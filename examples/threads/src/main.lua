@@ -1,4 +1,3 @@
--- MIT. One fixed-thread owner for an isolated, bounded communication proof.
 local process = require("process")
 local channel = require("channel")
 local security = require("security")

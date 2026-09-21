@@ -6,9 +6,6 @@ assembler is [wippyai/builder](https://github.com/wippyai/builder); Bee selects 
 inputs in `wippy.build.json` and pins the assembler in `build/builder.lock.json`.
 Both repositories are currently private. No stable native release is published.
 
-See the [native distribution audit](NATIVE_AUDIT.md) for reviewed boundaries,
-fixed findings and validation evidence.
-
 The [application and native module SDK](https://github.com/wippyai/builder/blob/main/docs/SDK.md)
 documents pack/UI configuration, native factories, typed Lua exports and argument
 passing. Event adapters depend on pinned runtime engine APIs.
@@ -19,18 +16,13 @@ passing. Event adapters depend on pinned runtime engine APIs.
 Normal Bee startup must use embedded code and locally retained deployment artifacts
 without downloading dependencies or requiring a reachable Hive peer. Installing or
 updating modules is an explicit operation. Fresh startup, restored deployments,
-restart and local client reconnect must work with external networking disabled;
-see [offline acceptance](handoffs/OFFLINE_BOOT.md). Local loopback communication
+restart and local client reconnect must work with external networking disabled.
+Local loopback communication
 remains available for clients and scoped MCP endpoints.
 
-The selected-state candidate derives a project root from the canonical launch
-folder before runtime state opens. Explicit `--state` still wins. On upgrade,
-one protected receipt binds the existing shared root to the first project after
-the old owner stops; it does not copy databases, and another project receives a
-new hashed root. Machine Hive enrollment remains under `~/.config/bee/local-hive`.
-The executable upgrade gate also reopens the bound state with the old binary to
-prove rollback. These semantics are candidate evidence until runtime PR #747 and
-builder PR #9 are accepted and the global promotion passes.
+Explicit `--state` selects the state directory. The standalone executable
+preserves the caller's working directory for native commands; application and
+registry state remain in the selected state directory.
 
 ## Build and check
 
@@ -45,9 +37,8 @@ make native-binary-check
 The source tools and executable use the same compiled component selection.
 `make native-binary-check` launches the source-free executable with literal
 arguments, checks Settings recovery, the terminal, fullscreen aliases and
-presenter rejoin. The fixture reads only disposable stores; it uses the source-free executable for
-all application operations. The current split-bundle proof is recorded in the
-[composition handoff](handoffs/STANDALONE_MODULE_COMPOSITION.md).
+presenter rejoin. The fixture reads only disposable stores; it uses the source-free
+executable for all application operations.
 `build/bootstrap.go` runs the pinned Go assembler.
 The Go assembler requires Git, Go 1.27.0, a C compiler and Git credentials that can
 read the selected private modules. Running the resulting binary needs neither Go,
@@ -99,12 +90,8 @@ Runtime patches are checksum-verified and copied into the generated bundle with
 their original contents and licenses.
 
 `make bundle-check` checks ownership failures and failed-build preservation.
-For coordinated validation, `BEE_BUILD_MANIFEST` can select an isolated candidate
-input; `BEE_BUNDLE_MANIFEST` selects its generated output. The release runtime pin
-still lacks the typed listener and Future declarations required by current Bee
-source. Candidate acceptance does not make the default release build ready.
-See [the runtime gate](handoffs/STATUS_RUNTIME_GATE.md) and
-[composition evidence](handoffs/STANDALONE_MODULE_COMPOSITION.md).
+For coordinated validation, `BEE_BUILD_MANIFEST` can select an isolated input;
+`BEE_BUNDLE_MANIFEST` selects its generated output.
 
 ### Component files
 
@@ -140,11 +127,13 @@ distribution. Those remain separate runtime/application capabilities.
 
 ## Installed application and updates
 
-The embedded baseline contains the complete default desktop, Terminal, Settings,
-Process Manager and Test Status. First boot requires no Hub connection, account
-or downloaded extension. The standalone acceptance harness starts with empty
-state, opens every default app, runs Test Status checks, exercises a native shell
-and verifies Settings recovery. Linux release jobs run it with networking disabled.
+The embedded baseline contains the complete default desktop and its bundled
+system applications, including Terminal, Settings, Process Manager, Timeline,
+Hive Manager and About. First boot requires no Hub connection, account or
+downloaded extension. The standalone acceptance harness starts with empty state,
+opens the current default applications, proves that the removed Test Status app
+does not return, exercises a native shell and verifies Settings recovery. Linux
+release jobs run it with networking disabled.
 
 ```sh
 ./dist/bee

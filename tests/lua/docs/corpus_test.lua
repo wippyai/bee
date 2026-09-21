@@ -39,9 +39,9 @@ local function define_tests()
                 test.eq(#(payload :: string), document.bytes)
             end
             -- The three questions an agent must be able to answer are present:
-            -- the terminal toolkit, cross-node subscriptions and a runtime module.
+            -- the terminal toolkit, cross-node sync and a runtime module.
             test.not_nil(corpus.find(manifest, "toolkit"))
-            test.not_nil(corpus.find(manifest, "docs/placement_and_subscriptions"))
+            test.not_nil(corpus.find(manifest, "docs/sync_and_inbox"))
             test.not_nil(corpus.find(manifest, "runtime/lua/core/process"))
             test.not_nil(corpus.find(manifest, "runtime/lua/storage/sql"))
             test.not_nil(corpus.find(manifest, "runtime/lua/system/tty"))

@@ -1,11 +1,12 @@
-//go:build meshclient && physicalclient
-
 // SPDX-License-Identifier: MIT
+
+// Package launch contains Bee's small native host boundary. The runtime owns
+// state opening, locking, deployment and application lifecycle; this package
+// only chooses the default state directory before those operations begin.
 package launch
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,19 +15,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
-
-	"github.com/wippyai/bee/native/internal/privatefile"
-	app "github.com/wippyai/runtime/cmd/app"
 )
 
 const (
 	legacyProjectFile     = "project-state.json"
-	legacyProjectLock     = ".project-state.lock"
 	legacyProjectMaxBytes = 16 * 1024
-	applicationLock       = ".application.lock"
 )
 
+// legacyProjectSelection is the receipt written by older Bee versions. It is
+// read only so a new executable can reopen an existing legacy root without
+// making a migration decision or changing durable state during planning.
 type legacyProjectSelection struct {
 	Version    int    `json:"version"`
 	Mode       string `json:"mode"`
@@ -34,40 +32,25 @@ type legacyProjectSelection struct {
 	StateDir   string `json:"state_dir"`
 }
 
-// CanonicalProject preserves the native node identity across symlink aliases.
-// It deliberately does not alter State: the host's plan selects that.
-func CanonicalProject(launch app.Launch) (app.Launch, error) {
-	if !filepath.IsAbs(launch.Dir) || !filepath.IsAbs(launch.State) {
-		return launch, errors.New("project launch requires absolute project and state directories")
-	}
-	directory, err := filepath.EvalSymlinks(launch.Dir)
-	if err != nil {
-		return launch, err
-	}
-	directory = filepath.Clean(directory)
-	launch.Dir = directory
-	return launch, nil
-}
-
-// ProjectStateDir is selected while planning a launch, before the runtime
-// resolves its own default. It preserves the caller-selected root while
-// assigning one runtime state directory per canonical project. An explicit
-// --state launch remains outside this helper and is left unchanged.
+// ProjectStateDir returns the state directory for one canonical project. It
+// does not inspect or create the root; callers can use it during planning.
 func ProjectStateDir(root, directory string) (string, error) {
 	root, directory, err := canonicalStateInputs(root, directory)
 	if err != nil {
 		return "", err
 	}
-	digest := sha256.Sum256([]byte(filepath.Clean(directory)))
+	digest := sha256.Sum256([]byte(directory))
 	return filepath.Join(root, "projects", hex.EncodeToString(digest[:])), nil
 }
 
-// DefaultProjectStateDir selects project-scoped state while preserving the
-// state created by Bee versions that used root for every launch folder. The
-// first canonical project opened against a legacy root is bound to that root by
-// one protected receipt; later projects use their digest-qualified directory.
-// No databases are copied or removed, so the previous executable can still use
-// the legacy root for rollback.
+// DefaultProjectStateDir selects the state for a non-explicit launch. The
+// hashed directory is the normal choice. A valid receipt from an older Bee
+// version binds its matching project to the old root for compatibility; a
+// valid receipt for another project and an absent receipt both select the
+// hashed directory.
+//
+// Planning is deliberately read-only. In particular, this function does not
+// create a receipt, inspect databases, acquire a lock, or open runtime state.
 func DefaultProjectStateDir(root, directory string) (string, error) {
 	root, directory, err := canonicalStateInputs(root, directory)
 	if err != nil {
@@ -78,66 +61,17 @@ func DefaultProjectStateDir(root, directory string) (string, error) {
 		return "", err
 	}
 
-	receipt, err := privatefile.New(root, legacyProjectFile, legacyProjectLock)
-	if err != nil {
-		return "", fmt.Errorf("project state receipt: %w", err)
-	}
-	if _, err := os.Lstat(root); errors.Is(err, os.ErrNotExist) {
+	receipt, err := readProjectReceipt(filepath.Join(root, legacyProjectFile))
+	if errors.Is(err, os.ErrNotExist) {
 		return projectState, nil
-	} else if err != nil {
-		return "", fmt.Errorf("inspect Bee state root: %w", err)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	selected := projectState
-	var releaseApplicationLock func() error
-	defer func() {
-		if releaseApplicationLock != nil {
-			_ = releaseApplicationLock()
-		}
-	}()
-	err = receipt.ReadModifyWrite(ctx, legacyProjectMaxBytes, func(existing []byte) ([]byte, error) {
-		if existing != nil {
-			resolved, err := resolveLegacyProject(existing, root, directory, projectState)
-			if err != nil {
-				return nil, err
-			}
-			selected = resolved
-			return nil, nil
-		}
-		legacy, err := hasLegacyState(root)
-		if err != nil {
-			return nil, err
-		}
-		if !legacy {
-			return nil, nil
-		}
-		releaseApplicationLock, err = privatefile.TryLock(ctx, root, applicationLock)
-		if errors.Is(err, privatefile.ErrLockBusy) {
-			return nil, errors.New("legacy Bee is running; stop it before the project-state upgrade")
-		}
-		if err != nil {
-			return nil, fmt.Errorf("lock legacy Bee state: %w", err)
-		}
-		selection := legacyProjectSelection{
-			Version:    1,
-			Mode:       "legacy-root",
-			ProjectDir: directory,
-			StateDir:   root,
-		}
-		encoded, err := json.Marshal(selection)
-		if err != nil {
-			return nil, err
-		}
-		encoded = append(encoded, '\n')
-		selected = root
-		return encoded, nil
-	})
 	if err != nil {
-		return "", fmt.Errorf("commit project state receipt: %w", err)
+		return "", err
 	}
-	return selected, nil
+	if receipt.ProjectDir == directory && receipt.StateDir == root {
+		return root, nil
+	}
+	return projectState, nil
 }
 
 func canonicalStateInputs(root, directory string) (string, string, error) {
@@ -147,69 +81,45 @@ func canonicalStateInputs(root, directory string) (string, string, error) {
 	root = filepath.Clean(root)
 	directory, err := filepath.EvalSymlinks(directory)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("canonicalize project directory: %w", err)
+	}
+	if !filepath.IsAbs(directory) {
+		return "", "", errors.New("canonical project directory is not absolute")
 	}
 	return root, filepath.Clean(directory), nil
 }
 
-func resolveLegacyProject(data []byte, root, directory, projectState string) (string, error) {
+func readProjectReceipt(path string) (legacyProjectSelection, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return legacyProjectSelection{}, err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, legacyProjectMaxBytes+1))
+	if err != nil {
+		return legacyProjectSelection{}, fmt.Errorf("read project state receipt: %w", err)
+	}
+	if len(data) > legacyProjectMaxBytes {
+		return legacyProjectSelection{}, errors.New("invalid project state receipt: file is too large")
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	var selection legacyProjectSelection
-	if err := decoder.Decode(&selection); err != nil {
-		return "", fmt.Errorf("invalid project state receipt: %w", err)
+	var receipt legacyProjectSelection
+	if err := decoder.Decode(&receipt); err != nil {
+		return legacyProjectSelection{}, fmt.Errorf("invalid project state receipt: %w", err)
 	}
-	if err := requireJSONEnd(decoder); err != nil {
-		return "", err
-	}
-	if selection.Version != 1 || selection.Mode != "legacy-root" ||
-		!filepath.IsAbs(selection.ProjectDir) || filepath.Clean(selection.ProjectDir) != selection.ProjectDir ||
-		selection.StateDir != root {
-		return "", errors.New("invalid project state receipt")
-	}
-	if selection.ProjectDir == directory {
-		return root, nil
-	}
-	return projectState, nil
-}
-
-func requireJSONEnd(decoder *json.Decoder) error {
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		if err == nil {
-			return errors.New("invalid project state receipt: trailing value")
+			return legacyProjectSelection{}, errors.New("invalid project state receipt: trailing value")
 		}
-		return fmt.Errorf("invalid project state receipt: %w", err)
+		return legacyProjectSelection{}, fmt.Errorf("invalid project state receipt: %w", err)
 	}
-	return nil
-}
-
-func hasLegacyState(root string) (bool, error) {
-	for _, name := range []string{
-		".application.lock",
-		"approvals.db",
-		"artifact-cache",
-		"credentials.db",
-		"deployment",
-		"gateway.db",
-		"governance.db",
-		"local-mesh",
-		"node.db",
-		"placement",
-		"placement.db",
-		"registry.db",
-		"resources.db",
-		"threads.db",
-		"workspace.db",
-		"workspace.db.client",
-	} {
-		_, err := os.Lstat(filepath.Join(root, name))
-		if err == nil {
-			return true, nil
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return false, fmt.Errorf("inspect legacy state %q: %w", name, err)
-		}
+	if receipt.Version != 1 || receipt.Mode != "legacy-root" ||
+		!filepath.IsAbs(receipt.ProjectDir) || filepath.Clean(receipt.ProjectDir) != receipt.ProjectDir ||
+		!filepath.IsAbs(receipt.StateDir) || filepath.Clean(receipt.StateDir) != receipt.StateDir {
+		return legacyProjectSelection{}, errors.New("invalid project state receipt: unsupported selection")
 	}
-	return false, nil
+	return receipt, nil
 }

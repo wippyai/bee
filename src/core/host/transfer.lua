@@ -1,4 +1,3 @@
--- MIT. Checked display-transfer requests. Admission and storage belong to the host.
 local contract = require("contract")
 type Request = {version: integer, workspace_id: string, connection_id: string,
     renderer_generation: string, request_id: string, view_id: string,

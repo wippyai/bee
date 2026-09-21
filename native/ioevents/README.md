@@ -58,4 +58,4 @@ can delay or lose native notifications; rescan handling remains necessary.
 
 Run `make native-check` after `make native-tools` for race tests, Go vet and Lua integration acceptance. Bee code is MIT;
 Wippy and its dependencies retain their upstream licenses. The backend's license
-is retained in `native/licenses/notify.txt`.
+is retained in `THIRD_PARTY_NOTICES.md`.

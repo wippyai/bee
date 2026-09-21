@@ -1,23 +1,6 @@
 version: '1.0'
 namespace: bee.placement.native
 entries:
-- name: docker_test
-  kind: function.lua
-  source: file://docker_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    configuration: bee.placement.docker:configuration
-- name: inspection_test
-  kind: function.lua
-  source: file://inspection_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  modules: [time]
-  imports:
-    test: wippy.test:test
-    inspection: bee.placement.docker:inspection
 - name: project_fixture
   kind: fs.directory
   meta: {type: test_support}
@@ -200,7 +183,7 @@ entries:
   meta: {type: bee.launch_policy, test_support: true}
   data:
     schema_revision: bee.launch-policy@2
-    placement_binding: bee.placement.fixture_container:binding
+    placement_binding: bee.placement.fixture:binding
     required_cleanup: direct_process
     required_exit_observation: eof_gated
     fixture: true

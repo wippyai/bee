@@ -9,9 +9,9 @@ execution composes placement with the thread contracts.
 | Slice | Responsibility |
 |---|---|
 | `bee.harness` | Module root |
-| `bee.harness.carrier` | `provenance`, `checkpoint`, `settle`: the pure rules of [the carrier contract](../../docs/CARRIER.md); `policy`: the host-selected launch policy with executable bindings and required capabilities; `machine`: one attempt from plan to receipt over an injected IO; `process`: the production carrier process, no fault hooks (a test-only entry wraps the same run with barriers); `capabilities`: bounds and the takeover rule |
+| `bee.harness.carrier` | `provenance`, `checkpoint`, `settle`: pure carrier rules; `policy`: the host-selected launch policy with executable bindings and required capabilities; `machine`: one attempt from plan to receipt over an injected IO; `process`: the production carrier process; `capabilities`: bounds and the takeover rule |
 | `bee.harness.launch` | `definitions`: exact decoding and digest of `bee.launch_definition` entries; `selection`: picker discovery plus component-owned CLI command lookup; `admission`: `resolve` (a measured plan pinning definition, binding, profile, policy and catalog generation, no effects), `admit` (for the authenticated requester: thread by policy, an attempt-bound resource grant and credential projections obtained in the requester's own authority, all keyed on the request id so a retry replays), `start` (spawns the carrier as the requester, resumes when a checkpoint exists, refuses a settled request) |
-| `bee.harness.permission` | `adapter`: the pure permission exchange rules (request identity, proposal, qualified keys, response encoding, pending ambiguity, transcript consistency); `acceptance`: the host acceptance record binding driver, profile, adapter and fixture measurements. A profile is eligible with `permission_exchange: {mode: adapter, adapter_ref, adapter_digest}` pinning a `harness.permission_adapter` entry the catalog measures from the same snapshot; enabling needs a matching acceptance record proven by the live fixture runner in `tests/lua/harness/acceptance_test.lua` and, for Claude, by the real executable in `claude_acceptance_test.lua` and `claude_control_test.lua`. Request fields and response fields are dotted paths, a request may name a separate acknowledgment id (Claude echoes `tool_use_id`, not `request_id`), and a terminal denial may be correlated. Both Claude profiles pin `bee.driver.claude:permission_adapter`; the acceptance record (`bee.permission-acceptance@2`) also carries placement's `executable_digest`, compared at plan time; shipped launch policies enable no exchange, so a terminal permission-denied result remains terminal |
+| `bee.harness.permission` | `adapter`: the pure permission exchange rules (request identity, proposal, qualified keys, response encoding, pending ambiguity, transcript consistency); `acceptance`: the host acceptance record binding driver, profile, adapter and executable measurements. A profile is eligible with `permission_exchange: {mode: adapter, adapter_ref, adapter_digest}` pinning a `harness.permission_adapter` entry the catalog measures from the same snapshot; enabling needs a matching acceptance record. Request fields and response fields are dotted paths, a request may name a separate acknowledgment id (Claude echoes `tool_use_id`, not `request_id`), and a terminal denial may be correlated. Both Claude profiles pin `bee.driver.claude:permission_adapter`; the acceptance record (`bee.permission-acceptance@2`) also carries placement's `executable_digest`, compared at plan time; shipped launch policies enable no exchange, so a terminal permission-denied result remains terminal |
 | `bee.harness.catalog` | `classify`: pure classification of a driver binding with its resolved profiles and methods; `catalog`: one immutable registry snapshot (`registry.snapshot()`), every `harness.driver` binding, declaration, method target and the host's `bee:harness_activation` entry read from that same snapshot, classified and marked activated |
 | `bee.harness.window` | Broker-launched Agent application and public `agent` command. The reusable `runtime` library owns the managed-window lifecycle; each process entry supplies its fixed placement binding and a constructor returning a process-local window handle. The runtime rejects a different planned placement before action admission or placement preparation; request data cannot select a constructor. An empty launch opens the host-defined profile picker; a bounded measured envelope selects one directly. Both admit the broker-authenticated application actor, share planning and preparation with the carrier, and consume the broker's sole terminal grant for one native PTY. PTY exit records `uncertain` completion; explicit application close records `cancelled`. Neither proves a successful agent turn. |
 
@@ -89,7 +89,7 @@ spawn policy must independently allow the carrier and selected host.
 
 The entry policies still bind `bee:carrier_policy` and
 `bee:launch_spawn_policy`. Independent installation must supply those reviewed
-policies; host binding alone is not Hub or Hive installation acceptance.
+policies; host binding alone does not install or authorize Hub or Hive access.
 
 ## Agent profile picker
 
@@ -105,20 +105,18 @@ uncertain`; hook stops never imply a successful attempt. Prompt text
 and tool arguments cannot become titles. The selected profile name stays in
 the title, bounded with the existing text sanitizer. Updates follow a confirmed
 thread commit; claims, failed commits and stale replies cannot publish activity.
-An actual native-child/gateway/broker fixture proves the resulting title update.
-This source change is not part of the installed `edf6a7c3` checkpoint.
 
-Native CLI terminal-title sequences are a separate source. Selected runtime
-`291f5c6b` does not expose VT title changes through `exec` terminal sessions;
-the proxy currently forwards mode and cursor callbacks. Forwarding those titles
-needs a runtime terminal-session capability, not a second ANSI parser in Bee.
+Native CLI terminal-title sequences are a separate source. The terminal session
+does not expose VT title changes through `exec`; the proxy currently forwards
+mode and cursor callbacks. Forwarding those titles needs a runtime
+terminal-session capability, not a second ANSI parser in Bee.
 
 A profile describes **harness + isolation + options + MCP scope**. The shipped
 defaults are registry declarations owned by the separate driver components.
 Authorized clients can create and edit bounded DB-backed profiles; launch
 selection pins their revision and merges only values allowed by the host policy.
 The profile feed is node-owned. Policy-controlled exchange of profiles between
-nodes remains unproven. Shared configuration must not contain host paths,
+nodes is unavailable. Shared configuration must not contain host paths,
 credential bytes or live process/session handles. Launch context uses the
 existing runtime `ctx` module and is resolved for each invocation; it is not a
 static profile payload or permission grant.
@@ -188,10 +186,8 @@ replacement attempt. Failure or incomplete
 hook draining refuses replacement; a copied checkpoint grants no authority.
 The gateway retains terminal rejection of unclaimed hooks on revocation; accepted
 intake is not a guarantee of thread commitment. Already-claimed rows remain
-recoverable under its existing epoch fences.
-These paths have fixture-harness acceptance in a live runtime. Whole-runtime crash
-and real-provider cold conversation recovery remain unverified. See
-[the recovery handoff](../../docs/handoffs/NATIVE_AGENT_RECOVERY.md).
+recoverable under its existing epoch fences. Whole-runtime crash recovery and
+real-provider cold conversation recovery remain unsupported.
 
 If planning, preparation or native startup fails after the Agent actor is
 admitted, the actor keeps a bounded error surface until the user closes it.
@@ -217,20 +213,16 @@ operation failure may leave earlier creations intact; retries reuse them.
 Production's credential map remains empty, so this does not yet discover or
 project the user's machine login automatically.
 
-The Agent picker source now summarizes the selected measured profile: project or
+The Agent picker source summarizes the selected measured profile: project or
 configured directory, whether persistent profile instructions are selected, and
 the number of configured gateway tools. It reads that summary from the same
 immutable registry snapshot as admission planning. Counts describe configuration,
 not a live MCP listener or granted authority. Instruction text, environment values
 and credential contents are not included in the summary. Compact windows retain
-the existing list and actions without the summary row. This UI addition passes the native Agent selector acceptance, including the
-summary before launching Claude/Codex and retained session/login behavior.
-The initial unit run passed 772 cases; the final selection/view check passed
-14 cases including exclusion of private instruction text.
+the existing list and actions without the summary row.
 
-The saved-profile facade under `bee.harness.profiles` now stores workspace-scoped
+The saved-profile facade under `bee.harness.profiles` stores workspace-scoped
 preferences through the existing node-owned sync ledger. The picker and launch
 admission carry the selected profile ID and revision; a changed profile cannot
 silently alter a restored conversation. Store access grants no workspace read or
-write authority. See [saved profiles](../../docs/handoffs/SAVED_AGENT_PROFILES.md)
-for the verified boundary, retention limits and remaining integration gates.
+write authority.

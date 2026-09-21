@@ -51,6 +51,11 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	if err := os.CopyFS(sourceSnapshot, os.DirFS(filepath.Join(repository, "src"))); err != nil {
 		t.Fatal(err)
 	}
+	// This fixture supplies the desktop supervisor's explicit input and owns
+	// its lifecycle; the default offline service is tested separately.
+	if err := os.RemoveAll(filepath.Join(sourceSnapshot, "hive", "host")); err != nil {
+		t.Fatal(err)
+	}
 	if os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_BINARY") != "" {
 		// Mark actual presenter replacement in the disposable source. Identical
 		// retained content need not emit fresh terminal bytes after F12.

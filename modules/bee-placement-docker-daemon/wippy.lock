@@ -1,6 +1,0 @@
-directories:
-  modules: .wippy
-  src: ./src
-# No dependency artifacts are locked yet. The source manifest declares the
-# Bee helper/thread and userspace client imports; publication must resolve and
-# record their real artifact digests first.

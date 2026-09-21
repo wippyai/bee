@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/syncthing/notify"
 )
 
 func stopManager(t *testing.T, manager *Manager) {
@@ -130,6 +132,25 @@ func TestOwnerCancellationReleasesWatch(t *testing.T) {
 	defer manager.mu.Unlock()
 	if len(manager.active) != 0 || len(manager.owners) != 0 {
 		t.Fatal("watch accounting survived cancellation")
+	}
+}
+
+func TestWatchEventsStopsWhenNativeChannelCloses(t *testing.T) {
+	raw := make(chan notify.EventInfo)
+	close(raw)
+
+	done := make(chan struct{})
+	go func() {
+		watchEvents(context.Background(), raw, time.Hour, t.TempDir(), Event{Kind: "rescan"}, func(Event) error {
+			return nil
+		})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("closed native event channel did not retire the watch loop")
 	}
 }
 

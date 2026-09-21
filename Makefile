@@ -94,66 +94,11 @@ run:
 	BEE_RUNTIME="$(abspath $(WIPPY))" bash ./run.sh
 lint:
 	$(WIPPY) lint $(LINT_FLAGS) --set lua.type_system.enabled=true --set lua.type_system.strict=true
-.PHONY: docker-configuration-check
-.PHONY: docker-daemon-check
-docker-daemon-check:
-	test -n "$(DOCKER_COMPONENT)"
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_daemon.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_daemon.go -runtime "$(abspath $(WIPPY))" -docker-source "$(abspath $(DOCKER_COMPONENT))"
-.PHONY: docker-boot-check
-docker-boot-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_boot.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_boot.go -runtime "$(abspath $(WIPPY))"
-docker-configuration-check:
-	test -n "$(DOCKER_COMPONENT)"
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_configuration.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_configuration.go -runtime "$(abspath $(WIPPY))" -docker-source "$(abspath $(DOCKER_COMPONENT))"
-.PHONY: docker-lifecycle-check
-docker-lifecycle-check:
-	test -n "$(DOCKER_COMPONENT)"
-	test -n "$(DOCKER_IMAGE)"
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_lifecycle.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)"
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)" -inspect-failure
-.PHONY: docker-start-stop-check
-docker-start-stop-check:
-	test -n "$(DOCKER_COMPONENT)"
-	test -n "$(DOCKER_IMAGE)"
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_lifecycle.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)" -race create
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)" -race start
-.PHONY: docker-agent-picker-check
-docker-agent-picker-check:
-	test -n "$(DOCKER_COMPONENT)"
-	test -n "$(DOCKER_IMAGE)"
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_agent_picker.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_agent_picker.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)"
-.PHONY: codex-docker-picker-check
-codex-docker-picker-check:
-	test -n "$(DOCKER_COMPONENT)"
-	test -n "$(CODEX_DOCKER_IMAGE)"
-	test -n "$(GATEWAY_INTERFACE)"
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_agent_picker.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_agent_picker.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(CODEX_DOCKER_IMAGE)" -interface "$(GATEWAY_INTERFACE)" -codex-component
-.PHONY: docker-profile-component-check
-docker-profile-component-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_profile_component.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_profile_component.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))"
-check: docker-profile-component-check
-.PHONY: docker-exec-pty-check
-docker-exec-pty-check:
-	test -n "$(DOCKER_IMAGE)"
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_exec_pty.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_exec_pty.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -image "$(DOCKER_IMAGE)"
 .PHONY: codex-native-hooks-check
 codex-native-hooks-check:
 	test -n "$(CODEX)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_codex_hooks.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_codex_hooks.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -codex "$(CODEX)"
-.PHONY: docker-sandbox-check
-docker-sandbox-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_sandbox.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_sandbox.go -runtime "$(abspath $(WIPPY))" -image "$(DOCKER_IMAGE)"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
 test: fixture-gateway-client

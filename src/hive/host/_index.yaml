@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.hive.host
+entries:
+- name: supervisor_service
+  kind: process.service
+  process: bee.hive.supervisor:main
+  host: bee.hive:supervisor_host
+  input:
+  - configured_nodes: []
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.hive.supervisor}
+      policies:
+      - bee:hive_supervisor_policy
+      - bee:hive_catalog_policy
+      - bee:hive_exposure_policy
+      - bee:hive_policy_exposure_policy
+      - bee:hive_dispatch_policy
+      - bee:hive_names_policy
+      - bee:hive_advertise_policy
+      - bee:hive_execute_policy
+  meta:
+    comment: Host-owned local Hive supervisor; a host overlay may replace input with admitted peer IDs and optional desktop configuration

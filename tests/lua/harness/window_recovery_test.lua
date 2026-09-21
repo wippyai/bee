@@ -73,22 +73,22 @@ local function define_tests()
             local old_digest = string.rep("a", 64)
             local current_digest = string.rep("b", 64)
             local frame = restore_view.review(100, 16, appearance.defaults(), {
-                title = "Docker Agent", definition_ref = "bee.agent:docker", profile_id = "window",
-                placement_binding_ref = "bee.placement.docker:binding", plan_digest = current_digest}, old_digest)
+                title = "Isolated Agent", definition_ref = "bee.agent:isolated", profile_id = "window",
+                placement_binding_ref = "bee.placement.fixture:binding", plan_digest = current_digest}, old_digest)
             local rows = table.concat(frame.rows)
             test.eq(#frame.rows, 16)
             test.is_true(rows:find("Review Agent changes", 1, true) ~= nil)
-            test.is_true(rows:find("bee.agent:docker", 1, true) ~= nil)
-            test.is_true(rows:find("Docker Agent", 1, true) ~= nil)
+            test.is_true(rows:find("bee.agent:isolated", 1, true) ~= nil)
+            test.is_true(rows:find("Isolated Agent", 1, true) ~= nil)
             test.is_true(rows:find("window", 1, true) ~= nil)
-            test.is_true(rows:find("bee.placement.docker:binding", 1, true) ~= nil)
+            test.is_true(rows:find("bee.placement.fixture:binding", 1, true) ~= nil)
             test.is_true(rows:find(old_digest, 1, true) ~= nil)
             test.is_true(rows:find(current_digest, 1, true) ~= nil)
             test.is_true(rows:find("Enter confirms", 1, true) ~= nil)
 
             local compact = restore_view.review(31, 12, appearance.defaults(), {
-                title = "Docker Agent", definition_ref = "bee.agent:docker", profile_id = "window",
-                placement_binding_ref = "bee.placement.docker:binding", plan_digest = current_digest}, old_digest)
+                title = "Isolated Agent", definition_ref = "bee.agent:isolated", profile_id = "window",
+                placement_binding_ref = "bee.placement.fixture:binding", plan_digest = current_digest}, old_digest)
             local compact_rows = table.concat(compact.rows)
             test.is_false(restore_view.reviewable(31, 12))
             test.is_true(restore_view.reviewable(32, 13))

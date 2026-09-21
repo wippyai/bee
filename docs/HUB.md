@@ -4,6 +4,8 @@ Bee has an optional Hub component with a scoped public API and a Modules TUI
 for browsing, requirements editing and reviewed installation. Real install,
 update, uninstall, SQLite migration and durable receipt restart checks pass on
 the existing runtime. Global build `7ba0b747` includes those behaviors.
+This is the local host-authorized path; public enrollment, headless-node launch
+and destination-to-destination Hub package transfer/install remain unfinished.
 
 `bee.hub:call({operation, request?, expected_digest?})` returns
 `{ok, value?, code?, message?, replayed}`. The facade checks the authenticated
@@ -88,6 +90,12 @@ no registry effect and can fetch and verify artifacts into the native immutable 
 `ready` means requirement bindings are complete; it does not prove migration
 function/ledger authority. `capabilities` names policy definitions present in
 the closure and grants none of them.
+
+`lifecycle.auto_start` is a lifecycle intent recorded in the plan. Even when
+apply publishes the definitions and asks the destination lifecycle manager to
+honor that intent, the plan/apply receipt does not establish that a service
+started, is healthy or is ready to serve. Service readiness requires separate
+destination lifecycle evidence.
 
 Apply replans and checks the displayed digest and registry base before
 publication. The native dependency publisher then resolves transitive ranges;
@@ -323,9 +331,6 @@ Retained Bee owners keep the UI loaded when they started. Replacing the global
 executable or reconnecting a presenter does not upgrade those running applications.
 Settings → About reports the loaded bundle; use a fresh owner to inspect a newly
 installed build without interrupting existing terminals.
-
-The [completion audit](handoffs/HUB_COMPLETION.md) maps the requested Kickside-like
-workflow to current APIs, UI acceptance and remaining application-admission work.
 
 ### Read-only Contents browser
 

@@ -32,7 +32,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 
 	root := t.TempDir()
 	transportTLS := supervisorTLS(t, root)
-	frozenSource, _ := freezeHiveSupervisorSource(t, root)
+	frozenSource, _ := freezeHiveSupervisorSource(t, root, true)
 	serviceFixture := filepath.Join(root, "service-fixture")
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -105,43 +105,23 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Append the trusted native service configuration for the actual Bee Hive supervisor.
-		// Service input injects the trusted peer nodes directly into the supervisor process.
+		// Replace only the default service input with the trusted peer selected by
+		// this native fixture. The service declaration and its lifecycle policies
+		// remain the production host composition.
 		peerNode := fmt.Sprintf("node-%d", 1-i)
-		serviceManifestSnippet := fmt.Sprintf(`
-- name: hive_supervisor_service
-  kind: process.service
-  process: bee.hive.supervisor:main
-  host: bee.hive:supervisor_host
-  input:
-  - configured_nodes:
-    - %s
-  lifecycle:
-    auto_start: true
-    security:
-      actor:
-        id: bee.hive.supervisor
-      policies:
-      - bee:hive_supervisor_policy
-      - bee:hive_catalog_policy
-      - bee:hive_exposure_policy
-      - bee:hive_dispatch_policy
-      - bee.hive_service_bootstrap:names_policy
-      - bee.hive_service_bootstrap:execute_policy
-  meta:
-    type: test_support
-`, peerNode)
-
-		indexPath := filepath.Join(fixtureDir, "_index.yaml")
-		f, err := os.OpenFile(indexPath, os.O_APPEND|os.O_WRONLY, 0600)
+		servicePath := filepath.Join(srcDir, "hive/host/_index.yaml")
+		serviceManifest, err := os.ReadFile(servicePath)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.WriteString(serviceManifestSnippet); err != nil {
-			_ = f.Close()
-			t.Fatal(err)
+		serviceText := string(serviceManifest)
+		defaultInput := "  - configured_nodes: []"
+		if strings.Count(serviceText, defaultInput) != 1 {
+			t.Fatal("default Hive service input anchor changed")
 		}
-		if err := f.Close(); err != nil {
+		serviceText = strings.Replace(serviceText, defaultInput,
+			fmt.Sprintf("  - configured_nodes:\n    - %s", peerNode), 1)
+		if err := os.WriteFile(servicePath, []byte(serviceText), 0600); err != nil {
 			t.Fatal(err)
 		}
 

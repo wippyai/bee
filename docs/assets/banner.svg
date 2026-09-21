@@ -1,14 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="240" viewBox="0 0 1200 240" role="img" aria-labelledby="title description">
   <title id="title">Bee</title>
-  <desc id="description">The terminal bee from the application's welcome screen.</desc>
-  <rect width="1200" height="240" rx="12" fill="#10151b"/>
-  <g fill="#edbd59" font-family="DejaVu Sans Mono" font-size="24" xml:space="preserve">
-    <text x="64" y="68">&#160;&#160;&#160;&#160;╭──╮&#160;╭──╮&#160;&#160;&#160;&#160;</text>
-    <text x="64" y="92">&#160;&#160;&#160;&#160;╰──╲&#160;╱──╯&#160;&#160;&#160;&#160;</text>
-    <text x="64" y="116">&#160;╭──────┴─────╮&#160;&#160;</text>
-    <text x="64" y="140">◂│&#160;██&#160;&#160;██&#160;&#160;•&#160;&#160;│&#160;&#160;</text>
-    <text x="64" y="164">&#160;╰────────────╯&#160;&#160;</text>
-    <text x="64" y="188">&#160;&#160;&#160;&#160;&#160;&#160;&#160;╲&#160;╲&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+  <desc id="description">The terminal bee mark beside the Bee wordmark.</desc>
+  <rect width="1200" height="240" rx="12" fill="#0c1119"/>
+  <g stroke="#ffc963" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <g fill="none">
+      <rect x="70" y="38" width="72" height="42" rx="11"/>
+      <rect x="170" y="38" width="72" height="42" rx="11"/>
+      <path d="M142 59l14 43M170 59l-14 43"/>
+      <rect x="44" y="102" width="225" height="78" rx="12"/>
+      <path d="M143 180l12 26M169 180l12 26"/>
+    </g>
+    <path d="M20 141l24-16v32z" fill="#ffc963" stroke="none"/>
+    <rect x="75" y="126" width="42" height="32" fill="#ffc963" stroke="none"/>
+    <rect x="132" y="126" width="42" height="32" fill="#ffc963" stroke="none"/>
+    <circle cx="235" cy="142" r="5" fill="#ffc963" stroke="none"/>
   </g>
-  <text x="376" y="151" fill="#f0f3f6" font-family="DejaVu Sans" font-size="84" font-weight="bold">Bee</text>
+  <text x="340" y="160" fill="#d8e2ef" font-family="DejaVu Sans, system-ui, sans-serif" font-size="84" font-weight="700">Bee</text>
 </svg>

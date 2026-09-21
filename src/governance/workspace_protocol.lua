@@ -1,5 +1,3 @@
--- MIT. Strict public authoring boundary. Host resources and actor identity are
--- deliberately absent from requests. Binary assets travel as canonical base64.
 local bounds = require("bounds")
 local base64 = require("base64")
 local M = {}

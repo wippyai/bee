@@ -98,7 +98,7 @@ entries:
 - name: host_files
   kind: fs.directory
   meta:
-    comment: The host filesystem as one volume for the executable measurement; readonly is enforced by a runtime carrying runtime PR 700 and ignored by an older one, where only this module's code keeps it read-only
+    comment: The host filesystem as one volume for executable measurement; this entry requests readonly access
   directory: /
   auto_init: false
   readonly: true

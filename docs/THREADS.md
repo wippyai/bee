@@ -1,169 +1,253 @@
-# Threads, hooks and subscriptions
+# Threads
 
-**Status: the bounded local journal contract is implemented, and the rich
-thread authority, delivery, subscriptions and projection of the build sequence
-are built on it (see [thread authority](THREAD_AUTHORITY.md),
-[delivery](THREAD_DELIVERY.md) and [sessions](THREAD_SESSIONS.md)).** The
-Timeline application reads a thread through those contracts. No Kickside, AI,
-MCP or Hub dependency is required.
+Threads are durable, ordered records for messages, observations and managed
+work. A thread is a resource owned by one Threads runtime and SQLite store; it
+is not a process, terminal view, agent or chat transcript. Views can detach
+while the thread, subscriptions and delivery state remain owned by the thread
+owner.
 
-## Implemented local slice
+The implementation has two compatible surfaces. The actor-owned `journal`
+contract keeps its claimed runs and event format. The rich authority,
+lifecycle, delivery, projection and carrier contracts use separate tables and
+never rewrite or implicitly bridge journal data.
 
-`bee.threads:journal` is a native contract, bound by `bee.threads:local`.
-The public `bee.threads:client` Lua library provides `open(thread)`, then
-`claim(run)`, `append(run, key, kind, body)` and `read_after(cursor)`.
-Events contain `seq`, `run`, `key`, `kind` and JSON string `body`.
-Reads return at most 64 ordered events; bodies are limited to 16 KiB.
-The store bounds runs and events per thread and rejects conflicting retries.
+## Ownership and boundaries
 
-Native methods derive ownership from the authenticated `security.actor()`;
-a payload cannot select its author. Host-selected function policies grant those
-methods their own SQLite access without granting the caller direct SQL access.
-The subsystem owns `bee.threads:db` (`BEE_THREADS_DB`, default
-`.wippy/threads.db`) and its checked migration ledger. This is separate from the
-primary desktop store and registry history. Ownership is actor-based, not a
-per-window isolation boundary; applications sharing an actor and granted journal
-operations share that actor's access. Dynamic membership is not implemented.
+Every callable method derives the actor from the authenticated security
+context. A request body cannot choose its author. Host-attached policies give
+the method access to the selected `bee.threads:database_ref`; they do not give
+the caller SQL access. Registry metadata, a claimed producer, a hook name, a
+consumer ID or a parent reference is not authority.
 
-One runtime owns this SQLite file. Concurrent actor callers are tested through
-that runtime's SQL pool. Multiple runtimes opening the same file are unsupported:
-a stress probe encountered write-lock failures. Future remote callers must use
-the owner's contract; mesh membership does not make SQLite a replicated store.
+Rich thread membership has three roles:
 
-**Timeline** is an on-demand application under Start → Tools. Run it with:
+| Role | Rights |
+| --- | --- |
+| `owner` | Read and write, administer membership, and close the thread. |
+| `participant` | Read and submit permitted messages and observations. |
+| `observer` | Read only. |
 
-```sh
-bee run bee.timeline:app <thread_id>
-```
+Lifecycle operations have a separate host-granted permission. Membership does
+not by itself admit an action, attempt or receipt. The owner checks membership,
+state, revisions and the operation's grant inside the same write transaction.
+The legacy journal remains actor-owned and is not made accessible by rich
+membership.
 
-Without an argument it lists the threads the local actor is a member of and
-opens the chosen one. It reads records through a subscription of the thread
-owner: one outstanding page at a time, acknowledged by identity and exact
-extent after it is folded into the frame, so the cursor moves only as the
-owner answers. New records arrive through a bounded wait that claims nothing
-for the viewer; the view holds 512 rows and marks what it no longer shows.
-Reopening restores the thread and subscription identity from the checkpoint
-and resumes under a new lease; an earlier instance's pages are then fenced.
-Viewing acknowledges no delivery and settles nothing. Approval records name
-where they are decided; the Approvals application acts on them. An
-unreachable owner is shown as unreachable, never as an empty thread. Child
-launch rows keep the action ID bounded and place the submitted brief beside it,
-so a Timeline reader can identify the work without confusing an action ID with
-the launch definition reference returned by `thread_launch`.
+The module owns its SQLite resource and migration ledger. One runtime must own
+the file; opening the same file from multiple runtimes is unsupported. A
+resource reference can select another owner-managed database, but it does not
+replicate history or merge table authority. A mesh or client connection must
+call the owning contract.
 
-`tests/timeline_app.py`, included in `make check`, boots the application
-under the broker; `tests/lua/timeline` proves the model against the real
-owner, including resume fencing and refusal of a non-member.
-`tests/thread_storage.py` checks the production contract's caller SQL denial,
-actor spoof denial, page boundaries, retry conflicts and migration integrity.
+The implementation is split into these Lua namespaces:
 
-## Proposed full contract
+| Namespace | Responsibility |
+| --- | --- |
+| `bee.threads` | Journal compatibility, local bindings, resources and capability reporting. |
+| `bee.threads.records` | Typed decoders, bounds and canonical record encoding; no I/O. |
+| `bee.threads.service` | Thread authority, membership, messages, observations, lifecycle and owner-qualified send. |
+| `bee.threads.delivery` | Recipient obligations, claim batches, dispatch, waits and subscriptions. |
+| `bee.threads.projection` | Record-derived recap and status checkpoints. |
+| `bee.threads.carrier` | Attempt carrier epochs, provenance, stream records and checkpoints. |
+| `bee.threads.approvals` | Authenticated approval records projected from the approval owner; it does not decide approvals. |
+| `bee.threads.persist` | The database, checked migrations, owner incarnation and readers/transactions. |
 
-## Durable resource
+## Authority and records
 
-A thread is a durable resource with a stable `thread_id`. It is an ordered log
-for requests, results, progress and observations; it is not a process, window,
-chat transcript or agent. A thread view may close while the thread, subscribers
-and their cursors continue. Subscriber and view lifetimes should remain separate.
+The authority exposes `create`, `get`, `list`, `join`, `leave`, `close`,
+`record` and `read_after`. Every mutation has a thread ID and idempotency key;
+membership and thread state are checked within the transaction. `join` accepts
+`participant` or `observer`, uses an expected revision, and is owner-only;
+`leave` can remove the caller or an owner-selected member, but the owner cannot
+leave its own thread. `close` is owner-only and refuses while lifecycle work is
+unsettled.
 
-Every event carries a bounded, versioned type and body, a thread-local
-`sequence` assigned at commit, a durable `event_id`, a source participant, and
-optional parent/correlation/causation references. The sequence is the local
-ordering authority. Source timestamps and upstream order are metadata only.
+Records use schema revision `bee.thread-record@1`. The authority supplies the
+record ID, producer, source, timestamp and sequence; callers submit a typed
+body and context only. Sequences are assigned at commit and are unique within
+the thread. `read_after` returns ordered bounded pages and an explicit
+continuation state.
 
-Process IDs are transport credentials with process lifetime. They are not
-durable authors, cursors or correlation IDs. A boundary authenticates the actual
-sender and maps it to an explicitly admitted durable participant before reading,
-appending, waiting or acknowledging.
+The supported record kinds are:
 
-Append dedupe uses a stable source idempotency key, scoped to the thread and
-source participant. Retrying the same key with the same canonical type/body
-returns the original committed receipt. Reusing it with a different body or
-type is a durable conflict and is rejected; it never silently creates a second
-event or merges payloads.
+- `observation` for typed stream, hook, transcript, MCP and Bee observations;
+  observation data includes session state, turn signals, text, tool calls and
+  results, notices, execution exits and bounded extensions;
+- `message` for requests, progress, replies and notifications;
+- `action.admitted`, `attempt.prepared`, `attempt.started`, `turn.request`,
+  `turn.end` and `receipt` for admitted work and its lifecycle;
+- `delivery.mark` and `request.answered` for recipient delivery facts; and
+- `approval.request` and `approval.transition` as approval-store projections.
 
-## Access and nesting
+Decoders reject unknown fields, invalid variants and invalid references.
+Content has one bounded text or artifact reference. Extension payloads are
+validated JSON and carry no authority. Approval transitions are decided by the
+approval subsystem; recording an approval projection never settles an
+operation.
 
-Participant membership grants named operations and bounded resources. Registry
-metadata, an event's claimed author, a hook name, and a parent thread do not
-grant authority. Parent/child relationships are organizational references:
-creation validates the parent, rejects cycles, and records explicit edges, but
-does not inherit read, append, wait or execution rights. Cross-thread causes use
-explicit references, and a parent read never reveals unauthorized child events.
+Lifecycle methods are `admit_action`, `prepare_attempt`, `start_attempt`,
+`request_turn`, `end_turn` and `receipt`. A prepared attempt contains the
+binding, profile and placement references plus their digests and a plan digest.
+Starting requires the prepared state; carrier and expected revision/epoch
+fences reject stale attempts. A continuation may name the action's latest
+attempt receipt as an ordering precondition, but it does not grant authority or
+resume a provider session by itself.
 
-The minimum operations are `create/open`, `append`, `read_after`, `wait_after`,
-`subscribe/resume`, and `revoke`. Access is checked again on every operation;
-revocation cancels denied waits and subscriptions. Page size, body size,
-correlation filters, queue depth, wait deadline and fan-out are bounded. Storage
-failure and retention exhaustion are visible errors.
+## Retry and transaction rules
 
-## Replay and live delivery
+SQLite writes use an immediate/serializable transaction. Membership, retry
+lookup, state transitions, record insertion, indexes and the stored reply
+commit together. A failed transaction leaves no sequence gap.
 
-`read_after(thread_id, replay_cursor)` returns a bounded page with a continuation
-cursor. A subscriber owns a durable consumption cursor, independent from the
-view's visual browsing cursor; scrolling a view must not acknowledge an event.
-On reconnect, replay starts after the consumer cursor.
+Retrying the same operation with the same authenticated actor, thread and
+idempotency key returns the stored result. Reusing that identity with a
+different canonical request returns `CONFLICT`; it never creates a second
+record. Producer event keys use the same content comparison. Canonical JSON is
+used for request identity and stored record envelopes.
 
-`wait_after` and live subscriptions use the same durable log as replay. A
-successful append commits before it acknowledges the producer. A wakeup is only
-a hint: the subscriber re-queries after its cursor, in bounded pages, before
-advancing or acknowledging. The read/register boundary must be covered by an
-atomic server operation or by a wake-and-catch-up rule, so an event committed in
-that gap cannot be lost. Wake queue overflow triggers catch-up rather than skip.
+Lifecycle admission reserves enough record capacity for required terminal
+records. A full thread therefore refuses new work before it can strand an
+attempt without a receipt. External side effects remain at-least-once: a
+timeout says that no result was observed before the deadline, not that the
+side effect did not happen.
 
-Hook adapters and application producers can use the same subscription contract.
-The adapter retains its authenticated source, stable upstream hook/event ID,
-source schema version, run/session ID, attempt and source timestamp. A missing
-hook is an explicit unknown; a generic hook fact is not evidence that a tool or
-command succeeded.
+## Recipient delivery
 
-## Hooks, progress and effects
+A message creates one obligation per recipient. An obligation has one of
+`pending`, `claimed`, `delivered`, `answered`, `uncertain` or `abandoned`.
+Claims are made only by the recipient actor; `consumer_id` identifies a cursor
+and cannot act for another recipient. `claim` returns a bounded claim batch and
+stores one delivery per obligation with the current owner incarnation.
 
-Progress is an event projection that can be rebuilt from the log. Correlate a
-trigger, attempts, results, cancellation and timeout with durable IDs and
-causation references; do not correlate through a live PID. Applications may post
-status events, while a hook adapter maps external facts to typed events.
+The normal delivery sequence is:
 
-Consumption and retries are at least once. A subscriber may receive a duplicate,
-so projections and work receipts need idempotency keys. External side effects
-(shell, GitHub, or another service) have no exactly-once guarantee: a timeout
-means that no result was observed by the deadline, not that the work did not
-happen. Running a side effect requires an independently admitted execution
-identity, bounded attempts, cancellation semantics and durable failure/result
-reporting. An outbox or job receipt is needed when recording an event and
-scheduling work must be coordinated.
+1. `claim` records a `claimed` mark and a five-minute claim expiry.
+2. `dispatch` records intent before bytes leave. An accepted dispatch becomes
+   `delivered`; an unaccepted dispatch remains claimed with dispatch evidence.
+3. `ack` can settle a claimed delivery as delivered. `release` returns the
+   obligation to `pending` only when no dispatch intent exists.
+4. `expire` changes an expired or old-incarnation claim to `uncertain`.
+5. The owner or lifecycle authority uses `reconcile` to `redeliver`, mark
+   `delivered`, or `abandon` an uncertain delivery. Redelivery preserves the
+   prior uncertainty in the record stream.
 
-## Isolated prototype limits
+A terminal reply from the obligated recipient settles the corresponding
+request. A duplicate terminal reply replays or conflicts; an owner does not
+silently impersonate the recipient. Delivery records and obligations are
+distinct from subscriptions.
 
-The fixture is a local SQLite proof with fixed bootstrap participants and bounded
-replay/wait. It can demonstrate durable order, duplicate append behavior,
-sender-authenticated denial, reconnect replay and a real projection.
-It does not provide remote authentication, dynamic membership, compaction or
-cross-database transactions, and it makes no exactly-once or arbitrary-code
-execution claim. AI drivers, MCP transport, hook adapters and desktop promotion
-remain future work until their own contracts and acceptance checks exist.
+`wait` claims pending obligations for its recipient, reads new records and then
+waits when both are empty. It checks before registration, registers with the
+supervised waiter, checks again, treats wakeups as hints, and performs a final
+authoritative check before timeout. The maximum wait is 60 seconds, reduced by
+the trusted transport budget and its margin. Registration is bounded to 64
+waits per thread and 1,024 per node; a missing waiter falls back to bounded
+polling. `watch` has the same wakeup path but is read-only and never claims an
+obligation, so a viewer cannot alter delivery state.
 
-Run `make threads` for the fixture acceptance checks (also part of `make check`).
-These cover multi-page replay and live catch-up, exclusive cursor resume,
-invalid cursors, per-thread sequence isolation, byte-identical retry/conflict,
-subscriber SQL/append/foreign-thread denial, and changed-migration rejection.
-The fixture does not yet implement the full event envelope proposed above:
-its rows contain `seq`, `source`, `key`, `kind`, and JSON `body`. It compares JSON
-bytes rather than canonicalizing arbitrary input and persists no consumer cursor.
+## Subscriptions and sessions
 
-The native contract framing probe confirms on the pinned W1 runtime that a bound
-Lua function has a different execution PID from its caller, while retaining the
-caller's security actor and SQL denial. A public native contract adapter must
-authorize the security actor and resource; it cannot pretend its outgoing actor
-message was sent by the original PID. The fixed participant fixture still uses
-exact PID admission internally. Native definitions/bindings are the intended
-public operation boundary. Trait/tool metadata may describe adapters to those
-operations later but does not supply authority. W2 compatibility remains unproved.
+A subscription is a durable consumer cursor over the immutable record stream.
+It has an authenticated actor, consumer ID, normalized filter and digest,
+durability, owner authority, owner incarnation and lease generation. It is
+independent from recipient obligations and from a view's visual cursor.
 
-The fixture now exercises a native contract read adapter and a typed Lua reader.
-An owner-issued bearer capability authorizes read access to exactly one thread
-for that owner lifetime; a bound function returns through its own PID. It does
-not forward a claimed caller PID as authentication. These ephemeral capabilities
-are intentionally delegable and must not enter checkpoints. Public actor/resource
-membership and revocation are still proposals; this fixture does not implement
-them. Its subscriber uses the reader to catch up after private wake messages.
+`subscribe` creates a subscription; `page` hands out one bounded range at a
+time; `ack_page` names the exact page ID and `scanned_through` value. The owner
+advances the cursor only after that acknowledgment. Repeating `page` while a
+page is outstanding returns the same page. Filter changes create a new
+subscription identity. `unsubscribe` preserves the durable cursor, `resume`
+installs a new lease, and owner-authorized `close_subscription` suspends a
+subscription while preserving its cursor. `forget_subscription` deletes only a
+closed subscription and reclaims its capacity.
+
+The consumer session follows these rules:
+
+| Situation | Result |
+| --- | --- |
+| Transport loss | The session is detached; no cursor or page is acknowledged. |
+| Same owner authority, incarnation and lease | Reconnect continues from the owner's cursor. |
+| New incarnation or lease | `resume` is required; old pages are fenced. |
+| Older generation or a cursor behind the owner's cursor | Stale information is ignored and cannot roll progress back. |
+| Different owner authority, closed subscription or replacement | Reset and re-admit, or resume only when the owner reports a retained closed subscription. |
+
+The session compares incarnation and lease generation only within one durable
+owner authority. The owner process establishes the incarnation at startup;
+the waiter cannot advance it. Confirmed deliveries survive an owner restart;
+unacknowledged claims need reconciliation and old claim controls fail with
+`CONFLICT`. Durable subscription cursors survive, but active leases must be
+rebound.
+
+## Owner-qualified send
+
+The destination reference for a remote thread is
+`{node_id, service_id = "bee.threads", resource_ref = thread_id}`. `send`
+accepts the destination thread, caller node ID, idempotency key, canonical
+message, SHA-256 payload digest and optional context. The destination owner
+must authenticate the forwarded principal and apply local membership and
+operation policy; no actor ID supplied in the payload can retarget it. The
+request identity includes the principal, caller node and key, so subjects on
+one node do not collide. `send_status` reports a committed record or
+`committed = false`; that result means only that no matching commit was visible
+at that read. An identical replay remains safe after an ambiguous timeout.
+
+The local send contract and its retry rules are implemented. Supervisor
+forwarding between independent runtimes, remote enrollment and the two-runtime
+proofs for commit-before-reply loss, replacement, duplicate delivery and stale
+acknowledgment are not enabled. A failed owner lookup is an error; it never
+falls back to a local thread with the same name.
+
+## Carrier and projections
+
+The carrier claims a fenced epoch for one live attempt. `commit` stores up to
+64 decoded stream or control records, their source provenance and the next
+checkpoint in one transaction. Provenance revision is
+`bee.carrier.provenance@1`; checkpoint revision is
+`bee.carrier.checkpoint@1` and its encoded state is limited to 64 KiB. Replayed
+stream positions are idempotent and different content at the same position is
+`CONFLICT`. A stale carrier cannot commit after replacement.
+
+Recap and status are projections of immutable records. They are rebuildable and
+never settle work. Recap keeps at most eight summary lines of 120 bytes each;
+projection checkpoints store their cursor and digest. A fold reads a bounded
+record prefix and commits the checkpoint and cursor together, so a projection
+cannot claim a cursor for facts it did not fold.
+
+## Bounds and storage
+
+Shared decoder and database limits are:
+
+| Item | Limit |
+| --- | ---: |
+| Identifier | 160 bytes, nonempty and without control characters |
+| Encoded record/body | 16 KiB |
+| Read, claim, wait or carrier page | 64 records |
+| Records per rich thread | 10,000 |
+| Active members, actions, attempts or turns per thread | 128 |
+| Recipient obligations per thread | 2,048 |
+| Subscription rows per thread | 128 |
+| Array items | 64 |
+| Extension JSON depth | 16 |
+| Thread title | 512 bytes |
+
+The checked migration ledger carries the legacy journal, rich authority,
+lifecycle, delivery, projection, carrier, approval and owner-authority schema.
+Applied migrations and their checksums are immutable. The owner keeps all
+table access behind typed contract methods; callers do not query another
+subsystem's tables or reset the database to bypass a migration failure.
+
+## Limits of the current implementation
+
+Threads are local-owner durable storage. They do not provide database
+replication, compaction, cross-database transactions, federated membership or
+exactly-once execution of external effects. Remote callers need an authenticated
+owner contract once forwarding is implemented. Wakeups are hints and delivery
+is at least once, so consumers and projections must tolerate duplicates and
+use the stored identity rules.
+
+The acceptance surface is covered by `tests/lua/threads`,
+`tests/thread_storage.py`, the Timeline application checks and `make threads`.
+These checks cover typed records, authority roles, lifecycle fencing,
+transactional retries, delivery recovery, wait registration and timeout,
+subscription page/lease fencing, projections, carrier provenance and
+migration integrity.

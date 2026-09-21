@@ -18,7 +18,7 @@ remains separate in `.wippy/registry.db` (or its configured
 
 Local desktop layout belongs to `bee:client_db`, at the selected workspace path
 plus `.client`. The desktop client cannot acquire the workspace store. See
-[client persistence](CLIENT_STATE.md) for qualified tab identities, generation
+the [desktop contract](DESKTOP.md) for qualified tab identities and generations
 checks and the once-only import from older combined desktop state.
 
 The core-only storage API is:

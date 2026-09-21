@@ -105,29 +105,23 @@ local function terminal_toolkit(token: string): string
     end
     return "tty.canvas with one-based canvas:put, present through output:present, client.ready after the first paint"
 end
--- Question 2: how does an application subscribe across nodes? Search the
--- cluster topic, then read the contract the search found.
-local function cross_node_subscriptions(token: string): string
-    -- A phrase only the placement contract carries, so a bounded search page
-    -- cannot be filled by the runtime event bus pages alone.
-    local found = value(tool(token, {operation = "search", query = "subscribe(thread", topic = "cluster", limit = 8}), "search cluster")
+-- Question 2: how do admitted nodes exchange owned projections? Search the
+-- cluster topic, then read the implemented sync contract the search found.
+local function cross_node_sync(token: string): string
+    local found = value(tool(token, {operation = "search", query = "expected revisions", topic = "cluster", limit = 8}), "search cluster")
     local results = found.results :: {{[string]: unknown}}
     assert(#results >= 1, "the cross-node search returned nothing")
     local selected: Object? = nil
     for _, result in ipairs(results) do
-        if tostring(result.id) == "docs/placement_and_subscriptions" or tostring(result.id) == "docs/hive_protocol" then selected = result end
+        if tostring(result.id) == "docs/sync_and_inbox" then selected = result end
     end
-    assert(selected ~= nil, "neither the placement nor the hive contract was found by search")
+    assert(selected ~= nil, "the sync contract was not found by search")
     local read = value(tool(token, {operation = "read", id = tostring(selected.id), limit = 16384}), "read contract")
     local content = tostring(read.content)
-    if tostring(selected.id) == "docs/placement_and_subscriptions" then
-        assert(find(content, "subscribe(thread"), "the placement contract does not state the subscribe operation")
-        assert(find(content, "owner_epoch") and find(content, "at least once"), "the placement contract does not state owner epoch and at-least-once delivery")
-        assert(find(content, "across nodes"), "the placement contract does not state cross-node subscriptions")
-    else
-        assert(find(content, "hive.expose."), "the hive protocol does not state the exposure check")
-    end
-    return "subscribe(thread, after_sequence, filter, consumer_id, durability) with owner_epoch and at-least-once delivery, cross-node through the owner"
+    assert(find(content, "bee.sync"), "the sync contract does not name bee.sync")
+    assert(find(content, "explicitly admitted nodes"), "the sync contract does not state node admission")
+    assert(find(content, "expected revisions"), "the sync contract does not state revision checks")
+    return "bee.sync exchanges owner-local projections between explicitly admitted nodes with expected revisions"
 end
 -- Question 3: how does a runtime module work? Read the SQL module from the
 -- corpus by the id list returned, and the terminal module by name.
@@ -168,7 +162,7 @@ local function main()
     assert(names["docs"] == true, "the docs tool is not advertised to this binding")
     bounds_hold(token)
     local first = terminal_toolkit(token)
-    local second = cross_node_subscriptions(token)
+    local second = cross_node_sync(token)
     local third = runtime_module(token)
     call("bee.gateway:revoke", {binding_id = binding_id})
     -- Answers only; no token bytes reach captured output.

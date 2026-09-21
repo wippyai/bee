@@ -1,7 +1,3 @@
--- MIT. What this runtime can promise about cleanup, measured, never
--- declared: a child is started in its own process group and its group id
--- is read back. A runtime whose exec handle carries no pid cannot identify
--- the child at all and controls the direct process only.
 local exec = require("exec")
 local types = require("types")
 local resources = require("resources")

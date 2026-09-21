@@ -1,4 +1,3 @@
--- MIT. Small typed consumer over the native contract; no storage authority.
 local contract = require("contract")
 local client = require("client")
 type Reader = {read_after: (Reader, integer) -> (client.Reply?, string?)}

@@ -1,20 +1,6 @@
 version: '1.0'
 namespace: bee.hive_service_bootstrap
 entries:
-- name: names_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [process.registry.register, process.registry.unregister, process.registry.register.eventual, process.registry.unregister.eventual]
-    resources: [bee.hive.supervisor, 'bee.hive.supervisor/*']
-    effect: allow
-- name: execute_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [funcs.call]
-    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:advertise]
-    effect: allow
 - name: probe_policy
   kind: security.policy
   meta: {type: test_support}

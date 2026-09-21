@@ -1,6 +1,3 @@
--- MIT. Agent application opening is a small, explicitly admitted facade over
--- the existing workspace host and applications broker. It has no registry,
--- publication or activation authority.
 local process = require("process")
 local security = require("security")
 local channel = require("channel")

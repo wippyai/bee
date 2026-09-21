@@ -1,5 +1,3 @@
--- MIT. The placement receipts schema as an ordered ledger. Migration text is
--- part of its checksum; a change is a new migration.
 local M = {}
 type Migration = {id: integer, name: string, sql: string, rebuild: boolean}
 local ATTEMPTS_SQL = [[

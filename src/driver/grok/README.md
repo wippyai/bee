@@ -42,32 +42,7 @@ selects the existing Bee `hook-post` executable. Generated `.grok/hooks/bee.json
 uses the separate hook credential environment; hook-only configuration creates
 no MCP server. The helper reports observations and emits no permission decisions.
 
-The B1.1 acceptance launches real Grok 1.0.30 and checks `inspect --json` for the
-preserved user settings, existing user MCP, Bee MCP, user hooks and Bee hooks.
-It also requires an authenticated SessionStart through the helper without a
-user prompt or model turn. The current standalone composition candidate passes
-this acceptance; the runtime-module review and complete release gate remain
-pending.
-Its payload carries both camelCase and snake_case aliases. The gateway accepts
-matching aliases, rejects conflicts, preserves bounded session/turn/tool claims,
-and hashes content instead of retaining it. Unit checks cover the captured
-SessionStart shape and documented tool shape. The assembled executable's
-Grok fixture now passes picker launch, present/absent machine login, scoped MCP,
-committed PreToolUse/Stop delivery and the resulting "Using tool" window title.
-This fixture does not prove real Grok model turns or cold window recovery.
-Evidence: `bee-evidence/0912/grok-session-hook-live.log` and
-`agent-login-hooks-grok-title.log`. Global binary `c8537ef7` includes this integration.
-
-The installed CLI advertises stdio, Streamable HTTP and SSE MCP
-transports. A September 13 loopback probe of the actual `grok mcp doctor`
-confirmed `${BEE_TEST_TOKEN}` expansion: initialize and tools/list requests
-carried the expanded dummy credential. The diagnostic returned exit 1 against
-the minimal server, so this is only header-behavior evidence, not a healthy-server
-or completed agent-turn proof. An authenticated managed MCP turn remains
-unverified; the installed Grok CLI was logged out during earlier acceptance.
-Evidence: `bee-evidence/0912/grok-mcp-header-expansion.log`.
-
-`tests/lua/driver/grok` covers launch arguments, configuration bounds, malformed
-state, session changes, answer bounds and terminal/tool outcomes. These fixtures
-remain outside production packs. Run the repository's `make lint` and `make test`
-with the selected `WIPPY` runtime.
+The gateway accepts both camelCase and snake_case hook fields, rejects
+conflicting aliases, preserves bounded session/turn/tool claims and hashes
+content instead of retaining it. Provider model turns and cold window recovery
+remain outside this driver contract.

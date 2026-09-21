@@ -1,11 +1,3 @@
--- MIT. The hook endpoint in its http form: POST /hook/{action} receives
--- one harness hook event as Claude Code's http hook handler posts it,
--- authenticates the bearer token as a hook credential of the action's
--- binding, and queues the observation. Every answer to the harness is a
--- status with an empty body: an accepted hook is 202 (queued) or 200
--- (already committed), and no refusal ever carries a JSON body, so nothing
--- the gateway says can be read as a hook decision. GET /hook/{action}/{event}
--- answers the submission's status to the same credential.
 local http = require("http")
 local json = require("json")
 local gateway = require("gateway")

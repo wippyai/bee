@@ -1,7 +1,3 @@
--- MIT. The pure Muse configuration contract: the carrier and placement
--- select both this method and its gateway from their pinned host records.
--- Muse accepts no provider configuration; the user's `muse login` owns
--- authentication, the same boundary as the Codex chatgpt login mode.
 local configuration = require("configuration")
 local configure_protocol = require("configure_protocol")
 local function handle(value: unknown): {[string]: unknown}

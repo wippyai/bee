@@ -1,12 +1,3 @@
--- MIT. The hook endpoint in its MCP form: POST /hook/{action}/mcp serves
--- one tool, hook, to a Codex mcp_tool hook handler. The bearer must be a
--- hook credential of the action's binding. The request metadata is
--- classified against the shape the pinned Codex sets for hook-engine calls,
--- which is version-specific validation and never an authenticated origin:
--- every accepted submission is an untrusted observation from the attempt.
--- The tool result is a bare text naming the submission's status (queued
--- until a carrier commits it) and its event id, never JSON, so nothing in
--- it can be read as a hook decision.
 local http = require("http")
 local json = require("json")
 local gateway = require("gateway")

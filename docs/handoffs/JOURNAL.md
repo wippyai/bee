@@ -8356,3 +8356,77 @@ with runtime `b476104e63` and native Bee
 stopped one exact prior owner cleanly and preserved every Bee state class.
 Backup: `bee-evidence/0921/global-before-guide-9e28a8b`. Receipt:
 `bee-evidence/0921/global-guide-9e28a8b-install.json`.
+
+### 2026-09-21 Codex: full-substrate component path reconciled
+
+A focused Bee/runtime audit and an Astra design review confirm that distributed
+domain systems remain ordinary Wippy components. They may define services,
+functions, owned storage and migrations, drivers, traits, agents and optional UI;
+Bee owns package planning, destination-specific authority and resources,
+lifecycle and receipts. No distributed-component framework, central component
+database, Bee-owned workload protocol or additional package layer is warranted.
+
+The implemented local boundaries remain `src/hub`, `src/governance`, `src/hive`,
+`src/resources` and `src/apps`. Documentation now distinguishes those working
+paths from public enrollment, headless-node launch and destination Hub transfer/
+install. It also records generic policy-mode Hive routing, the fact that an
+`auto_start` plan row is not service-readiness evidence, and the first bounded
+two-admitted-node acceptance milestone. Stale references to a missing private
+planner module and the pre-native-distribution feasibility phase were removed.
+
+The regenerated offline corpus contains 163 documents. Its digest check, changed
+document links, strict lint, repository action/secret checks and the real admitted
+docs-agent source/pack probe pass. The standalone candidate passes embedded Bee,
+Modules, About, all five Agent picker profiles and loopback-only offline cold
+boot/restart/reconnect; warm attachment measured 0.208 seconds. Global install
+remains at the preceding governed-authoring build until this candidate is
+committed and installed.
+
+### 2026-09-21 Codex: component-substrate release installed and repository audited
+
+Source `38784b7` is installed globally as executable SHA-256
+`7f1b59d5171cadb9d8903e7824df2bf7f211a8f9bc7f09258172ae29177cf6fd`,
+with runtime `b476104e63` and native Bee
+`v0.0.0-20260921050738-b2060715b014`. Its six-file installer proved rollback
+before replacement and preserved databases, profiles, conversations, workspaces,
+displays, credentials and migration ledgers. Backup:
+`bee-evidence/0921/global-before-substrate-38784b7`; receipt:
+`bee-evidence/0921/global-substrate-38784b7-install.json`.
+
+The first real launch restored a dead Muse window without a recorded provider
+conversation. Bee correctly refused to fabricate recovery. Escape closed the
+window through the supported desktop path; the following global launch opened
+cleanly and detached normally. No database was edited or reset.
+
+A read-only repository and complete-history audit found 187 strictly linear
+commits, one local and remote `main`, one worktree, no stale refs, unreachable or
+corrupt objects, suspicious commit subjects, tracked build output, credentials,
+secret files or broken documentation links. The large reconciliation baseline,
+append-only handoff journal and generated offline corpus are intentional and do
+not justify rewriting published history. Local cleanup removed dead branch
+tracking configuration and ignored release, fixture and Python-cache output;
+the retained `.wippy` directory remains developer/runtime state. The stale
+generated-bundle leak exemption and obsolete native-distribution Test Status
+description were removed.
+
+### 2026-09-21 Codex: native runtime boundary reduction in progress
+
+The cleanup now removes Bee's parallel native Hive, client, Docker, background
+launch, private-file and promotion machinery. Native code is being reduced to
+the filesystem event component and one application host that selects a
+project-specific default state and exposes bounded read-only host facts. The
+host neither opens nor locks state, creates compatibility receipts, manages
+processes, nor implements Hive.
+
+Runtime PR #819 adds `Plan.DefaultState` on top of #789/#787: an explicit
+`--state` wins, an empty host default preserves the executable default, and a
+relative host default resolves from the original launch directory. Bee pins the
+reviewed patch by digest until the runtime stack merges. Rodrigo has approved
+#787 at its current head.
+
+Upgrade persistence is not yet claimed. The prior two-binary gate proves
+workspace identity, migrations, settings and application visibility; a new
+acceptance is in progress for a real Hub dependency change plus a reviewed,
+approved Governance overlay, application checkpoint, executable replacement,
+boot recovery and reopen from the same explicit state. Global installation is
+held until that gate and the standalone/project-node checks pass.

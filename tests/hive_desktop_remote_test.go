@@ -97,11 +97,7 @@ func (r *desktopRemote) lint(ctx context.Context) *exec.Cmd {
 }
 
 func desktopDatabaseEnvironment(folder string) []string {
-	result := []string{"GOMAXPROCS=2"}
-	for _, name := range []string{"WORKSPACE", "THREADS", "CLIENT", "APPROVALS", "RESOURCES", "CREDENTIALS", "PLACEMENT"} {
-		result = append(result, "BEE_"+name+"_DB="+filepath.Join(folder, strings.ToLower(name)+".db"))
-	}
-	return result
+	return append([]string{"GOMAXPROCS=2"}, beeDataEnv(folder)...)
 }
 
 func (r *desktopRemote) command(ctx context.Context) *exec.Cmd {

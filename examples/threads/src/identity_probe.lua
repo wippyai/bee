@@ -1,4 +1,3 @@
--- MIT. Verify native contract invocation framing before adopting an adapter.
 local process = require("process")
 local sql = require("sql")
 local security = require("security")

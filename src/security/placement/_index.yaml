@@ -60,7 +60,7 @@ entries:
     actions:
     - process.registry.register
     - funcs.call
-    resources: ['*', bee.placement.docker:reconcile_internal]
+    resources: '*'
     effect: allow
 - name: placement_runner_policy
   kind: security.policy

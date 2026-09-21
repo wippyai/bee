@@ -1,12 +1,9 @@
--- MIT. Grok CLI launch specifications: declarative argv for a first turn
--- and for a resumed turn. Placement resolves the executable, the home and
--- the working directory; nothing here runs a process.
 local bounds = require("bounds")
 local types = require("types")
 local M = {}
 
 -- The API-key path uses environment projection of XAI_API_KEY (or browser/device
--- credentials in GROK_HOME); until verified against a live key, the gate stays open.
+-- credentials in GROK_HOME).
 M.GROK_AUTHENTICATION = "unproven"
 M.PERMISSION_MODES = {"default", "acceptEdits", "auto", "dontAsk", "bypassPermissions", "plan"}
 M.EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}

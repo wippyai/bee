@@ -1,171 +1,94 @@
 # Working on Bee
 
-This guide describes available development operations. The optional Hub component
-provides scoped package reads, planning and installation through `bee.hub:call`
-and the Modules application; see [the implemented Hub contract](HUB.md), including
-its migration limits. Managed Agent profiles have scoped native MCP delivery;
-some provider-specific acceptance and end-to-end in-app self-edit remain
-incomplete.
-See [saved profiles](handoffs/SAVED_AGENT_PROFILES.md) and the current foundation
-checkpoint for their verified scope. [Package boundaries](PACKAGE_BOUNDARIES.md) also contains proposals;
-use implementation contracts to determine which operations are callable.
+Read [the repository README](../README.md), [development conventions](DEVELOPMENT.md),
+and the [documentation map](README.md) before changing Bee. Source
+under `src/` is the runtime; tests, fixtures and the legacy proof of concept in
+`../bee-legacy/` are never runtime dependencies.
 
-Read `README.md`, `docs/FOUNDATION_STATUS.md` and `docs/DEVELOPMENT.md` first.
-The [local acceptance checkpoint](LOCAL_FOUNDATION_ACCEPTANCE.md) separates verified
-foundation work from the still-required headless/client milestone.
-`docs/README.md` distinguishes current contracts from historical/design pages.
-Keep desktop responsibilities
-in `src/core`, reusable appearance in `src/ui`, and standalone apps in `src/apps`.
-Use the [Bee UI brand book](UI_BRAND_BOOK.md) and the runnable **UI Guide** under
-Tools → Learn for application presentation, responsive layout and interaction
-patterns. It is reference source, not a widget framework.
-Use registry imports, explicit typed values and authenticated process protocols.
-App metadata describes an app; it does not grant capabilities. New apps require
-reviewed admission and an explicit scope. Do not grant generic applications the
-Process Manager's inspection permissions or Settings' preference-write route.
+Bee-owned code and artwork are MIT. Preserve the upstream license for Wippy and
+other dependencies when changing or copying runtime code. Keep core ownership,
+standalone application processes, typed boundary decoders and host-selected
+permissions intact. Registry metadata describes capabilities; it never grants
+them. Native Terminal runs with the operating system user's authority.
 
-Use `make lint` while editing. Run `make check` for behavioral changes; it covers
-unit tests, source/pack isolation and actual terminal interactions. Extend the
-acceptance harness for changed input, lifecycle or window behavior. Inspect
-intermediate synchronized frames when testing animation or drag handoffs; an
-eventually correct screenshot cannot reveal a one-frame jump.
+Keep desktop responsibilities in `src/core`, reusable appearance and public
+application helpers in `src/ui`, and standalone applications in `src/apps`.
+Use the [UI brand book](UI_BRAND_BOOK.md) and the runnable UI Guide for
+presentation and interaction rules. The guide is reference source, not a
+widget framework. Apps use public contracts such as `bee.application:client`
+and `bee.threads:client`; they do not import private broker or store modules.
 
-`make pack` produces `dist/bee.wapp`. Production loads only `src/`; fixtures and
-test dependencies belong to temporary test workspaces. Never add local runtime
-binaries, registry stores, credentials or legacy source to the pack. Do not edit
-registry database tables directly to work around a source-loading problem.
+The workspace owns application state, checkpoints and its migration ledger.
+Registry configuration/history, thread records, approvals, resources and
+credentials remain owned by their respective subsystems, even when stores
+share a SQLite file. Never edit an applied migration, alter a migration
+checksum, query another owner's tables, or reset a workspace database to hide
+a migration failure. Use an owner operation for every state change.
 
-F12 replaces only the presenter. If workspace, broker or session logic changed,
-exit with Ctrl+Q and run `bee` again. For editable-source development, use
-`make run` as described in the development guide. Preferences and opt-in application
-checkpoints persist in the workspace database. Settings opts in; Terminal does
-not restore a dead PTY. See `APPLICATION_CONTRACTS.md` for the actual version-1
-protocol; native process stacks are not portable checkpoints.
+Use typed values for every decoded message and request. Validate versions,
+identities, strings, arrays, state and request IDs before changing state. A PID
+is an execution address, not a credential. Authenticate the message sender and
+the relevant instance, token or operation grant. A successful send means
+queued; it does not mean ready, committed or stopped. Timeouts can leave an
+unknown result and must not cause a blind retry.
 
-For future package work, preserve definition IDs independently of versions and
-paths. Carry expected revisions, capability changes and rollback information in
-activation requests. Document whether an update supports live rejoin, app
-checkpoint/restore or a full restart. Do not describe planned operations as
-already callable.
+Use the Makefile for development:
 
-The thread authority and durable subscriptions now supply the communication
-slice; Timeline is the read-only application, and Test Status has been removed.
-See [the build sequence](BUILD_SEQUENCE.md) for implemented driver and gateway
-components and their remaining public activation gates. Do not route new
-authority through the desktop merely because it is the visible client.
+```sh
+make setup
+make lint
+make check
+make pack
+make standalone
+```
 
-The globally installed Bee contains the Muse 1.3.0 driver integration.
-Managed Muse uses a retained private `HOME` with `XDG_CONFIG_HOME` absent. The
-host admits and snapshots the user's Muse auth/settings, then placement builds
-a fresh settings file that preserves the provider/model/TUI, unrelated MCP
-servers and user hooks while inserting Bee's scoped MCP and appending its
-authenticated hook groups. The real `native-muse-recovery-live-check` passes
-against `dist/bee-muse-v2`: its first turn uses scoped `thread_read`, reads a
-file and commits the selected hooks; cold recovery resumes the exact session,
-recalls the token without tools or prompt replay, keeps the retained HOME,
-project, application and thread, and creates a fresh attempt, gateway binding
-and hook-token path. Source auth/settings/project state remain unchanged. The
-test wrapper disables Muse's experimental skill, goal and verification reminder agents only for
-this exact-session acceptance. Source `de9c5d0` is installed globally as
-executable SHA-256 `5e8d3f608e57`; its installed `bee muse` route reaches Muse's
-native workspace trust screen from the caller's project directory and detaches
-cleanly without changing the user's Muse auth or settings.
+`make run` starts an editable source workspace. `make desktop-check` runs the
+desktop acceptance against the built pack, and `make attachments-check` covers
+host/client attachment grants and revocation. Use focused tests while editing,
+then the checks required by the changed boundary. Documentation-only changes
+need link and source consistency checks; they do not need a full terminal run.
 
-The shared source currently needs the candidate runtime described in
-[the runtime gate](handoffs/STATUS_RUNTIME_GATE.md); historical standalone
-acceptance does not prove a release of these newer changes.
+Production loads only `src/`. Keep binaries, registry stores, credentials,
+fixture data and temporary databases outside the pack. Inspect assembled packs
+for test registrations and fixture dependencies. Do not add a local runtime
+binary or legacy source to production, and do not edit registry tables directly
+to work around source loading.
 
-## Continuing the host/client work
+The desktop client may replace only its presenter with F12. Workspace, broker,
+session, host or application changes require the owning process lifecycle and
+recovery path. Preferences and opted-in application checkpoints persist in the
+workspace database. Settings opts in to checkpointing; a dead native Terminal
+does not become a portable checkpoint. See
+[application contracts](APPLICATION_CONTRACTS.md) for launch, attachment,
+checkpoint and close behavior.
 
-Public `bee` selects
-the independent client, with `bee:client_db` alongside the workspace database.
-Legacy migration, full `make check` and standalone acceptance pass. Older selected
-deployments may retain their code; `bee recover` selects the embedded bundle
-with fresh registry history without resetting application databases.
-`bee observe` joins the running local Bee read-only through the same native mesh;
-it never starts a new Bee or displaces the controller.
-Use [client state](CLIENT_STATE.md) and the current command metadata for launch wiring.
+The host keeps application execution independent from presentation. A producer
+may be ready without a presenter, a client may observe a retained desktop, and
+attachments carry recipient-bound observation, input and resize authority.
+Detaching a client does not stop admitted applications. A stale attachment
+loses its authority. The public client and local host are implemented; remote
+workspace composition, public Hive enrollment/discovery, destination Hub
+transfer/install, and managed headless or Docker launch remain unfinished.
+Keep those operations labeled as proposals until their acceptance contracts
+exist.
 
-Read [client/host extraction](CLIENT_HOST_SPLIT.md) for current coupling and
-implementation gates, [workspace attachments](WORKSPACE_ATTACHMENTS.md) for
-identity, Hive and portable application content, and
-[historical foundation review](FOUNDATION_NEXT.md) for the proposed driver/self-edit
-sequence, not current implementation status.
-Do not create a parallel mesh, naming system or registry reconciler.
+`bee observe` attaches a read-only display to a running local Bee and never
+starts or displaces the controller. `bee recover <name>` selects the embedded
+application pack for a named managed launch while preserving workspace and
+application state. These commands keep the local owner boundary; they do not
+provide remote enrollment or workspace switching.
 
-Current evidence: the broker retains ready producers without a presenter, its
-attachment module retains one controller and up to 16 observer recipient/grant records per instance, and stale
-mounts lose observation/input/resize authority after detach. The named-host fixture
-uses native LOCAL registration after startup readiness. `bee.host:main` owns its
-broker and persistence without a physical TTY. The local supervisor starts it;
-the low-level `bee-host` entry can run that owner on `bee:workers` without a
-desktop. It does not yet expose supervisor admission or discovery. There is no
-managed headless launch profile, workspace switcher or `bee hive` CLI.
-The host admits supervisor-selected client actors with explicit operation
-permissions and connection IDs. Source/pack tests cover two clients, detach,
-re-admission, exit cleanup and retained native terminals. See the internal
-admission contract in `CLIENT_HOST_SPLIT.md`; it is not a remote enrollment API.
-Admitted actors receive separate, connection-qualified catalog and live-view
-snapshots, including apps opened before admission. These descriptions carry no
-mounts or checkpoints. Source/pack checks cover title/exit updates and publication
-fencing on detach; the desktop client consumes them. `bee.host.reply` results include a bounded
-inventory snapshot so independent channel ordering cannot resurrect a removed tab.
-The host also supports supervisor-selected renderer replacement under an existing
-client connection. Bind requests carry the current renderer generation. Source/pack
-tests cover old-grant denial, failed revocation, renderer exit and queued detach.
-`bee.client:main` composes a display, session, presenter and client
-store against one admitted host. Source/pack checks prove two independent desktop
-actors, selected-tab isolation, F12 and fresh-client reattachment to a retained
-Terminal. Guarded-close dialogs are tested across F12 and client reattachment.
-Settings theme persistence, isolation, F12 and denied writes also have source/pack
-acceptance. The local entry also proves presenter-crash recovery, bounded
-pause for readiness or renderer timeouts, and supervised normal/emergency exit.
-Ordinary launch grants display-local appearance. The client commits Settings
-writes before success, and the broker updates only its controlled producer pages.
-Fresh displays inherit node defaults; saved v1 choices become custom overrides.
-See the appearance contract for mode persistence. Workspace appearance grants
-and requests without a controlling display are rejected.
-Mixed workspaces remain unimplemented. See the verified local client acceptance
-and remaining remote boundary in `CLIENT_HOST_SPLIT.md`.
-`CLIENT_STATE.md` documents the client store and import receipt. Source/pack
-migration tests now boot the actual old combined actor, then the public client:
-workspace/application identities, layout and the original migration ledger survive,
-and subsequent boots preserve later client edits.
-The short workspace ID in the header is informational.
+The local Hub can inspect, plan and apply host-authorized components. Governed
+overlays can stage bounded content, freeze an immutable candidate, obtain an
+exact approval, apply it through the owning host and recover after restart.
+Hub discovery or installation alone does not publish an admission binding or
+grant an application authority. Publication, public enrollment and destination
+package transfer are separate authority boundaries; see
+[package boundaries](PACKAGE_BOUNDARIES.md) and [the system map](SYSTEM_MAP.md).
 
-Establish the local owner boundary first; then the Hive and agent-integration
-branches can proceed independently:
-
-1. Complete explicit per-client attachments and the single-controller contract.
-   Keep full workspace/instance/view identity and fresh execution references.
-2. Separate the TTY-free workspace host from the desktop client. Prove two local
-   clients with independent layouts, retained apps on detach and denied stale control.
-3. Route the same owner operations through native mesh names. Destination owners
-   establish actor/scopes after admission. Prove two actual Bee runtimes before
-   claiming Hive support or publishing a remote workspace selector.
-4. Add the Hive Manager and compact switcher over those operations. Save explicit
-   join configuration once; fresh installs remain local-only.
-5. Once the local boundary in steps 1–2 is stable, add registry-bound harness
-   drivers, thread/run ownership and scoped hook/MCP configuration. This local
-   branch does not depend on completing remote discovery or Hive Manager.
-   Reviewed publication and the real self-edit demo follow its acceptance checks.
-
-The registry owns definitions/configuration/history. Workspace application state,
-journal events and exported application data retain their respective owners.
-Transfer declarative content and explicitly supported state, not local credentials,
-live PIDs or mounts. Legacy drivers are source references outside the repository,
-never runtime dependencies. The `bee claude/codex/agy/grok/muse` aliases and the
-managed Agent picker use the same reviewed definitions, profiles, admission and
-scoped gateway configuration; provider hooks feed their bound threads. Fixture acceptance
-proves saved-conversation continuation. Real Agy, Codex and Grok cold-recovery
-rows pass against the selected-state candidate. Muse's exact session cold
-recovery and live MCP/hook acceptance pass against `dist/bee-muse-v2`; real
-Claude recovery remains unqualified because the provider account refuses
-inference. Read [saved
-profiles](handoffs/SAVED_AGENT_PROFILES.md) before extending this path.
-
-Use `make check` for production changes. `tests/lifecycle.py::detached` is the
-named-owner/revocation gate; `tests/recovery.py` covers durable identity and state;
-`tests/native_binary.py` checks the assembled executable. Runtime TTY proofs do
-not substitute for Bee host/client acceptance. Leave cluster/Raft implementation
-to its existing owner, and reproduce a TTY gap before requesting a #653 change.
+When changing a behavior, update the relevant implementation contract and run
+the checks for that owner. Preserve stable definition IDs independently of
+versions and paths. Carry expected revisions, capability changes and recovery
+information in activation requests. Describe whether an update supports live
+rejoin, application checkpoint/restore or a full restart; do not describe a
+proposal as a callable API.

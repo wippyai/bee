@@ -4,9 +4,8 @@ The placement contract and its values. A placement runs one admitted launch
 as one attempt: it validates an owner's admitted request, records intent
 before anything external exists, starts the child inside a runner it owns,
 proves every transition with evidence, and removes the attempt's private
-home only after the process is proven gone. Implementations
-(`bee.placement.native`, later `bee.placement.docker`) own executors,
-directories and receipts; this module owns none of them.
+home only after the process is proven gone. Placement implementations own
+executors, directories and receipts; this contract module owns none of them.
 
 | Slice | Responsibility |
 |---|---|
@@ -58,9 +57,3 @@ native windows require the exact native binding ID.
   `process_group` controls what remains in the created group, and
   `contained_tree` needs a stronger boundary than a process group. A
   descendant that starts its own session escapes a group.
-
-`make identity-native-check` loads the production identity library in a minimal
-native host. It verifies a live group, the same group after its leader is killed
-and reaped, and failed, malformed and empty process-table responses. These
-observations prove the absence check; they do not establish managed-terminal
-identity transfer or process-tree containment.

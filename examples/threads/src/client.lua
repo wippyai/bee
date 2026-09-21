@@ -1,4 +1,3 @@
--- MIT. Private fixture RPC; not a public Bee API.
 local process = require("process")
 local channel = require("channel")
 local time = require("time")

@@ -1,4 +1,3 @@
--- MIT. Pure Antigravity CLI driver configuration method.
 local configuration = require("configuration")
 local configure_protocol = require("configure_protocol")
 

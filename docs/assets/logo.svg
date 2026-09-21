@@ -1,13 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" role="img" aria-labelledby="title description">
   <title id="title">Bee</title>
-  <desc id="description">The terminal bee from the application's welcome screen.</desc>
-  <rect width="320" height="320" rx="12" fill="#10151b"/>
-  <g fill="#edbd59" font-family="DejaVu Sans Mono" font-size="28" xml:space="preserve">
-    <text x="17" y="100">&#160;&#160;&#160;&#160;╭──╮&#160;╭──╮&#160;&#160;&#160;&#160;</text>
-    <text x="17" y="128">&#160;&#160;&#160;&#160;╰──╲&#160;╱──╯&#160;&#160;&#160;&#160;</text>
-    <text x="17" y="156">&#160;╭──────┴─────╮&#160;&#160;</text>
-    <text x="17" y="184">◂│&#160;██&#160;&#160;██&#160;&#160;•&#160;&#160;│&#160;&#160;</text>
-    <text x="17" y="212">&#160;╰────────────╯&#160;&#160;</text>
-    <text x="17" y="240">&#160;&#160;&#160;&#160;&#160;&#160;&#160;╲&#160;╲&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+  <desc id="description">The terminal bee mark.</desc>
+  <rect width="320" height="320" rx="12" fill="#0c1119"/>
+  <g stroke="#ffc963" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <g fill="none">
+      <rect x="70" y="55" width="72" height="42" rx="11"/>
+      <rect x="178" y="55" width="72" height="42" rx="11"/>
+      <path d="M142 76l18 50M178 76l-18 50"/>
+      <rect x="44" y="126" width="232" height="80" rx="13"/>
+      <path d="M143 206l12 30M169 206l12 30"/>
+    </g>
+    <path d="M18 166l26-17v34z" fill="#ffc963" stroke="none"/>
+    <rect x="76" y="151" width="44" height="32" fill="#ffc963" stroke="none"/>
+    <rect x="136" y="151" width="44" height="32" fill="#ffc963" stroke="none"/>
+    <circle cx="239" cy="166" r="5" fill="#ffc963" stroke="none"/>
   </g>
 </svg>

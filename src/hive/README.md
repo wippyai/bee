@@ -1,6 +1,6 @@
 # bee.hive
 
-The cross-node protocol of Bee, as agreed in `docs/HIVE_PROTOCOL.md`. Six
+The cross-node protocol of Bee, as defined by the runtime Hive owner. Six
 terms: Principal, Owner, Operation, Request, Grant, Session. Every call passes
 the caller's supervisor and, when remote, the destination supervisor; the owner
 decides; a grant may open a direct session.
@@ -10,8 +10,21 @@ decides; a grant may open a direct session.
 | Slice | Responsibility |
 |---|---|
 | `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `catalog` (exposure and interfaces), `client`, and the supervisor host |
+| `bee.hive.host` | The host-owned default supervisor service composition |
 | `bee.hive.telemetry` | The first open operations: `presence`, `stats`, `catalog_list` |
 | `bee.hive.supervisor` | The supervisor: hello, admission, forwarding, guarded dispatch, epochs (Astra's lane) |
+
+## Host composition
+
+`bee.hive.host:supervisor_service` is the default `process.service`. It starts
+`bee.hive.supervisor:main` on `bee.hive:supervisor_host` with an empty
+`configured_nodes` list, so a fresh Bee can route local calls while remaining
+portable and offline. Its lifecycle actor and policies are selected by the
+host composition, not by an ordinary application.
+
+An admitted host overlay may replace that service input with peer node IDs and
+an optional validated desktop configuration. TLS, seeds, ports and native
+membership settings remain outside the registry; they are not service input.
 
 ## Exposure
 
@@ -23,6 +36,18 @@ only when the ceiling admits its mode, and the supervisor resolves it again at
 admission. Interfaces are `registry.entry` entries with `meta.type:
 hive.interface` naming `operation_ref`, fixed arguments and allowed arguments;
 they narrow and never widen.
+
+Policy operations use the same generic route with an additional destination
+authorization check. The host exposes an exact operation through
+`hive.expose.policy`; the destination supervisor then resolves its configured
+`bee.hive.supervisor:principal_mappings` entry, maps the authenticated issuer
+and subject pair to its derived member actor and configured policy IDs, and
+checks that mapped actor's scope grants `hive.invoke` for the operation. Only
+after those checks does it call the owner function, rechecking the operation
+revision, input digest and output contract. A request cannot choose its actor,
+policies or destination, and metadata cannot grant them. This generic policy
+route is the current operation seam; it does not provide public enrollment,
+headless-node launch or destination package installation.
 
 ## Client
 

@@ -1,4 +1,3 @@
--- MIT. Saved preferences select reviewed launch definitions, never host authority.
 local bounds = require("bounds")
 local M = {}
 M.SCHEMA = "bee.agent-profile@1"

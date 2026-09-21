@@ -1,7 +1,3 @@
--- MIT. Strict public boundary for the docs tool. A request names one operation
--- and nothing that could reach outside the corpus: no path, no host reference,
--- no actor identity, no policy. Every field is bounded before the corpus is
--- consulted, the same way the workspace and thread tools decode their requests.
 local bounds = require("bounds")
 local M = {}
 M.SCHEMA = "bee.docs-request@1"

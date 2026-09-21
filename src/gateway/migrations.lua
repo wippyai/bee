@@ -1,9 +1,3 @@
--- MIT. The gateway schema as an ordered ledger. A migration is immutable
--- once any store applied it, so every change is appended. Migration 3
--- moves token hashes out of bindings into a credentials table keyed by
--- binding and generation, adds the carrier epoch and the credential
--- generation to bindings, and gives the listener a secret; a store opened
--- across it keeps its bindings, and their tokens, as generation 1.
 local M = {}
 type Migration = {id: integer, name: string, sql: string, rebuild: boolean}
 local GATEWAY_SQL = [[

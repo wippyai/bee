@@ -1,4 +1,3 @@
--- MIT. Host-derived identity for one logical application instance.
 local M = {}
 
 type Value = {id: string, metadata: {[string]: string | integer}}

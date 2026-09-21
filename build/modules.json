@@ -127,6 +127,7 @@
       "namespaces": [
         "bee.hive",
         "bee.hive.desktop",
+        "bee.hive.host",
         "bee.hive.supervisor",
         "bee.hive.telemetry"
       ]
@@ -144,11 +145,6 @@
       "namespaces": [
         "bee.placement"
       ]
-    },
-    {
-      "module": "bee/placement-docker",
-      "root": "bee.placement.docker",
-      "namespaces": ["bee.placement.docker"]
     },
     {
       "module": "bee/placement-native",

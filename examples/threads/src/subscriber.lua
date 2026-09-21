@@ -1,4 +1,3 @@
--- MIT. A standalone projection consumer; its replay cursor is a launch argument.
 local process = require("process")
 local sql = require("sql")
 local client = require("client")

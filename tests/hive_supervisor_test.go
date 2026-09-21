@@ -25,7 +25,7 @@ import (
 
 // Uses actual native peer authentication and process provenance. The only
 // configured identities are native nodes; no supervisor PID is passed at boot.
-func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
+func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService bool) (string, string) {
 	t.Helper()
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -36,6 +36,11 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	fixtureSnapshot := filepath.Join(root, "fixture")
 	if err := os.CopyFS(filepath.Join(sourceSnapshot, "hive"), os.DirFS(filepath.Join(repository, "src/hive"))); err != nil {
 		t.Fatal(err)
+	}
+	if !includeDefaultService {
+		if err := os.RemoveAll(filepath.Join(sourceSnapshot, "hive/host")); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.CopyFS(fixtureSnapshot, os.DirFS(filepath.Join(repository, "tests/fixtures/hive_supervisor"))); err != nil {
 		t.Fatal(err)
@@ -288,7 +293,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	sourceSnapshot, fixtureSnapshot := freezeHiveSupervisorSource(t, root)
+	sourceSnapshot, fixtureSnapshot := freezeHiveSupervisorSource(t, root, false)
 	if feeds {
 		stageHiveFeeds(t, sourceSnapshot, fixtureSnapshot)
 	}

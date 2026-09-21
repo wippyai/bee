@@ -1,12 +1,6 @@
--- MIT. Codex CLI launch specifications: a fresh exec, or a resumed thread.
 local bounds = require("bounds")
 local types = require("types")
 local M = {}
--- The API-key path is selected only by a generated provider configuration
--- in the private CODEX_HOME (provider with env_key OPENAI_API_KEY, base_url
--- and the responses wire API); the environment projection alone does not
--- authenticate the pinned executable. Until that configuration projection
--- ships, the gate stays open.
 M.CODEX_AUTHENTICATION = "unproven"
 M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 M.SANDBOXES = {"read-only", "workspace-write"}

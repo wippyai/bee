@@ -65,18 +65,11 @@ selection. A base URL, custom provider name or fixture endpoint is refused
 for this mode. Omitting `authentication` retains the API-key configuration.
 MCP and hook configuration still use the same admitted gateway delivery.
 
-This implements configuration selection only. Automatically discovering the
-user's login, copying it into private writable session state, refreshing that
-state across cold launches and Docker execution are not yet accepted. No login
-file is read by this pure driver; the credential materializer owns that boundary.
+The driver selects the authentication mode; the credential materializer owns
+login discovery and private session state. No login file is read by this pure
+driver. Login refresh across launches and Docker execution are outside this
+contract.
 The configuration follows the [official Codex authentication contract](https://developers.openai.com/codex/auth).
-
-## Testing
-
-`make test` runs `tests/lua/driver`: profile validation, framing with
-fragmented and oversized input, quoting, observation builders, and each
-provider's normalizer against the captured fixtures under
-`tests/fixtures/drivers/<harness>/<protocol_revision>/`.
 
 ## Codex authentication path
 
@@ -90,7 +83,7 @@ A saved agent profile may *name* one Codex config profile
 (`$CODEX_HOME/<name>.config.toml`), which the executable layers on top of its
 base user config through `-p/--profile`. Bee's own session `-c` MCP and hook
 arguments still apply, and Codex resolves a later `-c` override over the named
-profile's value (verified against the installed binary). The name is a bounded
+profile's value. The name is a bounded
 identifier matching what Codex accepts; a dot, path separator, leading dash,
 space, empty or overlong value is refused, so it can never escape the Codex
 home. The field is offered only by a host policy that sets
@@ -112,21 +105,12 @@ whose named file is absent from the inherited home is refused before the
 process starts, by an existence check through the read-only host volume that
 never reads the file's contents.
 
-`make live-codex-profile-check CODEX_PROFILE=<name>` proves the whole route
-against the owner's installed Codex and their own config profile (default
-`ds-flash`): it boots a disposable composition, saves a profile naming the
-config profile, launches it, and requires one real turn in which the agent
-reads its own bound thread over Bee MCP and commits an unguessable token as a
-stream observation, with a succeeded turn and a receipt. It is opt-in and
-consumes inference; the ordinary suite covers the same wiring with no provider.
-
-
 The Codex launch writes the brief to stdin and Codex reads it until end of
 file, so the launch declares `stdin_eof`: placement admits it only where
-the executor can close stdin (`close_stdin`, runtime PR 698), the runner
+the executor can close stdin (`close_stdin`), the runner
 writes the complete input, closes stdin once and records
 `stdin.accepted`, `stdin.closed` or `stdin.uncertain`, and later writes are
-refused. The pinned executable does not take `OPENAI_API_KEY` from the
+refused. The executable does not take `OPENAI_API_KEY` from the
 environment alone: it selects the API-key path only through a provider
 configuration in the private `CODEX_HOME`. `bee.driver.codex:configuration`
 renders that file from the host's `bee.codex_provider` entry named by the
@@ -134,16 +118,13 @@ launch policy (`provider_ref`): only the provider name, base URL,
 model, optional `reasoning_effort` (`low`, `medium`, `high`, `xhigh` or
 `max`) and optional bounded `developer_instructions` (ordinary text plus
 escaped line breaks, carriage returns and tabs), with
-`env_key = "OPENAI_API_KEY"` and the responses wire API, plain
-http for the loopback fixture only. Unsupported control bytes are rejected,
+`env_key = "OPENAI_API_KEY"` and the responses wire API; plain HTTP is allowed
+only for loopback endpoints. Unsupported control bytes are rejected,
 and the rendered file remains within the shared 8192-byte configuration bound
 after escaping. The plan digest pins the adapter
 revision and the rendered digest, and placement writes it with exclusive
-creation. `tests/lua/harness/codex_runner_test.lua` proves API-key
-authentication-path selection through the runner with a sentinel key and a
-controlled endpoint when `BEE_CODEX_BIN` names the executable;
-`launch.CODEX_AUTHENTICATION` stays `unproven` until the pinned build
-carries the runtime capabilities, and no real credential is enabled.
+creation. Real credentials are never enabled by this driver contract; provider
+authentication remains the responsibility of the host and placement path.
 
 ## Host-selected model options
 
@@ -180,12 +161,6 @@ prompt are unchanged. Agy custom agents still control inheritance of ambient
 rules; this file is not a system-prompt replacement. The configuration boundary refuses an instruction file
 when no instructions were selected or its content differs from the selection.
 
-This is a source configuration feature, not an editable picker field. Docker
-profile execution remains a separate acceptance gate. CLI help
-confirms the Claude and Grok flags; Agy 1.2.2
-bundled customization documentation describes the global-rules path; pure delivery tests do not prove a provider
-applied the instructions during an authenticated turn.
-
 ### Instruction builders
 
 A host launch policy may select `instruction_builder = {func_id = ..., args = ...}`.
@@ -210,10 +185,6 @@ frozen value even if the builder later changes or fails. Failures before commit
 can evaluate again. Builder errors or invalid output refuse the new intent.
 
 This supports launch-time guidance, not per-turn refresh inside a running CLI.
-Native placement acceptance checks actor and `ctx` inheritance, declared reads,
-denied storage/execution, generated instructions, and replay after replacing the
-builder with a failing implementation. The Agent picker does not yet edit this
-host-policy field.
 
 ## Claude authentication path
 
@@ -223,19 +194,12 @@ in the private home. The API-key path
 is selected by the environment alone: the launch policy's `environment`
 carries the host-selected `ANTHROPIC_BASE_URL`, the credential broker
 projects `ANTHROPIC_API_KEY`, and the runner's private `HOME` carries no
-login state that could take precedence. `tests/lua/harness/claude_runner_test.lua`
-proves the selection through the runner when `BEE_CLAUDE_BIN` names the
-executable: the controlled endpoint records `x-api-key: <sentinel>` at
-`/v1/messages` and answers 400, so the proof covers path selection only;
-`launch.CLAUDE_AUTHENTICATION` stays `unproven` until the checked real recovery
-gate completes both turns. The current installed Claude and host API key reach
-the first-party provider through this projection, where the account is refused
-for insufficient credit before inference.
+login state that could take precedence. Provider authentication and
+conversation recovery remain outside this driver contract.
 
 ## Claude permission exchange
 
-`bee.driver.claude:permission_adapter` is the captured control protocol
-(`tests/fixtures/drivers/claude/stream-json-2/control.jsonl`). When the
+`bee.driver.claude:permission_adapter` defines the control protocol. When the
 host enables the exchange the carrier prepares with
 `permission_exchange = true` and the launch changes shape: `--input-format
 stream-json` with the brief as the first user line on stdin (canonically
@@ -253,14 +217,11 @@ JSON output flags or stdin-EOF lifecycle. Claude rejects explicit structured-tur
 limits and the stdio permission exchange for this profile.
 
 `terminal:attached` means a terminal transport is attached, not that the provider
-has accepted a turn or is ready for automated input. The production catalog does
-not yet declare this profile compatible; the managed PTY owner and its acceptance
-must land first. These are command specifications, not public window activation.
+has accepted a turn or is ready for automated input. These are command
+specifications, not public window activation.
 
-Claude's structured print command also places positional prompt text after `--`.
-Previously a prompt such as `--version` was parsed as a CLI option. The real
-native resume check now uses that literal prompt and still requires a completed
-turn and retained conversation history. Stdio permission-exchange launches keep
+Claude's structured print command places positional prompt text after `--`, so a
+prompt such as `--version` remains data. Stdio permission-exchange launches keep
 their existing structured input encoding.
 
 Launch specifications separate the executable from its arguments: `argv` never

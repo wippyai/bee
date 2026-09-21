@@ -667,9 +667,11 @@ def exercise():
     stamp_presenter(project)
     shutil.copytree(ROOT / "tests/fixtures/agent_app", project / "src/probe")
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") == "1":
+        # The replica fixture supplies an enrolled supervisor explicitly.
+        # Keep the default offline service out of that composition.
+        shutil.rmtree(project / "src/hive/host")
         shutil.copytree(ROOT / "tests/fixtures/hive_replica", project / "src/replica_probe")
         shutil.rmtree(project / "src/replica_probe/host_environment")
-        shutil.rmtree(project / "src/hive_activation")
         source_probe = project / "src/replica_probe/_index.yaml"
         probe = yaml.safe_load(source_probe.read_text())
         controller = next(item for item in probe["entries"] if item["name"] == "controller_policy")

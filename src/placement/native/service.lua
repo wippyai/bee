@@ -61,9 +61,6 @@ local function load(attempt_id: unknown): (types.Attempt?, Reply?, store.Row?)
     db:release()
     if read_error then return nil, fail("STORAGE", read_error) end
     if not attempt then return nil, fail("NOT_FOUND", "attempt is not recorded") end
-    if row and row.placement_kind == "docker" then
-        return nil, fail("DENIED", "native placement cannot operate a Docker attempt")
-    end
     local denied = owned(attempt)
     if denied then return nil, denied end
     return attempt, nil, row
@@ -287,7 +284,7 @@ end
 -- Configuration inputs come from one host snapshot, not caller-authored
 -- files. The renderer receives the final owner-derived HOME only when a new
 -- intent is recorded; replay uses that intent's frozen delivery.
-local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest, docker: boolean?): (configuration_protocol.Request?, string?, string?)
+local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest): (configuration_protocol.Request?, string?, string?)
     local policy_entry = resolver.entry(pinned, request.policy_ref)
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
     local data = policy_entry and bounds.object(policy_entry.data) or nil
@@ -298,13 +295,10 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
         data = effective
     end
     -- The operation target cannot override the host's selected placement.
-    -- A caller omitting its placement hint still cannot dispatch a Docker
-    -- policy through native execution.
-    if data.placement_binding ~= nil and ((docker ~= true and data.placement_binding ~= "bee.placement.native:binding")
-        or (docker == true and data.placement_binding == "bee.placement.native:binding")) then
+    if data.placement_binding ~= nil and data.placement_binding ~= "bee.placement.native:binding" then
         return nil, nil, "launch policy does not select native placement"
     end
-    if docker ~= true and data.placement_options ~= nil then
+    if data.placement_options ~= nil then
         return nil, nil, "native placement does not support placement_options"
     end
     local instructions, instructions_error = configuration_protocol.instructions(data.instructions)
@@ -338,12 +332,6 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
             hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
     end
     return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil
-end
--- Docker uses the same host policy, provider and configuration renderer. The
--- boolean only changes the placement-selection refusal; it never accepts a
--- caller-selected policy value.
-function M.configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest, docker: boolean?): (configuration_protocol.Request?, string?, string?)
-    return configuration_input(pinned, request, docker)
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)
     local path: string? = nil
@@ -771,27 +759,21 @@ end
 function M.sweep(): Reply
     local db, open_error = store.open()
     if not db then return fail("STORAGE", open_error or "open placement store") end
-    local rows, err = db:query("SELECT attempt_id, placement_kind FROM bee_placement_attempts WHERE execution_state IN ('starting', 'running', 'stopping') ORDER BY updated_at LIMIT ?", {M.SWEEP_BOUND})
+    local rows, err = db:query("SELECT attempt_id FROM bee_placement_attempts WHERE execution_state IN ('starting', 'running', 'stopping') ORDER BY updated_at LIMIT ?", {M.SWEEP_BOUND})
     if err or not rows then
         db:release()
         return fail("STORAGE", "read live attempts")
     end
-    local live: {{attempt: types.Attempt, docker: boolean}} = {}
+    local live: {types.Attempt} = {}
     for _, row in ipairs(rows) do
         local attempt = store.attempt(db, tostring(row.attempt_id))
-        if attempt then live[#live + 1] = {attempt = attempt, docker = row.placement_kind == "docker"} end
+        if attempt then live[#live + 1] = attempt end
     end
     db:release()
     local outcomes: {{attempt_id: string, ok: boolean, code: string?}} = {}
-    for index, item in ipairs(live) do
-        local result
-        if item.docker then
-            local raw, dispatch_error = funcs.call("bee.placement.docker:reconcile_internal", {attempt_id = item.attempt.attempt_id})
-            result = type(raw) == "table" and raw :: Reply or fail("UNAVAILABLE", tostring(dispatch_error or "Docker reconciler unavailable"))
-        else
-            result = M.reconcile_attempt(item.attempt)
-        end
-        outcomes[index] = {attempt_id = item.attempt.attempt_id, ok = result.ok, code = result.error and result.error.code or nil}
+    for index, attempt in ipairs(live) do
+        local result = M.reconcile_attempt(attempt)
+        outcomes[index] = {attempt_id = attempt.attempt_id, ok = result.ok, code = result.error and result.error.code or nil}
     end
     return succeed({reconciled = #live, outcomes = outcomes})
 end
@@ -958,11 +940,4 @@ function M.capabilities(): Reply
         max_write_bytes = protocol.MAX_WRITE_BYTES, max_outstanding_chunks = protocol.MAX_OUTSTANDING_CHUNKS, max_spool_bytes = protocol.MAX_SPOOL_BYTES,
         max_evidence_page = store.MAX_EVIDENCE_PAGE, canonical = canonical.encode({capability = measured.capability})})
 end
--- Shared admission seams used by the Docker owner. They return the same
--- owner-derived grants, credential projection checks and private home path as
--- native preparation; the Docker service supplies its own frozen executor.
-M.admit_resources = admit_resources
-M.check_projection = check_projection
-M.environment_conflict = materialization.environment_conflict
-M.configured_home = configured_home
 return M

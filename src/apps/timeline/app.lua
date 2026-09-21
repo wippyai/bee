@@ -1,9 +1,3 @@
--- MIT. The timeline application: threads the caller may read, one
--- thread's records in owner order through a subscription whose cursor the
--- owner moves on this viewer's acknowledgment, the recap as stored, and a
--- bounded wait that claims nothing for the reason to page again. Viewing
--- acknowledges no delivery and settles nothing; approvals are decided in
--- Approvals. Local state is the selection, follow and the detail toggle.
 local tty = require("tty")
 local client = require("client")
 local channel = require("channel")

@@ -1,14 +1,9 @@
--- MIT. Antigravity CLI (agy) launch specifications: declarative argv for
--- interactive window sessions, fresh print stream-json turns, and resumed turns.
 local bounds = require("bounds")
 local canonical = require("canonical")
 local types = require("types")
 
 local M = {}
 
--- Headless authentication requires an established profile under HOME;
--- GEMINI_API_KEY alone is not an account session and disables hooks.
--- Real authentication, hooks and MCP execution remain unproven in automated gates.
 M.AGY_AUTHENTICATION = "unproven"
 M.AGY_HOOKS = "unproven"
 M.AGY_MCP = "unproven"

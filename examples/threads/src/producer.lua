@@ -1,4 +1,3 @@
--- MIT. Real assertions against Bee's current production scene model.
 local process = require("process")
 local json = require("json")
 local model = require("model")

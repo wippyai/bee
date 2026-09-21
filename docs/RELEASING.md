@@ -36,8 +36,7 @@ enables the type system and strict mode; validation failures stop the build.
 The generated `dist/bee.bundle.build.json` records the selected version and every
 pack hash. Review `build/modules.json` for ownership and the generated
 bundle's `ownership.json` for entry coverage. Packing leaves the input runtime
-manifest unchanged. Current runtime cutover gates still apply; see
-`handoffs/STATUS_RUNTIME_GATE.md` before attempting a release.
+manifest unchanged.
 See [native distribution](NATIVE_DISTRIBUTION.md) for prerequisites and update
 semantics. Local builds create no Git tags or GitHub releases.
 

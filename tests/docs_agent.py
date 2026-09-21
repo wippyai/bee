@@ -4,8 +4,8 @@ could not know without the platform corpus.
 The agent is admitted on the real authenticated MCP gateway for exactly the
 `docs` tool, materializes its token once through the same admission and
 credential path every managed Agent uses, and then, using only that tool,
-answers one question about Bee's terminal toolkit, one about cross-node hive
-subscriptions and one about a runtime module. Each answer is asserted inside
+answers one question about Bee's terminal toolkit, one about cross-node sync
+and one about a runtime module. Each answer is asserted inside
 the probe against text the tool actually returned, so a corpus that silently
 lost a page or a tool that widened its bounds fails this gate.
 
@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from workspace import RUNTIME, fixture_workspace, pack_fixture  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-MARKERS = ("docs agent:", "tty.canvas", "subscribe(thread", "sql.builder.select")
+MARKERS = ("docs agent:", "tty.canvas", "bee.sync", "expected revisions", "sql.builder.select")
 
 
 def main():
@@ -47,7 +47,7 @@ def main():
             assert marker in answered, f"answer omitted {marker!r}: {answered}"
         assert "Bearer" not in output, "token bytes reached captured output"
         print("Docs agent: an admitted fixture agent answered the terminal toolkit, "
-              "cross-node subscriptions and the SQL module from the embedded corpus")
+              "cross-node sync and the SQL module from the embedded corpus")
         print(answered[:400])
         # The corpus must also travel inside a real pack: the same source, packed
         # with the test entries excluded, serves the manifest and a document from

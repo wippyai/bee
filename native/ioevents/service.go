@@ -101,36 +101,43 @@ func (manager *Manager) Start(ctx context.Context, owner, resource, root, relati
 	go func() {
 		defer release()
 		defer notify.Stop(raw)
-		timer := time.NewTicker(manager.rescanInterval)
-		defer timer.Stop()
-		rescan := Event{Kind: "rescan", Resource: resource, Path: filepath.ToSlash(filepath.Clean(relative))}
-		if err := emit(rescan); err != nil {
-			return
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-				if err := emit(rescan); err != nil {
-					return
-				}
-			case rawEvent := <-raw:
-				if rawEvent == nil {
-					continue
-				}
-				relativePath, err := filepath.Rel(root, rawEvent.Path())
-				if err != nil || !filepath.IsLocal(relativePath) {
-					continue
-				}
-				event := Event{Kind: "change", Resource: resource, Path: filepath.ToSlash(relativePath), Operation: eventOperation(rawEvent.Event())}
-				if err := emit(event); err != nil {
-					return
-				}
-			}
-		}
+		watchEvents(ctx, raw, manager.rescanInterval, root,
+			Event{Kind: "rescan", Resource: resource, Path: filepath.ToSlash(filepath.Clean(relative))}, emit)
 	}()
 	return watch, nil
+}
+
+func watchEvents(ctx context.Context, raw <-chan notify.EventInfo, rescanInterval time.Duration, root string, rescan Event, emit func(Event) error) {
+	timer := time.NewTicker(rescanInterval)
+	defer timer.Stop()
+	if err := emit(rescan); err != nil {
+		return
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			if err := emit(rescan); err != nil {
+				return
+			}
+		case rawEvent, ok := <-raw:
+			if !ok {
+				return
+			}
+			if rawEvent == nil {
+				continue
+			}
+			relativePath, err := filepath.Rel(root, rawEvent.Path())
+			if err != nil || !filepath.IsLocal(relativePath) {
+				continue
+			}
+			event := Event{Kind: "change", Resource: rescan.Resource, Path: filepath.ToSlash(relativePath), Operation: eventOperation(rawEvent.Event())}
+			if err := emit(event); err != nil {
+				return
+			}
+		}
+	}
 }
 
 func containedDirectory(root, relative string) (string, string, error) {

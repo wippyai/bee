@@ -1,52 +1,115 @@
-//go:build meshclient && physicalclient
-
 // SPDX-License-Identifier: MIT
+
 package launch
 
 import (
 	"context"
-	"github.com/wippyai/runtime/api/boot"
-	app "github.com/wippyai/runtime/cmd/app"
+	"errors"
+	"path/filepath"
 	"testing"
+
+	"github.com/wippyai/runtime/api/boot"
+	envapi "github.com/wippyai/runtime/api/env"
+	"github.com/wippyai/runtime/api/registry"
+	bootpkg "github.com/wippyai/runtime/boot"
+	bootsystem "github.com/wippyai/runtime/boot/components/system"
+	app "github.com/wippyai/runtime/cmd/app"
+	envsystem "github.com/wippyai/runtime/system/env"
+	"go.uber.org/zap"
 )
 
-func TestStartRouteDefersPreparationToRuntimeLock(t *testing.T) {
-	calls := 0
-	launcher, err := NewOwnerLauncher("bee", "retained-owner", func(context.Context, app.Launch) (boot.Config, func() error, error) {
-		calls++
-		return nil, nil, nil
-	})
+func TestPlanUsesProjectDefaultAndLeavesExplicitStateAlone(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "state")
+	project := makeProject(t)
+	host, err := newHost(root, systemHostResolver())
 	if err != nil {
 		t.Fatal(err)
 	}
-	launch := app.Launch{Op: app.OpRun, Command: "bee", Args: []string{"start"}}
-	plan, err := launcher.Plan(context.Background(), launch)
-	if err != nil || plan.Command != "retained-owner" || plan.Args == nil || len(plan.Args) != 0 || plan.Prepare == nil || plan.Run != nil || calls != 0 {
-		t.Fatalf("invalid start plan: %+v %v calls=%d", plan, err, calls)
+
+	plan, err := host.Plan(context.Background(), app.Launch{Dir: project, State: root})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, release, err := plan.Prepare(context.Background()); err != nil || calls != 1 {
-		t.Fatal(err, calls)
-	} else if release != nil {
-		t.Fatal("start route returned an unexpected release")
+	want, err := ProjectStateDir(root, project)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, operation := range []app.Op{app.OpUpdate, app.OpRecover, app.OpWippy} {
-		other := launch
-		other.Op = operation
-		plan, err := launcher.Plan(context.Background(), other)
-		if err != nil || plan.Prepare != nil || plan.Run != nil || plan.Command != "" {
-			t.Fatal("reserved operation intercepted", plan, err)
-		}
+	if plan.DefaultState != want {
+		t.Fatalf("default state = %q, want %q", plan.DefaultState, want)
 	}
-	launch.Args = []string{"start", "extra"}
-	if _, err := launcher.Plan(context.Background(), launch); err == nil {
-		t.Fatal("extra argument ignored")
+
+	explicit := filepath.Join(t.TempDir(), "chosen")
+	plan, err = host.Plan(context.Background(), app.Launch{Dir: project, State: explicit, Explicit: true})
+	if err != nil {
+		t.Fatal(err)
 	}
-	launch.Args = nil
-	plan, err = launcher.Plan(context.Background(), launch)
-	if err != nil || plan.Prepare != nil || plan.Command != "" {
-		t.Fatal("ordinary launch changed", plan, err)
+	if plan.DefaultState != "" {
+		t.Fatalf("explicit launch received default state %q", plan.DefaultState)
 	}
-	if calls != 1 {
-		t.Fatal("preparation happened before lock", calls)
+}
+
+func TestHostIsOneBootComponentAndHost(t *testing.T) {
+	host, err := newHost(filepath.Join(t.TempDir(), "state"), systemHostResolver())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var _ boot.Component = host
+	var _ app.Host = host
+	if host.Name() != ComponentName {
+		t.Fatalf("host name = %q", host.Name())
+	}
+	if len(host.DependsOn()) != 1 || host.DependsOn()[0] != bootsystem.EnvironmentName {
+		t.Fatalf("host dependencies = %v", host.DependsOn())
+	}
+}
+
+func TestHostRegistersReadOnlyEnvironment(t *testing.T) {
+	root := t.TempDir()
+	resolver := hostResolver{
+		lookPath: func(name string) (string, error) {
+			if name == "codex" {
+				return filepath.Join(root, "bin", name), nil
+			}
+			return "", errors.New("not found")
+		},
+		homeDir:    func() (string, error) { return filepath.Join(root, "home"), nil },
+		getwd:      func() (string, error) { return filepath.Join(root, "work"), nil },
+		executable: func() (string, error) { return filepath.Join(root, "bin", "bee"), nil },
+	}
+	host, err := newHost(filepath.Join(root, "state"), resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	environment := boot.New(boot.P{Name: bootsystem.EnvironmentName, Load: func(ctx context.Context) (context.Context, error) {
+		return envapi.WithRegistry(ctx, envsystem.NewRegistry(nil, zap.NewNop())), nil
+	}})
+	loader, err := bootpkg.NewLoader(host, environment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err = loader.Load(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	environmentRegistry := envapi.GetRegistry(ctx)
+	if environmentRegistry == nil {
+		t.Fatal("environment registry missing")
+	}
+	storage, err := environmentRegistry.GetStorage(ctx, registry.ParseID(StorageID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := storage.Get(ctx, "codex"); err != nil || got != filepath.Join(root, "bin", "codex") {
+		t.Fatalf("PATH lookup = %q, %v", got, err)
+	}
+	if _, err := storage.Get(ctx, filepath.Join(root, "bin", "codex")); !errors.Is(err, envapi.ErrVariableNotFound) {
+		t.Fatalf("absolute lookup error = %v", err)
+	}
+	if err := storage.Set(ctx, "codex", "other"); err == nil {
+		t.Fatal("read-only storage accepted Set")
 	}
 }

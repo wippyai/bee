@@ -64,8 +64,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Managed harness launches; inert until the combined runtime and the credential failure gates are pinned,
-      since prepare refuses it on the pinned runtime
+    comment: Managed harness launches subject to host-selected execution and credential requirements
   data:
     schema_revision: bee.launch-policy@2
     required_cleanup: process_group

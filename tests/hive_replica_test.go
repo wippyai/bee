@@ -252,6 +252,12 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		} else if err := os.CopyFS(filepath.Join(project, "src"), os.DirFS(filepath.Join(repository, "src"))); err != nil {
 			t.Fatal(err)
 		}
+		// This acceptance owns the supervisor lifecycle and supplies the
+		// enrolled peer list directly. Keep the default local service out of
+		// this deliberately explicit composition.
+		if err := os.RemoveAll(filepath.Join(project, "src", "hive", "host")); err != nil {
+			t.Fatal(err)
+		}
 		if i == 0 && agent == nil {
 			governancePath := filepath.Join(project, "src", "governance", "_index.yaml")
 			governance, err := os.ReadFile(governancePath)
@@ -282,11 +288,6 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			if err := os.WriteFile(approvalsPath, []byte(updated), 0600); err != nil {
 				t.Fatal(err)
 			}
-		}
-		// The fixture owns the supervisor lifecycle and peer list. Production's
-		// native activation entry would start a second local-only supervisor.
-		if err := os.RemoveAll(filepath.Join(project, "src", "hive_activation")); err != nil {
-			t.Fatal(err)
 		}
 		if !(agent != nil && i == 1 && agent.sourceProject != "") {
 			if err := os.CopyFS(filepath.Join(project, "src", "replica_probe"), os.DirFS(filepath.Join(repository, "tests/fixtures/hive_replica"))); err != nil {

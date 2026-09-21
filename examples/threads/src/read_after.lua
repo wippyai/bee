@@ -1,4 +1,3 @@
--- MIT. Native contract adapter; the journal actor owns authorization and SQL.
 local client = require("client")
 local function main(owner: unknown, thread: unknown, capability: unknown, after: unknown): client.Reply
     if type(owner) ~= "string" or #owner == 0 or #owner > 160 or owner:find("%c") then

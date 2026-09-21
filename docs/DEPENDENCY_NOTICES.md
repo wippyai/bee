@@ -33,5 +33,5 @@ notice and passes standalone desktop acceptance.
 Do not assign an upstream license based solely on the license of Bee or Wippy.
 Resolve applicable terms and update the pinned inputs before public distribution.
 The native `ioevents` backend retains its pinned MIT notice in
-`native/licenses/notify.txt`; Bee-owned code remains MIT and runtime patches
+`THIRD_PARTY_NOTICES.md`; Bee-owned code remains MIT and runtime patches
 retain MPL-2.0.

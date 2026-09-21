@@ -1,13 +1,8 @@
--- MIT. Muse CLI launch specifications: a fresh exec, or a resumed session.
--- The prompt travels as a positional argument behind a -- guard; exec reads
--- no prompt from stdin. Placement resolves the executable, the private home
--- and the working directory; nothing here runs.
 local bounds = require("bounds")
 local types = require("types")
 local M = {}
 -- Muse authentication uses the admitted login copied into a retained private
--- HOME. Keep the explicit gate open until the clean-commit promotion repeats
--- the live provider recovery proof.
+-- HOME.
 M.MUSE_AUTHENTICATION = "unproven"
 M.APPROVAL_MODES = {"untrusted", "on-request", "never"}
 M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}

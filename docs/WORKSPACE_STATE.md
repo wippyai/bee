@@ -34,7 +34,7 @@ resume schema. An installer must not mistake this for version pinning.
 The host retains the old desktop projection for a once-only client import; it
 does not write new window geometry into application checkpoints. The client stores
 committed scene changes, not each drag preview, in its own database. Its import
-receipt preserves later edits across repeated boots. See [client persistence](CLIENT_STATE.md).
+receipt preserves later edits across repeated boots. See [the desktop contract](DESKTOP.md).
 Host recovery retains resume records for failed or incompatible restores. Runtime PIDs, launch tokens,
 TTY mounts and native resources are recreated, never stored as authority.
 PID strings may repeat across runtime boots.
@@ -78,7 +78,7 @@ inside the desktop JSON. Future publication records, resource bindings and share
 catalogs likewise need explicit owners. Sharing a local SQLite file would not
 grant cross-owner SQL access or provide synchronization between machines.
 
-[Workspace attachments](WORKSPACE_ATTACHMENTS.md) specifies the proposed identity
+The desktop contract specifies the client identity
 and client layout split for future mixed-workspace tabs. The storage identity
 exists and the app SDK exposes workspace-qualified logical view references.
 Desktop snapshots preserve workspace identity for newly opened windows.

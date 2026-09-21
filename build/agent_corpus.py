@@ -27,10 +27,9 @@ Selection rule, stated once and enforced by this table:
     `wasm/**` and `about/**`.
 
   * Bee contracts: the top-level docs/ pages that state an implemented callable
-    boundary or the path a frozen artifact travels, including every HIVE_*,
-    THREAD_*, PLACEMENT_*, GATEWAY*, CARRIER, STORAGE and UI page. Labeled
-    historical or proposal pages (docs/README.md names them) and repository
-    process pages are left out.
+    boundary or the path a frozen artifact travels, including application,
+    thread, placement, gateway, carrier, storage and UI contracts. Repository
+    process and design pages are left out.
   * component READMEs: one page per src/ component, the owner's own statement of
     that package's contract.
   * toolkit: one generated reference to Bee's terminal toolkit (tty plus the
@@ -57,13 +56,10 @@ CORPUS = ROOT / "src" / "corpus"
 MANIFEST = CORPUS / "manifest.json"
 BASE = "https://wippy.ai/llm"
 SCHEMA = "bee.docs-corpus@1"
-# The corpus ships inside the installed pack, so it has a hard ceiling of its
-# own; growth past it is a build failure, not a surprise in the artifact.
 MAX_CORPUS_BYTES = 3 * 1024 * 1024
 USER_AGENT = "bee-agent-corpus/1 (+https://bee.wippy.ai)"
 
 RUNTIME_ROOTS = ("lua", "system", "http")
-# Named pages outside the module roots, with the topic each one teaches.
 RUNTIME_PAGES = {
     "start/llm-brief": "platform",
     "start/structure": "platform",
@@ -98,42 +94,22 @@ RUNTIME_PAGES = {
     "tutorials/task-queue": "process",
     "tutorials/echo-service": "http",
 }
-# Bee's own contracts and host-path pages, keyed by file name.
 BEE_DOCS = {
     "AGENT_GUIDE.md": "platform",
     "APPLICATION_CONTRACTS.md": "application",
     "APPROVALS.md": "approvals",
     "CARRIER.md": "application",
-    "CLIENT_HOST_SPLIT.md": "ui",
-    "CLIENT_STATE.md": "ui",
-    "COMPONENT_LAYOUT.md": "platform",
-    "DESKTOP_FOUNDATION.md": "ui",
+    "DESKTOP.md": "ui",
     "DISTRIBUTED_APP_DELIVERY.md": "application",
     "GATEWAY.md": "gateway",
     "GATEWAY_HOOKS.md": "gateway",
-    "GOVERNANCE_IMPLEMENTATION.md": "application",
-    "HARNESS_INVENTORY.md": "harness",
-    "HIVE_BOOTSTRAP.md": "cluster",
-    "HIVE_LAUNCH_STATE.md": "cluster",
-    "HIVE_PROTOCOL.md": "cluster",
-    "HIVE_SUPERVISOR.md": "cluster",
-    "HIVE_TOPOLOGY.md": "cluster",
-    "LAUNCH_ROUTING.md": "harness",
     "MCP_CONFIGURATION.md": "gateway",
     "PACKAGE_BOUNDARIES.md": "platform",
-    "PLACEMENT_AND_SUBSCRIPTIONS.md": "cluster",
-    "REGISTRY_EXTENSION.md": "registry",
     "STORAGE.md": "storage",
     "SYNC_AND_INBOX.md": "cluster",
     "SYSTEM_MAP.md": "platform",
     "THREADS.md": "threads",
-    "THREAD_AUTHORITY.md": "threads",
-    "THREAD_DELIVERY.md": "threads",
-    "THREAD_RECORDS.md": "threads",
-    "THREAD_SESSIONS.md": "threads",
-    "UI_REFINEMENT.md": "ui",
     "UI_BRAND_BOOK.md": "ui",
-    "WORKSPACE_ATTACHMENTS.md": "ui",
     "WORKSPACE_STATE.md": "storage",
     "README.md": "platform",
 }
@@ -441,8 +417,8 @@ SELECTION_RULE = (
     "frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are "
     "another product surface, not the terminal application contract. Bee contracts: the docs/ "
     "pages that state an implemented callable boundary or the path a frozen artifact travels "
-    "(application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, "
-    "registry, platform), excluding the pages docs/README.md labels historical or proposed. "
+    "(application, threads, placement, gateway, carrier, storage, ui, harness, approvals, "
+    "registry, platform), excluding repository process and design pages. "
     "Component: one README per src/ package. Terminal toolkit: one generated page composed from "
     "src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest."
 )

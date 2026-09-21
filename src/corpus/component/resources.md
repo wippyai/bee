@@ -32,7 +32,3 @@ Revocation stops future authorization; an
 attempt already holding a materialized resource is fenced by the placement
 at its next reconciliation, which the placement reports as pending
 enforcement until then.
-
-## Acceptance
-
-The Lua suite `tests/lua/resources` proves the association ceiling, subpath containment at association time, grant binding to subject, audience and attempt, every resolve refusal, `RESOURCE_NOT_LOCAL` and the authorization epoch. `tests/resources.py` proves the runtime-level guarantees: the `fs.directory` provider contains a symlink escape, a symlink directory and a parent traversal at open time, and an association, grant and credential definition survive a restart with no secret in any exported listing. It runs the shipped runtime with `run` (no `wippy lint`), so it is not blocked by the supervisor lane's pinned lint failure; `make check` still gates it behind that lint.

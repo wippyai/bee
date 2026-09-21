@@ -10,5 +10,5 @@ materialization.
 It is assembled as `bee/driver-codex`, separately from the shared
 `bee/driver` contract and other harness bindings. It requires that contract,
 its kit and thread-record decoders in the host composition. Native bundle
-assembly does not establish independent Hub publication. See the shared
-driver documentation for implemented authentication, MCP and recovery gates.
+assembly does not establish independent Hub publication. The shared driver
+contract defines authentication, MCP and recovery behavior.

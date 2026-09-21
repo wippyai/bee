@@ -1,7 +1,3 @@
--- MIT. What this threads implementation is: schema and projection
--- revisions, the migrations it carries, the contracts it binds, and every
--- limit a caller meets. Reporting grants nothing; each operation still
--- checks its own actor and policy.
 local bounds = require("bounds")
 local migrations = require("migrations")
 local claims = require("claims")

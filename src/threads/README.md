@@ -16,7 +16,7 @@ actor.
 | `bee.threads.service` | The authority: access facade, authority and lifecycle operations, and one `function.lua` per method in `<name>_method.lua` |
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
-| `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read. See [the carrier contract](../../docs/CARRIER.md) |
+| `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
 | `bee.threads.persist` | The owned store: checked migration ledger (6 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
 
 ## Dependency interface
@@ -78,15 +78,3 @@ commits its membership checks, retry lookup, head increment, record and
 indexes in one transaction; identical retries replay the stored reply and
 changed requests conflict. Capacity for the terminal records still owed is
 reserved before new work is admitted.
-
-## Testing
-
-`make test` runs the Wippy suites in `tests/lua/threads`: `records_test`
-(decoders and canonical encoding), `authority_test` (roles, retries, producer
-dedupe, bounded reads, concurrent writers, rollback), `lifecycle_test`
-(transitions, single receipts, capacity reservation, index rollback) and
-`ledger_test` (a populated version-1 store upgraded byte for byte, the record
-table rebuild, altered and newer ledgers refused), `delivery_test`,
-`subscription_test`, `wait_test` and `recap_test`. `make threads-module` boots only this module with a
-minimal host and exercises all three contracts with no desktop entries
-loaded. `make threads` and `tests/thread_storage.py` cover the journal.

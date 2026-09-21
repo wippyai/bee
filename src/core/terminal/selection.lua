@@ -1,9 +1,6 @@
--- MIT. Ephemeral, presenter-owned text selection over a frozen viewport snapshot.
 local tty = require("tty")
 
 type Text = {cut: (string, integer, integer) -> string, plain: (string) -> string}
--- Both helpers are present in the selection candidate runtime. Keep this
--- assertion local until its tty manifest is selected with the implementation.
 local text = tty.text :: Text
 
 type Binding = {

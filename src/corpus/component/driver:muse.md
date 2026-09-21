@@ -10,11 +10,8 @@ materialization.
 It is assembled as `bee/driver-muse`, separately from the shared
 `bee/driver` contract and other harness bindings. It requires that contract,
 its kit and thread-record decoders in the host composition. Native bundle
-assembly does not establish independent Hub publication. See the shared
-driver documentation for the common configuration, admission and recovery
-contracts; Muse-specific acceptance status is listed below.
-
-## Muse 1.3.0 integration status
+assembly does not establish independent Hub publication. The shared driver
+contract defines common configuration, admission and recovery behavior.
 
 `muse exec` offers no argv delivery for MCP servers, hooks or instructions
 (the full `muse exec --help` carries no `--mcp-config`, `--settings` or
@@ -47,18 +44,6 @@ identity remain extensions, including task failures. Effort admits the same
 bounded range as the other drivers, and batch turns default to
 `--approval-mode on-request` unless the host selects `never`.
 
-Focused driver and composition tests cover the declarative boundaries. The
-real `native-muse-recovery-live-check` now passes against `dist/bee-muse-v2`
-with Muse 1.3.0. Its first turn calls the scoped `thread_read` tool, reads a
-fixture file, and commits the selected SessionStart, UserPromptSubmit,
-PreToolUse, PostToolUse and Stop hooks. After the Bee owner restarts, the
-second launch resumes the exact provider session and recalls the same token
-without tools or replaying the first prompt. The retained private `HOME`,
-project, application, thread and conversation identity remain stable; the new
-attempt, gateway binding and private hook-token path are fresh, and the
-predecessor retires cleanly. The source auth, settings and project tree remain
-unchanged. The wrapper leaves `XDG_CONFIG_HOME` unset and disables Muse's
-experimental skill, goal and verification reminder agents only for this
-exact-session test.
-This proves the real managed path; the Muse candidate has not been installed
-globally.
+Placement and the credential broker own execution and retained session state;
+whole-runtime crash recovery and provider-specific session guarantees are
+outside this driver contract.

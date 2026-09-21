@@ -1,5 +1,4 @@
 -- SPDX-License-Identifier: MIT
--- The bundle builder replaces this development fallback in staged source.
 local M = {}
 type Info = {
     version: string,

@@ -90,6 +90,27 @@ and an MCP ceiling. Each turn supplies its own prompt and dynamic context. The
 host resolves executables and credentials, then admits the exact launch under
 its current policy.
 
+## One Hive, many Bees
+
+Multiple Bee nodes form a Hive. Each Bee keeps authority over its own
+workspaces and databases while the Hive carries authenticated presence, typed
+messages, approved projections, application coordination, and desktop
+attachments between nodes. A client can connect to the Hive, see its Bees, and
+work with an admitted remote workspace without turning local SQLite files into
+one shared database.
+
+```mermaid
+flowchart LR
+    C[Desktop client] <--> H[Hive]
+    H <--> A[Bee · workstation]
+    H <--> B[Bee · server]
+    H <--> D[Bee · GPU node]
+```
+
+Joining the transport does not grant application, workspace, or package
+authority. Each destination still applies its own admission, approval, and
+resource policy.
+
 ## Apps agents can build
 
 An admitted agent can search Bee's offline platform corpus, inspect installed
@@ -137,10 +158,10 @@ not treated as a portable checkpoint.
 
 ## Alpha boundaries
 
-Local workspaces, retained desktops, attachments, managed agents, Hub inspection
-and installation, governed overlays, approvals, and durable threads are the
-implemented foundation. Public Hive enrollment and discovery, remote workspace
-composition, destination-to-destination Hub transfer, managed Docker launch,
+Local workspaces, retained desktops, attachments, configured multi-node Hives,
+managed agents, Hub inspection and installation, governed overlays, approvals,
+and durable threads are the implemented foundation. Public Hive enrollment and
+discovery UX, destination-to-destination Hub transfer, managed Docker launch,
 and automatic cross-node reconnect are still being completed.
 
 See the [desktop guide](docs/guides/desktop.md), [agent MCP guide](docs/guides/agents/mcp.md),

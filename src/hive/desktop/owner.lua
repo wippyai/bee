@@ -111,6 +111,17 @@ local function remember(state: State, client: Client, pending: Pending, reply: t
         send(client.recipient, types.TOPIC_REPLY, reply)
     end
 end
+
+-- A refused first attachment has no session to reconcile. Keeping a receipt
+-- for every fresh controller refusal would let a waiting client consume the
+-- bounded receipt cache without acquiring anything. Such a refusal is a
+-- definite no-effect result, so it is deliberately not retained.
+local function forget_refusal(state: State, pending: Pending)
+    if pending.cache_key and state.receipts[pending.cache_key] then
+        state.receipts[pending.cache_key] = nil
+        state.receipt_count = state.receipt_count - 1
+    end
+end
 local function install_catalog_readers(state: State, snapshot: retained.CatalogReaders)
     if snapshot.workspace_id ~= state.workspace_id then error("Catalog reader workspace changed") end
     -- `state.node` is the Hive routing identity. A local-only supervisor maps
@@ -365,6 +376,7 @@ function M.result(state: State, message: process.Message, now: integer)
                 if pending.op == "attach" and not client.session and (result.error_code == "busy"
                     or result.error_code == "not_found" or result.error_code == "mode_conflict"
                     or result.error_code == "invalid_argument") then
+                    forget_refusal(state, pending)
                     forget(state, client.recipient)
                     return
                 end

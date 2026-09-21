@@ -113,6 +113,9 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		if err := os.CopyFS(filepath.Join(folder, "src"), os.DirFS(sourceSnapshot)); err != nil {
 			t.Fatal(err)
 		}
+		if err := os.CopyFS(filepath.Join(folder, "modules", "bee-persist"), os.DirFS(filepath.Join(repository, "modules", "bee-persist"))); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.CopyFS(filepath.Join(folder, "src", "hive_probe"), os.DirFS(fixtureSnapshot)); err != nil {
 			t.Fatal(err)
 		}
@@ -161,8 +164,9 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		}
 		config := map[string]any{
 			"version": "1.0", "shutdown": map[string]any{"timeout": "2s"},
-			"relay": map[string]any{"node_name": fmt.Sprintf("node-%d", i)},
-			"lua":   map[string]any{"type_system": map[string]any{"enabled": true, "strict": true}},
+			"workspace": map[string]any{"replacements": map[string]string{"bee/persist": "./modules/bee-persist"}},
+			"relay":     map[string]any{"node_name": fmt.Sprintf("node-%d", i)},
+			"lua":       map[string]any{"type_system": map[string]any{"enabled": true, "strict": true}},
 			"cluster": map[string]any{
 				"enabled": true, "name": fmt.Sprintf("node-%d", i),
 				"raft":       map[string]any{"role": role, "bootstrap_expect": expected, "max_voters": 1, "max_standbys": 0, "data_dir": "node-state"},
@@ -254,7 +258,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	marker(b, "ready ")
 	command(b, "probe", "probe_passed")
 	if catalogOnly {
-		t.Log("catalog/create/replay, independent desktop, session fencing and retained default passed")
+		t.Log("catalog, controller and observer authority, controller conflict, detach/rejoin, and retained shell state passed")
 	} else if nativeClient == "" {
 		command(b, "crash", "probe_passed")
 		command(b, "recover", "probe_passed")

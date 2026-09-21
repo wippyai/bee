@@ -6,6 +6,7 @@ local artifact = require("artifact")
 local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
+local application_admission = require("application_admission")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -18,7 +19,8 @@ type DatabaseBindings = {[string]: DatabaseBinding}
 type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    applied_databases: {[string]: unknown}?, database_bindings: DatabaseBindings?, migration_barrier: boolean}
+    applied_databases: {[string]: unknown}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
+    applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?}
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?)}
 
@@ -386,6 +388,19 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
     local context, context_error = policy_context(policy, captured, base_digest :: string, current, installed)
     if not context then return nil, nil, context_error end
+    if policy.applications then
+        if policy.workspace_id ~= spec.workspace_id or policy.source_node ~= source
+            or policy.source_workspace ~= source_workspace or not bounds.id(policy.overlay_owner) then
+            return nil, nil, "application admission policy does not match the selected activation profile"
+        end
+        local projection, projection_error = application_admission.project({workspace_id = policy.workspace_id,
+            overlay_owner = policy.overlay_owner, source_node = policy.source_node,
+            source_workspace = policy.source_workspace, artifact_digest = spec.artifact_digest,
+            bindings = policy.applications, artifact_entries = expected,
+            registry_entries = captured.entries, overlay_ids = captured.overlay_ids})
+        if not projection then return nil, nil, projection_error or "application admission projection is absent" end
+        context.application_admission = projection
+    end
     return {destination_node = destination, source_node = source,
         base_revision = captured.revision, base_digest = base_digest,
         artifacts = {{component = component, version = version, digest = spec.artifact_digest,

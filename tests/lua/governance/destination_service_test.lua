@@ -108,6 +108,23 @@ local function define_tests()
             test.is_nil(duplicate_policy)
             test.is_true(duplicate_policy_error ~= nil)
         end)
+        test.it("normalizes application admission into the host policy digest", function()
+            local config = valid()
+            local profile = (config.profiles :: {{[string]: unknown}})[1]
+            profile.applications = {{definition_id = "vendor.app:main",
+                policies = {"bee:policy-b", "bee:policy-a"}, thread_access = "observe_post"}}
+            local decoded, decode_error = service.configuration(config, "node-destination")
+            if not decoded then error(tostring(decode_error)) end
+            test.eq(decoded.profiles[1].applications[1].policies[1], "bee:policy-a")
+            test.eq(decoded.profiles[1].applications[1].thread_access, "observe_post")
+            local digest = decoded.profiles[1].policy_digest
+            local applications = profile.applications :: {{[string]: unknown}}
+            applications[1].thread_access = nil
+            local changed = assert(service.configuration(config, "node-destination"))
+            test.is_true(changed.profiles[1].policy_digest ~= digest)
+            applications[1].appearance_write = true
+            test.is_nil(service.configuration(config, "node-destination"))
+        end)
         test.it("names one delivery action per operation and refuses unknown ones", function()
             test.eq(service.required_action("list"), "bee.governance.delivery.read")
             test.eq(service.required_action("get"), "bee.governance.delivery.read")

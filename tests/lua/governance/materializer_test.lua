@@ -2,9 +2,17 @@
 local test = require("test")
 local materializer = require("materializer")
 local artifact = require("artifact")
+local admission = require("application_admission")
 
 type Entry = {[string]: unknown}
 type State = {entries: {[string]: Entry}, generation: integer, conflicts: integer}
+
+local function admission_blob(artifact_digest: string): {[string]: unknown}
+    local measured = assert(admission.measure({schema_revision = admission.SCHEMA,
+        workspace_id = "workspace-a", overlay_owner = "bee.governance:overlay", source_node = "node-a",
+        source_workspace = "source-a", artifact_digest = artifact_digest, policy_digest = string.rep("a", 64), bindings = {}}))
+    return {bytes = measured.bytes, digest = measured.digest}
+end
 
 local function copy(value: unknown): unknown
     if type(value) ~= "table" then return value end
@@ -127,6 +135,52 @@ local function define_tests()
             test.is_true(result.changed == true)
             test.is_true(result.artifact_digest ~= "")
             test.is_true(materializer.matches_with(api(state), "bee.governance:overlay", desired) == true)
+        end)
+
+        test.it("stages portable entries and one derived admission in one changeset", function()
+            local old = assert(artifact.create({{id = "app:old", kind = "registry.entry", data = {value = "old"}}}))
+            local state: State = {entries = {}, generation = 7, conflicts = 0}
+            local old_admission = admission_blob(old.digest)
+            local old_entry = assert(admission.entry(old_admission.bytes, old_admission.digest))
+            state.entries["app:old"] = old.entries[1]
+            state.entries[old_entry.id] = old_entry
+            local next_artifact = assert(artifact.create({{id = "app:new", kind = "registry.entry", data = {value = "new"}}}))
+            local next_admission = admission_blob(next_artifact.digest)
+            local result = assert(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.governance:overlay", next_artifact.entries, next_admission))
+            test.eq(result.entries, 1)
+            test.eq(result.overlay_entries, 2)
+            test.eq(result.artifact_digest, next_artifact.digest)
+            test.eq(state.generation, 8)
+            test.is_true(state.entries["app:old"] == nil)
+            test.not_nil(state.entries["app:new"])
+            test.is_true(materializer.matches_composed_with(api(state), "bee.governance:overlay",
+                next_artifact.entries, next_admission) == true)
+        end)
+
+        test.it("keeps a 512-entry portable artifact measured separately from admission", function()
+            local entries: {Entry} = {}
+            for index = 1, artifact.MAX_ENTRIES do
+                entries[index] = {id = "app:e" .. tostring(index), kind = "registry.entry", data = {value = index}}
+            end
+            local portable = assert(artifact.create(entries))
+            local state: State = {entries = {}, generation = 1, conflicts = 0}
+            local result = assert(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.governance:overlay", portable.entries, admission_blob(portable.digest)))
+            test.eq(result.entries, artifact.MAX_ENTRIES)
+            test.eq(result.overlay_entries, artifact.MAX_ENTRIES + 1)
+            test.eq(result.artifact_digest, portable.digest)
+            local count = 0
+            for _ in pairs(state.entries) do count = count + 1 end
+            test.eq(count, artifact.MAX_ENTRIES + 1)
+        end)
+
+        test.it("refuses a portable forgery of the reserved admission prefix", function()
+            local state: State = {entries = {}, generation = 1, conflicts = 0}
+            local forged = {{id = admission.RESERVED_PREFIX .. "forged", kind = "registry.entry", data = {}}}
+            test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.governance:overlay", forged, nil))
+            test.is_true(next(state.entries) == nil)
         end)
     end)
 end

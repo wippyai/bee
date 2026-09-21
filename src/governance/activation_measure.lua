@@ -7,15 +7,34 @@ local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
 local migration_work = require("migration_work")
+local application_admission = require("application_admission")
 
 local M = {}
 type Object = {[string]: unknown}
 type Blob = {bytes: string, digest: string}
+type Admission = {bytes: string, digest: string, record: {[string]: unknown}}
 
 local function digest(bytes: string): (string?, string?)
     local measured, err = hash.sha256(bytes)
     if not measured then return nil, tostring(err or "measure activation input") end
     return measured, nil
+end
+
+-- The resolver may carry host-selected application admission, but the
+-- activation boundary retains only its canonical measured bytes.  Decode and
+-- remeasure it here so neither a loose digest nor a noncanonical projection
+-- can become durable approval evidence.
+local function admission_blob(raw: unknown): (Admission?, string?)
+    if raw == nil then return nil, nil end
+    local value = bounds.object(raw)
+    if not value or type(value.bytes) ~= "string" or #value.bytes < 1
+        or #value.bytes > application_admission.MAX_BYTES or type(value.digest) ~= "string"
+        or #value.digest ~= 64 or not value.digest:match("^[0-9a-f]+$") then
+        return nil, "application admission measurement is invalid"
+    end
+    local decoded, decode_error = application_admission.decode(value.bytes, value.digest)
+    if not decoded then return nil, decode_error end
+    return {bytes = decoded.bytes, digest = decoded.digest, record = decoded.record}, nil
 end
 
 function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
@@ -40,6 +59,9 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     if not entries then return nil, artifact_error end
     local measured_entries: {[string]: string} = {}
     for _, entry in ipairs(entries) do
+        if application_admission.reserved(entry.id) then
+            return nil, "portable artifact entry uses a reserved application admission identity"
+        end
         if entry.kind == "ns.dependency" then
             return nil, "dependency directives cannot be activated in a process-local overlay"
         end
@@ -118,6 +140,12 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     end
     local resolution_blob: Blob = {bytes = resolution_bytes, digest = resolution_digest}
     local preflight_blob: Blob = {bytes = report_bytes, digest = report_digest}
+    local admission, admission_error = admission_blob((context :: any).application_admission)
+    if admission_error then return nil, admission_error end
+    if admission and (admission.record.workspace_id ~= workspace or admission.record.source_node ~= source
+        or admission.record.source_workspace ~= source_workspace or admission.record.artifact_digest ~= artifact_blob.digest) then
+        return nil, "application admission does not match the accepted plan"
+    end
     return {owner_node = owner, workspace_id = workspace, source_node = source,
         source_workspace = source_workspace, version = version, plan_digest = plan_digest,
         plan_revision = revision, selection_revision = selection_revision,
@@ -125,7 +153,8 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         preflight_digest = preflight_blob.digest, migration_work_digest = work.digest,
         entries = entries, candidate = durable_candidate, artifact = artifact_blob, resolution = resolution_blob,
         migration_work = {bytes = work.bytes, digest = work.digest},
-        preflight = preflight_blob, report = durable_report}, nil
+        preflight = preflight_blob, application_admission = admission,
+        application_admission_digest = admission and admission.digest or nil, report = durable_report}, nil
 end
 
 return M

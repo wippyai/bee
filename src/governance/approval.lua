@@ -150,6 +150,10 @@ local function activation(value: unknown): (Object?, string?)
         or not result.resolution_digest or not result.preflight_digest or not result.effect_key then
         return nil, "activation intent identity is malformed"
     end
+    if item.application_admission_digest ~= nil then
+        result.application_admission_digest = hex(item.application_admission_digest)
+        if not result.application_admission_digest then return nil, "activation application admission digest is malformed" end
+    end
     return result, nil
 end
 
@@ -161,7 +165,8 @@ function M.activation_proposal(value: unknown): (Object?, string?)
         payload = {workspace_id = item.workspace_id, overlay_owner = item.overlay_owner,
             source_node = item.source_node, source_workspace = item.source_workspace,
             version = item.version, artifact_digest = item.artifact_digest,
-            resolution_digest = item.resolution_digest, preflight_digest = item.preflight_digest}}, nil
+            resolution_digest = item.resolution_digest, preflight_digest = item.preflight_digest,
+            application_admission_digest = item.application_admission_digest}}, nil
 end
 
 function M.request_activation(executor: Executor, value: unknown, policy_raw: unknown, key_raw: unknown): (Object?, string?)

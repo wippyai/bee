@@ -54,12 +54,20 @@ entries:
   modules: [hash, json]
   imports:
     canonical: bee.sync:canonical
+- name: governed_application_admission
+  kind: library.lua
+  source: file://application_admission.lua
+  modules: [hash, json]
+  imports:
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
 - name: materializer
   kind: library.lua
   source: file://materializer.lua
   modules: [registry, hash]
   imports:
     artifact: bee.governance:artifact
+    application_admission: bee.governance:governed_application_admission
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
 - name: approval
@@ -113,6 +121,8 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     artifact: bee.governance:artifact
+    materializer: bee.governance:materializer
+    application_admission: bee.governance:governed_application_admission
     publisher: bee.governance:publisher
     staging: bee.governance:staging
     activation_store: bee.governance:activation_store
@@ -186,11 +196,12 @@ entries:
 - name: activation_measure
   kind: library.lua
   source: file://activation_measure.lua
-  modules: [hash]
+  modules: [hash, json]
   imports:
     artifact: bee.governance:artifact
     preflight: bee.governance:preflight
     migration_work: bee.governance:migration_work
+    application_admission: bee.governance:governed_application_admission
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
 - name: migration_work
@@ -219,6 +230,7 @@ entries:
     artifact: bee.governance:artifact
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
+    application_admission: bee.governance:governed_application_admission
 - name: overlay_resolver
   kind: library.lua
   source: file://overlay_resolver.lua
@@ -227,6 +239,7 @@ entries:
     artifact: bee.governance:artifact
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
+    application_admission: bee.governance:governed_application_admission
 - name: activation_owner
   kind: library.lua
   source: file://activation_owner.lua
@@ -240,6 +253,8 @@ entries:
     migration_work: bee.governance:migration_work
     approval: bee.governance:approval
     preflight: bee.governance:preflight
+    artifact: bee.governance:artifact
+    application_admission: bee.governance:governed_application_admission
 - name: activation_profiles
   kind: registry.entry
   meta:
@@ -267,6 +282,7 @@ entries:
     materializer: bee.governance:materializer
     migration_effect: bee.governance:migration_effect
     migration_runner: bee.hub:migration_runner
+    application_admission: bee.governance:governed_application_admission
     preflight: bee.governance:preflight
 - name: delivery_contract
   kind: contract.definition

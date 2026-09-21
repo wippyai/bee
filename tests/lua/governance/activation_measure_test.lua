@@ -5,8 +5,17 @@ local artifact = require("artifact")
 local preflight = require("preflight")
 local canonical = require("canonical")
 local hash = require("hash")
+local admission = require("application_admission")
 
 local SHA = string.rep("a", 64)
+local function application_admission(artifact_digest: string, policy_digest: string): {[string]: unknown}
+    local measured, measure_error = admission.measure({schema_revision = admission.SCHEMA,
+        workspace_id = "workspace-a", overlay_owner = "bee.governance:overlay",
+        source_node = "node-b", source_workspace = "source-app", artifact_digest = artifact_digest,
+        policy_digest = policy_digest, bindings = {}})
+    if not measured then error(tostring(measure_error)) end
+    return measured :: {[string]: unknown}
+end
 local function facts(): ({[string]: unknown}, preflight.Candidate, preflight.Context)
     local exact = assert(artifact.create({{id = "demo:run", kind = "function.lua", data = {source = "return true"}}}))
     local entry_bytes, entry_encode_error = canonical.encode(exact.entries[1])
@@ -38,6 +47,20 @@ local function define_tests()
             test.eq(result.plan_revision, 3)
             test.eq(result.selection_revision, 2)
             test.is_true((result.report :: preflight.Report).ready)
+            test.is_nil(result.application_admission)
+        end)
+        test.it("retains only a canonical measured application admission projection", function()
+            local plan, candidate, context = facts()
+            context.application_admission = application_admission(plan.artifact_digest :: string, SHA)
+            local result, err = measure.measure(plan, candidate, context)
+            if not result then error(tostring(err)) end
+            test.eq((result.application_admission :: {[string]: unknown}).digest,
+                (context.application_admission :: {[string]: unknown}).digest)
+            test.eq(result.application_admission_digest,
+                (context.application_admission :: {[string]: unknown}).digest)
+            local altered = context.application_admission :: {[string]: unknown}
+            altered.digest = string.rep("b", 64)
+            test.is_nil(measure.measure(plan, candidate, context))
         end)
         test.it("rejects remote readiness, pending migrations and overlay directives", function()
             local plan, candidate, context = facts()
@@ -52,6 +75,16 @@ local function define_tests()
             local directive = assert(artifact.create({{id = "demo:root", kind = "ns.dependency", data = {}}}))
             plan.artifact_bytes, plan.artifact_digest = directive.bytes, directive.digest
             candidate.migrations = {}
+            test.is_nil(measure.measure(plan, candidate, context))
+        end)
+        test.it("refuses a portable artifact that forges an admission identity", function()
+            local plan, candidate, context = facts()
+            local forged = assert(artifact.create({{id = admission.RESERVED_PREFIX .. "forged",
+                kind = "function.lua", data = {source = "return true"}}}))
+            plan.artifact_bytes, plan.artifact_digest = forged.bytes, forged.digest
+            local entry_bytes = assert(canonical.encode(forged.entries[1]))
+            candidate.entries[1].id = forged.entries[1].id :: string
+            candidate.entries[1].digest = assert(hash.sha256(entry_bytes))
             test.is_nil(measure.measure(plan, candidate, context))
         end)
         test.it("seals pending migration work for an existing admitted database", function()

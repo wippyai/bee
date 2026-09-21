@@ -8049,3 +8049,83 @@ sibling-forgery request through the current wire decoder. `TestHiveSupervisors`,
 under the renewal runtime. The complete feed journey also passed three
 additional consecutive runs. This closes the stale-fixture failure recorded by
 the production duplication audit; production behavior is unchanged.
+
+## 2026-09-20 — governed application admission contract established
+
+Governance now owns one pure canonical contract for host-selected application
+admission carried by a governed overlay. It accepts only a definition ID, at
+most 16 distinct policy IDs and optional `none` or `observe_post` thread access;
+all other application authority remains unavailable. Bindings and policies are
+sorted, duplicate or sparse lists are refused, empty lists retain their JSON
+array shape, and one reserved registry ID is derived deterministically from the
+overlay owner.
+
+The measured record binds workspace, source, overlay owner, exact portable
+artifact digest, exact external-policy digest and normalized bindings. The
+module is pure: it reads no registry state, applies no overlay and grants no
+capability. The activation resolver will create this value from its already
+pinned registry snapshot; later milestones will freeze it in the existing
+intent, apply it atomically beside the artifact and let the application catalog
+trust only the host-owned derived record.
+
+Renewal-runtime strict lint passes with the existing desktop-lifecycle warning.
+All 1,181 unit cases pass, including five focused contract cases. Commit
+`610402f` is on `main`. The global executable remains unchanged until the
+complete dynamic admission path and its end-to-end application journey pass.
+
+## 2026-09-20 — governed admission projected from pinned activation state
+
+Activation profiles may now select bounded application bindings. Both private
+overlay and Hub resolution derive the canonical admission record from the same
+pinned registry capture used for destination preflight. Every selected
+definition must be an exact `process.lua` application in the portable artifact;
+every selected policy must be an external security policy outside both the
+candidate and selected overlay. Complete canonical policy definitions are
+measured, so policy-body drift changes the projection and candidate-controlled
+metadata cannot grant application authority.
+
+The projection remains separate from portable artifact bytes and is not yet
+materialized or consumed by the application catalog. The next bounded milestone
+freezes its optional bytes and digest into the existing activation intent and
+approval evidence. Renewal-runtime strict lint passes with the existing
+desktop-lifecycle warning, all 1,185 unit cases pass, and `git diff --check`
+passes. Commit `0e8f527` is on `main`; the global executable remains unchanged.
+
+## 2026-09-20 — governed admission frozen into activation approval
+
+The destination now canonical-decodes and semantically remeasures the optional
+application-admission projection before it becomes durable evidence. Its
+workspace, source and artifact identities must match the accepted plan, and its
+overlay owner must match the activation owner. Migration 8 adds one nullable,
+paired bytes/digest field to the existing immutable activation intent; legacy
+intents and profiles without applications remain `NULL` without rewriting.
+
+The existing authorization digest, effect key and approval proposal bind the
+optional admission digest. Ordinary checks, migration-progress checks, apply
+remeasurement and cold recovery all reject admission drift. No new store,
+approval, service or lifecycle was added. Strict lint passes with the existing
+desktop-lifecycle warning, the governance workspace migration acceptance passes
+both boots with its eight-row ledger, and all 1,189 unit cases pass. Commit
+`8722f7d` is on `main`; materialization and catalog consumption remain the next
+milestones, so the global executable remains unchanged.
+
+## 2026-09-20 — governed admission materializes atomically
+
+Activation apply and recovery now reconstruct the complete desired overlay from
+the immutable intent: the original portable artifact plus its optional derived
+application-admission entry. Portable artifacts cannot claim any reserved
+admission identity. The materializer validates the two parts independently,
+then stages creates, updates and removals in one existing overlay changeset; a
+full 512-entry artifact remains valid with the derived entry beside it, and the
+reported artifact digest remains the portable digest.
+
+Publication verifies that complete composed overlay, rereads the desired intent
+as a fence, and transfers only the original artifact bytes and digest. The
+derived destination authority never enters replicated package content. Apply,
+uncertain recovery and settled cold recovery all use the same three-argument
+owner contract, with no compatibility adapter or additional lifecycle.
+
+Strict lint passes with the existing desktop-lifecycle warning, all 1,196 unit
+cases pass, and `git diff --check` passes. Commit `f00f1a0` is on `main`.
+Catalog consumption and the real managed-agent journey remain next, so the
+global executable remains unchanged.

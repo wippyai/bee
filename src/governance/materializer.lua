@@ -6,6 +6,7 @@ local artifact = require("artifact")
 local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
+local application_admission = require("application_admission")
 
 local M = {}
 
@@ -127,42 +128,92 @@ local function desired(raw: unknown): ({Entry}?, string?, string?)
     end
     local measured, artifact_error = artifact.create(raw)
     if not measured then return nil, nil, artifact_error end
+    for _, entry in ipairs(measured.entries) do
+        if application_admission.reserved(entry.id) then
+            return nil, nil, "portable artifact entry uses a reserved application admission identity"
+        end
+    end
     return measured.entries, measured.digest, nil
+end
+
+-- A governed application admission is one derived registry entry beside the
+-- portable artifact.  Measure its bytes separately so adding it does not turn
+-- a valid 512-entry artifact into an invalid 513-entry artifact or alter the
+-- bytes that replication publishes.
+local function composed(raw: unknown, admission_raw: unknown): ({Entry}?, {Entry}?, string?, string?)
+    local portable, artifact_digest, portable_error = desired(raw)
+    if not portable or not artifact_digest then return nil, nil, nil, portable_error end
+    local complete: {Entry} = table.create(#portable + (admission_raw == nil and 0 or 1), 0)
+    for index, entry in ipairs(portable) do complete[index] = entry end
+    if admission_raw == nil then return portable, complete, artifact_digest, nil end
+    local blob = bounds.object(admission_raw)
+    if not blob or bounds.fields(blob, {"bytes", "digest"}) then
+        return nil, nil, nil, "application admission blob is invalid"
+    end
+    local derived, derived_error = application_admission.entry(blob.bytes, blob.digest)
+    if not derived then return nil, nil, nil, derived_error end
+    complete[#complete + 1] = derived
+    return portable, complete, artifact_digest, nil
 end
 
 -- The injectable form keeps generation behavior testable without granting a
 -- unit test registry authority. Production uses reconcile(), below.
-function M.reconcile_with(open: Open, conflict: Conflict, owner_raw: unknown, entries_raw: unknown): ({[string]: unknown}?, string?)
+local function reconcile_wanted_with(open: Open, conflict: Conflict, owner_raw: unknown,
+    wanted: {Entry}, artifact_digest: string, portable_count: integer): ({[string]: unknown}?, string?)
     local owner = bounds.id(owner_raw)
     if not owner then return nil, "governance overlay owner is invalid" end
-    local wanted, artifact_digest, artifact_error = desired(entries_raw)
-    if not wanted or not artifact_digest then return nil, artifact_error end
     local raw_snapshot, open_error = open(owner)
     if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
     local snapshot = raw_snapshot :: Snapshot
     local changes, changed, stage_error = stage(snapshot, wanted)
     if not changes or changed == nil then return nil, stage_error end
     if not changed then
-        return {owner = owner, artifact_digest = artifact_digest, entries = #wanted,
+        return {owner = owner, artifact_digest = artifact_digest, entries = portable_count,
+            overlay_entries = #wanted,
             changed = false, attempts = 1}, nil
     end
     local applied, apply_error = changes:apply()
     if applied then
-        return {owner = owner, artifact_digest = artifact_digest, entries = #wanted,
+        return {owner = owner, artifact_digest = artifact_digest, entries = portable_count,
+            overlay_entries = #wanted,
             changed = true, attempts = 1}, nil
     end
     if conflict(apply_error) then return nil, "governance overlay changed during apply; preflight again" end
     return nil, tostring(apply_error or "apply governance overlay")
 end
 
-function M.matches_with(open: Open, owner_raw: unknown, entries_raw: unknown): (boolean?, string?)
+local function matches_wanted_with(open: Open, owner_raw: unknown, wanted: {Entry}): (boolean?, string?)
     local owner = bounds.id(owner_raw)
     if not owner then return nil, "governance overlay owner is invalid" end
-    local wanted, _, artifact_error = desired(entries_raw)
-    if not wanted then return nil, artifact_error end
     local raw_snapshot, open_error = open(owner)
     if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
     return matches_snapshot(raw_snapshot :: Snapshot, wanted)
+end
+
+function M.reconcile_with(open: Open, conflict: Conflict, owner_raw: unknown, entries_raw: unknown): ({[string]: unknown}?, string?)
+    local wanted, artifact_digest, artifact_error = desired(entries_raw)
+    if not wanted or not artifact_digest then return nil, artifact_error end
+    return reconcile_wanted_with(open, conflict, owner_raw, wanted, artifact_digest, #wanted)
+end
+
+function M.matches_with(open: Open, owner_raw: unknown, entries_raw: unknown): (boolean?, string?)
+    local wanted, _, artifact_error = desired(entries_raw)
+    if not wanted then return nil, artifact_error end
+    return matches_wanted_with(open, owner_raw, wanted)
+end
+
+function M.reconcile_composed_with(open: Open, conflict: Conflict, owner_raw: unknown,
+    entries_raw: unknown, admission_raw: unknown): ({[string]: unknown}?, string?)
+    local portable, complete, artifact_digest, compose_error = composed(entries_raw, admission_raw)
+    if not portable or not complete or not artifact_digest then return nil, compose_error end
+    return reconcile_wanted_with(open, conflict, owner_raw, complete, artifact_digest, #portable)
+end
+
+function M.matches_composed_with(open: Open, owner_raw: unknown, entries_raw: unknown,
+    admission_raw: unknown): (boolean?, string?)
+    local _, complete, _, compose_error = composed(entries_raw, admission_raw)
+    if not complete then return nil, compose_error end
+    return matches_wanted_with(open, owner_raw, complete)
 end
 
 local function open(owner: string): (unknown?, unknown?)
@@ -182,6 +233,16 @@ end
 
 function M.matches(owner: unknown, entries: unknown): (boolean?, string?)
     return M.matches_with(open, owner, entries)
+end
+
+function M.reconcile_composed(owner: unknown, entries: unknown,
+    admission_raw: unknown): ({[string]: unknown}?, string?)
+    return M.reconcile_composed_with(open, conflict, owner, entries, admission_raw)
+end
+
+function M.matches_composed(owner: unknown, entries: unknown,
+    admission_raw: unknown): (boolean?, string?)
+    return M.matches_composed_with(open, owner, entries, admission_raw)
 end
 
 return M

@@ -23,6 +23,7 @@ local preflight = require("preflight")
 local materializer = require("materializer")
 local migration_effect = require("migration_effect")
 local migration_runner = require("migration_runner")
+local application_admission = require("application_admission")
 
 local M = {}
 M.BACKEND = "bee.governance:destination_backend_call"
@@ -40,14 +41,16 @@ type PolicyIds = {string}
 type Profile = {workspace_id: string, source_node: string, source_workspace: string,
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
-    database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, policy_digest: string}
+    database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
+    policy_digest: string}
 type Configuration = {profiles: {Profile}}
 type Result = transaction.Result
 type ResolverRoot = {component: string, version: string, parameters: {unknown}}
 type ResolverPolicy = {node_id: string, policy_digest: string, packages: Set,
     namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, applied: {[string]: unknown}, applied_databases: {[string]: unknown},
-    migration_barrier: boolean}
+    migration_barrier: boolean, applications: {Object}?, workspace_id: string?, overlay_owner: string?,
+    source_node: string?, source_workspace: string?}
 type Resolver = {resolve: (Resolver, unknown) -> (unknown?, unknown?, string?)}
 
 local function failure(code: string, message: string): Result
@@ -141,7 +144,7 @@ local function profile(raw: unknown, node_id: string): (Profile?, string?)
     if not value then return nil, "activation profile must be an object" end
     local extra = bounds.fields(value, {"workspace_id", "source_node", "source_workspace", "component",
         "overlay_owner", "approval_policy", "resolver", "parameters", "allow", "database_bindings",
-        "migration_policies"})
+        "migration_policies", "applications"})
     if extra then return nil, "activation profile: " .. extra end
     local workspace_id, source_node = bounds.id(value.workspace_id), bounds.id(value.source_node)
     local source_workspace, component = bounds.id(value.source_workspace), bounds.text(value.component, 160)
@@ -169,12 +172,19 @@ local function profile(raw: unknown, node_id: string): (Profile?, string?)
     if bindings_error then return nil, bindings_error end
     local migration_policies, migration_policies_error = policy_ids(value.migration_policies)
     if migration_policies_error then return nil, migration_policies_error end
+    local applications: {Object}? = nil
+    if value.applications ~= nil then
+        local decoded, applications_error = application_admission.bindings(value.applications)
+        if not decoded then return nil, applications_error end
+        if #decoded > 0 then applications = decoded :: {Object} end
+    end
     local policy: Object = {schema_revision = "bee.governance-activation-policy@1",
         node_id = node_id, workspace_id = workspace_id, source_node = source_node,
         source_workspace = source_workspace, component = component, overlay_owner = overlay_owner,
         approval_policy = approval_policy, resolver = resolver_kind, parameters = parameters, allow = allow}
     if measured_bindings then policy.database_bindings = measured_bindings end
     if migration_policies then policy.migration_policies = migration_policies end
+    if applications then policy.applications = applications end
     local policy_bytes, encode_error = canonical.encode(policy)
     local policy_digest, digest_error = policy_bytes and hash.sha256(policy_bytes) or nil
     if not policy_digest then return nil, tostring(encode_error or digest_error or "measure activation policy") end
@@ -184,7 +194,7 @@ local function profile(raw: unknown, node_id: string): (Profile?, string?)
         parameters = parameters, packages = packages, namespaces = namespaces, kinds = kinds,
         databases = databases, grants = grants, modules = modules,
         database_bindings = bindings, migration_policies = migration_policies,
-        policy_digest = policy_digest}, nil
+        applications = applications, policy_digest = policy_digest}, nil
 end
 
 function M.configuration(raw: unknown, node_raw: unknown): (Configuration?, string?)
@@ -292,6 +302,9 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
             packages = profile_value.packages, namespaces = profile_value.namespaces, kinds = profile_value.kinds,
             databases = profile_value.databases, grants = profile_value.grants, modules = profile_value.modules,
             database_bindings = profile_value.database_bindings,
+            applications = profile_value.applications, workspace_id = profile_value.workspace_id,
+            overlay_owner = profile_value.overlay_owner, source_node = profile_value.source_node,
+            source_workspace = profile_value.source_workspace,
             applied = applied, applied_databases = applied_databases, migration_barrier = true}, nil
     end
     if profile_value.resolver == "overlay" then
@@ -322,10 +335,10 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     return {plans = plan_store, activations = activation_store, resolver = resolved :: owner.Resolver,
         approvals = executor :: owner.Executor, actor_id = ACTOR, consumer_id = ACTOR,
         overlay_owner = profile_value.overlay_owner, approval_policy = profile_value.approval_policy,
-        apply = function(overlay_owner: string, entries: unknown): ({[string]: unknown}?, string?)
-            return materializer.reconcile(overlay_owner, entries)
-        end, matches = function(overlay_owner: string, entries: unknown): (boolean?, string?)
-            return materializer.matches(overlay_owner, entries)
+        apply = function(overlay_owner: string, entries: unknown, admission: unknown?): ({[string]: unknown}?, string?)
+            return materializer.reconcile_composed(overlay_owner, entries, admission)
+        end, matches = function(overlay_owner: string, entries: unknown, admission: unknown?): (boolean?, string?)
+            return materializer.matches_composed(overlay_owner, entries, admission)
         end, migrations = migration_adapter}, nil
 end
 

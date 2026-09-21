@@ -346,6 +346,16 @@ DROP TABLE bee_governance_activation_receipts;
 ALTER TABLE bee_governance_activation_receipts_v7 RENAME TO bee_governance_activation_receipts;
 ]]
 
+-- Application admission is optional for legacy profiles, but when present it
+-- is immutable evidence paired with its measured digest.
+local ACTIVATION_APPLICATION_ADMISSION_SQL = [[
+ALTER TABLE bee_governance_activation_intents ADD COLUMN application_admission_bytes BLOB
+  CHECK(application_admission_bytes IS NULL OR length(CAST(application_admission_bytes AS BLOB)) BETWEEN 1 AND 65536);
+ALTER TABLE bee_governance_activation_intents ADD COLUMN application_admission_digest TEXT
+  CHECK((application_admission_bytes IS NULL) = (application_admission_digest IS NULL))
+  CHECK(application_admission_digest IS NULL OR length(application_admission_digest) = 64);
+]]
+
 
 function M.all(): {Migration}
     return {
@@ -356,6 +366,7 @@ function M.all(): {Migration}
         {id = 5, name = "governance_activation_intents", sql = ACTIVATION_SQL, rebuild = false},
         {id = 6, name = "governance_component_slots", sql = COMPONENT_SLOTS_SQL, rebuild = false},
         {id = 7, name = "governance_activation_migrations", sql = ACTIVATION_MIGRATIONS_SQL, rebuild = false},
+        {id = 8, name = "governance_activation_application_admission", sql = ACTIVATION_APPLICATION_ADMISSION_SQL, rebuild = false},
     }
 end
 

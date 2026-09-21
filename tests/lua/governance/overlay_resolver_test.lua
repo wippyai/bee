@@ -12,7 +12,8 @@ type Entry = {[string]: unknown}
 type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    database_bindings: {[string]: Object}?, migration_barrier: boolean}
+    database_bindings: {[string]: Object}?, migration_barrier: boolean, applications: {Object}?,
+    workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?}
 type Captured = {revision: integer, entries: {Entry}, overlay_ids: {[string]: boolean}?,
     owner: (Entry) -> (string?, string?)}
 type Facts = {candidate: Object, context: Object}
@@ -108,6 +109,36 @@ local function define_tests()
             local expected = assert(hash.sha256(bytes))
             local candidate = resolve(deps, spec).candidate
             test.eq(((candidate.entries :: {Object})[1]).digest, expected)
+        end)
+
+        test.it("derives application admission from the pinned external policy definition", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["process.lua"] = true}, databases = {}, grants = {}, modules = {},
+                applied = {}, migration_barrier = false, workspace_id = "workspace-destination",
+                overlay_owner = "bee.apps:workspace-destination", source_node = "node-source",
+                source_workspace = "author/app", applications = {{definition_id = "private.app:main",
+                    policies = {"bee:ordinary-policy"}, thread_access = "observe_post"}}}
+            local deps, spec = fixture(policy)
+            changes(spec, {{id = "private.app:main", kind = "process.lua",
+                meta = {type = "bee.application"}, data = {source = "return true"}}})
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
+                data = {},
+                policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
+                registry = {owner = "bee/host"}}
+            local first = resolve(deps, spec)
+            local admission = first.context.application_admission :: Object
+            test.eq((admission.record :: Object).artifact_digest, spec.artifact_digest)
+            local policy_body = captured.entries[#captured.entries].policy :: Object
+            policy_body.comment = "changed"
+            local second = resolve(deps, spec)
+            test.is_true((second.context.application_admission :: Object).digest ~= admission.digest)
+            captured.overlay_ids["bee:ordinary-policy"] = true
+            local candidate, context, err = resolver.resolve_with(deps, spec)
+            test.is_nil(candidate)
+            test.is_nil(context)
+            test.is_true(tostring(err):find("selected overlay", 1, true) ~= nil)
         end)
 
         test.it("keeps unrelated registry edits out of the semantic base", function()

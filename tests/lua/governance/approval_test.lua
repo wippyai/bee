@@ -60,6 +60,7 @@ local function define_tests()
                 source_node = "source-a", source_workspace = "application-a", version = "v1",
                 authorization_digest = DIGEST, artifact_digest = string.rep("b", 64),
                 resolution_digest = string.rep("c", 64), preflight_digest = string.rep("d", 64),
+                application_admission_digest = string.rep("f", 64),
                 effect_key = string.rep("e", 64)}
             local bound, bind_error = approval.request_activation(executor(), intent, "user-approval", "activation-1")
             if not bound then error(tostring(bind_error)) end
@@ -68,6 +69,8 @@ local function define_tests()
             local consumed, consume_error = approval.consume_activation(executor(), intent, "governance-host")
             if not consumed then error(tostring(consume_error and consume_error.message)) end
             test.eq(consumed.consumed_effect, intent.effect_key)
+            local proposal = assert(approval.activation_proposal(intent))
+            test.eq(((proposal.payload :: {[string]: unknown}).application_admission_digest), string.rep("f", 64))
             local wrong, wrong_error = approval.consume_activation(executor(), intent, "other-host")
             test.is_nil(wrong)
             test.eq(wrong_error and wrong_error.code, "CONFLICT")

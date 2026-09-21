@@ -18,6 +18,7 @@ local MAX_ARTIFACT = 262144
 local MAX_RESOLUTION = 1048576
 local MAX_PREFLIGHT = 131072
 local MAX_MIGRATION_WORK = 1048576
+local MAX_APPLICATION_ADMISSION = 65536
 local MAX_MIGRATION_RECEIPT = 262144
 local MAX_DIAGNOSTICS = 8192
 local MAX_REQUEST = 4194304
@@ -64,6 +65,10 @@ local function checked_blob(value: unknown, limit: integer, label: string): (Blo
     if not actual or actual ~= measured then return nil, label .. " digest does not match bytes" end
     return {bytes = bytes, digest = measured}, nil
 end
+local function optional_blob(value: unknown, limit: integer, label: string): (Blob?, string?)
+    if value == nil then return nil, nil end
+    return checked_blob(value, limit, label)
+end
 local function unknown(value: Object, allowed: {string}): string?
     return bounds.fields(value, allowed)
 end
@@ -75,13 +80,14 @@ local function request_digest(value: Request): (string?, Result?)
     return measured, nil
 end
 local function authorization_digest(store: Store, input: Request, artifact: Blob, resolution: Blob,
-    preflight: Blob, work: Blob): string?
+    preflight: Blob, work: Blob, admission: Blob?): string?
     local encoded = canonical.encode({schema_revision = "bee.governance-activation@1", owner_node = store.node,
         workspace_id = store.workspace, overlay_owner = input.overlay_owner, source_node = input.source_node,
         source_workspace = input.source_workspace, version = input.version, plan_digest = input.plan_digest,
         plan_revision = input.plan_revision, selection_revision = input.selection_revision,
         artifact_digest = artifact.digest, resolution_digest = resolution.digest, preflight_digest = preflight.digest,
-        migration_work_digest = work.digest})
+        migration_work_digest = work.digest,
+        application_admission_digest = admission and admission.digest or nil})
     if not encoded then return nil end
     return digest(encoded)
 end
@@ -116,6 +122,8 @@ local function view(store: Store, row: Object, current_slot: Object?): Object
         resolution_digest = row.resolution_digest, preflight_bytes = row.preflight_bytes,
         preflight_digest = row.preflight_digest, authorization_digest = row.authorization_digest,
         migration_work_bytes = row.migration_work_bytes, migration_work_digest = row.migration_work_digest,
+        application_admission_bytes = row.application_admission_bytes,
+        application_admission_digest = row.application_admission_digest,
         effect_key = row.effect_key, revision = row.revision, phase = row.phase,
         approval_id = row.approval_id, approval_proposal_digest = row.approval_proposal_digest,
         approval_owner_incarnation = row.approval_owner_incarnation, consumed_consumer_id = row.consumed_consumer_id,
@@ -188,7 +196,7 @@ local function decode(raw: unknown): (Request?, string?)
     local result: Request = {operation = operation, intent_id = intent_id, expected_revision = expected, idempotency_key = key}
     if operation == "prepare_activation" then
         if expected ~= 0 then return nil, "prepare_activation requires expected_revision zero" end
-        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "overlay_owner", "source_node", "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact", "resolution", "preflight", "migration_work"})
+        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "overlay_owner", "source_node", "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact", "resolution", "preflight", "migration_work", "application_admission"})
         if extra then return nil, extra end
         result.overlay_owner = id(value.overlay_owner)
         result.source_node, result.source_workspace, result.version = id(value.source_node), id(value.source_workspace), id(value.version)
@@ -198,9 +206,11 @@ local function decode(raw: unknown): (Request?, string?)
         local resolution, resolution_error = checked_blob(value.resolution, MAX_RESOLUTION, "resolution")
         local preflight, preflight_error = checked_blob(value.preflight, MAX_PREFLIGHT, "preflight")
         local work, work_error = checked_blob(value.migration_work, MAX_MIGRATION_WORK, "migration work")
-        if not result.overlay_owner or not result.source_node or not result.source_workspace or not result.version or not result.plan_digest or not result.plan_revision or not result.selection_revision or not artifact or not resolution or not preflight or not work then return nil, artifact_error or resolution_error or preflight_error or work_error or "activation facts are invalid" end
+        local admission, admission_error = optional_blob(value.application_admission, MAX_APPLICATION_ADMISSION, "application admission")
+        if not result.overlay_owner or not result.source_node or not result.source_workspace or not result.version or not result.plan_digest or not result.plan_revision or not result.selection_revision or not artifact or not resolution or not preflight or not work or admission_error then return nil, artifact_error or resolution_error or preflight_error or work_error or admission_error or "activation facts are invalid" end
         result.artifact_digest = artifact.digest
         result.artifact, result.resolution, result.preflight, result.migration_work = artifact, resolution, preflight, work
+        result.application_admission = admission
         return result, nil
     end
     if operation == "bind_approval" then
@@ -258,12 +268,14 @@ function M.prepare(store: Store, actor: string, input: Request): Result
         if not intents then return failure("INTERNAL", "activation intent count is corrupt") end
         if intents >= MAX_INTENTS then return failure("CAPACITY_EXHAUSTED", "activation intent capacity is exhausted") end
         local authorized = authorization_digest(store, input, input.artifact :: Blob,
-            input.resolution :: Blob, input.preflight :: Blob, input.migration_work :: Blob)
+            input.resolution :: Blob, input.preflight :: Blob, input.migration_work :: Blob,
+            input.application_admission :: Blob?)
         if not authorized then return failure("INTERNAL", "measure activation authorization") end
         local effect_bytes = canonical.encode({schema_revision = "bee.governance-effect@1", authorization_digest = authorized})
         local effect_key = effect_bytes and digest(effect_bytes)
         if not effect_key then return failure("INTERNAL", "measure activation effect key") end
-        local _, insert_error = tx:execute("INSERT INTO bee_governance_activation_intents (owner_node, workspace_id, intent_id, actor_id, overlay_owner, source_node, source_workspace, version, plan_digest, plan_revision, selection_revision, artifact_bytes, artifact_digest, resolution_bytes, resolution_digest, preflight_bytes, preflight_digest, migration_work_bytes, migration_work_digest, authorization_digest, effect_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, input.intent_id, actor, input.overlay_owner, input.source_node, input.source_workspace, input.version, input.plan_digest, input.plan_revision, input.selection_revision, input.artifact.bytes, input.artifact.digest, input.resolution.bytes, input.resolution.digest, input.preflight.bytes, input.preflight.digest, input.migration_work.bytes, input.migration_work.digest, authorized, effect_key})
+        local admission = input.application_admission :: Blob?
+        local _, insert_error = tx:execute("INSERT INTO bee_governance_activation_intents (owner_node, workspace_id, intent_id, actor_id, overlay_owner, source_node, source_workspace, version, plan_digest, plan_revision, selection_revision, artifact_bytes, artifact_digest, resolution_bytes, resolution_digest, preflight_bytes, preflight_digest, migration_work_bytes, migration_work_digest, application_admission_bytes, application_admission_digest, authorization_digest, effect_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, input.intent_id, actor, input.overlay_owner, input.source_node, input.source_workspace, input.version, input.plan_digest, input.plan_revision, input.selection_revision, input.artifact.bytes, input.artifact.digest, input.resolution.bytes, input.resolution.digest, input.preflight.bytes, input.preflight.digest, input.migration_work.bytes, input.migration_work.digest, admission and admission.bytes or nil, admission and admission.digest or nil, authorized, effect_key})
         if insert_error then return storage(insert_error, "prepare activation") end
         local _, execution_error = tx:execute("INSERT INTO bee_governance_activation_execution (owner_node, workspace_id, intent_id, revision, phase, updated_at) VALUES (?, ?, ?, 1, 'prepared', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, input.intent_id})
         if execution_error then return storage(execution_error, "create activation execution") end

@@ -14,6 +14,8 @@ local activations = require("activation_store")
 local resources = require("resources")
 local sync_resources = require("sync_resources")
 local transaction = require("transaction")
+local materializer = require("materializer")
+local application_admission = require("application_admission")
 
 local M = {}
 local CONFIG = "bee.governance:publication_profiles"
@@ -121,6 +123,50 @@ local function chosen_profile(config: Configuration, workspace_id: string, compo
     return nil
 end
 
+-- Publication transfers the portable artifact only, after proving that the
+-- complete local overlay (including its private derived admission entry) is
+-- still the exact settled intent.
+local function publish_intent(raw: unknown, profile: Profile, node_id: string,
+    workspace_id: string, version: string): (Object?, {unknown}?, Object?, string?)
+    local intent = bounds.object(raw)
+    if not intent or intent.phase ~= "settled" or intent.outcome ~= "applied"
+        or intent.overlay_owner ~= profile.overlay_owner or intent.source_node ~= node_id
+        or intent.source_workspace ~= profile.source_workspace or intent.workspace_id ~= workspace_id
+        or intent.version ~= version then
+        return nil, nil, nil, "only the exact locally reviewed and applied version can be published"
+    end
+    local entries, artifact_error = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
+    if not entries then return nil, nil, nil, tostring(artifact_error or "decode immutable publication artifact") end
+    for _, entry in ipairs(entries) do
+        if application_admission.reserved(entry.id) then
+            return nil, nil, nil, "portable artifact entry uses a reserved application admission identity"
+        end
+    end
+    local bytes, digest = intent.application_admission_bytes, intent.application_admission_digest
+    if bytes == nil and digest == nil then return intent, entries, nil, nil end
+    if type(bytes) ~= "string" or type(digest) ~= "string" then
+        return nil, nil, nil, "immutable application admission blob is incomplete"
+    end
+    local measured, admission_error = application_admission.decode(bytes, digest)
+    if not measured then return nil, nil, nil, tostring(admission_error) end
+    local record = measured.record
+    if record.workspace_id ~= workspace_id or record.overlay_owner ~= profile.overlay_owner
+        or record.source_node ~= node_id or record.source_workspace ~= profile.source_workspace
+        or record.artifact_digest ~= intent.artifact_digest then
+        return nil, nil, nil, "immutable application admission does not match publication identity"
+    end
+    return intent, entries, {bytes = measured.bytes, digest = measured.digest}, nil
+end
+
+local function same_intent(before: Object, after: Object): boolean
+    for _, field in ipairs({"intent_id", "revision", "phase", "outcome", "overlay_owner", "source_node",
+        "source_workspace", "workspace_id", "version", "artifact_bytes", "artifact_digest",
+        "application_admission_bytes", "application_admission_digest"}) do
+        if before[field] ~= after[field] then return false end
+    end
+    return true
+end
+
 function M.call(raw: unknown): Result
     local request = bounds.object(raw)
     if not request or bounds.fields(request, {"operation", "workspace_id", "component", "version", "snapshot_digest"})
@@ -170,25 +216,27 @@ function M.call(raw: unknown): Result
             artifact = {bytes = value.bytes, digest = value.digest}})
     end
 
-    local overlay, overlay_error = registry.overlay(chosen.overlay_owner)
-    if not overlay then return failure("UNAVAILABLE", tostring(overlay_error or "open publication overlay")) end
-    local entries, entries_error = overlay:entries()
-    if not entries then return failure("UNAVAILABLE", tostring(entries_error or "read publication overlay")) end
-    local measured, artifact_error = artifact.create(entries)
-    if not measured then return failure("BLOCKED", artifact_error or "measure publication overlay") end
     local activation_store, activation_error = activations.open(governance_resource, node_id, workspace_id)
     if not activation_store then return failure("UNAVAILABLE", activation_error or "open application activation state") end
     local desired = activations.desired(activation_store, chosen.overlay_owner)
+    local intent, entries, admission, intent_error = publish_intent(desired.ok and desired.value or nil,
+        chosen, node_id, workspace_id, selected_version)
+    if not intent or not entries then activations.close(activation_store); return failure("BLOCKED", intent_error or "read immutable activation intent") end
+    local matches, match_error = materializer.matches_composed(chosen.overlay_owner, entries, admission)
+    if matches == nil then activations.close(activation_store); return failure("UNAVAILABLE", tostring(match_error)) end
+    if matches ~= true then activations.close(activation_store); return failure("BLOCKED", "complete applied overlay no longer matches its immutable intent") end
+    -- Fence the immutable record after observing the overlay.  A superseding
+    -- activation cannot publish bytes that were only valid for the prior slot.
+    local fenced = activations.desired(activation_store, chosen.overlay_owner)
     activations.close(activation_store)
-    local intent = desired.ok and bounds.object(desired.value) or nil
-    if not intent or intent.phase ~= "settled" or intent.outcome ~= "applied"
-        or intent.source_node ~= node_id or intent.source_workspace ~= chosen.source_workspace
-        or intent.version ~= selected_version or intent.artifact_digest ~= measured.digest then
-        return failure("BLOCKED", "only the exact locally reviewed and applied version can be published")
+    local current, _, _, fence_error = publish_intent(fenced.ok and fenced.value or nil,
+        chosen, node_id, workspace_id, selected_version)
+    if not current or not same_intent(intent, current) then
+        return failure("BLOCKED", fence_error or "applied activation changed before publication")
     end
     return publisher.publish(sync_resource, node_id, {source_workspace = chosen.source_workspace,
         component = chosen.component, version = selected_version,
-        artifact = {bytes = measured.bytes, digest = measured.digest}})
+        artifact = {bytes = intent.artifact_bytes, digest = intent.artifact_digest}})
 end
 
 return M

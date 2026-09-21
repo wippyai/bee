@@ -21,7 +21,7 @@ def gateway_workspace():
         shutil.copytree(ROOT / "src", folder / "src")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, folder / name)
-        for child in (ROOT / "tests/modules/gateway/src").iterdir():
+        for child in (ROOT / "tests/fixtures/modules/gateway/src").iterdir():
             if os.environ.get("BEE_GATEWAY_NATIVE") == "1" and child.name == "managed":
                 continue
             shutil.copytree(child, folder / "src" / child.name)

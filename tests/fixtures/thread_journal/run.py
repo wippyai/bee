@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import uuid
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 def stage(folder):

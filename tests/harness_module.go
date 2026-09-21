@@ -214,7 +214,7 @@ func stage(root string, broken bool) (string, error) {
 			return "", fmt.Errorf("write %s: %w", path, err)
 		}
 	}
-	if err := os.CopyFS(filepath.Join(folder, "src", "host"), os.DirFS(filepath.Join(root, "tests", "modules", "harness", "src"))); err != nil {
+	if err := os.CopyFS(filepath.Join(folder, "src", "host"), os.DirFS(filepath.Join(root, "tests", "fixtures", "modules", "harness", "src"))); err != nil {
 		return "", fmt.Errorf("stage host fixture: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  src: ./src\n"), 0600); err != nil {

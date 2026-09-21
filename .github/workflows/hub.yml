@@ -51,7 +51,7 @@ jobs:
           exit 1
         fi
     - name: Build pinned publication runtime
-      uses: wippyai/builder@67a04357e73b43c35d354c5bb17b3261a9802ea3
+      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
       with:
         mode: toolchain
         manifest: wippy.build.json

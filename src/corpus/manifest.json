@@ -883,17 +883,17 @@
       "topic": "application"
     },
     {
-      "bytes": 31625,
+      "bytes": 4928,
       "id": "docs/gateway",
-      "sha256": "00df14df08a99577354d9c555172fa7de11861458326fea3f260150955a830e5",
+      "sha256": "9419681fd92233df366d5b90401e3e2425077327a6611775041799484e3881b7",
       "source": "docs/GATEWAY.md",
-      "title": "Gateway (build sequence step 9, harness lane)",
+      "title": "Gateway",
       "topic": "gateway"
     },
     {
-      "bytes": 23988,
+      "bytes": 3163,
       "id": "docs/gateway_hooks",
-      "sha256": "c46d6b0a9507daa1c30d68a9fddf51d6d79e76efb4a6b4e05da2512ea2e52c4b",
+      "sha256": "55e4225715b5bd99300a7a9232bb4393260dfaf76c3007c4add7b5cf35c39c7b",
       "source": "docs/GATEWAY_HOOKS.md",
       "title": "Gateway hooks",
       "topic": "gateway"
@@ -1150,7 +1150,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 1312111,
+    "bytes": 1264589,
     "documents": 143
   }
 }

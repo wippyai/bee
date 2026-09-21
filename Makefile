@@ -1,7 +1,15 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
-.PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check
+.PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check site-build site-publish
 setup: native-tools
+
+# The public site has an explicit build step and a separately authorized
+# publication step. Publication never chooses a host by default.
+site-build:
+	./site/build.sh
+site-publish:
+	./site/deploy.sh
+
 .PHONY: hub-inspect-check
 # Explicit live-Hub proof; ordinary checks do not require Hub network access.
 hub-inspect-check:

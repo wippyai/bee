@@ -9,7 +9,7 @@ import yaml
 from workspace import ROOT, RUNTIME
 
 MODULE = ROOT / "src/threads"
-HOST = ROOT / "tests/modules/threads/src"
+HOST = ROOT / "tests/fixtures/modules/threads/src"
 
 
 def stage(folder, mutate=None):

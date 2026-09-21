@@ -90,8 +90,8 @@ restricted secret storage; never attach them to releases or embed them in packs.
 Hub updates can replace compatible Lua application packs after publication;
 native module changes require a new Bee binary.
 
-The [dependency notice review](DEPENDENCY_NOTICES.md) records the remaining
-linked-module notices and their source evidence.
+See [dependency notices](DEPENDENCY_NOTICES.md) for the release inventory and
+notice requirements.
 
 ## Binary installer
 
@@ -141,15 +141,10 @@ variable `BEE_HUB_VISIBILITY` to
 Existing module visibility is preserved. Local publication accepts the equivalent
 `HUB_VISIBILITY` variable and Wippy's normal credential store or token environment.
 
-The local dry run passed with an empty home/config directory and no token.
-Bee's runtime includes the merged fix from
-[PR #684](https://github.com/wippyai/runtime/pull/684), so pack-only publication
-validation does not request credentials. Linux CI runs this preflight before
-the foundation suite. Actual publication retains its authentication requirement.
-The deployment token passed the live Hub publish authorization checks for
-`bee/bee` on 2026-09-08, and Hub reported organization role `owner`. Those probes
-omitted the version and upload payload, so they created no publication. A completed
-upload and a real Bee update remain acceptance gates for the first release.
+The local dry run needs no publication credential. Actual publication requires
+the configured Hub credential and creates only the selected immutable version.
+Run the dry run before publishing and verify the resulting release artifact
+through the normal update path.
 
 ## Distribution access
 

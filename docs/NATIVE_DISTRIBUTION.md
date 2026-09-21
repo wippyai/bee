@@ -53,17 +53,10 @@ dropped. Only the executable and test harness are mounted. The Terminal tolerate
 an unset `USER` through Wippy's explicit empty placeholder fallback. Container
 images still need Bash and a compatible C library.
 
-The runtime pin now includes the application host, locked-root redeployment,
-Nexus licensing and credential-free publish-dry-run fixes merged upstream as
-[runtime PR #667](https://github.com/wippyai/runtime/pull/667),
-[#668](https://github.com/wippyai/runtime/pull/668),
-[#677](https://github.com/wippyai/runtime/pull/677) and
-[#684](https://github.com/wippyai/runtime/pull/684); Bee no longer carries
-separate patches for them. Uploads still require credentials. The builder checks
-out that commit into a temporary directory and verifies the remaining runtime
-patches (below) before compiling. The complete
-[upstream dependency list](RUNTIME_UPSTREAM.md) tracks these merges and Bee's
-`runtime/` directory removal.
+The build manifest selects the runtime and any required patches. The builder
+checks out the selected runtime in a temporary directory before compiling.
+Uploads still require separate credentials. [Runtime integration](RUNTIME_UPSTREAM.md)
+describes the boundary between Bee and the selected runtime.
 
 `BEE_VERSION=0.1.0-dev make standalone` prepares the explicitly owned modules
 in `build/modules.json`. Child namespaces remain slices of their named owner;
@@ -76,9 +69,7 @@ Agy, Claude, Codex, Grok and Muse each have a separate driver pack
 (`bee/driver-agy`, `bee/driver-claude`, `bee/driver-codex`, `bee/driver-grok`
 and `bee/driver-muse`). The shared `bee/driver` pack owns the contract, kit and
 transport. Installing a driver does not activate it or grant execution: the host
-still selects its profile, executable and permissions. This split passed native
-bundle assembly with 22 modules and 831 entries; production launch profiles and
-independent Hub publication remain separate work.
+still selects its profile, executable and permissions.
 
 `build/bundle.py` writes checksummed artifacts under `dist/native-bundles/` and
 atomically replaces `dist/bee.bundle.build.json` only after every pack passes.
@@ -161,10 +152,8 @@ verifies artifact hashes, then switches the activation record. Failure retains
 the previous selection. Stop Bee before updating; the state directory has an
 exclusive process-lifetime lock. Hub credentials and an available published Bee
 module are required for real Bee updates. The [release protocol](RELEASING.md)
-provides a local Hub preflight and a publication workflow. The deployment token
-is configured and passed live publish authorization checks. A completed Bee upload
-and update proof remain pending. In-app Hub installation is
-not implemented.
+provides a local Hub preflight and publication workflow. In-app Hub installation
+is not implemented.
 
 The executable's immutable bundle is seeded under `deployments/<bundle-id>`.
 `run` continues the selected deployment, while `recover` starts the shipped
@@ -206,11 +195,8 @@ lua:
 Cache keys include code identity, source, dependencies and compiler cache version;
 type-check keys also include checker settings and native type manifests. Changed
 entries are recomputed. Workspace databases and deployment selections remain in
-their own state directories. Local sequential validation with two isolated Bee
-installations reused 184 cache files without rewriting them. Two concurrent
-installations also passed strict checking with an eight-entry cache limit and
-pruning after every write. Cross-computer distribution remains untested; sharing
-is opt-in. Use a directory writable only by the owning OS user.
+their own state directories. Cross-computer cache sharing is opt-in; use a
+directory writable only by the owning OS user.
 
 ## I/O events
 
@@ -240,11 +226,11 @@ organization; native module fetching uses the consuming repository's token.
 Archives contain the executable, input manifest provenance, effective Go module
 files, available dependency license notices and the runtime patch sources.
 Archive timestamps and ownership are normalized; pack timestamps and the native
-C toolchain still affect binary reproducibility. The Linux amd64 inventory has
-root notices for all linked Go modules, including the pinned MPL-2.0 registry bindings.
-See the [dependency notice review](DEPENDENCY_NOTICES.md) for pending upstream reviews.
-Complete those reviews and native target acceptance before publishing a
-stable release. No release tag is created by development checks.
+C toolchain still affect binary reproducibility. Each release target needs its
+own dependency inventory and root license notices. See [dependency
+notices](DEPENDENCY_NOTICES.md). Complete notice review and native target
+acceptance before publishing a stable release. No release tag is created by
+development checks.
 
 ## State-directory coverage
 

@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("thread_demo", ROOT / "examples/threads/run.py")
+spec = importlib.util.spec_from_file_location("thread_demo", ROOT / "tests/fixtures/thread_journal/run.py")
 demo = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(demo)
 

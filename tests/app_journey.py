@@ -577,7 +577,7 @@ def exercise():
         add_guide_admission(project)
         add_open_admission(project)
         configure_open_agent(project)
-        shutil.copytree(ROOT / "tests/modules/gateway/src/managed", project / "src/managed")
+        shutil.copytree(ROOT / "tests/fixtures/modules/gateway/src/managed", project / "src/managed")
         configure_managed_gateway(project)
         assert_overlay_authority(project)
         assert_delivery_has_no_overlay_authority(project)

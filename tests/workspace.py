@@ -110,7 +110,7 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             shutil.rmtree(folder / "src/tests/managed", ignore_errors=True)
         else:
             configure_managed_gateway(folder)
-        shutil.copytree(ROOT / "examples/fixtures", folder / "src/fixtures")
+        shutil.copytree(ROOT / "tests/fixtures/desktop_apps", folder / "src/fixtures")
         shutil.copytree(ROOT / "tests/fixtures/drivers", folder / "fixtures/drivers")
         shutil.copytree(ROOT / "tests/fixtures/harness", folder / "fixtures/harness")
         shutil.copy2(ROOT / ".wippy.yaml", folder / ".wippy.yaml")

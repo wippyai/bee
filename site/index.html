@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bee, a distributed workspace your agents extend</title>
-<meta name="description" content="Install a bee on every machine and they join one hive. Shells and coding agents side by side; agents build tools into the workspace, talk on threads, and ask you when it matters. No cloud.">
-<meta property="og:title" content="Bee, a distributed workspace your agents extend">
+<title>Bee, a persistent workspace your agents extend</title>
+<meta name="description" content="A persistent terminal workspace for shells, coding agents, governed applications, durable threads, and approvals. Run Bee locally on Linux or macOS.">
+<meta property="og:title" content="Bee, a persistent workspace your agents extend">
 <meta property="og:description" content="Shells and coding agents side by side. Ask an agent for a tool and it builds one into the workspace while it works. Try it in your browser.">
 <meta property="og:url" content="https://bee.wippy.ai/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230c1119'/%3E%3Cg transform='translate(0 10)' fill='none' stroke='%23ffc963' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'%3E%3Crect x='20' y='3' width='13' height='7' rx='2'/%3E%3Crect x='40' y='3' width='13' height='7' rx='2'/%3E%3Cpath d='M33 10l4 8M40 10l-3 8'/%3E%3Crect x='14' y='18' width='44' height='16' rx='3'/%3E%3Cpath d='M34 34l4 8M41 34l4 8'/%3E%3C/g%3E%3Cg transform='translate(0 10)' fill='%23ffc963'%3E%3Crect x='20' y='22' width='8' height='8'/%3E%3Crect x='32' y='22' width='8' height='8'/%3E%3Ccircle cx='50' cy='26' r='1.8'/%3E%3Cpath d='M6 26l7-4v8z'/%3E%3C/g%3E%3C/svg%3E">
@@ -19,7 +19,7 @@
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://bee.wippy.ai/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Bee","applicationCategory":"DeveloperApplication","operatingSystem":"Linux, macOS","url":"https://bee.wippy.ai/","license":"https://opensource.org/licenses/MIT","author":{"@type":"Organization","name":"SpiralScout","url":"https://spiralscout.com"},"description":"A distributed workspace your agents extend. Install a bee on every machine and they join one hive; agents build tools into the workspace, talk on threads, and ask you when it matters. No cloud."}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Bee","applicationCategory":"DeveloperApplication","operatingSystem":"Linux, macOS","url":"https://bee.wippy.ai/","license":"https://opensource.org/licenses/MIT","author":{"@type":"Organization","name":"SpiralScout","url":"https://spiralscout.com"},"description":"A persistent terminal workspace for shells, coding agents, governed applications, durable threads, and approvals."}</script>
 <style>
 :root{
   --ground:#0c1119;--surface:#17202c;--text:#d8e2ef;--muted:#8999ad;--border:#6f89a5;--accent:#ffc963;--pattern:#1c2937;--on-accent:#0c1119;
@@ -62,6 +62,8 @@ kbd{display:inline-block;padding:0 .45em;border:1px solid var(--border);border-b
 
 /* hero */
 .hero{padding:88px 24px 8px}
+.hero-mark{display:flex;justify-content:center;color:var(--accent);margin:0 0 28px}
+.hero-mark svg{width:112px;height:auto;filter:drop-shadow(0 10px 24px color-mix(in srgb,var(--accent) 18%,transparent))}
 .hero h1{font-size:clamp(34px,5.4vw,76px);letter-spacing:-.045em}
 .hero h1 .typed{color:var(--accent)}
 .hero h1 .cursor{display:inline-block;width:.42em;height:.78em;background:var(--accent);vertical-align:-.04em;margin-left:.1em;animation:blink 1.1s steps(1) infinite}
@@ -73,10 +75,6 @@ kbd{display:inline-block;padding:0 .45em;border:1px solid var(--border);border-b
 .quick{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:28px 0 0}
 .quick code{background:color-mix(in srgb,var(--surface) 82%,var(--ground));border:1px solid var(--pattern);border-radius:6px;padding:10px 14px;font-size:14px;overflow-x:auto;white-space:nowrap;max-width:100%}
 .copy.small{padding:9px 14px;font-size:14px}
-.os{display:inline-flex;border:1px solid var(--pattern);border-radius:6px;overflow:hidden}
-.os button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;padding:7px 12px;cursor:pointer}
-.os button+button{border-left:1px solid var(--pattern)}
-.os button[aria-pressed="true"]{background:var(--surface);color:var(--text)}
 
 /* simulator, fills the viewport under the bar */
 .sim-full{height:min(calc(100vh - 56px),max(420px,95vw));min-height:420px;display:flex;flex-direction:column;background:var(--ground)}
@@ -177,8 +175,8 @@ section.install{padding-top:128px}
 .install .big .c{color:var(--accent)}
 .install .big .u{color:var(--text);font-weight:500}
 .install .bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:0 30px 26px;font-size:14px;color:var(--muted)}
-.copy{border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600;font-size:15px;padding:9px 18px;cursor:pointer;white-space:nowrap}
-.copy:hover{filter:brightness(1.06)}
+.copy,.source-link{border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600;font-size:15px;padding:9px 18px;cursor:pointer;white-space:nowrap}
+.copy:hover,.source-link:hover{filter:brightness(1.06)}
 .install .log{border-top:1px solid var(--pattern);padding:20px 30px 26px;font-size:14px;line-height:1.8;color:var(--muted)}
 .install .log b{font-weight:500;color:var(--text)}
 .install .log .ok{color:var(--accent)}
@@ -256,12 +254,12 @@ footer{padding:96px 0 32px;color:var(--muted);font-size:14px;border-top:1px soli
   </div>
 
   <div class="wrap hero" id="hero">
-    <h1>A distributed workspace<br>your agents extend<span class="typed" id="typed"></span><span class="cursor" aria-hidden="true"></span></h1>
-    <p class="lede">Install a bee on every machine you own and they join one hive. Shells and coding agents side by side, on any of them. Agents build tools into the workspace, talk on threads, and ask you when it matters. No cloud.</p>
+    <div class="hero-mark" aria-hidden="true"><svg viewBox="0 0 64 44"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><rect x="20" y="3" width="13" height="7" rx="2"/><rect x="40" y="3" width="13" height="7" rx="2"/><path d="M33 10l4 8M40 10l-3 8"/><rect x="14" y="18" width="44" height="16" rx="3"/><path d="M34 34l4 8M41 34l4 8"/></g><g fill="currentColor"><rect x="20" y="22" width="8" height="8"/><rect x="32" y="22" width="8" height="8"/><circle cx="50" cy="26" r="1.8"/><path d="M6 26l7-4v8z"/></g></svg></div>
+    <h1>A persistent workspace<br>your agents extend<span class="typed" id="typed"></span><span class="cursor" aria-hidden="true"></span></h1>
+    <p class="lede">Keep shells, managed coding agents, governed applications, durable threads, and approvals together in one local workspace. Agents build tools into the workspace, talk on threads, and ask you when it matters.</p>
     <div class="quick">
-      <code data-install="cmd">curl -fsSL https://bee.wippy.ai/install.sh | sh</code>
-      <button class="copy small" data-install="copy" data-cmd="curl -fsSL https://bee.wippy.ai/install.sh | sh">Copy</button>
-      <span class="os" role="group" aria-label="Platform"><button data-os="sh" aria-pressed="true">Linux · macOS</button><button data-os="ps" aria-pressed="false">Windows</button></span>
+      <code>Alpha: no published release download yet</code>
+      <a class="source-link small" href="#install">Build from source</a>
       <span class="mit">MIT</span>
     </div>
   </div>
@@ -270,15 +268,15 @@ footer{padding:96px 0 32px;color:var(--muted);font-size:14px;border-top:1px soli
     <div class="chapters">
       <div class="chapter">
         <div class="text">
-          <h2>Start a hive</h2>
-          <p><code>bee hive init</code> on your Mac prints an invite. <code>bee hive join</code> with that invite on the Windows desk and the Linux box, and they are nodes. Open a terminal on any of them from any of them, and run the agent where the GPUs are.</p>
+          <h2>Start a workspace</h2>
+          <p>Launch Bee in a project and get a persistent local desktop for shells, managed agents, applications, and the tools they build. The host keeps execution and state together while clients attach explicitly.</p>
         </div>
-        <figure><canvas data-scene="hivestart" aria-label="Three machines join one hive; a terminal opens on the Windows node and Claude Code runs on the Linux node"></canvas></figure>
+        <figure><canvas data-scene="hive" aria-label="A local Bee workspace shows its admitted catalog and a managed coding agent"></canvas></figure>
       </div>
       <div class="chapter">
         <div class="text">
           <h2>Build tools</h2>
-          <p>Ask in plain words. The agent writes an app, publishes it over MCP, and it opens as a window next to the work.</p>
+          <p>Ask in plain words. The agent writes an app, freezes it for review through Governance, and it opens as a window next to the work after approval.</p>
         </div>
         <figure><canvas data-scene="build" aria-label="An agent writes a Deploy Board app and it opens as a window"></canvas></figure>
       </div>
@@ -292,28 +290,28 @@ footer{padding:96px 0 32px;color:var(--muted);font-size:14px;border-top:1px soli
       <div class="chapter">
         <div class="text">
           <h2>Ask, then act</h2>
-          <p>When an agent needs a decision it files a request. Your inbox shows every pending one across the hive: who asked, from which bee, for what, by when. Approve, and the action that was waiting fires. Each request lives in its workspace's database, nothing is decided twice, and silence never means yes.</p>
+          <p>When an agent needs a decision it files a request. Your inbox shows the pending operation, its scope, and its deadline. Approve, and the action that was waiting continues. Each request lives in its workspace's database, nothing is decided twice, and silence never means yes.</p>
         </div>
-        <figure><canvas data-scene="ask" aria-label="An inbox lists pending approvals from agents across the hive; approving one lets Claude Code continue"></canvas></figure>
+        <figure><canvas data-scene="ask" aria-label="An inbox lists pending approvals for a managed agent; approving one lets it continue"></canvas></figure>
       </div>
       <div class="chapter">
         <div class="text">
           <h2>Loops that run themselves</h2>
-          <p>Give an agent a goal and a metric: a faster build, a cheaper query, a better model. It builds the loop as an app: a watcher on the thread, a durable workflow per attempt, results in a database, a chart, and a reply on the thread when the goal is met or still isn't. On a Hive it keeps running while you sleep.</p>
+          <p>Give an agent a goal and a metric: a faster build, a cheaper query, a better model. It can build the loop as a governed app: a watcher on the thread, durable work per attempt, results in a database, a chart, and a reply on the thread when the goal is met or still isn't.</p>
         </div>
-        <figure><canvas data-scene="research" aria-label="An Optimize app shows a chart of attempts driving p95 latency down across Hive nodes, then reports on the thread"></canvas></figure>
+        <figure><canvas data-scene="research" aria-label="An Optimize app shows a chart of attempts driving p95 latency down, then reports on the thread"></canvas></figure>
       </div>
       <div class="chapter">
         <div class="text">
           <h2>Agents that make agents</h2>
-          <p>Claude does not triage four thousand issues itself. It writes a swarm: a dataflow of native Bee agents on a local model served from your GPU bee, publishes it, and the hive runs it at no per-token cost. The swarm is an app, so the next workspace installs it.</p>
+          <p>Claude does not triage four thousand issues itself. It can compose bounded agent actions into a governed application, freeze the reviewed candidate, and keep the work on the same durable thread.</p>
         </div>
-        <figure><canvas data-scene="swarm" aria-label="Claude Code publishes a swarm of native agents on a local model; a dataflow window shows progress across the hive"></canvas></figure>
+        <figure><canvas data-scene="swarm" aria-label="A managed agent composes bounded actions through explicit admission; a dataflow window shows progress"></canvas></figure>
       </div>
       <div class="chapter">
         <div class="text">
           <h2>Install from the Hub</h2>
-          <p>Apps from hub.wippy.ai install with their requirements filled and migrations run, then land under Tools. Agents install what they need the same way.</p>
+          <p>Inspect components through the optional Hub connection, then let the host resolve requirements, review the plan, run migrations, and apply the selected version under Tools.</p>
         </div>
         <figure><canvas data-scene="hub" aria-label="The Hub app lists packages; installed ones appear under Tools"></canvas></figure>
       </div>
@@ -337,13 +335,12 @@ footer{padding:96px 0 32px;color:var(--muted);font-size:14px;border-top:1px soli
               <p class="lt">service</p>
               <div class="e"><b>process.lua</b><i>rollout actor</i></div>
               <div class="e"><b>workflow.lua</b><i>durable, survives restarts</i></div>
-              <div class="e"><b>agent.gen1</b><i>native agent, any model, local too</i></div>
               <div class="e"><b>function.wasm</b><i>Rust, via WASI</i></div>
             </div>
             <div class="layer">
               <p class="lt">persist</p>
               <div class="e"><b>db.sql.postgres</b><i>modules: sql</i></div>
-              <div class="e"><b>store.kv.raft</b><i>replicated across nodes</i></div>
+              <div class="e"><b>store.kv</b><i>durable application state</i></div>
               <div class="e"><b>queue.queue</b><i>consumers, retries</i></div>
               <div class="e"><b>fs.directory</b><i>granted paths only</i></div>
             </div>
@@ -352,14 +349,14 @@ footer{padding:96px 0 32px;color:var(--muted);font-size:14px;border-top:1px soli
       </div>
       <div class="apptext">
         <h3>A Wippy application, not a script</h3>
-        <p>What an agent publishes is a live graph of functions, actors, durable workflows, HTTP, databases, queues, LLM calls, WASM and a UI. Entries change while the workspace runs. Nothing is redeployed.</p>
+        <p>What an agent authors is a graph of functions, actors, durable workflows, HTTP, databases, queues, LLM calls, WASM and a UI. Governance reviews the exact entries before the host applies them as an overlay.</p>
         <ul class="facts">
           <li><b>Nothing ambient.</b> A process sees only what it was granted.</li>
           <li><b>Durable.</b> Workflows on Temporal finish what they start.</li>
           <li><b>Self-extending.</b> Agent tools and traits are entries too, so agents build their own.</li>
-          <li><b>Agents of its own.</b> Native agents and dataflows run on any model, including local ones on your GPU bee.</li>
+          <li><b>Managed child launch.</b> A managed agent can launch a bounded child action through explicit admission.</li>
         </ul>
-        <p class="compare">A script gets the whole OS and none of this. A Bee app is a service with its own state, permissions and UI, and a thousand of them fit on a laptop.</p>
+        <p class="compare">A script gets the whole OS and none of this. A Bee app is a service with its own state, permissions and UI.</p>
       </div>
     </div>
   </section>
@@ -368,71 +365,45 @@ footer{padding:96px 0 32px;color:var(--muted);font-size:14px;border-top:1px soli
     <h2>The Hive</h2>
     <div class="out hivebox">
       <div class="diagram">
-        <svg viewBox="0 0 1100 430" role="img" aria-label="Hive topology: a client attaches to workspaces on headless nodes over a mutual TLS mesh; one node exposes a provisioning service that enrolls a new machine">
+        <svg viewBox="0 0 1100 360" role="img" aria-label="A local Bee host exposes an admitted operation catalog to its client and managed agents">
           <defs>
-            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5 0 10z" fill="var(--accent)"/></marker>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5 0 10z" fill="var(--accent)"/></marker>
           </defs>
           <g font-family="var(--mono)" font-size="14">
-            <!-- client -->
-            <rect x="30" y="60" width="320" height="180" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
-            <text x="50" y="88" fill="var(--text)" font-weight="600">your terminal</text>
-            <text x="240" y="88" fill="var(--muted)">Hive client</text>
-            <rect x="50" y="106" width="280" height="22" rx="3" fill="var(--ground)"/>
-            <text x="60" y="122" fill="var(--text)">project</text><text x="270" y="122" fill="var(--muted)">local</text>
-            <rect x="50" y="136" width="280" height="22" rx="3" fill="var(--ground)"/>
-            <text x="60" y="152" fill="var(--text)">api</text><text x="250" y="152" fill="var(--muted)">@ forge</text>
-            <rect x="50" y="166" width="280" height="22" rx="3" fill="var(--ground)"/>
-            <text x="60" y="182" fill="var(--text)">bench</text><text x="242" y="182" fill="var(--muted)">@ lab-01</text>
-            <text x="50" y="222" fill="var(--muted)" font-size="12">three workspaces, one layout</text>
-            <!-- local host -->
-            <rect x="30" y="290" width="320" height="80" rx="8" fill="var(--surface)" stroke="var(--border)"/>
-            <text x="50" y="318" fill="var(--text)" font-weight="600">this machine</text><text x="240" y="318" fill="var(--muted)">local host</text>
-            <text x="50" y="346" fill="var(--muted)" font-size="12">hosts project · a bee like the others</text>
-            <line x1="190" y1="240" x2="190" y2="290" stroke="var(--border)"/>
-            <!-- mesh -->
-            <path d="M350 150 C 430 150, 450 120, 520 120" fill="none" stroke="var(--accent)" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
-            <path d="M350 180 C 430 180, 450 270, 520 270" fill="none" stroke="var(--accent)" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
-            <text x="368" y="106" fill="var(--muted)" font-size="12">attach · mutual TLS</text>
-            <text x="372" y="268" fill="var(--muted)" font-size="12">attach</text>
-            <!-- forge -->
-            <rect x="520" y="60" width="260" height="120" rx="8" fill="var(--surface)" stroke="var(--border)"/>
-            <text x="540" y="88" fill="var(--text)" font-weight="600">forge</text><text x="700" y="88" fill="var(--muted)">headless</text>
-            <rect x="540" y="106" width="100" height="22" rx="3" fill="var(--ground)"/><text x="550" y="122" fill="var(--text)">api</text>
-            <rect x="650" y="106" width="110" height="22" rx="3" fill="var(--ground)"/><text x="660" y="122" fill="var(--text)">docs</text>
-            <text x="540" y="160" fill="var(--muted)" font-size="13">keeps running when you leave</text>
-            <!-- lab-01 -->
-            <rect x="520" y="210" width="260" height="160" rx="8" fill="var(--surface)" stroke="var(--border)"/>
-            <text x="540" y="238" fill="var(--text)" font-weight="600">lab-01</text><text x="700" y="238" fill="var(--muted)">headless</text>
-            <rect x="540" y="256" width="100" height="22" rx="3" fill="var(--ground)"/><text x="550" y="272" fill="var(--text)">bench</text>
-            <rect x="650" y="256" width="110" height="22" rx="3" fill="var(--ground)"/><text x="660" y="272" fill="var(--text)">ci</text>
-            <rect x="540" y="292" width="220" height="22" rx="3" fill="var(--ground)" stroke="var(--accent)"/><text x="550" y="308" fill="var(--accent)">service · provision.vm</text>
-            <text x="540" y="350" fill="var(--muted)" font-size="13">owner authorizes every request</text>
-            <!-- vm-7 -->
-            <rect x="850" y="250" width="240" height="80" rx="8" fill="none" stroke="var(--border)" stroke-dasharray="6 5"/>
-            <text x="870" y="278" fill="var(--text)" font-weight="600">vm-7</text><text x="990" y="278" fill="var(--muted)">enrolling</text>
-            <text x="870" y="306" fill="var(--muted)" font-size="12">provisioned, then enrolled</text>
-            <path d="M780 303 L 850 290" fill="none" stroke="var(--accent)" marker-end="url(#arrow)"/>
-            <text x="792" y="352" fill="var(--muted)" font-size="12">request r-91</text>
-            <!-- thread between forge and lab-01 -->
-            <path d="M660 180 L 660 210" fill="none" stroke="var(--border)"/>
-            <text x="672" y="200" fill="var(--muted)" font-size="12">threads travel the mesh</text>
-            <!-- caption -->
-            <text x="30" y="415" fill="var(--muted)" font-size="13">one hosting node per workspace · discovery finds, it never grants · node loss means unavailable, not cloned</text>
+            <rect x="30" y="70" width="300" height="180" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
+            <text x="52" y="100" fill="var(--text)" font-weight="600">your terminal</text><text x="220" y="100" fill="var(--muted)">client</text>
+            <rect x="52" y="122" width="256" height="24" rx="3" fill="var(--ground)"/><text x="64" y="139" fill="var(--text)">project</text><text x="250" y="139" fill="var(--muted)">local</text>
+            <rect x="52" y="154" width="256" height="24" rx="3" fill="var(--ground)"/><text x="64" y="171" fill="var(--text)">agent</text><text x="250" y="171" fill="var(--muted)">admitted</text>
+            <rect x="52" y="186" width="256" height="24" rx="3" fill="var(--ground)"/><text x="64" y="203" fill="var(--text)">threads</text><text x="226" y="203" fill="var(--muted)">durable</text>
+            <path d="M330 160 L 470 160" fill="none" stroke="var(--accent)" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+            <text x="350" y="140" fill="var(--muted)" font-size="12">explicit admission</text>
+            <rect x="470" y="40" width="300" height="240" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+            <text x="494" y="72" fill="var(--text)" font-weight="600">Bee host</text><text x="670" y="72" fill="var(--muted)">owner</text>
+            <rect x="494" y="94" width="252" height="26" rx="3" fill="var(--ground)"/><text x="506" y="112" fill="var(--accent)">catalog</text><text x="668" y="112" fill="var(--muted)">descriptive</text>
+            <rect x="494" y="128" width="252" height="26" rx="3" fill="var(--ground)"/><text x="506" y="146" fill="var(--accent)">policy</text><text x="668" y="146" fill="var(--muted)">ceiling</text>
+            <rect x="494" y="162" width="252" height="26" rx="3" fill="var(--ground)"/><text x="506" y="180" fill="var(--accent)">threads</text><text x="668" y="180" fill="var(--muted)">records</text>
+            <rect x="494" y="196" width="252" height="26" rx="3" fill="var(--ground)" stroke="var(--accent)"/><text x="506" y="214" fill="var(--accent)">approvals</text><text x="668" y="214" fill="var(--muted)">owner</text>
+            <path d="M770 160 L 900 160" fill="none" stroke="var(--accent)" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+            <text x="788" y="140" fill="var(--muted)" font-size="12">authorized call</text>
+            <rect x="900" y="92" width="170" height="136" rx="8" fill="none" stroke="var(--border)"/>
+            <text x="920" y="124" fill="var(--text)" font-weight="600">managed agent</text>
+            <text x="920" y="154" fill="var(--muted)" font-size="12">scoped tools</text><text x="920" y="178" fill="var(--muted)" font-size="12">durable thread</text><text x="920" y="202" fill="var(--muted)" font-size="12">host-selected grant</text>
+            <text x="30" y="325" fill="var(--muted)" font-size="13">metadata describes capability · the host selects authority · every operation is checked at its owner</text>
           </g>
         </svg>
       </div>
       <div class="hivetext">
         <div>
-          <h3>Bees join the hive</h3>
-          <p>A bee on one machine is a workspace. <code>bee hive init</code> makes it a hive; <code>bee hive join</code> on the next machine, with the invite the first one printed, adds a node. Bees on the same network find each other, and an invite is what lets one in. Headless bees keep hosting; your terminal attaches to any of them with a layout of its own.</p>
+          <h3>Explicit coordination</h3>
+          <p>The Hive Manager presents the host's admitted catalog and policy-routed operations. Each call still crosses the owner's authorization boundary.</p>
         </div>
         <div>
-          <h3>Work stays where it runs</h3>
-          <p>One node hosts each workspace and owns its state. Disconnecting ends your view, not the work. A workspace can expose a service to the hive, like the provisioner above, and its owner authorizes every request. No broker, no cloud account, no extra software: only bees.</p>
+          <h3>Work stays governed</h3>
+          <p>Threads, approvals, applications, and overlays keep their own owners and records. A client can detach while admitted local work keeps its durable state.</p>
         </div>
       </div>
-      <p class="hivestatus">      </div>
-      </div>
+      <p class="hivestatus">Local Hive operations are available; public enrollment, automatic discovery, and remote workspace composition are still in progress.</p>
+    </div>
   </section>
 
   <section class="wrap" id="themes">
@@ -445,14 +416,13 @@ footer{padding:96px 0 32px;color:var(--muted);font-size:14px;border-top:1px soli
   <section class="wrap install" id="install">
     <h2>Install</h2>
     <div class="out">
-      <p class="big" data-install="big"><span class="p">$</span> <span class="c">curl</span> -fsSL <span class="u">https://bee.wippy.ai/install.sh</span> <span class="p">|</span> <span class="c">sh</span></p>
+      <p class="big"><span class="c">Alpha</span> <span class="p">— release downloads are not published yet.</span></p>
       <div class="bar">
-        <button class="copy" data-install="copy" data-cmd="curl -fsSL https://bee.wippy.ai/install.sh | sh">Copy</button>
-        <span class="os" role="group" aria-label="Platform"><button data-os="sh" aria-pressed="true">Linux · macOS</button><button data-os="ps" aria-pressed="false">Windows</button></span>
-        <span>One binary, no dependencies. MIT license.</span>
+        <a class="source-link" href="https://github.com/wippyai/bee#install-from-source">Build from source</a>
+        <span>Use the source build instructions until the first release is published. MIT license.</span>
       </div>
     </div>
-    <p class="after">Then <code>bee</code> in a project, or <code>bee claude</code>. On a second machine, <code>bee hive join</code>. Source and <a href="https://github.com/wippyai/bee/blob/main/LICENSE">MIT license</a> on <a href="https://github.com/wippyai/bee">GitHub</a>.</p>
+    <p class="after">Then <code>bee</code> in a project, or <code>bee claude</code>. Source and <a href="https://github.com/wippyai/bee/blob/main/LICENSE">MIT license</a> on <a href="https://github.com/wippyai/bee">GitHub</a>. The release installer will be available after a published release.</p>
   </section>
 </main>
 
@@ -479,7 +449,7 @@ footer{padding:96px 0 32px;color:var(--muted);font-size:14px;border-top:1px soli
         <h3>Source</h3>
         <a href="https://github.com/wippyai/bee">GitHub</a>
         <a href="https://github.com/wippyai/bee/releases">Releases</a>
-        <a href="https://bee.wippy.ai/install.sh">install.sh</a>
+        <span>Release installer after alpha</span>
         <a href="https://github.com/wippyai/runtime">Wippy runtime</a>
         <a href="https://wippy.ai/en/">Wippy docs</a>
       </div>

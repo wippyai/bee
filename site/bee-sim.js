@@ -391,7 +391,7 @@
   function drawBar(cv, t) {
     const width = state.width;
     const status = Date.now() < state.statusUntil ? state.status : "";
-    const label = "hive home · 3 bees";
+    const label = "workspace · local host";
     const full = visible().find((w) => w.mode === "fullscreen");
     const restore = full && width >= 36 ? " −  ◇  × " : "";
     let right = "";
@@ -569,7 +569,7 @@
     exit: (a) => { a.exited = true; out(a, ["exit"]); const w = state.windows.find((x) => x.app === a); if (w) setTimeout(() => { closeWindow(w.id, true); render(); }, 300); },
     bee: (a, args) => {
       if (args[0] === "--version") return out(a, ["bee 0.3.0-dev (linux/amd64)", "wippy runtime 0.9, application pack bee@0.3.0"]);
-      if (args[0] === "update") return script(a, [[200, "bee update: checking hub.wippy.ai for bee"], [700, "bee update: application pack bee@0.3.0 is current"]]);
+      if (args[0] === "update") return script(a, [[200, "bee update: checking the selected local pack"], [700, "bee update: application pack bee@0.3.0 is current"]]);
       out(a, ["bee: already inside Bee. Press F1 to open applications,", "     or run one of: bee claude, bee codex, bee agy"]);
     },
     claude: (a, args) => launch(a, "claude", args), codex: (a, args) => launch(a, "codex", args), agy: (a) => out(a, ["agy: not installed in this demo"]),
@@ -615,13 +615,13 @@
         [350, [A("muted", "  ⎿  Read 84 lines")]],
         [200, []],
         [900, { type: "show me the tests in a window while you work" }],
-        [350, [A("accent", "● "), A("text", "Publishing a Bee app for that.")]],
+        [350, [A("accent", "● "), A("text", "Preparing a governed Bee app for that.")]],
         [200, []],
         [400, [A("accent", "● "), A("text", "Write"), A("muted", "(src/apps/test_watch/_index.yaml)")]],
         [400, [A("muted", "  ⎿  watcher process.lua · view · policy exec:test")]],
-        [350, [A("accent", "● "), A("text", "bee:publish"), A("muted", " (MCP)(src/apps/test_watch)")]],
-        [600, [A("muted", "  ⎿  validated · activated · in the hive")]],
-        [250, () => publishTestWatch()],
+        [350, [A("accent", "● "), A("text", "freeze"), A("muted", " (Governance)(src/apps/test_watch)")]],
+        [600, [A("muted", "  ⎿  reviewed overlay ready")]],
+        [250, () => openTestWatch()],
         [200, []],
         [350, [A("accent", "● "), A("text", "Test Watch follows the tests. Codex can take the flaky ones.")]],
         [200, []],
@@ -679,18 +679,18 @@
         [200, [A("muted", "*** Add File: apps/test_lint/app.lua")]],
         [200, [A("text", "+ workflow.on(\"tests.changed\", scan)")]],
         [300, []],
-        [700, [A("accent", "tool bee.publish")]],
+        [700, [A("accent", "tool freeze")]],
         [200, [A("muted", "apps/test_lint")]],
-        [800, [A("muted", "validated · activated · in the hive")]],
-        [300, () => publishTestLint()],
+        [800, [A("muted", "reviewed overlay ready")]],
+        [300, () => openTestLint()],
         [300, []],
         [500, [A("accent", "codex")]],
         [200, [A("text", "Test Lint is open. 3 comments to clean.")]],
         [300, []],
         [500, [A("accent", "tool bee.thread_reply")]],
-        [200, [A("muted", "agents: Test Lint published · 3 findings")]],
-        [900, () => { claudeSay([A("muted", "  ⎿  codex@desk: Test Lint published · 3 findings")]); }],
-        [600, () => { claudeSay([A("accent", "● "), A("text", "Both apps are in the hive, on desk and forge.")]); claudeSay([A("muted", "  ⎿  say the word and I'll clean those comments")]); }],
+        [200, [A("muted", "agents: Test Lint ready · 3 findings")]],
+        [900, () => { claudeSay([A("muted", "  ⎿  codex@desk: Test Lint ready · 3 findings")]); }],
+        [600, () => { claudeSay([A("accent", "● "), A("text", "Both apps are ready in this workspace.")]); claudeSay([A("muted", "  ⎿  say the word and I'll clean those comments")]); }],
       ],
       again: () => [
         [500, [A("accent", "codex")]],
@@ -790,7 +790,7 @@
   apps.codex = agentApp("codex");
 
 
-  // Test Watch: the application the agent publishes mid-task.
+  // Test Watch: the application the agent authors mid-task.
   const TOTAL_TESTS = 500;
   const initialWatch = () => { const cells = new Array(TOTAL_TESTS).fill("pass"); for (let i = 0; i < 37; i++) cells[(i * 7919 + 13) % TOTAL_TESTS] = "fail"; return cells; };
   const watch = { cells: initialWatch(), run: 1, at: Date.now(), timer: null };
@@ -818,7 +818,7 @@
     },
     key() {}, wheel() {}, mouse() {},
   };
-  function publishTestWatch() {
+  function openTestWatch() {
     if (!CATALOG.find((d) => d.id === "testwatch")) CATALOG.push({ id: "testwatch", title: "Test Watch", icon: "W", group: "Tools", role: "inspection" });
     if (state.windows.find((w) => w.def === "testwatch")) return;
     const keep = state.focus;
@@ -826,7 +826,7 @@
     w.accent = "green"; watch.at = Date.now();
     const a = area();
     place(w.id, { x: Math.round(a.width * 0.61), y: a.y + Math.round(a.height * 0.68), width: Math.round(a.width * 0.37), height: Math.max(9, a.height - Math.round(a.height * 0.68)) });
-    setStatus("Test Watch published to the hive", 3500);
+    setStatus("Test Watch ready in the workspace", 3500);
     if (keep) focusWindow(keep);
   }
   function testWatch(mode) {
@@ -850,7 +850,7 @@
     draw(app, w, h, t) {
       const cv = new Cells(w, h); cv.clear(t.text, t.surface);
       const put = (y, text, fg) => cv.put(2, y, truncate(text, w - 2, "…"), fg, t.surface, w - 2);
-      put(1, "INBOX", t.accent); cv.put(9, 1, "hive home · " + (inbox.state === "pending" ? "1 pending" : "0 pending"), t.muted, t.surface);
+      put(1, "INBOX", t.accent); cv.put(9, 1, "workspace · " + (inbox.state === "pending" ? "1 pending" : "0 pending"), t.muted, t.surface);
       const left = Math.max(0, Math.round((inbox.at + 15 * 60000 - Date.now()) / 60000));
       cv.put(2, 3, inbox.state === "pending" ? "●" : "✓", t.accent, t.surface, 1); cv.put(4, 3, truncate(inbox.what, w - 5, "…"), t.text, t.surface);
       put(4, "   " + inbox.who + "  ·  " + (inbox.state === "pending" ? left + " min left" : "approved · posted"), t.muted);
@@ -892,7 +892,7 @@
     },
     key() {}, wheel() {}, mouse() {},
   };
-  function publishTestLint() {
+  function openTestLint() {
     if (!CATALOG.find((d) => d.id === "testlint")) CATALOG.push({ id: "testlint", title: "Test Lint", icon: "L", group: "Tools", role: "inspection" });
     if (state.windows.find((w) => w.def === "testlint")) return;
     const keep = state.focus;
@@ -901,7 +901,7 @@
     const a = area();
     if (a.width >= 100) place(w.id, { x: Math.round(a.width * 0.57), y: a.y + Math.round(a.height * 0.44), width: Math.round(a.width * 0.41), height: Math.max(9, Math.round(a.height * 0.23)) });
     else w.mode = "fullscreen";
-    setStatus("Test Lint published by Codex", 3500);
+    setStatus("Test Lint ready for review", 3500);
     if (keep && a.width >= 100) focusWindow(keep);
   }
 
@@ -1430,7 +1430,7 @@
       sceneBar(cv, t, W, tabs, "Claude Code");
       const lines = [L(A("muted", "> "), "add a deploy board"), []];
       if (n >= 2) lines.push(L(A("accent", "● "), "Write", A("muted", "(apps/deploy_board)")), L(A("muted", "  ⎿  Wrote 48 lines")));
-      if (n >= 3) lines.push(L(A("accent", "● "), "bee:publish", A("muted", " (MCP)")), L(A("muted", "  ⎿  validated · activated")));
+      if (n >= 3) lines.push(L(A("accent", "● "), "freeze", A("muted", " (Governance)")), L(A("muted", "  ⎿  reviewed overlay ready")));
       if (n >= 5) lines.push([], L(A("accent", "● "), "Deploy Board is open."));
       sceneWindow(cv, t, { x: 2, y: 3, width: Math.floor(W * 0.52), height: H - 3 }, "Claude Code", lines);
       if (n >= 4) sceneWindow(cv, t, { x: Math.floor(W * 0.56), y: 5, width: W - Math.floor(W * 0.56) - 1, height: H - 7 }, "Deploy Board", [
@@ -1458,7 +1458,7 @@
     ask: { steps: 5, draw: (cv, t, W, H, n) => {
       sceneBar(cv, t, W, [["Inbox", "amber"], ["Claude Code @ forge", "green"]], n >= 4 ? "Claude Code @ forge" : "Inbox");
       const left = Math.floor(W * 0.56);
-      const rows = [L(A("accent", "INBOX"), A("muted", "  hive home · " + (n >= 3 ? "2 pending" : "3 pending"))), []];
+      const rows = [L(A("accent", "INBOX"), A("muted", "  workspace · " + (n >= 3 ? "2 pending" : "3 pending"))), []];
       const item = (mark, who, what, when, sel) => {
         const segs = [A(sel ? "accent" : "muted", mark + " "), A(sel ? "text" : "text", what)];
         return { segs, meta: L(A("muted", "   " + who + "  ·  " + when)) };
@@ -1481,7 +1481,7 @@
     hub: { steps: 5, draw: (cv, t, W, H, n) => {
       sceneBar(cv, t, W, [["Claude Code", ""], ["Hub", ""]], n >= 3 ? "Hub" : "Claude Code");
       if (n >= 3) {
-        const rows = [L(A("accent", "HUB"), A("muted", "  hub.wippy.ai")), [],
+        const rows = [L(A("accent", "HUB"), A("muted", "  host-authorized")), [],
           L("kanban        0.3  ", n >= 4 ? A("muted", "installed") : A("accent", "install")),
           L("sql-console   1.1  ", A("muted", "installed")), L("deploy-board  0.9  ", A("muted", "installed")), L("test-watch    1.0  ", A("muted", "installed"))];
         if (n >= 5) rows.push([], L(A("muted", "kanban is under Tools now")));
@@ -1495,8 +1495,8 @@
       sceneBar(cv, t, W, tabs, n >= 3 ? "Optimize" : "Claude Code");
       const left = Math.floor(W * 0.4);
       const lines = [L(A("muted", "> "), "p95 under 120ms, keep going"), []];
-      if (n >= 2) lines.push(L(A("accent", "● "), "bee:publish", A("muted", " (MCP)(optimize)")), L(A("muted", "  ⎿  watcher · workflow · db")));
-      if (n >= 3) lines.push(L(A("accent", "● "), "bee:hive_run", A("muted", " (MCP)(3 nodes)")), L(A("muted", "  ⎿  headless · reports on perf")));
+      if (n >= 2) lines.push(L(A("accent", "● "), "freeze", A("muted", " (Governance)(optimize)")), L(A("muted", "  ⎿  watcher · workflow · db")));
+      if (n >= 3) lines.push(L(A("accent", "● "), "bee:thread_message", A("muted", " (MCP)(perf)")), L(A("muted", "  ⎿  durable report on the thread")));
       if (n >= 7) lines.push([], L(A("accent", "● "), "bee:thread_read", A("muted", " (MCP)(perf)")), L(A("muted", "  ⎿  goal met at run 61 · 118ms")));
       sceneWindow(cv, t, { x: 2, y: 3, width: left - 2, height: H - 3 }, "Claude Code", lines, "", n < 3);
       if (n >= 3) {
@@ -1530,7 +1530,7 @@
         });
         const p95 = runs >= 61 ? "118ms" : runs >= 27 ? "204ms" : "296ms";
         const body = [
-          L(A("accent", "OPTIMIZE"), A("muted", "  goal p95 < 120ms · run " + runs + " · 3 nodes")),
+          L(A("accent", "OPTIMIZE"), A("muted", "  goal p95 < 120ms · run " + runs + " · local")),
           L(A("muted", "tests 500  "), A("green", "✓ " + (total - failing)), A("muted", "  "), A(failing ? "rose" : "muted", "✗ " + failing)),
           ...grid,
           [],
@@ -1540,63 +1540,25 @@
         sceneWindow(cv, t, { x: left + 1, y: 3, width, height: H - 3 }, "Optimize", body, "violet");
       }
     } },
-    hivestart: { steps: 7, draw: (cv, t, W, H, n) => {
-      const third = Math.floor((W - 4) / 3);
-      const top = 6;
-      const machine = (i, title, lines, accent, active) => sceneWindow(cv, t, { x: 2 + i * (third + 1), y: 2, width: third, height: top }, title, lines, accent, active);
-      const mac = [L(A("muted", "mbp $ "), "bee hive init")];
-      if (n >= 2) mac.push(L(A("muted", "hive "), A("accent", "home"), A("muted", " created")), L(A("muted", "invite  "), A("accent", "k9x2")));
-      machine(0, "mbp · macOS", mac, "", n < 3);
-      const win = n >= 3 ? [L(A("muted", "desk> "), "bee hive join k9x2")] : [L(A("muted", "desk> "), "▁")];
-      if (n >= 4) win.push(L(A("muted", "joined "), A("accent", "home"), A("muted", " as desk")));
-      machine(1, "desk · Windows", win, "", n >= 3 && n < 5);
-      const lin = n >= 5 ? [L(A("muted", "forge $ "), "bee hive join k9x2 -H")] : [L(A("muted", "forge $ "), "▁")];
-      if (n >= 6) lin.push(L(A("muted", "joined "), A("accent", "home"), A("muted", " · headless")));
-      machine(2, "forge · Linux", lin, "", n >= 5 && n < 7);
-      // the hive as seen from the mac, once every bee is in
-      if (n >= 7) {
-        const y = top + 3;
-        cv.fill(1, y, W, 1, t.text, t.surface);
-        cv.put(1, y, " BEE ▾ ", selectionText(t), t.accent, 7);
-        let x = 8;
-        for (const [label, accent, focus] of [["Hive Manager", "", true], ["Terminal @ desk", "cyan", false], ["Claude Code @ forge", "green", false]]) {
-          const text = " " + label + " "; const [ac, fg] = instanceAccent(t, accent);
-          if (focus) cv.put(x, y, text, selectionText(t), t.accent); else cv.put(x, y, text, ac, t.surface);
-          x += twidth(text);
-        }
-        const half = Math.floor(W / 2);
-        sceneWindow(cv, t, { x: 2, y: y + 1, width: half - 2, height: H - y - 1 }, "Hive Manager", [
-          L(A("accent", "HIVE home"), A("muted", "  3 bees")),
-          L("mbp    ", A("muted", "macOS    "), "you"),
-          L("desk   ", A("muted", "Windows  "), "terminal"),
-          L("forge  ", A("muted", "Linux    "), "claude · 2 GPUs"),
-        ]);
-        sceneWindow(cv, t, { x: half + 1, y: y + 1, width: W - half - 1, height: H - y - 1 }, "Claude Code @ forge", [
-          L(A("muted", "> "), "run the benchmarks"),
-          L(A("accent", "● "), "Bash", A("muted", "(go test -bench . ./...)")),
-          L(A("muted", "  ⎿  BenchmarkFormat  571 ns/op")),
-        ], "green", false);
-      }
-    } },
     swarm: { steps: 6, draw: (cv, t, W, H, n) => {
       const tabs = [["Claude Code", ""]]; if (n >= 3) tabs.push(["Triage swarm", "violet"]);
       sceneBar(cv, t, W, tabs, n >= 3 ? "Triage swarm" : "Claude Code");
       const left = Math.floor(W * 0.5);
       const lines = [L(A("muted", "> "), "triage 4,000 issues by tonight"), []];
       if (n >= 2) lines.push(L(A("accent", "● "), "Write", A("muted", "(swarm/triage.flow)")), L(A("muted", "  ⎿  fetch › classify ×12 › report")));
-      if (n >= 3) lines.push(L(A("accent", "● "), "bee:publish", A("muted", " (MCP)(swarm/triage)")), L(A("muted", "  ⎿  12 agents · qwen3 via vllm@forge")));
-      if (n >= 6) lines.push([], L(A("accent", "● "), "Done: 4,000 triaged, $0 in tokens."), L(A("muted", "  ⎿  shared to hive: triage-swarm 1.0")));
+      if (n >= 3) lines.push(L(A("accent", "● "), "freeze", A("muted", " (Governance)(swarm/triage)")), L(A("muted", "  ⎿  bounded agent actions · governed model")));
+      if (n >= 6) lines.push([], L(A("accent", "● "), "Done: 4,000 triaged."), L(A("muted", "  ⎿  report posted to the thread")));
       sceneWindow(cv, t, { x: 2, y: 3, width: left - 2, height: H - 3 }, "Claude Code", lines, "", n < 3);
       if (n >= 3) {
         const done = n >= 6 ? 4000 : n >= 5 ? 3180 : n >= 4 ? 1240 : 0;
         const width = W - left - 1, inner = width - 4;
         const bar = Math.max(1, inner - 12), filled = Math.round((done / 4000) * bar);
         const body = [
-          L(A("accent", "TRIAGE SWARM"), A("muted", "  dataflow · 12 agents · 2 bees")),
+          L(A("accent", "TRIAGE"), A("muted", "  bounded dataflow · 12 actions")),
           L(A("muted", "fetch ─┬─ classify ×12 ─┬─ dedupe ── report")),
-          L(A("muted", "       └─ " + (n >= 4 ? "forge 8 · lab-01 4" : "starting…"))), [],
+          L(A("muted", "       └─ " + (n >= 4 ? "local 12" : "starting…"))), [],
           L(A("green", "█".repeat(filled)), A("muted", "░".repeat(bar - filled) + "  " + String(done).padStart(5) + "/4000")),
-          L(A("muted", "model  qwen3-32b · vllm@forge · $0.00")),
+          L(A("muted", "model  local · governed action budget")),
           L(A("muted", "bugs 1,204 · features 812 · dupes 391 · noise 773")),
         ];
         if (n >= 6) body.push([], L(A("green", "✓ report posted to thread issues")));
@@ -1604,32 +1566,19 @@
       }
     } },
     hive: { steps: 5, draw: (cv, t, W, H, n) => {
-      const tabs = [["Claude Code", ""], ["Hive Manager", ""]]; if (n >= 4) tabs.push(["api @ forge", "cyan"]);
-      sceneBar(cv, t, W, tabs, n >= 4 ? "api @ forge" : "Hive Manager");
+      const tabs = [["Claude Code", ""], ["Hive Manager", ""]]; if (n >= 4) tabs.push(["Catalog", "cyan"]);
+      sceneBar(cv, t, W, tabs, n >= 4 ? "Catalog" : "Hive Manager");
       const left = Math.floor(W * 0.55);
-      const rows = [L(A("accent", "HIVE"), A("muted", "  3 nodes · 5 workspaces")), [], L(A("muted", "node       role      workspaces")),
-        L("this mac   ", A("muted", "local     "), "project")];
-      if (n >= 2) rows.push(L("forge      ", A("muted", "headless  "), "api, docs"), L("lab-01     ", A("muted", "headless  "), "bench, ci"));
-      if (n >= 3) rows.push([], L(A("accent", "› attach forge › api")));
+      const rows = [L(A("accent", "HIVE"), A("muted", "  admitted local operations")), [], L(A("muted", "surface       owner")),
+        L("catalog       ", A("muted", "descriptive")), L("policy        ", A("muted", "host ceiling"))];
+      if (n >= 2) rows.push(L("threads       ", A("muted", "durable")), L("approvals     ", A("muted", "owner")));
+      if (n >= 3) rows.push([], L(A("accent", "› inspect operation catalog")));
       sceneWindow(cv, t, { x: 2, y: 3, width: left - 2, height: H - 3 }, "Hive Manager", rows, "", n < 4);
-      if (n >= 4) sceneWindow(cv, t, { x: left + 1, y: 5, width: W - left - 1, height: H - 7 }, "api @ forge", [
-        L(A("muted", "forge:api $ "), "go test ./..."), ...(n >= 5 ? [L(A("muted", "ok   api  1.2s")), L(A("muted", "forge:api $ "), "▁")] : []),
+      if (n >= 4) sceneWindow(cv, t, { x: left + 1, y: 5, width: W - left - 1, height: H - 7 }, "Catalog", [
+        L(A("muted", "operation $ "), "thread_read"),
+        L(A("muted", "operation $ "), "approval_status"),
+        ...(n >= 5 ? [L(A("muted", "owner   "), "authorization required"), L(A("muted", "catalog "), "generation current")] : []),
       ], "cyan");
-    } },
-    cluster: { steps: 5, draw: (cv, t, W, H, n) => {
-      const tabs = [["Claude Code", ""]]; if (n >= 4) tabs.push(["Provision", "rose"]);
-      sceneBar(cv, t, W, tabs, "Claude Code");
-      const left = Math.floor(W * 0.55);
-      const lines = [L(A("muted", "> "), "give ci a bigger runner"), []];
-      if (n >= 2) lines.push(L(A("accent", "● "), "bee:service", A("muted", " (MCP)(provision.vm)")), L(A("muted", "  ⎿  request r-91 · owner lab-01")));
-      if (n >= 3) lines.push(L(A("muted", "  ⎿  authorized · vm-7 enrolling")));
-      if (n >= 5) lines.push([], L(A("accent", "● "), "vm-7 joined the Hive."));
-      sceneWindow(cv, t, { x: 2, y: 3, width: left - 2, height: H - 3 }, "Claude Code", lines);
-      if (n >= 4) sceneWindow(cv, t, { x: left + 1, y: 5, width: W - left - 1, height: H - 7 }, "Provision", [
-        L(A("accent", "PROVISION"), A("muted", "  lab-01 › proxmox")), [],
-        L("vm-7  4c  8G  ", n >= 5 ? A("muted", "ready") : A("accent", "enrolling")), L("vm-6  2c  4G  ", A("muted", "ready")), [],
-        L(A("muted", "retries resolve r-91")),
-      ], "rose", false);
     } },
   };
   const sceneCanvases = [];
@@ -1711,24 +1660,6 @@
     document.getElementById("try").scrollIntoView({ behavior: "smooth", block: "start" });
     canvas.focus({ preventScroll: true });
   }));
-
-  // Install command follows the visitor's platform; Windows gets PowerShell.
-  (function () {
-    const CMDS = {
-      sh: { cmd: "curl -fsSL https://bee.wippy.ai/install.sh | sh", big: '<span class="p">$</span> <span class="c">curl</span> -fsSL <span class="u">https://bee.wippy.ai/install.sh</span> <span class="p">|</span> <span class="c">sh</span>' },
-      ps: { cmd: "irm https://bee.wippy.ai/install.ps1 | iex", big: '<span class="p">PS&gt;</span> <span class="c">irm</span> <span class="u">https://bee.wippy.ai/install.ps1</span> <span class="p">|</span> <span class="c">iex</span>' },
-    };
-    const apply = (os) => {
-      const c = CMDS[os];
-      document.querySelectorAll('[data-install="cmd"]').forEach((el) => { el.textContent = c.cmd; });
-      document.querySelectorAll('[data-install="big"]').forEach((el) => { el.innerHTML = c.big; });
-      document.querySelectorAll('[data-install="copy"]').forEach((el) => { el.dataset.cmd = c.cmd; });
-      document.querySelectorAll("[data-os]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.os === os ? "true" : "false"));
-    };
-    document.querySelectorAll("[data-os]").forEach((b) => b.addEventListener("click", () => apply(b.dataset.os)));
-    const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
-    if (/win/i.test(platform)) apply("ps");
-  })();
 
   // The headline types " live" once the visitor reaches it or points at it.
   (function () {

@@ -21,7 +21,49 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
+
+func stageHiveSupervisorDesktop(t *testing.T, source string) {
+	t.Helper()
+	path := filepath.Join(source, "hive", "desktop", "_index.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest struct {
+		Version   string                   `yaml:"version"`
+		Namespace string                   `yaml:"namespace"`
+		Entries   []map[string]interface{} `yaml:"entries"`
+	}
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("decode Hive desktop fixture manifest: %v", err)
+	}
+	if manifest.Namespace != "bee.hive.desktop" {
+		t.Fatalf("Hive desktop fixture namespace = %q", manifest.Namespace)
+	}
+	wanted := map[string]bool{"protocol": true, "catalog": true, "owner": true}
+	entries := make([]map[string]interface{}, 0, len(wanted))
+	for _, entry := range manifest.Entries {
+		name, _ := entry["name"].(string)
+		if wanted[name] {
+			entries = append(entries, entry)
+			delete(wanted, name)
+		}
+	}
+	if len(wanted) != 0 {
+		t.Fatalf("Hive desktop fixture is missing bridge entries: %v", wanted)
+	}
+	manifest.Entries = entries
+	data, err = yaml.Marshal(&manifest)
+	if err != nil {
+		t.Fatalf("encode Hive desktop fixture manifest: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // Uses actual native peer authentication and process provenance. The only
 // configured identities are native nodes; no supervisor PID is passed at boot.
@@ -31,7 +73,10 @@ func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService
 	if !ok {
 		t.Fatal("locate supervisor fixture sources")
 	}
-	repository := filepath.Dir(filepath.Dir(sourceFile))
+	repository, err := filepath.Abs(filepath.Dir(filepath.Dir(sourceFile)))
+	if err != nil {
+		t.Fatal(err)
+	}
 	sourceSnapshot := filepath.Join(root, "source")
 	fixtureSnapshot := filepath.Join(root, "fixture")
 	if err := os.CopyFS(filepath.Join(sourceSnapshot, "hive"), os.DirFS(filepath.Join(repository, "src/hive"))); err != nil {
@@ -42,6 +87,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService
 			t.Fatal(err)
 		}
 	}
+	stageHiveSupervisorDesktop(t, sourceSnapshot)
 	if err := os.CopyFS(fixtureSnapshot, os.DirFS(filepath.Join(repository, "tests/fixtures/hive_supervisor"))); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +259,10 @@ func TestHiveSupervisorFeeds(t *testing.T) {
 func stageHiveFeeds(t *testing.T, source, fixture string) {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
-	repository := filepath.Dir(filepath.Dir(file))
+	repository, err := filepath.Abs(filepath.Dir(filepath.Dir(file)))
+	if err != nil {
+		t.Fatal(err)
+	}
 	coordinatorPath := filepath.Join(fixture, "coordinator.lua")
 	coordinator, err := os.ReadFile(coordinatorPath)
 	if err != nil {
@@ -233,13 +282,18 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 	if err := os.WriteFile(fixtureManifest, []byte(fixtureText), 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"node", "sync", "persist", "approvals"} {
-		if name == "sync" {
-			if err := os.RemoveAll(filepath.Join(source, name)); err != nil {
+	for _, dependency := range []struct{ name, path string }{
+		{name: "node", path: "src/node"},
+		{name: "sync", path: "src/sync"},
+		{name: "persist", path: "modules/bee-persist/src"},
+		{name: "approvals", path: "src/approvals"},
+	} {
+		if dependency.name == "sync" {
+			if err := os.RemoveAll(filepath.Join(source, dependency.name)); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if err := os.CopyFS(filepath.Join(source, name), os.DirFS(filepath.Join(repository, "src", name))); err != nil {
+		if err := os.CopyFS(filepath.Join(source, dependency.name), os.DirFS(filepath.Join(repository, dependency.path))); err != nil {
 			t.Fatal(err)
 		}
 	}

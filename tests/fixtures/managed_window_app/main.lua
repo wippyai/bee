@@ -145,7 +145,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
         wait_for("Selected agent fixture")
         if cancel_activation then
-            local resource_state = reply(call("bee.resources:list", {workspace_id = WORKSPACE}).value)
+            local resource_state = reply(call("bee.resources.binding:list", {workspace_id = WORKSPACE}).value)
             local grants_before = #(resource_state.grants :: {{[string]: unknown}})
             assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
             wait_for("Starting Agent")
@@ -179,7 +179,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
                     and record.kind ~= "attempt.started" and record.kind ~= "receipt",
                     "cancelled picker crossed the carrier lifecycle boundary")
             end
-            local resources_after = reply(call("bee.resources:list", {workspace_id = WORKSPACE}).value)
+            local resources_after = reply(call("bee.resources.binding:list", {workspace_id = WORKSPACE}).value)
             assert(#(resources_after.grants :: {{[string]: unknown}}) == grants_before,
                 "cancelled picker retained an attempt-bound resource grant")
             view:close()
@@ -662,7 +662,7 @@ M.retained = function()
         local granted = changed(mode)
         granted.data = {mode = "granted"}
         apply(granted)
-        call("bee.resources:associate", {workspace_id = WORKSPACE, name = "retained",
+        call("bee.resources.binding:associate", {workspace_id = WORKSPACE, name = "retained",
             root_ref = "bee.managed_window_fixture:session_root", subpath = "", allowed_access = "write"})
         local actor = security.actor()
         if not actor then error("fixture has no authenticated actor") end

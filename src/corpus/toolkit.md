@@ -257,7 +257,7 @@ tty.Canvas tty.canvas tty.events tty.mouse tty.screen_size tty.start tty.stop tt
 
 The native module reference is the `tty`, `appearance` and `filesystem` pages
 under `runtime/lua/` and `runtime/system/` in this corpus. The guide example in
-`src/governance/guide.lua` is the minimal working application.
+`src/gov/traits/guide.lua` is the minimal working application.
 
 ## Canonical UI Guide source
 

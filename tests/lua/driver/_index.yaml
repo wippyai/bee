@@ -70,6 +70,6 @@ entries:
     test: wippy.test:test
     registry: registry
     configuration: bee.driver.muse:configuration
-    configure: bee.driver.muse:configure
+    configure: bee.driver.muse.binding:configure
     placement_configuration: bee.placement.native:configuration
     placement_types: bee.placement:types

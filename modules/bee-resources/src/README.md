@@ -19,7 +19,10 @@ changed: re-admission, never silent retargeting) or `RESOURCE_NOT_LOCAL`
 
 | Slice | Responsibility |
 |---|---|
-| `bee.resources` | `authority`: the six operations and the store opened through `bee.persist`; `resources`: linked references (store, host roots) with env-backed roots resolved before identity hashing; contract `contract` with binding `local` |
+| root `bee.resources` | Definition, `target_db`/`target_roots` requirements, linked references, contract `contract`, and stable `local` binding |
+| `persist/` | Immutable resource schema migrations and `authority`, the SQL-owning association and grant authority opened through `bee.persist` |
+| `binding/` | Existing stable operation entry sources for associate, grant, revoke, revoke-all, resolve, list, and capabilities |
+| `registry/` | The linked database/root reference reader, including the narrow environment resolution used to digest admitted roots |
 
 Actions: `bee.resources.manage` (associate, list, revoke any, revoke_all;
 host policy `bee:resource_manage_policy`), `bee.resources.grant` (take a

@@ -52,7 +52,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local changes = registry.snapshot():changes()
     changes:update(roots)
     assert(changes:apply())
-    call("bee.resources:associate", {workspace_id = WORKSPACE, name = "retained",
+    call("bee.resources.binding:associate", {workspace_id = WORKSPACE, name = "retained",
         root_ref = "bee.window_hooks_fixture:session_root", subpath = "", allowed_access = "write"})
 
     -- 2. Create the target thread

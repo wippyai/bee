@@ -7,8 +7,8 @@ local guide = require("guide")
 local transaction = require("transaction")
 local bounds = require("bounds")
 
-local BACKEND = "bee.governance:workspace_backend_call"
-local EXECUTION_SCOPE = "bee.governance:workspace_execution_scope"
+local BACKEND = "bee.governance.binding:workspace_backend_call"
+local EXECUTION_SCOPE = "bee.governance.security:workspace_execution_scope"
 type Result = transaction.Result
 
 local function decode_reply(value: unknown): Result?

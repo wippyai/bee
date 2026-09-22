@@ -16,7 +16,83 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
+
+type hiveHostManifest struct {
+	Namespace string             `yaml:"namespace"`
+	Entries   []hiveServiceEntry `yaml:"entries"`
+}
+
+type hiveServiceEntry struct {
+	Name    string `yaml:"name"`
+	Kind    string `yaml:"kind"`
+	Process string `yaml:"process"`
+	Host    string `yaml:"host"`
+	Input   []struct {
+		ConfiguredNodes []string `yaml:"configured_nodes"`
+	} `yaml:"input"`
+	Lifecycle struct {
+		AutoStart *bool `yaml:"auto_start"`
+		Security  struct {
+			Actor struct {
+				ID string `yaml:"id"`
+			} `yaml:"actor"`
+			Policies []string `yaml:"policies"`
+		} `yaml:"security"`
+	} `yaml:"lifecycle"`
+}
+
+func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
+	t.Helper()
+	var manifest hiveHostManifest
+	if err := yaml.Unmarshal(source, &manifest); err != nil {
+		t.Fatalf("decode Hive host service: %v", err)
+	}
+	if manifest.Namespace != "bee.hive.host" {
+		t.Fatalf("Hive service namespace = %q", manifest.Namespace)
+	}
+	var service *hiveServiceEntry
+	for index := range manifest.Entries {
+		entry := &manifest.Entries[index]
+		if entry.Name != "supervisor_service" {
+			continue
+		}
+		if service != nil {
+			t.Fatal("duplicate Hive supervisor service")
+		}
+		service = entry
+	}
+	if service == nil {
+		t.Fatal("missing default Hive supervisor service")
+	}
+	if service.Kind != "process.service" || service.Process != "bee.hive.supervisor:main" || service.Host != "bee.hive:supervisor_host" {
+		t.Fatalf("unexpected Hive service binding: kind=%q process=%q host=%q", service.Kind, service.Process, service.Host)
+	}
+	if service.Lifecycle.AutoStart == nil || !*service.Lifecycle.AutoStart {
+		t.Fatal("Hive supervisor service must auto-start")
+	}
+	if service.Lifecycle.Security.Actor.ID != "bee.hive.supervisor" {
+		t.Fatalf("Hive supervisor service actor = %q", service.Lifecycle.Security.Actor.ID)
+	}
+	wantPolicies := []string{
+		"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy",
+		"bee:hive_policy_exposure_policy", "bee:hive_dispatch_policy", "bee:hive_names_policy",
+		"bee:hive_advertise_policy", "bee:hive_execute_policy",
+	}
+	if len(service.Lifecycle.Security.Policies) != len(wantPolicies) {
+		t.Fatalf("Hive supervisor service policy count = %d", len(service.Lifecycle.Security.Policies))
+	}
+	for index, policy := range wantPolicies {
+		if service.Lifecycle.Security.Policies[index] != policy {
+			t.Fatalf("Hive supervisor service policy %d = %q, want %q", index, service.Lifecycle.Security.Policies[index], policy)
+		}
+	}
+	if len(service.Input) != 1 || len(service.Input[0].ConfiguredNodes) != 0 {
+		t.Fatal("Hive supervisor service must start with one empty configured_nodes input")
+	}
+}
 
 // Proves native supervised service startup input can bootstrap the ACTUAL
 // Bee Hive supervisor without giving ordinary applications supervisor host authority.
@@ -114,6 +190,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		assertDefaultHiveSupervisorService(t, serviceManifest)
 		serviceText := string(serviceManifest)
 		defaultInput := "  - configured_nodes: []"
 		if strings.Count(serviceText, defaultInput) != 1 {

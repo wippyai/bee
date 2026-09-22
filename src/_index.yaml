@@ -13,6 +13,15 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: 0.1.0-dev
+- name: dependency_resources
+  kind: ns.dependency
+  component: bee/resources
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.resources:db
+  - name: target_roots
+    value: bee:resource_roots
 - name: workers
   kind: process.host
   host:

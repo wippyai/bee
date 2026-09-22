@@ -1,0 +1,35 @@
+version: '1.0'
+namespace: bee.governance.registry
+entries:
+- name: materializer
+  kind: library.lua
+  source: file://materializer.lua
+  modules: [registry, hash]
+  imports:
+    artifact: bee.governance:artifact
+    application_admission: bee.governance:governed_application_admission
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+- name: hub_resolver
+  kind: library.lua
+  source: file://hub_resolver.lua
+  modules: [registry, hash]
+  imports:
+    artifact: bee.governance:artifact
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+    application_admission: bee.governance:governed_application_admission
+- name: overlay_resolver
+  kind: library.lua
+  source: file://overlay_resolver.lua
+  modules: [registry, hash]
+  imports:
+    artifact: bee.governance:artifact
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+    application_admission: bee.governance:governed_application_admission
+- name: staging_resources
+  kind: library.lua
+  source: file://staging_resources.lua
+  modules: [registry]
+  imports: {bounds: bee.threads.records:bounds}

@@ -41,7 +41,7 @@ local function recover()
     if matches ~= true then
         local states = system.supervisor.states()
         for _, state in ipairs(states or {}) do
-            if tostring(state.id) == "bee.governance:activation_recovery_service" then
+            if tostring(state.id) == "bee.governance.service:recovery_service" then
                 io.print("RESEARCH_RECOVERY_SERVICE " .. tostring(json.encode(state)))
             end
         end

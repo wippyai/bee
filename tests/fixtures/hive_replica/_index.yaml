@@ -66,11 +66,11 @@ entries:
     canonical: bee.sync:canonical
     artifact: bee.governance:artifact
     delivery: bee.governance:delivery
-    destination: bee.governance:destination
-    plan_store: bee.governance:plan_store
-    materializer: bee.governance:materializer
-    overlay_resolver: bee.governance:overlay_resolver
-    publisher: bee.governance:publisher
+    destination: bee.governance.binding:destination
+    plan_store: bee.governance.persist:plan_store
+    materializer: bee.governance.registry:materializer
+    overlay_resolver: bee.governance.registry:overlay_resolver
+    publisher: bee.governance.binding:publisher
     sync: bee.sync:store
   meta:
     command:

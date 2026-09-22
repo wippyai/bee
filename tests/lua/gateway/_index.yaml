@@ -72,10 +72,23 @@ entries:
   source: file://mcp_test.lua
   method: run
   meta: {type: test, suite: bee}
+  modules: [registry, json]
+  security: {policies: [bee.gateway:mcp_test_policy]}
   imports:
     test: wippy.test:test
     mcp: bee.gateway:mcp
     gateway: bee.gateway:gateway
+- name: mcp_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.get]
+    resources:
+    - bee.governance:authoring_trait
+    - bee.governance:application_delivery_trait
+    - bee.governance:application_publish_trait
+    - bee.governance:overlay_call
+    effect: allow
 - name: context_test
   kind: function.lua
   source: file://context_test.lua

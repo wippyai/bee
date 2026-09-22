@@ -58,16 +58,6 @@ entries:
   source: file://preflight.lua
   modules: [hash, json]
   imports: {canonical: bee.sync:canonical}
-- name: guide
-  kind: library.lua
-  source: file://guide.lua
-  modules: [json]
-  imports: {preflight: bee.governance:preflight}
-- name: workspace_protocol
-  kind: library.lua
-  source: file://workspace_protocol.lua
-  modules: [base64]
-  imports: {bounds: bee.threads.records:bounds}
 - name: target_db
   kind: ns.requirement
   default: bee.governance:db
@@ -89,25 +79,23 @@ entries:
   kind: db.sql.sqlite
   file: ${env:bee.governance:db_path}
   lifecycle: {auto_start: true}
-- name: migrations
+- name: workspace_protocol
   kind: library.lua
-  source: file://migrations.lua
-- name: staging_resources
-  kind: library.lua
-  source: file://staging_resources.lua
-  modules: [registry]
+  source: file://workspace_protocol.lua
+  modules: [base64]
   imports: {bounds: bee.threads.records:bounds}
-- name: staging
-  kind: library.lua
-  source: file://staging.lua
-  modules: [sql, hash, base64]
-  imports:
-    database: bee.persist:database
-    transaction: bee.persist:transaction
-    migrations: bee.governance:migrations
-    protocol: bee.governance:workspace_protocol
-    workspace: bee.governance:workspace
-    bounds: bee.threads.records:bounds
+- name: overlay_call
+  kind: function.lua
+  source: file://workspace_method.lua
+  method: handle
+  modules: [funcs, security]
+  imports: {protocol: bee.governance:workspace_protocol, guide: bee.governance.traits:guide, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
+  security: {policies: [bee.governance.security:overlay_facade_policy]}
+`
+
+const governanceBindingIndex = `version: '1.0'
+namespace: bee.governance.binding
+entries:
 - name: workspace_backend_call
   kind: function.lua
   source: file://authoring.lua
@@ -115,9 +103,58 @@ entries:
   modules: [security, system]
   imports:
     protocol: bee.governance:workspace_protocol
-    staging: bee.governance:staging
-    resources: bee.governance:staging_resources
+    staging: bee.governance.persist:staging
+    resources: bee.governance.registry:staging_resources
     transaction: bee.persist:transaction
+`
+
+const governancePersistIndex = `version: '1.0'
+namespace: bee.governance.persist
+entries:
+- name: staging
+  kind: library.lua
+  source: file://staging.lua
+  modules: [sql, hash, base64]
+  imports:
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.governance.migrations:schema
+    protocol: bee.governance:workspace_protocol
+    workspace: bee.governance:workspace
+    bounds: bee.threads.records:bounds
+`
+
+const governanceMigrationsIndex = `version: '1.0'
+namespace: bee.governance.migrations
+entries:
+- name: schema
+  kind: library.lua
+  source: file://schema.lua
+`
+
+const governanceRegistryIndex = `version: '1.0'
+namespace: bee.governance.registry
+entries:
+- name: staging_resources
+  kind: library.lua
+  source: file://staging_resources.lua
+  modules: [registry]
+  imports: {bounds: bee.threads.records:bounds}
+`
+
+const governanceTraitsIndex = `version: '1.0'
+namespace: bee.governance.traits
+entries:
+- name: guide
+  kind: library.lua
+  source: file://guide.lua
+  modules: [json]
+  imports: {preflight: bee.governance:preflight}
+`
+
+const governanceSecurityIndex = `version: '1.0'
+namespace: bee.governance.security
+entries:
 - name: staging_policy
   kind: security.policy
   groups: [workspace_execution_scope]
@@ -130,22 +167,15 @@ entries:
   groups: [workspace_execution_scope]
   policy:
     actions: [bee.governance.workspace.execute]
-    resources: [bee.governance:workspace_backend_call]
+    resources: [bee.governance.binding:workspace_backend_call]
     effect: allow
 - name: overlay_facade_policy
   kind: security.policy.expr
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.governance:workspace_execution_scope") || (action == "funcs.call" && resource == "bee.governance:workspace_backend_call")'
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.governance.security:workspace_execution_scope") || (action == "funcs.call" && resource == "bee.governance.binding:workspace_backend_call")'
     actions: [funcs.security, security.policy_group.get, funcs.call]
-    resources: [security, bee.governance:workspace_execution_scope, bee.governance:workspace_backend_call]
+    resources: [security, bee.governance.security:workspace_execution_scope, bee.governance.binding:workspace_backend_call]
     effect: allow
-- name: overlay_call
-  kind: function.lua
-  source: file://workspace_method.lua
-  method: handle
-  modules: [funcs, security]
-  imports: {protocol: bee.governance:workspace_protocol, guide: bee.governance:guide, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
-  security: {policies: [bee.governance:overlay_facade_policy]}
 `
 
 func runCommand(ctx context.Context, directory, runtime string, environment []string, args ...string) ([]byte, error) {
@@ -175,13 +205,32 @@ func copyFile(destination, source string) error {
 }
 
 func setup(root string) error {
-	for _, name := range []string{"governance", "sync", "persist"} {
-		if err := copyTree(filepath.Join(root, "src", name), filepath.Join("src", name)); err != nil {
-			return fmt.Errorf("copy %s source: %w", name, err)
+	for _, source := range []struct{ name, path string }{
+		{name: "gov", path: "src/gov"},
+		{name: "sync", path: "src/sync"},
+		{name: "persist", path: "modules/bee-persist/src"},
+	} {
+		if err := copyTree(filepath.Join(root, "src", source.name), source.path); err != nil {
+			return fmt.Errorf("copy %s source: %w", source.name, err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(root, "src", "governance", "_index.yaml"), []byte(governanceIndex), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "src", "gov", "_index.yaml"), []byte(governanceIndex), 0600); err != nil {
 		return fmt.Errorf("write bounded governance composition: %w", err)
+	}
+	if err := os.RemoveAll(filepath.Join(root, "src", "gov", "service")); err != nil {
+		return fmt.Errorf("remove unbound governance services: %w", err)
+	}
+	for path, index := range map[string]string{
+		"binding/_index.yaml": governanceBindingIndex,
+		"persist/_index.yaml": governancePersistIndex,
+		"migrations/_index.yaml": governanceMigrationsIndex,
+		"registry/_index.yaml": governanceRegistryIndex,
+		"traits/_index.yaml": governanceTraitsIndex,
+		"security/_index.yaml": governanceSecurityIndex,
+	} {
+		if err := os.WriteFile(filepath.Join(root, "src", "gov", path), []byte(index), 0600); err != nil {
+			return fmt.Errorf("write bounded governance child composition: %w", err)
+		}
 	}
 	if err := os.WriteFile(filepath.Join(root, "src", "sync", "_index.yaml"), []byte(syncIndex), 0600); err != nil {
 		return fmt.Errorf("write bounded sync composition: %w", err)

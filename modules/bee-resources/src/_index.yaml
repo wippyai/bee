@@ -8,6 +8,14 @@ entries:
   meta:
     title: Bee resources
     comment: Owner-local resource authority; associations under a host ceiling, grants bound to subject, audience, revision, digest, scope and expiry
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
 - name: target_db
   kind: ns.requirement
   meta:
@@ -49,24 +57,6 @@ entries:
   file: ${env:bee.resources:db_path}
   lifecycle:
     auto_start: true
-- name: migrations
-  kind: library.lua
-  source: file://migrations.lua
-- name: resources
-  kind: library.lua
-  source: file://resources.lua
-  modules: [registry, env, system]
-- name: authority
-  kind: library.lua
-  source: file://authority.lua
-  modules: [sql, hash, time, uuid, security, system]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    persist: bee.persist:database
-    transaction: bee.persist:transaction
-    migrations: bee.resources:migrations
-    resources: bee.resources:resources
 - name: contract
   kind: contract.definition
   meta:
@@ -89,65 +79,9 @@ entries:
   contracts:
   - contract: bee.resources:contract
     methods:
-      associate: bee.resources:associate
-      grant: bee.resources:grant
-      revoke: bee.resources:revoke
-      revoke_all: bee.resources:revoke_all
-      resolve: bee.resources:resolve
-      list: bee.resources:list
-- name: associate
-  kind: function.lua
-  source: file://associate_method.lua
-  method: handle
-  imports:
-    authority: bee.resources:authority
-  security:
-    policies: [bee:resource_store_policy, bee:resource_environment_policy]
-- name: grant
-  kind: function.lua
-  source: file://grant_method.lua
-  method: handle
-  imports:
-    authority: bee.resources:authority
-  security:
-    policies: [bee:resource_store_policy, bee:resource_environment_policy]
-- name: revoke
-  kind: function.lua
-  source: file://revoke_method.lua
-  method: handle
-  imports:
-    authority: bee.resources:authority
-  security:
-    policies: [bee:resource_store_policy]
-- name: revoke_all
-  kind: function.lua
-  source: file://revoke_all_method.lua
-  method: handle
-  imports:
-    authority: bee.resources:authority
-  security:
-    policies: [bee:resource_store_policy]
-- name: resolve
-  kind: function.lua
-  source: file://resolve_method.lua
-  method: handle
-  imports:
-    authority: bee.resources:authority
-  security:
-    policies: [bee:resource_store_policy, bee:resource_environment_policy]
-- name: list
-  kind: function.lua
-  source: file://list_method.lua
-  method: handle
-  imports:
-    authority: bee.resources:authority
-  security:
-    policies: [bee:resource_store_policy]
-- name: capabilities
-  kind: function.lua
-  source: file://capabilities_method.lua
-  method: handle
-  imports:
-    authority: bee.resources:authority
-  security:
-    policies: [bee:resource_store_policy]
+      associate: bee.resources.binding:associate
+      grant: bee.resources.binding:grant
+      revoke: bee.resources.binding:revoke
+      revoke_all: bee.resources.binding:revoke_all
+      resolve: bee.resources.binding:resolve
+      list: bee.resources.binding:list

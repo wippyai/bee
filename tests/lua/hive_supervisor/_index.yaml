@@ -68,14 +68,6 @@ entries:
     test: wippy.test:test
     types: bee.hive:types
     client: bee.hive:client
-- name: composition_test
-  kind: function.lua
-  source: file://composition_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, registry, security]
-  imports:
-    test: wippy.test:test
 - name: replica_admission_test_policy
   kind: security.policy
   meta: {type: test_support}

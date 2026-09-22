@@ -41,7 +41,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.resources:associate, bee.resources:grant, bee.resources:revoke, bee.resources:revoke_all, bee.resources:resolve, bee.resources:list, bee.resources:capabilities]
+    resources: [bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.resources.binding:revoke_all, bee.resources.binding:resolve, bee.resources.binding:list, bee.resources.binding:capabilities]
     effect: allow
 - name: authority_test
   kind: function.lua
@@ -53,7 +53,7 @@ entries:
     policies: [bee.resources:apply_test_policy, bee:resource_store_policy]
   imports:
     test: wippy.test:test
-    authority: bee.resources:authority
-    migrations: bee.resources:migrations
+    authority: bee.resources.persist:authority
+    migrations: bee.resources.migrations:migrations
     persist: bee.persist:database
-    resources: bee.resources:resources
+    resources: bee.resources.registry:resources

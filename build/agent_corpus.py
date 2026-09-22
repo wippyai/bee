@@ -179,10 +179,10 @@ def fetch_runtime(paths: "list[str]") -> "dict[str, bytes]":
 
 def toolkit_reference() -> bytes:
     """Bee's terminal toolkit, composed from the sources that define it."""
-    guide = (ROOT / "src/governance/guide.lua").read_text()
+    guide = (ROOT / "src/gov/traits/guide.lua").read_text()
     source_match = re.search(r"M[.]SOURCE = \[==\[(.*?)\]==\]", guide, re.DOTALL)
     if not source_match:
-        raise SystemExit("src/governance/guide.lua has no bounded M.SOURCE example")
+        raise SystemExit("src/gov/traits/guide.lua has no bounded M.SOURCE example")
     guide_source = source_match.group(1).strip()
     client = (ROOT / "src/ui/application/client.lua").read_text()
     appearance = (ROOT / "src/ui/appearance.lua").read_text()
@@ -283,7 +283,7 @@ def toolkit_reference() -> bytes:
         "",
         "The native module reference is the `tty`, `appearance` and `filesystem` pages",
         "under `runtime/lua/` and `runtime/system/` in this corpus. The guide example in",
-        "`src/governance/guide.lua` is the minimal working application.",
+        "`src/gov/traits/guide.lua` is the minimal working application.",
         "",
         "## Canonical UI Guide source",
         "",
@@ -362,7 +362,7 @@ def build() -> int:
         record(f"docs/{stable_name}", topic, origin.read_bytes(), f"docs/{name}")
     for identity, topic, payload, source in component_documents():
         record(identity, topic, payload, source)
-    record("toolkit", "terminal", toolkit_reference(), "generated: src/ui, src/apps, src/governance/guide.lua")
+    record("toolkit", "terminal", toolkit_reference(), "generated: src/ui, src/apps, src/gov/traits/guide.lua")
 
     total = sum(document["bytes"] for document in documents)
     if total > MAX_CORPUS_BYTES:
@@ -433,7 +433,7 @@ SELECTION_RULE = (
     "(application, threads, placement, gateway, carrier, storage, ui, harness, approvals, "
     "registry, platform), excluding repository process and design pages. "
     "Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from "
-    "src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest."
+    "src/ui, src/apps and src/gov/traits/guide.lua and digest-checked with the rest."
 )
 
 

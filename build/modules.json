@@ -97,7 +97,14 @@
       "module": "bee/governance",
       "root": "bee.governance",
       "namespaces": [
-        "bee.governance"
+        "bee.governance",
+        "bee.governance.binding",
+        "bee.governance.migrations",
+        "bee.governance.persist",
+        "bee.governance.registry",
+        "bee.governance.security",
+        "bee.governance.service",
+        "bee.governance.traits"
       ]
     },
     {
@@ -157,7 +164,11 @@
       "module": "bee/resources",
       "root": "bee.resources",
       "namespaces": [
-        "bee.resources"
+        "bee.resources",
+        "bee.resources.binding",
+        "bee.resources.migrations",
+        "bee.resources.persist",
+        "bee.resources.registry"
       ]
     },
     {

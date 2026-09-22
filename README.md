@@ -190,7 +190,7 @@ host launch facts and operating-system I/O events.
 | [`src/core`](src/core) | Workspace, application, desktop, client, and storage lifecycle |
 | [`src/apps`](src/apps) | Bundled standalone application processes |
 | [`src/ui`](src/ui) | Shared appearance and application-facing UI helpers |
-| [`src/governance`](src/governance) | Overlay authoring, review, activation, and recovery |
+| [`src/gov`](src/gov) | Overlay authoring, review, activation, and recovery |
 | [`src/hub`](src/hub) | Package inspection, planning, apply, migration, and receipts |
 | [`modules/bee-threads/src`](modules/bee-threads/src) | Durable records, subscriptions, and delivery |
 | [`native`](native) | Generic application launch facts and OS I/O events |

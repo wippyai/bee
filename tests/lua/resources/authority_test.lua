@@ -39,7 +39,7 @@ local other = caller(OTHER, {"bee:resource_grant_policy"})
 local placement = caller(PLACEMENT, {"bee:resource_resolve_policy"})
 local outsider = caller("bee.test.outsider", {})
 local function call(client: funcs.Executor, method: string, value: unknown): authority.Reply
-    local reply, err = client:call("bee.resources:" .. method, value)
+    local reply, err = client:call("bee.resources.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: authority.Reply
 end
@@ -103,9 +103,9 @@ local function define_tests()
         end)
         test.it("creates an association once under concurrent zero CAS and preserves it on stale CAS", function()
             local workspace = fresh("cas")
-            local first, first_error = manager:async("bee.resources:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
+            local first, first_error = manager:async("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
                 subpath = "first", allowed_access = "write", expected_revision = 0})
-            local second, second_error = manager:async("bee.resources:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
+            local second, second_error = manager:async("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
                 subpath = "second", allowed_access = "write", expected_revision = 0})
             if first_error or not first or second_error or not second then error("start association race: " .. tostring(first_error or second_error)) end
             local replies = {await(first), await(second)}

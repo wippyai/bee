@@ -6,7 +6,7 @@ local function handle(): {opened: boolean, scope_create: boolean, scope_lookup: 
     if db then db:release() end
     return {opened = db ~= nil,
         scope_create = security.can("security.scope.create", "custom"),
-        scope_lookup = security.can("security.policy_group.get", "bee.governance:workspace_execution_scope"),
-        private_execute = security.can("bee.governance.workspace.execute", "bee.governance:workspace_backend_call")}
+        scope_lookup = security.can("security.policy_group.get", "bee.governance.security:workspace_execution_scope"),
+        private_execute = security.can("bee.governance.workspace.execute", "bee.governance.binding:workspace_backend_call")}
 end
 return {handle = handle}

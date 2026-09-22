@@ -184,7 +184,7 @@ lists the `fs.directory` roots a launch may name with the widest access the
 host allows, `prepare` checks the caller, the root, the subpath and the
 access mode against that list, and a request's `grant_ref` is correlation
 data only. In `granted` mode every `grant_ref` is a grant id resolved
-through `bee.resources:resolve` for the owner this placement admitted, with
+through `bee.resources.binding:resolve` for the owner this placement admitted, with
 the attempt as scope; the authority's root and subpath replace the caller's,
 the resolved grants are recorded with the attempt, `start` resolves them
 again before spawning the runner (`grant.refused` evidence and the

@@ -126,8 +126,8 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.harness.launch:start, bee.harness.launch:admit, bee.harness.launch:resolve, bee.harness.launch:setup, bee.harness.profiles:call,
-      bee.threads.service:get, bee.threads.service:create, bee.resources:grant, bee.credentials:issue_projection, bee.threads.carrier:checkpoint,
-      bee.resources:associate, bee.credentials:define]
+      bee.threads.service:get, bee.threads.service:create, bee.resources.binding:grant, bee.credentials:issue_projection, bee.threads.carrier:checkpoint,
+      bee.resources.binding:associate, bee.credentials:define]
     effect: allow
 - name: agent_launch_execution_action_policy
   kind: security.policy.expr
@@ -143,7 +143,7 @@ entries:
   kind: security.policy.expr
   groups: [harness_setup_execution_scope]
   policy:
-    expression: '(action == "funcs.call" && (resource == "bee.resources:associate" || resource == "bee.resources:list" || resource == "bee.credentials:define" || resource == "bee.credentials:list")) || action == "bee.resources.manage" || action == "bee.credentials.manage" || action == "registry.get"'
+    expression: '(action == "funcs.call" && (resource == "bee.resources.binding:associate" || resource == "bee.resources.binding:list" || resource == "bee.credentials:define" || resource == "bee.credentials:list")) || action == "bee.resources.manage" || action == "bee.credentials.manage" || action == "registry.get"'
     actions: [funcs.call, bee.resources.manage, bee.credentials.manage, registry.get]
     resources: '*'
     effect: allow

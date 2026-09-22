@@ -15,7 +15,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.governance:overlay_call, bee.governance:workspace_backend_call, bee.governance_workspace_probe:authority_probe]
+    resources: [bee.governance:overlay_call, bee.governance.binding:workspace_backend_call, bee.governance_workspace_probe:authority_probe]
     effect: allow
 - name: caller_boundary
   kind: security.policy

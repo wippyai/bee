@@ -1,0 +1,40 @@
+version: '1.0'
+namespace: bee.governance.persist
+entries:
+- name: plan_protocol
+  kind: library.lua
+  source: file://plan_protocol.lua
+  imports: {bounds: bee.threads.records:bounds}
+- name: plan_store
+  kind: library.lua
+  source: file://plan_store.lua
+  modules: [sql, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.governance.migrations:schema
+    plan_protocol: bee.governance.persist:plan_protocol
+- name: activation_store
+  kind: library.lua
+  source: file://activation_store.lua
+  modules: [sql, hash, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.governance.migrations:schema
+    migration_work: bee.governance:migration_work
+- name: staging
+  kind: library.lua
+  source: file://staging.lua
+  modules: [sql, hash, base64]
+  imports:
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.governance.migrations:schema
+    protocol: bee.governance:workspace_protocol
+    workspace: bee.governance:workspace
+    bounds: bee.threads.records:bounds

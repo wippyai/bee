@@ -26,7 +26,7 @@ local migration_runner = require("migration_runner")
 local activation_profiles = require("activation_profiles")
 
 local M = {}
-M.BACKEND = "bee.governance:destination_backend_call"
+M.BACKEND = "bee.governance.binding:destination_backend_call"
 M.EXECUTE = "bee.governance.delivery.execute"
 M.SCOPE = "bee:destination_execution_scope"
 local CONFIG = "bee.governance:activation_profiles"

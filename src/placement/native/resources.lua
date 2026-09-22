@@ -14,7 +14,7 @@ M.ADMITTED_ROOTS = "bee.placement.native:admitted_roots"
 -- The host filesystem, read for executable measurement only.
 M.HOST_FILES = "bee.placement.native:host_files"
 M.RESOURCE_MODE = "bee.placement.native:resource_mode"
-M.RESOLVE = "bee.resources:resolve"
+M.RESOLVE = "bee.resources.binding:resolve"
 M.CREDENTIAL_CHECK = "bee.credentials:check"
 M.CREDENTIAL_MATERIALIZE = "bee.credentials:materialize"
 M.GATEWAY_CHECK = "bee.gateway:check"

@@ -38,7 +38,7 @@ local function call(scope: security.Scope?, method: string, request: {[string]: 
         assert(scoped, "with_scope: " .. tostring(scope_error))
         executor = scoped
     end
-    local reply, err = executor:call("bee.resources:" .. method, request)
+    local reply, err = executor:call("bee.resources.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
     return reply :: {[string]: unknown}
 end
@@ -186,11 +186,17 @@ func resourcesModuleWrite(folder, relative string, document interface{}) error {
 	return nil
 }
 
-func resourcesModuleBase(folder string) error {
-	if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
+func resourcesModuleBase(folder string, resources bool) error {
+	modules := "    - name: bee/persist\n      version: 0.1.0-dev\n    - name: bee/threads\n      version: 0.1.0-dev\n"
+	replacements := "    bee/persist: ./modules/bee-persist\n    bee/threads: ./modules/bee-threads\n"
+	if resources {
+		modules += "    - name: bee/resources\n      version: 0.1.0-dev\n"
+		replacements += "    bee/resources: ./modules/bee-resources\n"
+	}
+	if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"+modules), 0600); err != nil {
 		return fmt.Errorf("write wippy.lock: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(folder, ".wippy.yaml"), []byte("version: '1.0'\nshutdown:\n  timeout: 2s\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(folder, ".wippy.yaml"), []byte("version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n"+replacements), 0600); err != nil {
 		return fmt.Errorf("write .wippy.yaml: %w", err)
 	}
 	return nil
@@ -236,16 +242,13 @@ func resourcesModuleProbeIndex(namespace, command, actor string, modules []strin
 }
 
 func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
-	for _, name := range []string{"resources", "persist", filepath.Join("threads", "records")} {
-		if err := resourcesModuleCopyDir(filepath.Join(folder, "src", name), filepath.Join(root, "src", name)); err != nil {
+	for _, name := range []string{"bee-resources", "bee-persist", "bee-threads"} {
+		if err := resourcesModuleCopyDir(filepath.Join(folder, "modules", name), filepath.Join(root, "modules", name)); err != nil {
 			return err
 		}
 	}
-	// This standalone probe supplies its own host bindings.
-	if err := os.RemoveAll(filepath.Join(folder, "src", "resources", "host")); err != nil {
-		return err
-	}
-	if err := resourcesModuleBase(folder); err != nil {
+	// This standalone probe supplies its own root composition and policies.
+	if err := resourcesModuleBase(folder, true); err != nil {
 		return err
 	}
 	resourcePolicyNames := []string{"resource_store_policy", "resource_environment_policy", "resource_manage_policy", "resource_grant_policy", "resource_resolve_policy"}
@@ -285,8 +288,11 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 }
 
 func resourcesModuleStageCredentials(root, folder string, dropSources bool) error {
-	for _, name := range []string{"credentials", "persist", filepath.Join("threads", "records")} {
-		if err := resourcesModuleCopyDir(filepath.Join(folder, "src", name), filepath.Join(root, "src", name)); err != nil {
+	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "credentials"), filepath.Join(root, "src", "credentials")); err != nil {
+		return err
+	}
+	for _, name := range []string{"bee-persist", "bee-threads"} {
+		if err := resourcesModuleCopyDir(filepath.Join(folder, "modules", name), filepath.Join(root, "modules", name)); err != nil {
 			return err
 		}
 	}
@@ -294,7 +300,7 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 	if err := os.RemoveAll(filepath.Join(folder, "src", "credentials", "host")); err != nil {
 		return err
 	}
-	if err := resourcesModuleBase(folder); err != nil {
+	if err := resourcesModuleBase(folder, false); err != nil {
 		return err
 	}
 	policyNames := []string{"credential_store_policy", "credential_file_policy", "credential_manage_policy", "credential_issue_policy", "credential_materialize_policy"}

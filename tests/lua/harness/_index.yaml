@@ -26,10 +26,10 @@ entries:
   contracts:
   - contract: bee.driver:driver
     methods:
-      prepare: bee.driver.claude:prepare
-      dispatch: bee.driver.claude:dispatch
-      normalize: bee.driver.claude:normalize
-      configure: bee.driver.claude:configure
+      prepare: bee.driver.claude.binding:prepare
+      dispatch: bee.driver.claude.binding:dispatch
+      normalize: bee.driver.claude.binding:normalize
+      configure: bee.driver.claude.binding:configure
 - name: fake_profiles
   kind: registry.entry
   meta:
@@ -59,10 +59,10 @@ entries:
   contracts:
   - contract: bee.driver:driver
     methods:
-      prepare: bee.driver.claude:prepare
-      dispatch: bee.driver.claude:dispatch
-      normalize: bee.driver.claude:normalize
-      configure: bee.driver.claude:configure
+      prepare: bee.driver.claude.binding:prepare
+      dispatch: bee.driver.claude.binding:dispatch
+      normalize: bee.driver.claude.binding:normalize
+      configure: bee.driver.claude.binding:configure
 - name: apply_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -404,7 +404,7 @@ entries:
       bee.threads.service:start_attempt, bee.threads.service:request_turn, bee.threads.service:end_turn, bee.threads.service:receipt,
       bee.threads.carrier:claim, bee.threads.carrier:commit, bee.threads.carrier:checkpoint,
       bee.placement.native:prepare, bee.placement.native:start, bee.placement.native:status, bee.placement.native:stop, bee.placement.native:reconcile,
-      bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach, bee.driver.claude:prepare, bee.driver.claude:normalize, bee.driver.claude:configure,
+      bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach, bee.driver.claude.binding:prepare, bee.driver.claude.binding:normalize, bee.driver.claude.binding:configure,
       bee.driver.codex.binding:configure, bee.harness.catalog:configuration_probe, bee.harness.carrier:capabilities, security]
     effect: allow
 - name: carrier_spawn_policy
@@ -740,7 +740,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.harness.launch:resolve, bee.harness.launch:admit, bee.harness.launch:start, bee.resources:associate, bee.resources:grant,
+    resources: [bee.harness.launch:resolve, bee.harness.launch:admit, bee.harness.launch:start, bee.resources.binding:associate, bee.resources.binding:grant,
       bee.credentials:define, bee.credentials:issue_projection, bee.credentials:list, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
     effect: allow
 - name: setup_client_policy

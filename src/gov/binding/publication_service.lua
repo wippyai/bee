@@ -34,7 +34,7 @@ end
 -- application is refused here, at the step where that truth is decided, with a
 -- named code and the remedy the author needs. The remedy is carried in the
 -- failure value under the field name the destination's own diagnostics use
--- (src/governance/preflight.lua), so one reader handles both.
+-- (src/gov/preflight.lua), so one reader handles both.
 local MISSING_ARTIFACT_REMEDY = "freeze an overlay that holds entries.json, a JSON list of complete "
     .. "registry entries; read the overlay tool's guide operation for this destination's contract "
     .. "and one minimal example"

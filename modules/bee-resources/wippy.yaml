@@ -1,0 +1,9 @@
+organization: bee
+module: resources
+type: library
+version: 0.1.0-dev
+description: Owner-local resource associations and scoped grants for Bee workspaces
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

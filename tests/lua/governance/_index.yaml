@@ -17,7 +17,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    guide: bee.governance:guide
+    guide: bee.governance.traits:guide
     artifact: bee.governance:artifact
     preflight: bee.governance:preflight
 - name: destination_public_test_policy
@@ -42,7 +42,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    destination_service: bee.governance:destination_service
+    destination_service: bee.governance.binding:destination_service
 - name: publication_service_test
   kind: function.lua
   source: file://publication_service_test.lua
@@ -52,7 +52,7 @@ entries:
   imports:
     test: wippy.test:test
     artifact: bee.governance:artifact
-    publication_service: bee.governance:publication_service
+    publication_service: bee.governance.binding:publication_service
 - name: plan_test_db
   kind: db.sql.sqlite
   meta: {type: test_support}
@@ -94,7 +94,7 @@ entries:
   security: {policies: [bee.governance:plan_test_policy]}
   imports:
     test: wippy.test:test
-    plan_store: bee.governance:plan_store
+    plan_store: bee.governance.persist:plan_store
 - name: activation_store_test
   kind: function.lua
   source: file://activation_store_test.lua
@@ -105,7 +105,7 @@ entries:
   imports:
     canonical: bee.sync:canonical
     test: wippy.test:test
-    activation_store: bee.governance:activation_store
+    activation_store: bee.governance.persist:activation_store
 - name: activation_measure_test
   kind: function.lua
   source: file://activation_measure_test.lua
@@ -142,9 +142,9 @@ entries:
     test: wippy.test:test
     canonical: bee.sync:canonical
     artifact: bee.governance:artifact
-    plan_store: bee.governance:plan_store
-    activation_store: bee.governance:activation_store
-    activation_owner: bee.governance:activation_owner
+    plan_store: bee.governance.persist:plan_store
+    activation_store: bee.governance.persist:activation_store
+    activation_owner: bee.governance.binding:activation_owner
     preflight: bee.governance:preflight
     application_admission: bee.governance:governed_application_admission
 - name: artifact_test
@@ -170,7 +170,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    materializer: bee.governance:materializer
+    materializer: bee.governance.registry:materializer
     artifact: bee.governance:artifact
     application_admission: bee.governance:governed_application_admission
 - name: approval_test
@@ -181,7 +181,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    approval: bee.governance:approval
+    approval: bee.governance.binding:approval
     canonical: bee.sync:canonical
 - name: destination_test
   kind: function.lua
@@ -192,8 +192,8 @@ entries:
   security: {policies: [bee.governance:plan_test_policy]}
   imports:
     test: wippy.test:test
-    destination: bee.governance:destination
-    plan_store: bee.governance:plan_store
+    destination: bee.governance.binding:destination
+    plan_store: bee.governance.persist:plan_store
     replicas: bee.sync:replicas
     delivery: bee.governance:delivery
     artifact: bee.governance:artifact
@@ -220,12 +220,12 @@ entries:
   security: {policies: [bee.governance:plan_test_policy]}
   imports:
     test: wippy.test:test
-    publisher: bee.governance:publisher
+    publisher: bee.governance.binding:publisher
     delivery: bee.governance:delivery
     artifact: bee.governance:artifact
     replicas: bee.sync:replicas
     sync: bee.sync:store
-    staging: bee.governance:staging
+    staging: bee.governance.persist:staging
 - name: plan_protocol_test
   kind: function.lua
   source: file://plan_protocol_test.lua
@@ -233,7 +233,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    plan_protocol: bee.governance:plan_protocol
+    plan_protocol: bee.governance.persist:plan_protocol
 - name: workspace_protocol_test
   kind: function.lua
   source: file://workspace_protocol_test.lua
@@ -296,7 +296,7 @@ entries:
   imports:
     test: wippy.test:test
     artifact: bee.governance:artifact
-    hub_resolver: bee.governance:hub_resolver
+    hub_resolver: bee.governance.registry:hub_resolver
 - name: overlay_resolver_test
   kind: function.lua
   source: file://overlay_resolver_test.lua
@@ -307,5 +307,5 @@ entries:
     test: wippy.test:test
     canonical: bee.sync:canonical
     artifact: bee.governance:artifact
-    overlay_resolver: bee.governance:overlay_resolver
+    overlay_resolver: bee.governance.registry:overlay_resolver
     preflight: bee.governance:preflight

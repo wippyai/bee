@@ -87,7 +87,7 @@ def application_identity(folder):
 def configure_destination(project, workspace_id=None, source_node="node-1"):
     """Install the destination's local policy in its source composition."""
     if workspace_id is not None:
-        governance_path = project / "src/governance/_index.yaml"
+        governance_path = project / "src/gov/_index.yaml"
         governance = yaml.safe_load(governance_path.read_text())
         profiles = next(item for item in governance["entries"] if item["name"] == "activation_profiles")
         profiles["data"] = {"profiles": [{

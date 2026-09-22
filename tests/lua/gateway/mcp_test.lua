@@ -4,8 +4,42 @@
 local test = require("test")
 local mcp = require("mcp")
 local gateway = require("gateway")
+local registry = require("registry")
+local json = require("json")
+type Object = {[string]: unknown}
+
+local function entry(id: string): Object
+    local found, err = registry.get(id)
+    if err or not found then error(id .. ": " .. tostring(err or "missing registry entry")) end
+    return found :: Object
+end
+
 local function define_tests()
     test.describe("Gateway MCP protocol", function()
+        test.it("discovers the production Governance traits and overlay schema", function()
+            for _, expected in ipairs({
+                {id = "bee.governance:authoring_trait", tool = "bee.governance:overlay_call"},
+                {id = "bee.governance:application_delivery_trait", tool = "bee.governance:delivery_call"},
+                {id = "bee.governance:application_publish_trait", tool = "bee.governance:delivery_call"},
+            }) do
+                local trait = entry(expected.id)
+                test.eq(trait.kind, "registry.entry")
+                test.eq((trait.meta :: Object).type, "agent.trait")
+                local data = trait.data :: Object
+                test.eq(#(data.tools :: {string}), 1)
+                test.eq((data.tools :: {string})[1], expected.tool)
+            end
+            local overlay = entry("bee.governance:overlay_call")
+            local metadata = overlay.meta :: Object
+            local encoded = metadata.input_schema
+            if type(encoded) ~= "string" then error("overlay input schema is missing") end
+            local schema, schema_error = json.decode(encoded)
+            if schema_error or type(schema) ~= "table" then error("decode overlay input schema: " .. tostring(schema_error)) end
+            local properties = (schema :: Object).properties :: Object
+            for _, name in ipairs({"operation", "overlay_id", "expected_revision", "idempotency_key"}) do
+                test.not_nil(properties[name])
+            end
+        end)
         test.it("decodes one strict JSON-RPC request and refuses the rest", function()
             local call = mcp.decode({jsonrpc = "2.0", id = 7, method = "tools/list"})
             if not call then error("decode") end

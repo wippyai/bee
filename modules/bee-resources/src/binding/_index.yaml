@@ -1,0 +1,45 @@
+version: '1.0'
+namespace: bee.resources.binding
+entries:
+- name: associate
+  kind: function.lua
+  source: file://associate_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee:resource_store_policy, bee:resource_environment_policy]}
+- name: grant
+  kind: function.lua
+  source: file://grant_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee:resource_store_policy, bee:resource_environment_policy]}
+- name: revoke
+  kind: function.lua
+  source: file://revoke_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee:resource_store_policy]}
+- name: revoke_all
+  kind: function.lua
+  source: file://revoke_all_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee:resource_store_policy]}
+- name: resolve
+  kind: function.lua
+  source: file://resolve_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee:resource_store_policy, bee:resource_environment_policy]}
+- name: list
+  kind: function.lua
+  source: file://list_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee:resource_store_policy]}
+- name: capabilities
+  kind: function.lua
+  source: file://capabilities_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee:resource_store_policy]}

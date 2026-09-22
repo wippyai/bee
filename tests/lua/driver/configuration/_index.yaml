@@ -14,10 +14,10 @@ entries:
     placement_types: bee.placement:types
     placement_configuration: bee.placement.native:configuration
     configuration: bee.driver:configuration
-    claude: bee.driver.claude:configure
+    claude: bee.driver.claude.binding:configure
     codex: bee.driver.codex.binding:configure
-    grok: bee.driver.grok:configure
-    agy: bee.driver.agy:configure
+    grok: bee.driver.grok.binding:configure
+    agy: bee.driver.agy.binding:configure
 - name: fixture_builder_ok
   kind: function.lua
   source: file://fixture_builder.lua

@@ -151,8 +151,8 @@ local function prepare_host(workspace: string)
     sources[#sources + 1] = {ref = "bee.credentials:claude_login_fixture", workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"file"}}
     sources[#sources + 1] = {ref = ALTERNATE_SOURCE, workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"environment"}}
     apply(sources_entry)
-    value(call("bee.resources:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"}))
-    value(call("bee.resources:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
+    value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"}))
+    value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
     value(call("bee.credentials:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}}))
 end
 local function setup(workspace: string, definition_ref: string): {[string]: unknown}
@@ -161,7 +161,7 @@ local function setup(workspace: string, definition_ref: string): {[string]: unkn
     return reply :: unknown as {[string]: unknown}
 end
 local function associations(workspace: string): {{[string]: unknown}}
-    local listed = value(call("bee.resources:list", {workspace_id = workspace}))
+    local listed = value(call("bee.resources.binding:list", {workspace_id = workspace}))
     return listed.associations :: {{[string]: unknown}}
 end
 local function restore_host()
@@ -365,7 +365,7 @@ local function define_tests()
         end)
         test.it("refuses changed or conflicting selected setup without replacing an association", function()
             local conflicting_workspace = fresh("setup-conflict")
-            value(call("bee.resources:associate", {workspace_id = conflicting_workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "read", expected_revision = 0}))
+            value(call("bee.resources.binding:associate", {workspace_id = conflicting_workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "read", expected_revision = 0}))
             local conflict = setup(conflicting_workspace, DEFINITION)
             test.is_false(conflict.ok == true)
             test.eq(#associations(conflicting_workspace), 1)
@@ -521,14 +521,14 @@ local function define_tests()
                 value(call_as(foreign_owner, "bee.threads.service:create", {thread_id = foreign_thread,
                     idempotency_key = fresh("foreign-create"), title = "Foreign"}))
                 local before = value(call_as(foreign_owner, "bee.threads.service:read_after", {thread_id = foreign_thread, cursor = 0}))
-                local resources_before = value(call("bee.resources:list", {workspace_id = workspace}))
+                local resources_before = value(call("bee.resources.binding:list", {workspace_id = workspace}))
                 local credentials_before = value(call("bee.credentials:list", {workspace_id = workspace}))
                 local refused = call("bee.harness.launch:admit", {request_id = fresh("foreign-agent"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "must not start", thread_id = foreign_thread})
                 test.eq(code(refused), "DENIED")
                 local after = value(call_as(foreign_owner, "bee.threads.service:read_after", {thread_id = foreign_thread, cursor = 0}))
                 test.eq(#(after.records :: {unknown}), #(before.records :: {unknown}))
-                local resources_after = value(call("bee.resources:list", {workspace_id = workspace}))
+                local resources_after = value(call("bee.resources.binding:list", {workspace_id = workspace}))
                 local credentials_after = value(call("bee.credentials:list", {workspace_id = workspace}))
                 test.eq(#(resources_after.grants :: {unknown}), #(resources_before.grants :: {unknown}))
                 test.eq(#(credentials_after.projections :: {unknown}), #(credentials_before.projections :: {unknown}))
@@ -680,8 +680,8 @@ local function define_tests()
             local binding = assert(registry.get("bee.driver.claude:binding"))
             local original = binding.data
             binding.data = {contracts = {{contract = "bee.driver:driver", methods = {
-                prepare = "bee.driver.claude:prepare", dispatch = "bee.driver.claude:dispatch",
-                normalize = "bee.driver.claude:normalize", configure = "bee.harness.catalog:configuration_probe",
+                prepare = "bee.driver.claude.binding:prepare", dispatch = "bee.driver.claude.binding:dispatch",
+                normalize = "bee.driver.claude.binding:normalize", configure = "bee.harness.catalog:configuration_probe",
             }}}}
             local ok, failure = pcall(function()
                 apply(binding)
@@ -1228,10 +1228,10 @@ local function define_tests()
             test.is_false((foreign :: admission.Reply).ok)
             -- Current resource authority must approve again; the old grant
             -- and committed hook do not authorize a new attempt.
-            value(call("bee.resources:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "read"}))
+            value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "read"}))
             request.request_id = fresh("revoked-resume")
             test.is_false(call("bee.harness.launch:admit", request).ok)
-            value(call("bee.resources:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
+            value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
             entry.data = original
             apply(entry)
             policy_entry.data = original_policy

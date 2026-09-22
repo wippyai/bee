@@ -331,6 +331,8 @@ retained-owner-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/retained_owner.go "$(abspath $(WIPPY))"
 check: retained-owner-check
 
+check: hive-supervisor-check
+
 .PHONY: workspace-hosts-check
 workspace-hosts-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/workspace_hosts.go
@@ -339,8 +341,8 @@ workspace-hosts-check:
 
 .PHONY: hive-supervisor-check
 hive-supervisor-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hive_remote.go tests/hive_supervisor_test.go tests/hive_service_bootstrap_test.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" go test -race -count=1 -v tests/hive_remote.go tests/hive_supervisor_test.go tests/hive_service_bootstrap_test.go -run '^TestHiveSupervisor'
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_service_bootstrap_test.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" go -C native test -race -count=1 -v ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_service_bootstrap_test.go -run '^TestHiveSupervisor'
 
 .PHONY: attachments-check
 attachments-check:

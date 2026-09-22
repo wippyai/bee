@@ -173,7 +173,7 @@ local function codex_gateway(input: configuration.GatewayInput): codex_configura
         token_environment = input.token_environment, hook_token_environment = input.hook_token_environment}
 end
 local function claude_delivery(input: configuration.GatewayInput): configuration.Delivery
-    local delivery, delivery_error = configuration.call("bee.driver.claude:configure", {fixture = false, gateway = input})
+    local delivery, delivery_error = configuration.call("bee.driver.claude.binding:configure", {fixture = false, gateway = input})
     if not delivery then error(tostring(delivery_error)) end
     return delivery
 end

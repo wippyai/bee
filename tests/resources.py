@@ -25,7 +25,7 @@ local KEY = "restart-grant-key"
 local CRED_SOURCE = "bee.resource_probe:cred_key"
 local SENTINEL = "probe-secret-4b8f2a"
 local function call(method: string, request: {[string]: unknown}): {[string]: unknown}
-    local reply, err = funcs.new():call("bee.resources:" .. method, request)
+    local reply, err = funcs.new():call("bee.resources.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
     local value = reply :: {[string]: unknown}
     assert(value.ok == true, method .. " failed: " .. tostring(type(value.error) == "table" and (value.error :: {[string]: unknown}).message))
@@ -122,6 +122,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="bee-resources-") as directory:
         folder = Path(directory)
         shutil.copytree(ROOT / "src", folder / "src")
+        shutil.copytree(ROOT / "modules", folder / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, folder / name)
         probe = folder / "src/resource_probe"

@@ -26,6 +26,7 @@ upstream licenses.
 | `src/ui` | Public application helpers, appearance and rendering values |
 | `src/apps/<name>` | A standalone default application and its view/domain helpers |
 | `modules/bee-threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
+| `modules/bee-resources/src` | Resource associations, scoped grants and owner-local ledger |
 | `src/sync` | Owner-local projection, event and receipt ledger |
 | `src/approvals` | Durable approval owner, inbox feed and outbox worker |
 | `src/placement` | Launch attempts, executor boundary, evidence and cleanup state |

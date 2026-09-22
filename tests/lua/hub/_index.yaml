@@ -67,7 +67,7 @@ entries:
     - bee:governance_destination_execution_policy
   imports:
     test: wippy.test:test
-    effect: bee.governance:migration_effect
+    effect: bee.governance.binding:migration_effect
     migration_runner: bee.hub:migration_runner
 - name: migration_runner_test
   kind: function.lua

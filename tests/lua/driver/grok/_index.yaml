@@ -9,8 +9,8 @@ entries:
   imports:
     test: wippy.test:test
     launch: bee.driver.grok:launch
-    prepare: bee.driver.grok:prepare
-    dispatch: bee.driver.grok:dispatch
+    prepare: bee.driver.grok.binding:prepare
+    dispatch: bee.driver.grok.binding:dispatch
 - name: configuration_test
   kind: function.lua
   source: file://configuration_test.lua
@@ -20,7 +20,7 @@ entries:
   imports:
     test: wippy.test:test
     configuration: bee.driver.grok:configuration
-    configure: bee.driver.grok:configure
+    configure: bee.driver.grok.binding:configure
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua
@@ -29,4 +29,4 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.driver.grok:protocol
-    normalize: bee.driver.grok:normalize
+    normalize: bee.driver.grok.binding:normalize

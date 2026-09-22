@@ -68,43 +68,15 @@ entries:
     canonical: bee.threads.records:canonical
     configure_protocol: bee.driver:configuration
     quote: bee.driver.kit:quote
-- name: prepare
-  kind: function.lua
-  source: file://prepare_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.agy:launch
-    types: bee.driver:types
-- name: configure
-  kind: function.lua
-  source: file://configure_method.lua
-  method: handle
-  imports:
-    configuration: bee.driver.agy:configuration
-    configure_protocol: bee.driver:configuration
-- name: dispatch
-  kind: function.lua
-  source: file://dispatch_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.agy:launch
-    types: bee.driver:types
-- name: normalize
-  kind: function.lua
-  source: file://normalize_method.lua
-  method: handle
-  imports:
-    protocol: bee.driver.agy:protocol
-    bounds: bee.threads.records:bounds
 - name: binding
   kind: contract.binding
   contracts:
   - contract: bee.driver:driver
     methods:
-      prepare: bee.driver.agy:prepare
-      dispatch: bee.driver.agy:dispatch
-      normalize: bee.driver.agy:normalize
-      configure: bee.driver.agy:configure
+      prepare: bee.driver.agy.binding:prepare
+      dispatch: bee.driver.agy.binding:dispatch
+      normalize: bee.driver.agy.binding:normalize
+      configure: bee.driver.agy.binding:configure
   meta:
     type: harness.driver
     driver_id: agy

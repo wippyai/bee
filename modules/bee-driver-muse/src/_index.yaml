@@ -71,43 +71,15 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     types: bee.driver:types
-- name: prepare
-  kind: function.lua
-  source: file://prepare_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.muse:launch
-    types: bee.driver:types
-- name: configure
-  kind: function.lua
-  source: file://configure_method.lua
-  method: handle
-  imports:
-    configuration: bee.driver.muse:configuration
-    configure_protocol: bee.driver:configuration
-- name: dispatch
-  kind: function.lua
-  source: file://dispatch_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.muse:launch
-    types: bee.driver:types
-- name: normalize
-  kind: function.lua
-  source: file://normalize_method.lua
-  method: handle
-  imports:
-    protocol: bee.driver.muse:protocol
-    bounds: bee.threads.records:bounds
 - name: binding
   kind: contract.binding
   contracts:
   - contract: bee.driver:driver
     methods:
-      prepare: bee.driver.muse:prepare
-      dispatch: bee.driver.muse:dispatch
-      normalize: bee.driver.muse:normalize
-      configure: bee.driver.muse:configure
+      prepare: bee.driver.muse.binding:prepare
+      dispatch: bee.driver.muse.binding:dispatch
+      normalize: bee.driver.muse.binding:normalize
+      configure: bee.driver.muse.binding:configure
   meta:
     type: harness.driver
     driver_id: muse

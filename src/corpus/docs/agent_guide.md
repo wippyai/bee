@@ -2,7 +2,8 @@
 
 Read [the repository README](../../README.md), [development conventions](conventions.md),
 and the [documentation map](../README.md) before changing Bee. Source
-under `src/` is the runtime; tests, fixtures and the legacy proof of concept in
+under the root and selected modules' `src/` directories is production code;
+tests, fixtures and the legacy proof of concept in
 `../bee-legacy/` are never runtime dependencies.
 
 Bee-owned code and artwork are MIT. Preserve the upstream license for Wippy and
@@ -48,8 +49,8 @@ host/client attachment grants and revocation. Use focused tests while editing,
 then the checks required by the changed boundary. Documentation-only changes
 need link and source consistency checks; they do not need a full terminal run.
 
-Production loads only `src/`. Keep binaries, registry stores, credentials,
-fixture data and temporary databases outside the pack. Inspect assembled packs
+Production loads the selected components' `src/` trees. Keep binaries, registry
+stores, credentials, fixture data and temporary databases outside the pack. Inspect assembled packs
 for test registrations and fixture dependencies. Do not add a local runtime
 binary or legacy source to production, and do not edit registry tables directly
 to work around source loading.

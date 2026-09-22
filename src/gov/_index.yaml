@@ -12,8 +12,7 @@ entries:
   kind: library.lua
   source: file://preflight.lua
   modules: [hash, json]
-  imports:
-    canonical: bee.sync:canonical
+  imports: {canonical: bee.sync:canonical}
 - name: delivery_protocol
   kind: library.lua
   source: file://delivery_protocol.lua
@@ -27,69 +26,34 @@ entries:
     bounds: bee.threads.records:bounds
     transaction: bee.persist:transaction
     preflight: bee.governance:preflight
-    guide: bee.governance:guide
+    guide: bee.governance.traits:guide
     protocol: bee.governance:delivery_protocol
   security: {policies: [bee:delivery_facade_policy]}
-- name: guide
-  kind: library.lua
-  source: file://guide.lua
-  modules: [json]
-  imports:
-    preflight: bee.governance:preflight
 - name: workspace
   kind: library.lua
   source: file://workspace.lua
   modules: [hash]
-  imports:
-    canonical: bee.sync:canonical
+  imports: {canonical: bee.sync:canonical}
+- name: workspace_protocol
+  kind: library.lua
+  source: file://workspace_protocol.lua
+  modules: [base64]
+  imports: {bounds: bee.threads.records:bounds}
 - name: candidate
   kind: library.lua
   source: file://candidate.lua
   modules: [hash, json]
-  imports:
-    canonical: bee.sync:canonical
-    workspace: bee.governance:workspace
+  imports: {canonical: bee.sync:canonical, workspace: bee.governance:workspace}
 - name: artifact
   kind: library.lua
   source: file://artifact.lua
   modules: [hash, json]
-  imports:
-    canonical: bee.sync:canonical
+  imports: {canonical: bee.sync:canonical}
 - name: governed_application_admission
   kind: library.lua
   source: file://application_admission.lua
   modules: [hash, json]
-  imports:
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
-- name: materializer
-  kind: library.lua
-  source: file://materializer.lua
-  modules: [registry, hash]
-  imports:
-    artifact: bee.governance:artifact
-    application_admission: bee.governance:governed_application_admission
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
-- name: approval
-  kind: library.lua
-  source: file://approval.lua
-  imports:
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
-- name: destination
-  kind: library.lua
-  source: file://destination.lua
-  modules: [hash]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
-    approval: bee.governance:approval
-    plan_store: bee.governance:plan_store
-    replicas: bee.sync:replicas
-    delivery: bee.governance:delivery
-    preflight: bee.governance:preflight
-    transaction: bee.persist:transaction
+  imports: {canonical: bee.sync:canonical, bounds: bee.threads.records:bounds}
 - name: delivery
   kind: library.lua
   source: file://delivery.lua
@@ -99,48 +63,18 @@ entries:
     canonical: bee.sync:canonical
     artifact: bee.governance:artifact
     version: bee.sync:version
-- name: publisher
-  kind: library.lua
-  source: file://publisher.lua
-  modules: [base64]
-  imports:
-    bounds: bee.threads.records:bounds
-    delivery: bee.governance:delivery
-    replicas: bee.sync:replicas
-    sync: bee.sync:store
-    transaction: bee.persist:transaction
 - name: publication_profiles
   kind: registry.entry
   meta:
     type: bee.governance.publication_profiles
     comment: Host-selected source workspaces and overlay owners available for immutable publication
   data: {profiles: []}
-- name: publication_service
-  kind: library.lua
-  source: file://publication_service.lua
-  modules: [registry, security, system, base64, json]
-  imports:
-    bounds: bee.threads.records:bounds
-    artifact: bee.governance:artifact
-    materializer: bee.governance:materializer
-    application_admission: bee.governance:governed_application_admission
-    publisher: bee.governance:publisher
-    staging: bee.governance:staging
-    activation_store: bee.governance:activation_store
-    resources: bee.governance:staging_resources
-    sync_resources: bee.sync:resources
-    transaction: bee.persist:transaction
 - name: publication_call
   kind: function.lua
   source: file://publication_method.lua
   method: handle
-  imports: {service: bee.governance:publication_service}
+  imports: {service: bee.governance.binding:publication_service}
   security: {policies: [bee:governance_publication_service_policy]}
-- name: workspace_protocol
-  kind: library.lua
-  source: file://workspace_protocol.lua
-  modules: [base64]
-  imports: {bounds: bee.threads.records:bounds}
 - name: target_db
   kind: ns.requirement
   default: bee.governance:db
@@ -164,36 +98,6 @@ entries:
   kind: db.sql.sqlite
   file: ${env:bee.governance:db_path}
   lifecycle: {auto_start: true}
-- name: migrations
-  kind: library.lua
-  source: file://migrations.lua
-- name: plan_protocol
-  kind: library.lua
-  source: file://plan_protocol.lua
-  imports:
-    bounds: bee.threads.records:bounds
-- name: plan_store
-  kind: library.lua
-  source: file://plan_store.lua
-  modules: [sql, hash]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
-    database: bee.persist:database
-    transaction: bee.persist:transaction
-    migrations: bee.governance:migrations
-    plan_protocol: bee.governance:plan_protocol
-- name: activation_store
-  kind: library.lua
-  source: file://activation_store.lua
-  modules: [sql, hash, json]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
-    database: bee.persist:database
-    transaction: bee.persist:transaction
-    migrations: bee.governance:migrations
-    migration_work: bee.governance:migration_work
 - name: activation_measure
   kind: library.lua
   source: file://activation_measure.lua
@@ -213,49 +117,6 @@ entries:
     artifact: bee.governance:artifact
     canonical: bee.sync:canonical
     preflight: bee.governance:preflight
-- name: migration_effect
-  kind: library.lua
-  source: file://migration_effect.lua
-  modules: [hash]
-  imports:
-    canonical: bee.sync:canonical
-    hub_migrations: bee.hub:migrations
-    migration_runner: bee.hub:migration_runner
-    migration_work: bee.governance:migration_work
-    materializer: bee.governance:materializer
-- name: hub_resolver
-  kind: library.lua
-  source: file://hub_resolver.lua
-  modules: [registry, hash]
-  imports:
-    artifact: bee.governance:artifact
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
-    application_admission: bee.governance:governed_application_admission
-- name: overlay_resolver
-  kind: library.lua
-  source: file://overlay_resolver.lua
-  modules: [registry, hash]
-  imports:
-    artifact: bee.governance:artifact
-    canonical: bee.sync:canonical
-    bounds: bee.threads.records:bounds
-    application_admission: bee.governance:governed_application_admission
-- name: activation_owner
-  kind: library.lua
-  source: file://activation_owner.lua
-  modules: [json]
-  imports:
-    bounds: bee.threads.records:bounds
-    transaction: bee.persist:transaction
-    plan_store: bee.governance:plan_store
-    activation_store: bee.governance:activation_store
-    activation_measure: bee.governance:activation_measure
-    migration_work: bee.governance:migration_work
-    approval: bee.governance:approval
-    preflight: bee.governance:preflight
-    artifact: bee.governance:artifact
-    application_admission: bee.governance:governed_application_admission
 - name: activation_profiles
   kind: registry.entry
   meta:
@@ -270,29 +131,6 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
     application_admission: bee.governance:governed_application_admission
-- name: destination_service
-  kind: library.lua
-  source: file://destination_service.lua
-  modules: [registry, security, system, funcs, hash]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
-    transaction: bee.persist:transaction
-    resources: bee.governance:staging_resources
-    sync_resources: bee.sync:resources
-    replicas: bee.sync:replicas
-    plan_store: bee.governance:plan_store
-    activation_store: bee.governance:activation_store
-    activation_owner: bee.governance:activation_owner
-    hub_resolver: bee.governance:hub_resolver
-    overlay_resolver: bee.governance:overlay_resolver
-    delivery: bee.governance:delivery
-    destination: bee.governance:destination
-    materializer: bee.governance:materializer
-    migration_effect: bee.governance:migration_effect
-    migration_runner: bee.hub:migration_runner
-    activation_profiles: bee.governance:activation_profile_decoder
-    preflight: bee.governance:preflight
 - name: delivery_contract
   kind: contract.definition
   methods:
@@ -309,93 +147,10 @@ entries:
   method: handle
   modules: [funcs, security]
   imports:
-    service: bee.governance:destination_service
+    service: bee.governance.binding:destination_service
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
-  security: {policies: [bee.governance:destination_facade_policy]}
-- name: destination_backend_call
-  kind: function.lua
-  source: file://destination_backend.lua
-  method: call
-  modules: [security]
-  imports:
-    service: bee.governance:destination_service
-    transaction: bee.persist:transaction
-  meta:
-    type: internal
-- name: destination_facade_policy
-  kind: security.policy.expr
-  meta:
-    comment: The facade may enter the private destination scope and call its backend; it holds no store, registry or overlay grant of its own
-  policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee:destination_execution_scope") || (action == "funcs.call" && resource == "bee.governance:destination_backend_call")'
-    actions: [funcs.security, security.policy_group.get, funcs.call]
-    resources: [security, bee:destination_execution_scope, bee.governance:destination_backend_call]
-    effect: allow
-- name: activation_recovery
-  kind: process.lua
-  source: file://activation_recovery.lua
-  method: main
-  modules: [process]
-  imports: {service: bee.governance:destination_service}
-- name: activation_recovery_service
-  kind: process.service
-  process: bee.governance:activation_recovery
-  host: bee:workers
-  lifecycle:
-    auto_start: true
-    security:
-      actor: {id: bee.governance.activation}
-      policies: [bee:governance_destination_service_policy]
-- name: staging_resources
-  kind: library.lua
-  source: file://staging_resources.lua
-  modules: [registry]
-  imports: {bounds: bee.threads.records:bounds}
-- name: staging
-  kind: library.lua
-  source: file://staging.lua
-  modules: [sql, hash, base64]
-  imports:
-    database: bee.persist:database
-    transaction: bee.persist:transaction
-    migrations: bee.governance:migrations
-    protocol: bee.governance:workspace_protocol
-    workspace: bee.governance:workspace
-    bounds: bee.threads.records:bounds
-- name: workspace_backend_call
-  kind: function.lua
-  source: file://authoring.lua
-  method: call
-  modules: [security, system]
-  imports:
-    protocol: bee.governance:workspace_protocol
-    staging: bee.governance:staging
-    resources: bee.governance:staging_resources
-    transaction: bee.persist:transaction
-  meta:
-    type: internal
-- name: staging_policy
-  kind: security.policy
-  groups: [workspace_execution_scope]
-  policy:
-    actions: [db.get, registry.get, system.read]
-    resources: [bee.governance:db, bee.governance:database_ref, node]
-    effect: allow
-- name: workspace_execution_policy
-  kind: security.policy
-  groups: [workspace_execution_scope]
-  policy:
-    actions: [bee.governance.workspace.execute]
-    resources: [bee.governance:workspace_backend_call]
-    effect: allow
-- name: overlay_facade_policy
-  kind: security.policy.expr
-  policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.governance:workspace_execution_scope") || (action == "funcs.call" && resource == "bee.governance:workspace_backend_call")'
-    actions: [funcs.security, security.policy_group.get, funcs.call]
-    resources: [security, bee.governance:workspace_execution_scope, bee.governance:workspace_backend_call]
-    effect: allow
+  security: {policies: [bee.governance.security:destination_facade_policy]}
 - name: overlay_contract
   kind: contract.definition
   methods:
@@ -411,8 +166,12 @@ entries:
   source: file://workspace_method.lua
   method: handle
   modules: [funcs, security]
-  imports: {protocol: bee.governance:workspace_protocol, guide: bee.governance:guide, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
-  security: {policies: [bee.governance:overlay_facade_policy]}
+  imports:
+    protocol: bee.governance:workspace_protocol
+    guide: bee.governance.traits:guide
+    transaction: bee.persist:transaction
+    bounds: bee.threads.records:bounds
+  security: {policies: [bee.governance.security:overlay_facade_policy]}
   meta:
     type: tool
     title: Overlay authoring

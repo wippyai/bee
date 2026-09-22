@@ -9,6 +9,7 @@ workspace:
   replacements:
     bee/persist: ./modules/bee-persist
     bee/threads: ./modules/bee-threads
+    bee/resources: ./modules/bee-resources
     bee/driver: ./modules/bee-driver
     bee/driver-agy: ./modules/bee-driver-agy
     bee/driver-claude: ./modules/bee-driver-claude

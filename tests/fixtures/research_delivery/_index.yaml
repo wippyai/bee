@@ -46,8 +46,8 @@ entries:
   imports: &imports
     bounds: bee.threads.records:bounds
     artifact: bee.governance:artifact
-    materializer: bee.governance:materializer
-    recovery: bee.governance:destination_service
+    materializer: bee.governance.registry:materializer
+    recovery: bee.governance.binding:destination_service
   security:
     policies: [bee.research_delivery:operator_policy]
   meta:

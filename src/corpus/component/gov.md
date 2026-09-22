@@ -81,7 +81,7 @@ conflicts, entry ownership and scoped permissions, explicit deletion and unchang
 durable history on the candidate executable. Logical overlay ownership is not
 automatic process-exit cleanup. Expanded packages, service readiness and migration
 ordering remain unproved by this registry-entry-only fixture.
-`bee.governance:materializer` keeps the overlay owner outside transferred data,
+`bee.governance.registry:materializer` keeps the overlay owner outside transferred data,
 copies and remeasures the desired artifact, and deletes definitions no longer in
 that owner's complete desired set. Cleanup can reconcile and observe the exact
 empty owner overlay without making an empty application artifact publishable. It
@@ -130,7 +130,7 @@ adapter may claim `guarded_publication` or `exact_expansion` from metadata alone
 No direct registry writer or remote activation endpoint is exposed through the
 agent facade.
 
-Migrations 5-7 and `bee.governance:activation_store` provide the internal
+Migrations 5-7 and `bee.governance.persist:activation_store` provide the internal
 recovery ledger. An immutable intent binds the host-selected overlay owner and
 exact plan, artifact, resolution, preflight and migration-work digests.
 Approval/consumption and migration progress are stored separately, and the
@@ -140,7 +140,7 @@ ledger before they enter preflight; they are a recovery index, not a substitute
 for database truth. This store performs no resolution, approval call or overlay
 operation.
 
-`bee.governance:activation_owner` prepares and advances that ledger one durable
+`bee.governance.binding:activation_owner` prepares and advances that ledger one durable
 phase at a time. Before consumption it requires the same current accepted
 selection and repeats local resolution/preflight. Once `consuming` is durable,
 recovery reconciles the same approval effect because it may already have been
@@ -162,7 +162,7 @@ frozen work and target ledger. Removing an overlay restores registry state; it
 never claims to roll back committed schema effects. Applied definitions are
 immutable and updates append migrations.
 
-`bee.governance:hub_resolver` now provides the destination resolution adapter.
+`bee.governance.registry:hub_resolver` now provides the destination resolution adapter.
 It captures one atomic registry state, asks the runtime to plan a
 host-selected Hub dependency root, reconstructs the complete selected closure
 from the planned final state, and retains definitions absent from the plan

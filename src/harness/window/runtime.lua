@@ -133,7 +133,7 @@ end
 local function release_unstarted(admitted: admission.Admitted): (boolean, string?)
     local details: {string} = {}
     for _, resource in ipairs(admitted.request.resources) do
-        local revoked, revoke_error = call("bee.resources:revoke", {grant_id = resource.grant_ref})
+        local revoked, revoke_error = call("bee.resources.binding:revoke", {grant_id = resource.grant_ref})
         if not revoked then details[#details + 1] = "resource " .. resource.grant_ref .. ": " .. tostring(revoke_error) end
     end
     for _, projection_id in ipairs(admitted.request.projections or {}) do

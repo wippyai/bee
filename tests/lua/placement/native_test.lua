@@ -120,7 +120,7 @@ local function resource_mode(mode: string)
     if not applied then error("set resource mode: " .. tostring(err)) end
 end
 local function resource_call(method: string, value: unknown): {[string]: unknown}
-    local reply, err = caller(OWNER):call("bee.resources:" .. method, value)
+    local reply, err = caller(OWNER):call("bee.resources.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     local typed = reply :: service.Reply
     if not typed.ok then error(method .. ": " .. tostring(typed.error and typed.error.code) .. ": " .. tostring(typed.error and typed.error.message)) end

@@ -1,0 +1,31 @@
+version: '1.0'
+namespace: bee.driver.agy.binding
+entries:
+- name: prepare
+  kind: function.lua
+  source: file://prepare.lua
+  method: handle
+  imports:
+    launch: bee.driver.agy:launch
+    types: bee.driver:types
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch.lua
+  method: handle
+  imports:
+    launch: bee.driver.agy:launch
+    types: bee.driver:types
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    configuration: bee.driver.agy:configuration
+    configure_protocol: bee.driver:configuration
+- name: normalize
+  kind: function.lua
+  source: file://normalize.lua
+  method: handle
+  imports:
+    protocol: bee.driver.agy:protocol
+    bounds: bee.threads.records:bounds

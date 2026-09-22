@@ -59,43 +59,15 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     types: bee.driver:types
-- name: prepare
-  kind: function.lua
-  source: file://prepare_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.grok:launch
-    types: bee.driver:types
-- name: configure
-  kind: function.lua
-  source: file://configure_method.lua
-  method: handle
-  imports:
-    configuration: bee.driver.grok:configuration
-    configure_protocol: bee.driver:configuration
-- name: dispatch
-  kind: function.lua
-  source: file://dispatch_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.grok:launch
-    types: bee.driver:types
-- name: normalize
-  kind: function.lua
-  source: file://normalize_method.lua
-  method: handle
-  imports:
-    protocol: bee.driver.grok:protocol
-    bounds: bee.threads.records:bounds
 - name: binding
   kind: contract.binding
   contracts:
   - contract: bee.driver:driver
     methods:
-      prepare: bee.driver.grok:prepare
-      dispatch: bee.driver.grok:dispatch
-      normalize: bee.driver.grok:normalize
-      configure: bee.driver.grok:configure
+      prepare: bee.driver.grok.binding:prepare
+      dispatch: bee.driver.grok.binding:dispatch
+      normalize: bee.driver.grok.binding:normalize
+      configure: bee.driver.grok.binding:configure
   meta:
     type: harness.driver
     driver_id: grok

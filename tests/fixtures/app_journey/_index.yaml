@@ -46,7 +46,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     artifact: bee.governance:artifact
-    materializer: bee.governance:materializer
+    materializer: bee.governance.registry:materializer
     preflight: bee.governance:preflight
     catalog: bee.applications:catalog
   security:
@@ -83,7 +83,7 @@ entries:
   modules: [funcs, registry, system, env, json, logger]
   imports:
     bounds: bee.threads.records:bounds
-    guide: bee.governance:guide
+    guide: bee.governance.traits:guide
     artifact: bee.governance:artifact
     preflight: bee.governance:preflight
   security:

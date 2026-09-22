@@ -69,7 +69,11 @@ function M.target(node_id: unknown, execution: unknown, workspace_id: unknown, d
     local workspace = contract.workspace_id(workspace_id)
     local desktop = contract.workspace_id(desktop_id)
     local selected: Mode? = selected_mode == nil and "control" or mode(selected_mode)
+    -- Node IDs are opaque protocol identities, but they are also used to
+    -- select a registry name. Reject path syntax at this boundary instead of
+    -- passing a generic printable identifier into a qualified registry key.
     if not node then return nil, "node_id must be an identifier" end
+    if node:find("[/\\\\]", 1) or node:find("%.%.", 1) then return nil, "node_id must be an identifier" end
     if not owner_execution or not workspace or not desktop then return nil, "execution, workspace_id and desktop_id must be 32 lowercase hexadecimal identities" end
     if not selected then return nil, "mode must be control or observe" end
     return {node_id = node, owner_execution = owner_execution, workspace_id = workspace, desktop_id = desktop, mode = selected}, nil

@@ -1,0 +1,14 @@
+version: '1.0'
+namespace: bee.resources.persist
+entries:
+- name: authority
+  kind: library.lua
+  source: file://authority.lua
+  modules: [sql, hash, time, uuid, security, system]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    persist: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.resources.migrations:migrations
+    resources: bee.resources.registry:resources

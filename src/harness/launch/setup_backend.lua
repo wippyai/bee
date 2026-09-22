@@ -11,14 +11,14 @@ local function same(value: unknown, root: string, access: string): boolean
     return object ~= nil and object.root_ref == root and object.subpath == "" and object.allowed_access == access
 end
 local function ensure(workspace: string, name: string, root: string): (boolean, string?)
-    local reply, call_error = funcs.call("bee.resources:associate", {workspace_id = workspace, name = name, root_ref = root, subpath = "", allowed_access = "write", expected_revision = 0})
+    local reply, call_error = funcs.call("bee.resources.binding:associate", {workspace_id = workspace, name = name, root_ref = root, subpath = "", allowed_access = "write", expected_revision = 0})
     local value = bounds.object(reply)
     if call_error or not value then return false, tostring(call_error or "associate") end
     if value.ok == true and same(value.value, root, "write") then return true, nil end
     if value.ok ~= false then return false, "associate reply" end
     local error = bounds.object(value.error)
     if not error or error.code ~= "CONFLICT" then return false, tostring(error and error.message or "associate") end
-    local listed, list_error = funcs.call("bee.resources:list", {workspace_id = workspace})
+    local listed, list_error = funcs.call("bee.resources.binding:list", {workspace_id = workspace})
     local listed_value = bounds.object(listed)
     local data = listed_value and bounds.object(listed_value.value)
     local associations = data and data.associations
@@ -29,7 +29,7 @@ local function ensure(workspace: string, name: string, root: string): (boolean, 
             if same(association, root, "write") then
                 local revision = bounds.count(association.revision)
                 if not revision or revision < 1 then return false, "existing association " .. name .. " has an invalid revision" end
-                local refreshed, refresh_error = funcs.call("bee.resources:associate", {workspace_id = workspace, name = name,
+                local refreshed, refresh_error = funcs.call("bee.resources.binding:associate", {workspace_id = workspace, name = name,
                     root_ref = root, subpath = "", allowed_access = "write", expected_revision = revision})
                 local refreshed_value = bounds.object(refreshed)
                 if refresh_error or not refreshed_value or refreshed_value.ok ~= true or not same(refreshed_value.value, root, "write") then

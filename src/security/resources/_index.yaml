@@ -46,7 +46,7 @@ entries:
     - funcs.call
     resources:
     - '*'
-    - bee.resources:resolve
+    - bee.resources.binding:resolve
     effect: allow
 - name: resource_environment_policy
   kind: security.policy

@@ -1,0 +1,113 @@
+version: '1.0'
+namespace: bee.governance.binding
+entries:
+- name: approval
+  kind: library.lua
+  source: file://approval.lua
+  imports: {canonical: bee.sync:canonical, bounds: bee.threads.records:bounds}
+- name: destination
+  kind: library.lua
+  source: file://destination.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    approval: bee.governance.binding:approval
+    plan_store: bee.governance.persist:plan_store
+    replicas: bee.sync:replicas
+    delivery: bee.governance:delivery
+    preflight: bee.governance:preflight
+    transaction: bee.persist:transaction
+- name: publisher
+  kind: library.lua
+  source: file://publisher.lua
+  modules: [base64]
+  imports:
+    bounds: bee.threads.records:bounds
+    delivery: bee.governance:delivery
+    replicas: bee.sync:replicas
+    sync: bee.sync:store
+    transaction: bee.persist:transaction
+- name: publication_service
+  kind: library.lua
+  source: file://publication_service.lua
+  modules: [registry, security, system, base64, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    artifact: bee.governance:artifact
+    materializer: bee.governance.registry:materializer
+    application_admission: bee.governance:governed_application_admission
+    publisher: bee.governance.binding:publisher
+    staging: bee.governance.persist:staging
+    activation_store: bee.governance.persist:activation_store
+    resources: bee.governance.registry:staging_resources
+    sync_resources: bee.sync:resources
+    transaction: bee.persist:transaction
+- name: activation_owner
+  kind: library.lua
+  source: file://activation_owner.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+    transaction: bee.persist:transaction
+    plan_store: bee.governance.persist:plan_store
+    activation_store: bee.governance.persist:activation_store
+    activation_measure: bee.governance:activation_measure
+    migration_work: bee.governance:migration_work
+    approval: bee.governance.binding:approval
+    preflight: bee.governance:preflight
+    artifact: bee.governance:artifact
+    application_admission: bee.governance:governed_application_admission
+- name: migration_effect
+  kind: library.lua
+  source: file://migration_effect.lua
+  modules: [hash]
+  imports:
+    canonical: bee.sync:canonical
+    hub_migrations: bee.hub:migrations
+    migration_runner: bee.hub:migration_runner
+    migration_work: bee.governance:migration_work
+    materializer: bee.governance.registry:materializer
+- name: destination_service
+  kind: library.lua
+  source: file://destination_service.lua
+  modules: [registry, security, system, funcs, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    transaction: bee.persist:transaction
+    resources: bee.governance.registry:staging_resources
+    sync_resources: bee.sync:resources
+    replicas: bee.sync:replicas
+    plan_store: bee.governance.persist:plan_store
+    activation_store: bee.governance.persist:activation_store
+    activation_owner: bee.governance.binding:activation_owner
+    hub_resolver: bee.governance.registry:hub_resolver
+    overlay_resolver: bee.governance.registry:overlay_resolver
+    delivery: bee.governance:delivery
+    destination: bee.governance.binding:destination
+    materializer: bee.governance.registry:materializer
+    migration_effect: bee.governance.binding:migration_effect
+    migration_runner: bee.hub:migration_runner
+    activation_profiles: bee.governance:activation_profile_decoder
+    preflight: bee.governance:preflight
+- name: destination_backend_call
+  kind: function.lua
+  source: file://destination_backend.lua
+  method: call
+  modules: [security]
+  imports:
+    service: bee.governance.binding:destination_service
+    transaction: bee.persist:transaction
+  meta: {type: internal}
+- name: workspace_backend_call
+  kind: function.lua
+  source: file://authoring.lua
+  method: call
+  modules: [security, system]
+  imports:
+    protocol: bee.governance:workspace_protocol
+    staging: bee.governance.persist:staging
+    resources: bee.governance.registry:staging_resources
+    transaction: bee.persist:transaction
+  meta: {type: internal}

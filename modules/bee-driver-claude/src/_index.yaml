@@ -105,43 +105,15 @@ entries:
       deny_acknowledgment: {mode: terminal_denial, event_type: tool.result, field: outcome, value: failed, correlation_field: call_id}
       cancellation: deny_before_close
       proof_fixture: control
-- name: prepare
-  kind: function.lua
-  source: file://prepare_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.claude:launch
-    types: bee.driver:types
-- name: configure
-  kind: function.lua
-  source: file://configure_method.lua
-  method: handle
-  imports:
-    configure_protocol: bee.driver:configuration
-    canonical: bee.threads.records:canonical
-- name: dispatch
-  kind: function.lua
-  source: file://dispatch_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.claude:launch
-    types: bee.driver:types
-- name: normalize
-  kind: function.lua
-  source: file://normalize_method.lua
-  method: handle
-  imports:
-    protocol: bee.driver.claude:protocol
-    bounds: bee.threads.records:bounds
 - name: binding
   kind: contract.binding
   contracts:
   - contract: bee.driver:driver
     methods:
-      prepare: bee.driver.claude:prepare
-      dispatch: bee.driver.claude:dispatch
-      normalize: bee.driver.claude:normalize
-      configure: bee.driver.claude:configure
+      prepare: bee.driver.claude.binding:prepare
+      dispatch: bee.driver.claude.binding:dispatch
+      normalize: bee.driver.claude.binding:normalize
+      configure: bee.driver.claude.binding:configure
   meta:
     type: harness.driver
     driver_id: claude

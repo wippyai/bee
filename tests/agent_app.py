@@ -75,7 +75,7 @@ def configure_source_node(project):
 def configure_continuous_source(project, workspace_id):
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") != "1":
         return
-    governance_path = project / "src/governance/_index.yaml"
+        governance_path = project / "src/gov/_index.yaml"
     governance = yaml.safe_load(governance_path.read_text())
     publication = next(item for item in governance["entries"] if item["name"] == "publication_profiles")
     publication["data"] = {"profiles": [{"workspace_id": workspace_id,
@@ -356,7 +356,7 @@ def stage(project, folder, round_label):
 
 def preflight_diagnostic(diagnostic):
     """One destination diagnostic as the agent reads it. The preflight wire
-    contract names the field remedy (src/governance/preflight.lua), so a
+    contract names the field remedy (src/gov/preflight.lua), so a
     reviewer that read another name would drop the destination's own repair
     instruction and hand back a weaker finding than the host observed."""
     return (str(diagnostic.get("code")) + " on " + str(diagnostic.get("target")) + ": "

@@ -21,9 +21,9 @@ entries:
   imports:
     canonical: bee.sync:canonical
     artifact: bee.governance:artifact
-    plan_store: bee.governance:plan_store
-    staging: bee.governance:staging_resources
-    approval: bee.governance:approval
+    plan_store: bee.governance.persist:plan_store
+    staging: bee.governance.registry:staging_resources
+    approval: bee.governance.binding:approval
 - name: seed
   kind: process.lua
   source: file://seed.lua

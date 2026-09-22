@@ -381,7 +381,7 @@ local function define_tests()
                     elseif target == "bee.threads.service:read_after" then
                         return {ok = true, value = {records = {observation(1, "provider-session", "old-binding", false, "previous")}, scanned_through = 1, has_more = false}}, nil
                     end
-                    test.eq(target, "bee.driver.claude:dispatch")
+                    test.eq(target, "bee.driver.claude.binding:dispatch")
                     local request = input :: {[string]: unknown}
                     test.eq(request.profile_id, "window")
                     test.eq(request.resume_ref, "provider-session")

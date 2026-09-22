@@ -19,7 +19,7 @@ entries:
     comment: Proof that a caller entered the private destination scope; nothing else grants this action
   policy:
     actions: [bee.governance.delivery.execute]
-    resources: [bee.governance:destination_backend_call]
+    resources: [bee.governance.binding:destination_backend_call]
     effect: allow
 - name: governance_publication_service_policy
   kind: security.policy

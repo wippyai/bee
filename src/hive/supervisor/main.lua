@@ -104,8 +104,12 @@ local function main(configuration: unknown)
     local advertising_response: Channel<unknown>? = nil
     local last_advertisement = -5000
     local registered = false
+    -- The name is published whenever this node has a native identity, even with
+    -- no boot-configured peers: a local client must be able to discover the
+    -- supervisor to ask for admission. Admission itself still requires an
+    -- established peer or a host enrollment, so publication grants nothing.
     local function advertise(now_ms: integer)
-        if native_node == "" or #nodes == 0 or advertised or advertising then return end
+        if native_node == "" or advertised or advertising then return end
         local future, future_error = funcs.async("bee.hive.supervisor:advertise", {name = distributed_name, pid = self})
         if not future or future_error then
             log:warn("Hive name publication unavailable")

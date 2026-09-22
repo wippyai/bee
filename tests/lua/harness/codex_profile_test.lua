@@ -144,6 +144,88 @@ local function define_tests()
             test.is_nil(machine.required_file_refusal(plain, true))
         end)
 
+        test.it("binds every shipped window policy executable through the host environment resolver", function()
+            -- The shipped window policies name their executable through
+            -- executable_env, which the host environment resolves (a bare name
+            -- is a PATH lookup, native/launch/environment.go). A runner without
+            -- the CLI therefore makes the route unavailable; this pins that the
+            -- resolution happens through that resolver and not a literal path.
+            local windows: {{policy_ref: string, executable: string, variable: string}} = {
+                {policy_ref = "bee:launch_policy_claude_window", executable = "claude", variable = "bee.driver.claude:executable"},
+                {policy_ref = "bee:launch_policy_codex_window", executable = "codex", variable = "bee.driver.codex:executable"},
+                {policy_ref = "bee:launch_policy_muse_window", executable = "muse", variable = "bee.driver.muse:executable"},
+                {policy_ref = "bee:launch_policy_agy_window", executable = "agy", variable = "bee.driver.agy:executable"},
+                {policy_ref = "bee:launch_policy_grok_window", executable = "grok", variable = "bee.driver.grok:executable"},
+            }
+            for _, window in ipairs(windows) do
+                local entry = registry.get(window.policy_ref)
+                if not entry then error("missing shipped policy " .. window.policy_ref) end
+                local resolved, resolve_error = policy.decode(window.policy_ref, entry,
+                    function(ref: string): (string?, string?)
+                        if ref == window.variable then return "/opt/host/" .. window.executable, nil end
+                        -- The companions (config home, host environment) are
+                        -- optional; an empty value leaves them absent.
+                        return "", nil
+                    end)
+                if not resolved then error(tostring(resolve_error)) end
+                test.eq((resolved.executables :: {[string]: string})[window.executable], "/opt/host/" .. window.executable)
+                -- An unavailable host executable leaves the declaration
+                -- unavailable rather than binding a relative or empty name.
+                local absent, absent_error = policy.decode(window.policy_ref, entry,
+                    function(ref: string): (string?, string?)
+                        if ref == window.variable then return nil, "environment variable not found" end
+                        return "", nil
+                    end)
+                test.is_nil(absent)
+                test.is_true(tostring(absent_error):find("executable_env." .. window.executable, 1, true) ~= nil)
+            end
+        end)
+
+        test.it("wires every shipped window executable to a live host environment variable", function()
+            -- The executable_env reference must name a real env.variable served
+            -- by the host environment storage; a rename on either side would
+            -- otherwise only surface as a route that silently goes unavailable.
+            local bindings: {{policy_ref: string, executable: string, variable: string}} = {
+                {policy_ref = "bee:launch_policy_claude_window", executable = "claude", variable = "bee.driver.claude:executable"},
+                {policy_ref = "bee:launch_policy_codex_window", executable = "codex", variable = "bee.driver.codex:executable"},
+                {policy_ref = "bee:launch_policy_muse_window", executable = "muse", variable = "bee.driver.muse:executable"},
+                {policy_ref = "bee:launch_policy_agy_window", executable = "agy", variable = "bee.driver.agy:executable"},
+                {policy_ref = "bee:launch_policy_grok_window", executable = "grok", variable = "bee.driver.grok:executable"},
+            }
+            for _, binding in ipairs(bindings) do
+                local policy_entry = registry.get(binding.policy_ref)
+                if not policy_entry then error("missing shipped policy " .. binding.policy_ref) end
+                local declared = ((policy_entry.data :: {[string]: unknown}).executable_env :: {[string]: string})[binding.executable]
+                test.eq(declared, binding.variable)
+                local variable_entry = registry.get(binding.variable)
+                if not variable_entry then error("missing executable variable " .. binding.variable) end
+                test.eq(variable_entry.kind, "env.variable")
+                test.eq((variable_entry.data :: {[string]: unknown}).storage, "bee.harness.host:environment")
+            end
+        end)
+
+        test.it("checks the committed CODEX_HOME rather than the inherited home", function()
+            -- Placement must read the home the policy committed, not the process
+            -- HOME. A runner whose own ~/.codex lacks the file still admits a
+            -- launch whose committed home carries it, and names the committed
+            -- home when it does not.
+            local installed: {driver_types.RequiredFile} = {{variable = "CODEX_HOME", path = "hostname"}}
+            local admitted = materialization.required_file_missing(launch_request(installed, {CODEX_HOME = "/etc", HOME = "/definitely-missing-bee-home"}))
+            test.is_nil(admitted)
+            local absent: {driver_types.RequiredFile} = {{variable = "CODEX_HOME", path = "definitely-missing-bee-profile.config.toml"}}
+            local refused = materialization.required_file_missing(launch_request(absent, {CODEX_HOME = "/etc", HOME = "/definitely-missing-bee-home"}))
+            test.not_nil(refused)
+            test.is_true(refused:find("/etc", 1, true) ~= nil)
+            test.is_true(refused:find("definitely-missing-bee-home", 1, true) == nil)
+        end)
+
+        test.it("reports an absent committed home instead of guessing the profile is missing", function()
+            local declared: {driver_types.RequiredFile} = {{variable = "CODEX_HOME", path = PROFILE .. ".config.toml", default_directory = ".codex"}}
+            local absent_home = materialization.required_file_missing(launch_request(declared, nil, nil))
+            test.not_nil(absent_home)
+            test.is_true(absent_home:find("host home is unavailable", 1, true) ~= nil)
+        end)
+
         test.it("refuses a named profile that is not installed, naming it", function()
             local declared: {driver_types.RequiredFile} = {{variable = "CODEX_HOME", path = PROFILE .. ".config.toml", default_directory = ".codex"}}
             -- /etc exists and carries no such profile, so the refusal is about

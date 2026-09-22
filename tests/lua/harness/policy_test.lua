@@ -104,6 +104,26 @@ local function define_tests()
             test.eq(invalid_error, "test:policy: allow_host_home must be a boolean")
         end)
 
+        test.it("measures the surface against the host's tools, not the narrower set a profile offers", function()
+            local raw = entry({claude = "/bin/claude"})
+            local data = raw.data :: Entry
+            data.instructions = "Host instructions"
+            data.gateway_tools = {"thread_read", "application_open"}
+            data.gateway_surface = {tools = {}, traits = {}, base_tools = {"thread_read"}, active_traits = {},
+                fixed_context = {}, dynamic_keys = {},
+                access = {policy = "app-open-runtime", workspace_id = "test-workspace", traits = {"bee.application:runtime"}}}
+            local host, host_error = policy.decode("test:policy", raw)
+            if not host or not host.gateway_surface then error(tostring(host_error)) end
+            -- A profile chooses what to offer the child out of what the host
+            -- admits. It does not unsay the declaration, so a profile that
+            -- leaves out application_open must not make the surface unreadable.
+            local narrowed, narrowed_error = policy.decode("test:policy", raw, nil,
+                {options = {}, mcp_tools = {"thread_read"}, instructions = ""})
+            if not narrowed or not narrowed.gateway_surface then error(tostring(narrowed_error)) end
+            -- What reaches the child is still only what the profile offered.
+            test.eq(#narrowed.gateway_tools, 1)
+            test.eq(narrowed.gateway_tools[1], "thread_read")
+        end)
         test.it("keeps the host authority digest while applying admitted preferences", function()
             local raw = entry({claude = "/bin/claude"})
             local data = raw.data :: Entry

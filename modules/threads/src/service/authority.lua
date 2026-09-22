@@ -344,6 +344,31 @@ local function correlated_request(tx: sql.Transaction, head: reader.Head, caller
     if obligation.state == "abandoned" then return nil, failure("INVALID_STATE", "the obligation was abandoned; reconcile it first") end
     return obligation, nil
 end
+-- One obligation per recipient is reserved against the thread limit before the
+-- record commits and written after it lands. The commitment is the caller's
+-- own family and key, so a member's message and an authority's projection share
+-- the rule: a replay commits nothing and owes nothing again. Only recipients
+-- handed in are obliged, so a notice to a recipient who can no longer be held
+-- to a delivery records without owing one.
+local function commit_message(tx: sql.Transaction, head: reader.Head, decoded: record_types.Message, recipients: {string}, commit: (integer) -> Result): Result
+    -- A request owes one answer or abandonment per recipient; other kinds owe
+    -- the delivery alone and reserve no record capacity.
+    local owed = 0
+    if decoded.message_kind == "request" then owed = #recipients end
+    if #recipients > 0 then
+        local total, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_obligations WHERE thread_id = ?", {head.thread_id}, "obligations")
+        if not total then return storage(count_err or "count obligations") end
+        if total + #recipients > bounds.MAX_THREAD_OBLIGATIONS then return failure("LIMIT_EXCEEDED", "thread obligation limit reached") end
+    end
+    local result = commit(owed)
+    if not result.ok or result.replayed then return result end
+    local committed = result.value :: types.Committed
+    for _, recipient in ipairs(recipients) do
+        local insert_err = transaction.insert_obligation(tx, head.thread_id, decoded.message_id, recipient, committed.record_id, decoded.message_kind, committed.sequence)
+        if insert_err then return storage(insert_err) end
+    end
+    return result
+end
 function M.submit_message(tx: sql.Transaction, head: reader.Head, caller: reader.Member, body: unknown, context: Context): Result
     if not access.submits(caller.role) then return failure("DENIED", "observers do not submit messages") end
     local object = bounds.object(body)
@@ -360,20 +385,13 @@ function M.submit_message(tx: sql.Transaction, head: reader.Head, caller: reader
         if not obligation then return refused or failure("INTERNAL", "request unavailable") end
         settled = obligation
     end
-    if #decoded.recipient_ids > 0 then
-        local total, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_obligations WHERE thread_id = ?", {head.thread_id}, "obligations")
-        if not total then return storage(count_err or "count obligations") end
-        if total + #decoded.recipient_ids > bounds.MAX_THREAD_OBLIGATIONS then return failure("LIMIT_EXCEEDED", "thread obligation limit reached") end
-    end
-    -- A request owes one answer or abandonment per recipient.
-    local owed = 0
-    if decoded.message_kind == "request" then owed = #decoded.recipient_ids end
-    local committed, refused = M.commit_record(tx, head, "message", caller.actor, "bee", decoded, context, nil, nil, owed)
-    if not committed then return refused or failure("INTERNAL", "commit failed") end
-    for _, recipient in ipairs(decoded.recipient_ids) do
-        local insert_err = transaction.insert_obligation(tx, head.thread_id, decoded.message_id, recipient, committed.record_id, decoded.message_kind, committed.sequence)
-        if insert_err then return storage(insert_err) end
-    end
+    local result = commit_message(tx, head, decoded, decoded.recipient_ids, function(owed: integer): Result
+        local committed, refused = M.commit_record(tx, head, "message", caller.actor, "bee", decoded, context, nil, nil, owed)
+        if not committed then return refused or failure("INTERNAL", "commit failed") end
+        return transaction.success(committed, false)
+    end)
+    if not result.ok then return result end
+    local committed = result.value :: types.Committed
     if settled then
         local answered: record_types.Answered = {request_message_id = settled.message_id, recipient_id = caller.actor,
             reply_message_id = decoded.message_id, outcome = decoded.outcome or "succeeded"}
@@ -435,6 +453,28 @@ function M.commit_keyed(tx: sql.Transaction, head: reader.Head, kind: record_typ
     local committed, refused = M.commit_record(tx, head, kind, producer_id, source, body, context, scope, key, 0)
     if not committed then return refused or failure("INTERNAL", "commit failed") end
     return transaction.success(committed, false)
+end
+-- Commits one addressed message for an authority that projects into the
+-- thread without being a member of it, under its own producer scope and
+-- key. Delivery follows the obligation and nothing else, so the obligation
+-- rows are written here: an authority notice that owes no answer still has
+-- to reach its recipient. A replay commits nothing and owes nothing again.
+-- Only an active member can ever claim an obligation, so a recipient who has
+-- since left is named by the recorded notice but owed nothing: the projection
+-- still reaches the thread, and no obligation outlives the membership that
+-- could have settled it.
+function M.project_message(tx: sql.Transaction, head: reader.Head, producer_id: string, decoded: record_types.Message, context: Context, scope: string, key: string): Result
+    local recipients: {string} = {}
+    for _, recipient in ipairs(decoded.recipient_ids) do
+        local member, member_err = reader.member(tx, head.thread_id, recipient)
+        if member_err then return storage(member_err) end
+        if member and member.active then recipients[#recipients + 1] = recipient end
+    end
+    -- A projected notice is a notification, which owes no answer and reserves
+    -- no record capacity; commit_keyed commits it under the authority's key.
+    return commit_message(tx, head, decoded, recipients, function(_owed: integer): Result
+        return M.commit_keyed(tx, head, "message", producer_id, "bee", decoded, context, scope, key)
+    end)
 end
 local function submit_observation(tx: sql.Transaction, head: reader.Head, caller: reader.Member, source: record_types.Source, body: unknown, context: Context): Result
     if not access.submits(caller.role) then return failure("DENIED", "observers do not submit observations") end

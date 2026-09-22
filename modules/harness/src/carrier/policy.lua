@@ -120,6 +120,16 @@ local function decode_environment_refs(value: unknown, environment: {[string]: s
     end
     return nil
 end
+-- Decode the policy's declared gateway tools as a sorted dense list. The same
+-- field is read before a preference replaces it, for the surface, and after,
+-- for what reaches the child.
+local function decode_gateway_tools(data: {[string]: unknown}, ref: string): ({string}?, string?)
+    if data.gateway_tools == nil then return {}, nil end
+    local declared, tools_error = bounds.ids(data.gateway_tools, true)
+    if not declared then return nil, ref .. ": gateway_tools: " .. tostring(tools_error) end
+    table.sort(declared)
+    return declared, nil
+end
 function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?, selected: preferences.Value?): (Policy?, string?)
     local meta = bounds.object(entry.meta) or {}
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
@@ -184,6 +194,14 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, ref .. ": digest failed" end
+    -- The policy's own tool list is the host's declaration of what a launch
+    -- under it admits, and the surface states what that declaration permits.
+    -- A saved profile replaces the tool list with the narrower set it offers
+    -- the child, so the surface must be measured against this declaration,
+    -- read before any preference narrows it: a profile that leaves out a tool
+    -- chooses what to offer, it does not unsay what the host declared.
+    local admitted_tools, admitted_error = decode_gateway_tools(data, ref)
+    if not admitted_tools then return nil, admitted_error end
     -- Credentials bind the host policy; the launch separately measures the
     -- preferences and resulting configuration under that policy.
     if selected then
@@ -234,12 +252,14 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     end
     local options: {[string]: unknown} = {}
     for name, item in pairs(prepare_options) do options[name] = item end
-    local gateway_tools: {string} = {}
-    if data.gateway_tools ~= nil then
-        local declared, tools_error = bounds.ids(data.gateway_tools, true)
-        if not declared then return nil, ref .. ": gateway_tools: " .. tostring(tools_error) end
-        table.sort(declared)
-        gateway_tools = declared
+    -- A preference replaces the declaration with the profile's selection, which
+    -- is what actually reaches the child; without one the declaration above is
+    -- already the effective list.
+    local gateway_tools: {string} = admitted_tools
+    if selected then
+        local effective, effective_error = decode_gateway_tools(data, ref)
+        if not effective then return nil, effective_error end
+        gateway_tools = effective
     end
     local agent_launch: {AgentLaunch} = {}
     if data.agent_launch ~= nil then
@@ -281,7 +301,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if data.gateway_surface ~= nil then
         gateway_surface = bounds.object(data.gateway_surface)
         if not gateway_surface then return nil, ref .. ": gateway_surface must be an object" end
-        local configured, _, surface_error = surface.prepare(gateway_surface, mcp.TOOLS, gateway_tools)
+        local configured, _, surface_error = surface.prepare(gateway_surface, mcp.TOOLS, admitted_tools)
         if not configured then return nil, ref .. ": gateway_surface: " .. tostring(surface_error) end
         local encoded_surface, encode_error = json.encode(gateway_surface)
         if not encoded_surface or encode_error then return nil, ref .. ": cannot copy gateway_surface" end

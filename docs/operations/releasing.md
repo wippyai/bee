@@ -50,6 +50,13 @@ merge with squash or rebase.
 The validation job runs `make repository-check` before application assembly:
 actionlint checks workflows, and Gitleaks scans history and current files with
 redacted output and a Wippy Hub token rule. Native-module tags run the same checks.
+On a release tag the validation job also checks the tag against the version
+pattern and main ancestry, then runs `make native-pin-check
+NATIVE_PIN_COMMIT="$GITHUB_SHA"`: the native pin in `wippy.build.json` must name
+the tagged commit's own `native/` tree. The builder rejects a local module
+replacement, so the pin is the only input that selects the native source; a pin
+one revision behind the tag would assemble and ship stale native code, and the
+gate stops the tag before anything is built.
 Dependabot groups weekly Actions and native Go dependency updates to limit PR runs.
 Actions default to read-only permissions and require full commit pins. Checkout
 steps do not retain credentials in Git configuration.
@@ -76,6 +83,75 @@ directive, including `[skip ci]`. A skipped tag-push workflow produces no assets
 and cannot satisfy the Hub publication gate.
 
 A manual Bee workflow run accepts a preview version and uploads artifacts.
+
+## Release procedure
+
+Bee application releases use tags of the form `vMAJOR.MINOR.PATCH` (with an
+optional `-identifier` prerelease suffix). Create the tag on the reviewed main
+commit; the validation job refuses a tag that is not a semantic version on main
+or whose native pin does not name the tagged tree. A prerelease-suffixed tag
+produces a prerelease; a bare version produces a stable release. The native Go
+module is released separately under `native/vMAJOR.MINOR.PATCH` and never moves
+the latest-release pointer.
+
+The `Native Bee` workflow runs four jobs:
+
+- `validate` (ubuntu-24.04) checks the tag, the native pin, then selects the
+  platform matrix: PRs and main run Linux amd64 only; tags and manual runs add
+  Linux arm64, macOS amd64 and macOS arm64.
+- `build` runs once per target. On every target it builds the pinned toolchain,
+  verifies the runner architecture, runs the native module checks, and assembles
+  the standalone executable with `make standalone`. Linux amd64 additionally
+  dry-runs the Hub publication pack and runs the full foundation suite; each
+  Linux target proves the source-free portable deployment and boots the
+  executable with networking disabled; each macOS target runs the standalone
+  desktop check. Targets other than Linux amd64 run `make installer-check`
+  directly (Linux amd64 already covers it inside `make check`). Each target then
+  packages `dist/bee` into an archive with checksums and uploads it.
+- `required` (`Bee CI`) fails unless every matrix target succeeded, so a single
+  target cannot be silently skipped or excused.
+- `release` runs only for `v*` tags. It downloads every target artifact, verifies
+  each archive against its `.sha256`, and creates a **draft** GitHub release with
+  `--verify-tag --draft --generate-notes`. Stable tags are marked `--latest`;
+  prerelease tags are marked `--prerelease --latest=false`.
+
+Artifacts accumulate in two places. During the run each target uploads an Actions
+artifact named `bee-<goos>-<goarch>`; the release job then attaches
+`bee-<goos>-<goarch>.tar.gz` and its `.sha256` to the draft release, together with
+`install.sh`. Each archive contains the executable `bee`, `bee.provenance.json`,
+`bee.LICENSES.txt`, the effective `bee.go.mod` and `bee.go.sum`, and
+`bee.runtime-patches.tar.gz`. The provenance sidecar records the sealed
+application manifest, including every physical pack hash and the pinned native
+module version.
+
+### Verifying a downloaded archive
+
+Download the archive and its checksum document from the release, then verify the
+bytes before trusting the binary:
+
+```sh
+sha256sum -c bee-linux-amd64.tar.gz.sha256
+tar -tzf bee-linux-amd64.tar.gz
+tar -xOzf bee-linux-amd64.tar.gz bee.provenance.json
+```
+
+The checksum document names the archive, so `sha256sum -c` fails on a mismatched
+or renamed file. The extracted `bee.provenance.json` records the exact pack hashes
+and native module version the archive was assembled from; compare the native
+`version` against the tag's `native/` tree.
+
+### Installer selection
+
+`install.sh` selects the archive for the running host: `uname -s` maps to
+`linux` or `darwin` and `uname -m` to `amd64` or `arm64`. It downloads
+`bee-<platform>-<arch>.tar.gz` and `.sha256` from
+`releases/latest/download` for the latest stable release, or from
+`releases/download/v<version>` when `--version` names a release (prereleases are
+selected explicitly this way). It verifies the archive against the checksum
+document, extracts the `bee` member, and replaces the destination through a
+temporary file. `make installer-check` covers this selection, checksum and
+failure-preservation behavior. No PowerShell installer ships in this repository,
+so `install.ps1` is not part of the release assets or checks.
 
 ## Contents and publication prerequisites
 

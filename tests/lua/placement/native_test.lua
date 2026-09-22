@@ -536,6 +536,19 @@ local function define_tests()
             local conflict = call(OWNER, "prepare", other)
             test.is_false(conflict.ok)
             test.eq(conflict.error and conflict.error.code, "CONFLICT")
+            -- The attempt id is the durable identity and its uniqueness is not
+            -- scoped to the idempotency key, so a request that repeats a
+            -- recorded attempt under a fresh key is refused by the identity
+            -- rather than the key, and has to say so.
+            local repeated = launch({"sh", "-c", "true"}, "direct_process")
+            repeated.attempt_id = request.attempt_id
+            local collided = call(OWNER, "prepare", repeated)
+            test.is_false(collided.ok)
+            local collision = collided.error
+            test.eq(collision and collision.code, "CONFLICT")
+            local reported = collision and collision.message or ""
+            test.eq(reported:find(request.attempt_id :: string, 1, true) ~= nil, true)
+            test.eq(reported:find("already recorded", 1, true) ~= nil, true)
             local foreign = launch({"sh", "-c", "true"}, "direct_process")
             local denied = call("bee.test.other", "prepare", foreign)
             test.eq(denied.error and denied.error.code, "FORBIDDEN")

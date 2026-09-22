@@ -94,6 +94,13 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		}
 		plan.Command = ownerCommand
 		plan.Args = []string{}
+		state := launch.State
+		if state == "" {
+			state = plan.DefaultState
+		}
+		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
+			return prepareOwner(state)
+		}
 	}
 	return plan, nil
 }

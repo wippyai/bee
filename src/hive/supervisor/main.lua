@@ -10,6 +10,8 @@ local logger = require("logger")
 local types = require("types")
 local bounds = require("bounds")
 local peers = require("peers")
+local enrollment = require("enrollment")
+local registry = require("registry")
 local admission = require("admission")
 local thread_admission = require("thread_admission")
 local policy_admission = require("policy_admission")
@@ -45,7 +47,7 @@ local function main(configuration: unknown)
     local trapping, trap_error = process.set_options({trap_links = true})
     if not trapping then error("Cannot handle Hive link loss: " .. tostring(trap_error)) end
     local config = bounds.object(configuration)
-    if not config or bounds.fields(config, {"configured_nodes", "desktop"}) then error("Invalid Hive supervisor configuration") end
+    if not config or bounds.fields(config, {"configured_nodes", "desktop", "enrollment"}) then error("Invalid Hive supervisor configuration") end
     local nodes, config_error = bounds.ids(config.configured_nodes)
     if not nodes then error("Invalid configured Hive nodes: " .. tostring(config_error)) end
     local desktop_config: desktop_protocol.Configuration? = nil
@@ -65,6 +67,10 @@ local function main(configuration: unknown)
     local incarnation = nonce()
     local state, state_error = peers.new({local_node = node, local_incarnation = incarnation, configured_nodes = nodes, ttl_ms = 10000})
     if not state then error(tostring(state_error)) end
+    -- The boot set stays authoritative; enrollment only adds and retires local
+    -- client nodes the host names in its own registry entry.
+    local boot: {[string]: boolean} = {}
+    for _, configured in ipairs(nodes) do boot[configured] = true end
     local started = time.now()
     local function elapsed(): integer return math.floor(time.now():sub(started):milliseconds()) end
     local log = logger:named("bee.hive.supervisor")
@@ -142,6 +148,28 @@ local function main(configuration: unknown)
                 or (route.recipient == old.pid and route.source_incarnation == old.supervisor_incarnation) then
                 expire_route(route, "UNAVAILABLE", "peer supervisor was replaced")
             end
+        end
+    end
+    -- reconcile_enrollment applies the host-selected local client nodes. It runs
+    -- on the tick because a registry entry has no change notification here; each
+    -- pass reads one bounded entry and only enrolls or retires nodes the boot set
+    -- does not own. A missing or malformed entry admits and retires nothing.
+    local function reconcile_enrollment()
+        local entry = registry.get(enrollment.ENTRY)
+        if not entry or type(entry.data) ~= "table" then return end
+        local desired, decode_error = enrollment.decode(entry.data)
+        if not desired then
+            log:warn("Hive enrollment refused", {cause = tostring(decode_error):sub(1, 256)})
+            return
+        end
+        local enroll, retire = enrollment.diff(desired.nodes, boot, enrollment.configured_view(state))
+        for _, selected in ipairs(retire) do
+            local retired, retire_error = peers.retire(state, selected)
+            if not retired and retire_error then log:warn("Hive enrollment retire refused", {node = selected, cause = retire_error}) end
+        end
+        for _, selected in ipairs(enroll) do
+            local enrolled, enroll_error = peers.enroll(state, selected)
+            if not enrolled and enroll_error then log:warn("Hive enrollment refused", {node = selected, cause = enroll_error}) end
         end
     end
     local function discover(now_ms: integer)
@@ -326,6 +354,7 @@ local function main(configuration: unknown)
                         else expire_route(route, "DEADLINE_EXCEEDED", "supervisor request deadline passed") end
                     end
                 end
+                reconcile_enrollment()
                 if now_ms - last_discovery >= 5000 then discover(now_ms); last_discovery = now_ms end
                 if now_ms - last_advertisement >= 5000 then advertise(now_ms) end
             elseif advertising_response and selected.channel == advertising_response and advertising then

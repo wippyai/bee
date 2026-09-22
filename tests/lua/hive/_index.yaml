@@ -1,6 +1,16 @@
 version: '1.0'
 namespace: bee.hive
 entries:
+- name: enrollment_test
+  kind: function.lua
+  source: file://enrollment_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    peers: bee.hive.supervisor:peers
+    enrollment: bee.hive.supervisor:enrollment
+    types: bee.hive:types
 - name: probe_exposure_policy
   kind: security.policy
   meta: {type: test_support}

@@ -8,6 +8,11 @@ entries:
   imports:
     types: bee.hive:types
     bounds: bee.hive:bounds
+- name: enrollment
+  kind: library.lua
+  source: file://enrollment.lua
+  imports:
+    bounds: bee.hive:bounds
 - name: admission
   kind: library.lua
   source: file://admission.lua
@@ -20,12 +25,13 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, time, uuid, funcs, logger]
+  modules: [process, channel, time, uuid, funcs, logger, registry]
   security: {policies: [bee:hive_policy_exposure_policy]}
   imports:
     types: bee.hive:types
     bounds: bee.hive:bounds
     peers: bee.hive.supervisor:peers
+    enrollment: bee.hive.supervisor:enrollment
     admission: bee.hive.supervisor:admission
     thread_admission: bee.hive.supervisor:thread_admission
     policy_admission: bee.hive.supervisor:policy_admission
@@ -41,6 +47,13 @@ entries:
   security: {policies: [bee:hive_names_policy, bee:hive_advertise_policy]}
   imports:
     types: bee.hive:types
+- name: enrollment_nodes
+  kind: registry.entry
+  meta:
+    type: bee.hive.supervisor_enrollment
+    comment: Host-owned table of the local client nodes the supervisor admits after boot; the host writes it through its overlay, an empty table admits no post-boot client
+  data:
+    nodes: []
 - name: principals
   kind: library.lua
   source: file://principals.lua

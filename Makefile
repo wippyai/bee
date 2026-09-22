@@ -313,7 +313,7 @@ headless-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/headless.go "$(abspath $(WIPPY))"
 
 .PHONY: retained-owner-check
-retained-owner-check:
+retained-owner-check: native-pack
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/retained_owner.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/retained_owner.go "$(abspath $(WIPPY))"
 check: retained-owner-check

@@ -168,6 +168,14 @@ entries:
     resources:
     - bee.launch:retained
     effect: allow
+- name: retained_owner_node_policy
+  kind: security.policy
+  policy:
+    actions:
+    - system.read
+    resources:
+    - node
+    effect: allow
 - name: local_supervisor_spawn_policy
   kind: security.policy
   policy:

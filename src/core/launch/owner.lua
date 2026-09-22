@@ -4,6 +4,8 @@ local channel = require("channel")
 local security = require("security")
 local time = require("time")
 local logger = require("logger")
+local io = require("io")
+local system = require("system")
 local retained = require("retained")
 local decode = require("decode")
 
@@ -47,7 +49,13 @@ local function main()
                     local value = retained.ready(message:payload():data())
                     if not value then error("Invalid retained workspace readiness") end
                     announced = true
+                    local node = system.node.id()
+                    local seed = system.node.addr()
+                    if not node or node == "" or not seed or seed == "" then
+                        node, seed = "local", "-"
+                    end
                     logger:info("Bee retained workspace ready", {workspace_id = value.workspace_id, desktop_id = value.desktop_id})
+                    assert(io.print("BEE_RETAINED_OWNER_READY " .. node .. " " .. seed .. " " .. self .. " " .. value.workspace_id .. " " .. value.desktop_id))
                 end
             end
         end

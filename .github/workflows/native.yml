@@ -108,6 +108,9 @@ jobs:
         if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
         make standalone BUILDER="$BUILDER_BINARY" BEE_VERSION="$version"
         echo "version=$version" >> "$GITHUB_OUTPUT"
+    - name: Verify source-free portable deployment
+      if: matrix.goos == 'linux'
+      run: tests/portable_deployment.sh "$PWD/.wippy/bin/bee-wippy" "$PWD/dist/portable-deployment"
     - name: Verify standalone desktop
       if: matrix.goos == 'darwin'
       run: make native-binary-check

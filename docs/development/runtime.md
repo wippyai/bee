@@ -26,6 +26,7 @@ through Wippy boot.
 make -C native patched-check
 make lint
 make check
+make portable-deployment-check
 make standalone
 ```
 

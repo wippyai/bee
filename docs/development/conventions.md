@@ -115,6 +115,7 @@ make test
 make check
 make pack
 make native-pack
+make portable-deployment-check
 make standalone
 ```
 
@@ -129,8 +130,10 @@ Fixtures use disposable test workspaces and remain outside `src/`. Inspect
 source and assembled packs for test registrations, fixture data, test-library
 dependencies and embedded filesystem assets. Production loads only the root
 and selected modules' `src/` directories.
-`make native-pack` and `make standalone` create a native distribution with its
-own manifest; bundled modules are not independently published packages.
+`make native-pack` seals independently packed root and component WAPPs into the
+native manifest. `make portable-deployment-check` inspects the exact local lock
+and vendor set, then proves isolated source-free boot, restart and tamper
+rejection. These packs are bundled application inputs, not publications.
 
 New runtime patches require upstream Go tests, a refreshed runtime checksum and
 a clean pinned build. `make -C native patched-check` validates the native source

@@ -843,9 +843,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 5326,
+      "bytes": 5549,
       "id": "docs/agent_guide",
-      "sha256": "a08da18326e2212dc85c14e0f3807d0af6a489df0c2f33f649017a0bb83008e3",
+      "sha256": "352fb9e0a79afefbfb9e706d617a933361da96fa3945068b68859c0e0bc00cc3",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -1003,9 +1003,9 @@
       "topic": "component"
     },
     {
-      "bytes": 1334,
+      "bytes": 1340,
       "id": "component/docs",
-      "sha256": "b2205eadbc4070bd063c1965b2d11a8c67079d2812e1b322464d0f2828ab3b0d",
+      "sha256": "22995734abf284bdd5f7ad85a46dd8ad88f90c5d500be6205beac74509e351d5",
       "source": "modules/docs/src/README.md",
       "title": "bee docs",
       "topic": "component"
@@ -1166,7 +1166,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 1231267,
+    "bytes": 1231496,
     "documents": 145
   }
 }

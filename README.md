@@ -181,9 +181,11 @@ make standalone BEE_VERSION=0.1.0-alpha.1
 ./dist/bee
 ```
 
-Production loads the root and selected components' `src/` trees. The standalone executable contains exact,
-checksummed application packs and the two small native boundaries Bee needs for
-host launch facts and operating-system I/O events.
+Development loads the root and selected components' `src/` trees. `make native-pack`
+creates one checksummed WAPP for `bee/bee` and every physical dependency, plus a
+source-free local deployment. The standalone executable embeds that same exact
+pack set and the two small native boundaries Bee needs for host launch facts and
+operating-system I/O events.
 
 | Source | Owner |
 |---|---|

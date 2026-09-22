@@ -39,6 +39,22 @@ arguments, checks Settings recovery, the terminal, fullscreen aliases and
 presenter rejoin. The fixture reads only disposable stores; it uses the source-free
 executable for all application operations.
 `build/bootstrap.go` runs the pinned Go assembler.
+The assembler compiles the native components at the version pinned in
+`wippy.build.json`; that version comes from the module proxy, not the checkout.
+A development build compiles the checked-out native sources instead:
+
+```sh
+BEE_NATIVE_LOCAL=1 make standalone
+```
+
+`build/local_native.sh` writes `native/` into a file-based Go module proxy under
+a fresh worktree pseudo-version, and `build/local_native_manifest.py` rewrites a
+copy of the build manifest to require it. `build/native.mk` exports that proxy
+plus `GOPRIVATE=none GONOPROXY=none` and a scoped `GONOSUMDB`, because the pinned
+builder resolves its `private` native modules through direct VCS. The sealed
+release build leaves `BEE_NATIVE_LOCAL` unset and resolves the pinned version
+exactly. A deliberate syntax error in a native source now fails the build, which
+proves the development build compiles the worktree and not the cached module.
 The Go assembler requires Git, Go 1.27.0, a C compiler and Git credentials that can
 read the selected private modules. Running the resulting binary needs neither Go,
 Wippy nor the Bee checkout. The native Terminal still requires `/bin/bash` and

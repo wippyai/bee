@@ -80,7 +80,7 @@ entries:
     arguments: bee.application:arguments
     workspace_protocol: bee.governance:workspace_protocol
     delivery_protocol: bee.governance:delivery_protocol
-    docs_protocol: bee:docs_protocol
+    docs_protocol: bee.docs:protocol
 - name: context
   kind: library.lua
   source: file://context.lua

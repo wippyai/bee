@@ -31,7 +31,7 @@ entries:
     clients_probe: bee.attachment_probe:clients
     decode: bee.protocol:decode
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     recovery: bee.workspace:recovery
     store: bee.storage:store
   meta:
@@ -83,7 +83,7 @@ entries:
     recovery: bee.workspace:recovery
     persistence: bee.workspace:persistence
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: host_guest
   kind: process.lua
   source: file://host.lua
@@ -95,7 +95,7 @@ entries:
     recovery: bee.workspace:recovery
     persistence: bee.workspace:persistence
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: observer_producer
   kind: process.lua
   source: file://observation.lua
@@ -112,7 +112,7 @@ entries:
   modules: [process, security, tty, time]
   imports:
     decode: bee.protocol:decode
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     store: bee.storage:store
 - name: controller
   kind: process.lua

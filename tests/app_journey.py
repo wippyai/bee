@@ -343,7 +343,7 @@ def configure_open_agent(project):
         str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
-    approvals = project / "src/approvals/_index.yaml"
+    approvals = project / "src/approvals/host/_index.yaml"
     approval_document = yaml.safe_load(approvals.read_text())
     approvers = next(entry for entry in approval_document["entries"]
                      if entry["name"] == "approver_policies")

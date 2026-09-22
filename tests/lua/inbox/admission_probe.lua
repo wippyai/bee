@@ -29,21 +29,21 @@ local function main(value: unknown): Object
     local decision = tostring(input.decision or "approved")
     local report: Object = {}
     report.store_before = attempt_store()
-    report.inbox = call("bee.approvals:inbox", {workspace_id = workspace})
-    local inbox_raw = funcs.new():call("bee.approvals:inbox", {workspace_id = workspace})
+    report.inbox = call("bee.approvals.binding:inbox", {workspace_id = workspace})
+    local inbox_raw = funcs.new():call("bee.approvals.binding:inbox", {workspace_id = workspace})
     local visible = 0
     if type(inbox_raw) == "table" and (inbox_raw :: Object).ok == true then
         local page = (inbox_raw :: Object).value :: Object
         for _ in ipairs(page.changes :: {unknown}) do visible = visible + 1 end
     end
     report.visible = visible
-    report.read = call("bee.approvals:read", {approval_id = approval_id})
-    report.list = call("bee.approvals:list", {workspace_id = workspace})
-    report.consume = call("bee.approvals:consume", {approval_id = approval_id, proposal_digest = string.rep("a", 64), effect_key = "e1", owner_incarnation = 1})
+    report.read = call("bee.approvals.binding:read", {approval_id = approval_id})
+    report.list = call("bee.approvals.binding:list", {workspace_id = workspace})
+    report.consume = call("bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = string.rep("a", 64), effect_key = "e1", owner_incarnation = 1})
     report.service = call("bee.approvals:service", {})
     report.store_after = attempt_store()
     if input.decide == true then
-        local read_raw = funcs.new():call("bee.approvals:read", {approval_id = approval_id})
+        local read_raw = funcs.new():call("bee.approvals.binding:read", {approval_id = approval_id})
         local digest, revision = "", 1
         if type(read_raw) == "table" and (read_raw :: Object).ok == true then
             local view = (read_raw :: Object).value :: Object
@@ -55,7 +55,7 @@ local function main(value: unknown): Object
             -- the authenticated process actor's host-issued definition.
             decision_request.metadata = {definition_id = "bee.inbox:app"}
         end
-        report.decide = call("bee.approvals:decide", decision_request)
+        report.decide = call("bee.approvals.binding:decide", decision_request)
         report.store_after_decide = attempt_store()
     end
     return report

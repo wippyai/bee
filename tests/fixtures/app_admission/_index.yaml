@@ -20,7 +20,7 @@ entries:
   modules: [process, channel, time, security, registry, tty, logger]
   imports:
     decode: bee.protocol:decode
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
   meta:
     command:
       name: app-admission-probe

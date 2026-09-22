@@ -1,0 +1,40 @@
+version: '1.0'
+namespace: bee.docs
+entries:
+- name: definition
+  kind: ns.definition
+  module: docs
+  readme: file://README.md
+  meta:
+    title: Bee documentation
+    comment: Offline documentation protocol, corpus reader and read-only facade; the host selects the embedded corpus resource and grants it explicitly
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: target_corpus
+  kind: ns.requirement
+  meta:
+    comment: The read-only documentation filesystem selected by the host
+  default: bee:docs_corpus
+  targets:
+  - entry: bee.docs:corpus_ref
+    path: .resource_ref
+- name: corpus_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked documentation filesystem; target_corpus fills resource_ref
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports: {bounds: bee.threads.records:bounds}
+- name: corpus
+  kind: library.lua
+  source: file://corpus.lua
+  modules: [fs, json]
+  imports: {bounds: bee.threads.records:bounds}

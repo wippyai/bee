@@ -113,12 +113,14 @@ local function prove_endpoint_call_scope()
     local scope = security.new_scope(policies)
     local actor = security.actor()
     assert(actor ~= nil, "probe actor missing")
-    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance:overlay_call", "bee:docs_call"}) do
+    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance:overlay_call", "bee.docs.binding:call"}) do
         assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
     end
     -- The docs tool reads the one embedded corpus and reaches no other volume.
     assert(scope:evaluate(actor, "fs.get", "bee:docs_corpus") == "allow", "docs corpus read is absent")
     assert(scope:evaluate(actor, "fs.get", "bee:workspace_root") ~= "allow", "docs policy reaches an unrelated filesystem")
+    assert(scope:evaluate(actor, "registry.get", "bee.docs:corpus_ref") == "allow", "docs corpus reference is absent")
+    assert(scope:evaluate(actor, "registry.get", "bee:workspace_root") ~= "allow", "docs policy reaches an unrelated registry entry")
     assert(scope:evaluate(actor, "bee.governance.overlay.read", "any-overlay") == "allow", "overlay read is absent")
     assert(scope:evaluate(actor, "bee.governance.overlay.write", "any-overlay") == "allow", "overlay write is absent")
     for _, target in ipairs({"bee.threads.service:create", "bee.gateway:materialize", "bee.hub:call", "arbitrary:operation"}) do

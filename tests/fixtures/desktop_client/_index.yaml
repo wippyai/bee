@@ -50,7 +50,7 @@ entries:
     decode: bee.protocol:decode
     launch_protocol: bee.launch:protocol
     interaction: bee.application:interaction
-    names: bee.desktop:names
+    names: bee.application:names
   security:
     policies: [bee.desktop_client_probe:root_policy]
   meta:

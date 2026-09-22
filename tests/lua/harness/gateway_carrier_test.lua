@@ -303,7 +303,7 @@ local function install_author_profiles(source_workspace: string)
             allow = {packages = {PROFILES_COMPONENT}, namespaces = {"bee.guide_demo"}, kinds = {"process.lua"},
                 databases = {}, grants = {}, modules = {"tty", "process", "channel", "json"}}}
     end)
-    rewrite("bee.approvals:approver_policies", function(data: Object)
+    rewrite("bee:approver_policies", function(data: Object)
         local policies = data.policies :: {Object}
         policies[#policies + 1] = {name = "local-author-app", approvers = {ACTOR}, max_ttl_ms = 600000}
     end)

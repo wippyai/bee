@@ -13,7 +13,7 @@ entries:
   - time
   - json
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     view: bee.settings:view
     client: bee.application:client
   meta:
@@ -35,7 +35,7 @@ entries:
   modules:
   - tty
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     build_info: bee.settings:build_info
 - name: build_info
   kind: library.lua

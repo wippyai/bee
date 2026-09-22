@@ -45,7 +45,7 @@ entries:
   source: file://restore_view.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: runtime
   kind: library.lua
   source: file://runtime.lua
@@ -62,7 +62,7 @@ entries:
     hooks: bee.harness.window:hooks
     delivery: bee.harness.window:delivery
     records: bee.harness.carrier:hook_records
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     restore_view: bee.harness.window:restore_view
 - name: app
   kind: process.lua
@@ -92,7 +92,7 @@ entries:
   source: file://picker_view.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     text: bee.application:text
     selection: bee.harness.launch:selection
 - name: picker
@@ -102,7 +102,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     client: bee.application:client
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     input_event: bee.harness.window:input
     selection: bee.harness.launch:selection
     admission: bee.harness.launch:admission
@@ -133,7 +133,7 @@ entries:
   source: file://profile_view.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     text: bee.application:text
     editor: bee.harness.window:profile_editor
     forms: bee.harness.window:profile_form

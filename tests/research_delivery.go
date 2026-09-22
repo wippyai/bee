@@ -517,7 +517,7 @@ func stageLiveMeasurement(root string) error {
 		return fmt.Errorf("measurement surface missing")
 	}
 	surface["access"] = map[string]interface{}{"workspace_id": "research-workspace", "policy": "research-live-measurement", "traits": []string{"research:measure"}}
-	for _, relative := range []string{"src/harness/host/_index.yaml", "src/approvals/_index.yaml"} {
+	for _, relative := range []string{"src/harness/host/_index.yaml", "src/approvals/host/_index.yaml"} {
 		path := filepath.Join(root, relative)
 		data, err = os.ReadFile(path)
 		if err != nil {

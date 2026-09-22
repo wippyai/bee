@@ -9,8 +9,8 @@ author calls, Bee's own contracts from docs/, every component README under src/
 and modules/,
 and one terminal toolkit reference, into an embeddable, read-only filesystem.
 
-Storage shape: `src/corpus/` is declared as one `fs.directory` entry
-(`bee.docs:corpus`) that `wippy.yaml`'s `embed:` list names, so `wippy pack` and
+Storage shape: `src/corpus/` is declared by the host as one `fs.directory` entry
+(`bee:docs_corpus`) that `wippy.yaml`'s `embed:` list names, so `wippy pack` and
 build/bundle.py both freeze it into the pack as an `fs.embed` volume the runtime
 serves read-only (see docs/operations/native.md and tests/bundle_assets.py).
 
@@ -184,8 +184,8 @@ def toolkit_reference() -> bytes:
     if not source_match:
         raise SystemExit("src/gov/traits/guide.lua has no bounded M.SOURCE example")
     guide_source = source_match.group(1).strip()
-    client = (ROOT / "src/ui/application/client.lua").read_text()
-    appearance = (ROOT / "src/ui/appearance.lua").read_text()
+    client = (ROOT / "modules/bee-application/src/client.lua").read_text()
+    appearance = (ROOT / "modules/bee-application/src/appearance.lua").read_text()
     stylebook_manifest = (ROOT / "src/apps/stylebook/_index.yaml").read_text().rstrip()
     stylebook_app = (ROOT / "src/apps/stylebook/app.lua").read_text().rstrip()
     stylebook_view = (ROOT / "src/apps/stylebook/view.lua").read_text().rstrip()
@@ -362,7 +362,7 @@ def build() -> int:
         record(f"docs/{stable_name}", topic, origin.read_bytes(), f"docs/{name}")
     for identity, topic, payload, source in component_documents():
         record(identity, topic, payload, source)
-    record("toolkit", "terminal", toolkit_reference(), "generated: src/ui, src/apps, src/gov/traits/guide.lua")
+    record("toolkit", "terminal", toolkit_reference(), "generated: modules/bee-application/src, src/apps, src/gov/traits/guide.lua")
 
     total = sum(document["bytes"] for document in documents)
     if total > MAX_CORPUS_BYTES:
@@ -433,7 +433,7 @@ SELECTION_RULE = (
     "(application, threads, placement, gateway, carrier, storage, ui, harness, approvals, "
     "registry, platform), excluding repository process and design pages. "
     "Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from "
-    "src/ui, src/apps and src/gov/traits/guide.lua and digest-checked with the rest."
+    "modules/bee-application/src, src/apps and src/gov/traits/guide.lua and digest-checked with the rest."
 )
 
 

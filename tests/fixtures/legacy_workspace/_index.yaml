@@ -20,7 +20,7 @@ entries:
     model: bee.desktop:model
     decode: bee.protocol:decode
     decode_input: bee.protocol:input
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     physical: bee.terminal:display
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
@@ -43,7 +43,7 @@ entries:
     model: bee.desktop:model
     decode: bee.protocol:decode
     decode_input: bee.protocol:input
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     physical: bee.terminal:display
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery

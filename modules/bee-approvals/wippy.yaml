@@ -1,0 +1,9 @@
+organization: bee
+module: approvals
+type: library
+version: 0.1.0-dev
+description: Durable approval authority, inbox feeds and thread projection outbox for Bee
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

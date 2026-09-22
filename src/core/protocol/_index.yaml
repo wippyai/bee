@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://commands.lua
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     contract: bee.protocol:application
 - name: input
   kind: library.lua
@@ -17,7 +17,7 @@ entries:
   imports:
     contract: bee.protocol:application
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: application
   kind: library.lua
   source: file://application.lua

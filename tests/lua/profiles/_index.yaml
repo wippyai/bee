@@ -88,7 +88,7 @@ entries:
     test: wippy.test:test
     view: bee.harness.window:profile_view
     editor: bee.harness.window:profile_editor
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: codex_effort_test
   kind: function.lua
   source: file://codex_effort_test.lua

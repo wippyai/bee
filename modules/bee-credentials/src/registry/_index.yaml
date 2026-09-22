@@ -1,0 +1,10 @@
+version: '1.0'
+namespace: bee.credentials.registry
+entries:
+- name: sources
+  kind: library.lua
+  source: file://sources.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    formats: bee.credentials:formats

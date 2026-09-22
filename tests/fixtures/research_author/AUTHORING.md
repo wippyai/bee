@@ -23,7 +23,7 @@ Put `source`, `method`, `modules`, `imports` and other configuration inside
 For this process app:
 
 ```json
-{"id":"bee.research.demo:app","kind":"process.lua","data":{"source":"...","method":"main","modules":["tty","process","channel","time","funcs","json","uuid"],"imports":{"client":"bee.application:client","appearance":"bee.desktop:appearance"}},"meta":{"type":"bee.application","application":{"api_version":1,"title":"Performance Research","icon":"R","lifetime":"view","revision":"1","instance_policy":"multiple","group":"Tools","role":"research","resume_schema":"research.v1","restart_policy":"manual"}}}
+{"id":"bee.research.demo:app","kind":"process.lua","data":{"source":"...","method":"main","modules":["tty","process","channel","time","funcs","json","uuid"],"imports":{"client":"bee.application:client","appearance":"bee.application:appearance"}},"meta":{"type":"bee.application","application":{"api_version":1,"title":"Performance Research","icon":"R","lifetime":"view","revision":"1","instance_policy":"multiple","group":"Tools","role":"research","resume_schema":"research.v1","restart_policy":"manual"}}}
 ```
 
 The application/model/view topics show the actual Timeline source and API calls.

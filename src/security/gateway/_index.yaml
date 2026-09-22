@@ -163,12 +163,8 @@ entries:
   meta:
     comment: A bound MCP subject reads the one embedded documentation corpus through the docs facade; the volume is read-only and this grants no host path, registry write or network
   policy:
-    actions:
-    - funcs.call
-    - fs.get
-    resources:
-    - bee:docs_call
-    - bee:docs_corpus
+    actions: [funcs.call, fs.get, registry.get]
+    resources: [bee.docs.binding:call, bee.docs:corpus_ref, bee:docs_corpus]
     effect: allow
 - name: gateway_tool_components_policy
   kind: security.policy.expr
@@ -211,5 +207,5 @@ entries:
     comment: Internal gateway calls to request and consume exact per-binding approvals; never an agent tool scope
   policy:
     actions: [funcs.call]
-    resources: [bee.approvals:request, bee.approvals:read, bee.approvals:consume, bee.approvals:revalidate, bee.threads.service:get, bee.threads.service:read_after]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.threads.service:get, bee.threads.service:read_after]
     effect: allow

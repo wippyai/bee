@@ -228,7 +228,7 @@ end
 local function configure_destination()
     local profiles = assert(registry.get("bee.governance:activation_profiles"))
     local configured_profiles = type(profiles.data) == "table" and object(profiles.data).profiles or nil
-    local approvals = assert(registry.get("bee.approvals:approver_policies"))
+    local approvals = assert(registry.get("bee:approver_policies"))
     local configured_approvals = type(approvals.data) == "table" and object(approvals.data).policies or nil
     if type(configured_profiles) == "table" and #configured_profiles > 0
         and type(configured_approvals) == "table" and #configured_approvals > 0 then return end
@@ -249,7 +249,7 @@ local function configure_agent_destination(scenario: AgentScenario)
     -- so the same ordinary desktop composition can recover it after the
     -- headless coordinator exits.
     local profiles = assert(registry.get("bee.governance:activation_profiles"))
-    local approvals = assert(registry.get("bee.approvals:approver_policies"))
+    local approvals = assert(registry.get("bee:approver_policies"))
     local configured_profiles = object(profiles.data).profiles
     if type(configured_profiles) ~= "table" or #configured_profiles ~= 1 then
         error("agent destination activation profile is unavailable")
@@ -321,7 +321,7 @@ local function activate_agent_artifact(scenario: AgentScenario): {[string]: unkn
         intent_id = "agent-artifact-activation", receipt_key = "agent-artifact-activation"},
         "prepare retained agent artifact")
     if prepared.phase ~= "approval_bound" then error("retained agent artifact did not bind a production approval") end
-    local decided_raw, decide_error = funcs.new():call("bee.approvals:decide", {approval_id = prepared.approval_id,
+    local decided_raw, decide_error = funcs.new():call("bee.approvals.binding:decide", {approval_id = prepared.approval_id,
         expected_revision = 1, decision = "approved", proposal_digest = prepared.approval_proposal_digest})
     if decide_error then error("decide retained agent artifact approval: " .. tostring(decide_error)) end
     required(object(decided_raw), "decide retained agent artifact approval")
@@ -370,7 +370,7 @@ local function activate_version(selected_version: string, intent_id: string, rec
     local prepared = destination_call({operation = "prepare", workspace_id = identity.workspace_id,
         source_node = identity.source_node, source_workspace = identity.source_workspace,
         version = identity.version, intent_id = intent_id, receipt_key = receipt}, "prepare version")
-    local decided_raw, decide_error = funcs.new():call("bee.approvals:decide", {approval_id = prepared.approval_id,
+    local decided_raw, decide_error = funcs.new():call("bee.approvals.binding:decide", {approval_id = prepared.approval_id,
         expected_revision = 1, decision = "approved", proposal_digest = prepared.approval_proposal_digest})
     if decide_error then error("decide version approval: " .. tostring(decide_error)) end
     required(object(decided_raw), "decide version approval")
@@ -580,7 +580,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                 source_node = "node-1", source_workspace = "shared/application", version = PACKAGE_V1,
                 intent_id = "activation-v1", receipt_key = "activation-v1"}, "prepare activation v1")
             if value.phase ~= "approval_bound" or value.version ~= PACKAGE_V1 then error("v1 activation did not request approval") end
-            local decided_raw, decide_error = funcs.new():call("bee.approvals:decide", {approval_id = value.approval_id,
+            local decided_raw, decide_error = funcs.new():call("bee.approvals.binding:decide", {approval_id = value.approval_id,
                 expected_revision = 1, decision = "approved", proposal_digest = value.approval_proposal_digest})
             if decide_error then error("decide activation approval: " .. tostring(decide_error)) end
             required(object(decided_raw), "decide activation approval")

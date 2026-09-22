@@ -133,7 +133,7 @@ local function approvals(): owner.Executor
     local value = {}
     function value:call(method: string, request: unknown): (unknown?, unknown?)
         local input = request :: {[string]: unknown}
-        if method == "bee.approvals:request" then
+        if method == "bee.approvals.binding:request" then
             local proposal = input.proposal :: {[string]: unknown}
             return {ok = true, value = {approval_id = "approval-v1", proposal = proposal,
                 proposal_digest = assert(hash.sha256(assert(canonical.encode(proposal)))),
@@ -151,7 +151,7 @@ local function lossy_approvals(): owner.Executor
     local consumed = false
     function value:call(method: string, request: unknown): (unknown?, unknown?)
         local input = request :: {[string]: unknown}
-        if method == "bee.approvals:request" then
+        if method == "bee.approvals.binding:request" then
             local proposal = input.proposal :: {[string]: unknown}
             return {ok = true, value = {approval_id = "approval-crash", proposal = proposal,
                 proposal_digest = assert(hash.sha256(assert(canonical.encode(proposal)))),

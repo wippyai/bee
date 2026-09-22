@@ -16,12 +16,12 @@ entries:
     shutdown: bee.applications:shutdown
     interaction: bee.application:interaction
     interactions: bee.applications:interactions
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     open_protocol: bee.applications:open_protocol
     binding_protocol: bee.host:binding_protocol
     thread_binding: bee.applications:thread_binding
     thread_binding_reducer: bee.applications:thread_binding_reducer
-    thread_protocol: bee.applications:thread_protocol
+    thread_protocol: bee.application:thread_protocol
   security:
     policies: [bee:broker_policy, bee:application_thread_membership_policy,
       bee:application_thread_facade_policy]
@@ -70,11 +70,6 @@ entries:
     arguments: bee.application:arguments
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    bounds: bee.threads.records:bounds
-- name: thread_protocol
-  kind: library.lua
-  source: file://thread_protocol.lua
-  imports:
     bounds: bee.threads.records:bounds
 - name: thread_binding
   kind: library.lua

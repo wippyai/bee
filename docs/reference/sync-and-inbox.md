@@ -78,7 +78,7 @@ agent-facing read/update tools without granting either operation.
 
 ## Approval feeds and UI
 
-`bee.approvals:feed_snapshot` accepts `workspace_id`, optional `limit`, and
+`bee.approvals.binding:feed_snapshot` accepts `workspace_id`, optional `limit`, and
 continuation fields `after_key`, `expected_cursor`, `expected_scope_revision`.
 `feed_read_after` accepts `workspace_id`, `cursor`, optional `limit`, and the
 snapshot's `expected_scope_revision`. Both retain the approval owner's existing

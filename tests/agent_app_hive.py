@@ -101,7 +101,7 @@ def configure_destination(project, workspace_id=None, source_node="node-1"):
         }]}
         governance_path.write_text(yaml.safe_dump(governance, sort_keys=False))
 
-        approvals_path = project / "src/approvals/_index.yaml"
+    approvals_path = project / "src/approvals/host/_index.yaml"
         approvals = yaml.safe_load(approvals_path.read_text())
         policies = next(item for item in approvals["entries"] if item["name"] == "approver_policies")
         policies["policies"] = [{"name": "local-agent-app-hive", "approvers": ["bee.replica_probe"],

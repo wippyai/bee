@@ -416,7 +416,7 @@ local function configure_host(workspace_id: string, local_node: string)
         migration_policies = {"bee.app_journey_probe:migration_policy"}}}
     act_entry.data = act_data
 
-    local policy_entry = assert(registry.get("bee.approvals:approver_policies"))
+    local policy_entry = assert(registry.get("bee:approver_policies"))
     local policy_data = object(policy_entry.data)
     local policies = policy_data.policies :: {unknown}
     policies[#policies + 1] = {name = APPROVAL_POLICY,
@@ -528,7 +528,7 @@ local function main()
     -- The decision is bound to this one proposal. The approvals owner refuses
     -- a decision offered against any other digest, so a decision carried over
     -- from other evidence cannot authorize this activation.
-    local misdirected = reply_of("bee.approvals:decide", {approval_id = approval_id, expected_revision = 1,
+    local misdirected = reply_of("bee.approvals.binding:decide", {approval_id = approval_id, expected_revision = 1,
         decision = "approved", proposal_digest = artifact_digest})
     if misdirected.ok == true then error("a decision on another proposal digest was accepted") end
     if fault_code(misdirected) ~= "CONFLICT" then
@@ -542,8 +542,8 @@ local function main()
     end
 
     -- The person deciding is the same operator identity in this fixture;
-    -- the decision itself is the real bee.approvals:decide call.
-    call_api("bee.approvals:decide", {approval_id = approval_id, expected_revision = 1,
+    -- the decision itself is the real bee.approvals.binding:decide call.
+    call_api("bee.approvals.binding:decide", {approval_id = approval_id, expected_revision = 1,
         decision = "approved", proposal_digest = proposal_digest})
 
     local stepped: Object = prepared
@@ -596,7 +596,7 @@ local function main()
 
     -- One decision authorizes one effect. The activation owner already
     -- consumed it; no second effect may claim the same decision.
-    local second = reply_of("bee.approvals:consume", {approval_id = approval_id, proposal_digest = proposal_digest,
+    local second = reply_of("bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = proposal_digest,
         owner_incarnation = math.floor(incarnation :: number), effect_key = RETRY_EFFECT})
     if second.ok == true then error("a second effect consumed the same decision") end
     if fault_code(second) ~= "CONFLICT" then

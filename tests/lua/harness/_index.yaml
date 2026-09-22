@@ -134,7 +134,7 @@ entries:
     test: wippy.test:test
     recovery: bee.harness.window:recovery
     restore_view: bee.harness.window:restore_view
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua
@@ -156,7 +156,7 @@ entries:
   meta: {type: test_support}
   modules: [registry]
   imports:
-    resolver: bee.placement:resolver
+    resolver: bee.placement.registry:resolver
 - name: fixture_policy
   kind: registry.entry
   meta:
@@ -399,7 +399,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.threads.service:create, bee.threads.service:read_after, bee.threads.service:get, bee.threads.service:admit_action, bee.threads.service:prepare_attempt,
-      bee.approvals:request, bee.approvals:read, bee.approvals:consume, bee.approvals:revalidate, bee.approvals:list,
+      bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.approvals.binding:list,
       bee.threads.delivery:subscribe, bee.threads.delivery:page, bee.threads.delivery:ack_page, bee.threads.delivery:resume, bee.threads.delivery:unsubscribe,
       bee.threads.service:start_attempt, bee.threads.service:request_turn, bee.threads.service:end_turn, bee.threads.service:receipt,
       bee.threads.carrier:claim, bee.threads.carrier:commit, bee.threads.carrier:checkpoint,
@@ -741,7 +741,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.harness.launch:resolve, bee.harness.launch:admit, bee.harness.launch:start, bee.resources.binding:associate, bee.resources.binding:grant,
-      bee.credentials:define, bee.credentials:issue_projection, bee.credentials:list, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
+      bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:list, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
     effect: allow
 - name: setup_client_policy
   kind: security.policy.expr
@@ -805,7 +805,7 @@ entries:
     test: wippy.test:test
     selection: bee.harness.launch:selection
     view: bee.harness.window:picker_view
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: profile_environment_isolation_test
   kind: function.lua
   source: file://profile_environment_isolation_test.lua
@@ -939,7 +939,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.approvals:inbox, bee.approvals:decide, bee.approvals:read, bee.approvals:list]
+    resources: [bee.approvals.binding:inbox, bee.approvals.binding:decide, bee.approvals.binding:read, bee.approvals.binding:list]
     effect: allow
 - name: permission_carrier_test
   kind: function.lua
@@ -1151,7 +1151,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.credentials:define, bee.credentials:issue_projection]
+    resources: [bee.credentials.binding:define, bee.credentials.binding:issue_projection]
     effect: allow
 - name: codex_runner_test
   kind: function.lua

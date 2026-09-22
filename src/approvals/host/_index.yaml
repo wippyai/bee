@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: approver_policies
+  kind: registry.entry
+  meta:
+    type: bee.approval_policies
+    comment: Host-owned approver policies; an empty list admits no request
+  policies: []

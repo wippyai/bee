@@ -8,7 +8,7 @@ entries:
   modules: [tty, process, channel, time, uuid, json, funcs, registry]
   imports:
     client: bee.application:client
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     model: bee.inbox:model
     view: bee.inbox:view
     inbox: bee.inbox:client
@@ -66,9 +66,9 @@ entries:
   source: file://view.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     model: bee.inbox:model
-    names: bee.desktop:names
+    names: bee.application:names
 - name: workspaces
   kind: registry.entry
   meta:
@@ -82,5 +82,5 @@ entries:
     comment: The inbox reads the owner's inbox and requests and submits explicit decisions and withdrawals under the process actor; the owner authorizes each call
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.approvals:inbox, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide, bee.approvals:withdraw, bee.inbox:workspaces, bee.inbox:sources]
+    resources: [bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.inbox:workspaces, bee.inbox:sources]
     effect: allow

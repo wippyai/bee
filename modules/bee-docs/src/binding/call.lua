@@ -4,6 +4,7 @@
 -- host names the read-only policy this runs under, so registration grants nothing.
 local protocol = require("protocol")
 local corpus = require("corpus")
+local resources = require("resources")
 local transaction = require("transaction")
 local bounds = require("bounds")
 type Result = transaction.Result
@@ -16,7 +17,9 @@ end
 local function handle(raw: unknown): Result
     local request, invalid = protocol.decode(raw)
     if not request then return transaction.failure("INVALID", invalid or "invalid docs request") end
-    local volume, volume_error = corpus.open()
+    local resource, resource_error = resources.corpus()
+    if not resource then return transaction.failure("UNAVAILABLE", tostring(resource_error)) end
+    local volume, volume_error = corpus.open(resource)
     if not volume then return transaction.failure("UNAVAILABLE", tostring(volume_error)) end
     local manifest, manifest_error = corpus.manifest(volume)
     if not manifest then return transaction.failure("INTERNAL", tostring(manifest_error)) end

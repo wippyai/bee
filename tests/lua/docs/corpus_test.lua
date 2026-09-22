@@ -4,7 +4,15 @@
 local test = require("test")
 local corpus = require("corpus")
 local protocol = require("protocol")
+local resources = require("resources")
 local method = require("method")
+local function volume(): any
+    local resource, resource_error = resources.corpus()
+    if not resource then error(tostring(resource_error)) end
+    local opened, open_error = corpus.open(resource)
+    if not opened then error(tostring(open_error)) end
+    return opened
+end
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("docs tool returned no reply") end
     local result = value :: {[string]: unknown}
@@ -21,8 +29,7 @@ end
 local function define_tests()
     test.describe("Docs corpus and tool", function()
         test.it("ships a complete, hashed manifest of the selected documentation", function()
-            local volume, volume_error = corpus.open()
-            if not volume then error(tostring(volume_error)) end
+            local volume = volume()
             local manifest, manifest_error = corpus.manifest(volume)
             if not manifest then error(tostring(manifest_error)) end
             test.eq(manifest.schema, corpus.SCHEMA)
@@ -95,7 +102,7 @@ local function define_tests()
             test.eq(too_many.more, true)
         end)
         test.it("reads one bounded window and can continue from an offset", function()
-            local volume = corpus.open()
+            local volume = volume()
             local manifest = corpus.manifest(volume)
             if not manifest then error("manifest") end
             local declared = corpus.find(manifest, "runtime/lua/core/process")
@@ -126,7 +133,7 @@ local function define_tests()
             test.eq(refused.code, "INVALID")
         end)
         test.it("keeps the anchors stable for the cross-node and terminal questions", function()
-            local volume = corpus.open()
+            local volume = volume()
             local manifest = corpus.manifest(volume)
             if not manifest then error("manifest") end
             -- The two topics the owner names are reachable by their corpus names.

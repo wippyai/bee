@@ -245,7 +245,7 @@ function M.example(): {{[string]: unknown}}
     return {{id = M.DEFINITION_ID, kind = "process.lua",
         data = {source = M.SOURCE, method = "main",
             modules = {"tty", "process", "channel", "json"},
-            imports = {client = "bee.application:client", appearance = "bee.desktop:appearance"}},
+            imports = {client = "bee.application:client", appearance = "bee.application:appearance"}},
         meta = {type = "bee.application", application = {api_version = 1, lifetime = "view",
             revision = "1", title = M.TITLE, instance_policy = "multiple",
             resume_schema = "guide-counter.v1", restart_policy = "automatic"}}}}
@@ -295,7 +295,7 @@ function M.document(): string
         .. " toolkit: tty.events, tty.start, tty.surface, tty.screen_size, tty.canvas with one-based"
         .. " canvas:put, output:present, client.launch, client.ready, and client.checkpoint when the"
         .. " metadata declares a resume_schema. Use semantic appearance roles from"
-        .. " bee.desktop:appearance, authenticate appearance messages by their broker sender, and"
+        .. " bee.application:appearance, authenticate appearance messages by their broker sender, and"
         .. " declare exactly the native modules and library imports the source uses."
     lines[#lines + 1] = ""
     lines[#lines + 1] = CONFIG_SHAPE_RULE

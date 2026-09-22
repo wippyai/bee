@@ -13,6 +13,7 @@ def run():
             folder = Path(directory)
             project = folder / "project"
             shutil.copytree(ROOT / "src", project / "src")
+            shutil.copytree(ROOT / "modules", project / "modules")
             shutil.copytree(ROOT / "tests/fixtures/app_admission", project / "src/probe")
             shutil.copy2(ROOT / ".wippy.yaml", project / ".wippy.yaml")
             # Carry the production embed declaration so the pack embeds the corpus.

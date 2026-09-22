@@ -4,9 +4,9 @@ local canonical = require("canonical")
 local bounds = require("bounds")
 
 local M = {}
-local REQUEST = "bee.approvals:request"
-local CONSUME = "bee.approvals:consume"
-local REVALIDATE = "bee.approvals:revalidate"
+local REQUEST = "bee.approvals.binding:request"
+local CONSUME = "bee.approvals.binding:consume"
+local REVALIDATE = "bee.approvals.binding:revalidate"
 
 type Object = {[string]: unknown}
 type Executor = {call: (Executor, string, unknown) -> (unknown?, unknown?)}

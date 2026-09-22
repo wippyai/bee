@@ -61,7 +61,7 @@ local function value(reply: Reply): Object
     return reply.value :: Object
 end
 local function install_policy()
-    local entry = registry.get("bee.approvals:approver_policies")
+    local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
     local data = entry.data :: Object
     local policies = data.policies :: {Object}
@@ -81,7 +81,7 @@ local function file_on_thread(workspace: string): (string, string, string)
     local action_id, attempt_id = "a-" .. key():sub(1, 8), "t-" .. key():sub(1, 8)
     thread_harness.value(launcher:call("admit_action", {thread_id = thread_id, idempotency_key = key(), action_id = action_id, admitted = thread_harness.admitted()}))
     thread_harness.value(launcher:call("prepare_attempt", {thread_id = thread_id, idempotency_key = key(), action_id = action_id, attempt_id = attempt_id, prepared = thread_harness.prepared()}))
-    local created = value(call(requester, "bee.approvals:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY, thread_id = thread_id,
+    local created = value(call(requester, "bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY, thread_id = thread_id,
         proposal = {kind = "attempt", ref = attempt_id, revision = "r1", action_id = action_id, payload = {tool_name = "Bash", correlation_id = "c-1"}}, prompt = {text = "touch proof.txt"}}))
     return tostring(created.approval_id), tostring(created.proposal_digest), thread_id
 end
@@ -180,7 +180,7 @@ local function define_tests()
             local approval_id, _, thread_id = file_on_thread(workspace)
             local lost = true
             local flaky = inbox.new(function(target: string, request: unknown): (unknown, string?)
-                if target == "bee.approvals:inbox" and lost then return nil, "disconnected" end
+                if target == "bee.approvals.binding:inbox" and lost then return nil, "disconnected" end
                 local raw, err = alice:call(target, request)
                 if err then return nil, tostring(err) end
                 return raw, nil
@@ -219,7 +219,7 @@ local function define_tests()
             open(state, owner, approval_id)
             decide(state, owner, "approved")
             local incarnation = math.floor(tonumber((state.detail :: Object).owner_incarnation) or 0)
-            local revoked = call(unconsuming, "bee.approvals:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = incarnation})
+            local revoked = call(unconsuming, "bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = incarnation})
             test.is_false(revoked.ok)
             test.eq(revoked.error and revoked.error.code, "DENIED")
             refresh(state, owner)
@@ -228,7 +228,7 @@ local function define_tests()
             test.eq(detail.decision, "approved")
             test.eq(detail.decider_id, ALICE)
             test.is_nil(detail.consumer_id)
-            local consumed = value(call(requester, "bee.approvals:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = incarnation}))
+            local consumed = value(call(requester, "bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = incarnation}))
             test.eq(consumed.consumed_effect, "e1")
             open(state, owner, approval_id)
             test.eq((state.detail :: Object).consumer_id, REQUESTER)
@@ -250,11 +250,11 @@ local function define_tests()
             test.eq(detail.state, "pending")
             test.eq(detail.revision, 1)
             decide(state, owner, "approved")
-            local stale = call(requester, "bee.approvals:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = math.floor(tonumber(detail.owner_incarnation) or 0)})
+            local stale = call(requester, "bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = math.floor(tonumber(detail.owner_incarnation) or 0)})
             test.eq(stale.error and stale.error.code, "REVALIDATE")
             local current = math.floor(tonumber((stale.value :: Object).current_incarnation) or 0)
-            value(call(requester, "bee.approvals:revalidate", {approval_id = approval_id, proposal_digest = digest, owner_incarnation = current}))
-            test.eq(value(call(requester, "bee.approvals:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = current})).consumed_effect, "e1")
+            value(call(requester, "bee.approvals.binding:revalidate", {approval_id = approval_id, proposal_digest = digest, owner_incarnation = current}))
+            test.eq(value(call(requester, "bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = current})).consumed_effect, "e1")
             test.eq(#until_records(thread_id, 2), 2)
         end)
     end)

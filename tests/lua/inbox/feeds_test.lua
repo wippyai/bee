@@ -28,12 +28,12 @@ local function define_tests()
             test.is_nil(configure_error)
             if not configured then error("configure inbox source") end
             local client = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)
-                if target == "bee.approvals:feed_snapshot" then
+                if target == "bee.approvals.binding:feed_snapshot" then
                     snapshots = snapshots + 1
                     if snapshots == 1 then return snapshot(source, {projection(source, view(1), 1)}), nil end
                     return snapshot(source, {}), nil
                 end
-                if target == "bee.approvals:feed_read_after" then
+                if target == "bee.approvals.binding:feed_read_after" then
                     reads = reads + 1
                     if reads == 1 then
                         local changed = view(2)
@@ -49,22 +49,22 @@ local function define_tests()
                 end
                 return nil, "unexpected target"
             end)
-            local first = client:invoke("bee.approvals:inbox", {workspace_id = "ws"})
+            local first = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
             test.is_true(first and first.ok)
             local first_page = (first :: Object).value :: Object
             local first_item = (first_page.changes :: {unknown})[1] :: Object
             test.eq((first_item.request :: Object).revision, 1)
-            local second = client:invoke("bee.approvals:inbox", {workspace_id = "ws"})
+            local second = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
             test.is_true(second and second.ok)
             local second_page = (second :: Object).value :: Object
             local second_item = (second_page.changes :: {unknown})[1] :: Object
             test.eq((second_item.request :: Object).revision, 2)
-            local third = client:invoke("bee.approvals:inbox", {workspace_id = "ws"})
+            local third = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
             test.is_true(third and third.ok)
             local third_page = (third :: Object).value :: Object
             test.is_true(third_page.replace_source :: boolean)
             test.eq(#(third_page.changes :: {unknown}), 0)
-            local stale = client:invoke("bee.approvals:read", {approval_id = "approval-a"})
+            local stale = client:invoke("bee.approvals.binding:read", {approval_id = "approval-a"})
             test.is_false(stale and stale.ok)
             test.eq(snapshots, 2)
             test.eq(reads, 2)

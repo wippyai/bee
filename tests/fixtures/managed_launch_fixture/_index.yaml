@@ -53,7 +53,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry]
   imports:
     test: wippy.test:test
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
   security:
     policies:
     - bee:desktop_policy

@@ -43,7 +43,7 @@ local function rpc(address: string, action: string, token: string, name: string,
     return object(decoded)
 end
 local function run(address: string)
-    local entry = registry.get("bee.approvals:approver_policies")
+    local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies unavailable") end
     local data = object(entry.data)
     data.policies = {{name = "mcp-test", approvers = {ACTOR}, max_ttl_ms = 600000}}
@@ -80,16 +80,16 @@ local function run(address: string)
     local approval_id = bounds.id(approval.approval_id)
     if not approval_id then error("missing approval ID") end
     assert(value(rpc(address, "access-a", token, "session", request)).approval_id == approval_id, "request retry duplicated approval")
-    local inbox = value(call("bee.approvals:inbox", {workspace_id = "access-workspace", after_seq = 0}))
+    local inbox = value(call("bee.approvals.binding:inbox", {workspace_id = "access-workspace", after_seq = 0}))
     local encoded_inbox = json.encode(inbox)
     assert(encoded_inbox and encoded_inbox:find(approval_id, 1, true), "pending approval missing from durable inbox")
     assert(value(rpc(address, "access-a", token, "session", {operation = "access_status", approval_id = approval_id})).status == "pending", "pending status")
     assert(rpc(address, "access-b", tokens["access-b"], "session", {operation = "access_status", approval_id = approval_id}).ok == false, "foreign binding inspected approval")
-    assert(rpc(address, "access-a", token, "call_tool", {name = "bee.approvals:decide", arguments = {approval_id = approval_id, decision = "approved"}}).ok == false, "MCP approved itself")
-    value(call("bee.approvals:decide", {approval_id = approval_id, expected_revision = approval.revision, proposal_digest = approval.proposal_digest, decision = "approved"}))
+    assert(rpc(address, "access-a", token, "call_tool", {name = "bee.approvals.binding:decide", arguments = {approval_id = approval_id, decision = "approved"}}).ok == false, "MCP approved itself")
+    value(call("bee.approvals.binding:decide", {approval_id = approval_id, expected_revision = approval.revision, proposal_digest = approval.proposal_digest, decision = "approved"}))
     -- Simulate the durable half of a crash handoff: the approval owner has
     -- consumed the effect, but the gateway has not applied its receipt yet.
-    value(call("bee.approvals:consume", {approval_id = approval_id, proposal_digest = approval.proposal_digest,
+    value(call("bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = approval.proposal_digest,
         effect_key = "mcp:" .. approval_id, owner_incarnation = approval.owner_incarnation}))
     assert(rpc(address, "access-a", token, "measure_context", {}).ok == false, "approval consumption alone bypassed gateway admission")
     local granted = value(rpc(address, "access-a", token, "session", {operation = "access_status", approval_id = approval_id}))
@@ -104,7 +104,7 @@ local function run(address: string)
     assert(rpc(address, "access-a", token, "measure_context", {}).ok == false, "status replay reactivated tool")
     local refused = value(rpc(address, "access-b", tokens["access-b"], "session", request))
     assert(refused.approval_id ~= approval_id, "two bindings shared an approval retry key")
-    value(call("bee.approvals:decide", {approval_id = refused.approval_id, expected_revision = refused.revision, proposal_digest = refused.proposal_digest, decision = "denied"}))
+    value(call("bee.approvals.binding:decide", {approval_id = refused.approval_id, expected_revision = refused.revision, proposal_digest = refused.proposal_digest, decision = "denied"}))
     local denied = value(rpc(address, "access-b", tokens["access-b"], "session", {operation = "access_status", approval_id = refused.approval_id}))
     assert(denied.status == "denied", "denied approval changed outcome")
     assert(rpc(address, "access-b", tokens["access-b"], "measure_context", {}).ok == false, "denied approval enabled tool")

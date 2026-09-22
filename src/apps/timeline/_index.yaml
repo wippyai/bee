@@ -8,7 +8,7 @@ entries:
   modules: [tty, process, channel, time, uuid, funcs]
   imports:
     client: bee.application:client
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     caller: bee.application:caller
     model: bee.timeline:model
     view: bee.timeline:view
@@ -46,7 +46,7 @@ entries:
   source: file://view.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     model: bee.timeline:model
 - name: client_policy
   kind: security.policy

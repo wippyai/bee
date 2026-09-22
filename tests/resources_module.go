@@ -86,7 +86,7 @@ local function call(scope: security.Scope?, method: string, request: {[string]: 
         assert(scoped, "with_scope: " .. tostring(scope_error))
         executor = scoped
     end
-    local reply, err = executor:call("bee.credentials:" .. method, request)
+    local reply, err = executor:call("bee.credentials.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
     return reply :: {[string]: unknown}
 end
@@ -186,12 +186,16 @@ func resourcesModuleWrite(folder, relative string, document interface{}) error {
 	return nil
 }
 
-func resourcesModuleBase(folder string, resources bool) error {
+func resourcesModuleBase(folder string, resources bool, credentials bool) error {
 	modules := "    - name: bee/persist\n      version: 0.1.0-dev\n    - name: bee/threads\n      version: 0.1.0-dev\n"
 	replacements := "    bee/persist: ./modules/bee-persist\n    bee/threads: ./modules/bee-threads\n"
 	if resources {
 		modules += "    - name: bee/resources\n      version: 0.1.0-dev\n"
 		replacements += "    bee/resources: ./modules/bee-resources\n"
+	}
+	if credentials {
+		modules += "    - name: bee/credentials\n      version: 0.1.0-dev\n"
+		replacements += "    bee/credentials: ./modules/bee-credentials\n"
 	}
 	if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"+modules), 0600); err != nil {
 		return fmt.Errorf("write wippy.lock: %w", err)
@@ -248,7 +252,7 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 		}
 	}
 	// This standalone probe supplies its own root composition and policies.
-	if err := resourcesModuleBase(folder, true); err != nil {
+	if err := resourcesModuleBase(folder, true, false); err != nil {
 		return err
 	}
 	resourcePolicyNames := []string{"resource_store_policy", "resource_environment_policy", "resource_manage_policy", "resource_grant_policy", "resource_resolve_policy"}
@@ -288,19 +292,13 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 }
 
 func resourcesModuleStageCredentials(root, folder string, dropSources bool) error {
-	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "credentials"), filepath.Join(root, "src", "credentials")); err != nil {
-		return err
-	}
-	for _, name := range []string{"bee-persist", "bee-threads"} {
+	for _, name := range []string{"bee-credentials", "bee-persist", "bee-threads"} {
 		if err := resourcesModuleCopyDir(filepath.Join(folder, "modules", name), filepath.Join(root, "modules", name)); err != nil {
 			return err
 		}
 	}
 	// This standalone probe supplies its own host bindings.
-	if err := os.RemoveAll(filepath.Join(folder, "src", "credentials", "host")); err != nil {
-		return err
-	}
-	if err := resourcesModuleBase(folder, false); err != nil {
+	if err := resourcesModuleBase(folder, false, true); err != nil {
 		return err
 	}
 	policyNames := []string{"credential_store_policy", "credential_file_policy", "credential_manage_policy", "credential_issue_policy", "credential_materialize_policy"}

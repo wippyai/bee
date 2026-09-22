@@ -1,0 +1,9 @@
+organization: bee
+module: placement
+type: library
+version: 0.1.0-dev
+description: Shared placement contract, launch values, transition rules, and binding resolution for Bee
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

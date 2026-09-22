@@ -23,13 +23,15 @@ upstream licenses.
 | `src/core/protocol` | Private core message decoders |
 | `src/core/terminal` | Replaceable presenter, input and composition |
 | `src/core/storage` | Workspace database and migration ledger |
-| `src/ui` | Public application helpers, appearance and rendering values |
+| `modules/bee-application/src` | Public application helpers, appearance and rendering values |
 | `src/apps/<name>` | A standalone default application and its view/domain helpers |
 | `modules/bee-threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
+| `modules/bee-docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/bee-resources/src` | Resource associations, scoped grants and owner-local ledger |
+| `modules/bee-placement/src` | Shared placement contract, launch values, transition rules and binding resolution |
 | `src/sync` | Owner-local projection, event and receipt ledger |
-| `src/approvals` | Durable approval owner, inbox feed and outbox worker |
-| `src/placement` | Launch attempts, executor boundary, evidence and cleanup state |
+| `modules/bee-approvals/src` | Durable approval owner, inbox feed and outbox worker |
+| `src/placement/native` | Native launch attempts, executor boundary, evidence and cleanup state |
 | `src/node` | Authorized native-node descriptions and metadata |
 
 Registry IDs are public identities independent of file paths. `main.lua` is an

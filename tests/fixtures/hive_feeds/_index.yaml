@@ -13,7 +13,7 @@ entries:
   kind: security.policy
   policy:
     actions: [registry.get, funcs.call]
-    resources: [bee.hive.supervisor:principal_mappings, bee.feed_probe:handle, bee.approvals:approver_policies, bee.approvals:request]
+    resources: [bee.hive.supervisor:principal_mappings, bee.feed_probe:handle, bee:approver_policies, bee.approvals.binding:request]
     effect: allow
 - name: enrollment_policy
   kind: security.policy
@@ -25,7 +25,7 @@ entries:
   kind: security.policy
   policy:
     actions: [hive.invoke, funcs.call, bee.node.read, bee.approvals.decide]
-    resources: [bee.node:describe, bee.node:snapshot, bee.node:read_after, bee.node:update_metadata, bee.hive.supervisor:invoke_check, node-0, node-1, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide, feed-workspace]
+    resources: [bee.node:describe, bee.node:snapshot, bee.node:read_after, bee.node:update_metadata, bee.hive.supervisor:invoke_check, node-0, node-1, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, feed-workspace]
     effect: allow
 - name: write_policy
   kind: security.policy

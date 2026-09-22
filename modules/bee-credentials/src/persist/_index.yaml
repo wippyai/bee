@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.credentials.persist
+entries:
+- name: broker
+  kind: library.lua
+  source: file://broker.lua
+  modules: [sql, hash, time, uuid, security, system, env, fs, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    persist: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.credentials.migrations:migrations
+    sources: bee.credentials.registry:sources
+    formats: bee.credentials:formats

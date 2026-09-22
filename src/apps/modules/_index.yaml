@@ -8,7 +8,7 @@ entries:
   modules: [tty, process, channel, uuid, funcs]
   imports:
     client: bee.application:client
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     model: bee.modules:model
     view: bee.modules:view
     contents: bee.modules:contents
@@ -36,7 +36,7 @@ entries:
   source: file://view.lua
   modules: [tty, json]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     model: bee.modules:model
     contents: bee.modules:contents
 - name: contents

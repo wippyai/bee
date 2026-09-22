@@ -43,7 +43,7 @@ entries:
     inventory: bee.host:inventory
     client_protocol: bee.host:protocol
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
   meta:
     command:
       name: hive-remote-client

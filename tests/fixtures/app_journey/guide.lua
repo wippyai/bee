@@ -61,7 +61,7 @@ local function configure_host(workspace_id: string, local_node: string)
             databases = {}, grants = {}, modules = {"tty", "process", "channel", "json"}}}}
     act_entry.data = act_data
 
-    local policy_entry = assert(registry.get("bee.approvals:approver_policies"))
+    local policy_entry = assert(registry.get("bee:approver_policies"))
     local policy_data = object(policy_entry.data)
     local policies = policy_data.policies :: {unknown}
     policies[#policies + 1] = {name = APPROVAL_POLICY,

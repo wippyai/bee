@@ -57,7 +57,7 @@ local other_app = caller("bee.application:0123456789abcdef0123456789abcdef:other
     {"bee:approval_decide_policy"}, {definition_id = "bee.settings:app"})
 local owner = caller(OUTBOX, {"bee:approval_owner_policy", "bee:thread_approval_policy", "bee:thread_approval_client_policy", "bee:thread_storage_policy", "bee:thread_resource_policy"})
 local function call(client: funcs.Executor, method: string, value: unknown): service.Reply
-    local reply, err = client:call("bee.approvals:" .. method, value)
+    local reply, err = client:call("bee.approvals.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: service.Reply
 end
@@ -93,7 +93,7 @@ local function fault_value(reply: service.Reply): {[string]: unknown}
     return reply.value :: {[string]: unknown}
 end
 local function install_policy()
-    local entry = registry.get("bee.approvals:approver_policies")
+    local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
     local data = entry.data :: {[string]: unknown}
     local policies = data.policies :: {{[string]: unknown}}
@@ -108,7 +108,7 @@ local function install_policy()
     if not applied then error("install approver policy: " .. tostring(err)) end
 end
 local function replace_approvers(value: {unknown})
-    local entry = assert(registry.get("bee.approvals:approver_policies"))
+    local entry = assert(registry.get("bee:approver_policies"))
     local data = entry.data :: {[string]: unknown}
     local policies = data.policies :: {{[string]: unknown}}
     local selected: {[string]: unknown}? = nil
@@ -265,8 +265,8 @@ local function define_tests()
             test.eq(value(call(manager, "read", {approval_id = approval_id})).approval_id, approval_id)
             test.eq(code(call(outsider, "decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = digest})), "DENIED")
             test.eq(code(call(alice, "decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = string.rep("0", 64)})), "CONFLICT")
-            local a = alice:async("bee.approvals:decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = digest})
-            local b = bob:async("bee.approvals:decide", {approval_id = approval_id, expected_revision = 1, decision = "denied", proposal_digest = digest})
+            local a = alice:async("bee.approvals.binding:decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = digest})
+            local b = bob:async("bee.approvals.binding:decide", {approval_id = approval_id, expected_revision = 1, decision = "denied", proposal_digest = digest})
             local wins = 0
             for _, future in ipairs({a, b}) do
                 if await(future).ok then wins = wins + 1 end

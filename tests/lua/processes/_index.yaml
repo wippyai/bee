@@ -11,7 +11,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     probe: bee.processes:probe
     view: bee.processes:view
 - name: probe_test

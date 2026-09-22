@@ -117,7 +117,7 @@ local function configure(launch_workspace: string, policy_ref: string, keep_exec
         data.instructions = INSTRUCTIONS
     end
     policy.data = data
-    local approvers = registry.get("bee.approvals:approver_policies")
+    local approvers = registry.get("bee:approver_policies")
     if not approvers then error("approval policies missing") end
     local approver_data = bounds.object(approvers.data)
     if not approver_data then error("approval policy data missing") end
@@ -239,7 +239,7 @@ local function await_carrier(started: Object): boolean
         if selected.channel == tick then
             -- The host operator, not the MCP subject scope: it approves only
             -- this exact attempt's expected capability through the inbox.
-            local inbox = call("bee.approvals:inbox", {workspace_id = tostring(started.workspace_id), after_seq = inbox_cursor})
+            local inbox = call("bee.approvals.binding:inbox", {workspace_id = tostring(started.workspace_id), after_seq = inbox_cursor})
             local entries = inbox.changes
             if type(entries) ~= "table" then error("inbox changes missing") end
             for _, raw in ipairs(entries) do
@@ -252,7 +252,7 @@ local function await_carrier(started: Object): boolean
                     if approved or request.requester_id ~= ACTOR or request.thread_id ~= THREAD or not proposed
                         or proposed.action_id ~= started.action_id or proposed.ref ~= started.attempt_id
                         or not traits or #traits ~= 1 or traits[1] ~= "app:author" then error("unexpected access request") end
-                    call("bee.approvals:decide", {approval_id = request.approval_id, expected_revision = request.revision,
+                    call("bee.approvals.binding:decide", {approval_id = request.approval_id, expected_revision = request.revision,
                         proposal_digest = request.proposal_digest, decision = "approved"})
                     approved = true
                 end

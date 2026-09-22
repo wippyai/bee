@@ -101,7 +101,7 @@ local function decide_exact_request(request: Object, proposal: Object?, actor: s
     if not revision or revision < 1 or not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
         error("live access request has an invalid revision or proposal digest")
     end
-    local decided = call("bee.approvals:decide", {approval_id = approval_id, expected_revision = revision,
+    local decided = call("bee.approvals.binding:decide", {approval_id = approval_id, expected_revision = revision,
         proposal_digest = digest, decision = "approved"})
     if decided.approval_id ~= approval_id or decided.state ~= "decided" or decided.decision ~= "approved"
         or decided.decider_id ~= actor then
@@ -111,7 +111,7 @@ local function decide_exact_request(request: Object, proposal: Object?, actor: s
 end
 local function observe_approval(actor: string, action_id: string, attempt_id: string,
     cursor: integer, approved_id: string?): (integer, string?)
-    local page = call("bee.approvals:inbox", {workspace_id = WORKSPACE, after_seq = cursor, limit = 64})
+    local page = call("bee.approvals.binding:inbox", {workspace_id = WORKSPACE, after_seq = cursor, limit = 64})
     local changes = page.changes
     if type(changes) ~= "table" then error("approval inbox changes are missing") end
     local approved = approved_id

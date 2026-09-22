@@ -37,9 +37,9 @@ entries:
     menu: bee.terminal:menu
     selection: bee.terminal:selection
     connection: bee.terminal:connection
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     surface: bee.application:status_surface
-    names: bee.desktop:names
+    names: bee.application:names
 - name: title_editor_test
   kind: function.lua
   source: file://title_editor_test.lua
@@ -49,7 +49,7 @@ entries:
   imports:
     test: wippy.test:test
     editor: bee.terminal:title_editor
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: dialog_test
   kind: function.lua
   source: file://dialog_test.lua
@@ -59,4 +59,4 @@ entries:
   imports:
     test: wippy.test:test
     dialog: bee.terminal:dialog
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance

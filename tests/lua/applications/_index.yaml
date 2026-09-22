@@ -71,7 +71,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    protocol: bee.applications:thread_protocol
+    protocol: bee.application:thread_protocol
 - name: thread_binding_test
   kind: function.lua
   source: file://thread_binding_test.lua

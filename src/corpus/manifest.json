@@ -835,9 +835,9 @@
       "topic": "terminal"
     },
     {
-      "bytes": 3075,
+      "bytes": 3170,
       "id": "docs/readme",
-      "sha256": "9613d570b86bfc0ea17414ce8c0cc9e250587a85384f6d9c035967eebd043508",
+      "sha256": "6f593f9ef319fff81078ac696f565b122a295d67bb0107b8eef4d41ac60a8b4a",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -899,9 +899,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 11030,
+      "bytes": 11042,
       "id": "docs/carrier",
-      "sha256": "af79e0bca4951b516f1227f5913613b90a6cc55c487d068152f1ed2b7c32b57f",
+      "sha256": "b57ebd2918c90222076e3d31fa4750e54ba705391a6d2ed522d45c39e9bb6cb5",
       "source": "docs/reference/agents/carrier.md",
       "title": "Carrier contract",
       "topic": "application"
@@ -931,9 +931,9 @@
       "topic": "application"
     },
     {
-      "bytes": 9608,
+      "bytes": 9620,
       "id": "docs/approvals",
-      "sha256": "67c6690862b4e5622ad7b3e9d17c7b1a1f4e3dbdd163f6e7f6356036a8a420e7",
+      "sha256": "6b21129dd9ee247f91a353e9188fce937b94fdde40f79f254d03b5d5c57ce3ae",
       "source": "docs/reference/approvals.md",
       "title": "Durable approval requests",
       "topic": "approvals"
@@ -947,9 +947,9 @@
       "topic": "storage"
     },
     {
-      "bytes": 7889,
+      "bytes": 7897,
       "id": "docs/sync_and_inbox",
-      "sha256": "a64966a2f1fc73956586eac7f331790bf3d6bdc1f00f06b524967db49576a910",
+      "sha256": "a964b80ad9d27a49bb61b5dd9eb29c335a011e9d583766c392c9859e4c9d4ed9",
       "source": "docs/reference/sync-and-inbox.md",
       "title": "Owner-local sync and inbox",
       "topic": "cluster"
@@ -969,22 +969,6 @@
       "source": "docs/reference/workspace-state.md",
       "title": "Workspace state and application restoration",
       "topic": "storage"
-    },
-    {
-      "bytes": 2746,
-      "id": "component/approvals",
-      "sha256": "a1471368df2f4c9a1fa8f15cbd215025767954bac7dc39d18246947c63b80e79",
-      "source": "src/approvals/README.md",
-      "title": "Bee approvals",
-      "topic": "component"
-    },
-    {
-      "bytes": 10662,
-      "id": "component/credentials",
-      "sha256": "dee1d0243150585b48a5ae937c37f4d7cb73b7cb0c2525d46fc71a12aaf2c319",
-      "source": "src/credentials/README.md",
-      "title": "bee.credentials",
-      "topic": "component"
     },
     {
       "bytes": 1254,
@@ -1051,17 +1035,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3590,
-      "id": "component/placement",
-      "sha256": "ff729d5dfdf799f3983e81f880d438e53954c22ba6742a9d67d8ead56d88f1eb",
-      "source": "src/placement/README.md",
-      "title": "bee.placement",
-      "topic": "component"
-    },
-    {
-      "bytes": 17706,
+      "bytes": 17714,
       "id": "component/placement:native",
-      "sha256": "0ebd3c47f7c7b12511fc6333f6d5049d8fc6cb1ac48c2fb0342e11bf3573f09b",
+      "sha256": "3a7d88a8f5422aa05c635e64e78804f2da0605022eb2520b0d36d8162d1d80c7",
       "source": "src/placement/native/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -1072,6 +1048,22 @@
       "sha256": "fb587cd182e79afffc4aac386bd61ee4e9597dc2f4531c753e664fec3c41f321",
       "source": "src/sync/README.md",
       "title": "Bee sync",
+      "topic": "component"
+    },
+    {
+      "bytes": 3238,
+      "id": "component/approvals",
+      "sha256": "3d1eb61bb8691733e8c298ce678869e060d10de44b72b3fce8c77beb402e7d9b",
+      "source": "modules/bee-approvals/src/README.md",
+      "title": "Bee approvals",
+      "topic": "component"
+    },
+    {
+      "bytes": 10689,
+      "id": "component/credentials",
+      "sha256": "99955508425840768d8a3de904de85f285fc0ba5941d9eefd2688d9ddc9c4454",
+      "source": "modules/bee-credentials/src/README.md",
+      "title": "bee.credentials",
       "topic": "component"
     },
     {
@@ -1131,6 +1123,14 @@
       "topic": "component"
     },
     {
+      "bytes": 3749,
+      "id": "component/placement",
+      "sha256": "987b3fe2c4dc92d334c2bd192f87b43ddb4c265e08c28214d129fc5576fc5f59",
+      "source": "modules/bee-placement/src/README.md",
+      "title": "bee.placement",
+      "topic": "component"
+    },
+    {
       "bytes": 2496,
       "id": "component/resources",
       "sha256": "ae03553a771aa80a369d2268aa09f90495d8249d57a9f46cf0ca25cd39c3b550",
@@ -1158,7 +1158,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from src/ui, src/apps and src/gov/traits/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 1224521,
+    "bytes": 1225334,
     "documents": 144
   }
 }

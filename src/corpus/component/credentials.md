@@ -119,7 +119,7 @@ Test suites enforce these invariants using synthetic workspace-scoped fixtures
 Native placement accepts file projections only with a selected retained session
 home. It seeds the frozen declared destination and preserves provider-refreshed
 bytes when the recorded definition identity matches; changed identity or a
-partial seed refuses reuse. See [native placement](../placement/native/README.md)
+partial seed refuses reuse. See [native placement](../../../src/placement/native/README.md)
 for the delivery and filesystem guarantees. File contents never enter the
 environment projection route.
 
@@ -150,7 +150,7 @@ child cannot be scrubbed.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.credentials` | `broker`: the seven operations and the store opened through `bee.persist`; `sources`: host allowlist, provider destinations, linked references; contract `contract` with binding `local` |
+| `bee.credentials` | `persist/broker`: the seven operations and the store opened through `bee.persist`; `registry/sources`: host allowlist, provider destinations, linked references; contract `contract` with binding `local` |
 
 Actions: `bee.credentials.manage` (define, list, revoke any, revoke_all;
 `bee:credential_manage_policy`), `bee.credentials.issue` (issue for oneself;

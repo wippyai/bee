@@ -9,7 +9,12 @@ workspace:
   replacements:
     bee/persist: ./modules/bee-persist
     bee/threads: ./modules/bee-threads
+    bee/docs: ./modules/bee-docs
+    bee/approvals: ./modules/bee-approvals
+    bee/application: ./modules/bee-application
     bee/resources: ./modules/bee-resources
+    bee/placement: ./modules/bee-placement
+    bee/credentials: ./modules/bee-credentials
     bee/driver: ./modules/bee-driver
     bee/driver-agy: ./modules/bee-driver-agy
     bee/driver-claude: ./modules/bee-driver-claude

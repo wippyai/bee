@@ -56,7 +56,7 @@ local TOOLS: {Tool} = {
             content_base64 = {type = "string", maxLength = M.MAX_WORKSPACE_BASE64_BYTES},
             snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
         }}},
-    {name = "docs", description = "Read the platform documentation that ships inside Bee, offline: list the corpus by topic, search it for a phrase, or read one bounded window of one document by stable id. Use it to look up how the runtime modules an application author calls work (process, channel, tty, registry, sql, fs, http, events), Bee's own contracts (application, threads, hive and cross-node subscriptions, placement, gateway, storage, UI) and the terminal toolkit for drawing, layout, styles and input.", operation = "bee:docs_call",
+    {name = "docs", description = "Read the platform documentation that ships inside Bee, offline: list the corpus by topic, search it for a phrase, or read one bounded window of one document by stable id. Use it to look up how the runtime modules an application author calls work (process, channel, tty, registry, sql, fs, http, events), Bee's own contracts (application, threads, hive and cross-node subscriptions, placement, gateway, storage, UI) and the terminal toolkit for drawing, layout, styles and input.", operation = "bee.docs.binding:call",
         policies = {"bee:gateway_tool_docs_policy"}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
             operation = {type = "string", enum = {"list", "search", "read"}},

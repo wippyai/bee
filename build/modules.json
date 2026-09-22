@@ -15,7 +15,12 @@
       "module": "bee/approvals",
       "root": "bee.approvals",
       "namespaces": [
-        "bee.approvals"
+        "bee.approvals",
+        "bee.approvals.binding",
+        "bee.approvals.migrations",
+        "bee.approvals.persist",
+        "bee.approvals.registry",
+        "bee.approvals.service"
       ]
     },
     {
@@ -23,7 +28,6 @@
       "root": "bee",
       "namespaces": [
         "bee",
-        "bee.application",
         "bee.applications",
         "bee.client",
         "bee.console",
@@ -46,10 +50,21 @@
       ]
     },
     {
+      "module": "bee/application",
+      "root": "bee.application",
+      "namespaces": [
+        "bee.application"
+      ]
+    },
+    {
       "module": "bee/credentials",
       "root": "bee.credentials",
       "namespaces": [
-        "bee.credentials"
+        "bee.credentials",
+        "bee.credentials.binding",
+        "bee.credentials.migrations",
+        "bee.credentials.persist",
+        "bee.credentials.registry"
       ]
     },
     {
@@ -85,6 +100,15 @@
       "module": "bee/driver-muse",
       "root": "bee.driver.muse",
       "namespaces": ["bee.driver.muse"]
+    },
+    {
+      "module": "bee/docs",
+      "root": "bee.docs",
+      "namespaces": [
+        "bee.docs",
+        "bee.docs.binding",
+        "bee.docs.registry"
+      ]
     },
     {
       "module": "bee/gateway",
@@ -150,7 +174,8 @@
       "module": "bee/placement",
       "root": "bee.placement",
       "namespaces": [
-        "bee.placement"
+        "bee.placement",
+        "bee.placement.registry"
       ]
     },
     {

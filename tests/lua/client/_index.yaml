@@ -34,7 +34,7 @@ entries:
     test: wippy.test:test
     state: bee.client:state
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: assignments_test
   kind: function.lua
   source: file://assignments_test.lua

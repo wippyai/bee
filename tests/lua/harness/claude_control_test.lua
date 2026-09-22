@@ -181,7 +181,7 @@ local function prepare_host(claude: string, port: string, ttl_ms: integer)
     data.environment = {ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port}
     data.permission_exchange = {adapter_ref = ADAPTER, acceptance_ref = ACCEPTANCE, fixture_digest = fixture_digest, approver_policy = APPROVER_POLICY, poll_ms = 500, ttl_ms = ttl_ms}
     apply(policy)
-    local policies_entry = registry.get("bee.approvals:approver_policies")
+    local policies_entry = registry.get("bee:approver_policies")
     if not policies_entry then error("approver policies entry") end
     local list = (policies_entry.data :: Object).policies :: {Object}
     local present = false
@@ -248,7 +248,7 @@ local function await_carrier(pid: string, label: string): Outcome
 end
 local function await_request(workspace: string): Object
     for _ = 1, 400 do
-        local page = approve_call("bee.approvals:inbox", {workspace_id = workspace})
+        local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
         for _, change in ipairs(page.changes :: {Object}) do
             local view = change.request :: Object
             if view.state == "pending" then return view end
@@ -258,7 +258,7 @@ local function await_request(workspace: string): Object
     error("no pending approval request in workspace " .. workspace)
 end
 local function decide(view: Object, decision: string)
-    approve_call("bee.approvals:decide", {approval_id = view.approval_id, expected_revision = view.revision, decision = decision, proposal_digest = view.proposal_digest})
+    approve_call("bee.approvals.binding:decide", {approval_id = view.approval_id, expected_revision = view.revision, decision = decision, proposal_digest = view.proposal_digest})
 end
 local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
@@ -294,7 +294,7 @@ local function writes(records: {Object}): {string}
     return list
 end
 local function approvals_in(workspace: string): integer
-    local listed = call("bee.approvals:list", {workspace_id = workspace})
+    local listed = call("bee.approvals.binding:list", {workspace_id = workspace})
     return #(listed.requests :: {unknown})
 end
 local function count(list: {string}, wanted: string): integer

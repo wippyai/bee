@@ -8,6 +8,14 @@ entries:
   meta:
     title: Bee placement
     comment: Placement contract and launch and attempt values; implementations own executors, homes and receipts
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
 - name: types
   kind: library.lua
   source: file://types.lua
@@ -28,14 +36,6 @@ entries:
   kind: library.lua
   source: file://transitions.lua
   imports:
-    types: bee.placement:types
-- name: resolver
-  kind: library.lua
-  source: file://resolver.lua
-  modules: [hash, registry]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
     types: bee.placement:types
 - name: placement
   kind: contract.definition

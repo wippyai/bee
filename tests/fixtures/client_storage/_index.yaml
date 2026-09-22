@@ -51,7 +51,7 @@ entries:
     store: bee.client:store
     state: bee.client:state
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
   security:
     policies: [bee:client_storage_policy]
   meta:

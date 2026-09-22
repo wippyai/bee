@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.approvals.registry
+entries:
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]

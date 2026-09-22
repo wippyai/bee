@@ -32,7 +32,7 @@ local function call(method: string, request: {[string]: unknown}): {[string]: un
     return value.value :: {[string]: unknown}
 end
 local function credential(method: string, request: {[string]: unknown}): {[string]: unknown}
-    local reply, err = funcs.new():call("bee.credentials:" .. method, request)
+    local reply, err = funcs.new():call("bee.credentials.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
     local value = reply :: {[string]: unknown}
     assert(value.ok == true, method .. " failed: " .. tostring(type(value.error) == "table" and (value.error :: {[string]: unknown}).message))

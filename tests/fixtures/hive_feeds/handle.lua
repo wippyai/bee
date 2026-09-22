@@ -13,7 +13,7 @@ local function handle(raw: unknown): string
     if type(input.command) ~= "string" or type(input.remote) ~= "string" then error("bad command") end
     local command, remote = input.command, input.remote
     if command:match("^approval%-") then
-        local entry = registry.get("bee.approvals:approver_policies")
+        local entry = registry.get("bee:approver_policies")
         if not entry then error("missing approval policies") end
         local approvers: {string} = {}
         if command ~= "approval-revoke" then
@@ -27,7 +27,7 @@ local function handle(raw: unknown): string
         local applied, apply_error = changes:apply()
         if not applied then error(tostring(apply_error)) end
         if command == "approval-revoke" then return "approval_revoked" end
-        local created, create_error = funcs.new():call("bee.approvals:request", {workspace_id = "feed-workspace", idempotency_key = "feed-approval-1",
+        local created, create_error = funcs.new():call("bee.approvals.binding:request", {workspace_id = "feed-workspace", idempotency_key = "feed-approval-1",
             request_kind = "permission", policy = "feed-approval", proposal = {kind = "operation", ref = "bee.node:update_metadata", revision = "1", payload = {display_name = "Approved name"}}, prompt = {text = "Approve this test request?"}})
         if create_error or object(created).ok ~= true then error("create approval: " .. tostring(create_error)) end
         return "approval_created"
@@ -53,8 +53,8 @@ local function handle(raw: unknown): string
     local mesh, err = client.open()
     if not mesh then error(tostring(err)) end
     if command == "feed-approval" or command == "feed-approval-empty" then
-        local owner: types.OwnerRef = {node_id = remote, service_id = "bee.approvals"}
-        local snapshot = mesh:call(owner, {operation_ref = "bee.approvals:feed_snapshot"}, {workspace_id = "feed-workspace"}, {timeout = "5s"})
+        local owner: types.OwnerRef = {node_id = remote, service_id = "bee.approvals.binding"}
+        local snapshot = mesh:call(owner, {operation_ref = "bee.approvals.binding:feed_snapshot"}, {workspace_id = "feed-workspace"}, {timeout = "5s"})
         if not snapshot.ok then error("approval snapshot transport refused") end
         local domain = object(snapshot.value)
         if domain.ok ~= true then error("approval snapshot owner refused") end
@@ -68,10 +68,10 @@ local function handle(raw: unknown): string
         end
         if #items ~= 1 or page.owner_id ~= remote then error("incorrect approval snapshot") end
         local request = object(object(items[1]).value)
-        local decided = mesh:call(owner, {operation_ref = "bee.approvals:decide"}, {approval_id = request.approval_id,
+        local decided = mesh:call(owner, {operation_ref = "bee.approvals.binding:decide"}, {approval_id = request.approval_id,
             expected_revision = request.revision, proposal_digest = request.proposal_digest, decision = "approved"}, {timeout = "5s"})
         if not decided.ok or object(decided.value).ok ~= true then error("remote decision failed") end
-        local changed = mesh:call(owner, {operation_ref = "bee.approvals:feed_read_after"}, {workspace_id = "feed-workspace",
+        local changed = mesh:call(owner, {operation_ref = "bee.approvals.binding:feed_read_after"}, {workspace_id = "feed-workspace",
             cursor = page.cursor, expected_scope_revision = page.scope_revision}, {timeout = "5s"})
         if not changed.ok or object(changed.value).ok ~= true then error("approval catch-up failed") end
         local events = object(object(changed.value).value).events

@@ -83,7 +83,7 @@ local function snapshot(self: Client, source: Source): caller.Reply
             request.expected_cursor = next_state.snapshot_cursor
             request.expected_scope_revision = next_state.scope_revision
         end
-        local reply = invoke_owner(self, source, "bee.approvals:feed_snapshot", request)
+        local reply = invoke_owner(self, source, "bee.approvals.binding:feed_snapshot", request)
         if not reply then return failure("UNAVAILABLE", "approval owner did not answer") end
         if not reply.ok then return reject_source(self, source, reply) end
         local page, decode_error = sync.snapshot(reply.value, source.node_id, source.feed, decode_view)
@@ -135,7 +135,7 @@ local function snapshot(self: Client, source: Source): caller.Reply
 end
 local function catchup(self: Client, source: Source, state: sync.State): Catchup
     if not state.scope_revision then return {reply = failure("RESET_REQUIRED", "approval feed has no visibility scope"), reset = true} end
-    local reply = invoke_owner(self, source, "bee.approvals:feed_read_after", {workspace_id = source.workspace_id,
+    local reply = invoke_owner(self, source, "bee.approvals.binding:feed_read_after", {workspace_id = source.workspace_id,
         cursor = state.cursor, limit = 64, expected_scope_revision = state.scope_revision})
     if not reply then return {reply = failure("UNAVAILABLE", "approval owner did not answer"), reset = false} end
     if not reply.ok then
@@ -193,13 +193,13 @@ end
 local function invoke(self: Client, target: string, value: unknown): caller.Reply?
     local request = bounds.object(value)
     if not request then return failure("INVALID", "request must be an object") end
-    if target == "bee.approvals:inbox" then
+    if target == "bee.approvals.binding:inbox" then
         local workspace = bounds.id(request.workspace_id)
         local source = workspace and self.sources[workspace] or nil
         if not source then return failure("DENIED", "inbox source is not admitted") end
         return refresh(self, source)
     end
-    if target ~= "bee.approvals:read" and target ~= "bee.approvals:decide" and target ~= "bee.approvals:withdraw" then
+    if target ~= "bee.approvals.binding:read" and target ~= "bee.approvals.binding:decide" and target ~= "bee.approvals.binding:withdraw" then
         return failure("DENIED", "operation is not an inbox action")
     end
     local ui_id = bounds.id(request.approval_id)

@@ -38,7 +38,7 @@ entries:
     test: wippy.test:test
     model: bee.timeline:model
     view: bee.timeline:view
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: surface_test
   kind: function.lua
   source: file://surface_test.lua
@@ -52,5 +52,5 @@ entries:
     model: bee.timeline:model
     view: bee.timeline:view
     caller: bee.application:caller
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     harness: bee.threads:harness

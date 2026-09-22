@@ -54,7 +54,7 @@ local function caller(actor: string)
 end
 local SENTINEL = "placement-sentinel-4e5f6a"
 local function credential_call(method: string, value: unknown): {[string]: unknown}
-    local reply, err = caller(OWNER):call("bee.credentials:" .. method, value)
+    local reply, err = caller(OWNER):call("bee.credentials.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     local typed = reply :: service.Reply
     if not typed.ok then error(method .. ": " .. tostring(typed.error and typed.error.code) .. ": " .. tostring(typed.error and typed.error.message)) end

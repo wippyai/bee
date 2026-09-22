@@ -42,8 +42,9 @@ def exercise(packed, theme="honey"):
         folder = Path(temporary)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         if theme != "honey":
-            appearance = project / "src/ui/appearance.lua"
+            appearance = project / "modules/bee-application/src/appearance.lua"
             source = appearance.read_text()
             anchor = 'function M.defaults(): Preferences return {theme = "honey",'
             assert source.count(anchor) == 1
@@ -150,6 +151,7 @@ def command_handlers(packed):
         folder = Path(temporary)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         for name in ("wippy.lock", ".wippy.yaml", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         index = project / "src/apps/console/_index.yaml"

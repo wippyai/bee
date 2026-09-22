@@ -20,7 +20,7 @@ end
 local function executor(): destination.Executor
     local selected = {}
     function selected:call(method: string, raw: unknown): (unknown?, unknown?)
-        if method ~= "bee.approvals:request" then return nil, "unexpected method" end
+        if method ~= "bee.approvals.binding:request" then return nil, "unexpected method" end
         local request = raw :: {[string]: unknown}
         local proposal = request.proposal
         local bytes = assert(canonical.encode(proposal))

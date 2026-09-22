@@ -1,0 +1,36 @@
+version: '1.0'
+namespace: bee.approvals.service
+entries:
+- name: worker
+  kind: process.lua
+  source: file://worker.lua
+  method: main
+  modules: [process, channel, time]
+  imports:
+    service: bee.approvals:service
+    outbox: bee.approvals.persist:outbox
+- name: authority
+  kind: process.lua
+  source: file://authority.lua
+  method: main
+  modules: [process]
+  imports:
+    service: bee.approvals:service
+- name: authority_service
+  kind: process.service
+  process: bee.approvals.service:authority
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.approvals.authority}
+      policies: [bee:approval_store_policy, bee:approval_owner_policy]
+- name: worker_service
+  kind: process.service
+  process: bee.approvals.service:worker
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.approvals.outbox}
+      policies: [bee:approval_store_policy, bee:approval_owner_policy, bee:thread_approval_policy, bee:thread_approval_client_policy]

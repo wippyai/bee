@@ -17,7 +17,7 @@ entries:
   modules:
   - json
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     decode: bee.protocol:decode
     contract: bee.protocol:application
     model: bee.desktop:model

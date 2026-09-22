@@ -8,9 +8,9 @@ entries:
   modules: [tty, process, channel, time, uuid, registry, system]
   imports:
     client: bee.application:client
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     model: bee.hive_manager:model
-    names: bee.desktop:names
+    names: bee.application:names
     view: bee.hive_manager:view
     directory: bee.hive_manager:directory
     hive: bee.hive:client
@@ -35,15 +35,15 @@ entries:
   imports:
     text: bee.application:text
     directory: bee.hive_manager:directory
-    names: bee.desktop:names
+    names: bee.application:names
 - name: view
   kind: library.lua
   source: file://view.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     model: bee.hive_manager:model
-    names: bee.desktop:names
+    names: bee.application:names
 - name: directory
   kind: library.lua
   source: file://directory.lua

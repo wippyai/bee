@@ -12,7 +12,7 @@ entries:
     contract: bee.protocol:application
     decode: bee.protocol:decode
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     interaction: bee.application:interaction
     connections: bee.host:clients
     inventory: bee.host:inventory
@@ -54,7 +54,7 @@ entries:
     contract: bee.protocol:application
     decode: bee.protocol:decode
     inventory: bee.host:inventory
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: transfer
   kind: library.lua
   source: file://transfer.lua

@@ -26,7 +26,7 @@ local function main()
     if proposal.revision ~= plan.plan_digest or proposal.input_digest ~= plan.plan_digest then
         error("decision proposal does not bind the exact plan digest")
     end
-    local listed, list_error = call("bee.approvals:list", {workspace_id = helper.WORKSPACE})
+    local listed, list_error = call("bee.approvals.binding:list", {workspace_id = helper.WORKSPACE})
     if not listed then error("list requests: " .. tostring((list_error :: Object).message)) end
     local approval_id: string? = nil
     local incarnation: integer? = nil
@@ -47,18 +47,18 @@ local function main()
     -- call observed is already behind the one this process just started
     -- under; revalidate against the fault's current incarnation and retry,
     -- the same recovery the activation owner performs in production.
-    local receipt, consume_error, consume_fault_value = call("bee.approvals:consume", {approval_id = approval_id,
+    local receipt, consume_error, consume_fault_value = call("bee.approvals.binding:consume", {approval_id = approval_id,
         proposal_digest = proposal_digest, owner_incarnation = incarnation, effect_key = helper.EFFECT_KEY})
     if not receipt and (consume_error :: Object).code == "REVALIDATE" then
         local fault_value = helper.object(consume_fault_value, "revalidate fault carries no value")
         local current = math.floor(fault_value.current_incarnation :: number)
-        local revalidated, revalidate_error = call("bee.approvals:revalidate", {approval_id = approval_id,
+        local revalidated, revalidate_error = call("bee.approvals.binding:revalidate", {approval_id = approval_id,
             proposal_digest = proposal_digest, owner_incarnation = current})
         if not revalidated then
             error("revalidate decision: " .. tostring((revalidate_error :: Object).code) .. ": " .. tostring((revalidate_error :: Object).message))
         end
         incarnation = current
-        receipt, consume_error = call("bee.approvals:consume", {approval_id = approval_id,
+        receipt, consume_error = call("bee.approvals.binding:consume", {approval_id = approval_id,
             proposal_digest = proposal_digest, owner_incarnation = incarnation, effect_key = helper.EFFECT_KEY})
     end
     if not receipt then
@@ -72,7 +72,7 @@ local function main()
     end
     logger:info("INBOX_DECIDE_CONSUMED", {approval_id = approval_id, plan_digest = plan.plan_digest,
         proposal_digest = proposal_digest, effect = receipt.consumed_effect, decider_id = decider_id})
-    local _, second_error = call("bee.approvals:consume", {approval_id = approval_id,
+    local _, second_error = call("bee.approvals.binding:consume", {approval_id = approval_id,
         proposal_digest = proposal_digest, owner_incarnation = incarnation, effect_key = helper.RETRY_EFFECT_KEY})
     if second_error == nil then error("a second effect consumed the same decision") end
     if (second_error :: Object).code ~= "CONFLICT" then

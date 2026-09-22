@@ -37,7 +37,7 @@ entries:
     actions: [funcs.call]
     resources: [bee.placement.native:prepare, bee.placement.native:start, bee.placement.native:status, bee.placement.native:stop,
       bee.placement.native:reconcile, bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach,
-      bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.credentials:define, bee.credentials:issue_projection, bee.credentials:revoke,
+      bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:revoke,
       bee.placement.native:fixture_stop_materialization]
     effect: allow
 - name: fixture_stop_materialization_policy

@@ -15,7 +15,7 @@ local function executor(change: boolean?): approval.Executor
     local selected = {}
     function selected:call(method: string, request: unknown): (unknown?, unknown?)
         local value = request :: {[string]: unknown}
-        if method == "bee.approvals:request" then
+        if method == "bee.approvals.binding:request" then
             local proposal = value.proposal :: {[string]: unknown}
             if change then proposal = {kind = "operation", ref = "other", revision = "other", payload = {}} end
             local bytes = assert(canonical.encode(proposal))
@@ -23,7 +23,7 @@ local function executor(change: boolean?): approval.Executor
             return {ok = true, replayed = false, value = {approval_id = "approval-1",
                 proposal = proposal, proposal_digest = digest, owner_incarnation = 7}}, nil
         end
-        if method == "bee.approvals:revalidate" then
+        if method == "bee.approvals.binding:revalidate" then
             return {ok = true, replayed = false, value = {approval_id = value.approval_id,
                 proposal_digest = value.proposal_digest, validated_incarnation = value.owner_incarnation}}, nil
         end

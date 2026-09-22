@@ -110,7 +110,7 @@ local function approve(workspace_id: string, thread_id: string, actor_id: string
                     .. tostring(result and result.error or carrier_report())
             end
         else
-            local inbox, inbox_error = call("bee.approvals:inbox", {workspace_id = workspace_id, after_seq = cursor, limit = 64})
+            local inbox, inbox_error = call("bee.approvals.binding:inbox", {workspace_id = workspace_id, after_seq = cursor, limit = 64})
             if inbox then
                 local changes = inbox.changes
                 if type(changes) ~= "table" then return false, "approval inbox changes are missing" end
@@ -124,7 +124,7 @@ local function approve(workspace_id: string, thread_id: string, actor_id: string
                                 .. " expected=" .. json.encode({workspace_id = workspace_id, thread_id = thread_id,
                                     actor_id = actor_id, action_id = action_id, attempt_id = attempt_id})
                         end
-                        local decided, decide_error = call("bee.approvals:decide", {
+                        local decided, decide_error = call("bee.approvals.binding:decide", {
                             approval_id = request.approval_id, expected_revision = request.revision,
                             proposal_digest = request.proposal_digest, decision = "approved"})
                         if not decided then return false, "decide app-open approval: " .. tostring(decide_error) end

@@ -6,8 +6,8 @@ entries:
   source: file://connection.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
-    names: bee.desktop:names
+    appearance: bee.application:appearance
+    names: bee.application:names
 - name: selection
   kind: library.lua
   source: file://selection.lua
@@ -41,8 +41,8 @@ entries:
     bindings: bee.terminal:bindings
     menu: bee.terminal:menu
     selection: bee.terminal:selection
-    appearance: bee.desktop:appearance
-    names: bee.desktop:names
+    appearance: bee.application:appearance
+    names: bee.application:names
     display_transfer: bee.protocol:display_transfer
     status_surface: bee.application:status_surface
 - name: render
@@ -54,7 +54,7 @@ entries:
     dialog: bee.terminal:dialog
     model: bee.desktop:model
     layout: bee.desktop:layout
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     connection: bee.terminal:connection
     chrome: bee.terminal:chrome
     bar: bee.terminal:bar
@@ -71,15 +71,15 @@ entries:
   source: file://chrome.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: menu
   kind: library.lua
   source: file://menu.lua
   modules: [tty]
   imports:
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
-    names: bee.desktop:names
+    appearance: bee.application:appearance
+    names: bee.application:names
     display_transfer: bee.protocol:display_transfer
 - name: bar
   kind: library.lua
@@ -87,7 +87,7 @@ entries:
   modules: [tty]
   imports:
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     surface: bee.application:status_surface
 - name: window_chrome
   kind: library.lua
@@ -96,17 +96,17 @@ entries:
   imports:
     model: bee.desktop:model
     layout: bee.desktop:layout
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     surface: bee.application:status_surface
 - name: title_editor
   kind: library.lua
   source: file://title_editor.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: dialog
   kind: library.lua
   source: file://dialog.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance

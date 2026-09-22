@@ -25,8 +25,8 @@ generator when the corpus is intentionally updated.
 | Hub package inspection and local installation | [Hub](guides/hub.md) |
 | Managed harness gateway, hooks, and MCP configuration | [Gateway](reference/agents/gateway.md), [gateway hooks](reference/agents/hooks.md), [MCP configuration](guides/agents/mcp.md) |
 | Governed application delivery | [Distributed app delivery](guides/overlays.md) |
-| Harness, placement, resource, and credential module contracts | [Harness module](../src/harness/README.md), [placement module](../src/placement/README.md), [native placement](../src/placement/native/README.md), [resources module](../modules/bee-resources/src/README.md), [credentials module](../src/credentials/README.md) |
-| Persistence, governance, Hub, Hive, and sync module contracts | [Persist module](../modules/bee-persist/src/README.md), [governance module](../src/gov/README.md), [Hub module](../src/hub/README.md), [Hive module](../src/hive/README.md), [sync module](../src/sync/README.md) |
+| Harness, placement, resource, and credential module contracts | [Harness module](../src/harness/README.md), [placement module](../modules/bee-placement/src/README.md), [native placement](../src/placement/native/README.md), [resources module](../modules/bee-resources/src/README.md), [credentials module](../modules/bee-credentials/src/README.md) |
+| Persistence, approvals, governance, Hub, Hive, and sync module contracts | [Persist module](../modules/bee-persist/src/README.md), [approvals module](../modules/bee-approvals/src/README.md), [governance module](../src/gov/README.md), [Hub module](../src/hub/README.md), [Hive module](../src/hive/README.md), [sync module](../src/sync/README.md) |
 
 Use the source module README and tests for implementation details. A contract
 describes a callable boundary only when the source and its checks implement it;

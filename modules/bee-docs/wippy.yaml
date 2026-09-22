@@ -1,0 +1,9 @@
+organization: bee
+module: docs
+type: library
+version: 0.1.0-dev
+description: Offline documentation corpus protocol and read-only gateway facade
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

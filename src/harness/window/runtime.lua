@@ -137,7 +137,7 @@ local function release_unstarted(admitted: admission.Admitted): (boolean, string
         if not revoked then details[#details + 1] = "resource " .. resource.grant_ref .. ": " .. tostring(revoke_error) end
     end
     for _, projection_id in ipairs(admitted.request.projections or {}) do
-        local revoked, revoke_error = call("bee.credentials:revoke", {projection_id = projection_id})
+        local revoked, revoke_error = call("bee.credentials.binding:revoke", {projection_id = projection_id})
         if not revoked then details[#details + 1] = "credential " .. projection_id .. ": " .. tostring(revoke_error) end
     end
     if #details > 0 then return false, table.concat(details, "; ") end

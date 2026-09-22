@@ -51,7 +51,7 @@ local function through(executor: funcs.Executor): app_caller.Client
     end)
 end
 local function install_policy()
-    local entry = registry.get("bee.approvals:approver_policies")
+    local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
     local data = entry.data :: Object
     local policies = data.policies :: {Object}
@@ -66,7 +66,7 @@ local function install_policy()
 end
 local function file(workspace: string, prompt: string, ttl_ms: integer?): string
     local attempt = "attempt-" .. key()
-    local reply, err = requester:call("bee.approvals:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY,
+    local reply, err = requester:call("bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY,
         proposal = {kind = "attempt", ref = attempt, revision = "r1", action_id = "action-1", payload = {tool_name = "Bash", correlation_id = "c-1"}}, prompt = {text = prompt}, ttl_ms = ttl_ms})
     if err then error("request: " .. tostring(err)) end
     local typed = reply :: {ok: boolean, error: {code: string, message: string}?, value: Object}
@@ -144,7 +144,7 @@ local function define_tests()
             test.is_true(bob_state.notice:find("CONFLICT: approved by " .. ALICE, 1, true) ~= nil)
             local _, refused = model.decision_intent(bob_state, key(), "denied")
             test.eq(refused, "the request is decided")
-            local record = alice:call("bee.approvals:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
+            local record = alice:call("bee.approvals.binding:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
             test.eq(record.value.decision, "approved")
             test.eq(record.value.decider_id, ALICE)
         end)
@@ -156,7 +156,7 @@ local function define_tests()
             refresh(state, owner)
             test.eq(#model.rows(state), 0)
             if not tostring(state.unavailable[workspace]):find("DENIED", 1, true) then
-                local raw, err = outsider:call("bee.approvals:inbox", {workspace_id = workspace})
+                local raw, err = outsider:call("bee.approvals.binding:inbox", {workspace_id = workspace})
                 error("outsider inbox: unavailable " .. tostring(state.unavailable[workspace]) .. "; raw " .. tostring(json.encode(raw)) .. "; err " .. tostring(err))
             end
             test.is_true(frame_text(state):find("unavailable", 1, true) ~= nil)
@@ -196,7 +196,7 @@ local function define_tests()
             -- The owner commits; the answer never arrives.
             local lossy = inbox.new(function(target: string, request: unknown): (unknown, string?)
                 local raw, err = alice:call(target, request)
-                if target == "bee.approvals:decide" then
+                if target == "bee.approvals.binding:decide" then
                     decided = decided + 1
                     return nil, "connection lost"
                 end

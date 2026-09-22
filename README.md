@@ -181,7 +181,7 @@ make standalone BEE_VERSION=0.1.0-alpha.1
 ./dist/bee
 ```
 
-Production loads only `src/`. The standalone executable contains exact,
+Production loads the root and selected components' `src/` trees. The standalone executable contains exact,
 checksummed application packs and the two small native boundaries Bee needs for
 host launch facts and operating-system I/O events.
 
@@ -189,10 +189,11 @@ host launch facts and operating-system I/O events.
 |---|---|
 | [`src/core`](src/core) | Workspace, application, desktop, client, and storage lifecycle |
 | [`src/apps`](src/apps) | Bundled standalone application processes |
-| [`src/ui`](src/ui) | Shared appearance and application-facing UI helpers |
+| [`modules/bee-application/src`](modules/bee-application/src) | Public application SDK and shared presentation values |
 | [`src/gov`](src/gov) | Overlay authoring, review, activation, and recovery |
 | [`src/hub`](src/hub) | Package inspection, planning, apply, migration, and receipts |
 | [`modules/bee-threads/src`](modules/bee-threads/src) | Durable records, subscriptions, and delivery |
+| [`modules/bee-docs/src`](modules/bee-docs/src) | Offline documentation protocol and read-only corpus facade |
 | [`native`](native) | Generic application launch facts and OS I/O events |
 
 Start with the [agent guide](docs/development/agent-guide.md) and

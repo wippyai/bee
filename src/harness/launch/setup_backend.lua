@@ -65,14 +65,14 @@ local function same_credential(value: unknown, chosen: Credential): boolean
         and object.optional == chosen.optional
 end
 local function ensure_credential(workspace: string, name: string, chosen: Credential): (boolean, string?)
-    local reply, call_error = funcs.call("bee.credentials:define", {workspace_id = workspace, name = name,
+    local reply, call_error = funcs.call("bee.credentials.binding:define", {workspace_id = workspace, name = name,
         provider = chosen.provider, source = chosen.source, projection_kind = chosen.projection_kind, optional = chosen.optional, expected_revision = 0})
     local value = bounds.object(reply)
     if call_error or not value then return false, tostring(call_error or "define credential") end
     if value.ok == true and same_credential(value.value, chosen) then return true, nil end
     local error = bounds.object(value.error)
     if value.ok ~= false or not error or error.code ~= "CONFLICT" then return false, tostring(error and error.message or "define credential") end
-    local listed, list_error = funcs.call("bee.credentials:list", {workspace_id = workspace})
+    local listed, list_error = funcs.call("bee.credentials.binding:list", {workspace_id = workspace})
     local result = bounds.object(listed)
     local data = result and bounds.object(result.value)
     if list_error or not result or result.ok ~= true or not data or type(data.definitions) ~= "table" then return false, "read existing credential" end

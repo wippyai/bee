@@ -1,0 +1,10 @@
+version: '1.0'
+namespace: bee.approvals.persist
+entries:
+- name: outbox
+  kind: library.lua
+  source: file://outbox.lua
+  modules: [sql, json, funcs, time]
+  imports:
+    transaction: bee.persist:transaction
+    resources: bee.approvals.registry:resources

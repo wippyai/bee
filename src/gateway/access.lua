@@ -26,7 +26,7 @@ local function invoke(binding: Binding, operation: string, value: Object): Reply
     if not acted then return fail("DENIED", tostring(actor_failure)) end
     local scoped, scope_error = acted:with_scope(security.new_scope(policies))
     if not scoped then return fail("DENIED", tostring(scope_error)) end
-    local raw, call_error = scoped:call("bee.approvals:" .. operation, value)
+    local raw, call_error = scoped:call("bee.approvals.binding:" .. operation, value)
     if call_error then return fail("UNAVAILABLE", tostring(call_error)) end
     local reply = bounds.object(raw)
     if not reply or type(reply.ok) ~= "boolean" then return fail("UNAVAILABLE", "invalid approval reply") end

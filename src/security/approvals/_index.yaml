@@ -15,7 +15,7 @@ entries:
     - bee.approvals:db
     - bee.approvals:database_ref
     - bee.approvals:policies_ref
-    - bee.approvals:approver_policies
+    - bee:approver_policies
     - node
     - '*'
     effect: allow

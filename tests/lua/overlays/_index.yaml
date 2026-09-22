@@ -22,5 +22,5 @@ entries:
     test: wippy.test:test
     model: bee.overlays:model
     view: bee.overlays:view
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     preflight: bee.governance:preflight

@@ -4,7 +4,7 @@ The carrier turns one placement attempt's byte streams into durable thread
 records. It owns the driver protocol and logical turn state for that attempt;
 the thread owner persists records and checkpoints, and placement owns the
 executor, private directories and cleanup. Read [threads](../threads.md),
-[placement](../../../src/placement/README.md) and [approvals](../approvals.md) with this
+[placement](../../../modules/bee-placement/src/README.md) and [approvals](../approvals.md) with this
 contract.
 
 A harness profile selects a driver, execution environment, options and MCP

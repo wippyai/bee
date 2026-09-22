@@ -160,9 +160,9 @@ local function thread(): string
     return created.thread_id :: string
 end
 local function projection_for(workspace: string, attempt_id: string): string
-    call("bee.credentials:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}})
+    call("bee.credentials.binding:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}})
     local binding_digest, profile_digest, policy_digest = measured()
-    local issued = call("bee.credentials:issue_projection", {workspace_id = workspace, name = "anthropic", audience = ACTOR, attempt_id = attempt_id, profile_id = "batch",
+    local issued = call("bee.credentials.binding:issue_projection", {workspace_id = workspace, name = "anthropic", audience = ACTOR, attempt_id = attempt_id, profile_id = "batch",
         profile_digest = profile_digest, binding_digest = binding_digest, launch_policy_digest = policy_digest, idempotency_key = fresh("key")})
     return issued.projection_id :: string
 end

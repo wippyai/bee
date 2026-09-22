@@ -50,7 +50,7 @@ local function code(reply: Reply): string
     return reply.error and reply.error.code or ""
 end
 local function install_policy()
-    local entry = registry.get("bee.approvals:approver_policies")
+    local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
     local data = entry.data :: Object
     local policies = data.policies :: {Object}
@@ -64,7 +64,7 @@ local function install_policy()
     if not applied then error("install approver policy: " .. tostring(err)) end
 end
 local function file(workspace: string, proposal: Object): Object
-    return value(call(requester, "bee.approvals:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY, proposal = proposal, prompt = {text = "run it"}}))
+    return value(call(requester, "bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY, proposal = proposal, prompt = {text = "run it"}}))
 end
 local function through(executor: funcs.Executor): app_caller.Client
     return inbox.new(function(target: string, request: unknown): (unknown, string?)
@@ -117,9 +117,9 @@ local function define_tests()
             decide(state, owner, "approved")
             local incarnation = math.floor(tonumber((state.detail :: Object).owner_incarnation) or 0)
             -- The approved decision authorizes only the proposal it was given.
-            local crossed = call(requester, "bee.approvals:consume", {approval_id = original.approval_id, proposal_digest = changed.proposal_digest, effect_key = "e1", owner_incarnation = incarnation})
+            local crossed = call(requester, "bee.approvals.binding:consume", {approval_id = original.approval_id, proposal_digest = changed.proposal_digest, effect_key = "e1", owner_incarnation = incarnation})
             test.eq(code(crossed), "CONFLICT")
-            local undecided = call(requester, "bee.approvals:consume", {approval_id = changed.approval_id, proposal_digest = changed.proposal_digest, effect_key = "e1", owner_incarnation = incarnation})
+            local undecided = call(requester, "bee.approvals.binding:consume", {approval_id = changed.approval_id, proposal_digest = changed.proposal_digest, effect_key = "e1", owner_incarnation = incarnation})
             test.is_false(undecided.ok)
             -- The decision and its proposal stand as committed; the inbox shows them, not the changed definition.
             refresh(state, owner)
@@ -134,9 +134,9 @@ local function define_tests()
             test.is_nil(detail.consumer_id)
             test.eq(state.rows[tostring(changed.approval_id)].state, "pending")
             -- The original proposal still consumes once under its own digest.
-            local consumed = value(call(requester, "bee.approvals:consume", {approval_id = original.approval_id, proposal_digest = original.proposal_digest, effect_key = "e1", owner_incarnation = incarnation}))
+            local consumed = value(call(requester, "bee.approvals.binding:consume", {approval_id = original.approval_id, proposal_digest = original.proposal_digest, effect_key = "e1", owner_incarnation = incarnation}))
             test.eq(consumed.consumed_effect, "e1")
-            test.eq(code(call(requester, "bee.approvals:consume", {approval_id = original.approval_id, proposal_digest = original.proposal_digest, effect_key = "e2", owner_incarnation = incarnation})), "CONFLICT")
+            test.eq(code(call(requester, "bee.approvals.binding:consume", {approval_id = original.approval_id, proposal_digest = original.proposal_digest, effect_key = "e2", owner_incarnation = incarnation})), "CONFLICT")
         end)
         test.it("treats a revised operation as another proposal with its own pending approval", function()
             local workspace = "ws-" .. key():sub(1, 8)
@@ -150,7 +150,7 @@ local function define_tests()
             refresh(state, owner)
             open(state, owner, tostring(first.approval_id))
             decide(state, owner, "approved")
-            test.eq(code(call(alice, "bee.approvals:decide", {approval_id = revised.approval_id, expected_revision = 1, decision = "approved", proposal_digest = first.proposal_digest})), "CONFLICT")
+            test.eq(code(call(alice, "bee.approvals.binding:decide", {approval_id = revised.approval_id, expected_revision = 1, decision = "approved", proposal_digest = first.proposal_digest})), "CONFLICT")
             refresh(state, owner)
             test.eq(state.rows[tostring(first.approval_id)].state, "decided")
             test.eq(state.rows[tostring(revised.approval_id)].state, "pending")

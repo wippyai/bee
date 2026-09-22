@@ -33,4 +33,4 @@ entries:
     view: bee.hive_manager:view
     directory: bee.hive_manager:directory
     types: bee.hive:types
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance

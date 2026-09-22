@@ -193,7 +193,7 @@ local function prepare_host(): string
     unpinned_data.executables = {claude = executable}
     unpinned_data.permission_exchange = {adapter_ref = ADAPTER, acceptance_ref = ACCEPTANCE, fixture_digest = fixture_digest, approver_policy = APPROVER_POLICY, poll_ms = 2000, ttl_ms = 60000}
     apply(unpinned)
-    local policies_entry = registry.get("bee.approvals:approver_policies")
+    local policies_entry = registry.get("bee:approver_policies")
     if not policies_entry then error("approver policies entry") end
     local list = (policies_entry.data :: Object).policies :: {Object}
     local present = false
@@ -266,7 +266,7 @@ end
 -- is pending, then decide it for the recorded proposal digest.
 local function await_request(workspace: string): Object
     for _ = 1, 200 do
-        local page = approve_call("bee.approvals:inbox", {workspace_id = workspace})
+        local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
         for _, change in ipairs(page.changes :: {Object}) do
             local view = change.request :: Object
             if view.state == "pending" then return view end
@@ -276,7 +276,7 @@ local function await_request(workspace: string): Object
     error("no pending approval request in workspace " .. workspace)
 end
 local function decide(view: Object, decision: string)
-    approve_call("bee.approvals:decide", {approval_id = view.approval_id, expected_revision = view.revision, decision = decision, proposal_digest = view.proposal_digest})
+    approve_call("bee.approvals.binding:decide", {approval_id = view.approval_id, expected_revision = view.revision, decision = decision, proposal_digest = view.proposal_digest})
 end
 local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
@@ -355,7 +355,7 @@ local function settlement_of(outcome: Outcome, label: string): Object
     return outcome.value.settlement :: Object
 end
 local function approvals_in(workspace: string): integer
-    local listed = call("bee.approvals:list", {workspace_id = workspace})
+    local listed = call("bee.approvals.binding:list", {workspace_id = workspace})
     return #(listed.requests :: {unknown})
 end
 local function define_tests()
@@ -382,7 +382,7 @@ local function define_tests()
             test.eq(table.concat(writes(records), ","), "intended,accepted")
             test.eq(tool_results(records), 1)
             test.eq(stderr_mentions(records, "malformed"), 0)
-            local consumed = approve_call("bee.approvals:read", {approval_id = view.approval_id})
+            local consumed = approve_call("bee.approvals.binding:read", {approval_id = view.approval_id})
             test.eq(consumed.consumer_id, ACTOR)
             test.eq(approvals_in(workspace), 1)
             -- The session ended the declared way: stdin closed at the
@@ -569,7 +569,7 @@ local function define_tests()
                 if payload.phase == "closed" then closed = tostring(payload.reason) end
             end
             test.is_true(closed:find("executable measurement changed since acceptance", 1, true) ~= nil)
-            local record = approve_call("bee.approvals:read", {approval_id = view.approval_id})
+            local record = approve_call("bee.approvals.binding:read", {approval_id = view.approval_id})
             test.eq(record.decision, "approved")
             test.eq(record.decider_id, APPROVER)
         end)
@@ -598,7 +598,7 @@ local function define_tests()
                 if payload.phase == "closed" then closed = tostring(payload.reason) end
             end
             test.is_true(closed:find("executable measurement changed since acceptance", 1, true) ~= nil)
-            local record = approve_call("bee.approvals:read", {approval_id = view.approval_id})
+            local record = approve_call("bee.approvals.binding:read", {approval_id = view.approval_id})
             test.eq(record.decision, "approved")
         end)
         test.it("leaves a write uncertain when the runner is lost during recovery and sends nothing after settlement", function()

@@ -1,14 +1,13 @@
 -- MIT. The offline documentation corpus a bound agent reads through the docs
--- tool. The corpus is one read-only embedded filesystem (bee:docs_corpus,
--- frozen into the pack by wippy.yaml embed) holding Markdown documents and a
--- manifest that names, per document, its stable id, topic, source and digest.
+-- tool. The corpus is one host-selected read-only embedded filesystem holding
+-- Markdown documents and a manifest that names each document's stable id,
+-- topic, source and digest.
 -- This library only reads that volume: it writes nothing, executes nothing and
 -- reaches no host path, network or registry beyond the one volume it was given.
 local fs = require("fs")
 local json = require("json")
 local bounds = require("bounds")
 local M = {}
-M.VOLUME = "bee:docs_corpus"
 M.MANIFEST = "manifest.json"
 M.SCHEMA = "bee.docs-corpus@1"
 -- Bounds, in one place, matching the request decoder and the tool description.
@@ -21,8 +20,8 @@ type Excerpt = {id: string, title: string, topic: string, section: string, line:
 -- Opens the corpus volume. The volume does not require release; the system
 -- detaches it with the filesystem. A missing volume is a build fault, not a
 -- caller fault, and is reported as such.
-function M.open(): (any?, string?)
-    local volume, volume_error = fs.get(M.VOLUME)
+function M.open(resource: string): (any?, string?)
+    local volume, volume_error = fs.get(resource)
     if not volume then return nil, "documentation corpus is unavailable: " .. tostring(volume_error) end
     return volume, nil
 end

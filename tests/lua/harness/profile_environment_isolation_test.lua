@@ -176,7 +176,7 @@ local function define_tests()
 
                 local workspace = fresh("profile-workspace")
                 call("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"})
-                call("bee.credentials:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}})
+                call("bee.credentials.binding:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}})
                 local alpha = call("bee.harness.launch:start", {request_id = fresh("profile-alpha"), definition_ref = ALPHA, workspace_id = workspace, brief = "ping"})
                 attempts[#attempts + 1] = tostring(alpha.attempt_id)
                 local beta = call("bee.harness.launch:start", {request_id = fresh("profile-beta"), definition_ref = BETA, workspace_id = workspace, brief = "ping"})

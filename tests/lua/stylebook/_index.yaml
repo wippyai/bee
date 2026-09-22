@@ -12,4 +12,4 @@ entries:
   imports:
     test: wippy.test:test
     view: bee.stylebook:view
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance

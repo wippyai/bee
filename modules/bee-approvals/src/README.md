@@ -19,9 +19,9 @@ request lifetime: an exhausted delivery stays visible and a manager returns it
 to the queue; settled requests are forgotten after the retention window
 together with their deduplication receipts.
 
-The authority process `bee.approvals:authority` establishes the node's
-authority incarnation before any request is served; a restart is a new
-incarnation. An effect owner presents the incarnation it observed; an
+The authority service starts `bee.approvals.service:authority`, which registers
+the stable owner name `bee.approvals.authority` before any request is served;
+a restart is a new incarnation. An effect owner presents the incarnation it observed; an
 observation of an older authority, or a decision made under one, returns
 `REVALIDATE` naming the current incarnation. The effect owner re-checks the
 decision in its own domain and calls `revalidate`, which records the
@@ -37,7 +37,16 @@ one effect key. Retention forgets a request only after its lifetime plus the
 retention window, with every delivery acknowledged; an idempotency key older
 than that horizon creates a fresh request.
 
-Approver policies are host-owned under `bee.approvals:approver_policies`:
+Approver policies are host-owned under `bee:approver_policies`:
 each names its approvers and the longest lifetime a request may ask for. An
 approver needs both the `bee.approvals.decide` action on the workspace and a
 place in the policy. Workspace membership alone exposes nothing.
+
+| Slice | Responsibility |
+|---|---|
+| root `bee.approvals` | Contract, stable local binding, linked host references, default database and the owner domain library |
+| `binding/` | Callable approval operations, including the Hive policy operations |
+| `persist/` | Durable thread-projection outbox |
+| `registry/` | Linked database and host-policy readers |
+| `migrations/` | Immutable approval schema ledger |
+| `service/` | Authority and outbox worker processes |

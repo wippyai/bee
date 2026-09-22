@@ -87,7 +87,7 @@ entries:
   method: run
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
@@ -100,7 +100,7 @@ entries:
   method: natural
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
@@ -112,7 +112,7 @@ entries:
   method: checkpoint_ack
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
@@ -165,7 +165,7 @@ entries:
   method: select
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
@@ -214,7 +214,7 @@ entries:
   method: retained
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:

@@ -58,7 +58,7 @@ local other = caller(OTHER, {"bee:credential_issue_policy"})
 local runner = caller(RUNNER, {"bee:credential_materialize_policy"})
 local outsider = caller("bee.test.cred.outsider", {})
 local function call(client: funcs.Executor, method: string, value: unknown): broker.Reply
-    local reply, err = client:call("bee.credentials:" .. method, value)
+    local reply, err = client:call("bee.credentials.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: broker.Reply
 end

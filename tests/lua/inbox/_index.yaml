@@ -13,7 +13,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.approvals:request, bee.approvals:decide, bee.approvals:withdraw, bee.approvals:read, bee.approvals:inbox, bee.approvals:list, bee.approvals:consume, bee.approvals:revalidate, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:read, bee.approvals.binding:inbox, bee.approvals.binding:list, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
     effect: allow
 - name: model_test
   kind: function.lua
@@ -44,7 +44,7 @@ entries:
     test: wippy.test:test
     model: bee.inbox:model
     view: bee.inbox:view
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: surface_test
   kind: function.lua
   source: file://surface_test.lua
@@ -59,7 +59,7 @@ entries:
     view: bee.inbox:view
     inbox: bee.inbox:client
     caller: bee.application:caller
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: admission_probe
   kind: process.lua
   source: file://admission_probe.lua

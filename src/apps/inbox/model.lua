@@ -102,7 +102,7 @@ function M.new(workspaces: {string}): State
 end
 -- inbox_intent: the next bounded page of one workspace's changes.
 function M.inbox_intent(state: State, workspace: string): Intent
-    return {target = "bee.approvals:inbox", request = {workspace_id = workspace, after_seq = state.cursors[workspace] or 0, limit = M.INBOX_PAGE}}
+    return {target = "bee.approvals.binding:inbox", request = {workspace_id = workspace, after_seq = state.cursors[workspace] or 0, limit = M.INBOX_PAGE}}
 end
 local function keep(state: State, view: Object, seq: integer)
     local row = M.summary(view, seq)
@@ -190,7 +190,7 @@ end
 -- read_intent: the selected request's current view from the owner.
 function M.read_intent(state: State): Intent?
     if not state.selected then return nil end
-    return {target = "bee.approvals:read", request = {approval_id = state.selected}}
+    return {target = "bee.approvals.binding:read", request = {approval_id = state.selected}}
 end
 -- Bind the shell's question to exactly the owner revision the user opened.
 function M.confirmation(state: State): Confirmation?
@@ -238,7 +238,7 @@ function M.decision_intent(state: State, request_id: string, decision: string): 
     if detail.state ~= "pending" then return nil, "the request is " .. M.text(detail.state, 40) end
     local revision = integer(detail.revision)
     state.pending = {kind = "decide", request_id = request_id, approval_id = state.selected :: string, revision = revision, decision = decision}
-    return {target = "bee.approvals:decide", request = {approval_id = state.selected, expected_revision = revision, decision = decision, proposal_digest = detail.proposal_digest}}, nil
+    return {target = "bee.approvals.binding:decide", request = {approval_id = state.selected, expected_revision = revision, decision = decision, proposal_digest = detail.proposal_digest}}, nil
 end
 -- withdraw_intent: the pending request whose detail is loaded; the owner
 -- alone knows whether the viewer is its requester and refuses otherwise.
@@ -248,7 +248,7 @@ function M.withdraw_intent(state: State, request_id: string): (Intent?, string?)
     if not detail or not state.selected or detail.approval_id ~= state.selected then return nil, "open the request before withdrawing" end
     if detail.state ~= "pending" then return nil, "the request is " .. M.text(detail.state, 40) end
     state.pending = {kind = "withdraw", request_id = request_id, approval_id = state.selected :: string, revision = integer(detail.revision), decision = nil}
-    return {target = "bee.approvals:withdraw", request = {approval_id = state.selected}}, nil
+    return {target = "bee.approvals.binding:withdraw", request = {approval_id = state.selected}}, nil
 end
 local function outcome_text(view: Object): string
     local state = M.text(view.state, 40)
@@ -294,7 +294,7 @@ end
 function M.recovery_intent(state: State): Intent?
     local pending = state.pending
     if not pending then return nil end
-    return {target = "bee.approvals:read", request = {approval_id = pending.approval_id}}
+    return {target = "bee.approvals.binding:read", request = {approval_id = pending.approval_id}}
 end
 function M.apply_recovery(state: State, reply: Reply)
     local pending = state.pending

@@ -51,7 +51,7 @@ local function admitted_scope(): security.Scope
     return security.new_scope(policies_of(names))
 end
 local function install_policy()
-    local entry = registry.get("bee.approvals:approver_policies")
+    local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
     local data = entry.data :: Object
     local policies = data.policies :: {Object}
@@ -76,7 +76,7 @@ local function requester(): funcs.Executor
     return funcs.new():with_actor(security.new_actor(REQUESTER)):with_scope(security.new_scope(policies_of({"bee.inbox:client_test_policy", "bee:approval_request_policy"})))
 end
 local function file(workspace: string, policy: string?): string
-    local reply, err = requester():call("bee.approvals:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = policy or POLICY,
+    local reply, err = requester():call("bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = policy or POLICY,
         proposal = {kind = "attempt", ref = "attempt-" .. key(), revision = "r1", action_id = "action-1", payload = {tool_name = "Bash"}}, prompt = {text = "touch proof.txt"}})
     if err then error("request: " .. tostring(err)) end
     local typed = reply :: {ok: boolean, error: {code: string}?, value: Object}
@@ -135,7 +135,7 @@ local function define_tests()
             test.eq(approver.visible, 1)
             test.eq(approver.decide, "ok")
             test.is_true(starts(approver.store_after_decide, "denied"))
-            local record = requester():call("bee.approvals:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
+            local record = requester():call("bee.approvals.binding:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
             test.eq(record.value.decision, "denied")
             test.eq(record.value.decider_id, ALICE)
         end)
@@ -159,7 +159,7 @@ local function define_tests()
             local approver = probe(app_actor, {workspace_id = workspace, approval_id = approval_id, decide = true, decision = "approved"}, app_metadata)
             test.eq(approver.visible, 1)
             test.eq(approver.decide, "ok")
-            local record = requester():call("bee.approvals:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
+            local record = requester():call("bee.approvals.binding:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
             test.eq(record.value.decider_id, app_actor)
         end)
     end)

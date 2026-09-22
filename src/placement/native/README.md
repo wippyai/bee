@@ -203,7 +203,7 @@ those writes uncertain; the recipient must not write them again on its own.
 ## Credential projections
 
 A launch names credential projection ids. `prepare` checks each binding
-through `bee.credentials:check` for the owner it admitted with the attempt
+through `bee.credentials.binding:check` for the owner it admitted with the attempt
 as scope. Environment projections materialize right before the child starts
 at the provider's fixed environment destination. An absent optional environment
 projection is validated and omitted; placement never creates an empty variable.

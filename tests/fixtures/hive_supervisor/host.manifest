@@ -32,8 +32,8 @@ entries:
   policy:
     actions: [hive.expose.policy]
     resources: [bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after,
-      bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide,
-      bee.approvals:withdraw, bee.sync:replica_receive]
+      bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide,
+      bee.approvals.binding:withdraw, bee.sync:replica_receive]
     effect: allow
 - name: hive_replica_admission_policy
   kind: security.policy
@@ -48,8 +48,8 @@ entries:
     actions: [registry.get, system.read, funcs.call]
     resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check,
       bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after,
-      bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide,
-      bee.approvals:withdraw, bee.sync:replica_receive]
+      bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide,
+      bee.approvals.binding:withdraw, bee.sync:replica_receive]
     effect: allow
 - name: hive_names_policy
   kind: security.policy

@@ -61,7 +61,7 @@ entries:
     lifecycle: bee.client:lifecycle
     interaction: bee.application:interaction
     physical: bee.terminal:display
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: local
   kind: process.lua
   source: file://main.lua
@@ -127,7 +127,7 @@ entries:
     decode: bee.protocol:decode
     contract: bee.protocol:application
     model: bee.desktop:model
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: list_desktops
   kind: function.lua
   source: file://desktop_storage.lua
@@ -153,7 +153,7 @@ entries:
   source: file://node_appearance.lua
   modules: [funcs, channel]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: assignments
   kind: library.lua
   source: file://assignments.lua

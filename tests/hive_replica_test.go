@@ -274,7 +274,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 				t.Fatal(err)
 			}
 
-			approvalsPath := filepath.Join(project, "src", "approvals", "_index.yaml")
+			approvalsPath := filepath.Join(project, "src", "approvals", "host", "_index.yaml")
 			approvals, err := os.ReadFile(approvalsPath)
 			if err != nil {
 				t.Fatal(err)

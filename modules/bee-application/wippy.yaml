@@ -1,0 +1,9 @@
+organization: bee
+module: application
+type: library
+version: 0.1.0-dev
+description: Public application SDK values, presentation helpers, and bounded thread facade messages for Bee
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

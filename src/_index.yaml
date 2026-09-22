@@ -13,6 +13,17 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: 0.1.0-dev
+- name: dependency_application
+  kind: ns.dependency
+  component: bee/application
+  version: 0.1.0-dev
+- name: dependency_docs
+  kind: ns.dependency
+  component: bee/docs
+  version: 0.1.0-dev
+  parameters:
+  - name: target_corpus
+    value: bee:docs_corpus
 - name: dependency_resources
   kind: ns.dependency
   component: bee/resources
@@ -22,6 +33,28 @@ entries:
     value: bee.resources:db
   - name: target_roots
     value: bee:resource_roots
+- name: dependency_placement
+  kind: ns.dependency
+  component: bee/placement
+  version: 0.1.0-dev
+- name: dependency_credentials
+  kind: ns.dependency
+  component: bee/credentials
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.credentials:db
+  - name: target_sources
+    value: bee:credential_sources
+- name: dependency_approvals
+  kind: ns.dependency
+  component: bee/approvals
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.approvals:db
+  - name: target_policies
+    value: bee:approver_policies
 - name: workers
   kind: process.host
   host:

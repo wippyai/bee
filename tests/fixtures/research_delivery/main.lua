@@ -187,7 +187,7 @@ local function main()
     }
     act_entry.data = act_data
 
-    local app_entry = assert(registry.get("bee.approvals:approver_policies"))
+    local app_entry = assert(registry.get("bee:approver_policies"))
     local app_data = object(app_entry.data) or {}
     local app_policies = app_data.policies
     if type(app_policies) ~= "table" then error("host approval policies missing") end
@@ -303,7 +303,7 @@ local function main()
 
     -- 4 TEST OPERATOR decides exact approval_id/proposal_digest (never expose this to Gemini).
     --   destination_call step until settled applied.
-    call_api("bee.approvals:decide", {
+    call_api("bee.approvals.binding:decide", {
         approval_id = approval_id,
         expected_revision = 1,
         decision = "approved",

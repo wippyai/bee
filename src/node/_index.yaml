@@ -36,7 +36,7 @@ entries:
   source: file://protocol.lua
   imports:
     bounds: bee.threads.records:bounds
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: resources
   kind: library.lua
   source: file://resources.lua
@@ -54,7 +54,7 @@ entries:
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 - name: store_policy
   kind: security.policy
   policy:

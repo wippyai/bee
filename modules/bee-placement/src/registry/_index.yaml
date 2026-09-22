@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.placement.registry
+entries:
+- name: resolver
+  kind: library.lua
+  source: file://resolver.lua
+  modules: [hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    types: bee.placement:types

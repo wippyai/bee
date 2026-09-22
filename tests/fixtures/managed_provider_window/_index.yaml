@@ -112,7 +112,7 @@ entries:
   - json
   - registry
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
   security:
     policies:
     - bee:desktop_policy

@@ -143,7 +143,7 @@ local function configure(workspace_id: string, local_node: string)
                 kinds = {"function.lua"}, databases = {}, grants = {}, modules = {}}}}
     activation.data = activation_data
 
-    local approvers = assert(registry.get("bee.approvals:approver_policies"))
+    local approvers = assert(registry.get("bee:approver_policies"))
     local approver_data = object(approvers.data)
     local policies = approver_data.policies :: {unknown}
     policies[#policies + 1] = {name = APPROVAL_POLICY,

@@ -1,0 +1,174 @@
+version: '1.0'
+namespace: bee.approvals.binding
+entries:
+- name: request
+  kind: function.lua
+  source: file://request_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: feed_snapshot
+  kind: function.lua
+  source: file://feed_snapshot_method.lua
+  method: handle
+  imports: {service: bee.approvals:service}
+  security: {policies: [bee:approval_store_policy]}
+  meta:
+    hive: policy
+    hive_operation:
+      revision: '1'
+      title: Authorized approval snapshot
+      input:
+        type: object
+        additionalProperties: false
+        required: [workspace_id]
+        properties:
+          workspace_id: {type: string}
+          limit: {type: integer, minimum: 1, maximum: 64}
+          after_key: {type: string}
+          expected_cursor: {type: integer, minimum: 0}
+          expected_scope_revision: {type: string}
+      output: &approval_reply
+        type: object
+        additionalProperties: false
+        properties:
+          ok: {type: boolean}
+          error: {type: object}
+          value: {}
+          replayed: {type: boolean}
+- name: feed_read_after
+  kind: function.lua
+  source: file://feed_read_after_method.lua
+  method: handle
+  imports: {service: bee.approvals:service}
+  security: {policies: [bee:approval_store_policy]}
+  meta:
+    hive: policy
+    hive_operation:
+      revision: '1'
+      title: Authorized approval changes
+      input:
+        type: object
+        additionalProperties: false
+        required: [workspace_id, cursor, expected_scope_revision]
+        properties:
+          workspace_id: {type: string}
+          cursor: {type: integer, minimum: 0}
+          limit: {type: integer, minimum: 1, maximum: 64}
+          expected_scope_revision: {type: string}
+      output: *approval_reply
+- name: decide
+  kind: function.lua
+  meta:
+    hive: policy
+    hive_operation:
+      revision: '1'
+      title: Decide one exact approval
+      input:
+        type: object
+        additionalProperties: false
+        required: [approval_id, expected_revision, decision, proposal_digest]
+        properties:
+          approval_id: {type: string}
+          expected_revision: {type: integer, minimum: 1}
+          decision: {type: string, enum: [approved, denied]}
+          proposal_digest: {type: string}
+          response: {}
+      output: *approval_reply
+  source: file://decide_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: withdraw
+  kind: function.lua
+  meta:
+    hive: policy
+    hive_operation:
+      revision: '1'
+      title: Withdraw own approval request
+      input: {type: object, additionalProperties: false, required: [approval_id], properties: {approval_id: {type: string}}}
+      output: *approval_reply
+  source: file://withdraw_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: consume
+  kind: function.lua
+  source: file://consume_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: revalidate
+  kind: function.lua
+  source: file://revalidate_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: read
+  kind: function.lua
+  meta:
+    hive: policy
+    hive_operation:
+      revision: '1'
+      title: Read authorized approval request
+      input: {type: object, additionalProperties: false, required: [approval_id], properties: {approval_id: {type: string}}}
+      output: *approval_reply
+  source: file://read_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: inbox
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: list
+  kind: function.lua
+  source: file://list_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: reconcile
+  kind: function.lua
+  source: file://reconcile_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: capabilities
+  kind: function.lua
+  source: file://capabilities_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee:approval_store_policy]
+- name: deliveries
+  kind: function.lua
+  source: file://deliveries_method.lua
+  method: handle
+  modules: [security]
+  imports:
+    bounds: bee.threads.records:bounds
+    service: bee.approvals:service
+    outbox: bee.approvals.persist:outbox
+  security:
+    policies: [bee:approval_store_policy]

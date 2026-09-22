@@ -39,7 +39,7 @@ local function main()
         access = {workspace_id = "research-workspace", policy = "live-research", traits = {"research:record"}}}
     local changes = registry.snapshot():changes()
     changes:update(policy)
-    local approvers = registry.get("bee.approvals:approver_policies")
+    local approvers = registry.get("bee:approver_policies")
     if not approvers then error("approval policies missing") end
     local approver_data = bounds.object(approvers.data)
     if not approver_data then error("approval policy data missing") end
@@ -78,7 +78,7 @@ local function main()
         if selected.channel == tick then
             -- This is the test operator, not the MCP subject scope. It approves
             -- only this exact live attempt's expected capability through inbox.
-            local inbox = call("bee.approvals:inbox", {workspace_id = "research-workspace", after_seq = inbox_cursor})
+            local inbox = call("bee.approvals.binding:inbox", {workspace_id = "research-workspace", after_seq = inbox_cursor})
             local entries = inbox.changes
             if type(entries) ~= "table" then error("inbox changes missing") end
             for _, raw in ipairs(entries) do
@@ -91,7 +91,7 @@ local function main()
                     if approved or request.requester_id ~= actor or request.thread_id ~= thread or not proposed
                         or proposed.action_id ~= started.action_id or proposed.ref ~= started.attempt_id
                         or not traits or #traits ~= 1 or traits[1] ~= "research:record" then error("unexpected access request") end
-                    call("bee.approvals:decide", {approval_id = request.approval_id, expected_revision = request.revision,
+                    call("bee.approvals.binding:decide", {approval_id = request.approval_id, expected_revision = request.revision,
                         proposal_digest = request.proposal_digest, decision = "approved"})
                     approved = true
                 end

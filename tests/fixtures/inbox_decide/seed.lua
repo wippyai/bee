@@ -23,7 +23,7 @@ local function main()
     local plan = helper.selected_plan(plans)
     helper.close(plans)
     local proposal, proposal_digest = helper.proposal(plan)
-    local requested = call("bee.approvals:request", {workspace_id = helper.WORKSPACE,
+    local requested = call("bee.approvals.binding:request", {workspace_id = helper.WORKSPACE,
         idempotency_key = "inbox-decide-request", request_kind = "permission", policy = helper.POLICY,
         proposal = proposal, prompt = {text = helper.PROMPT}})
     if requested.proposal_digest ~= proposal_digest then

@@ -36,6 +36,17 @@ const (
 	desktopApplication = "bee.harness.window:app"
 )
 
+// ownerComponents returns the boot components the owner route adds. The
+// enrollment publisher is owner-only: it writes the host-owned Hive enrollment
+// entry from the trusted directory the client writes into.
+func ownerComponents(state string) ([]boot.Component, error) {
+	publisher, err := enrollmentPublisher(state)
+	if err != nil {
+		return nil, err
+	}
+	return []boot.Component{publisher}, nil
+}
+
 // prepareOwner opens the owner's retained host resources. The runtime calls it
 // as the host's Plan.Prepare under the real application state lock, so it runs
 // once per owner boot and its release runs after shutdown while that lock is

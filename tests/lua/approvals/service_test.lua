@@ -144,18 +144,33 @@ local function thread(): string
     if not typed.ok then error("create thread: " .. tostring(typed.error and typed.error.message)) end
     return thread_id
 end
-local function thread_records(thread_id: string): {{[string]: unknown}}
-    local reply, err = requester:call("bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"approval.request", "approval.transition"}}})
+local function records_of(thread_id: string, kinds: {string}): {{[string]: unknown}}
+    local reply, err = requester:call("bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = kinds}})
     if err then error("read thread: " .. tostring(err)) end
     local typed = reply :: service.Reply
     if not typed.ok then error("read thread: " .. tostring(typed.error and typed.error.message)) end
     local page = typed.value :: {[string]: unknown}
     return page.records :: {{[string]: unknown}}
 end
+local function thread_records(thread_id: string): {{[string]: unknown}}
+    return records_of(thread_id, {"approval.request", "approval.transition"})
+end
+local function thread_notices(thread_id: string): {{[string]: unknown}}
+    return records_of(thread_id, {"message"})
+end
 local function until_records(thread_id: string, count: integer): {{[string]: unknown}}
     local records: {{[string]: unknown}} = {}
     for _ = 1, 100 do
         records = thread_records(thread_id)
+        if #records >= count then return records end
+        time.sleep("50ms")
+    end
+    return records
+end
+local function until_notices(thread_id: string, count: integer): {{[string]: unknown}}
+    local records: {{[string]: unknown}} = {}
+    for _ = 1, 100 do
+        records = thread_notices(thread_id)
         if #records >= count then return records end
         time.sleep("50ms")
     end
@@ -407,11 +422,36 @@ local function define_tests()
             test.eq(body.expected_revision, 1)
             test.eq((body.response :: {[string]: unknown}).text, "go")
             local acked = value(call(requester, "deliveries", {approval_id = approval_id})).deliveries :: {{[string]: unknown}}
-            test.eq(#acked, 2)
+            test.eq(#acked, 3)
             test.eq(acked[2].acknowledged_at ~= nil, true)
+            test.eq(acked[3].event_id, approval_id .. ":2:notice")
+            test.eq(acked[3].kind, "message")
             test.eq(code(call(requester, "deliveries", {approval_id = approval_id, redeliver = approval_id .. ":2"})), "DENIED")
             test.eq(code(call(manager, "deliveries", {approval_id = approval_id, redeliver = approval_id .. ":2"})), "INVALID_STATE")
             test.eq(#thread_records(thread_id), 2)
+            -- The transition record owes nobody anything, so the outcome is
+            -- also addressed to the requester: the obligation it creates is
+            -- what the delivery layer carries to the waiting agent.
+            local notices = until_notices(thread_id, 1)
+            test.eq(#notices, 1)
+            local notice = notices[1].body :: {[string]: unknown}
+            test.eq(notice.message_kind, "notification")
+            test.eq(notice.sender_id, service.WORKER_NAME)
+            test.eq((notice.recipient_ids :: {string})[1], REQUESTER)
+            test.eq((notice.content :: {[string]: unknown}).text, "Approval " .. approval_id .. " is approved.")
+            local claimed = thread_harness.value(launcher:call("claim", {thread_id = thread_id, idempotency_key = key(), consumer_id = "inbox", limit = 4}))
+            local pending = claimed.deliveries :: {{[string]: unknown}}
+            test.eq(#pending, 1)
+            test.eq(pending[1].message_id, notice.message_id)
+            -- A refusal is announced on the same path: what leaves an agent
+            -- waiting is the silence, not the answer.
+            local refused = value(call(requester, "request", request_of(workspace, {thread_id = thread_id})))
+            local refused_id = refused.approval_id :: string
+            value(call(alice, "decide", {approval_id = refused_id, expected_revision = 1, decision = "denied", proposal_digest = refused.proposal_digest}))
+            local both = until_notices(thread_id, 2)
+            test.eq(#both, 2)
+            local denial = both[2].body :: {[string]: unknown}
+            test.eq((denial.content :: {[string]: unknown}).text, "Approval " .. refused_id .. " is denied.")
         end)
         test.it("survives a crash between the thread commit and the outbox acknowledgement without a duplicate record", function()
             local workspace = "ws-" .. key()

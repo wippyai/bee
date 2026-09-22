@@ -804,6 +804,19 @@ local function define_tests()
             changed_policy.gateway_hooks = {"SessionStart", "Stop"}
             changed_policy.prepare_options = {sandbox = "read-only"}
             local ok, failure = pcall(function()
+                local workspace_id, saved_id = workspace, fresh("named-profile")
+                -- The named profile file lives in a throwaway Codex home, never
+                -- the owner's. Only existence is checked; the suite writes it.
+                local root = shell("pwd"):gsub("%s+$", "")
+                local codex_home = root .. "/.wippy/named-profile-" .. saved_id .. "/.codex"
+                shell("mkdir -p " .. codex_home)
+                -- shell() wraps this in sh -c '...'; a single-quoted printf
+                -- would close that wrapper and write nothing.
+                shell("printf \"model = \\\"fixture\\\"\\n\" > " .. codex_home .. "/ds-flash.config.toml")
+                -- The throwaway home is committed with the policy, so the
+                -- prepared launch never falls back to the runner's own home.
+                changed_policy.environment = {CODEX_HOME = codex_home}
+                changed_policy.environment_refs = nil
                 definition_entry.data = changed_definition
                 codex_policy.data = changed_policy
                 local changes = registry.snapshot():changes()
@@ -811,16 +824,6 @@ local function define_tests()
                 changes:update(codex_policy)
                 local applied, apply_error = changes:apply()
                 if not applied then error("configure codex named profile: " .. tostring(apply_error)) end
-                local workspace_id, saved_id = workspace, fresh("named-profile")
-                -- The named profile file lives in a throwaway Codex home, never
-                -- the owner's. Only existence is checked; the suite writes it.
-                local root = shell("pwd"):gsub("%s+$", "")
-                local codex_home = root .. "/.wippy/named-profile-" .. saved_id .. "/.codex"
-                shell("mkdir -p " .. codex_home)
-                shell("printf 'model = \"fixture\"\n' > " .. codex_home .. "/ds-flash.config.toml")
-                changed_policy.environment = {CODEX_HOME = codex_home}
-                changed_policy.environment_refs = nil
-                codex_policy.data = changed_policy
                 value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"),
                     profile = {title = "DeepSeek Flash", definition_ref = DEFINITION, options = {config_profile = "ds-flash"}, mcp_tools = {"thread_read"}}}))

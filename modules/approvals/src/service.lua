@@ -207,8 +207,28 @@ local function thread_state(state: string, decision: string?): string
     if state == "withdrawn" then return "cancelled" end
     return state
 end
+-- One outbox row: the durable intent to project one body into the thread
+-- under a stable event id. The row commits with the change it describes, so
+-- a decision is never recorded without its projection being owed.
+local function enqueue(tx: sql.Transaction, event_id: string, approval_id: string, revision: integer, thread_id: string, kind: string,
+    body: Object, context_json: string?, now: integer, at: string): string?
+    local encoded, encode_error = canonical.encode(body)
+    if not encoded then return "encode projection: " .. tostring(encode_error) end
+    local _, outbox_error = tx:execute("INSERT INTO bee_approval_outbox (event_id, approval_id, revision, thread_id, kind, body_json, context_json, attempts, next_attempt_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+        {event_id, approval_id, revision, thread_id, kind, encoded, context_json, now, at})
+    if outbox_error then return "record outbox delivery" end
+    return nil
+end
+-- A transition record owes nobody anything: only a message commit creates
+-- the recipient obligation the delivery layer carries. So the outcome is
+-- also addressed to the requester, who is the thread member that asked.
+local function notice_of(row: Row, revision: integer, outcome: string): Object
+    local approval_id = text(row.approval_id) or ""
+    return {message_id = approval_id .. ":" .. tostring(revision) .. ":notice", message_kind = "notification",
+        recipient_ids = {text(row.requester_id) or ""}, content = {text = "Approval " .. approval_id .. " is " .. outcome .. "."}}
+end
 -- Every change is one revision: the history row, the inbox change and,
--- when the request projects onto a thread, the outbox row all commit with it.
+-- when the request projects onto a thread, the outbox rows all commit with it.
 local function record_change(tx: sql.Transaction, row: Row, revision: integer, state: string, decision: string?, actor: string, reason: string, now: integer, body: Object?): string?
     local approval_id, workspace_id = text(row.approval_id) or "", text(row.workspace_id) or ""
     local at = stamp(now)
@@ -221,14 +241,23 @@ local function record_change(tx: sql.Transaction, row: Row, revision: integer, s
     if thread_id and body then
         local kind = "approval.transition"
         if state == "pending" then kind = "approval.request" end
-        local encoded, encode_error = canonical.encode(body)
-        if not encoded then return "encode projection: " .. tostring(encode_error) end
         local context_json: string? = nil
         local binding = bounds.object(decode(row.binding_json))
         if binding and binding.attempt_id then context_json = canonical.encode({action_id = binding.action_id, attempt_id = binding.attempt_id}) end
-        local _, outbox_error = tx:execute("INSERT INTO bee_approval_outbox (event_id, approval_id, revision, thread_id, kind, body_json, context_json, attempts, next_attempt_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
-            {approval_id .. ":" .. tostring(revision), approval_id, revision, thread_id, kind, encoded, context_json, now, at})
-        if outbox_error then return "record outbox delivery" end
+        local event_id = approval_id .. ":" .. tostring(revision)
+        local queued = enqueue(tx, event_id, approval_id, revision, thread_id, kind, body, context_json, now, at)
+        if queued then return queued end
+        -- Every terminal outcome is announced, a denial and an expiry as
+        -- much as an approval: what leaves an agent waiting is not the
+        -- refusal but the silence. The notice is a side effect of the
+        -- decision and never a condition of it, so it rides the same outbox:
+        -- a thread that refuses it retries and finally exhausts that row in
+        -- view of `deliveries`, while the decision recorded here stands.
+        if state ~= "pending" then
+            local announced = enqueue(tx, event_id .. ":notice", approval_id, revision, thread_id, "message",
+                notice_of(row, revision, thread_state(state, decision)), context_json, now, at)
+            if announced then return announced end
+        end
     end
     return nil
 end

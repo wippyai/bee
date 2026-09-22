@@ -199,6 +199,21 @@ function M.intend(db: sql.DB, request: types.LaunchRequest, digest: string, enco
         local existing, existing_error = M.by_key(db, request.owner_id, request.idempotency_key)
         if existing_error then return {ok = false, code = "STORAGE", message = existing_error} end
         if existing and existing.request_digest == digest then return {ok = true, attempt = project(existing)} end
+        -- The attempt id is the durable identity and its uniqueness is not
+        -- scoped to an owner, while the replay lookup above is. So a launch
+        -- that repeats a request identity an earlier run already recorded is
+        -- refused here by the primary key, and reporting the idempotency key
+        -- names the one thing that did not refuse it. Say which attempt held
+        -- the identity, so the caller knows a new run needs a new one.
+        local recorded, recorded_error = M.row(db, request.attempt_id)
+        if recorded_error then return {ok = false, code = "STORAGE", message = recorded_error} end
+        if recorded then
+            local owner = text(recorded.owner_id) or ""
+            if owner ~= request.owner_id then
+                return {ok = false, code = "CONFLICT", message = "attempt " .. request.attempt_id .. " is already recorded by owner " .. owner .. "; a new run needs a new request identity"}
+            end
+            return {ok = false, code = "CONFLICT", message = "attempt " .. request.attempt_id .. " is already recorded under a different request"}
+        end
         return {ok = false, code = "CONFLICT", message = "attempt or idempotency key already recorded"}
     end
     if not inserted or integer(inserted.rows_affected) ~= 1 then

@@ -7,13 +7,12 @@ local system = require("system")
 local M = {}
 M.DATABASE_REF = "bee.placement.native:database_ref"
 M.ROOT_REF = "bee.placement.native:root_ref"
-M.EXECUTOR = "bee.placement.native:executor"
 M.RUNNER = "bee.placement.native:runner"
 M.RUNNER_HOST_REF = "bee.placement.native:runner_host_ref"
-M.ADMITTED_ROOTS = "bee.placement.native:admitted_roots"
--- The host filesystem, read for executable measurement only.
-M.HOST_FILES = "bee.placement.native:host_files"
-M.RESOURCE_MODE = "bee.placement.native:resource_mode"
+M.EXECUTOR_REF = "bee.placement.native:executor_ref"
+M.HOST_FILES_REF = "bee.placement.native:host_files_ref"
+M.ADMITTED_ROOTS_REF = "bee.placement.native:admitted_roots_ref"
+M.RESOURCE_MODE_REF = "bee.placement.native:resource_mode_ref"
 M.RESOLVE = "bee.resources.binding:resolve"
 M.CREDENTIAL_CHECK = "bee.credentials.binding:check"
 M.CREDENTIAL_MATERIALIZE = "bee.credentials.binding:materialize"
@@ -40,12 +39,20 @@ end
 function M.runner_host(): (string?, string?)
     return reference(M.RUNNER_HOST_REF, "host_ref", "placement runner host")
 end
+function M.executor(): (string?, string?)
+    return reference(M.EXECUTOR_REF, "resource_ref", "placement executor")
+end
+function M.host_files(): (string?, string?)
+    return reference(M.HOST_FILES_REF, "resource_ref", "host files")
+end
 -- The host's admitted resource roots: fs.directory entries a launch may
 -- name, each with the widest access the host allows. This is host policy,
 -- not a delegated grant; a request naming any other root or wider access
 -- is refused at prepare.
 function M.admitted_roots(): ({[string]: string}?, string?)
-    local entry, err = registry.get(M.ADMITTED_ROOTS)
+    local root_ref, root_error = reference(M.ADMITTED_ROOTS_REF, "resource_ref", "admitted roots")
+    if not root_ref then return nil, root_error end
+    local entry, err = registry.get(root_ref)
     if err or not entry then return nil, "admitted roots unavailable" end
     local data = entry.data
     local roots: {[string]: string} = {}
@@ -64,7 +71,9 @@ end
 -- The host's resource mode: host_configured roots, or grants resolved by
 -- the resource authority. The host selects it; a request cannot.
 function M.resource_mode(): string
-    local entry, err = registry.get(M.RESOURCE_MODE)
+    local mode_ref = reference(M.RESOURCE_MODE_REF, "resource_ref", "resource mode")
+    if not mode_ref then return "host_configured" end
+    local entry, err = registry.get(mode_ref)
     if err or not entry then return "host_configured" end
     local data = entry.data
     local mode = type(data) == "table" and data.mode or nil

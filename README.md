@@ -181,9 +181,11 @@ make standalone BEE_VERSION=0.1.0-alpha.1
 ./dist/bee
 ```
 
-Production loads the root and selected components' `src/` trees. The standalone executable contains exact,
-checksummed application packs and the two small native boundaries Bee needs for
-host launch facts and operating-system I/O events.
+Development loads the root and selected components' `src/` trees. `make native-pack`
+creates one checksummed WAPP for `bee/bee` and every physical dependency, plus a
+source-free local deployment. The standalone executable embeds that same exact
+pack set and the two small native boundaries Bee needs for host launch facts and
+operating-system I/O events.
 
 | Source | Owner |
 |---|---|
@@ -195,6 +197,7 @@ host launch facts and operating-system I/O events.
 | [`modules/hub`](modules/hub) | Package inspection, planning, apply, migration, and receipts |
 | [`modules/threads/src`](modules/threads/src) | Durable records, subscriptions, and delivery |
 | [`modules/docs/src`](modules/docs/src) | Offline documentation protocol and read-only corpus facade |
+| [`modules/placement-native/src`](modules/placement-native/src) | Native launch attempts, receipts, materialization, supervision, and cleanup |
 | [`modules/sync/src`](modules/sync/src) | Owner-local synchronized projections and immutable replica storage |
 | [`modules/node/src`](modules/node/src) | Authorized native-node descriptions and appearance defaults |
 | [`native`](native) | Generic application launch facts and OS I/O events |

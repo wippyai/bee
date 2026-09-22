@@ -27,7 +27,8 @@ end
 -- A CLI definition route uses the same setup and admission operations as an
 -- explicit picker choice. The command resolver supplies only a definition
 -- reference; this actor obtains and fences the current measured plan.
-function M.direct(workspace_id: string, definition_ref: string, origin_view: {view_id: string, instance_id: string}?): (admission.Admitted?, string?)
+function M.direct(workspace_id: string, definition_ref: string, thread_id: string?,
+    origin_view: {view_id: string, instance_id: string}?): (admission.Admitted?, string?)
     local plan, refused = admission.resolve(definition_ref, "window", workspace_id)
     if not plan then return nil, fault(refused) end
     local setup, setup_error = funcs.call("bee.harness.launch:setup", {
@@ -42,7 +43,7 @@ function M.direct(workspace_id: string, definition_ref: string, origin_view: {vi
     if not request_id then return nil, "Agent request identity: " .. tostring(request_error) end
     local admitted, admission_error = admission.admit_request({request_id = request_id,
         definition_ref = definition_ref, expected_plan_digest = plan.plan_digest,
-        workspace_id = workspace_id, brief = "", mode = "window", origin_view = origin_view})
+        workspace_id = workspace_id, thread_id = thread_id, brief = "", mode = "window", origin_view = origin_view})
     if not admitted then return nil, fault(admission_error) end
     return admitted, nil
 end
@@ -198,7 +199,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         local admitted, refused = admission.admit_request({request_id = request.request_id,
                             definition_ref = choice.definition_ref, saved_profile_id = choice.saved_profile_id,
                             saved_profile_revision = choice.saved_profile_revision, expected_plan_digest = choice.plan_digest,
-                            workspace_id = launch.workspace_id, brief = "", mode = "window",
+                            workspace_id = launch.workspace_id, thread_id = launch.thread_id, brief = "", mode = "window",
                             origin_view = {view_id = launch.view_id, instance_id = launch.instance_id}})
                         activations:send({serial = request.serial, admitted = admitted, refused = refused, title = choice.title})
                     end)

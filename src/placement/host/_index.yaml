@@ -1,0 +1,62 @@
+version: '1.0'
+namespace: bee.placement.native
+entries:
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: db_path
+  kind: env.variable
+  storage: bee.placement.native:environment
+  variable: BEE_PLACEMENT_DB
+  default: .wippy/placement.db
+  readonly: true
+- name: root_path
+  kind: env.variable
+  storage: bee.placement.native:environment
+  variable: BEE_PLACEMENT_ROOT
+  default: .wippy/placement
+  readonly: true
+- name: path
+  kind: env.variable
+  storage: bee.placement.native:environment
+  variable: PATH
+  default: /usr/local/bin:/usr/bin:/bin
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.placement.native:db_path}
+  lifecycle:
+    auto_start: true
+- name: root
+  kind: fs.directory
+  directory: ${env:bee.placement.native:root_path}
+  auto_init: true
+  mode: '0700'
+- name: host_files
+  kind: fs.directory
+  meta:
+    comment: The host filesystem as one volume for executable measurement; this entry requests readonly access
+  directory: /
+  auto_init: false
+  readonly: true
+- name: executor
+  kind: exec.native
+  meta:
+    comment: Children start with a clean environment; PATH comes from the host, everything else from the admitted request
+  default_env:
+    PATH: ${env:bee.placement.native:path}
+- name: admitted_roots
+  kind: registry.entry
+  meta:
+    type: bee.placement_roots
+    comment: fs.directory entries a launch may name as resource roots on this host with the widest access allowed; host policy, not a delegated grant
+  data:
+    roots: []
+- name: resource_mode
+  kind: registry.entry
+  meta:
+    type: bee.placement_resource_mode
+    comment: host_configured or granted; selected by the host, never by a request
+  data:
+    mode: granted

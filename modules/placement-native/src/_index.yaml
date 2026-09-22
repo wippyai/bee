@@ -3,11 +3,39 @@ namespace: bee.placement.native
 entries:
 - name: definition
   kind: ns.definition
-  module: placement_native
+  module: placement-native
   readme: file://README.md
   meta:
     title: Bee native placement
     comment: Attempts as native children under a runner process, receipts in an owned SQLite store, homes under a placement root
+- name: dependency_placement
+  kind: ns.dependency
+  component: bee/placement
+  version: '*'
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: dependency_resources
+  kind: ns.dependency
+  component: bee/resources
+  version: '*'
+- name: dependency_credentials
+  kind: ns.dependency
+  component: bee/credentials
+  version: '*'
+- name: dependency_gateway
+  kind: ns.dependency
+  component: bee/gateway
+  version: '*'
 - name: target_db
   kind: ns.requirement
   meta:
@@ -34,6 +62,38 @@ entries:
     path: .host_ref
   - entry: bee.placement.native:sweeper_service
     path: .host
+- name: target_executor
+  kind: ns.requirement
+  meta:
+    comment: Host-selected native executor; a launch request never selects it
+  default: bee.placement.native:executor
+  targets:
+  - entry: bee.placement.native:executor_ref
+    path: .resource_ref
+- name: target_host_files
+  kind: ns.requirement
+  meta:
+    comment: Host-selected read-only filesystem for executable measurement
+  default: bee.placement.native:host_files
+  targets:
+  - entry: bee.placement.native:host_files_ref
+    path: .resource_ref
+- name: target_admitted_roots
+  kind: ns.requirement
+  meta:
+    comment: Host-selected admissible resource roots; a launch request cannot choose this policy
+  default: bee.placement.native:admitted_roots
+  targets:
+  - entry: bee.placement.native:admitted_roots_ref
+    path: .resource_ref
+- name: target_resource_mode
+  kind: ns.requirement
+  meta:
+    comment: Host-selected placement resource mode; a launch request cannot choose it
+  default: bee.placement.native:resource_mode
+  targets:
+  - entry: bee.placement.native:resource_mode_ref
+    path: .resource_ref
 - name: database_ref
   kind: registry.entry
   meta:
@@ -49,82 +109,43 @@ entries:
   meta:
     type: bee.resource_ref
     comment: The linked runner host; process_host fills host_ref
-- name: admitted_roots
+- name: executor_ref
   kind: registry.entry
   meta:
-    type: bee.placement_roots
-    comment: fs.directory entries a launch may name as resource roots on this host with the widest access allowed; host policy, not a delegated grant
-  data:
-    roots: []
-- name: resource_mode
+    type: bee.resource_ref
+    comment: The linked native executor; target_executor fills resource_ref
+- name: host_files_ref
   kind: registry.entry
   meta:
-    type: bee.placement_resource_mode
-    comment: host_configured or granted; selected by the host, never by a request
-  data:
-    mode: granted
-- name: environment
-  kind: env.storage.os
-  lifecycle:
-    auto_start: true
-- name: db_path
-  kind: env.variable
-  storage: bee.placement.native:environment
-  variable: BEE_PLACEMENT_DB
-  default: .wippy/placement.db
-  readonly: true
-- name: root_path
-  kind: env.variable
-  storage: bee.placement.native:environment
-  variable: BEE_PLACEMENT_ROOT
-  default: .wippy/placement
-  readonly: true
-- name: path
-  kind: env.variable
-  storage: bee.placement.native:environment
-  variable: PATH
-  default: /usr/local/bin:/usr/bin:/bin
-  readonly: true
-- name: db
-  kind: db.sql.sqlite
-  file: ${env:bee.placement.native:db_path}
-  lifecycle:
-    auto_start: true
-- name: root
-  kind: fs.directory
-  directory: ${env:bee.placement.native:root_path}
-  auto_init: true
-  mode: '0700'
-- name: host_files
-  kind: fs.directory
+    type: bee.resource_ref
+    comment: The linked read-only host filesystem; target_host_files fills resource_ref
+- name: admitted_roots_ref
+  kind: registry.entry
   meta:
-    comment: The host filesystem as one volume for executable measurement; this entry requests readonly access
-  directory: /
-  auto_init: false
-  readonly: true
+    type: bee.resource_ref
+    comment: The linked host placement-roots policy; target_admitted_roots fills resource_ref
+- name: resource_mode_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked host resource-mode policy; target_resource_mode fills resource_ref
 - name: executable
   kind: library.lua
-  source: file://executable.lua
+  source: file://service/executable.lua
   modules: [fs, hash]
   imports:
     resources: bee.placement.native:resources
     types: bee.placement:types
-- name: executor
-  kind: exec.native
-  meta:
-    comment: Children start with a clean environment; PATH comes from the host, everything else from the admitted request
-  default_env:
-    PATH: ${env:bee.placement.native:path}
 - name: migrations
   kind: library.lua
-  source: file://migrations.lua
+  source: file://migrations/migrations.lua
 - name: resources
   kind: library.lua
-  source: file://resources.lua
+  source: file://registry/resources.lua
   modules: [registry, env, system]
 - name: store
   kind: library.lua
-  source: file://store.lua
+  source: file://persist/store.lua
   modules: [sql, json, time]
   imports:
     persist: bee.persist:database
@@ -136,14 +157,14 @@ entries:
     configuration: bee.driver:configuration
 - name: capability
   kind: library.lua
-  source: file://capability.lua
+  source: file://service/capability.lua
   modules: [exec]
   imports:
     types: bee.placement:types
     resources: bee.placement.native:resources
 - name: homes
   kind: library.lua
-  source: file://homes.lua
+  source: file://service/homes.lua
   modules: [fs, hash]
   imports:
     formats: bee.credentials:formats
@@ -152,7 +173,7 @@ entries:
     resources: bee.placement.native:resources
 - name: identity
   kind: library.lua
-  source: file://identity.lua
+  source: file://service/identity.lua
   modules: [exec]
   imports:
     resources: bee.placement.native:resources
@@ -161,7 +182,7 @@ entries:
   source: file://protocol.lua
 - name: service
   kind: library.lua
-  source: file://service.lua
+  source: file://service/service.lua
   modules: [process, channel, time, security, uuid, json, funcs, registry]
   imports:
     gateway_configuration: bee.gateway.registry:configuration
@@ -192,7 +213,7 @@ entries:
     types: bee.placement:types
 - name: materialization
   kind: library.lua
-  source: file://materialization.lua
+  source: file://service/materialization.lua
   modules: [env, fs, funcs, sql, process, hash]
   imports:
     store: bee.placement.native:store
@@ -202,7 +223,7 @@ entries:
     types: bee.placement:types
 - name: runner
   kind: process.lua
-  source: file://runner.lua
+  source: file://service/runner.lua
   method: main
   modules: [process, channel, time, exec, funcs]
   imports:
@@ -218,7 +239,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_runner_policy, bee:credential_materialize_policy, bee:gateway_materialize_policy]
 - name: window
   kind: library.lua
-  source: file://window.lua
+  source: file://service/window.lua
   modules: [process, exec, tty, time, security, funcs]
   imports:
     protocol: bee.placement.native:protocol
@@ -233,7 +254,7 @@ entries:
     identity: bee.placement.native:identity
 - name: sweeper
   kind: process.lua
-  source: file://sweeper.lua
+  source: file://service/sweeper.lua
   method: main
   modules: [process, channel, time]
   imports:
@@ -268,7 +289,7 @@ entries:
     placement_kind: native
 - name: prepare
   kind: function.lua
-  source: file://prepare_method.lua
+  source: file://binding/prepare_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -276,7 +297,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: start
   kind: function.lua
-  source: file://start_method.lua
+  source: file://binding/start_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -284,7 +305,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: status
   kind: function.lua
-  source: file://status_method.lua
+  source: file://binding/status_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -292,7 +313,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: stop
   kind: function.lua
-  source: file://stop_method.lua
+  source: file://binding/stop_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -300,7 +321,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: capabilities
   kind: function.lua
-  source: file://capabilities_method.lua
+  source: file://binding/capabilities_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -308,7 +329,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: measure_executable
   kind: function.lua
-  source: file://measure_executable_method.lua
+  source: file://binding/measure_executable_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -316,7 +337,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: close_stdin
   kind: function.lua
-  source: file://close_stdin_method.lua
+  source: file://binding/close_stdin_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -324,7 +345,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: reconcile
   kind: function.lua
-  source: file://reconcile_method.lua
+  source: file://binding/reconcile_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -332,7 +353,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: cleanup
   kind: function.lua
-  source: file://cleanup_method.lua
+  source: file://binding/cleanup_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -340,7 +361,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: evidence
   kind: function.lua
-  source: file://evidence_method.lua
+  source: file://binding/evidence_method.lua
   method: handle
   imports:
     service: bee.placement.native:service
@@ -348,7 +369,7 @@ entries:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
 - name: attach
   kind: function.lua
-  source: file://attach_method.lua
+  source: file://binding/attach_method.lua
   method: handle
   imports:
     service: bee.placement.native:service

@@ -375,7 +375,7 @@ func run() error {
 	if err := os.WriteFile(receiptIndexPath, []byte(receiptIndexText), 0600); err != nil {
 		return err
 	}
-	machinePath := filepath.Join(dir, "src", "harness", "carrier", "machine.lua")
+	machinePath := filepath.Join(dir, "modules", "harness", "src", "carrier", "machine.lua")
 	machine, err := os.ReadFile(machinePath)
 	if err != nil {
 		return err
@@ -384,7 +384,7 @@ func run() error {
 	if *stage == "plan" {
 		machineText = strings.Replace(string(machine), "function M.plan(io: IO, request: Request): (Plan?, string?)\n", "function M.plan(io: IO, request: Request): (Plan?, string?)\n    if request.binding_ref == \"bee.managed_window_fixture:binding\" then return nil, \"injected planning failure\" end\n", 1)
 	} else if *stage == "placement" {
-		runtimePath := filepath.Join(dir, "src", "harness", "window", "runtime.lua")
+		runtimePath := filepath.Join(dir, "modules", "harness", "src", "window", "runtime.lua")
 		runtimeSource, readError := os.ReadFile(runtimePath)
 		if readError != nil {
 			return readError
@@ -399,7 +399,7 @@ func run() error {
 		machineText = string(machine)
 	}
 	if *stage == "generation" {
-		runtimePath := filepath.Join(dir, "src", "harness", "window", "runtime.lua")
+		runtimePath := filepath.Join(dir, "modules", "harness", "src", "window", "runtime.lua")
 		runtimeSource, err := os.ReadFile(runtimePath)
 		if err != nil {
 			return err
@@ -414,7 +414,7 @@ func run() error {
 		machineText = string(machine)
 	}
 	if *stage == "component" {
-		appPath := filepath.Join(dir, "src", "harness", "window", "app.lua")
+		appPath := filepath.Join(dir, "modules", "harness", "src", "window", "app.lua")
 		appSource, err := os.ReadFile(appPath)
 		if err != nil {
 			return err

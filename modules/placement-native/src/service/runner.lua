@@ -72,7 +72,9 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     gateway_binding = bound_gateway
     if not materialized then return refuse(materialization_error or "attempt materialization") end
     local environment, work_dir = materialized.environment, materialized.working_directory
-    local executor, executor_error = exec.get(resources.EXECUTOR)
+    local executor_ref, reference_error = resources.executor()
+    local executor, executor_error
+    if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
     if not executor then
         evidence(db, attempt_id, "executor.failed", tostring(executor_error), {execution = "exited"})
         return refuse("executor unavailable")

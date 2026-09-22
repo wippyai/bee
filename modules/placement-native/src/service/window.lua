@@ -146,7 +146,9 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         return fail(db, preparation_error or "attempt materialization", gateway_binding, attempt_id)
     end
 
-    local executor, executor_error = exec.get(resources.EXECUTOR)
+    local executor_ref, reference_error = resources.executor()
+    local executor, executor_error
+    if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
     if not executor then
         store.transition(db, attempt_id, {execution = "exited", evidence = {kind = "executor.failed", detail = tostring(executor_error)}})
         return fail(db, "executor unavailable", gateway_binding, attempt_id)

@@ -1,0 +1,9 @@
+organization: bee
+module: harness
+type: library
+version: 0.1.0-dev
+description: Managed harness catalog, launch admission, carriers, profiles, and Agent window for Bee
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

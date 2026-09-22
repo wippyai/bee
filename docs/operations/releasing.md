@@ -28,14 +28,14 @@ revision and contains the same native source as the original development pin.
 make release BEE_VERSION=0.1.0-dev
 ```
 
-This builds pinned tools, runs the foundation and native checks, packs the
-application, assembles Bee, runs executable acceptance, and packages the result
-under `dist/release/`.
+This builds pinned tools, runs the foundation and native checks, packs and proves
+the source-free deployment, assembles Bee, runs executable acceptance (including
+Linux network-isolated boot), and packages the result under `dist/release/`.
 Packing requires Wippy syntax and strict type checking. The lint command explicitly
 enables the type system and strict mode; validation failures stop the build.
 The generated `dist/bee.bundle.build.json` records the selected version and every
-pack hash. Review `build/modules.json` for ownership and the generated
-bundle's `ownership.json` for entry coverage. Packing leaves the input runtime
+physical pack hash. Review `dist/portable-deployment/wippy.lock` and its vendor
+set with `make portable-deployment-check`. Packing leaves the input runtime
 manifest unchanged.
 See [native distribution](native.md) for prerequisites and update
 semantics. Local builds create no Git tags or GitHub releases.
@@ -57,8 +57,9 @@ steps do not retain credentials in Git configuration.
 PR and main checks run Linux amd64 with the full foundation suite. Release tags
 and manual runs assemble and exercise Linux and macOS, each on amd64 and arm64.
 Linux amd64 also dry-runs the Hub publication packer without upload credentials.
-Both Linux targets run executable acceptance with networking disabled. Native
-module checks run on every Bee target, with a separate Linux module gate.
+Each Linux target proves the source-free portable deployment and runs executable
+acceptance with networking disabled. Native module checks run on every Bee target,
+with a separate Linux module gate.
 Windows desktop support requires replacing the current Bash/POSIX terminal
 assumptions; it is outside this release matrix. Builder has Windows CLI builds.
 

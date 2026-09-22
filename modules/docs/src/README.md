@@ -5,7 +5,7 @@ The offline platform documentation a bound agent reads through the gateway
 
 The host composition holds one `fs.directory` entry, `bee:docs_corpus`, pointing
 at the `src/corpus` snapshot. `wippy.yaml` names it in its `embed:` list, so `make pack`
-and `build/bundle.py` freeze it into the pack as a read-only `fs.embed` volume;
+and `make native-pack` freeze it into the root WAPP as a read-only `fs.embed` volume;
 an installed Bee serves it with no network (`docs/operations/native.md`). The
 volume is read-only at boot, so an agent can read the corpus and can never
 change it.

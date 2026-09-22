@@ -517,7 +517,8 @@ local function main(value: unknown, constructors: {[string]: Open})
             error("Managed window recovery surface: " .. tostring(output_error))
         end
     elseif direct then
-        local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1], {view_id = launch.view_id, instance_id = launch.instance_id})
+        local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1], launch.thread_id,
+            {view_id = launch.view_id, instance_id = launch.instance_id})
         if not choice then
             show_failure("Managed window admission: " .. tostring(direct_error))
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)

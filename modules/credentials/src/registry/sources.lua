@@ -9,7 +9,7 @@ local formats = require("formats")
 local M = {}
 M.DATABASE_REF = "bee.credentials:database_ref"
 M.SOURCES_REF = "bee.credentials:sources_ref"
-M.MATERIALIZER = "bee.placement.native:binding"
+M.MATERIALIZER_REF = "bee.credentials:materializer_ref"
 type Setup = {path: string, destination: string, content_format: string}
 type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}, path: string?, setup: Setup?}
 type SourceSet = {sources: {Source}, formats: {[string]: string}}
@@ -23,6 +23,9 @@ local function reference(id: string, field: string, label: string): (string?, st
 end
 function M.database(): (string?, string?)
     return reference(M.DATABASE_REF, "resource_ref", "credential database")
+end
+function M.materializer(): (string?, string?)
+    return reference(M.MATERIALIZER_REF, "binding_ref", "credential materializer")
 end
 -- Host sources: env.variable entries a workspace may define credentials
 -- from, with the provider, the projection kinds and the audience (the

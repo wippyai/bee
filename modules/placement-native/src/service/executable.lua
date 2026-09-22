@@ -32,7 +32,9 @@ end
 function M.measure(path: unknown): (Measurement?, string?)
     if type(path) ~= "string" or path == "" or path:find("\0", 1, true) then return nil, "path must be nonempty text" end
     if path:sub(1, 1) ~= "/" then return nil, "path must be absolute" end
-    local vol, vol_error = fs.get(resources.HOST_FILES)
+    local host_files, host_files_error = resources.host_files()
+    if not host_files then return nil, "host files unavailable: " .. tostring(host_files_error) end
+    local vol, vol_error = fs.get(host_files)
     if not vol then return nil, "host files unavailable: " .. tostring(vol_error) end
     local info, stat_error = vol:stat(path)
     if not info then return nil, "executable is not readable: " .. tostring(stat_error) end
@@ -85,7 +87,12 @@ end
 type Capabilities = {streaming: boolean, read_only_volume: boolean, detail: string}
 function M.capabilities(): Capabilities
     local report: Capabilities = {streaming = streaming(), read_only_volume = false, detail = ""}
-    local host, host_error = fs.get(resources.HOST_FILES)
+    local host_files, host_files_error = resources.host_files()
+    if not host_files then
+        report.detail = "host files unavailable: " .. tostring(host_files_error)
+        return report
+    end
+    local host, host_error = fs.get(host_files)
     if not host then
         report.detail = "host files unavailable: " .. tostring(host_error)
         return report

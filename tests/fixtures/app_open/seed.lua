@@ -127,6 +127,7 @@ local function main(raw: unknown)
     local report: Object = {workspace_id = workspace_id, thread_id = THREAD, application_actor = actor_id,
         access_approval_id = managed.approval_id, first_id = managed.first_view, second_id = managed.second_view,
         first_instance = managed.first_instance, second_instance = managed.second_instance,
+        window_id = managed.window_view, window_instance = managed.window_instance,
         removed_instance = managed.removed_instance, surviving_instance = managed.surviving_instance,
         removed_actor = managed.removed_actor, removed_access = managed.removed_access,
         surviving_access = managed.surviving_access,

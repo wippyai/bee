@@ -187,6 +187,12 @@ func stage(root string, broken bool) (string, error) {
 	for _, identity := range identities {
 		item := entries[identity]
 		entry := item.entry
+		// The staged composition closes imports into one disposable source tree.
+		// Component dependency declarations are verified by the real module pack;
+		// retaining them here would make this isolated closure fetch from Hub.
+		if entry["kind"] == "ns.dependency" {
+			continue
+		}
 		if broken && identity == "bee.harness:process_host" {
 			entry = make(map[string]interface{}, len(item.entry)+1)
 			for key, value := range item.entry {

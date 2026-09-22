@@ -57,6 +57,18 @@ local version = require("version")
 return {send = function(_: string, _: version.Descriptor, _: string, _: {timeout: string?, source_cursor: integer}): transaction.Result return transaction.failure("UNAVAILABLE", "saved profile fixture does not distribute replicas") end}
 `
 
+const savedProfilesHarnessIndex = `version: '1.0'
+namespace: bee.harness
+entries:
+- name: definition
+  kind: ns.definition
+  module: harness
+  readme: file://README.md
+  meta:
+    title: Bee harness
+    comment: Execution contracts and the pinned discovery of admitted driver bindings; carriers arrive with launch admission
+`
+
 const savedProfilesNodeRootIndex = `version: '1.0'
 namespace: bee.node
 entries:
@@ -168,13 +180,13 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesWrite(filepath.Join(root, "src", "_index.yaml"), savedProfilesRootIndex); err != nil {
 		return err
 	}
-	if err := savedProfilesCopyFile(filepath.Join(root, "src", "harness", "_index.yaml"), filepath.Join(source, "src", "harness", "_index.yaml")); err != nil {
-		return fmt.Errorf("copy harness index: %w", err)
+	if err := savedProfilesWrite(filepath.Join(root, "src", "harness", "_index.yaml"), savedProfilesHarnessIndex); err != nil {
+		return fmt.Errorf("write harness index: %w", err)
 	}
-	if err := savedProfilesCopyFile(filepath.Join(root, "src", "harness", "README.md"), filepath.Join(source, "src", "harness", "README.md")); err != nil {
+	if err := savedProfilesCopyFile(filepath.Join(root, "src", "harness", "README.md"), filepath.Join(source, "modules", "harness", "src", "README.md")); err != nil {
 		return fmt.Errorf("copy harness README: %w", err)
 	}
-	if err := savedProfilesCopyTree(filepath.Join(root, "src", "harness", "profiles"), filepath.Join(source, "src", "harness", "profiles")); err != nil {
+	if err := savedProfilesCopyTree(filepath.Join(root, "src", "harness", "profiles"), filepath.Join(source, "modules", "harness", "src", "profiles")); err != nil {
 		return fmt.Errorf("copy profiles source: %w", err)
 	}
 	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "sync"), filepath.Join(source, "modules", "sync")); err != nil {

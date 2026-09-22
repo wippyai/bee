@@ -40,6 +40,7 @@ COLD_BOOT = 30
 OVERLAY_WRITE = "registry.overlay.apply"
 OVERLAY_OWNER = "bee.app_journey_probe:activation_overlay"
 OPEN_SEED = "bee.app_open_probe:seed"
+OPEN_PROBE_THREAD = "open-probe-thread"
 MIGRATION_ID = "bee.app_journey_demo:001"
 
 
@@ -64,6 +65,9 @@ def bind_admission(project):
                                                "bee.app_open_probe:recheck_policy",
                                                "bee.app_open_probe:operator_signal_policy"],
                                   "thread_access": "observe_post"})
+    window = next(item for item in admission["bindings"]
+                  if item["definition_id"] == "bee.harness.window:app")
+    window["thread_access"] = "observe_post"
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
@@ -334,6 +338,34 @@ def open_catalog_app(ui, title, timeout):
         ui.pump(.5)
 
 
+def wait_taskbar_title(ui, title, timeout):
+    """Return the exact title span after its taskbar tab is rendered."""
+    expected = re.compile(rf"(?<!\S){re.escape(title)}(?!\S)")
+    deadline = time.monotonic() + timeout
+    while True:
+        tab = ui.screen.display[0]
+        match = expected.search(tab)
+        if match:
+            return match.start() + 1
+        assert time.monotonic() < deadline, ui.text()
+        ui.pump(.1)
+
+
+def wait_agent_picker_choice(ui, title, timeout):
+    """Wait for the Agent picker and return its exact profile row."""
+    deadline = time.monotonic() + timeout
+    while True:
+        rows = ui.screen.display
+        picker = any(re.search(r"(?<!\S)AGENT(?!\S)", line) for line in rows)
+        chooser = any("Choose a profile" in line for line in rows)
+        if picker and chooser:
+            matches = [(line.index(title) + 1, row) for row, line in enumerate(rows, 1) if title in line]
+            if len(matches) == 1:
+                return matches[0]
+        assert time.monotonic() < deadline, ui.text()
+        ui.pump(.1)
+
+
 def configure_open_agent(project):
     """Bind the scripted executable at the fixture edge; the managed carrier
     still owns gateway admission, materialization and revocation."""
@@ -343,6 +375,18 @@ def configure_open_agent(project):
     policy["data"]["executables"] = {"claude": str(ROOT / "tests/fixtures/harness/bin/claude")}
     policy["data"]["environment"]["BEE_FIXTURE_STREAM"] = \
         str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
+    policy["data"]["environment"]["BEE_FIXTURE_WINDOW_DEFINITION"] = "bee.harness.window:app"
+    harness = project / "src/harness/host/_index.yaml"
+    harness_document = yaml.safe_load(harness.read_text())
+    activation = next(entry for entry in harness_document["entries"] if entry["name"] == "harness_activation")
+    activation["data"]["bindings"].append("bee.window_hooks_fixture:binding")
+    harness.write_text(yaml.safe_dump(harness_document, sort_keys=False))
+    hooks = project / "src/window_hooks/_index.yaml"
+    hooks_document = yaml.safe_load(hooks.read_text())
+    definition = next(entry for entry in hooks_document["entries"] if entry["name"] == "definition")
+    definition["data"]["presentation"]["start_menu"] = True
+    definition["data"].pop("session_resource")
+    hooks.write_text(yaml.safe_dump(hooks_document, sort_keys=False))
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
     approvals = project / "src/approvals/host/_index.yaml"
@@ -375,7 +419,7 @@ def run_open_probe(project, directory, packed=False, pack_file=None):
                 ui.pump(.5)
             deadline = time.monotonic() + 40
             progress = {}
-            while "APP JOURNEY DELIVERED" not in ui.text() or progress.get("passed") is not True:
+            while progress.get("passed") is not True:
                 ui.pump()
                 if report_path.exists():
                     try:
@@ -384,8 +428,33 @@ def run_open_probe(project, directory, packed=False, pack_file=None):
                         progress = {}
                     assert progress.get("passed") is not False, progress
                 if time.monotonic() >= deadline or ui.process.poll() is not None:
-                    ui.wait("APP JOURNEY DELIVERED", timeout=0)
                     raise AssertionError(f"open probe did not complete: {progress}")
+            assert progress.get("window_id") and progress.get("window_instance"), progress
+
+            # The window was opened by the approved MCP caller. Select its
+            # real picker and child through the desktop, then prove the hook
+            # driver remains a usable PTY after gateway delivery.
+            agent_x = wait_taskbar_title(ui, "Agent", timeout=10)
+            ui.mouse(0, agent_x, 1)
+            ui.mouse(0, agent_x, 1, True)
+            fixture_x, fixture_row = wait_agent_picker_choice(ui, "Window hooks fixture", timeout=10)
+            ui.mouse(0, fixture_x, fixture_row)
+            ui.mouse(0, fixture_x, fixture_row, True)
+            ui.key(b"\r")
+            ui.wait("HOOK_HTTP_CODE:202", timeout=20)
+            ui.key(b"first-pty-check\r")
+            ui.wait("HOOK_CHILD_INPUT:first-pty-check", timeout=10)
+            ui.wait("Window hooks fixture · Using tool", timeout=10)
+            ui.key(b"second-pty-check\r")
+            ui.wait("HOOK_CHILD_INPUT:second-pty-check", timeout=10)
+
+            deadline = time.monotonic() + 10
+            while "APP JOURNEY DELIVERED" not in ui.text():
+                tabs = ui.screen.display[0]
+                app_x = tabs.index("App Journey") + 1
+                ui.mouse(0, app_x, 1)
+                ui.mouse(0, app_x, 1, True)
+                assert time.monotonic() < deadline, ui.text()
             ui.wait("Saved: 0")
             ui.key(b"x")
             ui.wait("Saved: 1")
@@ -571,6 +640,7 @@ def exercise():
         shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copytree(ROOT / "tests/fixtures/app_journey", project / "src/probe")
         shutil.copytree(ROOT / "tests/fixtures/app_open", project / "src/open_probe")
+        shutil.copytree(ROOT / "tests/fixtures/window_hooks", project / "src/window_hooks")
         open_manifest = yaml.safe_load((project / "src/open_probe/_index.yaml").read_text())
         open_seed = next(entry for entry in open_manifest["entries"] if entry["name"] == "seed")
         assert open_seed["imports"]["client"] == "bee.application:client"
@@ -665,6 +735,17 @@ def exercise():
         open_source_root.mkdir()
         copy_activation(folder, open_source_root)
         open_source = run_open_probe(project, open_source_root)
+        assert open_source["thread_id"] == OPEN_PROBE_THREAD, open_source
+        agent_instance = open_source["window_instance"]
+        agent_binding = binding_records(open_source_root, [agent_instance])
+        assert set(agent_binding) == {agent_instance}, agent_binding
+        agent_binding = agent_binding[agent_instance]
+        expected_actor = f"bee.application:{open_source['workspace_id']}:{agent_instance}"
+        assert agent_binding[0] == OPEN_PROBE_THREAD and agent_binding[1] == expected_actor, agent_binding
+        assert agent_binding[2] == "active" and isinstance(agent_binding[3], int) \
+            and agent_binding[3] > 0 and agent_binding[4] == 0, agent_binding
+        agent_membership = thread_members(open_source_root, [expected_actor])
+        assert agent_membership.get(expected_actor, (None, 0))[1] == 1, agent_membership
 
         removed = open_source["removed_instance"]
         surviving = open_source["surviving_instance"]

@@ -104,6 +104,11 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             raise ValueError("The managed gateway belongs to the unit-test composition")
         if unit_tests:
             shutil.copytree(ROOT / "tests/lua", folder / "src/tests")
+            # This test-support copy overrides homes while exercising the
+            # component's current materialization source; it never enters a
+            # production source tree or assembled pack.
+            shutil.copy2(ROOT / "modules/placement-native/src/service/materialization.lua",
+                         folder / "src/tests/placement_publication/materialization.lua")
         else:
             (folder / "src/tests").mkdir()
         # Managed harness tests own their loopback listener. Desktop proofs

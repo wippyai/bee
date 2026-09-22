@@ -120,6 +120,36 @@ entries:
     value: bee.credentials:db
   - name: target_sources
     value: bee:credential_sources
+  - name: target_materializer
+    value: bee.placement.native:binding
+- name: dependency_placement_native
+  kind: ns.dependency
+  component: bee/placement-native
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.placement.native:db
+  - name: target_root
+    value: bee.placement.native:root
+  - name: process_host
+    value: bee:workers
+  - name: target_executor
+    value: bee.placement.native:executor
+  - name: target_host_files
+    value: bee.placement.native:host_files
+  - name: target_admitted_roots
+    value: bee.placement.native:admitted_roots
+  - name: target_resource_mode
+    value: bee.placement.native:resource_mode
+- name: dependency_harness
+  kind: ns.dependency
+  component: bee/harness
+  version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
+  - name: target_db
+    value: bee.node:db
 - name: dependency_approvals
   kind: ns.dependency
   component: bee/approvals

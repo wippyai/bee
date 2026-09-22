@@ -4,7 +4,7 @@ Bee can be assembled into a Linux or macOS executable on amd64 or arm64 containi
 versioned application pack and the `ioevents` native component. The reusable
 assembler is [wippyai/builder](https://github.com/wippyai/builder); Bee selects its
 inputs in `wippy.build.json` and pins the assembler in `build/builder.lock.json`.
-Both repositories are currently private. No stable native release is published.
+Bee is public. No stable native release is published.
 
 The [application and native module SDK](https://github.com/wippyai/builder/blob/main/docs/SDK.md)
 documents pack/UI configuration, native factories, typed Lua exports and argument
@@ -30,8 +30,7 @@ registry state remain in the selected state directory.
 make native-tools
 make check WIPPY="$PWD/.wippy/bin/bee-wippy"
 make native-check
-make standalone
-make native-binary-check
+make native-portable-check
 ```
 
 The source tools and executable use the same compiled component selection.
@@ -58,12 +57,15 @@ checks out the selected runtime in a temporary directory before compiling.
 Uploads still require separate credentials. [Runtime integration](../development/runtime.md)
 describes the boundary between Bee and the selected runtime.
 
-`BEE_VERSION=0.1.0-dev make standalone` prepares the explicitly owned modules
-in `build/modules.json`. Child namespaces remain slices of their named owner;
-each module has one `ns.definition`. The build freezes `src/`, runs strict lint,
-checks source inventory, and packs through Wippy's existing namespace exclusions.
-Source-free loading must match every pack's assigned IDs and kinds exactly.
-Missing or multiply owned namespaces and extra module roots fail the build.
+`BEE_VERSION=0.1.0-dev make native-pack` stages the real root and physical module
+layout only to write About metadata, then runs `wippy pack --module` for
+`bee/bee` and every dependency selected by the root lock. It writes immutable
+pack generations under `dist/native-packs/`, a source-free lock/vendor deployment
+at `dist/portable-deployment/`, and seals every exact WAPP path and SHA-256 into
+`dist/bee.bundle.build.json`. The deployment has an empty source path and no
+local replacements. `make portable-deployment-check` inspects each WAPP, then
+proves Linux network-isolated headless boot, restart and digest rejection after
+one vendor-pack byte changes.
 
 Agy, Claude, Codex, Grok and Muse each have a separate driver pack
 (`bee/driver-agy`, `bee/driver-claude`, `bee/driver-codex`, `bee/driver-grok`
@@ -71,16 +73,12 @@ and `bee/driver-muse`). The shared `bee/driver` pack owns the contract, kit and
 transport. Installing a driver does not activate it or grant execution: the host
 still selects its profile, executable and permissions.
 
-`build/bundle.py` writes checksummed artifacts under `dist/native-bundles/` and
-atomically replaces `dist/bee.bundle.build.json` only after every pack passes.
-The pinned Go builder assembles that generated manifest. `wippy.build.json`
-remains the runtime/native/default-version input and is not resealed by packing;
-failed packing preserves the previous bundle. All bundled modules receive the
-selected Bee version. This is host composition, not independent Hub publication.
-Runtime patches are checksum-verified and copied into the generated bundle with
-their original contents and licenses.
-
-`make bundle-check` checks ownership failures and failed-build preservation.
+The pinned Go builder assembles only the sealed generated manifest. It verifies
+every WAPP and runtime-patch hash before embedding them. The input
+`wippy.build.json` remains the runtime/native/default-version input; a failed
+pack or seal leaves the previous manifest and portable-deployment pointer in
+place. WAPP timestamps are runtime-owned and can produce a new immutable
+generation on a repeated build; each generation remains internally exact.
 For coordinated validation, `BEE_BUILD_MANIFEST` can select an isolated input;
 `BEE_BUNDLE_MANIFEST` selects its generated output.
 
@@ -96,8 +94,7 @@ embed:
 ```
 
 The corresponding entry uses `directory: ./assets/example` and `base: module`.
-Bundle preparation freezes that directory along with source and records each
-file's SHA-256 in the generation's `ownership.json`. Wippy embeds the bytes and
+Wippy embeds the bytes and
 changes only the selected filesystem kind from `fs.directory` to `fs.embed`;
 the entry keeps its identity and remains owned by the same module. The pack
 checksum covers those resources too. Installation or transfer of the pack carries
@@ -109,12 +106,6 @@ inside the component source tree, with no symlinks or environment-selected paths
 Installed embedded files are read-only; changing shipped assets requires a new
 component version through the same publication/activation boundary as its code.
 Runtime-generated workspace files retain their own resource/storage owners.
-
-`make bundle-assets-check` packs a valid empty WASM module and a nested template,
-copies only the pack to a new folder, deletes source and loose build assets, then
-reads the exact bytes through Wippy's filesystem API and proves writes fail.
-This verifies asset transfer and loading, not WASM execution or automatic Hive
-distribution. Those remain separate runtime/application capabilities.
 
 ## Installed application and updates
 

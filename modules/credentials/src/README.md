@@ -116,10 +116,14 @@ select a credential name and never supply a materialization path.
 Test suites enforce these invariants using synthetic workspace-scoped fixtures
 (`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.
 
+The host links the exact placement binding persisted on new projection receipts;
+an unlinked materializer fails projection issuance closed, and caller or artifact
+input cannot select it. Existing projection rows retain their recorded binding.
+
 Native placement accepts file projections only with a selected retained session
 home. It seeds the frozen declared destination and preserves provider-refreshed
 bytes when the recorded definition identity matches; changed identity or a
-partial seed refuses reuse. See [native placement](../../../src/placement/native/README.md)
+partial seed refuses reuse. See [native placement](../../placement-native/src/README.md)
 for the delivery and filesystem guarantees. File contents never enter the
 environment projection route.
 

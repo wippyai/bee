@@ -40,6 +40,7 @@ make setup
 make lint
 make check
 make pack
+make portable-deployment-check
 make standalone
 ```
 
@@ -49,7 +50,9 @@ host/client attachment grants and revocation. Use focused tests while editing,
 then the checks required by the changed boundary. Documentation-only changes
 need link and source consistency checks; they do not need a full terminal run.
 
-Production loads the selected components' `src/` trees. Keep binaries, registry
+Development loads the selected components' `src/` trees. `make native-pack` uses
+`wippy pack --module` for the root and every physical component; `make portable-deployment-check`
+boots their exact local vendor WAPPs with no source or replacements. Keep binaries, registry
 stores, credentials, fixture data and temporary databases outside the pack. Inspect assembled packs
 for test registrations and fixture dependencies. Do not add a local runtime
 binary or legacy source to production, and do not edit registry tables directly

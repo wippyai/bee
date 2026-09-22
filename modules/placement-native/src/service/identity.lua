@@ -54,7 +54,9 @@ end
 -- Compares the recorded identity with what the kernel reports now.
 function M.observe(recorded: Identity): Observation
     if not recorded.start_ticks or not recorded.boot_id then return {observed = false, detail = "no execution identity recorded"} end
-    local executor, executor_error = exec.get(resources.EXECUTOR)
+    local executor_ref, reference_error = resources.executor()
+    local executor, executor_error
+    if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
     if not executor then return {observed = false, detail = "executor unavailable: " .. tostring(executor_error)} end
     local output, err = capture(executor, stat_command(recorded.pid))
     executor:release()
@@ -73,7 +75,9 @@ end
 -- reused id: the safe direction for cleanup.
 function M.group_absent(pgid: integer): (boolean?, string?)
     if pgid <= 1 then return nil, "invalid process group" end
-    local executor, executor_error = exec.get(resources.EXECUTOR)
+    local executor_ref, reference_error = resources.executor()
+    local executor, executor_error
+    if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
     if not executor then return nil, "executor unavailable: " .. tostring(executor_error) end
     -- A failed kill probe can mean unsupported shell syntax or denied access.
     -- Only a successful, fully decoded process table proves group absence.
@@ -99,7 +103,9 @@ function M.signal_group(recorded: Identity, signal: integer): (boolean, string?)
     if not observation.observed then return false, observation.detail end
     if not observation.alive then return false, observation.detail end
     if not recorded.pgid then return false, "no process group recorded" end
-    local executor, executor_error = exec.get(resources.EXECUTOR)
+    local executor_ref, reference_error = resources.executor()
+    local executor, executor_error
+    if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
     if not executor then return false, "executor unavailable: " .. tostring(executor_error) end
     local _, err, code = capture(executor, "kill -s " .. tostring(signal) .. " -- -" .. tostring(recorded.pgid))
     executor:release()

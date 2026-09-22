@@ -395,6 +395,11 @@ function M.issue_projection(value: unknown): Reply
         db:release()
         return fail("CONFLICT", "credential destination does not match its frozen format")
     end
+    local materializer, materializer_error = sources.materializer()
+    if not materializer then
+        db:release()
+        return fail("STORAGE", materializer_error or "credential materializer")
+    end
     local epoch, epoch_error = epoch_of(db, request.workspace_id)
     if not epoch then
         db:release()
@@ -411,7 +416,7 @@ function M.issue_projection(value: unknown): Reply
         materialization_generation, expires_at, authorization_epoch, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)]],
         {projection_id, request.workspace_id, request.name, definition.definition_id, definition.revision, node(), 1, subject, request.audience, request.attempt_id,
             request.profile_id, request.profile_digest, request.binding_digest, request.launch_policy_digest, definition.provider, definition.projection_kind, definition.destination,
-            format_json, sources.MATERIALIZER, request.idempotency_key, stamp(created + request.ttl), epoch, stamp(created)})
+            format_json, materializer, request.idempotency_key, stamp(created + request.ttl), epoch, stamp(created)})
     if insert_error then
         db:release()
         return fail("STORAGE", "record projection")

@@ -1,0 +1,6 @@
+organization: bee
+module: placement-native
+type: library
+version: 0.1.0-dev
+description: Native placement attempts, receipts, materialization, supervision, and cleanup
+license: MIT

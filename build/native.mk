@@ -5,7 +5,7 @@ BEE_BINARY ?= dist/bee
 BEE_BUILD_MANIFEST ?= wippy.build.json
 BEE_BUNDLE_MANIFEST ?= dist/bee.bundle.build.json
 AGY_MODEL ?= gemini-3.8-flash
-.PHONY: native-tools native-check native-bootstrap-check native-pack standalone native-binary-check
+.PHONY: native-tools native-check native-bootstrap-check portable-pack-atomic-check native-pack portable-deployment-check standalone native-binary-check native-portable-check
 native-tools:
 	$(BUILDER) toolchain "$(BEE_BUILD_MANIFEST)" --output "$(NATIVE_WIPPY)"
 
@@ -17,18 +17,18 @@ native-check: native-bootstrap-check
 	$(MAKE) -C native check
 	$(MAKE) -C native integration WIPPY="$(abspath $(NATIVE_WIPPY))"
 
+portable-pack-atomic-check:
+	tests/portable_pack_atomic.sh
+
 native-pack:
-	python3 build/bundle.py --manifest "$(BEE_BUILD_MANIFEST)" --output "$(BEE_BUNDLE_MANIFEST)" --toolchain "$(abspath $(NATIVE_WIPPY))" $(if $(BEE_VERSION),--version "$(BEE_VERSION)",)
+	@test -x "$(NATIVE_WIPPY)" || { echo 'Run make native-tools before packing Bee.' >&2; exit 1; }
+	WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_BUILD_MANIFEST="$(BEE_BUILD_MANIFEST)" BEE_BUNDLE_MANIFEST="$(BEE_BUNDLE_MANIFEST)" $(if $(BEE_VERSION),BEE_VERSION="$(BEE_VERSION)",) build/portable-pack.sh
+
+portable-deployment-check: native-pack
+	tests/portable_deployment.sh "$(abspath $(NATIVE_WIPPY))" "$(dir $(BEE_BUNDLE_MANIFEST))portable-deployment"
 
 standalone: native-pack
 	$(BUILDER) build "$(BEE_BUNDLE_MANIFEST)" --output "$(BEE_BINARY)"
-
-.PHONY: bundle-check bundle-assets-check
-bundle-check:
-	python3 -m unittest discover -s build -p 'bundle_test.py'
-
-bundle-assets-check:
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/bundle_assets.py
 
 native-binary-check:
 	python3 tests/native_binary.py "$(BEE_BINARY)"
@@ -41,8 +41,11 @@ BEE_RELEASE_ARCHIVE ?= dist/release/bee-$(shell go env GOOS)-$(shell go env GOAR
 release: repository-check native-tools
 	$(MAKE) check WIPPY="$(abspath $(NATIVE_WIPPY))"
 	$(MAKE) native-check
-	$(MAKE) standalone
+	$(MAKE) native-pack
+	tests/portable_deployment.sh "$(abspath $(NATIVE_WIPPY))" "$(dir $(BEE_BUNDLE_MANIFEST))portable-deployment"
+	$(BUILDER) build "$(BEE_BUNDLE_MANIFEST)" --output "$(BEE_BINARY)"
 	$(MAKE) native-binary-check
+	@if [ "$(shell go env GOOS)" = linux ]; then $(MAKE) offline-boot-check; fi
 	$(BUILDER) package "$(BEE_BINARY)" --output "$(BEE_RELEASE_ARCHIVE)"
 
 HUB_VISIBILITY ?= private
@@ -72,6 +75,14 @@ native-client-check:
 .PHONY: offline-boot-check
 offline-boot-check:
 	tests/offline_boot.sh "$(abspath $(BEE_BINARY))"
+
+# The executable is built only from the same sealed physical pack set. The
+# offline smoke starts the native binary from an empty caller directory in a
+# Linux network namespace.
+native-portable-check: standalone
+	tests/portable_deployment.sh "$(abspath $(NATIVE_WIPPY))" "$(dir $(BEE_BUNDLE_MANIFEST))portable-deployment"
+	$(MAKE) native-binary-check BEE_BINARY="$(abspath $(BEE_BINARY))"
+	$(MAKE) offline-boot-check BEE_BINARY="$(abspath $(BEE_BINARY))"
 
 # Longer diagnostic gate for repeated departures; no user's Bee is touched.
 .PHONY: native-client-retention-check

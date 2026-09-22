@@ -11,7 +11,7 @@ def main():
         folder = Path(directory)
         source = folder / "src"
         shutil.copytree(ROOT / "tests/fixtures/identity_native", source)
-        shutil.copy2(ROOT / "src/placement/native/identity.lua", source / "identity.lua")
+        shutil.copy2(ROOT / "modules/placement-native/src/service/identity.lua", source / "identity.lua")
         (folder / "wippy.lock").write_text("directories:\n  modules: .wippy\n  src: ./src\n")
         environment = database_environment(folder, BEE_IDENTITY_PATH="/usr/bin:/bin")
         subprocess.run([str(RUNTIME), "lint"], cwd=folder, env=environment, check=True, timeout=60)

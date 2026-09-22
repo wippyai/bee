@@ -6,7 +6,9 @@ local M = {}
 -- which a launch that reads its input until end of file requires.
 type Measurement = {capability: types.Capability, exit_observation: types.ExitObservation, stdin_close: boolean, detail: string}
 function M.measure(): Measurement
-    local executor, executor_error = exec.get(resources.EXECUTOR)
+    local executor_ref, reference_error = resources.executor()
+    local executor, executor_error
+    if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
     if not executor then return {capability = "direct_process", exit_observation = "eof_gated", stdin_close = false, detail = "executor unavailable: " .. tostring(executor_error)} end
     local proc, exec_error = executor:exec("sh -c 'echo $$; ps -o pgid= -p $$'", {process_group = true})
     if not proc then

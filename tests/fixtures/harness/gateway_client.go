@@ -361,18 +361,37 @@ func reportApplicationOpen(client *httpClient, url, authorization string, report
 		report["app_open_error"] = "application open returned no identity"
 		return
 	}
+	var windowValue object
+	if window := os.Getenv("BEE_FIXTURE_WINDOW_DEFINITION"); window != "" {
+		opened := call("application_open", object{"definition_id": window, "arguments": []string{}, "idempotency_key": "open-window"}, 403)
+		if opened == nil || opened["ok"] != true {
+			report["app_open_error"] = "managed window open failed"
+			return
+		}
+		windowValue = mustObject(opened["value"])
+		if windowValue == nil {
+			report["app_open_error"] = "managed window returned no identity"
+			return
+		}
+	}
 	proof := object{"schema": "managed-app-open.v1", "approval_id": approvalID,
 		"unapproved_refused": report["unapproved_refused"], "selected": report["selected"],
 		"first_instance": firstValue["instance_id"], "second_instance": secondValue["instance_id"],
 		"first_view": firstValue["view_id"], "second_view": secondValue["view_id"],
 		"first_display": firstValue["display_id"], "second_display": secondValue["display_id"]}
+	if windowValue != nil {
+		proof["window_definition"] = windowValue["definition_id"]
+		proof["window_instance"] = windowValue["instance_id"]
+		proof["window_view"] = windowValue["view_id"]
+		proof["window_display"] = windowValue["display_id"]
+	}
 	encoded, err := json.Marshal(proof)
 	if err != nil {
 		report["app_open_error"] = err.Error()
 		return
 	}
 	posted := call("thread_message", object{"idempotency_key": "managed-app-open-proof", "message_id": "managed-app-open-proof",
-		"message_kind": "progress", "recipient_ids": []string{}, "content": object{"text": string(encoded)}}, 403)
+		"message_kind": "progress", "recipient_ids": []string{}, "content": object{"text": string(encoded)}}, 404)
 	report["app_open_posted"] = posted != nil && posted["ok"] == true
 }
 

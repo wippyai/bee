@@ -218,13 +218,17 @@ local function await_proofs(workspace_id: string, action_id: string, attempt_id:
         local first = managed and applications[tostring(managed.first_instance)] or nil
         local second = managed and applications[tostring(managed.second_instance)] or nil
         if managed and first and second then
+            local window_instance = bounds.id(managed.window_instance)
+            local window_view = bounds.id(managed.window_view)
             if managed.first_instance == managed.second_instance or managed.first_view == managed.second_view
                 or managed.unapproved_refused ~= true
-                or managed.selected ~= true or not bounds.id(managed.approval_id) then
+                or managed.selected ~= true or not bounds.id(managed.approval_id)
+                or managed.window_definition ~= "bee.harness.window:app" or not window_instance or not window_view then
                 error("managed application proof does not match the opened apps")
             end
             return {approval_id = managed.approval_id, first_view = managed.first_view, second_view = managed.second_view,
                 first_instance = managed.first_instance, second_instance = managed.second_instance,
+                window_view = window_view, window_instance = window_instance,
                 unapproved_refused = managed.unapproved_refused, agent_exited = true,
                 managed_proof = managed, first_thread_proof = first, second_thread_proof = second}
         end

@@ -30,7 +30,9 @@ end
 function M.required_file_missing(request: types.LaunchRequest): string?
     local required = request.launch.required_files
     if not required or #required == 0 then return nil end
-    local volume = fs.get(resources.HOST_FILES)
+    local host_files, host_files_error = resources.host_files()
+    local volume = host_files and fs.get(host_files) or nil
+    if not volume and host_files_error then return "host files are unavailable: " .. host_files_error end
     if not volume then return "host files are unavailable for " .. request.launch.executable .. "'s required file" end
     for _, file in ipairs(required) do
         local directory = request.environment[file.variable]

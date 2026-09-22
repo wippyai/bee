@@ -19,6 +19,10 @@ entries:
     - bee.placement.native:database_ref
     - bee.placement.native:root_ref
     - bee.placement.native:runner_host_ref
+    - bee.placement.native:executor_ref
+    - bee.placement.native:host_files_ref
+    - bee.placement.native:admitted_roots_ref
+    - bee.placement.native:resource_mode_ref
     - custom
     - security
     - bee.placement.native:admitted_roots

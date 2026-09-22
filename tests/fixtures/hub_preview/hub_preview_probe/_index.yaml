@@ -23,7 +23,7 @@ entries:
   method: main
   modules: [logger, registry, base64]
   imports:
-    preview: bee.hub:preview
+    preview: bee.hub.binding:preview
   security:
     policies: [bee.hub_preview_probe:inspect_policy, bee.hub_preview_probe:registry_read_policy]
   meta:

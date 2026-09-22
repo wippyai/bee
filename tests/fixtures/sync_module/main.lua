@@ -12,7 +12,7 @@ local function principal(actor: string, write: boolean): funcs.Executor
     return funcs.new():with_actor(security.new_actor(actor)):with_scope(security.new_scope(policies))
 end
 local function call(client: funcs.Executor, method: string, request: unknown): Object
-    local result, err = client:call("bee.node:" .. method, request)
+    local result, err = client:call("bee.node.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
     assert(type(result) == "table", "node returned malformed reply")
     return result :: Object

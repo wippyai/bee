@@ -1,0 +1,16 @@
+version: '1.0'
+namespace: bee.node.traits
+entries:
+- name: metadata_trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Node metadata
+    comment: Read and update descriptive metadata within host-selected authority
+  prompt: |
+    Describe the node before updating it. Submit the observed revision and a
+    stable idempotency key. An update replaces the complete description; omitted
+    description and labels become empty. Reuse the same key only for the same
+    request. On conflict, reread and resolve the change before using a new key.
+    Metadata describes the node and never grants permissions or proves liveness.
+  tools: [bee.node.binding:describe, bee.node.binding:update_metadata]

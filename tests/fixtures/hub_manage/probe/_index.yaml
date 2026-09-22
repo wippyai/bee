@@ -5,7 +5,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.hub:call]
+    resources: [bee.hub.binding:call]
     effect: allow
 - name: management_policy
   kind: security.policy

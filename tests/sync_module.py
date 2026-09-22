@@ -1,5 +1,6 @@
 """Headless node metadata + ledger acceptance on one retained SQLite database."""
 import shutil
+import sqlite3
 import subprocess
 import tempfile
 from pathlib import Path
@@ -9,15 +10,8 @@ from workspace import ROOT, RUNTIME, database_environment
 def main():
     with tempfile.TemporaryDirectory(prefix="bee-sync-module-") as directory:
         folder = Path(directory)
-        shutil.copytree(ROOT / "src" / "node", folder / "src" / "node")
-        shutil.copytree(ROOT / "modules" / "bee-sync", folder / "modules" / "bee-sync")
-        shutil.copytree(ROOT / "modules" / "bee-persist", folder / "modules" / "bee-persist")
-        shutil.copytree(ROOT / "modules/bee-threads/src/records", folder / "src/records")
-        # Only the pure appearance value library; no desktop actor or terminal.
-        appearance = folder / "src/appearance"
-        appearance.mkdir()
-        shutil.copy2(ROOT / "modules/bee-application/src/appearance.lua", appearance / "appearance.lua")
-        (appearance / "_index.yaml").write_text("version: '1.0'\nnamespace: bee.application\nentries:\n- name: appearance\n  kind: library.lua\n  source: file://appearance.lua\n")
+        for module in ("application", "node", "persist", "sync", "threads"):
+            shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
         shutil.copytree(ROOT / "tests/fixtures/sync_module", folder / "src/probe")
         (folder / "src" / "_index.yaml").write_text("""version: '1.0'
 namespace: bee
@@ -35,6 +29,13 @@ entries:
     value: bee.sync_probe:sender
   - name: target_exports
     value: bee:sync_exports
+- name: dependency_node
+  kind: ns.dependency
+  component: bee/node
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.sync_probe:node_db
 - name: sync_exports
   kind: registry.entry
   data: {exports: []}
@@ -43,11 +44,11 @@ entries:
   host: {workers: 2, max_processes: 8}
   lifecycle: {auto_start: true}
 """)
+        probe_index = folder / "src" / "probe" / "_index.yaml"
         (folder / "src" / "probe" / "sender.lua").write_text("""local transaction = require(\"transaction\")
 local version = require(\"version\")
 return {send = function(_: string, _: version.Descriptor, _: string, _: {timeout: string?, source_cursor: integer}): transaction.Result return transaction.failure(\"UNAVAILABLE\", \"probe sender is not used\") end}
 """)
-        probe_index = folder / "src" / "probe" / "_index.yaml"
         probe_index.write_text(probe_index.read_text() + """\n- name: sender
   kind: library.lua
   source: file://sender.lua
@@ -59,7 +60,13 @@ return {send = function(_: string, _: version.Descriptor, _: string, _: {timeout
 modules:
   - name: bee/persist
     version: 0.1.0-dev
+  - name: bee/application
+    version: 0.1.0-dev
+  - name: bee/node
+    version: 0.1.0-dev
   - name: bee/sync
+    version: 0.1.0-dev
+  - name: bee/threads
     version: 0.1.0-dev
 """)
         (folder / ".wippy.yaml").write_text("""version: '1.0'
@@ -67,8 +74,11 @@ shutdown:
   timeout: 2s
 workspace:
   replacements:
-    bee/persist: ./modules/bee-persist
-    bee/sync: ./modules/bee-sync
+    bee/persist: ./modules/persist
+    bee/application: ./modules/application
+    bee/node: ./modules/node
+    bee/sync: ./modules/sync
+    bee/threads: ./modules/threads
 """)
         environment = database_environment(folder)
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=folder, check=True, timeout=60, env=environment)
@@ -81,6 +91,10 @@ workspace:
                 print(result.stdout)
                 raise SystemExit("Node sync acceptance failed in " + phase)
             print(marker)
+        selected = folder / ".wippy" / "selected-node.db"
+        with sqlite3.connect(selected) as connection:
+            names = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        assert "bee_sync_projections" in names, "Node owner did not use its injected database resource"
         print("Node sync: public dispatch, permissions, CAS, replay, ledger catch-up and same-database restart passed")
 
 

@@ -44,7 +44,7 @@ def exercise(packed, theme="honey"):
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "modules", project / "modules")
         if theme != "honey":
-            appearance = project / "modules/bee-application/src/appearance.lua"
+            appearance = project / "modules/application/src/appearance.lua"
             source = appearance.read_text()
             anchor = 'function M.defaults(): Preferences return {theme = "honey",'
             assert source.count(anchor) == 1

@@ -47,7 +47,7 @@ SOURCE_WORKSPACE = "agent-app-source"
 AUTHORING_THREAD = "agent-app-authoring"
 ADMITTED_TOOLS = ["app_docs", "overlay", "thread_message", "thread_read"]
 ACTIVE_TRAITS = ["app:author", "app:read"]
-MATERIAL = {"contract": "tests/fixtures/agent_app/CONTRACT.md", "client": "modules/bee-application/src/client.lua",
+MATERIAL = {"contract": "tests/fixtures/agent_app/CONTRACT.md", "client": "modules/application/src/client.lua",
             "example": "src/apps/timeline/app.lua", "view": "src/apps/timeline/view.lua"}
 
 

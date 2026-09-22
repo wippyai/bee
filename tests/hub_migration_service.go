@@ -54,18 +54,23 @@ func prepareFixture(root, repo string) error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join(repo, "tests/fixtures/hub_manage"))); err != nil {
 		return fmt.Errorf("copy Hub fixture: %w", err)
 	}
-	if err := os.CopyFS(filepath.Join(root, "src/hub"), os.DirFS(filepath.Join(repo, "src/hub"))); err != nil {
+	if err := os.CopyFS(filepath.Join(root, "src/hub"), os.DirFS(filepath.Join(repo, "modules/hub/src"))); err != nil {
 		return fmt.Errorf("copy production Hub source: %w", err)
 	}
-	if err := copyServiceFile(filepath.Join(repo, "modules/bee-threads/src/records/bounds.lua"), filepath.Join(root, "src/records/bounds.lua")); err != nil {
+	for _, module := range []string{"persist", "sync", "threads"} {
+		if err := os.CopyFS(filepath.Join(root, "modules", module), os.DirFS(filepath.Join(repo, "modules", module))); err != nil {
+			return fmt.Errorf("copy Hub dependency %s: %w", module, err)
+		}
+	}
+	if err := copyServiceFile(filepath.Join(repo, "modules/threads/src/records/bounds.lua"), filepath.Join(root, "src/records/bounds.lua")); err != nil {
 		return err
 	}
 	for _, name := range []string{"bounds.lua", "canonical.lua"} {
-		if err := copyServiceFile(filepath.Join(repo, "modules/bee-sync/src", name), filepath.Join(root, "src/sync", name)); err != nil {
+		if err := copyServiceFile(filepath.Join(repo, "modules/sync/src", name), filepath.Join(root, "src/sync", name)); err != nil {
 			return err
 		}
 	}
-	if err := copyServiceFile(filepath.Join(repo, "modules/bee-persist/src/transaction.lua"), filepath.Join(root, "src/persist/transaction.lua")); err != nil {
+	if err := copyServiceFile(filepath.Join(repo, "modules/persist/src/transaction.lua"), filepath.Join(root, "src/persist/transaction.lua")); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(root, "src/persist/_index.yaml"), []byte("version: '1.0'\nnamespace: bee.persist\nentries:\n- name: transaction\n  kind: library.lua\n  source: file://transaction.lua\n  modules: [sql, time]\n"), 0600); err != nil {
@@ -74,7 +79,7 @@ func prepareFixture(root, repo string) error {
 	if err := copyServiceFile(filepath.Join(repo, "wippy.lock"), filepath.Join(root, "wippy.lock")); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte("version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte("version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"), 0600); err != nil {
 		return err
 	}
 	return nil
@@ -104,7 +109,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.hub:call]
+    resources: [bee.hub.binding:call]
     effect: allow
 - name: manage
   kind: security.policy
@@ -120,7 +125,7 @@ entries:
     effect: allow
 - name: migration_function
   kind: security.policy
-  groups: [bee.hub:execution_scope]
+  groups: [bee.hub.security:execution_scope]
   policy:
     actions: [funcs.call]
     resources: [acme.storage:first, acme.storage:second]
@@ -483,10 +488,10 @@ func runMode(runtime, folder, hubURL, mode string) error {
 		index = strings.Replace(index, "[probe:caller, probe:manage, probe:read]", "[probe:caller, probe:manage, probe:read, probe:fixture_prerequisite]", 1)
 	}
 	if mode != "denied" {
-		index = appendPolicy(index, "migration_database", "db.get", "probe:db", "bee.hub:execution_scope")
+		index = appendPolicy(index, "migration_database", "db.get", "probe:db", "bee.hub.security:execution_scope")
 	}
 	if strings.HasPrefix(mode, "newdb") && mode != "newdb_denied" {
-		index = appendPolicy(index, "package_database", "db.get", "acme.storage:db", "bee.hub:execution_scope")
+		index = appendPolicy(index, "package_database", "db.get", "acme.storage:db", "bee.hub.security:execution_scope")
 	}
 	if err := os.WriteFile(filepath.Join(folder, "src/migration_probe/_index.yaml"), []byte(index), 0600); err != nil {
 		return err
@@ -498,7 +503,7 @@ func runMode(runtime, folder, hubURL, mode string) error {
 	}
 	environment := runEnvironment(folder, hubURL)
 	if mode == "crash" || mode == "tamper" || mode == "rollback_crash" || mode == "rollback_published" || mode == "rollback_tamper" || mode == "newdb_crash" || mode == "newdb_before" || mode == "newdb_checkpoint" || mode == "newdb_tamper" || mode == "newdb_rollback_tamper" {
-		service := filepath.Join(folder, "src/hub/service.lua")
+		service := filepath.Join(folder, "src/hub/binding/publication.lua")
 		original, err := os.ReadFile(service)
 		if err != nil {
 			return err

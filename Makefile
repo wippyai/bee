@@ -1,20 +1,7 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
-.PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check site-build site-check site-publish
+.PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check
 setup: native-tools
-
-# The public site has an explicit build step and a separately authorized
-# publication step. Publication never chooses a host by default.
-site-build:
-	./site/build.sh
-site-check: site-build
-	sh -n site/build.sh site/deploy.sh
-	node --check site/bee-sim.js
-	test -f dist/site/index.html -a -f dist/site/og.png -a -f dist/site/robots.txt -a -f dist/site/sitemap.xml
-	test "$$(find dist/site -maxdepth 1 -type f -name 'bee-sim.*.js' | wc -l)" -eq 1
-	test ! -e dist/site/install.ps1 -a ! -e dist/site/install.sh
-site-publish:
-	./site/deploy.sh
 
 .PHONY: hub-inspect-check
 # Explicit live-Hub proof; ordinary checks do not require Hub network access.

@@ -11,9 +11,9 @@ type Bindings = {[string]: Binding}
 type PolicyIds = {string}
 
 local HUB_PRIVATE_POLICIES: {string} = {
-    "bee.hub:execution_policy", "bee.hub:publisher_policy", "bee.hub:dependency_policy",
-    "bee.hub:receipt_policy", "bee.hub:worker_policy", "bee.hub:worker_name_policy",
-    "bee.hub:worker_reply_policy", "bee.hub:migration_context_policy",
+    "bee.hub.security:execution_policy", "bee.hub.security:publisher_policy", "bee.hub.security:dependency_policy",
+    "bee.hub.security:receipt_policy", "bee.hub.security:worker_policy", "bee.hub.security:worker_host_policy",
+    "bee.hub.security:worker_name_policy", "bee.hub.security:worker_reply_policy", "bee.hub.security:migration_context_policy",
 }
 
 local function registry_id(value: unknown): string?

@@ -1,0 +1,9 @@
+organization: bee
+module: node
+type: library
+version: 0.1.0-dev
+description: Authorized native-node descriptions and appearance defaults for Bee
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

@@ -1,5 +1,6 @@
 /.wippy/
 /dist/
+/site/
 *.db
 *.db-shm
 *.db-wal

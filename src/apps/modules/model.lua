@@ -11,7 +11,7 @@ M.MAX_TEXT = 512
 M.MAX_PARAMETERS = 128
 M.MAX_ITEMS = 100
 M.MAX_ROOTS = 16384
-M.HUB = "bee.hub:call"
+M.HUB = "bee.hub.binding:call"
 M.PUBLICATION = "bee.governance:publication_call"
 
 type Object = {[string]: unknown}

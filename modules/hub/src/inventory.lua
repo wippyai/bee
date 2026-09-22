@@ -1,5 +1,4 @@
--- MIT. Installed module identities come from one registry-owned snapshot.
-local registry = require("registry")
+-- MIT. Pure installed-module snapshot decoder shared by Hub planning and reads.
 local bounds = require("bounds")
 local requirements = require("requirements")
 local M = {}
@@ -114,14 +113,6 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     table.sort(modules, function(a: Module, b: Module): boolean return a.component < b.component end)
     table.sort(roots, function(a: Root, b: Root): boolean return a.id < b.id end)
     return {version = version, modules = modules, roots = roots}, nil
-end
-
-function M.read(): (Result?, string?)
-    local snapshot, snapshot_error = registry.snapshot()
-    if not snapshot then return nil, tostring(snapshot_error) end
-    local state, state_error = snapshot:state()
-    if not state then return nil, tostring(state_error) end
-    return M.decode(state, snapshot:version():id())
 end
 
 -- Only the dependency closure reachable from explicit registry roots is

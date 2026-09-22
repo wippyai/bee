@@ -25,7 +25,7 @@ entries:
   kind: security.policy
   policy:
     actions: [hive.invoke, funcs.call, bee.node.read, bee.approvals.decide]
-    resources: [bee.node:describe, bee.node:snapshot, bee.node:read_after, bee.node:update_metadata, bee.hive.supervisor:invoke_check, node-0, node-1, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, feed-workspace]
+    resources: [bee.node.binding:describe, bee.node.binding:snapshot, bee.node.binding:read_after, bee.node.binding:update_metadata, bee.hive.supervisor:invoke_check, node-0, node-1, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, feed-workspace]
     effect: allow
 - name: write_policy
   kind: security.policy

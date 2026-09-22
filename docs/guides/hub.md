@@ -8,7 +8,7 @@ creates an application overlay.
 The public facade is:
 
 ```lua
-bee.hub:call({operation, request?, expected_digest?})
+bee.hub.binding:call({operation, request?, expected_digest?})
 ```
 
 It returns `{ok, value?, code?, message?, replayed}`. The facade authenticates

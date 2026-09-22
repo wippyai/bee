@@ -188,14 +188,14 @@ func resourcesModuleWrite(folder, relative string, document interface{}) error {
 
 func resourcesModuleBase(folder string, resources bool, credentials bool) error {
 	modules := "    - name: bee/persist\n      version: 0.1.0-dev\n    - name: bee/threads\n      version: 0.1.0-dev\n"
-	replacements := "    bee/persist: ./modules/bee-persist\n    bee/threads: ./modules/bee-threads\n"
+	replacements := "    bee/persist: ./modules/persist\n    bee/threads: ./modules/threads\n"
 	if resources {
 		modules += "    - name: bee/resources\n      version: 0.1.0-dev\n"
-		replacements += "    bee/resources: ./modules/bee-resources\n"
+		replacements += "    bee/resources: ./modules/resources\n"
 	}
 	if credentials {
 		modules += "    - name: bee/credentials\n      version: 0.1.0-dev\n"
-		replacements += "    bee/credentials: ./modules/bee-credentials\n"
+		replacements += "    bee/credentials: ./modules/credentials\n"
 	}
 	if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"+modules), 0600); err != nil {
 		return fmt.Errorf("write wippy.lock: %w", err)
@@ -246,7 +246,7 @@ func resourcesModuleProbeIndex(namespace, command, actor string, modules []strin
 }
 
 func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
-	for _, name := range []string{"bee-resources", "bee-persist", "bee-threads"} {
+	for _, name := range []string{"resources", "persist", "threads"} {
 		if err := resourcesModuleCopyDir(filepath.Join(folder, "modules", name), filepath.Join(root, "modules", name)); err != nil {
 			return err
 		}
@@ -292,7 +292,7 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 }
 
 func resourcesModuleStageCredentials(root, folder string, dropSources bool) error {
-	for _, name := range []string{"bee-credentials", "bee-persist", "bee-threads"} {
+	for _, name := range []string{"credentials", "persist", "threads"} {
 		if err := resourcesModuleCopyDir(filepath.Join(folder, "modules", name), filepath.Join(root, "modules", name)); err != nil {
 			return err
 		}

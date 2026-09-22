@@ -1,98 +1,35 @@
 version: '1.0'
-namespace: bee.node
+namespace: bee.node.binding
 entries:
-- name: definition
-  kind: ns.definition
-  module: node
-  readme: file://README.md
-  meta:
-    title: Bee node descriptions
-    comment: Authorized editable node descriptions with owner-local revisions and sync ledger events
-- name: target_db
-  kind: ns.requirement
-  default: bee.node:db
-  meta: {comment: Host-selected SQLite resource for the node description ledger}
-  targets:
-  - entry: bee.node:database_ref
-    path: .resource_ref
-- name: database_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref}
-- name: environment
-  kind: env.storage.os
-  lifecycle: {auto_start: true}
-- name: db_path
-  kind: env.variable
-  storage: bee.node:environment
-  variable: BEE_NODE_DB
-  default: .wippy/node.db
-  readonly: true
-- name: db
-  kind: db.sql.sqlite
-  file: ${env:bee.node:db_path}
-  lifecycle: {auto_start: true}
-- name: protocol
+- name: node
   kind: library.lua
-  source: file://protocol.lua
-  imports:
-    bounds: bee.threads.records:bounds
-    appearance: bee.application:appearance
-- name: resources
-  kind: library.lua
-  source: file://resources.lua
-  modules: [registry]
-  imports:
-    bounds: bee.threads.records:bounds
-- name: service
-  kind: library.lua
-  source: file://service.lua
+  source: file://node.lua
   modules: [system, security, hash]
   imports:
     protocol: bee.node:protocol
-    resources: bee.node:resources
+    resources: bee.node.registry:resources
     sync: bee.sync.persist:store
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     appearance: bee.application:appearance
-- name: store_policy
-  kind: security.policy
-  policy:
-    actions: [db.get, registry.get, system.read]
-    resources: [bee.node:db, bee.node:database_ref, node]
-    effect: allow
-- name: contract
-  kind: contract.definition
-  methods:
-  - name: get_appearance
-    description: Read node appearance defaults and their revision
-  - name: update_appearance
-    description: Commit authorized node appearance defaults at an expected revision
-  - name: describe
-    description: Read this node's native identity and editable description
-  - name: update_metadata
-    description: Replace descriptive metadata at an expected revision and append its ledger event atomically
-  - name: snapshot
-    description: Snapshot the node description feed and its owner-local cursor
-  - name: read_after
-    description: Catch up the node description feed from an owner-local cursor
 - name: local
   kind: contract.binding
   contracts:
   - contract: bee.node:contract
     methods:
-      get_appearance: bee.node:get_appearance
-      update_appearance: bee.node:update_appearance
-      describe: bee.node:describe
-      update_metadata: bee.node:update_metadata
-      snapshot: bee.node:snapshot
-      read_after: bee.node:read_after
+      get_appearance: bee.node.binding:get_appearance
+      update_appearance: bee.node.binding:update_appearance
+      describe: bee.node.binding:describe
+      update_metadata: bee.node.binding:update_metadata
+      snapshot: bee.node.binding:snapshot
+      read_after: bee.node.binding:read_after
 - name: describe
   kind: function.lua
   source: file://describe_method.lua
   method: handle
-  imports: {service: bee.node:service}
-  security: {policies: [bee.node:store_policy]}
+  imports: {service: bee.node.binding:node}
+  security: {policies: [bee.node.security:database_policy, bee.node.security:store_policy]}
   meta:
     type: tool
     title: Describe node
@@ -118,8 +55,8 @@ entries:
   kind: function.lua
   source: file://update_metadata_method.lua
   method: handle
-  imports: {service: bee.node:service}
-  security: {policies: [bee.node:store_policy]}
+  imports: {service: bee.node.binding:node}
+  security: {policies: [bee.node.security:database_policy, bee.node.security:store_policy]}
   meta:
     type: tool
     title: Update node description
@@ -151,8 +88,8 @@ entries:
   kind: function.lua
   source: file://snapshot_method.lua
   method: handle
-  imports: {service: bee.node:service}
-  security: {policies: [bee.node:store_policy]}
+  imports: {service: bee.node.binding:node}
+  security: {policies: [bee.node.security:database_policy, bee.node.security:store_policy]}
   meta:
     hive: policy
     hive_operation:
@@ -164,8 +101,8 @@ entries:
   kind: function.lua
   source: file://read_after_method.lua
   method: handle
-  imports: {service: bee.node:service}
-  security: {policies: [bee.node:store_policy]}
+  imports: {service: bee.node.binding:node}
+  security: {policies: [bee.node.security:database_policy, bee.node.security:store_policy]}
   meta:
     hive: policy
     hive_operation:
@@ -179,30 +116,15 @@ entries:
           cursor: {type: integer, minimum: 0}
           limit: {type: integer, minimum: 1, maximum: 64}
       output: *node_reply
-- name: metadata_trait
-  kind: registry.entry
-  meta:
-    type: agent.trait
-    title: Node metadata
-    comment: Read and update descriptive metadata within host-selected authority
-  prompt: |
-    Describe the node before updating it. Submit the observed revision and a
-    stable idempotency key. An update replaces the complete description; omitted
-    description and labels become empty. Reuse the same key only for the same
-    request. On conflict, reread and resolve the change before using a new key.
-    Metadata describes the node and never grants permissions or proves liveness.
-  tools: [bee.node:describe, bee.node:update_metadata]
-
 - name: get_appearance
   kind: function.lua
   source: file://get_appearance_method.lua
   method: handle
-  imports: {service: bee.node:service}
-  security: {policies: [bee.node:store_policy]}
-
+  imports: {service: bee.node.binding:node}
+  security: {policies: [bee.node.security:database_policy, bee.node.security:store_policy]}
 - name: update_appearance
   kind: function.lua
   source: file://update_appearance_method.lua
   method: handle
-  imports: {service: bee.node:service}
-  security: {policies: [bee.node:store_policy]}
+  imports: {service: bee.node.binding:node}
+  security: {policies: [bee.node.security:database_policy, bee.node.security:store_policy]}

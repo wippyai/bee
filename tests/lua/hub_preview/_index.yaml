@@ -8,4 +8,4 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    preview: bee.hub:preview
+    preview: bee.hub.binding:preview

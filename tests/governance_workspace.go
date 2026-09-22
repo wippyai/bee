@@ -207,8 +207,8 @@ func copyFile(destination, source string) error {
 func setup(root string) error {
 	for _, source := range []struct{ name, path string }{
 		{name: "gov", path: "src/gov"},
-		{name: "sync", path: "modules/bee-sync/src"},
-		{name: "persist", path: "modules/bee-persist/src"},
+		{name: "sync", path: "modules/sync/src"},
+		{name: "persist", path: "modules/persist/src"},
 	} {
 		if err := copyTree(filepath.Join(root, "src", source.name), source.path); err != nil {
 			return fmt.Errorf("copy %s source: %w", source.name, err)
@@ -238,7 +238,7 @@ func setup(root string) error {
 	if err := os.MkdirAll(filepath.Join(root, "src", "records"), 0700); err != nil {
 		return fmt.Errorf("create records composition: %w", err)
 	}
-	if err := copyFile(filepath.Join(root, "src", "records", "bounds.lua"), "modules/bee-threads/src/records/bounds.lua"); err != nil {
+	if err := copyFile(filepath.Join(root, "src", "records", "bounds.lua"), "modules/threads/src/records/bounds.lua"); err != nil {
 		return fmt.Errorf("copy records bounds: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "src", "records", "_index.yaml"), []byte(recordsIndex), 0600); err != nil {

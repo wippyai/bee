@@ -28,7 +28,7 @@ local function handle(raw: unknown): string
         if not applied then error(tostring(apply_error)) end
         if command == "approval-revoke" then return "approval_revoked" end
         local created, create_error = funcs.new():call("bee.approvals.binding:request", {workspace_id = "feed-workspace", idempotency_key = "feed-approval-1",
-            request_kind = "permission", policy = "feed-approval", proposal = {kind = "operation", ref = "bee.node:update_metadata", revision = "1", payload = {display_name = "Approved name"}}, prompt = {text = "Approve this test request?"}})
+            request_kind = "permission", policy = "feed-approval", proposal = {kind = "operation", ref = "bee.node.binding:update_metadata", revision = "1", payload = {display_name = "Approved name"}}, prompt = {text = "Approve this test request?"}})
         if create_error or object(created).ok ~= true then error("create approval: " .. tostring(create_error)) end
         return "approval_created"
     end
@@ -81,13 +81,13 @@ local function handle(raw: unknown): string
         mesh:close()
         return "feed_approval"
     end
-    local operation = "bee.node:describe"
+    local operation = "bee.node.binding:describe"
     local request: {[string]: unknown} = {}
     if command == "feed-write" or command == "feed-replay" or command == "feed-write-denied" then
-        operation = "bee.node:update_metadata"
+        operation = "bee.node.binding:update_metadata"
         request = {expected_revision = 0, idempotency_key = "remote-write-1", metadata = {display_name = "Remote owner", labels = {purpose = "acceptance"}}}
-    elseif command == "feed-snapshot" then operation = "bee.node:snapshot" end
-    local reply = mesh:call({node_id = remote, service_id = "bee.node"}, {operation_ref = operation}, request, {timeout = "5s"})
+    elseif command == "feed-snapshot" then operation = "bee.node.binding:snapshot" end
+    local reply = mesh:call({node_id = remote, service_id = "bee.node.binding"}, {operation_ref = operation}, request, {timeout = "5s"})
     mesh:close()
     if command == "feed-denied" then
         if reply.ok or not reply.error or reply.error.code ~= "DENIED" then error("unmapped principal was not denied") end

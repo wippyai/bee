@@ -3,13 +3,13 @@ local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
 local catalog = require("catalog")
-local inspect = require("inspect")
+local inspection = require("inspection")
 local plan = require("plan")
 local preview = require("preview")
 local transaction = require("transaction")
 type Result = transaction.Result
-local BACKEND = "bee.hub:backend"
-local SCOPE = "bee.hub:execution_scope"
+local BACKEND = "bee.hub.binding:backend"
+local SCOPE = "bee.hub.security:execution_scope"
 local function handle(raw: unknown): Result
     local value = bounds.object(raw)
     if not value then return transaction.failure("INVALID", "Hub request must be an object") end
@@ -30,7 +30,7 @@ local function handle(raw: unknown): Result
         if not request then return transaction.failure("INVALID", problem or "invalid package read") end
         resource = request.component
     elseif operation == "inspect" then
-        local request, problem = inspect.decode(value.request)
+        local request, problem = inspection.decode(value.request)
         if not request then return transaction.failure("INVALID", problem or "invalid inspection request") end
         resource = request.component
     elseif operation == "plan" or operation == "apply" then

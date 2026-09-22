@@ -10,5 +10,5 @@ entries:
     test: wippy.test:test
     plan: bee.hub:plan
     graph: bee.hub:graph
-    inspect: bee.hub:inspect
+    inspect: bee.hub:inspection
     requirements: bee.hub:requirements

@@ -144,6 +144,12 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		if err := os.CopyFS(srcDir, os.DirFS(frozenSource)); err != nil {
 			t.Fatal(err)
 		}
+		moduleNames := []string{"hive", "persist", "sync", "threads"}
+		for _, name := range moduleNames {
+			if err := os.CopyFS(filepath.Join(folder, "modules", name), os.DirFS(filepath.Join(root, "modules", name))); err != nil {
+				t.Fatal(err)
+			}
+		}
 		fixtureDir := filepath.Join(srcDir, "hive_service_bootstrap")
 		if err := os.CopyFS(fixtureDir, os.DirFS(serviceFixture)); err != nil {
 			t.Fatal(err)
@@ -202,7 +208,13 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
+		lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
+		replacements := map[string]string{}
+		for _, name := range moduleNames {
+			lock += "- name: bee/" + name + "\n  version: 0.1.0-dev\n"
+			replacements["bee/"+name] = "./modules/" + name
+		}
+		if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte(lock), 0600); err != nil {
 			t.Fatal(err)
 		}
 
@@ -211,10 +223,11 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 			role, expected = "server", 1
 		}
 		config := map[string]any{
-			"version":  "1.0",
-			"shutdown": map[string]any{"timeout": "2s"},
-			"relay":    map[string]any{"node_name": fmt.Sprintf("node-%d", i)},
-			"lua":      map[string]any{"type_system": map[string]any{"enabled": true, "strict": true}},
+			"version":   "1.0",
+			"shutdown":  map[string]any{"timeout": "2s"},
+			"workspace": map[string]any{"replacements": replacements},
+			"relay":     map[string]any{"node_name": fmt.Sprintf("node-%d", i)},
+			"lua":       map[string]any{"type_system": map[string]any{"enabled": true, "strict": true}},
 			"cluster": map[string]any{
 				"enabled": true,
 				"name":    fmt.Sprintf("node-%d", i),
@@ -261,7 +274,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 	start := func(i int, folder string) *procRunner {
 		cmd := exec.CommandContext(ctx, binary, "run", "--silent", "hive-service-probe", "--", fmt.Sprintf("node-%d", 1-i))
 		cmd.Dir = folder
-		cmd.Env = append(os.Environ(), "GOMAXPROCS=2", "BEE_WORKSPACE_DB="+filepath.Join(folder, "workspace.db"), "BEE_THREADS_DB="+filepath.Join(folder, "threads.db"))
+		cmd.Env = append(os.Environ(), "GOMAXPROCS=2", "BEE_WORKSPACE_DB="+filepath.Join(folder, "workspace.db"), "BEE_THREADS_DB="+filepath.Join(folder, "threads.db"), "BEE_SYNC_DB="+filepath.Join(folder, "sync.db"))
 		runner, err := newProcRunner(cmd, fmt.Sprintf("service node %d", i))
 		if err != nil {
 			t.Fatal(err)

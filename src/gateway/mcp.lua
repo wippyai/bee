@@ -67,7 +67,7 @@ local TOOLS: {Tool} = {
             offset = {type = "integer", minimum = 0},
             limit = {type = "integer", minimum = 1, maximum = 16384},
         }}},
-    {name = "components", description = "Inspect installed registry components, explore Hub packages and review a resolved installation plan without applying it. Catalog and details discover packages; installed reads effective component state; inspect and state show exact package entries, resources and requirements; files and read_file inspect packaged documentation and examples; plan resolves the exact dependency closure, migrations and capabilities. This tool cannot apply, install, update, uninstall or write the registry.", operation = "bee.hub:call",
+    {name = "components", description = "Inspect installed registry components, explore Hub packages and review a resolved installation plan without applying it. Catalog and details discover packages; installed reads effective component state; inspect and state show exact package entries, resources and requirements; files and read_file inspect packaged documentation and examples; plan resolves the exact dependency closure, migrations and capabilities. This tool cannot apply, install, update, uninstall or write the registry.", operation = "bee.hub.binding:call",
         policies = {"bee:gateway_tool_components_policy"}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
             operation = {type = "string", enum = {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan"}},

@@ -42,10 +42,10 @@ entries:
     actions:
     - hive.expose.policy
     resources:
-    - bee.node:describe
-    - bee.node:update_metadata
-    - bee.node:snapshot
-    - bee.node:read_after
+    - bee.node.binding:describe
+    - bee.node.binding:update_metadata
+    - bee.node.binding:snapshot
+    - bee.node.binding:read_after
     - bee.approvals.binding:feed_snapshot
     - bee.approvals.binding:feed_read_after
     - bee.approvals.binding:read
@@ -64,10 +64,10 @@ entries:
     - node
     - bee.hive.supervisor:principal_mappings
     - bee.hive.supervisor:invoke_check
-    - bee.node:describe
-    - bee.node:update_metadata
-    - bee.node:snapshot
-    - bee.node:read_after
+    - bee.node.binding:describe
+    - bee.node.binding:update_metadata
+    - bee.node.binding:snapshot
+    - bee.node.binding:read_after
     - bee.approvals.binding:feed_snapshot
     - bee.approvals.binding:feed_read_after
     - bee.approvals.binding:read

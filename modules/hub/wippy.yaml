@@ -1,0 +1,6 @@
+organization: bee
+module: hub
+type: library
+version: 0.1.0-dev
+description: Host-authorized Hub inspection, dependency planning, publication and migration recovery
+license: MIT

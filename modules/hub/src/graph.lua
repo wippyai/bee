@@ -2,16 +2,16 @@
 -- remains responsible for resolution and linking the published roots.
 local bounds = require("bounds")
 local requirements = require("requirements")
-local inspect = require("inspect")
+local inspection = require("inspection")
 local semver = require("semver")
 local canonical = require("canonical")
 local M = {}
 type Edge = {component: string, version: string, parameters: {requirements.Parameter}}
 type Package = {component: string, version: string, digest: string,
-    entries: {inspect.Entry}, dependencies: {Edge}, requirements: requirements.Result}
+    entries: {inspection.Entry}, dependencies: {Edge}, requirements: requirements.Result}
 type Source = {
     versions: (string, integer) -> ({string}?, boolean?, string?),
-    artifact: (string, string) -> (inspect.Inspection?, string?),
+    artifact: (string, string) -> (inspection.Inspection?, string?),
 }
 type Result = {packages: {Package}, missing: {string}}
 
@@ -30,7 +30,7 @@ function M.edge(raw: unknown): (Edge?, string?)
     return {component = component, version = version, parameters = parameters}, nil
 end
 
-local function package(artifact: inspect.Inspection): (Package?, string?)
+local function package(artifact: inspection.Inspection): (Package?, string?)
     local dependencies: {Edge} = {}
     for _, entry in ipairs(artifact.entries) do
         if entry.kind == "ns.dependency" then

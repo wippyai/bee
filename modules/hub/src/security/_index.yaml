@@ -1,0 +1,54 @@
+version: '1.0'
+namespace: bee.hub.security
+entries:
+- name: facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.hub.security:execution_scope") || (action == "funcs.call" && resource == "bee.hub.binding:backend")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.hub.security:execution_scope, bee.hub.binding:backend]
+    effect: allow
+- name: execution_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [bee.hub.execute], resources: [bee.hub.binding:backend, bee.hub.service:worker], effect: allow}
+- name: read_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [registry.get, hub.modules.list, hub.modules.search, hub.modules.get, hub.modules.readme, hub.versions.open, hub.versions.list], resources: '*', effect: allow}
+- name: publisher_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [registry.apply, registry.apply_version], resources: '*', effect: allow}
+- name: dependency_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [registry.create.ns.dependency, registry.update.ns.dependency, registry.delete.ns.dependency], resources: 'bee.hub.deps:*', effect: allow}
+- name: receipt_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [registry.create.registry.entry, registry.update.registry.entry], resources: 'bee.hub.operations:*', effect: allow}
+- name: worker_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [process.spawn], resources: [bee.hub.service:worker], effect: allow}
+- name: worker_host_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [process.host], resources: [], effect: allow}
+- name: worker_name_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [process.registry.register, process.registry.register.local, process.registry.unregister], resources: [bee.hub.publisher], effect: allow}
+- name: worker_reply_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [process.send], resources: '*', effect: allow}
+- name: migration_context_policy
+  kind: security.policy.expr
+  groups: [execution_scope]
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.scope.create" && resource == "without")'
+    actions: [funcs.security, security.scope.create]
+    resources: [security, without]
+    effect: allow

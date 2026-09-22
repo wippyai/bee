@@ -192,7 +192,7 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.node:get_appearance
+    - bee.node.binding:get_appearance
     effect: allow
 - name: client_node_defaults_read_policy
   kind: security.policy

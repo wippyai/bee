@@ -1,0 +1,69 @@
+version: '1.0'
+namespace: bee.hub.binding
+entries:
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [hub]
+  imports: {bounds: bee.threads.records:bounds}
+- name: inspect
+  kind: library.lua
+  source: file://inspect.lua
+  modules: [hub]
+  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub:requirements, inspection: bee.hub:inspection}
+- name: preview
+  kind: library.lua
+  source: file://preview.lua
+  modules: [hub, fs, base64]
+  imports: {bounds: bee.threads.records:bounds, inspection: bee.hub:inspection}
+- name: migration_runner
+  kind: library.lua
+  source: file://migration_runner.lua
+  modules: [sql, funcs, security]
+  imports: {migrations: bee.hub:migrations}
+- name: publication
+  kind: library.lua
+  source: file://publication.lua
+  modules: [registry, security, hash]
+  imports:
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+    plan: bee.hub:plan
+    catalog: bee.hub.binding:catalog
+    inspect: bee.hub.binding:inspect
+    inspection: bee.hub:inspection
+    transaction: bee.persist:transaction
+    inventory: bee.hub:inventory
+    inventory_reader: bee.hub.registry:inventory_reader
+    migration_runner: bee.hub.binding:migration_runner
+    migrations: bee.hub:migrations
+    migration_work: bee.hub:migration_work
+- name: backend
+  kind: function.lua
+  source: file://backend.lua
+  method: handle
+  modules: [security, process, uuid, time, channel]
+  imports:
+    bounds: bee.threads.records:bounds
+    catalog: bee.hub.binding:catalog
+    inventory_reader: bee.hub.registry:inventory_reader
+    inspect: bee.hub.binding:inspect
+    publication: bee.hub.binding:publication
+    transaction: bee.persist:transaction
+    preview: bee.hub.binding:preview
+    host_resources: bee.hub.registry:host_resources
+  meta: {type: internal}
+- name: call
+  kind: function.lua
+  source: file://facade.lua
+  method: handle
+  modules: [security, funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    catalog: bee.hub.binding:catalog
+    inspection: bee.hub:inspection
+    plan: bee.hub:plan
+    transaction: bee.persist:transaction
+    preview: bee.hub.binding:preview
+  security: {policies: [bee.hub.security:facade_policy]}
+  meta: {type: tool, title: Component explorer, llm_alias: BeeComponents, llm_description: Inspect effective installed component state and exact Hub packages without applying them, input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","plan"]},"request":{"type":"object"}}}'}

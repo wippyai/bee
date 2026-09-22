@@ -22,6 +22,13 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: 0.1.0-dev
+- name: dependency_hub
+  kind: ns.dependency
+  component: bee/hub
+  version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
 - name: dependency_hive
   kind: ns.dependency
   component: bee/hive
@@ -29,6 +36,10 @@ entries:
 - name: dependency_application
   kind: ns.dependency
   component: bee/application
+  version: 0.1.0-dev
+- name: dependency_node
+  kind: ns.dependency
+  component: bee/node
   version: 0.1.0-dev
 - name: dependency_docs
   kind: ns.dependency

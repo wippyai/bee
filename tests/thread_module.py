@@ -8,14 +8,14 @@ import tempfile
 import yaml
 from workspace import ROOT, RUNTIME
 
-MODULE = ROOT / "modules/bee-threads"
-PERSIST = ROOT / "modules/bee-persist"
+MODULE = ROOT / "modules/threads"
+PERSIST = ROOT / "modules/persist"
 HOST = ROOT / "tests/fixtures/modules/threads/src"
 
 
 def stage(folder, mutate=None):
-    shutil.copytree(MODULE, folder / "modules/bee-threads")
-    shutil.copytree(PERSIST, folder / "modules/bee-persist")
+    shutil.copytree(MODULE, folder / "modules/threads")
+    shutil.copytree(PERSIST, folder / "modules/persist")
     shutil.copytree(HOST, folder / "src/host")
     (folder / "wippy.lock").write_text("""directories:
   modules: .wippy
@@ -31,8 +31,8 @@ shutdown:
   timeout: 2s
 workspace:
   replacements:
-    bee/persist: ./modules/bee-persist
-    bee/threads: ./modules/bee-threads
+    bee/persist: ./modules/persist
+    bee/threads: ./modules/threads
 """)
     if mutate:
         mutate(folder)
@@ -51,7 +51,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="bee-thread-module-") as directory:
         folder = stage(Path(directory))
         staged = sorted(str(p.relative_to(folder)) for p in folder.rglob("_index.yaml"))
-        assert staged == ["modules/bee-persist/src/_index.yaml", "modules/bee-threads/src/_index.yaml", "modules/bee-threads/src/approvals/_index.yaml", "modules/bee-threads/src/carrier/_index.yaml", "modules/bee-threads/src/delivery/_index.yaml", "modules/bee-threads/src/persist/_index.yaml", "modules/bee-threads/src/projection/_index.yaml", "modules/bee-threads/src/records/_index.yaml", "modules/bee-threads/src/service/_index.yaml", "src/host/_index.yaml"], staged
+        assert staged == ["modules/persist/src/_index.yaml", "modules/threads/src/_index.yaml", "modules/threads/src/approvals/_index.yaml", "modules/threads/src/carrier/_index.yaml", "modules/threads/src/delivery/_index.yaml", "modules/threads/src/persist/_index.yaml", "modules/threads/src/projection/_index.yaml", "modules/threads/src/records/_index.yaml", "modules/threads/src/service/_index.yaml", "src/host/_index.yaml"], staged
         run(folder, "lint")
         database = folder / "threads.db"
         output = run(folder, "run", "threads-isolation", env={"BEE_THREADS_DB": str(database)})
@@ -59,7 +59,7 @@ def main():
         assert database.exists(), "journal did not open the linked database"
 
     def broken_target(folder):
-        index = folder / "modules/bee-threads/src/_index.yaml"
+        index = folder / "modules/threads/src/_index.yaml"
         document = yaml.safe_load(index.read_text())
         for entry in document["entries"]:
             if entry["name"] == "target_db":

@@ -9,6 +9,20 @@ entries:
   kind: process.host
   host: {max_processes: 64, workers: 2}
   lifecycle: {auto_start: true}
+- name: dependency_sync
+  kind: ns.dependency
+  component: bee/sync
+  version: 0.1.0-dev
+  parameters:
+  - name: target_sender
+    value: bee.hive.host:replica_sender
+  - name: target_exports
+    value: bee:sync_exports
+- name: sync_exports
+  kind: registry.entry
+  meta:
+    type: bee.sync.exports
+  data: {exports: []}
 - name: hive_supervisor_policy
   kind: security.policy
   policy:
@@ -31,7 +45,7 @@ entries:
   kind: security.policy
   policy:
     actions: [hive.expose.policy]
-    resources: [bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after,
+    resources: [bee.node.binding:describe, bee.node.binding:update_metadata, bee.node.binding:snapshot, bee.node.binding:read_after,
       bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide,
       bee.approvals.binding:withdraw, bee.sync.binding:replica_receive]
     effect: allow
@@ -47,7 +61,7 @@ entries:
   policy:
     actions: [registry.get, system.read, funcs.call]
     resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check,
-      bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after,
+      bee.node.binding:describe, bee.node.binding:update_metadata, bee.node.binding:snapshot, bee.node.binding:read_after,
       bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide,
       bee.approvals.binding:withdraw, bee.sync.binding:replica_receive]
     effect: allow

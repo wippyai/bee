@@ -82,25 +82,8 @@ func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService
 	if err := os.CopyFS(filepath.Join(sourceSnapshot, "hive"), os.DirFS(filepath.Join(repository, "src/hive"))); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.CopyFS(filepath.Join(sourceSnapshot, "hive_component"), os.DirFS(filepath.Join(repository, "modules/bee-hive/src"))); err != nil {
-		t.Fatal(err)
-	}
-	componentManifest := filepath.Join(sourceSnapshot, "hive_component", "_index.yaml")
-	component, err := os.ReadFile(componentManifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	const threadsDependency = "- name: dependency_threads\n  kind: ns.dependency\n  component: bee/threads\n  version: '*'\n"
-	staged := strings.Replace(string(component), threadsDependency, "", 1)
-	if staged == string(component) {
-		t.Fatal("Hive component fixture is missing its threads dependency")
-	}
-	component = []byte(staged)
-	if err := os.WriteFile(componentManifest, component, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if !includeDefaultService {
-		if err := os.RemoveAll(filepath.Join(sourceSnapshot, "hive/host")); err != nil {
+	for _, name := range []string{"hive", "persist", "sync", "threads"} {
+		if err := os.CopyFS(filepath.Join(root, "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -108,31 +91,8 @@ func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService
 	if err := os.CopyFS(fixtureSnapshot, os.DirFS(filepath.Join(repository, "tests/fixtures/hive_supervisor"))); err != nil {
 		t.Fatal(err)
 	}
-	// Stage explicit pure interface dependencies only. The optional desktop
-	// bridge must not pull desktop processes, stores or grants into this fixture.
-	canonicalDir := filepath.Join(sourceSnapshot, "canonical")
-	if err := os.MkdirAll(canonicalDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	canonical, err := os.ReadFile(filepath.Join(repository, "modules/bee-threads/src/records/canonical.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(canonicalDir, "canonical.lua"), canonical, 0600); err != nil {
-		t.Fatal(err)
-	}
-	bounds, err := os.ReadFile(filepath.Join(repository, "modules/bee-threads/src/records/bounds.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(canonicalDir, "bounds.lua"), bounds, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(canonicalDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.threads.records\nentries:\n- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	for _, dependency := range []struct{ directory, source, manifest string }{
-		{"application_arguments", "modules/bee-application/src/arguments.lua", "version: '1.0'\nnamespace: bee.application\nentries:\n- name: arguments\n  kind: library.lua\n  source: file://source.lua\n"},
+		{"application_arguments", "modules/application/src/arguments.lua", "version: '1.0'\nnamespace: bee.application\nentries:\n- name: arguments\n  kind: library.lua\n  source: file://source.lua\n"},
 		{"application_protocol", "src/core/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.application:arguments\n"},
 		{"retained_protocol", "src/core/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
 	} {
@@ -183,7 +143,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService
 	if err := os.WriteFile(filepath.Join(clipboardDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	appearance, err := os.ReadFile(filepath.Join(repository, "modules/bee-application/src/appearance.lua"))
+	appearance, err := os.ReadFile(filepath.Join(repository, "modules/application/src/appearance.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,22 +155,6 @@ func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(appearanceDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.application\nentries:\n- name: appearance\n  kind: library.lua\n  source: file://appearance.lua\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	syncDir := filepath.Join(sourceSnapshot, "sync")
-	if err := os.MkdirAll(syncDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"bounds", "canonical", "version"} {
-		body, err := os.ReadFile(filepath.Join(repository, "modules/bee-sync/src", name+".lua"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(syncDir, name+".lua"), body, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(syncDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.sync\nentries:\n- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n  imports:\n    bounds: bee.sync:bounds\n- name: version\n  kind: library.lua\n  source: file://version.lua\n  modules: [hash]\n  imports:\n    bounds: bee.sync:bounds\n    canonical: bee.sync:canonical\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	host, err := os.ReadFile(filepath.Join(fixtureSnapshot, "host.manifest"))
@@ -299,39 +243,28 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 	if err := os.WriteFile(fixtureManifest, []byte(fixtureText), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.RemoveAll(filepath.Join(source, "sync")); err != nil {
-		t.Fatal(err)
-	}
 	hostDir := filepath.Join(source, "hive", "host")
-	if err := os.MkdirAll(hostDir, 0700); err != nil {
+	if err := os.RemoveAll(hostDir); err != nil {
 		t.Fatal(err)
 	}
-	sender, err := os.ReadFile(filepath.Join(repository, "src", "hive", "host", "replica_sender.lua"))
-	if err != nil {
+	if err := os.CopyFS(hostDir, os.DirFS(filepath.Join(repository, "src", "hive", "host"))); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hostDir, "replica_sender.lua"), sender, 0600); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"application", "node"} {
+		if err := os.CopyFS(filepath.Join(filepath.Dir(source), "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.WriteFile(filepath.Join(hostDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.hive.host\nentries:\n- name: replica_sender\n  kind: library.lua\n  source: file://replica_sender.lua\n  modules: [hash, base64]\n  imports:\n    hive: bee.hive:client\n    version: bee.sync:version\n    transaction: bee.persist:transaction\n    bounds: bee.sync:bounds\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.CopyFS(filepath.Join(source, "node"), os.DirFS(filepath.Join(repository, "src/node"))); err != nil {
-		t.Fatal(err)
+	for _, directory := range []string{"application_arguments", "appearance"} {
+		if err := os.RemoveAll(filepath.Join(source, directory)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.CopyFS(filepath.Join(source, "approvals", "host"), os.DirFS(filepath.Join(repository, "src/approvals/host"))); err != nil {
 		t.Fatal(err)
 	}
-	// Feeds exercise the real approval component and its declared dependencies.
-	// Replace the pure thread subset used by the transport-only fixture.
-	if err := os.RemoveAll(filepath.Join(source, "canonical")); err != nil {
+	if err := os.CopyFS(filepath.Join(filepath.Dir(source), "modules", "approvals"), os.DirFS(filepath.Join(repository, "modules", "approvals"))); err != nil {
 		t.Fatal(err)
-	}
-	for _, name := range []string{"approvals", "persist", "sync", "threads"} {
-		module := "bee-" + name
-		if err := os.CopyFS(filepath.Join(filepath.Dir(source), "modules", module), os.DirFS(filepath.Join(repository, "modules", module))); err != nil {
-			t.Fatal(err)
-		}
 	}
 	if err := os.CopyFS(filepath.Join(source, "feed_fixture"), os.DirFS(filepath.Join(repository, "tests/fixtures/hive_feeds"))); err != nil {
 		t.Fatal(err)
@@ -378,15 +311,18 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		if err := os.CopyFS(filepath.Join(folder, "src", "hive_probe"), os.DirFS(fixtureSnapshot)); err != nil {
 			t.Fatal(err)
 		}
-		lock := "directories:\n  modules: .wippy\n  src: ./src\n"
+		moduleNames := []string{"hive", "persist", "sync", "threads"}
 		if feeds {
-			if err := os.CopyFS(filepath.Join(folder, "modules"), os.DirFS(filepath.Join(root, "modules"))); err != nil {
+			moduleNames = append(moduleNames, "application", "approvals", "node")
+		}
+		for _, name := range moduleNames {
+			if err := os.CopyFS(filepath.Join(folder, "modules", name), os.DirFS(filepath.Join(root, "modules", name))); err != nil {
 				t.Fatal(err)
 			}
-			lock += "modules:\n"
-			for _, name := range []string{"approvals", "persist", "sync", "threads"} {
-				lock += "- name: bee/" + name + "\n  version: 0.1.0-dev\n"
-			}
+		}
+		lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
+		for _, name := range moduleNames {
+			lock += "- name: bee/" + name + "\n  version: 0.1.0-dev\n"
 		}
 		if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte(lock), 0600); err != nil {
 			t.Fatal(err)
@@ -406,13 +342,11 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 				"internode":  map[string]any{"bind_addr": "127.0.0.1", "bind_port": 0, "auto_port": true, "identity_key": keys[i], "trusted_peer_keys": trusted, "tls": transportTLS},
 			},
 		}
-		if feeds {
-			replacements := map[string]string{}
-			for _, name := range []string{"approvals", "persist", "sync", "threads"} {
-				replacements["bee/"+name] = "./modules/bee-" + name
-			}
-			config["workspace"] = map[string]any{"replacements": replacements}
+		replacements := map[string]string{}
+		for _, name := range moduleNames {
+			replacements["bee/"+name] = "./modules/" + name
 		}
+		config["workspace"] = map[string]any{"replacements": replacements}
 		data, err := json.Marshal(config)
 		if err != nil {
 			t.Fatal(err)
@@ -434,6 +368,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 			verbosity = "--verbose"
 		}
 		args := []string{"run", verbosity}
+		args = append(args, "--override", "bee.hive.host:supervisor_service:lifecycle.auto_start=false")
 		if feeds {
 			for _, service := range []string{"bee.approvals.service:worker_service", "bee.threads:owner_service", "bee.threads.delivery:waiter_service"} {
 				args = append(args, "--override", service+":lifecycle.auto_start=false")
@@ -442,9 +377,9 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		args = append(args, "hive-supervisor-probe", "--", fmt.Sprintf("node-%d", 1-i))
 		cmd := exec.CommandContext(ctx, binary, args...)
 		cmd.Dir = folder
-		cmd.Env = append(os.Environ(), "GOMAXPROCS=2", "BEE_WORKSPACE_DB="+filepath.Join(folder, "workspace.db"), "BEE_THREADS_DB="+filepath.Join(folder, "threads.db"))
+		cmd.Env = append(os.Environ(), "GOMAXPROCS=2", "BEE_WORKSPACE_DB="+filepath.Join(folder, "workspace.db"), "BEE_THREADS_DB="+filepath.Join(folder, "threads.db"), "BEE_SYNC_DB="+filepath.Join(folder, "sync.db"))
 		if feeds {
-			cmd.Env = append(cmd.Env, "BEE_APPROVALS_DB="+filepath.Join(folder, "approvals.db"), "BEE_NODE_DB="+filepath.Join(folder, "node.db"), "BEE_SYNC_DB="+filepath.Join(folder, "sync.db"))
+			cmd.Env = append(cmd.Env, "BEE_APPROVALS_DB="+filepath.Join(folder, "approvals.db"), "BEE_NODE_DB="+filepath.Join(folder, "node.db"))
 		}
 		runner, err := newProcRunner(cmd, fmt.Sprintf("supervisor node %d", i))
 		if err != nil {

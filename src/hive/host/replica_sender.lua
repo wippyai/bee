@@ -66,15 +66,13 @@ local function result(reply: unknown): transaction.Result
     return transaction.success(domain.value, domain.replayed)
 end
 
-local function call(client: unknown, node: string, input: Object, idempotency_key: string, timeout: string?): transaction.Result
-    if type(client) ~= "table" then return failure("UNAVAILABLE", "Hive client is unavailable") end
-    local selected = client :: any
-    local reply = selected:call({node_id = node, service_id = SERVICE}, {operation_ref = OPERATION}, input,
+local function call(client: hive.Client, node: string, input: Object, idempotency_key: string, timeout: string?): transaction.Result
+    local reply = client:call({node_id = node, service_id = SERVICE}, {operation_ref = OPERATION}, input,
         {idempotency_key = idempotency_key, timeout = timeout})
     return result(reply)
 end
 
-local function status(client: unknown, node: string, descriptor: version.Descriptor, timeout: string?): (State?, transaction.Result?)
+local function status(client: hive.Client, node: string, descriptor: version.Descriptor, timeout: string?): (State?, transaction.Result?)
     local stable, stable_error = key(descriptor.digest, "status", 0)
     if not stable then return nil, failure("INTERNAL", tostring(stable_error)) end
     local outcome = call(client, node, {action = "status", source_owner = descriptor.owner_id,
@@ -85,7 +83,7 @@ local function status(client: unknown, node: string, descriptor: version.Descrip
     return decoded, nil
 end
 
-local function mutation(client: unknown, node: string, descriptor: version.Descriptor, action: string,
+local function mutation(client: hive.Client, node: string, descriptor: version.Descriptor, action: string,
     input: Object, offset: integer?, expected: integer, timeout: string?): transaction.Result
     local stable, stable_error = key(descriptor.digest, action, offset)
     if not stable then return failure("INTERNAL", tostring(stable_error)) end

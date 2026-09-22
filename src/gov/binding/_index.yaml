@@ -65,7 +65,7 @@ entries:
   imports:
     canonical: bee.sync:canonical
     hub_migrations: bee.hub:migrations
-    migration_runner: bee.hub:migration_runner
+    migration_runner: bee.hub.binding:migration_runner
     migration_work: bee.governance:migration_work
     materializer: bee.governance.registry:materializer
 - name: destination_service
@@ -88,7 +88,7 @@ entries:
     destination: bee.governance.binding:destination
     materializer: bee.governance.registry:materializer
     migration_effect: bee.governance.binding:migration_effect
-    migration_runner: bee.hub:migration_runner
+    migration_runner: bee.hub.binding:migration_runner
     activation_profiles: bee.governance:activation_profile_decoder
     preflight: bee.governance:preflight
 - name: destination_backend_call

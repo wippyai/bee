@@ -113,7 +113,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		if err := os.CopyFS(filepath.Join(folder, "src"), os.DirFS(sourceSnapshot)); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.CopyFS(filepath.Join(folder, "modules", "bee-persist"), os.DirFS(filepath.Join(repository, "modules", "bee-persist"))); err != nil {
+		if err := os.CopyFS(filepath.Join(folder, "modules", "persist"), os.DirFS(filepath.Join(repository, "modules", "persist"))); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.CopyFS(filepath.Join(folder, "src", "hive_probe"), os.DirFS(fixtureSnapshot)); err != nil {
@@ -164,7 +164,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		}
 		config := map[string]any{
 			"version": "1.0", "shutdown": map[string]any{"timeout": "2s"},
-			"workspace": map[string]any{"replacements": map[string]string{"bee/persist": "./modules/bee-persist"}},
+			"workspace": map[string]any{"replacements": map[string]string{"bee/persist": "./modules/persist"}},
 			"relay":     map[string]any{"node_name": fmt.Sprintf("node-%d", i)},
 			"lua":       map[string]any{"type_system": map[string]any{"enabled": true, "strict": true}},
 			"cluster": map[string]any{

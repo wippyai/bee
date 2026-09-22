@@ -29,10 +29,10 @@ entries:
   method: main
   modules: [hub, logger, registry, base64]
   imports:
-    inspect: bee.hub:inspect
-    catalog: bee.hub:catalog
+    inspect: bee.hub.binding:inspect
+    catalog: bee.hub.binding:catalog
     inventory: bee.hub:inventory
-    preview: bee.hub:preview
+    preview: bee.hub.binding:preview
   security:
     policies: [bee.hub_inspect_probe:inspect_policy, bee.hub_inspect_probe:registry_read_policy, bee.hub_inspect_probe:catalog_policy]
   meta:

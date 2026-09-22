@@ -7,8 +7,10 @@ local bounds = require("bounds")
 local plan = require("plan")
 local catalog = require("catalog")
 local inspect = require("inspect")
+local inspection = require("inspection")
 local transaction = require("transaction")
 local inventory = require("inventory")
+local inventory_reader = require("inventory_reader")
 local canonical = require("canonical")
 local hash = require("hash")
 local migration_runner = require("migration_runner")
@@ -28,9 +30,9 @@ local function digest(raw: unknown): string?
     return raw
 end
 local function source(): {versions: (string, integer) -> ({string}?, boolean?, string?),
-    artifact: (string, string) -> (inspect.Inspection?, string?)}
+    artifact: (string, string) -> (inspection.Inspection?, string?)}
     return {versions = catalog.available,
-        artifact = function(component: string, version: string): (inspect.Inspection?, string?)
+        artifact = function(component: string, version: string): (inspection.Inspection?, string?)
             return inspect.read({component = component, version = version})
         end}
 end
@@ -378,7 +380,7 @@ end
 
 -- Called only inside the named publication worker after facade authorization.
 function M.apply(raw: unknown, expected: unknown): Result
-    if not security.can("bee.hub.execute", "bee.hub:worker") then return transaction.failure("DENIED", "Hub worker authority required") end
+    if not security.can("bee.hub.execute", "bee.hub.service:worker") then return transaction.failure("DENIED", "Hub worker authority required") end
     local measured = digest(expected)
     if not measured then return transaction.failure("INVALID", "confirmation requires the displayed plan digest") end
     local actor = security.actor()
@@ -515,7 +517,7 @@ function M.apply(raw: unknown, expected: unknown): Result
     if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
     local applied, apply_error = changes:apply()
     if not applied then return transaction.failure("FAILED", tostring(apply_error)) end
-    local actual, inventory_error = inventory.read()
+    local actual, inventory_error = inventory_reader.read()
     local mismatch: string? = inventory_error
     if actual then mismatch = verify(expected, actual)
     else mismatch = inventory_error or "cannot verify installed module inventory" end

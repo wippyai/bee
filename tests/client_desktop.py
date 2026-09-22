@@ -79,7 +79,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             code = fixture.read_text().replace('local process = require("process")', 'local process = require("process")\nlocal funcs = require("funcs")', 1)
             assert code.count('local function main(mode: string?)') == 1
             code = code.replace('local function main(mode: string?)', """local function main(mode: string?)
-    local seeded, seed_error = funcs.call("bee.node:update_appearance", {expected_revision = 0,
+    local seeded, seed_error = funcs.call("bee.node.binding:update_appearance", {expected_revision = 0,
         idempotency_key = "fixture-defaults", preferences = {theme = "dos", background = "solid", taskbar = "labels"}})
     assert(not seed_error and type(seeded) == "table" and seeded.ok == true, "Cannot seed node defaults")""", 1)
             code = code.replace('options = {version = 1, desktop_id', 'options = {version = 1, node_defaults = true, desktop_id', 1)
@@ -113,7 +113,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
     end
     assert(customized, "Explicit selection did not restore custom mode")
     local function update_defaults(revision: integer, key: string, theme: string)
-        local changed, change_error = funcs.call("bee.node:update_appearance", {expected_revision = revision,
+        local changed, change_error = funcs.call("bee.node.binding:update_appearance", {expected_revision = revision,
             idempotency_key = key, preferences = {theme = theme, background = "solid", taskbar = "labels"}})
         assert(not change_error and type(changed) == "table" and changed.ok == true, "Cannot update node defaults")
         local applied = false

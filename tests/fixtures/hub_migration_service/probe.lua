@@ -4,7 +4,7 @@ local registry = require("registry")
 local logger = require("logger")
 local sql = require("sql")
 local function call(operation, request, digest)
-    local reply, err = funcs.call("bee.hub:call", {operation = operation, request = request, expected_digest = digest})
+    local reply, err = funcs.call("bee.hub.binding:call", {operation = operation, request = request, expected_digest = digest})
     assert(not err, tostring(err))
     assert(type(reply) == "table", "no facade reply")
     return reply

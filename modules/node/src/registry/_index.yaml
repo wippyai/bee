@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.node.registry
+entries:
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds

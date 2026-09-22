@@ -4,7 +4,13 @@
     {
       "module": "bee/node",
       "root": "bee.node",
-      "namespaces": ["bee.node"]
+      "namespaces": [
+        "bee.node",
+        "bee.node.binding",
+        "bee.node.registry",
+        "bee.node.security",
+        "bee.node.traits"
+      ]
     },
     {
       "module": "bee/sync",
@@ -36,6 +42,7 @@
       "root": "bee",
       "namespaces": [
         "bee",
+        "bee.modules",
         "bee.applications",
         "bee.client",
         "bee.console",
@@ -147,7 +154,11 @@
       "root": "bee.hub",
       "namespaces": [
         "bee.hub",
-        "bee.modules"
+        "bee.hub.binding",
+        "bee.hub.registry",
+        "bee.hub.service",
+        "bee.hub.security",
+        "bee.hub.traits"
       ]
     },
     {

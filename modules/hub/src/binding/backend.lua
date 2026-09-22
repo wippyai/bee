@@ -7,10 +7,11 @@ local time = require("time")
 local channel = require("channel")
 local bounds = require("bounds")
 local catalog = require("catalog")
-local inventory = require("inventory")
+local inventory_reader = require("inventory_reader")
 local inspect = require("inspect")
 local preview = require("preview")
-local service = require("service")
+local publication = require("publication")
+local host_resources = require("host_resources")
 local transaction = require("transaction")
 type Result = transaction.Result
 
@@ -29,7 +30,9 @@ local function publish(request: unknown, expected: string): Result
     local topic = "bee.hub.result." .. id
     local replies, listen_error = process.listen(topic, {message = true})
     if not replies then return transaction.failure("UNAVAILABLE", tostring(listen_error)) end
-    local pid, spawn_error = process.spawn("bee.hub:worker", "bee:workers", process.pid(), topic, request, expected)
+    local host, host_error = host_resources.process_host()
+    if not host then return transaction.failure("UNAVAILABLE", host_error or "Hub worker host is unavailable") end
+    local pid, spawn_error = process.spawn("bee.hub.service:worker", host, process.pid(), topic, request, expected)
     if not pid then process.unlisten(replies); return transaction.failure("UNAVAILABLE", tostring(spawn_error)) end
     local deadline = time.after("120s")
     while true do
@@ -48,7 +51,7 @@ local function publish(request: unknown, expected: string): Result
     return transaction.failure("UNCERTAIN", "Hub worker did not return a result")
 end
 local function handle(raw: unknown): Result
-    if not security.can("bee.hub.execute", "bee.hub:backend") then return transaction.failure("DENIED", "Hub backend is private") end
+    if not security.can("bee.hub.execute", "bee.hub.binding:backend") then return transaction.failure("DENIED", "Hub backend is private") end
     local value = bounds.object(raw)
     if not value then return transaction.failure("INVALID", "invalid Hub request") end
     local operation = bounds.line(value.operation, 32)
@@ -70,18 +73,18 @@ local function handle(raw: unknown): Result
         if not result then return transaction.failure("UNAVAILABLE", problem or "package inspection unavailable") end
         return transaction.success(result, false)
     elseif value.operation == "installed" then
-        local result, problem = inventory.read()
+        local result, problem = inventory_reader.read()
         if not result then return transaction.failure("UNAVAILABLE", problem or "inventory unavailable") end
         return transaction.success(result, false)
     elseif value.operation == "plan" then
-        local result, problem = service.prepare(value.request)
+        local result, problem = publication.prepare(value.request)
         if not result then return transaction.failure("INVALID", problem or "package plan unavailable") end
         return transaction.success(result.plan, false)
     elseif value.operation == "apply" then
         local expected = bounds.line(value.expected_digest, 64)
         if not expected then return transaction.failure("INVALID", "confirmation digest is required") end
         return publish(value.request, expected)
-    elseif value.operation == "status" then return service.status(value.expected_digest, value.request) end
+    elseif value.operation == "status" then return publication.status(value.expected_digest, value.request) end
     return transaction.failure("INVALID", "unknown Hub operation")
 end
 return {handle = handle}

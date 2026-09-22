@@ -65,7 +65,7 @@ Large WASM/assets use verified content transfer, not unbounded ledger records.
 
 ## Node metadata
 
-`bee.node:describe`, `update_metadata`, `snapshot` and `read_after` operate on
+`bee.node.binding:describe`, `update_metadata`, `snapshot` and `read_after` operate on
 the executing node. The host grants `bee.node.read` / `bee.node.update` on its
 exact native node ID and selects the `target_db` resource. `BEE_NODE_DB` selects
 the bundled node database path.
@@ -73,7 +73,7 @@ the bundled node database path.
 An update replaces `{display_name, description, labels}` and requires
 `expected_revision` and a stable `idempotency_key`. Omitted description/labels
 become empty. Identity, trust, permissions, runtime capabilities and presence
-cannot be changed through metadata. `bee.node:metadata_trait` describes the two
+cannot be changed through metadata. `bee.node.traits:metadata_trait` describes the two
 agent-facing read/update tools without granting either operation.
 
 ## Approval feeds and UI

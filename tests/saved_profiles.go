@@ -177,25 +177,25 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesCopyTree(filepath.Join(root, "src", "harness", "profiles"), filepath.Join(source, "src", "harness", "profiles")); err != nil {
 		return fmt.Errorf("copy profiles source: %w", err)
 	}
-	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "bee-sync"), filepath.Join(source, "modules", "bee-sync")); err != nil {
+	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "sync"), filepath.Join(source, "modules", "sync")); err != nil {
 		return fmt.Errorf("copy sync module: %w", err)
 	}
-	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "bee-persist"), filepath.Join(source, "modules", "bee-persist")); err != nil {
+	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "persist"), filepath.Join(source, "modules", "persist")); err != nil {
 		return fmt.Errorf("copy persist module: %w", err)
 	}
 	if err := savedProfilesWrite(filepath.Join(root, "src", "sync_sender.lua"), savedProfilesSyncSender); err != nil {
 		return err
 	}
-	if err := savedProfilesCopyFile(filepath.Join(root, "src", "node", "README.md"), filepath.Join(source, "src", "node", "README.md")); err != nil {
+	if err := savedProfilesCopyFile(filepath.Join(root, "src", "node", "README.md"), filepath.Join(source, "modules", "node", "src", "README.md")); err != nil {
 		return fmt.Errorf("copy node README: %w", err)
 	}
 	if err := savedProfilesWrite(filepath.Join(root, "src", "node", "_index.yaml"), savedProfilesNodeRootIndex); err != nil {
 		return err
 	}
-	if err := savedProfilesCopyFile(filepath.Join(root, "src", "threads", "records", "bounds.lua"), filepath.Join(source, "modules", "bee-threads", "src", "records", "bounds.lua")); err != nil {
+	if err := savedProfilesCopyFile(filepath.Join(root, "src", "threads", "records", "bounds.lua"), filepath.Join(source, "modules", "threads", "src", "records", "bounds.lua")); err != nil {
 		return err
 	}
-	if err := savedProfilesCopyFile(filepath.Join(root, "src", "threads", "records", "canonical.lua"), filepath.Join(source, "modules", "bee-threads", "src", "records", "canonical.lua")); err != nil {
+	if err := savedProfilesCopyFile(filepath.Join(root, "src", "threads", "records", "canonical.lua"), filepath.Join(source, "modules", "threads", "src", "records", "canonical.lua")); err != nil {
 		return err
 	}
 	if err := savedProfilesWrite(filepath.Join(root, "src", "threads", "records", "_index.yaml"), savedProfilesRecordsIndex); err != nil {
@@ -207,7 +207,7 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesWrite(filepath.Join(root, "wippy.lock"), "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n"); err != nil {
 		return err
 	}
-	if err := savedProfilesWrite(filepath.Join(root, ".wippy.yaml"), "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/persist: ./modules/bee-persist\n    bee/sync: ./modules/bee-sync\n"); err != nil {
+	if err := savedProfilesWrite(filepath.Join(root, ".wippy.yaml"), "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n"); err != nil {
 		return err
 	}
 	return nil

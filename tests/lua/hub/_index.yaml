@@ -68,7 +68,7 @@ entries:
   imports:
     test: wippy.test:test
     effect: bee.governance.binding:migration_effect
-    migration_runner: bee.hub:migration_runner
+    migration_runner: bee.hub.binding:migration_runner
 - name: migration_runner_test
   kind: function.lua
   source: file://migration_runner_test.lua
@@ -79,15 +79,16 @@ entries:
     policies:
     - bee.hub:migration_runner_test_policy
     - bee.hub:migration_binding_deny_policy
-    - bee.hub:execution_policy
-    - bee.hub:publisher_policy
-    - bee.hub:worker_policy
-    - bee.hub:migration_context_policy
+    - bee.hub.security:execution_policy
+    - bee.hub.security:publisher_policy
+    - bee.hub.security:worker_policy
+    - bee.hub.security:worker_host_policy
+    - bee.hub.security:migration_context_policy
     - bee:governance_destination_service_policy
     - bee:governance_destination_execution_policy
   imports:
     test: wippy.test:test
-    migration_runner: bee.hub:migration_runner
+    migration_runner: bee.hub.binding:migration_runner
     migrations: bee.hub:migrations
 - name: requirements_test
   kind: function.lua
@@ -97,6 +98,14 @@ entries:
   imports:
     test: wippy.test:test
     requirements: bee.hub:requirements
+- name: host_resources_test
+  kind: function.lua
+  source: file://host_resources_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    host_resources: bee.hub.registry:host_resources
 - name: inspect_test
   kind: function.lua
   source: file://inspect_test.lua
@@ -104,4 +113,5 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    inspect: bee.hub:inspect
+    inspect: bee.hub.binding:inspect
+    inspection: bee.hub:inspection

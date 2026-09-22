@@ -3,7 +3,7 @@
 local hub = require("hub")
 local base64 = require("base64")
 local bounds = require("bounds")
-local inspect = require("inspect")
+local inspection = require("inspection")
 local M = {}
 type Request = {component: string, version: string, resource: string?, path: string, offset: integer, limit: integer, expected_digest: string?}
 type File = {name: string, type: string}
@@ -19,7 +19,7 @@ function M.decode(operation: string, raw: unknown): (Request?, string?)
     elseif operation ~= "state" then return nil, "unknown package read" end
     local extra = bounds.fields(value, allowed)
     if extra then return nil, extra end
-    local selected, invalid = inspect.decode({component = value.component, version = value.version})
+    local selected, invalid = inspection.decode({component = value.component, version = value.version})
     if not selected then return nil, invalid end
     local expected: string? = nil
     if value.expected_digest ~= nil then

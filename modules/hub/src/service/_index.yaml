@@ -1,0 +1,10 @@
+version: '1.0'
+namespace: bee.hub.service
+entries:
+- name: worker
+  kind: process.lua
+  source: file://worker.lua
+  method: main
+  modules: [process, security]
+  imports: {publication: bee.hub.binding:publication, transaction: bee.persist:transaction}
+  meta: {type: internal}

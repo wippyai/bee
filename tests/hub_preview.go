@@ -69,7 +69,7 @@ func copyFixture(root string) error {
 	if err := os.MkdirAll(filepath.Join(root, "src", "persist"), 0700); err != nil {
 		return err
 	}
-	transaction, err := os.ReadFile(filepath.Join("modules", "bee-persist", "src", "transaction.lua"))
+	transaction, err := os.ReadFile(filepath.Join("modules", "persist", "src", "transaction.lua"))
 	if err != nil {
 		return err
 	}

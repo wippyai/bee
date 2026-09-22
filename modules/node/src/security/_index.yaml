@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.node.security
+entries:
+- name: database_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.node:db]
+    effect: allow
+- name: store_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, system.read]
+    resources: [bee.node:database_ref, node]
+    effect: allow

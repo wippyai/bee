@@ -6,7 +6,7 @@ local logger = require("logger")
 local bounds = require("bounds")
 type Object = {[string]: unknown}
 local function call(operation: string, request: unknown?, digest: string?): Object
-    local result, problem = funcs.new():call("bee.hub:call", {operation = operation, request = request, expected_digest = digest})
+    local result, problem = funcs.new():call("bee.hub.binding:call", {operation = operation, request = request, expected_digest = digest})
     assert(not problem, tostring(problem))
     local reply = bounds.object(result)
     assert(reply, "invalid facade result")
@@ -31,9 +31,9 @@ local function applied(request: unknown, digest: string)
 end
 local function main()
     local baseline = assert(registry.snapshot())
-    local scope, scope_error = security.named_scope("bee.hub:execution_scope")
+    local scope, scope_error = security.named_scope("bee.hub.security:execution_scope")
     assert(not scope and scope_error, "caller obtained private Hub execution scope")
-    local backend, backend_error = funcs.new():call("bee.hub:backend", {operation = "installed"})
+    local backend, backend_error = funcs.new():call("bee.hub.binding:backend", {operation = "installed"})
     local backend_reply = bounds.object(backend)
     assert(backend_error or (backend_reply and backend_reply.ok == false and backend_reply.code == "DENIED"), "caller reached private backend")
     local changes = assert(baseline:changes())
@@ -75,7 +75,7 @@ local function main()
     logger:info("HUB_MANAGE_PASS")
 end
 local function narrow()
-    local result, problem = funcs.new():call("bee.hub:call", {operation = "plan",
+    local result, problem = funcs.new():call("bee.hub.binding:call", {operation = "plan",
         request = {action = "install", component = "wippy/test", version = "0.4.16"}})
     assert(not problem, tostring(problem))
     local reply = assert(bounds.object(result))
@@ -84,11 +84,11 @@ local function narrow()
 end
 local function reader()
     local request = {action = "install", component = "wippy/test", version = "0.4.16"}
-    local review, review_error = funcs.new():call("bee.hub:call", {operation = "plan", request = request})
+    local review, review_error = funcs.new():call("bee.hub.binding:call", {operation = "plan", request = request})
     assert(not review_error, tostring(review_error))
     local plan = assert(bounds.object(review))
     local value = assert(bounds.object(plan.value))
-    local denied, denied_error = funcs.new():call("bee.hub:call", {operation = "apply", request = request,
+    local denied, denied_error = funcs.new():call("bee.hub.binding:call", {operation = "apply", request = request,
         expected_digest = value.digest})
     assert(not denied_error, tostring(denied_error))
     local denied_reply = assert(bounds.object(denied))

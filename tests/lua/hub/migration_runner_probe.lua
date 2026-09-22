@@ -19,20 +19,20 @@ local function run(options: {[string]: unknown}): {[string]: unknown}
     local id = options.id
     assert(type(id) == "string")
     if id == DEFAULT then
-        for _, policy in ipairs({"bee.hub:execution_policy", "bee.hub:publisher_policy",
-            "bee.hub:worker_policy", "bee.hub:migration_context_policy"}) do
+        for _, policy in ipairs({"bee.hub.security:execution_policy", "bee.hub.security:publisher_policy",
+            "bee.hub.security:worker_policy", "bee.hub.security:worker_host_policy", "bee.hub.security:migration_context_policy"}) do
             expect_policy(policy, false)
         end
         expect_policy("bee:governance_destination_service_policy", true)
         expect_policy("bee:governance_destination_execution_policy", true)
     elseif id == CUSTOM then
-        expect_policy("bee.hub:execution_policy", true)
-        expect_policy("bee.hub:publisher_policy", true)
+        expect_policy("bee.hub.security:execution_policy", true)
+        expect_policy("bee.hub.security:publisher_policy", true)
         expect_policy("bee:governance_destination_service_policy", false)
         expect_policy("bee:governance_destination_execution_policy", false)
     elseif id == GOVERNANCE then
-        expect_policy("bee.hub:execution_policy", false)
-        expect_policy("bee.hub:publisher_policy", false)
+        expect_policy("bee.hub.security:execution_policy", false)
+        expect_policy("bee.hub.security:publisher_policy", false)
         expect_policy("bee:governance_destination_service_policy", false)
         expect_policy("bee:governance_destination_execution_policy", false)
         expect_policy("bee.hub:governance_migration_grant_policy", true)

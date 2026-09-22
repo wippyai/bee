@@ -171,9 +171,9 @@ entries:
   meta:
     comment: A bound MCP subject may inspect effective installed component state, package previews and effect-free plans through the strict Hub facade; it receives no apply, publication or registry-write authority
   policy:
-    expression: '(action == "funcs.call" && resource == "bee.hub:call") || (action == "bee.hub.read" && resource != "")'
+    expression: '(action == "funcs.call" && resource == "bee.hub.binding:call") || (action == "bee.hub.read" && resource != "")'
     actions: [funcs.call, bee.hub.read]
-    resources: [bee.hub:call, '*']
+    resources: [bee.hub.binding:call, '*']
     effect: allow
 - name: gateway_tool_delivery_policy
   kind: security.policy.expr

@@ -2,7 +2,7 @@
 
 `bee.approvals` is the approval owner for one Bee node. It stores requests,
 decisions, history, inbox changes and delivery outbox rows in an owner-scoped
-database. See [the implementation README](../../modules/bee-approvals/src/README.md) and
+database. See [the implementation README](../../modules/approvals/src/README.md) and
 [sync and inbox](sync-and-inbox.md) for the surrounding owner-feed boundary.
 Application confirmation dialogs are live broker questions; they are not
 durable approvals and never grant remote operation authority.

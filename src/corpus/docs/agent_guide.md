@@ -13,7 +13,7 @@ permissions intact. Registry metadata describes capabilities; it never grants
 them. Native Terminal runs with the operating system user's authority.
 
 Keep desktop responsibilities in `src/core`, public application helpers and appearance values in
-`modules/bee-application/src`, and standalone applications in `src/apps`.
+`modules/application/src`, and standalone applications in `src/apps`.
 Use the [UI brand book](../guides/ui.md) and the runnable UI Guide for
 presentation and interaction rules. The guide is reference source, not a
 widget framework. Apps use public contracts such as `bee.application:client`

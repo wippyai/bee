@@ -36,7 +36,7 @@ function M.advance(reader: Reader, now: integer): Pending?
     end
     if now < reader.due then return nil end
     reader.due = now + 5000
-    local future, err = funcs.async("bee.node:get_appearance", {})
+    local future, err = funcs.async("bee.node.binding:get_appearance", {})
     if err or not future then return nil end
     -- Runtime response() returns the future's channel; the selected manifest
     -- still leaves its generic element type unspecified.

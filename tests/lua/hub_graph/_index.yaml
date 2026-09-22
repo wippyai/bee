@@ -9,4 +9,4 @@ entries:
   imports:
     test: wippy.test:test
     graph: bee.hub:graph
-    inspect: bee.hub:inspect
+    inspect: bee.hub:inspection

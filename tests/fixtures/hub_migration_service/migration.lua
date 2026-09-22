@@ -6,7 +6,7 @@ local function run(options)
         {"registry.apply", "*"}, {"registry.apply_version", "*"},
         {"registry.create.ns.dependency", "bee.hub.deps:probe"},
         {"registry.update.registry.entry", "bee.hub.operations:probe"},
-        {"bee.hub.execute", "bee.hub:backend"}, {"process.spawn", "bee.hub:worker"},
+        {"bee.hub.execute", "bee.hub.binding:backend"}, {"process.spawn", "bee.hub.service:worker"}, {"process.host", "bee:workers"},
         {"process.registry.register", "bee.hub.publisher"},
         {"process.send", "probe"}, {"funcs.security", "security"},
         {"security.scope.create", "without"},

@@ -123,7 +123,7 @@ local function prove_endpoint_call_scope()
     assert(scope:evaluate(actor, "registry.get", "bee:workspace_root") ~= "allow", "docs policy reaches an unrelated registry entry")
     assert(scope:evaluate(actor, "bee.governance.overlay.read", "any-overlay") == "allow", "overlay read is absent")
     assert(scope:evaluate(actor, "bee.governance.overlay.write", "any-overlay") == "allow", "overlay write is absent")
-    for _, target in ipairs({"bee.threads.service:create", "bee.gateway:materialize", "bee.hub:call", "arbitrary:operation"}) do
+    for _, target in ipairs({"bee.threads.service:create", "bee.gateway:materialize", "bee.hub.binding:call", "arbitrary:operation"}) do
         assert(scope:evaluate(actor, "funcs.call", target) ~= "allow", "endpoint can invoke an unrelated operation")
     end
 end

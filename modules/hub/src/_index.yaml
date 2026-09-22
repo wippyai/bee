@@ -1,0 +1,63 @@
+version: '1.0'
+namespace: bee.hub
+entries:
+- name: definition
+  kind: ns.definition
+  module: hub
+  readme: file://README.md
+  meta: {title: Bee Hub, comment: Scoped package reads, dependency planning and publication recovery}
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: '*'
+- name: dependency_sync
+  kind: ns.dependency
+  component: bee/sync
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: process_host
+  kind: ns.requirement
+  meta: {comment: Host-selected process host for the fixed Hub publisher}
+  targets:
+  - entry: bee.hub:process_host_ref
+    path: .host_ref
+  - entry: bee.hub.security:worker_host_policy
+    path: .policy.resources
+- name: process_host_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked Hub publisher host; an absent link fails closed}
+- name: requirements
+  kind: library.lua
+  source: file://requirements.lua
+  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical}
+- name: inspection
+  kind: library.lua
+  source: file://inspection.lua
+  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub:requirements}
+- name: inventory
+  kind: library.lua
+  source: file://inventory.lua
+  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub:requirements}
+- name: semver
+  kind: library.lua
+  source: file://semver.lua
+- name: graph
+  kind: library.lua
+  source: file://graph.lua
+  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub:requirements, inspection: bee.hub:inspection, semver: bee.hub:semver, canonical: bee.sync:canonical}
+- name: plan
+  kind: library.lua
+  source: file://plan.lua
+  modules: [hash]
+  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical, graph: bee.hub:graph, inventory: bee.hub:inventory, requirements: bee.hub:requirements, semver: bee.hub:semver}
+- name: migrations
+  kind: library.lua
+  source: file://migrations.lua
+- name: migration_work
+  kind: library.lua
+  source: file://migration_work.lua
+  modules: [hash]
+  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical, plan: bee.hub:plan, migrations: bee.hub:migrations}

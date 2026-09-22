@@ -48,6 +48,7 @@ func (f *fakeOwner) seams(directory string) clientSeams {
 			f.joined++
 			return nil
 		},
+		waitEnrolled: func(context.Context, string, string) error { return nil },
 	}
 }
 
@@ -116,6 +117,26 @@ func TestClientReusesRunningOwnerWithoutSpawning(t *testing.T) {
 	}
 	if owner.joined != 1 {
 		t.Fatalf("joined %d times, want 1", owner.joined)
+	}
+}
+
+func TestClientWaitsForEnrollmentBeforeJoining(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	waited := false
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	seams.waitEnrolled = func(_ context.Context, gotState, node string) error {
+		waited = true
+		if gotState != state || node == "" {
+			t.Fatalf("waitEnrolled(%q, %q)", gotState, node)
+		}
+		return nil
+	}
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if !waited {
+		t.Fatal("client joined before its enrollment was registered")
 	}
 }
 

@@ -36,6 +36,9 @@ type clientSeams struct {
 	startOwner     func(ctx context.Context, launch app.Launch) (done <-chan struct{}, wait func() error, err error)
 	waitDescriptor func(ctx context.Context, directory string) (rendezvous.Descriptor, error)
 	join           func(ctx context.Context, join joinRequest) error
+	// waitEnrolled blocks until the owner has registered the client's node in the
+	// local enrollment, or the context ends.
+	waitEnrolled func(ctx context.Context, state, node string) error
 }
 
 // joinRequest is the client's authenticated join into the owner's mesh.
@@ -94,6 +97,13 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	}
 	if err := enrollClient(launch.State, directory, join.Node, join.Public); err != nil {
 		return err
+	}
+	// The owner registers the trusted key on its own bounded refresh, so wait
+	// until the enrollment lists this node before the mesh handshake.
+	if seams.waitEnrolled != nil {
+		if err := seams.waitEnrolled(ctx, launch.State, join.Node); err != nil {
+			return err
+		}
 	}
 	join.State = launch.State
 	return seams.join(ctx, join)

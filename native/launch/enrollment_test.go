@@ -43,6 +43,14 @@ func (r *recordingRegistry) Apply(_ context.Context, changes registry.ChangeSet)
 	return nil, nil
 }
 
+// prepareOwnerState creates the owner files the publisher reads.
+func prepareOwnerState(t *testing.T, state string) {
+	t.Helper()
+	if _, _, err := prepareOwner(state); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func writeClientKey(t *testing.T, trusted, node string) ed25519.PublicKey {
 	t.Helper()
 	public, _, err := ed25519.GenerateKey(rand.Reader)
@@ -61,6 +69,7 @@ func writeClientKey(t *testing.T, trusted, node string) ed25519.PublicKey {
 
 func TestEnrollmentPublisherAppliesAddedAndRetiredNodes(t *testing.T) {
 	state := t.TempDir()
+	prepareOwnerState(t, state)
 	trusted := ownerTrustedDirectory(state)
 	writeClientKey(t, trusted, "client-a")
 	writeClientKey(t, trusted, "client-b")
@@ -108,6 +117,7 @@ func TestEnrollmentPublisherAppliesAddedAndRetiredNodes(t *testing.T) {
 
 func TestEnrollmentPublisherIgnoresMalformedTrustedFiles(t *testing.T) {
 	state := t.TempDir()
+	prepareOwnerState(t, state)
 	trusted := ownerTrustedDirectory(state)
 	writeClientKey(t, trusted, "client-good")
 	// A malformed key, a wrong-length key and an unrelated file are all ignored.
@@ -152,6 +162,7 @@ func (r *flakyRegistry) Apply(_ context.Context, changes registry.ChangeSet) (re
 
 func TestEnrollmentPublisherRetriesUntilTheEntryExists(t *testing.T) {
 	state := t.TempDir()
+	prepareOwnerState(t, state)
 	writeClientKey(t, ownerTrustedDirectory(state), "client-a")
 	reg := &flakyRegistry{}
 	reg.failures.Store(2)
@@ -187,6 +198,7 @@ func TestEnrollmentPublisherRetriesUntilTheEntryExists(t *testing.T) {
 
 func TestOwnerComponentsIncludeEnrollmentPublisher(t *testing.T) {
 	state := t.TempDir()
+	prepareOwnerState(t, state)
 	components, err := ownerComponents(state, "0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatal(err)
@@ -209,6 +221,7 @@ func TestOwnerComponentsIncludeEnrollmentPublisher(t *testing.T) {
 
 func TestEnrollmentPublisherHandlesMissingDirectory(t *testing.T) {
 	state := t.TempDir()
+	prepareOwnerState(t, state)
 	changes, err := enrollmentChangeSet(ownerTrustedDirectory(state))
 	if err != nil {
 		t.Fatal(err)

@@ -8,6 +8,7 @@ package session
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -36,9 +37,12 @@ const detachTimeout = 200 * time.Millisecond
 
 type Config struct {
 	Directory string
-	Selection Selection
-	Command   *hive.DesktopCommand
-	Mode      hive.DesktopMode
+	// EnrollmentDir holds the owner-seeded local enrollment. Empty uses
+	// Directory, where the same-account path keeps both.
+	EnrollmentDir string
+	Selection     Selection
+	Command       *hive.DesktopCommand
+	Mode          hive.DesktopMode
 }
 
 func selectDesktop(catalog hive.DesktopCatalog, selection Selection) (Selection, error) {
@@ -148,6 +152,34 @@ func Join(ctx context.Context, cfg Config, stdin *os.File, stdout io.Writer) err
 	transport, closeTransport := cleanupLifetime(ctx)
 	defer closeTransport()
 	return mesh.SameAccount(transport, cfg.Directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
+			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
+		})
+	})
+}
+
+// JoinEnrolled joins an owner whose local enrollment already lists node with the
+// supplied private key, over plaintext loopback. The owner seeded that key, so no
+// TLS credentials are needed. It never starts an owner or opens application
+// stores.
+func JoinEnrolled(ctx context.Context, cfg Config, node string, private ed25519.PrivateKey, stdin *os.File, stdout io.Writer) error {
+	if ctx == nil || stdin == nil || stdout == nil || cfg.Directory == "" || node == "" ||
+		len(private) != ed25519.PrivateKeySize ||
+		(cfg.Mode != hive.Control && cfg.Mode != hive.Observe) ||
+		((cfg.Selection.Workspace == "") != (cfg.Selection.Desktop == "")) ||
+		(cfg.Command != nil && (!cfg.Command.Valid() || cfg.Mode != hive.Control)) {
+		return errors.New("invalid enrolled client session configuration")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	transport, closeTransport := cleanupLifetime(ctx)
+	defer closeTransport()
+	enrollmentDirectory := cfg.EnrollmentDir
+	if enrollmentDirectory == "" {
+		enrollmentDirectory = cfg.Directory
+	}
+	return mesh.Joined(transport, cfg.Directory, enrollmentDirectory, node, private, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
 			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
 		})

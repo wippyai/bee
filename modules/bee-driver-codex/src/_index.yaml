@@ -90,43 +90,15 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     types: bee.driver:types
-- name: prepare
-  kind: function.lua
-  source: file://prepare_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.codex:launch
-    types: bee.driver:types
-- name: configure
-  kind: function.lua
-  source: file://configure_method.lua
-  method: handle
-  imports:
-    configuration: bee.driver.codex:configuration
-    configure_protocol: bee.driver:configuration
-- name: dispatch
-  kind: function.lua
-  source: file://dispatch_method.lua
-  method: handle
-  imports:
-    launch: bee.driver.codex:launch
-    types: bee.driver:types
-- name: normalize
-  kind: function.lua
-  source: file://normalize_method.lua
-  method: handle
-  imports:
-    protocol: bee.driver.codex:protocol
-    bounds: bee.threads.records:bounds
 - name: binding
   kind: contract.binding
   contracts:
   - contract: bee.driver:driver
     methods:
-      prepare: bee.driver.codex:prepare
-      dispatch: bee.driver.codex:dispatch
-      normalize: bee.driver.codex:normalize
-      configure: bee.driver.codex:configure
+      prepare: bee.driver.codex.binding:prepare
+      dispatch: bee.driver.codex.binding:dispatch
+      normalize: bee.driver.codex.binding:normalize
+      configure: bee.driver.codex.binding:configure
   meta:
     type: harness.driver
     driver_id: codex

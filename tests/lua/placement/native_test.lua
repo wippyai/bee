@@ -183,7 +183,7 @@ end
 local function provider_configuration_digest(): string
     local provider = registry.get("bee.placement.native:codex_test_provider")
     if not provider then error("provider entry") end
-    local digest, digest_error = configuration_protocol.digest({provider_ref = "bee.placement.native:codex_test_provider", provider = provider, fixture = true}, "bee.driver.codex:configure")
+    local digest, digest_error = configuration_protocol.digest({provider_ref = "bee.placement.native:codex_test_provider", provider = provider, fixture = true}, "bee.driver.codex.binding:configure")
     if not digest then error(tostring(digest_error)) end
     return digest
 end

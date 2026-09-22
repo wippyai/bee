@@ -405,7 +405,7 @@ entries:
       bee.threads.carrier:claim, bee.threads.carrier:commit, bee.threads.carrier:checkpoint,
       bee.placement.native:prepare, bee.placement.native:start, bee.placement.native:status, bee.placement.native:stop, bee.placement.native:reconcile,
       bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach, bee.driver.claude:prepare, bee.driver.claude:normalize, bee.driver.claude:configure,
-      bee.driver.codex:configure, bee.harness.catalog:configuration_probe, bee.harness.carrier:capabilities, security]
+      bee.driver.codex.binding:configure, bee.harness.catalog:configuration_probe, bee.harness.carrier:capabilities, security]
     effect: allow
 - name: carrier_spawn_policy
   kind: security.policy

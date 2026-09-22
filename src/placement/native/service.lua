@@ -362,7 +362,7 @@ function M.prepare(value: unknown): Reply
     if caller ~= request.owner_id then return fail("FORBIDDEN", "owner_id is not the caller") end
     local environment_conflict = materialization.environment_conflict(request)
     if environment_conflict then return fail("INVALID", environment_conflict) end
-    -- A named Codex config profile is a file in the inherited Codex home.
+    -- A declared host file is available only from the inherited user home.
     -- Refuse the launch before intent when it is absent, rather than letting
     -- the executable start and fail. Existence only; contents are never read.
     local missing_file = materialization.required_file_missing(request)

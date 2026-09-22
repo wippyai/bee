@@ -243,12 +243,13 @@ end
 -- A launch may declare a host file it needs before it starts. Bee never
 -- copies the owner's configuration or credentials into a private home, so a
 -- launch that needs one is only available where the profile inherits the
--- host user's home. The refusal names the profile the driver declared.
+-- host user's home. The refusal names the declared file without assuming a
+-- provider-specific configuration format.
 function M.required_file_refusal(launch: driver_types.Launch, private_home: boolean): string?
     if not private_home or not launch.required_files or #launch.required_files == 0 then return nil end
     local file = launch.required_files[1] :: driver_types.RequiredFile
-    return "the named Codex profile " .. file.path:gsub("%.config%.toml$", "") ..
-        " is only available where Bee inherits the user's Codex home; a private home does not carry it"
+    return "the required host file " .. file.path ..
+        " is only available where Bee inherits the user's home; a private home does not carry it"
 end
 -- plan: pin the usable binding and profile, take the driver's declarative
 -- launch, bind executables and requirements from the host policy.

@@ -46,7 +46,7 @@ local function define_tests()
             local refusal = machine.required_file_refusal(launch, true)
             test.not_nil(refusal)
             test.is_true(refusal:find("ds-flash", 1, true) ~= nil)
-            test.is_true(refusal:find("inherits the user's Codex home", 1, true) ~= nil)
+            test.is_true(refusal:find("only available where Bee inherits the user's home", 1, true) ~= nil)
             test.is_nil(machine.required_file_refusal(launch, false))
             local plain: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}
             test.is_nil(machine.required_file_refusal(plain, true))

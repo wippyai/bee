@@ -15,7 +15,7 @@ entries:
     placement_configuration: bee.placement.native:configuration
     configuration: bee.driver:configuration
     claude: bee.driver.claude:configure
-    codex: bee.driver.codex:configure
+    codex: bee.driver.codex.binding:configure
     grok: bee.driver.grok:configure
     agy: bee.driver.agy:configure
 - name: fixture_builder_ok

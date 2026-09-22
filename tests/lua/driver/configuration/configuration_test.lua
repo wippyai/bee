@@ -249,10 +249,14 @@ local function define_tests()
             test.eq(first, assert(configuration.digest(request, "fixture:configure")))
             request.gateway.action_id = "action-b"
             test.neq(first, assert(configuration.digest(request, "fixture:configure")))
+            local selected_gateway = gateway("action-c")
+            selected_gateway.endpoint = "example.test:1"
+            selected_gateway.token_environment = "TOKEN"
+            test.not_nil(configuration.decode_request({fixture = false, gateway = selected_gateway}))
             for _, value in ipairs({
                 {fixture = false, provider_ref = PROVIDER}, {fixture = false, provider = {}}, {fixture = "false"},
                 {fixture = false, gateway_section = "x"}, {fixture = false, gateway = gateway("a"), home_directory = "relative"},
-                {fixture = false, gateway = {endpoint = "example.test:1", action_id = "a", tools = {"x"}, hooks = {}, token_environment = "TOKEN"}},
+                {fixture = false, gateway = {endpoint = "example.test:1", action_id = "a", tools = {"x"}, hooks = {}, token_environment = "token"}},
             }) do test.is_nil(configuration.decode_request(value)) end
         end)
         test.it("decodes instruction_builder and measures its selection in configuration digest", function()

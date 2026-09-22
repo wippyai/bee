@@ -52,6 +52,13 @@ module's root, namespace ownership and dependency requirements must be declared
 before extraction. Independent Hub packages, public enrollment and remote
 package transfer remain separate proposals.
 
+Within a module, keep shared domain types and contracts at the root. Contract
+implementations belong in `binding`, SQL repositories in `persist`, and
+long-running processes in `service`. Use `api` for HTTP endpoints and `traits`
+for agent tools. Each child namespace declares its own local sources in its
+YAML. Inject host resources through `ns.requirement`; creating a child directory
+does not require a new contract or forwarding layer.
+
 ## Values, messages and authority
 
 Use explicit record types for exported values and functions. Treat decoded JSON
@@ -117,7 +124,8 @@ boundary. A constructed completion record does not prove process cleanup.
 
 Fixtures use disposable test workspaces and remain outside `src/`. Inspect
 source and assembled packs for test registrations, fixture data, test-library
-dependencies and embedded filesystem assets. Production must load only `src/`.
+dependencies and embedded filesystem assets. Production loads only the root
+and selected modules' `src/` directories.
 `make native-pack` and `make standalone` create a native distribution with its
 own manifest; bundled modules are not independently published packages.
 

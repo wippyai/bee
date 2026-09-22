@@ -51,8 +51,7 @@ function M.required_file_missing(request: types.LaunchRequest): string?
             if file.default_directory then directory = home .. "/" .. file.default_directory else directory = home end
         end
         if volume:exists(directory .. "/" .. file.path) ~= true then
-            local name = file.path:gsub("%.config%.toml$", "")
-            return "the named Codex config profile " .. name .. " is not installed in " .. directory
+            return "the required host file " .. file.path .. " is not installed in " .. directory
         end
     end
     return nil

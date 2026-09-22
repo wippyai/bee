@@ -151,7 +151,7 @@ function M.view(row: Row): Object
 end
 -- deliveries: the delivery state for one request, for its requester or a manager.
 function M.deliveries(db: sql.DB, approval_id: string): ({Object}?, string?)
-    local rows, err = db:query("SELECT * FROM bee_approval_outbox WHERE approval_id = ? ORDER BY revision", {approval_id})
+    local rows, err = db:query("SELECT * FROM bee_approval_outbox WHERE approval_id = ? ORDER BY revision, event_id", {approval_id})
     if err or not rows then return nil, "read deliveries" end
     local views: {Object} = {}
     for _, row in ipairs(rows) do views[#views + 1] = M.view(row :: Row) end

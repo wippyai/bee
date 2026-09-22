@@ -85,8 +85,40 @@ CREATE TABLE bee_approval_outbox (
 CREATE INDEX bee_approval_outbox_due
     ON bee_approval_outbox (acknowledged_at, exhausted_at, next_attempt_ms);
 ]]
+-- A decision notice is projected as a `message`, so the outbox carries that
+-- family too. SQLite cannot widen a CHECK in place, so the table is rebuilt
+-- and its rows are copied unchanged.
+local NOTICE_SQL = [[
+CREATE TABLE bee_approval_outbox_rebuilt (
+    event_id TEXT PRIMARY KEY,
+    approval_id TEXT NOT NULL REFERENCES bee_approval_requests(approval_id),
+    revision INTEGER NOT NULL,
+    thread_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('approval.request', 'approval.transition', 'message')),
+    body_json TEXT NOT NULL CHECK (length(CAST(body_json AS BLOB)) <= 16384),
+    context_json TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_ms INTEGER NOT NULL,
+    lease_owner TEXT,
+    lease_until_ms INTEGER,
+    acknowledged_at TEXT,
+    exhausted_at TEXT,
+    last_error TEXT,
+    created_at TEXT NOT NULL
+);
+INSERT INTO bee_approval_outbox_rebuilt (event_id, approval_id, revision, thread_id, kind, body_json, context_json,
+    attempts, next_attempt_ms, lease_owner, lease_until_ms, acknowledged_at, exhausted_at, last_error, created_at)
+    SELECT event_id, approval_id, revision, thread_id, kind, body_json, context_json,
+    attempts, next_attempt_ms, lease_owner, lease_until_ms, acknowledged_at, exhausted_at, last_error, created_at
+    FROM bee_approval_outbox;
+DROP TABLE bee_approval_outbox;
+ALTER TABLE bee_approval_outbox_rebuilt RENAME TO bee_approval_outbox;
+CREATE INDEX bee_approval_outbox_due
+    ON bee_approval_outbox (acknowledged_at, exhausted_at, next_attempt_ms);
+]]
 local list: {Migration} = {
     {id = 1, name = "approvals", sql = APPROVALS_SQL, rebuild = false},
+    {id = 2, name = "decision_notice", sql = NOTICE_SQL, rebuild = true},
 }
 function M.all(): {Migration}
     return list

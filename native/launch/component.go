@@ -28,8 +28,12 @@ const (
 // environment storage needed by native integrations.
 type Host struct {
 	defaultRoot string
-	resolver    hostResolver
-	initErr     error
+	// ownerState is the state directory selected for a retained owner launch. It
+	// is set during planning so Load can add the owner's enrollment publisher.
+	ownerState string
+	components []boot.Component
+	resolver   hostResolver
+	initErr    error
 }
 
 // New creates the launch host for a known default Bee state root. It does not
@@ -88,6 +92,8 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		}
 		plan.DefaultState = selected
 	}
+	// The retained owner route keeps the runtime's own application start, so it
+	// prepares the owner's cluster, desktop bridge and enrollment publisher.
 	if launch.Op == app.OpRun && launch.Command == desktopCommand && len(launch.Args) > 0 && launch.Args[0] == ownerArgument {
 		if len(launch.Args) != 1 {
 			return app.Plan{}, errors.New("bee start takes no arguments")
@@ -98,11 +104,34 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		if state == "" {
 			state = plan.DefaultState
 		}
+		host.ownerState = state
 		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
 			return prepareOwner(state)
 		}
+		return plan, nil
+	}
+	// Every other ordinary launch of this executable is a client of the retained
+	// owner. The runtime never opens the client's state for it: the host decides
+	// ownership, starts the owner when needed, enrolls this process and joins.
+	if launch.Op == app.OpRun && launch.Command == desktopCommand {
+		selected := launch
+		if selected.State == "" {
+			selected.State = plan.DefaultState
+		}
+		selected.State = resolvePlannedState(selected)
+		plan.DefaultState = ""
+		plan.Run = func(ctx context.Context) error { return runClientRoute(ctx, selected) }
 	}
 	return plan, nil
+}
+
+// resolvePlannedState makes a host-selected default absolute against the
+// invocation's working directory, matching the runtime's own resolution.
+func resolvePlannedState(launch app.Launch) string {
+	if launch.State == "" || filepath.IsAbs(launch.State) {
+		return launch.State
+	}
+	return filepath.Join(launch.Dir, launch.State)
 }
 
 func (host *Host) Load(ctx context.Context) (context.Context, error) {
@@ -119,6 +148,44 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 	}
 	registry.RegisterStorage(registryID(), storage)
 	return ctx, nil
+}
+
+// Start activates the owner's enrollment publisher when this launch is the
+// retained owner. The host is itself one of the executable's boot components, so
+// it starts the publisher directly; the cluster it depends on is already up by
+// the time Start runs.
+func (host *Host) Start(ctx context.Context) error {
+	if host.initErr != nil {
+		return host.initErr
+	}
+	if host.ownerState == "" {
+		return nil
+	}
+	components, err := ownerComponents(host.ownerState)
+	if err != nil {
+		return err
+	}
+	host.components = components
+	for _, component := range components {
+		if starter, ok := component.(boot.Starter); ok {
+			if err := starter.Start(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Stop releases the owner components this host started.
+func (host *Host) Stop(ctx context.Context) error {
+	var result error
+	for _, component := range host.components {
+		if stopper, ok := component.(boot.Stopper); ok {
+			result = errors.Join(result, stopper.Stop(ctx))
+		}
+	}
+	host.components = nil
+	return result
 }
 
 func registryID() registry.ID { return registry.ParseID(StorageID) }

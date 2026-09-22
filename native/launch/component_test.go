@@ -84,6 +84,111 @@ func TestPlanMapsOnlyExplicitOwnerStart(t *testing.T) {
 	}
 }
 
+func TestPlanRoutesOrdinaryLaunchThroughClientAndOwnerThroughPrepare(t *testing.T) {
+	state := t.TempDir()
+	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := makeProject(t)
+
+	// An ordinary launch is the client route: the host decides ownership, so the
+	// runtime must not open the client's state itself.
+	client, err := host.Plan(context.Background(), app.Launch{
+		Op: app.OpRun, Command: desktopCommand, Args: []string{"agent"},
+		State: state, Dir: project, Explicit: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.Run == nil {
+		t.Fatal("ordinary launch has no client Run")
+	}
+	if client.Prepare != nil {
+		t.Fatal("ordinary launch prepared owner resources")
+	}
+	if client.Command != "" || client.Args != nil || client.DefaultState != "" {
+		t.Fatalf("client plan leaked runtime selection: %#v", client)
+	}
+
+	// The owner route prepares resources and records the state for the
+	// enrollment publisher the host starts.
+	owner, err := host.Plan(context.Background(), app.Launch{
+		Op: app.OpRun, Command: desktopCommand, Args: []string{ownerArgument},
+		State: state, Dir: project, Explicit: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owner.Prepare == nil || owner.Run != nil {
+		t.Fatalf("owner plan = prepare %v run %v", owner.Prepare != nil, owner.Run != nil)
+	}
+	if owner.Command != ownerCommand {
+		t.Fatalf("owner command = %q", owner.Command)
+	}
+	if host.ownerState != state {
+		t.Fatalf("host owner state = %q, want %q", host.ownerState, state)
+	}
+}
+
+func TestHostStartAddsEnrollmentPublisherForOwner(t *testing.T) {
+	state := t.TempDir()
+	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A client launch starts nothing.
+	if err := host.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(host.components) != 0 {
+		t.Fatalf("client launch added components: %#v", host.components)
+	}
+	// After planning an owner launch the host owns the publisher. The publisher
+	// needs the registry the runtime attaches during boot.
+	if _, err := host.Plan(context.Background(), app.Launch{
+		Op: app.OpRun, Command: desktopCommand, Args: []string{ownerArgument},
+		State: state, Dir: state, Explicit: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx = registry.WithRegistry(ctx, &enrollmentRegistryStub{})
+	if err := host.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(host.components) != 1 || host.components[0].Name() != "bee.launch.enrollment" {
+		t.Fatalf("owner components = %#v", host.components)
+	}
+	if err := host.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// enrollmentRegistryStub is an inert registry for the host Start test.
+type enrollmentRegistryStub struct{}
+
+func (enrollmentRegistryStub) GetAllEntries() ([]registry.Entry, error) { return nil, nil }
+func (enrollmentRegistryStub) GetEntry(registry.ID) (registry.Entry, error) {
+	return registry.Entry{}, nil
+}
+func (enrollmentRegistryStub) Apply(context.Context, registry.ChangeSet) (registry.Version, error) {
+	return nil, nil
+}
+func (enrollmentRegistryStub) ApplyVersion(context.Context, registry.Version) error { return nil }
+func (enrollmentRegistryStub) LoadState(context.Context, registry.State, registry.Version) error {
+	return nil
+}
+func (enrollmentRegistryStub) Current() (registry.Version, error) { return nil, nil }
+func (enrollmentRegistryStub) History() registry.History          { return nil }
+func (enrollmentRegistryStub) Snapshot() registry.Snapshot        { return registry.Snapshot{} }
+func (enrollmentRegistryStub) RegisterDependencyPattern(registry.DependencyPattern) error {
+	return nil
+}
+
 func TestHostIsOneBootComponentAndHost(t *testing.T) {
 	host, err := newHost(filepath.Join(t.TempDir(), "state"), systemHostResolver())
 	if err != nil {

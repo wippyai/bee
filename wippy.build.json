@@ -9,7 +9,9 @@
       "fts5",
       "sqlite_vec",
       "treesitter",
-      "sqlite_preupdate_hook"
+      "sqlite_preupdate_hook",
+      "meshclient",
+      "physicalclient"
     ],
     "patches": [
       {

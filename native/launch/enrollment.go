@@ -82,45 +82,66 @@ func trustedNodes(trusted string) ([]any, error) {
 
 // enrollmentPublisher mirrors the owner's trusted client directory into the
 // supervisor's enrollment entry on a bounded interval. It depends on the cluster
-// so the update lands only while the owner's mesh is up.
+// so the update lands only while the owner's mesh is up. Start returns as soon as
+// the first publish succeeds; the periodic refresh runs until Stop cancels it.
 func enrollmentPublisher(state string) (boot.Component, error) {
 	if !filepath.IsAbs(state) {
 		return nil, errors.New("enrollment publisher requires an absolute state directory")
 	}
 	trusted := ownerTrustedDirectory(state)
+	p := &enrollmentPublisherComponent{trusted: trusted}
 	return boot.New(boot.P{
 		Name:      "bee.launch.enrollment",
 		DependsOn: []string{"cluster"},
-		Start: func(ctx context.Context) error {
-			reg := registry.GetRegistry(ctx)
-			if reg == nil {
-				return errors.New("enrollment publisher requires the registry")
-			}
-			publish := func() error {
-				changes, err := enrollmentChangeSet(trusted)
-				if err != nil {
-					return err
-				}
-				_, err = reg.Apply(ctx, changes)
-				return err
-			}
-			if err := publish(); err != nil {
-				return err
-			}
-			ticker := time.NewTicker(time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-ticker.C:
-					if err := publish(); err != nil {
-						return err
-					}
-				}
-			}
-		},
+		Start:     p.Start,
+		Stop:      p.Stop,
 	}), nil
+}
+
+type enrollmentPublisherComponent struct {
+	trusted string
+	cancel  context.CancelFunc
+}
+
+func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
+	reg := registry.GetRegistry(ctx)
+	if reg == nil {
+		return errors.New("enrollment publisher requires the registry")
+	}
+	changes, err := enrollmentChangeSet(p.trusted)
+	if err != nil {
+		return err
+	}
+	if _, err := reg.Apply(ctx, changes); err != nil {
+		return err
+	}
+	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	p.cancel = cancel
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-lifetime.Done():
+				return
+			case <-ticker.C:
+				changes, err := enrollmentChangeSet(p.trusted)
+				if err != nil {
+					continue
+				}
+				_, _ = reg.Apply(lifetime, changes)
+			}
+		}
+	}()
+	return nil
+}
+
+func (p *enrollmentPublisherComponent) Stop(context.Context) error {
+	if p.cancel != nil {
+		p.cancel()
+		p.cancel = nil
+	}
+	return nil
 }
 
 var _ = ed25519.PublicKeySize

@@ -124,6 +124,9 @@ func check() error {
 	if err = os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join(repo, "src"))); err != nil {
 		return err
 	}
+	if err = os.CopyFS(filepath.Join(root, "modules"), os.DirFS(filepath.Join(repo, "modules"))); err != nil {
+		return err
+	}
 	for _, name := range []string{".wippy.yaml", "wippy.lock"} {
 		if err = copyFile(filepath.Join(root, name), filepath.Join(repo, name)); err != nil {
 			return err
@@ -139,7 +142,7 @@ func check() error {
 	if *author {
 		// Tool metadata grants nothing. The experiment host separately admits
 		// this exact operation to the endpoint, as well as its per-tool scope.
-		gatewayPath := filepath.Join(root, "src/gateway/_index.yaml")
+		gatewayPath := filepath.Join(root, "modules/gateway/src/api/_index.yaml")
 		gatewayBytes, readErr := os.ReadFile(gatewayPath)
 		if readErr != nil {
 			return readErr
@@ -277,6 +280,9 @@ func check() error {
 		// added to the running host or applied to its live registry overlay.
 		review := filepath.Join(root, "review")
 		if err = os.CopyFS(filepath.Join(review, "src"), os.DirFS(filepath.Join(root, "src"))); err != nil {
+			return err
+		}
+		if err = os.CopyFS(filepath.Join(review, "modules"), os.DirFS(filepath.Join(root, "modules"))); err != nil {
 			return err
 		}
 		for _, name := range []string{".wippy.yaml", "wippy.lock"} {

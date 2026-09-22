@@ -160,35 +160,35 @@ local function configure(workspace_id: string, local_node: string)
 end
 
 local function author(source_workspace: string, entries: {unknown}): string
-    call_api("bee.governance:overlay_call", {operation = "create", overlay_id = source_workspace,
+    call_api("bee.governance.binding:overlay_call", {operation = "create", overlay_id = source_workspace,
         expected_revision = 0, idempotency_key = "create-" .. source_workspace})
-    call_api("bee.governance:overlay_call", {operation = "put", overlay_id = source_workspace,
+    call_api("bee.governance.binding:overlay_call", {operation = "put", overlay_id = source_workspace,
         expected_revision = 1, idempotency_key = "put-" .. source_workspace, path = "entries.json",
         content = json.encode(entries)})
-    local frozen = call_api("bee.governance:overlay_call", {operation = "freeze",
+    local frozen = call_api("bee.governance.binding:overlay_call", {operation = "freeze",
         overlay_id = source_workspace, expected_revision = 2, idempotency_key = "freeze-" .. source_workspace})
     return digest_of(frozen.digest, source_workspace .. " frozen overlay digest")
 end
 
 local function stage(workspace_id: string, component: string, source_workspace: string, snapshot_digest: string): Object
-    local prepared = call_api("bee.governance:publication_call", {operation = "prepare",
+    local prepared = call_api("bee.governance.binding:publication_call", {operation = "prepare",
         workspace_id = workspace_id, component = component, version = VERSION,
         snapshot_digest = snapshot_digest})
     local descriptor = object(prepared.descriptor)
-    local available = call_api("bee.governance:destination_call", {operation = "available", workspace_id = workspace_id})
+    local available = call_api("bee.governance.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
     for _, raw in ipairs(available.versions :: {unknown}) do
         local item = object(raw)
         if item.key == descriptor.key and item.digest == descriptor.digest then found = true end
     end
     if not found then error(component .. " was not discoverable by the destination") end
-    local staged = call_api("bee.governance:destination_call", {operation = "stage", workspace_id = workspace_id,
+    local staged = call_api("bee.governance.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
         source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
         descriptor_digest = descriptor.digest, idempotency_key = "stage-" .. source_workspace})
     if staged.status ~= "staged" or staged.selected == true then
         error(component .. " did not stage as an unselected plan")
     end
-    return call_api("bee.governance:destination_call", {operation = "get", workspace_id = workspace_id,
+    return call_api("bee.governance.binding:destination_call", {operation = "get", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = source_workspace, version = VERSION})
 end
 
@@ -235,7 +235,7 @@ local function main()
 
     -- The entry set a reviewer sees comes from the destination's read-only
     -- comparison of the reviewed candidate against the composed base.
-    local changes = call_api("bee.governance:destination_call", {operation = "changes",
+    local changes = call_api("bee.governance.binding:destination_call", {operation = "changes",
         workspace_id = workspace_id, source_node = local_node, source_workspace = READY_WORKSPACE,
         version = VERSION})
     local added = changes.added :: {unknown}

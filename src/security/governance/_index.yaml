@@ -1,34 +1,6 @@
 version: '1.0'
 namespace: bee
 entries:
-- name: governance_destination_service_policy
-  kind: security.policy
-  groups: [destination_execution_scope]
-  meta:
-    comment: Private dependencies of the destination owner; callers still need an exact workspace delivery action
-  policy:
-    actions: [db.get, registry.get, registry.preview, system.read, funcs.call, funcs.security, security.actor.create,
-      security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply,
-      registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
-    resources: '*'
-    effect: allow
-- name: governance_destination_execution_policy
-  kind: security.policy
-  groups: [destination_execution_scope]
-  meta:
-    comment: Proof that a caller entered the private destination scope; nothing else grants this action
-  policy:
-    actions: [bee.governance.delivery.execute]
-    resources: [bee.governance.binding:destination_backend_call]
-    effect: allow
-- name: governance_publication_service_policy
-  kind: security.policy
-  meta:
-    comment: Private host resources for publishing one configured local overlay as immutable Sync content
-  policy:
-    actions: [registry.get, registry.overlay.get, db.get, system.read]
-    resources: '*'
-    effect: allow
 - name: governance_delivery_read_policy
   kind: security.policy
   policy:
@@ -52,12 +24,4 @@ entries:
   policy:
     actions: [bee.governance.delivery.publish]
     resources: '*'
-    effect: allow
-- name: delivery_facade_policy
-  kind: security.policy
-  meta:
-    comment: The public delivery facade's own dependencies; it authenticates the caller's exact delivery action first, and the publication/destination owner facades authorize again
-  policy:
-    actions: [funcs.call, security.actor.get, registry.get]
-    resources: [bee.governance:publication_call, bee.governance:destination_call, bee.governance:publication_profiles]
     effect: allow

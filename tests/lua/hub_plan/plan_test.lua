@@ -128,13 +128,50 @@ local function define_tests()
             end
         end)
 
-        test.it("refuses an existing root whose registry-selected id is not Bee's Hub root", function()
+        test.it("does not fetch host roots while preparing a Hub install", function()
+            local prepared, problem = plan.prepare(state({
+                {id = "bee:dependency_sync", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "bee/sync", version = "0.1.0-dev"}},
+            }, {{name = "bee/sync", version = "0.1.0-dev", source = "local"}}), 4,
+                request({action = "install", component = "acme/app", version = "1.0.0"}),
+                source({["acme/app@1.0.0"] = package("acme/app", "1.0.0", "a")}))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+        end)
+
+        test.it("keeps a host-rooted shared dependency on Hub removal", function()
+            local captured = state({
+                root("acme/app", "1.0.0"),
+                {id = "bee:dependency_shared", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "acme/shared", version = "1.0.0"}},
+                {id = "acme.app:shared", kind = "ns.dependency", registry = {owner = "acme/app", root = false},
+                    data = {component = "acme/shared", version = "1.0.0"}},
+                {id = "acme.shared:host_child", kind = "ns.dependency", registry = {owner = "acme/shared", root = false},
+                    data = {component = "acme/host_child", version = "1.0.0"}},
+            }, {{name = "acme/app", version = "1.0.0"}, {name = "acme/shared", version = "1.0.0"},
+                {name = "acme/host_child", version = "1.0.0"}})
+            local prepared, problem = plan.prepare(captured, 4,
+                request({action = "uninstall", component = "acme/app"}), source({}))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if prepared then
+                local app, shared = module_for(prepared.plan.modules, "acme/app"), module_for(prepared.plan.modules, "acme/shared")
+                local host_child = module_for(prepared.plan.modules, "acme/host_child")
+                test.not_nil(app); test.not_nil(shared); test.not_nil(host_child)
+                if app then test.eq(app.change, "remove") end
+                if shared then test.eq(shared.change, "keep") end
+                if host_child then test.eq(host_child.change, "keep") end
+            end
+        end)
+
+        test.it("refuses a direct host-managed target", function()
             local prepared, problem = plan.prepare(state({
                 {id = "host.config:app", kind = "ns.dependency", registry = {owner = "", root = true},
                     data = {component = "acme/app", version = "1.0.0"}},
-            }), 4, request({action = "update", component = "acme/app", version = "1.1.0"}), source({}))
+            }, {{name = "acme/app", version = "1.0.0", source = "local"}}), 4,
+                request({action = "update", component = "acme/app", version = "1.1.0"}), source({}))
             test.is_nil(prepared)
-            test.not_nil(problem)
+            test.eq(problem, "component is managed by the host deployment")
         end)
 
         test.it("binds digest to the captured base revision and selected artifact", function()

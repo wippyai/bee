@@ -13,8 +13,8 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call, http_client.request, http_client.private_ip]
-    resources: [bee.gateway:address, bee.gateway:admit, bee.gateway:authorize_materialization,
-      bee.gateway:materialize, bee.gateway:ready, bee.gateway:revoke, bee.threads.service:create,
+    resources: [bee.gateway.registry:address, bee.gateway.binding:admit, bee.gateway.binding:authorize_materialization,
+      bee.gateway.binding:materialize, bee.gateway.binding:ready, bee.gateway.binding:revoke, bee.threads.service:create,
       BEE_CONTAINER_CALLBACK_URL, 127.0.0.1]
     effect: allow
 - name: probe
@@ -24,7 +24,7 @@ entries:
   modules: [funcs, json, http_client, time, env, logger, security]
   security:
     policies: [bee.gateway_container:policy, bee:gateway_admit_policy,
-      bee:gateway_materialize_policy, bee:gateway_supervision_policy, bee:gateway_readiness_policy,
+      bee:gateway_materialize_policy, bee:gateway_supervision_policy, bee.gateway.security:readiness_policy,
       bee:thread_create_policy, bee.gateway_container:callback_policy]
   meta:
     command:

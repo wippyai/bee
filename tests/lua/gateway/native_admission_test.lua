@@ -11,7 +11,8 @@ local json = require("json")
 local time = require("time")
 local configuration = require("configuration")
 
-local ENDPOINT = "bee:gateway_endpoint"
+local ENDPOINT_REF = "bee.gateway.registry:endpoint_ref"
+local ENDPOINT = "bee.gateway:native_admission_endpoint"
 local LISTENER_REF = "bee.gateway:listener_ref"
 local DATABASE_REF = "bee.gateway:database_ref"
 local DATABASE = "bee.gateway:native_admission_db"
@@ -19,7 +20,7 @@ local LISTENER = "bee.gateway:ephemeral_listener"
 local ACTOR = "bee.test.native_gateway_admission"
 
 type Object = {[string]: unknown}
-type RegistryState = {endpoint: Object, listener: Object, database: Object}
+type RegistryState = {endpoint_ref: Object, endpoint: Object, listener: Object, database: Object}
 type Reply = {ok: boolean, error: Object?, value: unknown}
 
 local function clone(value: unknown): Object
@@ -37,7 +38,12 @@ local function entry(id: string): Object
 end
 
 local function state(): RegistryState
-    return {endpoint = clone((entry(ENDPOINT).data :: Object)), listener = clone((entry(LISTENER_REF).data :: Object)), database = clone((entry(DATABASE_REF).data :: Object))}
+    return {
+        endpoint_ref = clone((entry(ENDPOINT_REF).data :: Object)),
+        endpoint = clone((entry(ENDPOINT).data :: Object)),
+        listener = clone((entry(LISTENER_REF).data :: Object)),
+        database = clone((entry(DATABASE_REF).data :: Object)),
+    }
 end
 
 local function apply(entries: {Object})
@@ -48,23 +54,27 @@ local function apply(entries: {Object})
 end
 
 local function configure()
+    local endpoint_ref = entry(ENDPOINT_REF)
+    endpoint_ref.data = {resource_ref = ENDPOINT}
     local endpoint = entry(ENDPOINT)
     endpoint.data = {address = "127.0.0.1:0"}
     local listener = entry(LISTENER_REF)
     listener.data = {resource_ref = LISTENER}
     local database = entry(DATABASE_REF)
     database.data = {resource_ref = DATABASE}
-    apply({endpoint, listener, database})
+    apply({endpoint_ref, endpoint, listener, database})
 end
 
 local function restore(saved: RegistryState)
+    local endpoint_ref = entry(ENDPOINT_REF)
+    endpoint_ref.data = clone(saved.endpoint_ref)
     local endpoint = entry(ENDPOINT)
     endpoint.data = clone(saved.endpoint)
     local listener = entry(LISTENER_REF)
     listener.data = clone(saved.listener)
     local database = entry(DATABASE_REF)
     database.data = clone(saved.database)
-    apply({endpoint, listener, database})
+    apply({endpoint_ref, endpoint, listener, database})
 end
 
 local function policy(name: string): security.Policy
@@ -132,13 +142,13 @@ local function define_tests()
                 local db = database()
                 test.eq(listener_count(db), 0)
 
-                local denied = raw_call(caller(false, false), "bee.gateway:admit", admit_request("unauthorized"))
+                local denied = raw_call(caller(false, false), "bee.gateway.binding:admit", admit_request("unauthorized"))
                 test.is_false(denied.ok)
                 test.eq((denied.error :: Object).code, "DENIED")
                 test.eq(listener_count(db), 0)
 
                 local selected = wait_for_listener()
-                local admitted = raw_call(caller(true, false), "bee.gateway:admit", admit_request("authorized"))
+                local admitted = raw_call(caller(true, false), "bee.gateway.binding:admit", admit_request("authorized"))
                 if not admitted.ok then error("authorized admission: " .. tostring(admitted.error and (admitted.error :: Object).message)) end
                 local first = row(db)
                 test.eq(first.epoch, 1)
@@ -151,7 +161,7 @@ local function define_tests()
                 local hook_request = admit_request("hooks-only")
                 hook_request.tools = {}
                 hook_request.hooks = {"SessionStart"}
-                local hook_admitted = raw_call(caller(true, false), "bee.gateway:admit", hook_request)
+                local hook_admitted = raw_call(caller(true, false), "bee.gateway.binding:admit", hook_request)
                 if not hook_admitted.ok then error("hook-only admission: " .. tostring(hook_admitted.error and hook_admitted.error.message)) end
                 local stored_hooks, stored_error = db:query("SELECT tools_json, hooks_json FROM bee_gateway_bindings WHERE action_id = ?", {"native-action-hooks-only"})
                 if not stored_hooks or stored_error or #stored_hooks ~= 1 then error("missing hook-only binding") end
@@ -163,13 +173,13 @@ local function define_tests()
                 test.eq(hook_names[1], "SessionStart")
                 local empty_request = admit_request("empty")
                 empty_request.tools = {}
-                local empty = raw_call(caller(true, false), "bee.gateway:admit", empty_request)
+                local empty = raw_call(caller(true, false), "bee.gateway.binding:admit", empty_request)
                 test.eq(empty.error and empty.error.code, "INVALID")
 
                 local replay_request = admit_request("origin-replay")
                 replay_request.idempotency_key = "origin-replay-key"
                 replay_request.origin_view = {view_id = "view-origin", instance_id = "instance-origin"}
-                local first_origin = raw_call(caller(true, false), "bee.gateway:admit", replay_request)
+                local first_origin = raw_call(caller(true, false), "bee.gateway.binding:admit", replay_request)
                 if not first_origin.ok then error("origin admission: " .. tostring(first_origin.error and first_origin.error.message)) end
                 local first_binding = (first_origin.value :: Object).binding :: Object
                 test.eq(((first_binding.origin_view :: Object).view_id), "view-origin")
@@ -177,7 +187,7 @@ local function define_tests()
                 if stored_origin_error or not stored_origin or #stored_origin ~= 1 then error("missing stored origin view") end
                 local stored_view = json.decode(tostring((stored_origin[1] :: Object).origin_view_json))
                 test.eq((stored_view :: Object).instance_id, "instance-origin")
-                local replayed_origin = raw_call(caller(true, false), "bee.gateway:admit", replay_request)
+                local replayed_origin = raw_call(caller(true, false), "bee.gateway.binding:admit", replay_request)
                 if not replayed_origin.ok then error("origin replay: " .. tostring(replayed_origin.error and replayed_origin.error.message)) end
                 test.is_true((replayed_origin.value :: Object).replayed == true)
                 local replayed_binding = (replayed_origin.value :: Object).binding :: Object
@@ -189,7 +199,7 @@ local function define_tests()
                 local before_key = first.native_key
                 local _, drain_error = db:execute("UPDATE bee_gateway_listener SET drained = 1 WHERE singleton = 1")
                 if drain_error then error("mark listener drained: " .. tostring(drain_error)) end
-                local still_denied = raw_call(caller(true, false), "bee.gateway:admit", admit_request("same-execution"))
+                local still_denied = raw_call(caller(true, false), "bee.gateway.binding:admit", admit_request("same-execution"))
                 test.is_false(still_denied.ok)
                 test.eq((still_denied.error :: Object).code, "UNAVAILABLE")
                 local preserved = row(db)
@@ -198,7 +208,7 @@ local function define_tests()
                 test.eq(preserved.native_key, before_key)
                 test.eq(preserved.drained, 1)
 
-                local opened = raw_call(caller(false, true), "bee.gateway:open", {address = selected.address})
+                local opened = raw_call(caller(false, true), "bee.gateway.binding:open", {address = selected.address})
                 if not opened.ok then error("explicit open: " .. tostring(opened.error and (opened.error :: Object).message)) end
                 local reopened = row(db)
                 test.eq(reopened.native_key, before_key)

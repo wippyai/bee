@@ -53,44 +53,53 @@ func copyFixture(root string, manage bool) error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join("tests", "fixtures", fixture))); err != nil {
 		return fmt.Errorf("copy Hub inspection fixture: %w", err)
 	}
-	if err := os.CopyFS(filepath.Join(root, "src", "hub"), os.DirFS(filepath.Join("src", "hub"))); err != nil {
-		return fmt.Errorf("copy production Hub source: %w", err)
-	}
-	bounds, err := os.ReadFile(filepath.Join("src", "threads", "records", "bounds.lua"))
-	if err != nil {
-		return fmt.Errorf("read production bounds: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "src", "records", "bounds.lua"), bounds, 0600); err != nil {
-		return fmt.Errorf("copy production bounds: %w", err)
-	}
-	for _, name := range []string{"bounds.lua", "canonical.lua"} {
-		contents, readErr := os.ReadFile(filepath.Join("src", "sync", name))
-		if readErr != nil {
-			return fmt.Errorf("read production sync %s: %w", name, readErr)
-		}
-		if writeErr := os.WriteFile(filepath.Join(root, "src", "sync", name), contents, 0600); writeErr != nil {
-			return fmt.Errorf("copy production sync %s: %w", name, writeErr)
+	for _, module := range []string{"hub", "persist", "sync", "threads"} {
+		if err := os.CopyFS(filepath.Join(root, "modules", module), os.DirFS(filepath.Join("modules", module))); err != nil {
+			return fmt.Errorf("stage Hub component dependency %s: %w", module, err)
 		}
 	}
-	if err := os.MkdirAll(filepath.Join(root, "src", "persist"), 0700); err != nil {
-		return err
-	}
-	transaction, err := os.ReadFile(filepath.Join("modules", "persist", "src", "transaction.lua"))
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(root, "src", "persist", "transaction.lua"), transaction, 0600); err != nil {
-		return err
-	}
-	manifest := "version: '1.0'\nnamespace: bee.persist\nentries:\n- name: transaction\n  kind: library.lua\n  source: file://transaction.lua\n  modules: [sql, time]\n"
-	if err := os.WriteFile(filepath.Join(root, "src", "persist", "_index.yaml"), []byte(manifest), 0600); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
+	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n"
+	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write fixture lock: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte("version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\n"), 0600); err != nil {
+	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write fixture configuration: %w", err)
+	}
+	return nil
+}
+
+func wrongHostCheck(runtime string) error {
+	root, err := os.MkdirTemp("", "bee-hub-wrong-host-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+	if err := copyFixture(root, true); err != nil {
+		return err
+	}
+	index := filepath.Join(root, "src", "_index.yaml")
+	data, err := os.ReadFile(index)
+	if err != nil {
+		return err
+	}
+	const linked = "value: bee:hub_workers"
+	at := strings.LastIndex(string(data), linked)
+	if at < 0 {
+		return fmt.Errorf("Hub host fixture has no linked process host")
+	}
+	changed := string(data[:at]) + "value: bee:fixture_terminal" + string(data[at+len(linked):])
+	if err := os.WriteFile(index, []byte(changed), 0600); err != nil {
+		return err
+	}
+	if err := strictLint(runtime, root); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	output, err := runCommand(ctx, root, runtime, "run", "--verbose", "--host", "bee:hub_workers", "--", "hub-manage-wrong-host")
+	if err != nil || !strings.Contains(string(output), "HUB_MANAGE_WRONG_HOST_PASS") {
+		return fmt.Errorf("wrong Hub host was not rejected: %v\n%s", err, output)
 	}
 	return nil
 }
@@ -117,11 +126,16 @@ func run(runtime string, manage bool) error {
 	if err := strictLint(runtime, root); err != nil {
 		return err
 	}
+	if manage {
+		if err := wrongHostCheck(runtime); err != nil {
+			return err
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	host, command := "bee.hub_inspect_probe:workers", "hub-inspect-probe"
 	if manage {
-		host, command = "bee:workers", "hub-manage-probe"
+		host, command = "bee:hub_workers", "hub-manage-probe"
 		for _, check := range []struct {
 			command string
 			marker  string

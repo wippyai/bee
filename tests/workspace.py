@@ -17,15 +17,20 @@ def registry_entries(folder, names):
     wanted = set(names)
     found = {}
     documents = {}
-    for index in (folder / "src").rglob("_index.yaml"):
-        document = yaml.safe_load(index.read_text())
-        documents[index] = document
-        for entry in document.get("entries", []):
-            name = entry.get("name")
-            if name not in wanted:
-                continue
-            assert name not in found, f"duplicate registry entry {name}"
-            found[name] = (index, entry)
+    roots = [folder / "src"]
+    modules = folder / "modules"
+    if modules.exists():
+        roots.append(modules)
+    for root in roots:
+        for index in root.rglob("_index.yaml"):
+            document = yaml.safe_load(index.read_text())
+            documents[index] = document
+            for entry in document.get("entries", []):
+                name = entry.get("name")
+                if name not in wanted:
+                    continue
+                assert name not in found, f"duplicate registry entry {name}"
+                found[name] = (index, entry)
     assert set(found) == wanted, f"missing registry entries {sorted(wanted - set(found))}"
     return found, documents
 
@@ -45,22 +50,18 @@ def managed_gateway_address():
 def configure_managed_gateway(folder, address=None):
     """Point this copied managed composition at one isolated loopback address."""
     selected = address or managed_gateway_address()
-    found, documents = registry_entries(folder, {"gateway_endpoint", "gateway_readiness_policy"})
+    found, documents = registry_entries(folder, {"gateway_endpoint", "readiness_policy"})
     endpoint = found["gateway_endpoint"][1]
-    readiness = found["gateway_readiness_policy"][1]
+    readiness = found["readiness_policy"][1]
+    assert yaml.safe_load(found["readiness_policy"][0].read_text())["namespace"] == "bee.gateway.security"
     endpoint["data"]["address"] = selected
     assert readiness["kind"] == "security.policy.expr"
     readiness["policy"]["expression"] = (
         '(action == "http_client.private_ip" && resource == "127.0.0.1") || '
         f'(action == "http_client.request" && resource == "http://{selected}/ready")'
     )
-    for index in {found["gateway_endpoint"][0], found["gateway_readiness_policy"][0]}:
+    for index in {found["gateway_endpoint"][0], found["readiness_policy"][0]}:
         index.write_text(yaml.safe_dump(documents[index], sort_keys=False))
-    gateway = folder / "src/gateway/_index.yaml"
-    gateway_document = yaml.safe_load(gateway.read_text())
-    target = next(entry for entry in gateway_document["entries"] if entry["name"] == "target_listener")
-    target["default"] = "bee.managed:listener"
-    gateway.write_text(yaml.safe_dump(gateway_document, sort_keys=False))
     listeners = []
     for index in (folder / "src").rglob("_index.yaml"):
         entry_document = yaml.safe_load(index.read_text())

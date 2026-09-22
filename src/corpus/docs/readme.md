@@ -23,10 +23,10 @@ generator when the corpus is intentionally updated.
 | Release artifacts and publication | [Releasing](operations/releasing.md) |
 | GitHub protections and repository settings | [GitHub setup](development/github.md) |
 | Hub package inspection and local installation | [Hub](guides/hub.md) |
-| Managed harness gateway, hooks, and MCP configuration | [Gateway](reference/agents/gateway.md), [gateway hooks](reference/agents/hooks.md), [MCP configuration](guides/agents/mcp.md) |
+| Managed harness gateway, hooks, and MCP configuration | [Gateway](reference/agents/gateway.md), [gateway module](../modules/gateway/src/README.md), [gateway hooks](reference/agents/hooks.md), [MCP configuration](guides/agents/mcp.md) |
 | Governed application delivery | [Distributed app delivery](guides/overlays.md) |
 | Application SDK, harness, placement, resource, and credential module contracts | [application SDK](../modules/application/src/README.md), [Harness module](../src/harness/README.md), [placement module](../modules/placement/src/README.md), [native placement](../src/placement/native/README.md), [resources module](../modules/resources/src/README.md), [credentials module](../modules/credentials/src/README.md) |
-| Persistence, approvals, governance, Hub, Hive, sync, and node module contracts | [Persist module](../modules/persist/src/README.md), [approvals module](../modules/approvals/src/README.md), [governance module](../src/gov/README.md), [Hub module](../src/hub/README.md), [Hive module](../modules/hive/src/README.md), [sync module](../modules/sync/src/README.md), [node module](../modules/node/src/README.md) |
+| Persistence, approvals, governance, Hub, Hive, sync, and node module contracts | [Persist module](../modules/persist/src/README.md), [approvals module](../modules/approvals/src/README.md), [governance module](../modules/gov/src/README.md), [Hub module](../modules/hub/README.md), [Hive module](../modules/hive/src/README.md), [sync module](../modules/sync/src/README.md), [node module](../modules/node/src/README.md) |
 
 Use the source module README and tests for implementation details. A contract
 describes a callable boundary only when the source and its checks implement it;

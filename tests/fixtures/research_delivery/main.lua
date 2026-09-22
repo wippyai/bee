@@ -41,7 +41,7 @@ local function recover()
     if matches ~= true then
         local states = system.supervisor.states()
         for _, state in ipairs(states or {}) do
-            if tostring(state.id) == "bee.governance.service:recovery_service" then
+            if tostring(state.id) == "bee:governance_recovery_service" then
                 io.print("RESEARCH_RECOVERY_SERVICE " .. tostring(json.encode(state)))
             end
         end
@@ -107,7 +107,7 @@ local function main()
     -- 1 overlay_call create/put entries.json/freeze (test operator actor);
     --   returned snapshot_digest is a new file snapshot, distinct from original artifact digest.
     --   Keep exact entries so artifact digest remains same.
-    local create_res = call_api("bee.governance:overlay_call", {
+    local create_res = call_api("bee.governance.binding:overlay_call", {
         operation = "create",
         overlay_id = SOURCE_WORKSPACE,
         expected_revision = 0,
@@ -116,7 +116,7 @@ local function main()
     assert(create_res.revision == 1, "create revision expected 1")
 
     local entries_json = json.encode(measured.entries)
-    local put_res = call_api("bee.governance:overlay_call", {
+    local put_res = call_api("bee.governance.binding:overlay_call", {
         operation = "put",
         overlay_id = SOURCE_WORKSPACE,
         expected_revision = 1,
@@ -126,7 +126,7 @@ local function main()
     })
     assert(put_res.revision == 2, "put revision expected 2")
 
-    local freeze_res = call_api("bee.governance:overlay_call", {
+    local freeze_res = call_api("bee.governance.binding:overlay_call", {
         operation = "freeze",
         overlay_id = SOURCE_WORKSPACE,
         expected_revision = 2,
@@ -208,7 +208,7 @@ local function main()
 
     -- publication_call prepare {operation,workspace_id,component,version,snapshot_digest}.
     -- Verify descriptor manifest artifact_digest matches supplied artifact.
-    local pub_res = call_api("bee.governance:publication_call", {
+    local pub_res = call_api("bee.governance.binding:publication_call", {
         operation = "prepare",
         workspace_id = test_workspace_uuid,
         component = COMPONENT,
@@ -223,7 +223,7 @@ local function main()
 
     -- destination_call available -> stage using returned descriptor/source_owner/feed/version_key/descriptor_digest
     -- -> review accepted -> select -> prepare intent/receipt.
-    local avail_res = call_api("bee.governance:destination_call", {
+    local avail_res = call_api("bee.governance.binding:destination_call", {
         operation = "available",
         workspace_id = test_workspace_uuid,
     })
@@ -239,7 +239,7 @@ local function main()
     end
     assert(found_desc, "prepared descriptor was not listed in destination available versions")
 
-    local stage_res = call_api("bee.governance:destination_call", {
+    local stage_res = call_api("bee.governance.binding:destination_call", {
         operation = "stage",
         workspace_id = test_workspace_uuid,
         source_owner = descriptor.owner_id,
@@ -252,7 +252,7 @@ local function main()
     assert(stage_res.selected ~= true, "staged version must not be selected")
     local stage_rev = stage_res.revision :: integer
 
-    local review_res = call_api("bee.governance:destination_call", {
+    local review_res = call_api("bee.governance.binding:destination_call", {
         operation = "review",
         workspace_id = test_workspace_uuid,
         source_node = descriptor.owner_id,
@@ -266,7 +266,7 @@ local function main()
     assert(review_res.review_status == "accepted", "review_status expected 'accepted'")
     local review_rev = review_res.revision :: integer
 
-    local select_res = call_api("bee.governance:destination_call", {
+    local select_res = call_api("bee.governance.binding:destination_call", {
         operation = "select",
         workspace_id = test_workspace_uuid,
         source_node = descriptor.owner_id,
@@ -279,7 +279,7 @@ local function main()
 
     local intent_id = "intent-" .. test_workspace_uuid
     local receipt_key = "receipt-" .. test_workspace_uuid
-    local prep_res = call_api("bee.governance:destination_call", {
+    local prep_res = call_api("bee.governance.binding:destination_call", {
         operation = "prepare",
         workspace_id = test_workspace_uuid,
         source_node = descriptor.owner_id,
@@ -295,7 +295,7 @@ local function main()
         error("prepare omitted approval_id or approval_proposal_digest")
     end
 
-    local pending = call_api("bee.governance:destination_call", {operation = "step",
+    local pending = call_api("bee.governance.binding:destination_call", {operation = "step",
         workspace_id = test_workspace_uuid, intent_id = intent_id, receipt_key = receipt_key})
     if pending.phase == "settled" or registry.get("bee.research.demo:app") then
         error("unapproved candidate was applied")
@@ -312,7 +312,7 @@ local function main()
 
     local stepped: Object = prep_res
     for _ = 1, 8 do
-        stepped = call_api("bee.governance:destination_call", {
+        stepped = call_api("bee.governance.binding:destination_call", {
             operation = "step",
             workspace_id = test_workspace_uuid,
             intent_id = intent_id,

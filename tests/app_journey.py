@@ -3,7 +3,7 @@
 An application definition is authored into a governed overlay, frozen with
 its digest, published, discovered, staged, preflighted, reviewed, selected,
 approved, consumed and applied by the registry owner through the production
-governance chain (bee.governance:overlay_call, publication_call,
+governance chain (bee.governance.binding:overlay_call, publication_call,
 destination_call and the approvals owner). The application then appears in the
 desktop's effective catalog, opens from it as a real window with its own
 content, and comes back with its state after a full host restart.
@@ -70,7 +70,8 @@ def bind_admission(project):
 def assert_overlay_authority(project):
     """Overlays belong to the destination owner: nothing else may write one."""
     granted, denied = set(), set()
-    for index in (project / "src").rglob("_index.yaml"):
+    indexes = list((project / "src").rglob("_index.yaml")) + list((project / "modules/gov/src").rglob("_index.yaml"))
+    for index in indexes:
         document = yaml.safe_load(index.read_text())
         for entry in document.get("entries", []):
             policy = entry.get("policy")
@@ -78,7 +79,7 @@ def assert_overlay_authority(project):
                 continue
             identity = f'{document["namespace"]}:{entry["name"]}'
             (granted if policy.get("effect") == "allow" else denied).add(identity)
-    assert granted == {"bee:governance_destination_service_policy"}, granted
+    assert granted == {"bee.governance.security:destination_service_policy"}, granted
     assert denied == {"bee:app_boundary_policy", "bee:scope_managing_app_boundary"}, denied
 
 
@@ -87,9 +88,10 @@ def assert_delivery_has_no_overlay_authority(project):
     destination staging; they grant no overlay write, which is the activation
     owner's alone."""
     wanted = {"bee:gateway_tool_delivery_policy", "bee:gateway_tool_publish_policy",
-              "bee:delivery_facade_policy"}
+              "bee.governance.security:delivery_facade_policy"}
     seen = set()
-    for index in (project / "src").rglob("_index.yaml"):
+    indexes = list((project / "src").rglob("_index.yaml")) + list((project / "modules/gov/src").rglob("_index.yaml"))
+    for index in indexes:
         document = yaml.safe_load(index.read_text())
         for entry in document.get("entries", []):
             identity = f'{document["namespace"]}:{entry["name"]}'
@@ -566,6 +568,7 @@ def exercise():
         folder = Path(directory)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copytree(ROOT / "tests/fixtures/app_journey", project / "src/probe")
         shutil.copytree(ROOT / "tests/fixtures/app_open", project / "src/open_probe")
         open_manifest = yaml.safe_load((project / "src/open_probe/_index.yaml").read_text())

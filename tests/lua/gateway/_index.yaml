@@ -16,7 +16,7 @@ entries:
   modules: [sql]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gateway:surface_test_policy]}
-  imports: {test: wippy.test:test, persist: bee.persist:database, migrations: bee.gateway:migrations, store: bee.gateway:surface_store}
+  imports: {test: wippy.test:test, persist: bee.persist:database, migrations: bee.gateway.migrations:migrations, store: bee.gateway.persist:surface_store}
 - name: catalog_test
   kind: function.lua
   source: file://catalog_test.lua
@@ -54,8 +54,8 @@ entries:
   imports:
     test: wippy.test:test
     persist: bee.persist:database
-    migrations: bee.gateway:migrations
-    gateway: bee.gateway:gateway
+    migrations: bee.gateway.migrations:migrations
+    gateway: bee.gateway.binding:gateway
 - name: hooks_test
   kind: function.lua
   source: file://hooks_test.lua
@@ -77,17 +77,17 @@ entries:
   imports:
     test: wippy.test:test
     mcp: bee.gateway:mcp
-    gateway: bee.gateway:gateway
+    gateway: bee.gateway.binding:gateway
 - name: mcp_test_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [registry.get]
     resources:
-    - bee.governance:authoring_trait
-    - bee.governance:application_delivery_trait
-    - bee.governance:application_publish_trait
-    - bee.governance:overlay_call
+    - bee.governance.traits:authoring_trait
+    - bee.governance.traits:application_delivery_trait
+    - bee.governance.traits:application_publish_trait
+    - bee.governance.binding:overlay_call
     effect: allow
 - name: context_test
   kind: function.lua
@@ -107,6 +107,10 @@ entries:
   meta: {type: test_support}
   addr: 127.0.0.2:0
   lifecycle: {auto_start: true}
+- name: address_test_endpoint
+  kind: registry.entry
+  meta: {type: test_support}
+  data: {address: 127.0.0.1:0}
 - name: address_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -124,7 +128,7 @@ entries:
     policies: [bee.gateway:address_test_policy]
   imports:
     test: wippy.test:test
-    configuration: bee.gateway:configuration
+    configuration: bee.gateway.registry:configuration
 - name: native_admission_db_path
   kind: env.variable
   meta: {type: test_support}
@@ -138,6 +142,10 @@ entries:
   file: ${env:bee.gateway:native_admission_db_path}
   lifecycle:
     auto_start: true
+- name: native_admission_endpoint
+  kind: registry.entry
+  meta: {type: test_support}
+  data: {address: 127.0.0.1:0}
 - name: native_admission_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -155,7 +163,7 @@ entries:
     policies: [bee.gateway:native_admission_test_policy]
   imports:
     test: wippy.test:test
-    configuration: bee.gateway:configuration
+    configuration: bee.gateway.registry:configuration
 - name: policy_reference_admin
   kind: security.policy
   meta: {type: test_support}

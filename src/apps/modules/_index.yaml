@@ -51,7 +51,7 @@ entries:
     comment: Modules may call only the public Hub facade. The facade authorizes the requested package operation before entering its private registry execution scope.
   policy:
     actions: [funcs.call]
-    resources: [bee.hub.binding:call, bee.governance:publication_call]
+    resources: [bee.hub.binding:call, bee.governance.binding:publication_call]
     effect: allow
 - name: publication_policy
   kind: security.policy

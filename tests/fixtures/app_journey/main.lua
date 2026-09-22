@@ -430,6 +430,16 @@ local function configure_host(workspace_id: string, local_node: string)
     assert(changes:update(policy_entry))
     local applied, apply_error = changes:apply()
     if not applied then error("apply host delivery profiles: " .. tostring(apply_error)) end
+    local selected = assert(registry.get("bee.governance.registry:activation_profiles_ref"))
+    local selected_data = object(selected.data)
+    if selected_data.resource_ref ~= "bee.governance:activation_profiles" then
+        error("activation profile requirement did not retain the default selection")
+    end
+    local retained = assert(registry.get(selected_data.resource_ref :: string))
+    local retained_data = object(retained.data)
+    if type(retained_data.profiles) ~= "table" or #retained_data.profiles ~= 1 then
+        error("activation profile update did not retain its configured data")
+    end
 end
 
 local function main()
@@ -455,21 +465,21 @@ local function main()
 
     -- Author into a governed workspace and freeze it, exactly as a person
     -- editing the source tree would.
-    local create_res = call_api("bee.governance:overlay_call", {operation = "create",
+    local create_res = call_api("bee.governance.binding:overlay_call", {operation = "create",
         overlay_id = SOURCE_WORKSPACE, expected_revision = 0, idempotency_key = "create-" .. SOURCE_WORKSPACE})
     if create_res.revision ~= 1 then error("workspace create revision expected 1") end
-    local put_res = call_api("bee.governance:overlay_call", {operation = "put", overlay_id = SOURCE_WORKSPACE,
+    local put_res = call_api("bee.governance.binding:overlay_call", {operation = "put", overlay_id = SOURCE_WORKSPACE,
         expected_revision = 1, idempotency_key = "put-entries-" .. SOURCE_WORKSPACE, path = "entries.json",
         content = json.encode(measured.entries)})
     if put_res.revision ~= 2 then error("workspace put revision expected 2") end
-    local freeze_res = call_api("bee.governance:overlay_call", {operation = "freeze",
+    local freeze_res = call_api("bee.governance.binding:overlay_call", {operation = "freeze",
         overlay_id = SOURCE_WORKSPACE, expected_revision = 2, idempotency_key = "freeze-" .. SOURCE_WORKSPACE})
     local snapshot_digest = digest_of(freeze_res.digest, "frozen overlay digest")
 
     local local_node = assert(system.node.id())
     configure_host(workspace_id, local_node)
 
-    local pub_res = call_api("bee.governance:publication_call", {operation = "prepare", workspace_id = workspace_id,
+    local pub_res = call_api("bee.governance.binding:publication_call", {operation = "prepare", workspace_id = workspace_id,
         component = COMPONENT, version = VERSION, snapshot_digest = snapshot_digest})
     local descriptor = object(pub_res.descriptor)
     local manifest = object(descriptor.manifest)
@@ -477,7 +487,7 @@ local function main()
         error("descriptor artifact digest does not match the authored artifact")
     end
 
-    local available = call_api("bee.governance:destination_call", {operation = "available", workspace_id = workspace_id})
+    local available = call_api("bee.governance.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
     for _, raw in ipairs(available.versions :: {unknown}) do
         local item = object(raw)
@@ -485,14 +495,14 @@ local function main()
     end
     if not found then error("prepared descriptor was not discoverable by the destination") end
 
-    local stage_res = call_api("bee.governance:destination_call", {operation = "stage", workspace_id = workspace_id,
+    local stage_res = call_api("bee.governance.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
         source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
         descriptor_digest = descriptor.digest, idempotency_key = "stage-" .. workspace_id})
     if stage_res.status ~= "staged" or stage_res.selected == true then error("staged plan is not staged-and-unselected") end
 
     -- The staged plan is the review surface: its exact artifact bytes and the
     -- destination's own preflight report, verified against its digest.
-    local staged = call_api("bee.governance:destination_call", {operation = "get", workspace_id = workspace_id,
+    local staged = call_api("bee.governance.binding:destination_call", {operation = "get", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = VERSION})
     local plan_digest = digest_of(staged.plan_digest, "staged plan digest")
     if staged.artifact_digest ~= artifact_digest then error("staged plan carries another artifact digest") end
@@ -505,19 +515,19 @@ local function main()
         error("staged plan does not report the logical pending migration")
     end
 
-    local review_res = call_api("bee.governance:destination_call", {operation = "review", workspace_id = workspace_id,
+    local review_res = call_api("bee.governance.binding:destination_call", {operation = "review", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = VERSION,
         expected_revision = staged.revision, idempotency_key = "review-" .. workspace_id,
         review_status = "accepted", review_reason = "app journey acceptance review"})
     if review_res.review_status ~= "accepted" then error("plan was not reviewed accepted") end
 
-    local select_res = call_api("bee.governance:destination_call", {operation = "select", workspace_id = workspace_id,
+    local select_res = call_api("bee.governance.binding:destination_call", {operation = "select", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = VERSION,
         expected_revision = review_res.revision, idempotency_key = "select-" .. workspace_id})
     if select_res.selected ~= true then error("plan was not selected") end
 
     local intent_id, receipt_key = "intent-" .. workspace_id, "receipt-" .. workspace_id
-    local prepared = call_api("bee.governance:destination_call", {operation = "prepare", workspace_id = workspace_id,
+    local prepared = call_api("bee.governance.binding:destination_call", {operation = "prepare", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = VERSION,
         intent_id = intent_id, receipt_key = receipt_key})
     if prepared.phase ~= "approval_bound" then error("prepared activation phase expected approval_bound") end
@@ -535,7 +545,7 @@ local function main()
         error("a decision on another proposal digest was refused with " .. fault_code(misdirected) .. " instead of CONFLICT")
     end
 
-    local pending = call_api("bee.governance:destination_call", {operation = "step", workspace_id = workspace_id,
+    local pending = call_api("bee.governance.binding:destination_call", {operation = "step", workspace_id = workspace_id,
         intent_id = intent_id, receipt_key = receipt_key})
     if pending.phase == "settled" or registry.get(DEFINITION_ID) then
         error("unapproved candidate was applied")
@@ -548,7 +558,7 @@ local function main()
 
     local stepped: Object = prepared
     for _ = 1, 8 do
-        stepped = call_api("bee.governance:destination_call", {operation = "step", workspace_id = workspace_id,
+        stepped = call_api("bee.governance.binding:destination_call", {operation = "step", workspace_id = workspace_id,
             intent_id = intent_id, receipt_key = receipt_key})
         if stepped.phase == "settled" then break end
     end
@@ -558,7 +568,7 @@ local function main()
 
     -- The settled record is the fence's evidence: the composed base this
     -- overlay landed on is the one the owner reviewed and approved.
-    local status = call_api("bee.governance:destination_call", {operation = "status",
+    local status = call_api("bee.governance.binding:destination_call", {operation = "status",
         workspace_id = workspace_id, intent_id = intent_id})
     if status.plan_digest ~= plan_digest then error("settled activation records another plan digest") end
     -- The proposal the owner decided binds this authorization digest, which

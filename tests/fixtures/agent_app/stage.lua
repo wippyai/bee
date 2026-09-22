@@ -134,7 +134,7 @@ local function main()
     local local_node = assert(system.node.id())
     configure(workspace_id, local_node, source_workspace)
 
-    local prepared = call_api("bee.governance:publication_call", {operation = "prepare", workspace_id = workspace_id,
+    local prepared = call_api("bee.governance.binding:publication_call", {operation = "prepare", workspace_id = workspace_id,
         component = COMPONENT, version = version, snapshot_digest = snapshot_digest})
     local descriptor = object(prepared.descriptor)
     local manifest = object(descriptor.manifest)
@@ -142,7 +142,7 @@ local function main()
         error("the prepared descriptor carries another artifact than the one the agent froze")
     end
 
-    local available = call_api("bee.governance:destination_call", {operation = "available", workspace_id = workspace_id})
+    local available = call_api("bee.governance.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
     for _, raw in ipairs(available.versions :: {unknown}) do
         local item = object(raw)
@@ -150,14 +150,14 @@ local function main()
     end
     if not found then error("the prepared descriptor was not discoverable by the destination") end
 
-    local staged_reply = call_api("bee.governance:destination_call", {operation = "stage", workspace_id = workspace_id,
+    local staged_reply = call_api("bee.governance.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
         source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
         descriptor_digest = descriptor.digest, idempotency_key = "stage-" .. source_workspace .. "-" .. version})
     if staged_reply.status ~= "staged" or staged_reply.selected == true then
         error("the agent's version did not stage as an unselected plan")
     end
 
-    local staged = call_api("bee.governance:destination_call", {operation = "get", workspace_id = workspace_id,
+    local staged = call_api("bee.governance.binding:destination_call", {operation = "get", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = source_workspace, version = version})
     if staged.artifact_digest ~= artifact_digest then error("the staged plan carries another artifact digest") end
     local report, report_error = preflight.decode_report(staged.preflight_bytes, staged.preflight_digest)
@@ -171,7 +171,7 @@ local function main()
     local added: {unknown} = table.create(1, 0)
     local modified: {unknown} = table.create(1, 0)
     if report.ready == true and #report.diagnostics == 0 then
-        local changes = call_api("bee.governance:destination_call", {operation = "changes", workspace_id = workspace_id,
+        local changes = call_api("bee.governance.binding:destination_call", {operation = "changes", workspace_id = workspace_id,
             source_node = local_node, source_workspace = source_workspace, version = version})
         for _, raw in ipairs(changes.added :: {unknown}) do
             local item = object(raw)

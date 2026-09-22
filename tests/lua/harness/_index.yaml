@@ -345,7 +345,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call, funcs.security]
-    resources: [bee.gateway:open, bee.gateway:check, bee.gateway:revoke, bee.gateway:drain, bee.gateway:ready, bee.gateway:admit, bee.gateway:authorize_materialization, bee.gateway:materialize, bee.gateway:hook_queue, bee.placement.native:evidence, bee.placement.native:status, bee.placement.native:capabilities, bee.placement.native:measure_executable]
+    resources: [bee.gateway.binding:open, bee.gateway.binding:check, bee.gateway.binding:revoke, bee.gateway.binding:drain, bee.gateway.binding:ready, bee.gateway.binding:admit, bee.gateway.binding:authorize_materialization, bee.gateway.binding:materialize, bee.gateway.binding:hook_queue, bee.placement.native:evidence, bee.placement.native:status, bee.placement.native:capabilities, bee.placement.native:measure_executable]
     effect: allow
 - name: agent_launch_acceptance_test
   kind: function.lua

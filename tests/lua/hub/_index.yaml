@@ -63,8 +63,8 @@ entries:
   security:
     policies:
     - bee.hub:migration_runner_test_policy
-    - bee:governance_destination_service_policy
-    - bee:governance_destination_execution_policy
+    - bee.governance.security:destination_service_policy
+    - bee.governance.security:destination_execution_policy
   imports:
     test: wippy.test:test
     effect: bee.governance.binding:migration_effect
@@ -84,8 +84,8 @@ entries:
     - bee.hub.security:worker_policy
     - bee.hub.security:worker_host_policy
     - bee.hub.security:migration_context_policy
-    - bee:governance_destination_service_policy
-    - bee:governance_destination_execution_policy
+    - bee.governance.security:destination_service_policy
+    - bee.governance.security:destination_execution_policy
   imports:
     test: wippy.test:test
     migration_runner: bee.hub.binding:migration_runner

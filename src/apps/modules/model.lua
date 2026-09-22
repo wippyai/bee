@@ -12,7 +12,7 @@ M.MAX_PARAMETERS = 128
 M.MAX_ITEMS = 100
 M.MAX_ROOTS = 16384
 M.HUB = "bee.hub.binding:call"
-M.PUBLICATION = "bee.governance:publication_call"
+M.PUBLICATION = "bee.governance.binding:publication_call"
 
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}

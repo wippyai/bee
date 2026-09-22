@@ -94,4 +94,7 @@ local function main()
     logger:info("HUB_INSPECT_PASS digest=" .. result.digest)
 end
 
-return {main = main}
+return {main = function()
+    local ok, problem = pcall(main)
+    if not ok then logger:error("HUB_INSPECT_FAILURE " .. tostring(problem)); error(tostring(problem)) end
+end}

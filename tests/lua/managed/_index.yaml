@@ -22,7 +22,7 @@ entries:
     router: bee.managed:router
   method: GET
   path: /ready
-  func: bee.gateway:ready_http
+  func: bee.gateway.api:ready_http
 - name: mcp
   kind: http.endpoint
   meta:
@@ -30,7 +30,7 @@ entries:
     router: bee.managed:router
   method: POST
   path: /mcp/:action
-  func: bee.gateway:mcp_http
+  func: bee.gateway.api:mcp_http
 - name: hook
   kind: http.endpoint
   meta:
@@ -38,7 +38,7 @@ entries:
     router: bee.managed:router
   method: POST
   path: /hook/:action
-  func: bee.gateway:hook_http
+  func: bee.gateway.api:hook_http
 - name: hook_status
   kind: http.endpoint
   meta:
@@ -46,7 +46,7 @@ entries:
     router: bee.managed:router
   method: GET
   path: /hook/:action/:event
-  func: bee.gateway:hook_status_http
+  func: bee.gateway.api:hook_status_http
 - name: hook_mcp
   kind: http.endpoint
   meta:
@@ -54,4 +54,4 @@ entries:
     router: bee.managed:router
   method: POST
   path: /hook/:action/mcp
-  func: bee.gateway:hook_mcp_http
+  func: bee.gateway.api:hook_mcp_http

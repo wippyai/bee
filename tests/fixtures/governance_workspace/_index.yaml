@@ -5,6 +5,10 @@ entries:
   kind: process.host
   host: {workers: 2, max_processes: 8}
   lifecycle: {auto_start: true}
+- name: sender
+  kind: library.lua
+  source: file://sender.lua
+  imports: {transaction: bee.persist:transaction, version: bee.sync:version}
 - name: owner_policy
   kind: security.policy
   policy:
@@ -15,7 +19,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.governance:overlay_call, bee.governance.binding:workspace_backend_call, bee.governance_workspace_probe:authority_probe]
+    resources: [bee.governance.binding:overlay_call, bee.governance.binding:workspace_backend_call, bee.governance_workspace_probe:authority_probe]
     effect: allow
 - name: caller_boundary
   kind: security.policy

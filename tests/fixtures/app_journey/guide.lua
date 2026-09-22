@@ -80,7 +80,7 @@ end
 local function main()
     -- The guide is the product surface an agent reads over MCP. Read it here
     -- through the same facade, not from this fixture.
-    local published = call_api("bee.governance:overlay_call", {operation = "guide"})
+    local published = call_api("bee.governance.binding:overlay_call", {operation = "guide"})
     local document = bounds.text(published.document, 65536)
     if not document or not document:find(guide.ENTRIES_PATH, 1, true) then
         error("the guide document does not name " .. guide.ENTRIES_PATH)
@@ -96,14 +96,14 @@ local function main()
         error("the guide example is not the expected single process.lua entry")
     end
 
-    local create_res = call_api("bee.governance:overlay_call", {operation = "create",
+    local create_res = call_api("bee.governance.binding:overlay_call", {operation = "create",
         overlay_id = SOURCE_WORKSPACE, expected_revision = 0, idempotency_key = "create-" .. SOURCE_WORKSPACE})
     if create_res.revision ~= 1 then error("workspace create revision expected 1") end
-    local put_res = call_api("bee.governance:overlay_call", {operation = "put", overlay_id = SOURCE_WORKSPACE,
+    local put_res = call_api("bee.governance.binding:overlay_call", {operation = "put", overlay_id = SOURCE_WORKSPACE,
         expected_revision = 1, idempotency_key = "put-entries-" .. SOURCE_WORKSPACE,
         path = guide.ENTRIES_PATH, content = entries_json})
     if put_res.revision ~= 2 then error("workspace put revision expected 2") end
-    local freeze_res = call_api("bee.governance:overlay_call", {operation = "freeze",
+    local freeze_res = call_api("bee.governance.binding:overlay_call", {operation = "freeze",
         overlay_id = SOURCE_WORKSPACE, expected_revision = 2, idempotency_key = "freeze-" .. SOURCE_WORKSPACE})
     local snapshot_digest = digest_of(freeze_res.digest, "guide example frozen digest")
 
@@ -112,7 +112,7 @@ local function main()
     local local_node = assert(system.node.id())
     configure_host(workspace_id, local_node)
 
-    local prepared = call_api("bee.governance:publication_call", {operation = "prepare",
+    local prepared = call_api("bee.governance.binding:publication_call", {operation = "prepare",
         workspace_id = workspace_id, component = COMPONENT, version = guide.VERSION,
         snapshot_digest = snapshot_digest})
     local descriptor = object(prepared.descriptor)
@@ -121,13 +121,13 @@ local function main()
         error("the guide example published another artifact than it measured")
     end
 
-    local staged_reply = call_api("bee.governance:destination_call", {operation = "stage",
+    local staged_reply = call_api("bee.governance.binding:destination_call", {operation = "stage",
         workspace_id = workspace_id, source_owner = descriptor.owner_id, feed = descriptor.feed,
         version_key = descriptor.key, descriptor_digest = descriptor.digest,
         idempotency_key = "stage-" .. SOURCE_WORKSPACE})
     if staged_reply.status ~= "staged" then error("the guide example did not stage") end
 
-    local staged = call_api("bee.governance:destination_call", {operation = "get", workspace_id = workspace_id,
+    local staged = call_api("bee.governance.binding:destination_call", {operation = "get", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = guide.VERSION})
     local report, report_error = preflight.decode_report(staged.preflight_bytes, staged.preflight_digest)
     if not report then error("guide example preflight report: " .. tostring(report_error)) end
@@ -138,7 +138,7 @@ local function main()
 
     -- The product delivery tool an authoring agent holds: request delivery of
     -- the frozen artifact, learn the destination's verdict and the human steps.
-    local delivered = call_api("bee.governance:delivery_call", {operation = "request",
+    local delivered = call_api("bee.governance.binding:delivery_call", {operation = "request",
         workspace_id = workspace_id, source_overlay_id = SOURCE_WORKSPACE, version = guide.VERSION,
         snapshot_digest = snapshot_digest})
     if delivered.ready ~= true then
@@ -156,7 +156,7 @@ local function main()
         error("the product delivery tool did not name where the human acts")
     end
     -- Delivery status reads the staged plan back by identity.
-    local status_res = call_api("bee.governance:delivery_call", {operation = "status",
+    local status_res = call_api("bee.governance.binding:delivery_call", {operation = "status",
         workspace_id = workspace_id, source_overlay_id = SOURCE_WORKSPACE, version = guide.VERSION,
         source_node = local_node})
     if status_res.plan_digest ~= staged.plan_digest or status_res.selected == true then

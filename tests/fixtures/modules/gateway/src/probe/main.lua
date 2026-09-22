@@ -18,13 +18,13 @@ local THREAD = "gateway-thread"
 type Object = {[string]: unknown}
 local ADDRESS = ""
 local function endpoint(): string
-    local selected, err = funcs.call("bee.gateway:address", {})
+    local selected, err = funcs.call("bee.gateway.registry:address", {})
     -- Auto-start services become ready asynchronously. Wait only for the
     -- reported starting state; a failed or missing service is an immediate error.
     for _ = 1, 100 do
         if not err or not tostring(err):find("gateway listener is starting", 1, true) then break end
         time.sleep("20ms")
-        selected, err = funcs.call("bee.gateway:address", {})
+        selected, err = funcs.call("bee.gateway.registry:address", {})
     end
     assert(not err and type(selected) == "table", "gateway endpoint: " .. tostring(err))
     local address = (selected :: Object).address
@@ -46,17 +46,17 @@ local function code(reply: Object): string
     return tostring((reply.error :: Object).code)
 end
 local function admit(action: string, ttl: integer?, carrier_epoch: integer?, tools: {string}?): (string, string)
-    local value = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD, owner_incarnation = 1,
+    local value = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD, owner_incarnation = 1,
         carrier_epoch = carrier_epoch or 1, tools = tools or {"thread_read", "thread_wait"}, ttl_ms = ttl or 60000}), "admit " .. action)
     local binding_id = tostring((value.binding :: Object).binding_id)
     assert(value.token == nil, "admit must not return token bytes")
-    local authorized = ok(call("bee.gateway:authorize_materialization", {attempt_id = action .. "-attempt", carrier_epoch = carrier_epoch or 1, binding_id = binding_id}), "authorize " .. action)
-    local materialized = ok(call("bee.gateway:materialize", {attempt_id = action .. "-attempt", carrier_epoch = carrier_epoch or 1, materialization_key = authorized.materialization_key}), "materialize " .. action)
+    local authorized = ok(call("bee.gateway.binding:authorize_materialization", {attempt_id = action .. "-attempt", carrier_epoch = carrier_epoch or 1, binding_id = binding_id}), "authorize " .. action)
+    local materialized = ok(call("bee.gateway.binding:materialize", {attempt_id = action .. "-attempt", carrier_epoch = carrier_epoch or 1, materialization_key = authorized.materialization_key}), "materialize " .. action)
     return tostring(materialized.token), binding_id
 end
 local function materialize(attempt: string, carrier_epoch: integer, binding_id: string): Object
-    local authorized = ok(call("bee.gateway:authorize_materialization", {attempt_id = attempt, carrier_epoch = carrier_epoch, binding_id = binding_id}), "authorize " .. attempt)
-    return call("bee.gateway:materialize", {attempt_id = attempt, carrier_epoch = carrier_epoch, materialization_key = authorized.materialization_key})
+    local authorized = ok(call("bee.gateway.binding:authorize_materialization", {attempt_id = attempt, carrier_epoch = carrier_epoch, binding_id = binding_id}), "authorize " .. attempt)
+    return call("bee.gateway.binding:materialize", {attempt_id = attempt, carrier_epoch = carrier_epoch, materialization_key = authorized.materialization_key})
 end
 local function rpc(action: string, token: string, method: string, params: Object?): (number, Object?)
     local body = json.encode({jsonrpc = "2.0", id = 1, method = method, params = params or {}})
@@ -105,7 +105,7 @@ local function prove_configuration_scope(address: string)
 end
 local function prove_endpoint_call_scope()
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:gateway_address_call_policy", "bee:gateway_store_policy", "bee:gateway_execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy", "bee:gateway_tool_overlay_policy", "bee:gateway_tool_docs_policy"}) do
+    for _, name in ipairs({"bee.gateway.security:address_call_policy", "bee.gateway.security:store_policy", "bee.gateway.security:execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy", "bee:gateway_tool_overlay_policy", "bee:gateway_tool_docs_policy"}) do
         local selected, err = security.policy(name)
         assert(selected ~= nil and err == nil, "endpoint policy unavailable")
         policies[#policies + 1] = selected
@@ -113,7 +113,7 @@ local function prove_endpoint_call_scope()
     local scope = security.new_scope(policies)
     local actor = security.actor()
     assert(actor ~= nil, "probe actor missing")
-    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance:overlay_call", "bee.docs.binding:call"}) do
+    for _, target in ipairs({"bee.gateway.registry:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance.binding:overlay_call", "bee.docs.binding:call"}) do
         assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
     end
     -- The docs tool reads the one embedded corpus and reaches no other volume.
@@ -123,12 +123,12 @@ local function prove_endpoint_call_scope()
     assert(scope:evaluate(actor, "registry.get", "bee:workspace_root") ~= "allow", "docs policy reaches an unrelated registry entry")
     assert(scope:evaluate(actor, "bee.governance.overlay.read", "any-overlay") == "allow", "overlay read is absent")
     assert(scope:evaluate(actor, "bee.governance.overlay.write", "any-overlay") == "allow", "overlay write is absent")
-    for _, target in ipairs({"bee.threads.service:create", "bee.gateway:materialize", "bee.hub.binding:call", "arbitrary:operation"}) do
+    for _, target in ipairs({"bee.threads.service:create", "bee.gateway.binding:materialize", "bee.hub.binding:call", "arbitrary:operation"}) do
         assert(scope:evaluate(actor, "funcs.call", target) ~= "allow", "endpoint can invoke an unrelated operation")
     end
 end
 local function configurable_surface(token_a: string)
-    local configurable = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "configurable", attempt_id = "configurable-attempt",
+    local configurable = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "configurable", attempt_id = "configurable-attempt",
         thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "measure_context"}, ttl_ms = 60000,
         surface = {tools = {{name = "measure_context", operation = "bee.gateway_probe:context_tool", description = "Read scoped context",
             policies = {"bee.gateway_probe:context_tool_policy", "bee.gateway_probe:replacement_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
@@ -152,7 +152,7 @@ local function configurable_surface(token_a: string)
     local spoofed = tool("configurable", configurable_token, "session", {operation = "select", expected_revision = 2,
         active_traits = {"research:measure"}, context = {["bee.gateway.binding"] = {thread_id = "foreign"}}})
     assert(spoofed.ok == false, "caller replaced reserved binding attribution")
-    local peer = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "context-peer", attempt_id = "context-peer-attempt",
+    local peer = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "context-peer", attempt_id = "context-peer-attempt",
         thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"measure_context"}, ttl_ms = 60000,
         surface = {tools = {{name = "measure_context", operation = "bee.gateway_probe:context_tool", description = "Read attribution",
             policies = {"bee.gateway_probe:context_tool_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
@@ -188,7 +188,7 @@ local function configurable_surface(token_a: string)
     assert(loser.error.code == "CONFLICT", "concurrent loser was not a revision conflict")
     local winner = tool("configurable", configurable_token, "session", {operation = "read"})
     assert((winner.value :: Object).revision == 3, "concurrent update advanced twice")
-    ok(call("bee.gateway:reissue", {binding_id = configurable_binding, expected_generation = 1}), "rotate configurable credential")
+    ok(call("bee.gateway.binding:reissue", {binding_id = configurable_binding, expected_generation = 1}), "rotate configurable credential")
     local old_status = rpc("configurable", configurable_token, "tools/call", {name = "session", arguments = {operation = "read"}})
     assert(old_status == 401, "rotated token retained selection access")
     configurable_token = tostring(ok(materialize("configurable-attempt", 1, configurable_binding), "renew configurable credential").token)
@@ -214,7 +214,7 @@ local function configurable_surface(token_a: string)
         time.sleep("10ms")
     end
     assert(observed, "same binding did not observe native policy replacement")
-    ok(call("bee.gateway:revoke", {binding_id = configurable_binding}), "revoke configurable binding")
+    ok(call("bee.gateway.binding:revoke", {binding_id = configurable_binding}), "revoke configurable binding")
     local revoked_status = rpc("configurable", configurable_token, "tools/call", {name = "measure_context", arguments = {}})
     assert(revoked_status == 401, "revoked configurable binding executed")
 end
@@ -222,7 +222,7 @@ local function main()
     prove_endpoint_call_scope()
     ADDRESS = endpoint()
     prove_configuration_scope(ADDRESS)
-    local opened = ok(call("bee.gateway:open", {address = ADDRESS}), "open")
+    local opened = ok(call("bee.gateway.binding:open", {address = ADDRESS}), "open")
     assert(opened.epoch == 1, "first epoch")
     ok(call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = key(), title = "Gateway"}), "create")
     for index = 1, 3 do record("line " .. tostring(index)) end
@@ -230,7 +230,7 @@ local function main()
     local readiness_response, readiness_error = http_client.get("http://" .. ADDRESS .. "/ready", {timeout = "2s", query = {nonce = "fixture-readiness"}})
     assert(readiness_response, "readiness request: " .. tostring(readiness_error))
     if readiness_response.status_code ~= 200 then error("readiness refused: " .. tostring(readiness_response.body)) end
-    local ready = ok(call("bee.gateway:ready", {binding_id = binding_a}), "ready")
+    local ready = ok(call("bee.gateway.binding:ready", {binding_id = binding_a}), "ready")
     assert(ready.listening == true and (ready.generation :: Object).epoch == 1, "readiness under epoch 1")
     assert(ready.binding_valid == true, "binding A valid")
     local status, init = rpc("act-a", token_a, "initialize")
@@ -279,14 +279,14 @@ local function main()
     assert(body_status == 400, "whole MCP body limit was not enforced")
     local unchanged = tool("workspace-action", workspace_token, "overlay", {operation = "list", overlay_id = "gateway-large-source"})
     assert(unchanged.ok == true and (unchanged.value :: Object).revision == 2, "refused oversized request changed the workspace")
-    local foreign_admission = ok(call("bee.gateway:admit", {subject = "foreign-workspace-subject", action_id = "foreign-workspace-action",
+    local foreign_admission = ok(call("bee.gateway.binding:admit", {subject = "foreign-workspace-subject", action_id = "foreign-workspace-action",
         attempt_id = "foreign-workspace-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1,
         tools = {"overlay"}, ttl_ms = 60000}), "admit foreign workspace actor")
     local foreign_workspace_binding = tostring((foreign_admission.binding :: Object).binding_id)
     local foreign_workspace_token = tostring(ok(materialize("foreign-workspace-attempt", 1, foreign_workspace_binding), "materialize foreign workspace actor").token)
     local foreign_workspace = tool("foreign-workspace-action", foreign_workspace_token, "overlay", {operation = "list", overlay_id = "gateway-research"})
     assert(foreign_workspace.ok == false and foreign_workspace.code == "DENIED", "foreign MCP actor read another workspace")
-    ok(call("bee.gateway:revoke", {binding_id = workspace_binding}), "revoke workspace binding")
+    ok(call("bee.gateway.binding:revoke", {binding_id = workspace_binding}), "revoke workspace binding")
     end
     -- The credential lifecycle: the same generation cannot be materialized
     -- twice, reissue is a compare-and-set that revokes the old token and
@@ -295,61 +295,61 @@ local function main()
     assert(code(materialize("act-a-attempt", 1, binding_a)) == "CONFLICT", "second materialization refused")
     -- Materialization needs placement's one-time key: none, a wrong one, or
     -- a used one is refused even by a caller holding the materializer grant.
-    assert(code(call("bee.gateway:materialize", {attempt_id = "act-a-attempt", carrier_epoch = 1})) == "INVALID", "materialization without a key refused")
-    assert(code(call("bee.gateway:materialize", {attempt_id = "act-a-attempt", carrier_epoch = 1, materialization_key = "not-the-key"})) == "DENIED", "materialization with a wrong key refused")
-    assert(code(call("bee.gateway:reissue", {binding_id = binding_a, expected_generation = 7})) == "CONFLICT", "stale reissue refused")
-    local reissued = ok(call("bee.gateway:reissue", {binding_id = binding_a, expected_generation = 1}), "reissue")
+    assert(code(call("bee.gateway.binding:materialize", {attempt_id = "act-a-attempt", carrier_epoch = 1})) == "INVALID", "materialization without a key refused")
+    assert(code(call("bee.gateway.binding:materialize", {attempt_id = "act-a-attempt", carrier_epoch = 1, materialization_key = "not-the-key"})) == "DENIED", "materialization with a wrong key refused")
+    assert(code(call("bee.gateway.binding:reissue", {binding_id = binding_a, expected_generation = 7})) == "CONFLICT", "stale reissue refused")
+    local reissued = ok(call("bee.gateway.binding:reissue", {binding_id = binding_a, expected_generation = 1}), "reissue")
     assert(reissued.generation == 2, "generation advanced")
-    assert(code(call("bee.gateway:reissue", {binding_id = binding_a, expected_generation = 1})) == "CONFLICT", "concurrent reissue with the same expectation loses")
+    assert(code(call("bee.gateway.binding:reissue", {binding_id = binding_a, expected_generation = 1})) == "CONFLICT", "concurrent reissue with the same expectation loses")
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 401, "replaced token refused")
-    local authorized_again = ok(call("bee.gateway:authorize_materialization", {attempt_id = "act-a-attempt", carrier_epoch = 1, binding_id = binding_a}), "authorize generation 2")
-    local renewed = ok(call("bee.gateway:materialize", {attempt_id = "act-a-attempt", carrier_epoch = 1, materialization_key = authorized_again.materialization_key}), "materialize generation 2")
+    local authorized_again = ok(call("bee.gateway.binding:authorize_materialization", {attempt_id = "act-a-attempt", carrier_epoch = 1, binding_id = binding_a}), "authorize generation 2")
+    local renewed = ok(call("bee.gateway.binding:materialize", {attempt_id = "act-a-attempt", carrier_epoch = 1, materialization_key = authorized_again.materialization_key}), "materialize generation 2")
     token_a = tostring(renewed.token)
-    assert(code(call("bee.gateway:materialize", {attempt_id = "act-a-attempt", carrier_epoch = 1, materialization_key = authorized_again.materialization_key})) == "DENIED", "a used key authorizes nothing more")
+    assert(code(call("bee.gateway.binding:materialize", {attempt_id = "act-a-attempt", carrier_epoch = 1, materialization_key = authorized_again.materialization_key})) == "DENIED", "a used key authorizes nothing more")
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 200, "new generation token works")
     assert(code(materialize("act-a-attempt", 2, binding_a)) == "CONFLICT", "a later carrier epoch inherits the binding and its materialized generation")
-    assert(code(call("bee.gateway:authorize_materialization", {attempt_id = "act-a-attempt", carrier_epoch = 1, binding_id = "another-binding"})) == "CONFLICT", "a binding that is not the carrier's recorded one is refused")
-    assert(code(call("bee.gateway:authorize_materialization", {attempt_id = "act-zz-attempt", carrier_epoch = 1, binding_id = binding_a})) == "NOT_FOUND", "no binding for an unknown attempt")
+    assert(code(call("bee.gateway.binding:authorize_materialization", {attempt_id = "act-a-attempt", carrier_epoch = 1, binding_id = "another-binding"})) == "CONFLICT", "a binding that is not the carrier's recorded one is refused")
+    assert(code(call("bee.gateway.binding:authorize_materialization", {attempt_id = "act-zz-attempt", carrier_epoch = 1, binding_id = binding_a})) == "NOT_FOUND", "no binding for an unknown attempt")
     -- A presented token is counted; the count is the evidence a client authenticated.
-    local presented = ok(call("bee.gateway:check", {binding_id = binding_a}), "check presentations")
+    local presented = ok(call("bee.gateway.binding:check", {binding_id = binding_a}), "check presentations")
     assert((tonumber(presented.presented_count) or 0) >= 1 and presented.last_presented_at ~= nil, "presentations counted")
     -- One live binding per attempt and carrier epoch: the same admission
     -- replays it, a different one at the same epoch conflicts.
-    local replayed = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, ttl_ms = 60000}), "replay admission")
+    local replayed = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, ttl_ms = 60000}), "replay admission")
     assert(replayed.replayed == true and (replayed.binding :: Object).binding_id == binding_a, "same admission replays the live binding")
-    assert(code(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "a different admission at the same epoch conflicts")
+    assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "a different admission at the same epoch conflicts")
     -- A later carrier epoch's admission supersedes the earlier binding of the same attempt.
-    local superseding = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 2, tools = {"thread_read"}, ttl_ms = 60000}), "admit under epoch 2")
+    local superseding = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 2, tools = {"thread_read"}, ttl_ms = 60000}), "admit under epoch 2")
     assert((superseding.binding :: Object).binding_id ~= binding_a, "a new binding")
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 401, "the superseded binding's token is refused")
-    local superseded = ok(call("bee.gateway:check", {binding_id = binding_a}), "check superseded")
+    local superseded = ok(call("bee.gateway.binding:check", {binding_id = binding_a}), "check superseded")
     assert(superseded.valid == false and tostring(superseded.reason) == "binding is revoked", "superseded binding is revoked")
     binding_a = tostring((superseding.binding :: Object).binding_id)
     token_a = tostring(ok(materialize("act-a-attempt", 2, binding_a), "materialize under epoch 2").token)
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 200, "the superseding binding's token works")
     -- A delayed admission under an epoch below the highest ever admitted for
     -- the attempt is refused, so no second live binding can appear.
-    assert(code(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "stale admission refused")
-    ok(call("bee.gateway:revoke", {binding_id = binding_a}), "revoke the epoch 2 binding")
-    assert(code(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "stale admission refused even with the newer binding revoked")
-    local reopened_a = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 3, tools = {"thread_read", "thread_wait"}, ttl_ms = 60000}), "admit under epoch 3")
+    assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "stale admission refused")
+    ok(call("bee.gateway.binding:revoke", {binding_id = binding_a}), "revoke the epoch 2 binding")
+    assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "stale admission refused even with the newer binding revoked")
+    local reopened_a = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 3, tools = {"thread_read", "thread_wait"}, ttl_ms = 60000}), "admit under epoch 3")
     binding_a = tostring((reopened_a.binding :: Object).binding_id)
     token_a = tostring(ok(materialize("act-a-attempt", 3, binding_a), "materialize under epoch 3").token)
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 200, "the epoch 3 binding's token works")
     -- Independent revocation is fenced by carrier epoch: a report from an
     -- older carrier cannot revoke a binding admitted under a higher epoch.
     local token_f, binding_f = admit("act-f", nil, 5)
-    local older = ok(call("bee.gateway:revoke_attempt", {attempt_id = "act-f-attempt", carrier_epoch = 4}), "revoke_attempt older")
+    local older = ok(call("bee.gateway.binding:revoke_attempt", {attempt_id = "act-f-attempt", carrier_epoch = 4}), "revoke_attempt older")
     assert(older.revoked == 0 and select(1, rpc("act-f", token_f, "tools/list")) == 200, "older carrier report left the newer binding alive")
-    local current = ok(call("bee.gateway:revoke_attempt", {attempt_id = "act-f-attempt", carrier_epoch = 5}), "revoke_attempt current")
+    local current = ok(call("bee.gateway.binding:revoke_attempt", {attempt_id = "act-f-attempt", carrier_epoch = 5}), "revoke_attempt current")
     assert(current.revoked == 1 and select(1, rpc("act-f", token_f, "tools/list")) == 401, "current carrier report revoked the binding")
-    local checked = ok(call("bee.gateway:check", {binding_id = binding_f}), "check")
+    local checked = ok(call("bee.gateway.binding:check", {binding_id = binding_f}), "check")
     assert(checked.valid == false and tostring(checked.reason) == "binding is revoked", "check reports revocation")
     -- A tool outside the binding's admitted set is refused at the call, whatever a client allows for itself.
     local token_h = admit("act-h", nil, 1)
     local narrow_status, narrow_reply = rpc("act-h", token_h, "tools/list")
     assert(narrow_status == 200 and #(((narrow_reply :: Object).result :: Object).tools :: {Object}) == 4, "the probe admits both tools and MCP controls")
-    local admitted_only = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-i", attempt_id = "act-i-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000}), "admit read only")
+    local admitted_only = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-i", attempt_id = "act-i-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000}), "admit read only")
     local token_i = tostring(ok(materialize("act-i-attempt", 1, tostring((admitted_only.binding :: Object).binding_id)), "materialize read only").token)
     local listed_status, listed = rpc("act-i", token_i, "tools/list")
     assert(listed_status == 200 and #(((listed :: Object).result :: Object).tools :: {Object}) == 3, "only the admitted tool and MCP controls are advertised")
@@ -357,7 +357,7 @@ local function main()
     assert(refused_status == 200 and refused and refused.error ~= nil and tostring(((refused :: Object).error :: Object).message):find("not admitted", 1, true), "a tool outside the binding is refused")
     local refused_message_status, refused_message = rpc("act-i", token_i, "tools/call", {name = "thread_message", arguments = {idempotency_key = "read-only-message", message_id = "read-only-message", message_kind = "notification", recipient_ids = {}, content = {text = "no"}}})
     assert(refused_message_status == 200 and refused_message and refused_message.error ~= nil and tostring(((refused_message :: Object).error :: Object).message):find("not admitted", 1, true), "a read-only binding admitted a write")
-    local foreign_admission = ok(call("bee.gateway:admit", {subject = "foreign-subject", action_id = "foreign-action", attempt_id = "foreign-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_message"}, ttl_ms = 60000}), "admit non-member message")
+    local foreign_admission = ok(call("bee.gateway.binding:admit", {subject = "foreign-subject", action_id = "foreign-action", attempt_id = "foreign-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_message"}, ttl_ms = 60000}), "admit non-member message")
     local foreign_binding = tostring((foreign_admission.binding :: Object).binding_id)
     local foreign_token = tostring(ok(materialize("foreign-attempt", 1, foreign_binding), "materialize non-member message").token)
     local foreign_message = tool("foreign-action", foreign_token, "thread_message", {idempotency_key = "foreign-message", message_id = "foreign-message", message_kind = "notification", recipient_ids = {}, content = {text = "no"}})
@@ -372,7 +372,7 @@ local function main()
     time.sleep("250ms")
     assert(select(1, rpc("act-c", token_c, "tools/list")) == 401, "expired token refused")
     -- A revoked token is refused.
-    ok(call("bee.gateway:revoke", {binding_id = binding_a}), "revoke")
+    ok(call("bee.gateway.binding:revoke", {binding_id = binding_a}), "revoke")
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 401, "revoked token refused")
     -- thread_wait is bounded and read-only: a timeout returns within the budget, a
     -- new record wakes it, and no obligation or delivery mark is touched.
@@ -394,7 +394,7 @@ local function main()
         admitted = {request_id = "mcp-request", principal_id = ACTOR, binding_ref = "mcp-binding", binding_digest = "mcp-digest", grant_refs = {}, budget_ref = "mcp-budget", input = {text = "mcp"}}}), "admit MCP action")
     ok(call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "mcp-action", attempt_id = "mcp-attempt",
         prepared = {binding_ref = "mcp-binding", binding_digest = "mcp-digest", profile_id = "mcp-profile", profile_digest = "mcp-profile-digest", placement_binding = "mcp-placement", placement_attempt_id = "mcp-placement-attempt", plan_digest = "mcp-plan"}}), "prepare MCP attempt")
-    local mcp_admit = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "mcp-action", attempt_id = "mcp-attempt", thread_id = THREAD,
+    local mcp_admit = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "mcp-action", attempt_id = "mcp-attempt", thread_id = THREAD,
         owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_message"}, ttl_ms = 60000}), "admit MCP message")
     local mcp_binding = tostring((mcp_admit.binding :: Object).binding_id)
     local mcp_token = tostring(ok(materialize("mcp-attempt", 1, mcp_binding), "materialize MCP message").token)
@@ -428,7 +428,7 @@ local function main()
     assert(arbitrary_record and arbitrary_record.error and tostring((arbitrary_record.error :: Object).message):find("unknown field kind", 1, true), "arbitrary record kind was accepted")
     local settled = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {kinds = {"receipt"}, action_id = "mcp-action"}}), "read MCP receipts")
     assert(#(settled.records :: {unknown}) == 0, "thread_message settled an attempt")
-    ok(call("bee.gateway:revoke", {binding_id = mcp_binding}), "revoke MCP message binding")
+    ok(call("bee.gateway.binding:revoke", {binding_id = mcp_binding}), "revoke MCP message binding")
     assert(select(1, rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = message_arguments})) == 401, "revoked thread_message token was accepted")
     end
     -- Hooks: a binding that admits hook events gets a second credential of
@@ -455,10 +455,10 @@ local function main()
         local decoded: unknown = json.decode(tostring(response.body))
         return response.status_code, type(decoded) == "table" and (decoded :: Object) or nil
     end
-    local hook_admit = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-k", attempt_id = "act-k-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"},
+    local hook_admit = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-k", attempt_id = "act-k-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"},
         hooks = {"PreToolUse", "PostToolUse", "Stop", "SessionStart"}, ttl_ms = 60000}), "admit with hooks")
     local binding_k = tostring((hook_admit.binding :: Object).binding_id)
-    assert(code(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-k2", attempt_id = "act-k2-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"Notification"}})) == "INVALID", "an event outside the catalog is not admitted")
+    assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-k2", attempt_id = "act-k2-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"Notification"}})) == "INVALID", "an event outside the catalog is not admitted")
     local minted_k = ok(materialize("act-k-attempt", 1, binding_k), "materialize with hooks")
     local token_k, hook_k = tostring(minted_k.token), tostring(minted_k.hook_token)
     assert(hook_k ~= token_k and #hook_k > 20, "a hook credential of its own")
@@ -504,7 +504,7 @@ local function main()
     assert(select(1, hook_post("act-k", hook_k, {hook_event_name = "PostToolUse", session_id = "s1", tool_use_id = "toolu_big", tool_response = table.concat(big)})) == 413, "a payload past the bound is refused")
     -- What the queue holds: kinds, claims, sizes and digests; no content and
     -- no control field.
-    local queue = ok(call("bee.gateway:hook_queue", {binding_id = binding_k}), "hook queue")
+    local queue = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "hook queue")
     local queued_list = queue.hooks :: {Object}
     assert(#queued_list == 5, "five submissions queued: " .. tostring(#queued_list))
     local queued_text = json.encode(queued_list) or ""
@@ -534,7 +534,7 @@ local function main()
     assert(bare_reply and bare_reply.error ~= nil and tostring(((bare_reply :: Object).error :: Object).message):find("(unclassified)", 1, true), "a call without metadata is refused")
     local _, other_tool = hook_rpc(hook_k, "tools/call", {name = "thread_read", arguments = {cursor = 0}, _meta = {threadId = "s2"}})
     assert(other_tool and other_tool.error ~= nil, "no thread tool is served on the hook endpoint")
-    local engine_queue = ok(call("bee.gateway:hook_queue", {binding_id = binding_k}), "hook queue after mcp")
+    local engine_queue = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "hook queue after mcp")
     assert((json.encode(engine_queue.hooks) or ""):find("codex:hook_engine", 1, true) ~= nil, "provenance records the classification")
     -- Overload is explicit: past the queue bound the endpoint answers 429
     -- with a retry interval, and a replay of a queued event still answers.
@@ -554,10 +554,10 @@ local function main()
     -- acknowledges only a claimed row. The carrier record path is exercised
     -- with the retained claim below. A claim or acknowledgment from an epoch
     -- below the highest admitted for the attempt changes nothing.
-    local lost_claim = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim whose reply is lost")
+    local lost_claim = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim whose reply is lost")
     local lost_list = lost_claim.hooks :: {Object}
     assert(#lost_list == 3 and lost_list[1].event_id == event_1, "the first three queued submissions are claimed in order")
-    local claimed = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "recover lost claim reply")
+    local claimed = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "recover lost claim reply")
     local claimed_list = claimed.hooks :: {Object}
     assert(#claimed_list == #lost_list, "the lost claim is redelivered at the same bound")
     for index, item in ipairs(claimed_list) do
@@ -565,36 +565,36 @@ local function main()
     end
     local claimed_ids: {string} = {}
     for index, item in ipairs(claimed_list) do claimed_ids[index] = tostring(item.event_id) end
-    local acked = ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = claimed_ids}), "ack claimed batch")
+    local acked = ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = claimed_ids}), "ack claimed batch")
     assert(acked.acknowledged == 3, "the recovered batch is acknowledged once")
     local committed_status, committed_body = hook_get("act-k", hook_k, event_1)
     assert(committed_status == 200 and committed_body and committed_body.status == "committed", "status answers committed")
     local replay_status, replay_body = hook_post("act-k", hook_k, first_payload)
     assert(replay_status == 200 and replay_body == "", "a replay of a committed submission answers 200 with an empty body")
-    assert(ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = claimed_ids}), "ack twice").acknowledged == 0, "an acknowledgment is idempotent")
-    local progressed_claim = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim after acknowledgment")
+    assert(ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = claimed_ids}), "ack twice").acknowledged == 0, "an acknowledgment is idempotent")
+    local progressed_claim = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim after acknowledgment")
     assert(#(progressed_claim.hooks :: {Object}) == 3 and (progressed_claim.hooks :: {Object})[1].event_id ~= event_1,
         "acknowledgment advances the next bounded claim")
     -- Sealing ends intake at once and keeps the accepted rows for the carrier.
-    local pre_seal = ok(call("bee.gateway:hook_queue", {binding_id = binding_k}), "queue before seal")
-    ok(call("bee.gateway:seal", {binding_id = binding_k}), "seal")
+    local pre_seal = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "queue before seal")
+    ok(call("bee.gateway.binding:seal", {binding_id = binding_k}), "seal")
     local sealed_status, sealed_body = hook_post("act-k", hook_k, {hook_event_name = "PreToolUse", session_id = "s9", tool_use_id = "toolu_after_seal", tool_name = "Bash"})
     assert(sealed_status == 403 and sealed_body:find("sealed", 1, true), "a submission after the seal is refused: " .. tostring(sealed_status) .. " " .. sealed_body)
     assert(select(1, hook_post("act-k", hook_k, first_payload)) == 200, "a replay of a committed submission still answers after the seal")
     assert(select(1, rpc("act-k", token_k, "tools/list")) == 200, "the seal leaves the tool credential valid")
-    local post_seal = ok(call("bee.gateway:hook_queue", {binding_id = binding_k}), "queue after seal")
+    local post_seal = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "queue after seal")
     assert(#(post_seal.hooks :: {Object}) == #(pre_seal.hooks :: {Object}), "the seal discards nothing accepted")
-    local taken_over = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 3, limit = 2}), "claim under a higher epoch")
+    local taken_over = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 3, limit = 2}), "claim under a higher epoch")
     assert(#(taken_over.hooks :: {Object}) == 2, "a higher epoch takes over rows a lower epoch claimed, sealed or not")
-    local stale_ack = ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = {(taken_over.hooks :: {Object})[1].event_id}}), "stale ack")
+    local stale_ack = ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = {(taken_over.hooks :: {Object})[1].event_id}}), "stale ack")
     assert(stale_ack.acknowledged == 0, "a lower epoch cannot acknowledge what a higher one claimed")
-    local unclaimed_ack = ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(progressed_claim.hooks :: {Object})[3].event_id}}), "ack without claim")
+    local unclaimed_ack = ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(progressed_claim.hooks :: {Object})[3].event_id}}), "ack without claim")
     assert(unclaimed_ack.acknowledged == 0, "an epoch that did not take over a row cannot acknowledge it")
-    local admitted_higher = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-k", attempt_id = "act-k-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 4, tools = {"thread_read"}, hooks = {"Stop", "PreToolUse"}, ttl_ms = 60000}), "admit act-k under epoch 4")
-    assert(code(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 3})) == "CONFLICT", "a claim below the highest admitted epoch is refused")
-    assert(code(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(taken_over.hooks :: {Object})[1].event_id}})) == "CONFLICT",
+    local admitted_higher = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-k", attempt_id = "act-k-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 4, tools = {"thread_read"}, hooks = {"Stop", "PreToolUse"}, ttl_ms = 60000}), "admit act-k under epoch 4")
+    assert(code(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 3})) == "CONFLICT", "a claim below the highest admitted epoch is refused")
+    assert(code(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(taken_over.hooks :: {Object})[1].event_id}})) == "CONFLICT",
         "an old claim cannot acknowledge after the replacement admission")
-    local superseded_queue = ok(call("bee.gateway:hook_queue", {binding_id = binding_k}), "superseded queue")
+    local superseded_queue = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "superseded queue")
     local rejected_count, committed_count, retained_claimed = 0, 0, 0
     for _, item in ipairs(superseded_queue.hooks :: {Object}) do
         if item.status == "rejected" then rejected_count = rejected_count + 1; assert(item.rejected_reason == "binding superseded", "rejection names its reason") end
@@ -603,10 +603,10 @@ local function main()
     end
     assert(committed_count == 3 and rejected_count > 0 and retained_claimed > 0,
         "supersession rejects unclaimed rows, keeps committed rows and retains claimed uncertainty: " .. tostring(committed_count) .. " " .. tostring(rejected_count) .. " " .. tostring(retained_claimed))
-    local recovered_after_supersession = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 4, limit = 3}), "reclaim superseded claims")
+    local recovered_after_supersession = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 4, limit = 3}), "reclaim superseded claims")
     assert(#(recovered_after_supersession.hooks :: {Object}) > 0, "the current carrier reclaims a superseded claimed row")
     local recovered_id = tostring((recovered_after_supersession.hooks :: {Object})[1].event_id)
-    assert(ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 4, event_ids = {recovered_id}}), "ack reclaimed superseded row").acknowledged == 1,
+    assert(ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 4, event_ids = {recovered_id}}), "ack reclaimed superseded row").acknowledged == 1,
         "a replacement can acknowledge a retained claim")
     assert(select(1, hook_post("act-k", hook_k, first_payload)) == 401, "the superseded binding's hook credential is refused")
     local binding_k4 = tostring((admitted_higher.binding :: Object).binding_id)
@@ -614,19 +614,19 @@ local function main()
     local hook_k4 = tostring(minted_k4.hook_token)
     local stop_status, _, stop_headers = hook_post("act-k", hook_k4, {hook_event_name = "Stop", session_id = "s4", prompt_id = "p4", stop_hook_active = false})
     assert(stop_status == 202, "a hook under the new binding queues")
-    local ended = ok(call("bee.gateway:hook_reject", {binding_id = binding_k4, carrier_epoch = 4, reason = "attempt settled"}), "reject at settlement")
+    local ended = ok(call("bee.gateway.binding:hook_reject", {binding_id = binding_k4, carrier_epoch = 4, reason = "attempt settled"}), "reject at settlement")
     assert(ended.rejected == 1, "the queued row is rejected at settlement")
     local rejected_status, rejected_body = hook_get("act-k", hook_k4, tostring(header_of(stop_headers, "X-Bee-Event")))
     assert(rejected_status == 200 and rejected_body and rejected_body.status == "rejected" and rejected_body.rejected_reason == "attempt settled", "status answers rejected with its reason")
     local gone_status, gone_body = hook_post("act-k", hook_k4, {hook_event_name = "PreToolUse", session_id = "s4", tool_use_id = "toolu_gone", tool_name = "Bash"})
     assert(gone_status == 202, "a fresh occurrence still queues until the binding ends: " .. tostring(gone_status) .. " " .. tostring(gone_body))
-    ok(call("bee.gateway:hook_reject", {binding_id = binding_k4, carrier_epoch = 4, reason = "attempt settled"}), "reject again")
+    ok(call("bee.gateway.binding:hook_reject", {binding_id = binding_k4, carrier_epoch = 4, reason = "attempt settled"}), "reject again")
     local replay_gone_status, replay_gone_body = hook_post("act-k", hook_k4, {hook_event_name = "PreToolUse", session_id = "s4", tool_use_id = "toolu_gone", tool_name = "Bash"})
     assert(replay_gone_status == 410 and replay_gone_body:find("rejected: attempt settled", 1, true), "a replay of a rejected occurrence answers 410 with plain text: " .. tostring(replay_gone_status) .. " " .. replay_gone_body)
     local claimed_before_revoke, _, claimed_headers = hook_post("act-k", hook_k4, {hook_event_name = "PreToolUse", session_id = "s4", tool_use_id = "toolu_claimed_revoke", tool_name = "Bash"})
     local queued_before_revoke, _, revoke_headers = hook_post("act-k", hook_k4, {hook_event_name = "PreToolUse", session_id = "s4", tool_use_id = "toolu_revoked", tool_name = "Bash"})
     assert(claimed_before_revoke == 202 and queued_before_revoke == 202, "claimed and unclaimed rows queue before the revocation")
-    local claimed_for_commit = ok(call("bee.gateway:hook_claim", {binding_id = binding_k4, carrier_epoch = 4, limit = 1}), "claim before lost acknowledgment")
+    local claimed_for_commit = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k4, carrier_epoch = 4, limit = 1}), "claim before lost acknowledgment")
     local claimed_item = (claimed_for_commit.hooks :: {Object})[1]
     local claimed_for_commit_id = tostring(claimed_item.event_id)
     assert(claimed_for_commit_id == tostring(header_of(claimed_headers, "X-Bee-Event")), "the row held across revoke was claimed first")
@@ -653,9 +653,9 @@ local function main()
     local first_commit = ok(call("bee.threads.carrier:commit", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt", carrier_epoch = 4, expected_revision = 0,
         checkpoint = {schema_revision = "bee.carrier.checkpoint@1", phase = "hook-committed-before-ack"}, records = {hook_record}}), "commit claimed hook")
     assert(#(first_commit.records :: {Object}) == 1 and (first_commit.records :: {Object})[1].replayed == false, "the claimed hook committed once")
-    ok(call("bee.gateway:revoke", {binding_id = binding_k4}), "revoke the hook binding")
+    ok(call("bee.gateway.binding:revoke", {binding_id = binding_k4}), "revoke the hook binding")
     assert(select(1, hook_post("act-k", hook_k4, first_payload)) == 401, "a revoked binding's hook credential is refused")
-    local after_revoke = ok(call("bee.gateway:hook_queue", {binding_id = binding_k4}), "queue after revoke")
+    local after_revoke = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k4}), "queue after revoke")
     for _, item in ipairs(after_revoke.hooks :: {Object}) do
         if item.event_id == header_of(revoke_headers, "X-Bee-Event") then assert(item.status == "rejected" and item.rejected_reason == "binding revoked", "revocation rejects an unclaimed row terminally") end
         if item.event_id == claimed_for_commit_id then assert(item.status == "queued" and item.claimed_epoch == 4, "revocation retains the claimed row after its thread commit") end
@@ -669,26 +669,26 @@ local function main()
         if item.kind == "observation" and type(item.body) == "table" and (item.body :: Object).event_key == event_key then retained_records = retained_records + 1 end
     end
     assert(retained_records == 1, "the replay did not duplicate the committed hook record")
-    assert(ok(call("bee.gateway:hook_ack", {binding_id = binding_k4, carrier_epoch = 4, event_ids = {claimed_for_commit_id}}), "ack after revoke").acknowledged == 1,
+    assert(ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k4, carrier_epoch = 4, event_ids = {claimed_for_commit_id}}), "ack after revoke").acknowledged == 1,
         "the internally authorized carrier acknowledges the committed row after revocation")
     -- Expiry has the same distinction: the token is refused, unclaimed rows
     -- are rejected, and the internally authorized carrier path reclaims work
     -- that was already claimed before expiry.
-    local expiring = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-expiring-hooks", attempt_id = "act-expiring-hooks-attempt", thread_id = THREAD,
+    local expiring = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-expiring-hooks", attempt_id = "act-expiring-hooks-attempt", thread_id = THREAD,
         owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"PreToolUse"}, ttl_ms = 250}), "admit expiring hooks")
     local expiring_binding = tostring((expiring.binding :: Object).binding_id)
     local expiring_tokens = ok(materialize("act-expiring-hooks-attempt", 1, expiring_binding), "materialize expiring hooks")
     local expiring_hook = tostring(expiring_tokens.hook_token)
     local expiring_status, _, expiring_headers = hook_post("act-expiring-hooks", expiring_hook, {hook_event_name = "PreToolUse", session_id = "expiry", tool_use_id = "toolu_expiry", tool_name = "Bash"})
     assert(expiring_status == 202, "hook queues before expiry")
-    local expiring_claim = ok(call("bee.gateway:hook_claim", {binding_id = expiring_binding, carrier_epoch = 1, limit = 1}), "claim before expiry")
+    local expiring_claim = ok(call("bee.gateway.binding:hook_claim", {binding_id = expiring_binding, carrier_epoch = 1, limit = 1}), "claim before expiry")
     local expiring_id = tostring((expiring_claim.hooks :: {Object})[1].event_id)
     assert(expiring_id == tostring(header_of(expiring_headers, "X-Bee-Event")), "the expiring row was claimed")
     time.sleep("300ms")
-    local expired_recovery = ok(call("bee.gateway:hook_claim", {binding_id = expiring_binding, carrier_epoch = 2, limit = 1}), "reclaim after expiry")
+    local expired_recovery = ok(call("bee.gateway.binding:hook_claim", {binding_id = expiring_binding, carrier_epoch = 2, limit = 1}), "reclaim after expiry")
     assert(#(expired_recovery.hooks :: {Object}) == 1 and tostring((expired_recovery.hooks :: {Object})[1].event_id) == expiring_id,
         "expiry retains and reclaims a claimed row")
-    assert(ok(call("bee.gateway:hook_ack", {binding_id = expiring_binding, carrier_epoch = 2, event_ids = {expiring_id}}), "ack after expiry").acknowledged == 1,
+    assert(ok(call("bee.gateway.binding:hook_ack", {binding_id = expiring_binding, carrier_epoch = 2, event_ids = {expiring_id}}), "ack after expiry").acknowledged == 1,
         "the reclaimed expired row acknowledges normally")
     -- Drain during a wait: a helper drains while this wait is in flight; the
     -- wait returns a released outcome well before its own deadline, new
@@ -704,13 +704,13 @@ local function main()
     local released = tool("act-d", token_d, "thread_wait", {after_sequence = drain_cursor, wait_ms = 4000})
     assert(released.ok == true and (released.value :: Object).status == "released" and (released.value :: Object).reason == "draining", "wait released by drain: " .. tostring(json.encode(released)))
     assert(time.now():sub(drain_started):milliseconds() < 3500, "release came before the wait's own deadline")
-    assert(code(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-e", attempt_id = "att-e", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}})) == "UNAVAILABLE", "admission refused after drain")
+    assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-e", attempt_id = "att-e", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}})) == "UNAVAILABLE", "admission refused after drain")
     local late = tool("act-d", token_d, "thread_read", {cursor = 0})
     assert(late.ok == true, "bounded read finishes during drain")
     -- A new epoch fences every earlier binding and readiness.
-    local reopened = ok(call("bee.gateway:open", {address = ADDRESS}), "reopen")
+    local reopened = ok(call("bee.gateway.binding:open", {address = ADDRESS}), "reopen")
     assert(reopened.epoch == 2, "second epoch")
-    local stale = ok(call("bee.gateway:ready", {binding_id = binding_d}), "ready after reopen")
+    local stale = ok(call("bee.gateway.binding:ready", {binding_id = binding_d}), "ready after reopen")
     assert((stale.generation :: Object).epoch == 2 and stale.binding_valid == false, "earlier binding fenced by the new epoch")
     assert(select(1, rpc("act-d", token_d, "tools/list")) == 401, "earlier epoch token refused")
 end

@@ -1,0 +1,226 @@
+version: '1.0'
+namespace: bee.gateway.binding
+entries:
+- name: gateway
+  kind: library.lua
+  source: file://gateway.lua
+  modules:
+  - sql
+  - hash
+  - time
+  - uuid
+  - json
+  - security
+  - system
+  - crypto
+  - base64
+  - http_client
+  - registry
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    persist: bee.persist:database
+    migrations: bee.gateway.migrations:migrations
+    configuration: bee.gateway.registry:configuration
+    hooks: bee.gateway:hooks
+    mcp: bee.gateway:mcp
+    surface: bee.gateway:surface
+    surface_store: bee.gateway.persist:surface_store
+    access: bee.gateway.security:access
+- name: open
+  kind: function.lua
+  source: file://open_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: admit
+  kind: function.lua
+  source: file://admit_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: revoke
+  kind: function.lua
+  source: file://revoke_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: materialize
+  kind: function.lua
+  source: file://materialize_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: authorize_materialization
+  kind: function.lua
+  source: file://authorize_materialization_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: reissue
+  kind: function.lua
+  source: file://reissue_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: revoke_attempt
+  kind: function.lua
+  source: file://revoke_attempt_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: check
+  kind: function.lua
+  source: file://check_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: drain
+  kind: function.lua
+  source: file://drain_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: ready
+  kind: function.lua
+  source: file://ready_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+    - bee.gateway.security:readiness_policy
+- name: seal
+  kind: function.lua
+  source: file://seal_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: hook_claim
+  kind: function.lua
+  source: file://hook_claim_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: hook_ack
+  kind: function.lua
+  source: file://hook_ack_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: hook_reject
+  kind: function.lua
+  source: file://hook_reject_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: hook_queue
+  kind: function.lua
+  source: file://hook_queue_method.lua
+  method: handle
+  modules:
+  - security
+  imports:
+    bounds: bee.threads.records:bounds
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:supervisor_policy

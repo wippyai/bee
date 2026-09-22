@@ -62,13 +62,13 @@ def bind_destination(project, workspace_id):
 
 def delay_destination(project, operation, duration="2s"):
     """Delay one destination operation without changing its reply."""
-    manifest = project / "src/gov/_index.yaml"
+    manifest = project / "modules/gov/src/binding/_index.yaml"
     document = yaml.safe_load(manifest.read_text())
     entry = next(item for item in document["entries"] if item["name"] == "destination_call")
     if "time" not in entry["modules"]:
         entry["modules"].append("time")
     manifest.write_text(yaml.safe_dump(document, sort_keys=False))
-    method = project / "src/gov/destination_method.lua"
+    method = project / "modules/gov/src/binding/destination_method.lua"
     source = method.read_text()
     if 'local time = require("time")' not in source:
         source = source.replace('local funcs = require("funcs")',
@@ -153,6 +153,7 @@ def exercise_responsive():
         folder = Path(directory)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
 
@@ -187,6 +188,7 @@ def exercise():
         folder = Path(directory)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copytree(ROOT / "tests/fixtures/delivery_review", project / "src/probe")
         for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)

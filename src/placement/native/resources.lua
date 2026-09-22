@@ -17,12 +17,12 @@ M.RESOURCE_MODE = "bee.placement.native:resource_mode"
 M.RESOLVE = "bee.resources.binding:resolve"
 M.CREDENTIAL_CHECK = "bee.credentials.binding:check"
 M.CREDENTIAL_MATERIALIZE = "bee.credentials.binding:materialize"
-M.GATEWAY_CHECK = "bee.gateway:check"
-M.GATEWAY_MATERIALIZE = "bee.gateway:materialize"
-M.GATEWAY_REVOKE = "bee.gateway:revoke"
-M.GATEWAY_SEAL = "bee.gateway:seal"
-M.GATEWAY_REVOKE_ATTEMPT = "bee.gateway:revoke_attempt"
-M.GATEWAY_AUTHORIZE = "bee.gateway:authorize_materialization"
+M.GATEWAY_CHECK = "bee.gateway.binding:check"
+M.GATEWAY_MATERIALIZE = "bee.gateway.binding:materialize"
+M.GATEWAY_REVOKE = "bee.gateway.binding:revoke"
+M.GATEWAY_SEAL = "bee.gateway.binding:seal"
+M.GATEWAY_REVOKE_ATTEMPT = "bee.gateway.binding:revoke_attempt"
+M.GATEWAY_AUTHORIZE = "bee.gateway.binding:authorize_materialization"
 local function reference(id: string, field: string, label: string): (string?, string?)
     local entry, err = registry.get(id)
     if err or not entry then return nil, label .. " reference unavailable" end

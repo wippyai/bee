@@ -75,7 +75,7 @@ def configure_source_node(project):
 def configure_continuous_source(project, workspace_id):
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") != "1":
         return
-        governance_path = project / "src/gov/_index.yaml"
+        governance_path = project / "modules/gov/src/_index.yaml"
     governance = yaml.safe_load(governance_path.read_text())
     publication = next(item for item in governance["entries"] if item["name"] == "publication_profiles")
     publication["data"] = {"profiles": [{"workspace_id": workspace_id,
@@ -238,7 +238,7 @@ def write_inputs(project, **values):
 
 def admit_docs_tool(project):
     """Tool metadata grants nothing: the host admits this exact operation."""
-    index = project / "src/gateway/_index.yaml"
+    index = project / "modules/gateway/src/api/_index.yaml"
     document = yaml.safe_load(index.read_text())
     endpoint = next(entry for entry in document["entries"] if entry["name"] == "mcp_http")
     endpoint["security"]["policies"].append("bee.agent_app_probe:docs_policy")
@@ -356,7 +356,7 @@ def stage(project, folder, round_label):
 
 def preflight_diagnostic(diagnostic):
     """One destination diagnostic as the agent reads it. The preflight wire
-    contract names the field remedy (src/gov/preflight.lua), so a
+    contract names the field remedy (modules/gov/src/preflight.lua), so a
     reviewer that read another name would drop the destination's own repair
     instruction and hand back a weaker finding than the host observed."""
     return (str(diagnostic.get("code")) + " on " + str(diagnostic.get("target")) + ": "
@@ -664,6 +664,7 @@ def exercise():
     print("Private evidence:", folder)
     project = folder / "project"
     shutil.copytree(ROOT / "src", project / "src")
+    shutil.copytree(ROOT / "modules", project / "modules")
     stamp_presenter(project)
     shutil.copytree(ROOT / "tests/fixtures/agent_app", project / "src/probe")
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") == "1":

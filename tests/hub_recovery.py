@@ -253,34 +253,31 @@ def command_environment(folder):
 
 
 def prepare_fixture(folder):
-    # Match the existing live-Hub fixture composition. Production modules are
-    # copied into this disposable source tree; none of these files enter src/.
     shutil.copytree(ROOT / "tests/fixtures/hub_manage", folder / "src")
-    shutil.copytree(ROOT / "src/hub", folder / "src/hub")
-    shutil.copy2(ROOT / "modules/threads/src/records/bounds.lua", folder / "src/records/bounds.lua")
-    for name in ("bounds.lua", "canonical.lua"):
-        shutil.copy2(ROOT / "modules/sync/src" / name, folder / "src/sync" / name)
-    (folder / "src/persist").mkdir()
-    shutil.copy2(ROOT / "modules/persist/src/transaction.lua", folder / "src/persist/transaction.lua")
-    (folder / "src/persist/_index.yaml").write_text(
-        "version: '1.0'\nnamespace: bee.persist\nentries:\n"
-        "- name: transaction\n  kind: library.lua\n  source: file://transaction.lua\n  modules: [sql, time]\n"
-    )
+    for module in ("hub", "persist", "sync", "threads"):
+        shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
     (folder / "src/hub_recovery_probe").mkdir()
     (folder / "src/hub_recovery_probe/main.lua").write_text(PROBE)
     (folder / "src/hub_recovery_probe/_index.yaml").write_text(PROBE_INDEX)
-    # The runtime requires the repository's source-directory lock. Copy it
-    # unchanged into the disposable fixture; this test never edits the lock.
-    shutil.copy2(ROOT / "wippy.lock", folder / "wippy.lock")
+    (folder / "wippy.lock").write_text(
+        "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
+        "- name: bee/hub\n  version: 0.1.0-dev\n"
+        "- name: bee/persist\n  version: 0.1.0-dev\n"
+        "- name: bee/sync\n  version: 0.1.0-dev\n"
+        "- name: bee/threads\n  version: 0.1.0-dev\n"
+    )
     (folder / ".wippy.yaml").write_text(
         "version: '1.0'\nregistry:\n  enable_history: true\n"
         "  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\n"
+        "workspace:\n  replacements:\n"
+        "    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n"
+        "    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
     )
 
 
 def run(runtime, folder, command):
     result = subprocess.run(
-        [str(runtime), "run", "--verbose", "--host", "bee:workers", "--", command],
+        [str(runtime), "run", "--verbose", "--host", "bee:hub_workers", "--", command],
         cwd=folder,
         env=command_environment(folder),
         capture_output=True,
@@ -302,7 +299,7 @@ def run(runtime, folder, command):
 def kill_after_publication(runtime, folder):
     """Kill the actual runtime after the source-only post-commit marker."""
     process = subprocess.Popen(
-        [str(runtime), "run", "--verbose", "--host", "bee:workers", "--", "hub-recovery-probe"],
+        [str(runtime), "run", "--verbose", "--host", "bee:hub_workers", "--", "hub-recovery-probe"],
         cwd=folder,
         env=command_environment(folder),
         stdout=subprocess.PIPE,
@@ -349,7 +346,7 @@ def main():
     folder = Path(tempfile.mkdtemp(prefix="bee-hub-recovery-"))
     try:
         prepare_fixture(folder)
-        service = folder / "src/hub/service.lua"
+        service = folder / "modules/hub/src/binding/publication.lua"
         original = service.read_text()
         anchor = "    local applied, apply_error = changes:apply()\n    if not applied then return transaction.failure(\"FAILED\", tostring(apply_error)) end\n"
         assert original.count(anchor) == 1, "publication injection anchor is not unique"

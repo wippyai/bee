@@ -23,47 +23,53 @@ local function run()
             test.is_true(not configuration.host_matches("localhost:43211", "127.0.0.1:43210"))
         end)
         test.it("reads the actual selected native listener without accepting a caller address", function()
-            local endpoint = registry.get("bee:gateway_endpoint")
-            local reference = registry.get("bee.gateway:listener_ref")
-            if not endpoint or not reference then error("missing gateway host configuration") end
+            local endpoint_link = registry.get("bee.gateway.registry:endpoint_ref")
+            local endpoint = registry.get("bee.gateway:address_test_endpoint")
+            local listener_link = registry.get("bee.gateway:listener_ref")
+            if not endpoint_link or not endpoint or not listener_link then error("missing gateway component host selections") end
+            local changed_endpoint_link: Object = {id = endpoint_link.id, kind = endpoint_link.kind, meta = endpoint_link.meta,
+                data = {resource_ref = "bee.gateway:address_test_endpoint"}}
             local changed_endpoint: Object = {id = endpoint.id, kind = endpoint.kind, meta = endpoint.meta, data = {address = "127.0.0.1:0"}}
-            local changed_reference: Object = {id = reference.id, kind = reference.kind, meta = reference.meta,
+            local changed_listener_link: Object = {id = listener_link.id, kind = listener_link.kind, meta = listener_link.meta,
                 data = {resource_ref = "bee.gateway:ephemeral_listener"}}
-            local function update(left: Object, right: Object)
+            local function update()
                 local changes = registry.snapshot():changes()
-                changes:update(left); changes:update(right)
+                changes:update(changed_endpoint_link); changes:update(changed_endpoint); changes:update(changed_listener_link)
                 local applied, err = changes:apply()
                 if not applied then error(tostring(err)) end
             end
             local ok, failure = pcall(function()
-                update(changed_endpoint, changed_reference)
+                update()
                 local address, err = configuration.endpoint()
                 if not address then error(tostring(err)) end
                 test.is_true(configuration.valid_address(address, false))
                 test.neq(address, "127.0.0.1:0")
                 local replay = configuration.endpoint()
                 test.eq(replay, address)
-                local supplied, supplied_error = funcs.call("bee.gateway:address", {address = "127.0.0.1:1"})
+                local supplied, supplied_error = funcs.call("bee.gateway.registry:address", {address = "127.0.0.1:1"})
                 test.is_true(supplied == nil)
                 test.is_true(supplied_error ~= nil)
                 -- A real listener on another loopback interface exercises
                 -- interface selection without depending on Docker on the test host.
                 changed_endpoint.data = {address = "127.0.0.2:0"}
-                update(changed_endpoint, changed_reference)
+                update()
                 local mismatched = configuration.endpoint()
                 test.is_true(mismatched == nil)
-                changed_reference.data = {resource_ref = "bee.gateway:alternate_listener"}
-                update(changed_endpoint, changed_reference)
+                changed_listener_link.data = {resource_ref = "bee.gateway:alternate_listener"}
+                update()
                 local alternate, alternate_error = configuration.endpoint()
                 if not alternate then error(tostring(alternate_error)) end
                 test.is_true(alternate:match("^127%.0%.0%.2:%d+$") ~= nil)
                 test.neq(alternate, "127.0.0.2:0")
-                changed_reference.data = {resource_ref = "bee.gateway:absent_listener"}
-                update(changed_endpoint, changed_reference)
+                changed_listener_link.data = {resource_ref = "bee.gateway:absent_listener"}
+                update()
                 local missing = configuration.endpoint()
                 test.is_true(missing == nil)
             end)
-            update(endpoint, reference)
+            local restore = registry.snapshot():changes()
+            restore:update(endpoint_link); restore:update(endpoint); restore:update(listener_link)
+            local restored, restore_error = restore:apply()
+            if not restored then error(tostring(restore_error)) end
             if not ok then error(tostring(failure)) end
         end)
     end)

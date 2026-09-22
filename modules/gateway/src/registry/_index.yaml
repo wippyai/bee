@@ -1,0 +1,51 @@
+version: '1.0'
+namespace: bee.gateway.registry
+entries:
+- name: endpoint_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host endpoint configuration; target_endpoint fills resource_ref}
+- name: approval_request_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host approval request policy; an absent link fails closed}
+- name: approval_consume_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host approval consume policy; an absent link fails closed}
+- name: tool_read_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in bound-thread read tools}
+- name: tool_message_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in bound-thread message tool}
+- name: tool_launch_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in managed-launch tool}
+- name: tool_overlay_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in governed-overlay tool}
+- name: tool_docs_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in offline-documentation tool}
+- name: tool_components_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in component-inspection tool}
+- name: tool_delivery_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in delivery tool}
+- name: tool_publish_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in publication tool}
+- name: tool_application_open_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in admitted-application open tool}
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules: [registry, funcs, env]
+  imports: {address_value: bee.gateway:address_value}
+- name: address
+  kind: function.lua
+  source: file://address_method.lua
+  method: handle
+  modules: [registry, system]
+  imports: {configuration: bee.gateway.registry:configuration}
+  security: {policies: [bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy]}

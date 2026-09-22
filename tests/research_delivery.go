@@ -53,6 +53,9 @@ func reviewArtifact(root, runtime string, environment []string, entries []interf
 	if err := os.CopyFS(filepath.Join(review, "src"), os.DirFS(filepath.Join(root, "src"))); err != nil {
 		return err
 	}
+	if err := os.CopyFS(filepath.Join(review, "modules"), os.DirFS(filepath.Join(root, "modules"))); err != nil {
+		return err
+	}
 	for _, name := range []string{".wippy.yaml", "wippy.lock"} {
 		if err := copyFile(filepath.Join(review, name), filepath.Join(root, name)); err != nil {
 			return err
@@ -177,6 +180,9 @@ func check() error {
 	fmt.Println("Private evidence:", root)
 
 	if err = os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join(repo, "src"))); err != nil {
+		return err
+	}
+	if err = os.CopyFS(filepath.Join(root, "modules"), os.DirFS(filepath.Join(repo, "modules"))); err != nil {
 		return err
 	}
 	for _, name := range []string{".wippy.yaml", "wippy.lock"} {
@@ -407,7 +413,7 @@ func stageMeasurement(repo, root string, entries []interface{}) error {
 	if err = os.WriteFile(admissionPath, admissionBytes, 0600); err != nil {
 		return err
 	}
-	gatewayPath := filepath.Join(root, "src/gateway/_index.yaml")
+	gatewayPath := filepath.Join(root, "modules/gateway/src/api/_index.yaml")
 	gatewayBytes, err := os.ReadFile(gatewayPath)
 	if err != nil {
 		return err

@@ -52,7 +52,7 @@ entries:
   imports:
     permission: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
-    gateway_configuration: bee.gateway:configuration
+    gateway_configuration: bee.gateway.registry:configuration
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     catalog: bee.harness.catalog:catalog

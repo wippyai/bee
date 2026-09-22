@@ -117,7 +117,7 @@ local function settle_failure(admitted: admission.Admitted, epoch: integer?, rea
         if not cleaned then details[#details + 1] = "placement cleanup: " .. tostring(cleanup_error) end
     end
     if gateway_binding then
-        local revoked, revoke_error = call("bee.gateway:revoke", {binding_id = gateway_binding})
+        local revoked, revoke_error = call("bee.gateway.binding:revoke", {binding_id = gateway_binding})
         if not revoked then details[#details + 1] = "gateway revoke: " .. tostring(revoke_error) end
     end
     local settled, settlement_error = receipt(admitted, epoch, "uncertain", reason, attempt_receipt)

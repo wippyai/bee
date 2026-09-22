@@ -116,7 +116,7 @@ local function define_tests()
             local selected = model.selected(state)
             test.not_nil(selected)
             if selected then
-                test.eq(model.CALL, "bee.governance:destination_call")
+                test.eq(model.CALL, "bee.governance.binding:destination_call")
                 test.eq(model.get_request(state, selected).operation, "get")
                 test.eq(model.select_request(state, selected, "select-key").operation, "select")
                 test.eq(model.prepare_request(state, selected, "intent", "prepare-key").operation, "prepare")

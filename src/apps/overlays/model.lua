@@ -6,7 +6,7 @@ local json = require("json")
 local preflight = require("preflight")
 
 local M = {}
-M.CALL = "bee.governance:destination_call"
+M.CALL = "bee.governance.binding:destination_call"
 M.MAX_PLANS = 128
 M.MAX_AVAILABLE = 512
 M.MAX_CHANGES = 512

@@ -47,5 +47,5 @@ entries:
     comment: Overlays calls only the destination-owned governance facade; local review is separate from Approvals decisions
   policy:
     actions: [funcs.call]
-    resources: [bee.governance:destination_call]
+    resources: [bee.governance.binding:destination_call]
     effect: allow

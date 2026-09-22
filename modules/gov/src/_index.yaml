@@ -1,0 +1,173 @@
+version: '1.0'
+namespace: bee.governance
+entries:
+- name: definition
+  kind: ns.definition
+  module: governance
+  readme: file://README.md
+  meta:
+    title: Bee governance authoring
+    comment: Caller-owned migrated staging, measured-closure checks and durable overlay activation
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: dependency_sync
+  kind: ns.dependency
+  component: bee/sync
+  version: '*'
+- name: dependency_approvals
+  kind: ns.dependency
+  component: bee/approvals
+  version: '*'
+- name: dependency_hub
+  kind: ns.dependency
+  component: bee/hub
+  version: '*'
+- name: preflight
+  kind: library.lua
+  source: file://preflight.lua
+  modules: [hash, json]
+  imports: {canonical: bee.sync:canonical}
+- name: delivery_protocol
+  kind: library.lua
+  source: file://delivery_protocol.lua
+  imports: {bounds: bee.threads.records:bounds}
+- name: workspace
+  kind: library.lua
+  source: file://workspace.lua
+  modules: [hash]
+  imports: {canonical: bee.sync:canonical}
+- name: workspace_protocol
+  kind: library.lua
+  source: file://workspace_protocol.lua
+  modules: [base64]
+  imports: {bounds: bee.threads.records:bounds}
+- name: candidate
+  kind: library.lua
+  source: file://candidate.lua
+  modules: [hash, json]
+  imports: {canonical: bee.sync:canonical, workspace: bee.governance:workspace}
+- name: artifact
+  kind: library.lua
+  source: file://artifact.lua
+  modules: [hash, json]
+  imports: {canonical: bee.sync:canonical}
+- name: governed_application_admission
+  kind: library.lua
+  source: file://application_admission.lua
+  modules: [hash, json]
+  imports: {canonical: bee.sync:canonical, bounds: bee.threads.records:bounds}
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  modules: [json, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    artifact: bee.governance:artifact
+    version: bee.sync:version
+- name: target_db
+  kind: ns.requirement
+  default: bee.governance:db
+  meta: {comment: Host-selected SQLite store for private overlays and frozen content}
+  targets:
+  - entry: bee.governance:database_ref
+    path: .resource_ref
+  - entry: bee.governance.security:staging_database_policy
+    path: .policy.resources
+- name: database_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref}
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: db_path
+  kind: env.variable
+  storage: bee.governance:environment
+  variable: BEE_GOVERNANCE_DB
+  default: .wippy/governance.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.governance:db_path}
+  lifecycle: {auto_start: true}
+- name: activation_measure
+  kind: library.lua
+  source: file://activation_measure.lua
+  modules: [hash, json]
+  imports:
+    artifact: bee.governance:artifact
+    preflight: bee.governance:preflight
+    migration_work: bee.governance:migration_work
+    application_admission: bee.governance:governed_application_admission
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+- name: migration_work
+  kind: library.lua
+  source: file://migration_work.lua
+  modules: [hash, json]
+  imports:
+    artifact: bee.governance:artifact
+    canonical: bee.sync:canonical
+    preflight: bee.governance:preflight
+- name: target_publication_profiles
+  kind: ns.requirement
+  default: bee.governance:publication_profiles
+  meta: {comment: Host-selected publication profiles; the retained default preserves configured local data}
+  targets:
+  - entry: bee.governance.registry:publication_profiles_ref
+    path: .resource_ref
+  - entry: bee.governance.security:publication_profiles_read_policy
+    path: .policy.resources
+- name: target_activation_profiles
+  kind: ns.requirement
+  default: bee.governance:activation_profiles
+  meta: {comment: Host-selected activation profiles; the retained default preserves configured local data}
+  targets:
+  - entry: bee.governance.registry:activation_profiles_ref
+    path: .resource_ref
+- name: target_approval_request_policy
+  kind: ns.requirement
+  meta: {comment: Host-selected approval request policy for the fixed activation actor; absent selection fails closed}
+  targets:
+  - entry: bee.governance.registry:approval_request_policy_ref
+    path: .resource_ref
+- name: target_approval_consume_policy
+  kind: ns.requirement
+  meta: {comment: Host-selected approval consume policy for the fixed activation actor; absent selection fails closed}
+  targets:
+  - entry: bee.governance.registry:approval_consume_policy_ref
+    path: .resource_ref
+- name: activation_profile_decoder
+  kind: library.lua
+  source: file://activation_profiles.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    application_admission: bee.governance:governed_application_admission
+- name: delivery_contract
+  kind: contract.definition
+  methods:
+  - name: call
+    description: Discover, stage, review, select and locally activate overlay versions for one destination workspace
+- name: delivery_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.governance:delivery_contract
+    methods: {call: bee.governance.binding:destination_call}
+- name: overlay_contract
+  kind: contract.definition
+  methods:
+  - name: call
+    description: Author a caller-owned overlay with revision checks; freeze content without executing or approving it
+- name: overlay_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.governance:overlay_contract
+    methods: {call: bee.governance.binding:overlay_call}

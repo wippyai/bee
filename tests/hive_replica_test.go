@@ -239,7 +239,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 	}
 	moduleNames := []string{
 		"application", "approvals", "credentials", "docs", "driver", "driver-agy",
-		"driver-claude", "driver-codex", "driver-grok", "driver-muse", "hive", "node",
+		"driver-claude", "driver-codex", "driver-grok", "driver-muse", "gov", "hive", "node",
 		"persist", "placement", "resources", "sync", "threads",
 	}
 	type stagedNode struct{ project, state string }
@@ -286,7 +286,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			}
 		}
 		if i == 0 && agent == nil {
-			governancePath := filepath.Join(project, "src", "gov", "_index.yaml")
+			governancePath := filepath.Join(project, "src", "governance", "_index.yaml")
 			governance, err := os.ReadFile(governancePath)
 			if err != nil {
 				t.Fatal(err)
@@ -328,7 +328,11 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		}
 		lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
 		for _, name := range moduleNames {
-			lock += "- name: bee/" + name + "\n  version: 0.1.0-dev\n"
+			component := name
+			if name == "gov" {
+				component = "governance"
+			}
+			lock += "- name: bee/" + component + "\n  version: 0.1.0-dev\n"
 		}
 		if err := os.WriteFile(filepath.Join(project, "wippy.lock"), []byte(lock), 0600); err != nil {
 			t.Fatal(err)
@@ -357,7 +361,11 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		}
 		replacements := map[string]string{}
 		for _, name := range moduleNames {
-			replacements["bee/"+name] = "./modules/" + name
+			component := name
+			if name == "gov" {
+				component = "governance"
+			}
+			replacements["bee/"+component] = "./modules/" + name
 		}
 		config["workspace"] = map[string]any{"replacements": replacements}
 		data, err := json.Marshal(config)

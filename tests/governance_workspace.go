@@ -84,6 +84,11 @@ entries:
   source: file://workspace_protocol.lua
   modules: [base64]
   imports: {bounds: bee.threads.records:bounds}
+`
+
+const governanceBindingIndex = `version: '1.0'
+namespace: bee.governance.binding
+entries:
 - name: overlay_call
   kind: function.lua
   source: file://workspace_method.lua
@@ -91,11 +96,6 @@ entries:
   modules: [funcs, security]
   imports: {protocol: bee.governance:workspace_protocol, guide: bee.governance.traits:guide, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
   security: {policies: [bee.governance.security:overlay_facade_policy]}
-`
-
-const governanceBindingIndex = `version: '1.0'
-namespace: bee.governance.binding
-entries:
 - name: workspace_backend_call
   kind: function.lua
   source: file://authoring.lua
@@ -205,52 +205,27 @@ func copyFile(destination, source string) error {
 }
 
 func setup(root string) error {
-	for _, source := range []struct{ name, path string }{
-		{name: "gov", path: "src/gov"},
-		{name: "sync", path: "modules/sync/src"},
-		{name: "persist", path: "modules/persist/src"},
-	} {
-		if err := copyTree(filepath.Join(root, "src", source.name), source.path); err != nil {
-			return fmt.Errorf("copy %s source: %w", source.name, err)
+	for _, name := range []string{"approvals", "gov", "hub", "persist", "sync", "threads"} {
+		if err := copyTree(filepath.Join(root, "modules", name), filepath.Join("modules", name)); err != nil {
+			return fmt.Errorf("stage %s component: %w", name, err)
 		}
-	}
-	if err := os.WriteFile(filepath.Join(root, "src", "gov", "_index.yaml"), []byte(governanceIndex), 0600); err != nil {
-		return fmt.Errorf("write bounded governance composition: %w", err)
-	}
-	if err := os.RemoveAll(filepath.Join(root, "src", "gov", "service")); err != nil {
-		return fmt.Errorf("remove unbound governance services: %w", err)
-	}
-	for path, index := range map[string]string{
-		"binding/_index.yaml": governanceBindingIndex,
-		"persist/_index.yaml": governancePersistIndex,
-		"migrations/_index.yaml": governanceMigrationsIndex,
-		"registry/_index.yaml": governanceRegistryIndex,
-		"traits/_index.yaml": governanceTraitsIndex,
-		"security/_index.yaml": governanceSecurityIndex,
-	} {
-		if err := os.WriteFile(filepath.Join(root, "src", "gov", path), []byte(index), 0600); err != nil {
-			return fmt.Errorf("write bounded governance child composition: %w", err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(root, "src", "sync", "_index.yaml"), []byte(syncIndex), 0600); err != nil {
-		return fmt.Errorf("write bounded sync composition: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, "src", "records"), 0700); err != nil {
-		return fmt.Errorf("create records composition: %w", err)
-	}
-	if err := copyFile(filepath.Join(root, "src", "records", "bounds.lua"), "modules/threads/src/records/bounds.lua"); err != nil {
-		return fmt.Errorf("copy records bounds: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "src", "records", "_index.yaml"), []byte(recordsIndex), 0600); err != nil {
-		return fmt.Errorf("write records composition: %w", err)
 	}
 	if err := copyTree(filepath.Join(root, "src", "governance_workspace_probe"), "tests/fixtures/governance_workspace"); err != nil {
 		return fmt.Errorf("copy governance fixture: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
+	rootIndex := "version: '1.0'\nnamespace: bee\nentries:\n- name: dependency_sync\n  kind: ns.dependency\n  component: bee/sync\n  version: 0.1.0-dev\n  parameters:\n  - name: target_sender\n    value: bee.governance_workspace_probe:sender\n  - name: target_exports\n    value: bee:sync_exports\n- name: dependency_hub\n  kind: ns.dependency\n  component: bee/hub\n  version: 0.1.0-dev\n  parameters:\n  - name: process_host\n    value: bee:workers\n- name: dependency_governance\n  kind: ns.dependency\n  component: bee/governance\n  version: 0.1.0-dev\n  parameters:\n  - name: target_approval_request_policy\n    value: bee:approval_request_policy\n  - name: target_approval_consume_policy\n    value: bee:approval_consume_policy\n- name: workers\n  kind: process.host\n  host: {workers: 2, max_processes: 8}\n  lifecycle: {auto_start: true}\n- name: sync_exports\n  kind: registry.entry\n  data: {exports: []}\n- name: approval_request_policy\n  kind: security.policy\n  policy: {actions: [bee.approvals.request], resources: '*', effect: allow}\n- name: approval_consume_policy\n  kind: security.policy\n  policy: {actions: [bee.approvals.consume], resources: '*', effect: allow}\n"
+	if err := os.WriteFile(filepath.Join(root, "src", "_index.yaml"), []byte(rootIndex), 0600); err != nil {
+		return fmt.Errorf("write governance host composition: %w", err)
+	}
+	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
+	for _, name := range []string{"approvals", "governance", "hub", "persist", "sync", "threads"} {
+		lock += "  - name: bee/" + name + "\n    version: 0.1.0-dev\n"
+	}
+	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write runtime lock: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte("version: '1.0'\nshutdown:\n  timeout: 2s\n"), 0600); err != nil {
+	config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/governance: ./modules/gov\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write bounded shutdown config: %w", err)
 	}
 	return nil

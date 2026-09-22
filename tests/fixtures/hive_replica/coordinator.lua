@@ -221,7 +221,7 @@ local function required(result: {[string]: unknown}, operation: string): {[strin
     return object(result.value)
 end
 local function destination_call(request: {[string]: unknown}, operation: string): {[string]: unknown}
-    local raw, call_error = funcs.new():call("bee.governance:destination_call", request)
+    local raw, call_error = funcs.new():call("bee.governance.binding:destination_call", request)
     if call_error then error(operation .. ": " .. tostring(call_error)) end
     return required(object(raw), operation)
 end
@@ -628,7 +628,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             if agent.source_workspace_id then
                 local recovered: {[string]: unknown}? = nil
                 for attempt = 1, 4 do
-                    local raw, recovery_error = funcs.call("bee.governance:destination_call", {operation = "recover",
+                    local raw, recovery_error = funcs.call("bee.governance.binding:destination_call", {operation = "recover",
                         workspace_id = agent.source_workspace_id, source_node = local_node,
                         source_workspace = AGENT_WORKSPACE,
                         receipt_key = "agent-source-hive-recovery-" .. tostring(attempt)})
@@ -655,7 +655,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                 local publish_error: unknown? = nil
                 while time.now():before(deadline) do
                     local raw
-                    raw, publish_error = funcs.call("bee.governance:publication_call", {operation = "publish",
+                    raw, publish_error = funcs.call("bee.governance.binding:publication_call", {operation = "publish",
                         workspace_id = agent.source_workspace_id, component = AGENT_PACKAGE,
                         version = agent.source_version or AGENT_VERSION})
                     if not publish_error then

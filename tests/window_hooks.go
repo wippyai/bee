@@ -65,9 +65,12 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 	if err := copyDir(filepath.Join(tempDir, "src"), filepath.Join(srcDir, "src")); err != nil {
 		return "", fmt.Errorf("copy src from %s: %w", srcDir, err)
 	}
+	if err := copyDir(filepath.Join(tempDir, "modules"), filepath.Join(repoRoot, "modules")); err != nil {
+		return "", fmt.Errorf("copy component modules: %w", err)
+	}
 
 	// 2. Copy managed gateway HTTP definitions into src/managed
-	gatewayManaged := filepath.Join(repoRoot, "tests", "modules", "gateway", "src", "managed")
+	gatewayManaged := filepath.Join(repoRoot, "tests", "fixtures", "modules", "gateway", "src", "managed")
 	if err := copyDir(filepath.Join(tempDir, "src", "managed"), gatewayManaged); err != nil {
 		return "", fmt.Errorf("copy gateway managed definitions: %w", err)
 	}
@@ -79,10 +82,10 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 	}
 	// Inject latency only in this disposable gateway method. It still calls
 	// the real owner, so terminal input must progress while the call is pending.
-	if err := copyFile(filepath.Join(tempDir, "src", "gateway", "hook_claim_method.lua"), filepath.Join(windowHooksFixture, "claim.lua")); err != nil {
+	if err := copyFile(filepath.Join(tempDir, "modules", "gateway", "src", "binding", "hook_claim_method.lua"), filepath.Join(windowHooksFixture, "claim.lua")); err != nil {
 		return "", err
 	}
-	gatewayIndex := filepath.Join(tempDir, "src", "gateway", "_index.yaml")
+	gatewayIndex := filepath.Join(tempDir, "modules", "gateway", "src", "binding", "_index.yaml")
 	gatewayBytes, err := os.ReadFile(gatewayIndex)
 	if err != nil {
 		return "", err
@@ -111,13 +114,13 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 
 	// Patch the owning indexes in the disposable fixture, with exact anchors.
 	patches := []struct{ path, from, to string }{
-		{"gateway/host/_index.yaml", "address: 127.0.0.1:0", "address: " + endpointAddress},
-		{"security/gateway/_index.yaml", `resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$"`, `resource == "http://` + endpointAddress + `/ready"`},
-		{"harness/host/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window_hooks_fixture:binding\n"},
-		{"_index.yaml", "hide_logs: true", "hide_logs: false"},
+		{"src/gateway/host/_index.yaml", "address: 127.0.0.1:0", "address: " + endpointAddress},
+		{"modules/gateway/src/security/_index.yaml", `resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$"`, `resource == "http://` + endpointAddress + `/ready"`},
+		{"src/harness/host/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window_hooks_fixture:binding\n"},
+		{"src/_index.yaml", "hide_logs: true", "hide_logs: false"},
 	}
 	for _, patch := range patches {
-		path := filepath.Join(tempDir, "src", filepath.FromSlash(patch.path))
+		path := filepath.Join(tempDir, filepath.FromSlash(patch.path))
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return "", err
@@ -130,17 +133,17 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 		}
 	}
 
-	gatewayFile := filepath.Join(tempDir, "src", "gateway", "_index.yaml")
-	gatewayBytes, err = os.ReadFile(gatewayFile)
+	compositionFile := filepath.Join(tempDir, "src", "_index.yaml")
+	gatewayBytes, err = os.ReadFile(compositionFile)
 	if err != nil {
 		return "", err
 	}
-	const selectedListener = "default: bee:gateway_listener"
-	if !strings.Contains(string(gatewayBytes), selectedListener) {
-		return "", fmt.Errorf("missing gateway listener target")
+	const selectedListener = "- name: target_listener\n    value: bee:gateway_listener"
+	if strings.Count(string(gatewayBytes), selectedListener) != 1 {
+		return "", fmt.Errorf("missing root gateway listener target")
 	}
-	gatewayContent := strings.Replace(string(gatewayBytes), selectedListener, "default: bee.managed:listener", 1)
-	if err := os.WriteFile(gatewayFile, []byte(gatewayContent), 0644); err != nil {
+	gatewayContent := strings.Replace(string(gatewayBytes), selectedListener, "- name: target_listener\n    value: bee.managed:listener", 1)
+	if err := os.WriteFile(compositionFile, []byte(gatewayContent), 0644); err != nil {
 		return "", err
 	}
 

@@ -835,9 +835,9 @@
       "topic": "terminal"
     },
     {
-      "bytes": 3300,
+      "bytes": 3364,
       "id": "docs/readme",
-      "sha256": "202ca3ecda6d0dc8d9b8a65e8ff7d90d77487d912f556aea57394202c2df9a4a",
+      "sha256": "0d48e25b9d2a2942d23f59e5f72d8f1180d31acd4815d2adbaa1850cffb506cb",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -867,9 +867,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 6322,
+      "bytes": 6553,
       "id": "docs/mcp_configuration",
-      "sha256": "6ba37226691d40502642f6bf3da0635fd2a4ebc6b54126c4d55030ec6b41ea60",
+      "sha256": "6c9a506bd7a269b2cf57347f3729828349bd9ddceadc92178fa38e63fc29391e",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -907,17 +907,17 @@
       "topic": "application"
     },
     {
-      "bytes": 4920,
+      "bytes": 5738,
       "id": "docs/gateway",
-      "sha256": "cefc91dea4cb9063381dfc725709309b07d1a1e05eab3a15a91c49efa9b2ee0f",
+      "sha256": "6795ccfc8da4d70106a7c187a19715d5d402683287c0d9e8c1baa0ca3816fc08",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
     },
     {
-      "bytes": 3163,
+      "bytes": 3386,
       "id": "docs/gateway_hooks",
-      "sha256": "55e4225715b5bd99300a7a9232bb4393260dfaf76c3007c4add7b5cf35c39c7b",
+      "sha256": "c362efb8bb45042012307380699ea07999f79f6387ac237a515f200a61f13fc0",
       "source": "docs/reference/agents/hooks.md",
       "title": "Gateway hooks",
       "topic": "gateway"
@@ -971,22 +971,6 @@
       "topic": "storage"
     },
     {
-      "bytes": 2544,
-      "id": "component/gateway",
-      "sha256": "009b26d24934fc074b9e169804e7484df63ead571d2a589cadce248de3c606b0",
-      "source": "src/gateway/README.md",
-      "title": "bee.gateway",
-      "topic": "component"
-    },
-    {
-      "bytes": 15082,
-      "id": "component/gov",
-      "sha256": "4e70a67f98d38de040ed567efab215e4c44bdb2a511b0263c1b8de3efd97ff82",
-      "source": "src/gov/README.md",
-      "title": "Overlay authoring and preflight",
-      "topic": "component"
-    },
-    {
       "bytes": 17421,
       "id": "component/harness",
       "sha256": "141edf858ff275fb50fba9576f10d8585a9c134b5545315b7b995d8d3a72f4d0",
@@ -1000,14 +984,6 @@
       "sha256": "6e88aa0e5211e0a0a3062325c1a224dd95c7910e637c1357415220a9eeb3a0fd",
       "source": "src/hive/host/README.md",
       "title": "bee.hive.host",
-      "topic": "component"
-    },
-    {
-      "bytes": 4814,
-      "id": "component/hub",
-      "sha256": "e745577722c1b664696eb47b32db811852d49f4f2f878f5b1a8c20f44fd970d0",
-      "source": "src/hub/README.md",
-      "title": "Hub module management",
       "topic": "component"
     },
     {
@@ -1099,11 +1075,35 @@
       "topic": "component"
     },
     {
+      "bytes": 3754,
+      "id": "component/gateway",
+      "sha256": "86c480f47f83782eb93a77bc051e168fc5d01f2d00eec18c1ac06e0d919be17d",
+      "source": "modules/gateway/src/README.md",
+      "title": "bee.gateway",
+      "topic": "component"
+    },
+    {
+      "bytes": 15110,
+      "id": "component/gov",
+      "sha256": "9adbdafda3171675a27cb180f12eec702758d11394c8208fe72823f90b2e25e6",
+      "source": "modules/gov/src/README.md",
+      "title": "Overlay authoring and preflight",
+      "topic": "component"
+    },
+    {
       "bytes": 4316,
       "id": "component/hive",
       "sha256": "bb8458e4601133e48ecd6c149a78ec53989f44c75c8e654e804ced38015085a5",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
+      "topic": "component"
+    },
+    {
+      "bytes": 5141,
+      "id": "component/hub",
+      "sha256": "43cbd6917af5bc969fc686b7a1ca39aeb5e5877b964ea679b95cb21e1ef6d59a",
+      "source": "modules/hub/src/README.md",
+      "title": "Hub module management",
       "topic": "component"
     },
     {
@@ -1155,18 +1155,18 @@
       "topic": "component"
     },
     {
-      "bytes": 23178,
+      "bytes": 23186,
       "id": "toolkit",
-      "sha256": "edd19fb26e706e920174147ac1cc33d57b1660bcebdcfeafb5ac7dd0fd3713c3",
-      "source": "generated: modules/application/src, src/apps, src/gov/traits/guide.lua",
+      "sha256": "9cd983188a1e9f0b55af14815a20fc9585a6bf25da4e36021c9c53a38ae990cc",
+      "source": "generated: modules/application/src, src/apps, modules/gov/src/traits/guide.lua",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
     }
   ],
   "schema": "bee.docs-corpus@1",
-  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and src/gov/traits/guide.lua and digest-checked with the rest.",
+  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 1228101,
+    "bytes": 1231010,
     "documents": 145
   }
 }

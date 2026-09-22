@@ -56,7 +56,7 @@ local function main()
         local replay = call("apply", changed, install_digest)
         assert(replay.ok == false and replay.code == "STALE", "changed request reused a completed receipt: " .. tostring(replay.code))
     end
-    local explicit_defaults = call("apply", {action = "install", component = "wippy/test", version = "0.4.16", migration_policy = "none", parameters = {}}, install_digest)
+    local explicit_defaults = call("apply", {action = "install", component = "wippy/test", version = "0.4.16", migration_policy = "none", parameters = table.create(1, 0)}, install_digest)
     assert(explicit_defaults.ok == true and explicit_defaults.replayed == true, "equivalent defaults failed receipt replay")
     assert(assert(registry.snapshot()):version():id() == completed_revision, "receipt replay changed registry history")
     local installed_state = assert(assert(registry.snapshot()):state())
@@ -87,13 +87,19 @@ local function reader()
     local review, review_error = funcs.new():call("bee.hub.binding:call", {operation = "plan", request = request})
     assert(not review_error, tostring(review_error))
     local plan = assert(bounds.object(review))
-    local value = assert(bounds.object(plan.value))
+    local value = assert(bounds.object(plan.value), "reader plan failed: " .. tostring(plan.code) .. " " .. tostring(plan.message))
     local denied, denied_error = funcs.new():call("bee.hub.binding:call", {operation = "apply", request = request,
         expected_digest = value.digest})
     assert(not denied_error, tostring(denied_error))
     local denied_reply = assert(bounds.object(denied))
     assert(denied_reply.ok == false and denied_reply.code == "DENIED", "read-only caller applied a plan")
     logger:info("HUB_MANAGE_READER_PASS")
+end
+local function wrong_host()
+    local request = {action = "install", component = "wippy/test", version = "0.4.16"}
+    local result = call("apply", request, prepare(request))
+    assert(result.ok == false and result.code == "UNAVAILABLE", "wrong host was admitted: " .. tostring(result.code))
+    logger:info("HUB_MANAGE_WRONG_HOST_PASS")
 end
 local function restart()
     local snapshot = assert(registry.snapshot())
@@ -118,4 +124,5 @@ local function checked(run: () -> ())
     if not ok then logger:error("HUB_MANAGE_FAILURE " .. tostring(problem)); error(tostring(problem)) end
 end
 return {main = function() checked(main) end, narrow = function() checked(narrow) end,
-    reader = function() checked(reader) end, restart = function() checked(restart) end}
+    reader = function() checked(reader) end, wrong_host = function() checked(wrong_host) end,
+    restart = function() checked(restart) end}

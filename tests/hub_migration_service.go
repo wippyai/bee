@@ -54,33 +54,18 @@ func prepareFixture(root, repo string) error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join(repo, "tests/fixtures/hub_manage"))); err != nil {
 		return fmt.Errorf("copy Hub fixture: %w", err)
 	}
-	if err := os.CopyFS(filepath.Join(root, "src/hub"), os.DirFS(filepath.Join(repo, "modules/hub/src"))); err != nil {
-		return fmt.Errorf("copy production Hub source: %w", err)
-	}
-	for _, module := range []string{"persist", "sync", "threads"} {
+	for _, module := range []string{"hub", "persist", "sync", "threads"} {
 		if err := os.CopyFS(filepath.Join(root, "modules", module), os.DirFS(filepath.Join(repo, "modules", module))); err != nil {
-			return fmt.Errorf("copy Hub dependency %s: %w", module, err)
+			return fmt.Errorf("stage Hub component dependency %s: %w", module, err)
 		}
 	}
-	if err := copyServiceFile(filepath.Join(repo, "modules/threads/src/records/bounds.lua"), filepath.Join(root, "src/records/bounds.lua")); err != nil {
-		return err
+	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n"
+	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
+		return fmt.Errorf("write fixture lock: %w", err)
 	}
-	for _, name := range []string{"bounds.lua", "canonical.lua"} {
-		if err := copyServiceFile(filepath.Join(repo, "modules/sync/src", name), filepath.Join(root, "src/sync", name)); err != nil {
-			return err
-		}
-	}
-	if err := copyServiceFile(filepath.Join(repo, "modules/persist/src/transaction.lua"), filepath.Join(root, "src/persist/transaction.lua")); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(root, "src/persist/_index.yaml"), []byte("version: '1.0'\nnamespace: bee.persist\nentries:\n- name: transaction\n  kind: library.lua\n  source: file://transaction.lua\n  modules: [sql, time]\n"), 0600); err != nil {
-		return err
-	}
-	if err := copyServiceFile(filepath.Join(repo, "wippy.lock"), filepath.Join(root, "wippy.lock")); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte("version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"), 0600); err != nil {
-		return err
+	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
+		return fmt.Errorf("write fixture configuration: %w", err)
 	}
 	return nil
 }
@@ -257,7 +242,7 @@ func killAfterCommit(runtime, folder string, environment []string) error {
 		return err
 	}
 	defer output.Close()
-	cmd := exec.Command(runtime, "run", "--verbose", "--host", "bee:workers", "--", "migration-service-probe")
+	cmd := exec.Command(runtime, "run", "--verbose", "--host", "bee:hub_workers", "--", "migration-service-probe")
 	cmd.Dir = folder
 	cmd.Env = environment
 	cmd.Stdout = output
@@ -503,7 +488,7 @@ func runMode(runtime, folder, hubURL, mode string) error {
 	}
 	environment := runEnvironment(folder, hubURL)
 	if mode == "crash" || mode == "tamper" || mode == "rollback_crash" || mode == "rollback_published" || mode == "rollback_tamper" || mode == "newdb_crash" || mode == "newdb_before" || mode == "newdb_checkpoint" || mode == "newdb_tamper" || mode == "newdb_rollback_tamper" {
-		service := filepath.Join(folder, "src/hub/binding/publication.lua")
+		service := filepath.Join(folder, "modules", "hub", "src", "binding", "publication.lua")
 		original, err := os.ReadFile(service)
 		if err != nil {
 			return err
@@ -569,7 +554,7 @@ func runMode(runtime, folder, hubURL, mode string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	output, err := runRuntime(ctx, runtime, folder, environment, "run", "--verbose", "--host", "bee:workers", "--", "migration-service-probe")
+	output, err := runRuntime(ctx, runtime, folder, environment, "run", "--verbose", "--host", "bee:hub_workers", "--", "migration-service-probe")
 	if writeErr := os.WriteFile(filepath.Join(folder, "runtime.log"), output, 0600); writeErr != nil {
 		return writeErr
 	}
@@ -600,7 +585,7 @@ func runMode(runtime, folder, hubURL, mode string) error {
 		}
 		foreignCtx, foreignCancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer foreignCancel()
-		foreign, err := runRuntime(foreignCtx, runtime, folder, environment, "run", "--verbose", "--host", "bee:workers", "--", "migration-service-probe")
+		foreign, err := runRuntime(foreignCtx, runtime, folder, environment, "run", "--verbose", "--host", "bee:hub_workers", "--", "migration-service-probe")
 		if writeErr := os.WriteFile(filepath.Join(folder, "other-actor.log"), foreign, 0600); writeErr != nil {
 			return writeErr
 		}

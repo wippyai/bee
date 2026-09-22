@@ -164,7 +164,7 @@ entries:
   source: file://service.lua
   modules: [process, channel, time, security, uuid, json, funcs, registry]
   imports:
-    gateway_configuration: bee.gateway:configuration
+    gateway_configuration: bee.gateway.registry:configuration
     configuration: bee.driver:configuration
     preferences: bee.driver:preferences
     resolver: bee.driver:resolver

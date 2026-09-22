@@ -4,6 +4,10 @@ Gateway hooks carry bounded lifecycle observations from a managed harness to its
 bound thread. They are not a control channel: a hook cannot approve work, alter
 prompt execution, settle a turn, extend an attempt or create authority.
 
+The hook HTTP handlers are `bee.gateway.api:*`; queue, claim, acknowledgment,
+rejection, and sealing calls are `bee.gateway.binding:*`. The host owns the
+listener and routes and selects the policies that permit each call.
+
 ## Endpoints and credentials
 
 Claude-compatible hooks use POST /hook/{action}. Codex-compatible hooks use

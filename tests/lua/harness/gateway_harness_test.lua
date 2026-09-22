@@ -181,7 +181,7 @@ local function append_delivery(argv: {string}, delivery: configuration.Delivery)
     for _, item in ipairs(delivery.arguments) do argv[#argv + 1] = item end
 end
 local function open_gateway()
-    call("bee.gateway:open", {address = endpoint_address()})
+    call("bee.gateway.binding:open", {address = endpoint_address()})
 end
 local function thread(): string
     local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Gateway harness"})
@@ -325,7 +325,7 @@ local function through_placement(harness: Harness)
     end
     test.eq(settlement.outcome, "succeeded")
     -- The credential was presented for initialization, discovery and the call.
-    local checked = call("bee.gateway:check", {attempt_id = attempt_id, carrier_epoch = 1})
+    local checked = call("bee.gateway.binding:check", {attempt_id = attempt_id, carrier_epoch = 1})
     if (tonumber(checked.presented_count) or 0) < 3 then error(harness.name .. ": the credential was presented " .. tostring(checked.presented_count) .. " times") end
     -- The hooks the harness reported reached the thread as records through
     -- the carrier, with nothing content bearing in them.
@@ -385,7 +385,7 @@ local function without_variable(harness: Harness)
     open_gateway()
     local attempt_id = fresh("direct")
     local action_id = "action-" .. attempt_id
-    local admitted = call("bee.gateway:admit", {subject = ACTOR, action_id = action_id, attempt_id = attempt_id, thread_id = thread(), owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}})
+    local admitted = call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action_id, attempt_id = attempt_id, thread_id = thread(), owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}})
     local binding_id = tostring((admitted.binding :: Object).binding_id)
     local address = endpoint_address()
     local home = shell("cd " .. root .. "/home && pwd"):gsub("%s+$", "")
@@ -443,7 +443,7 @@ local function without_variable(harness: Harness)
     if not recorded:find('"path": "/v1/', 1, true) then
         error(harness.name .. " did not reach the model endpoint; exit " .. tostring(exit_code) .. "; command " .. quote.line(argv) .. "; home " .. shell("ls -la " .. root .. "/home; cat " .. root .. "/home/.claude.json 2>/dev/null"):sub(1, 500) .. "; stdout: " .. output:sub(1, 600) .. "; stderr: " .. errors:sub(1, 600))
     end
-    local checked = call("bee.gateway:check", {binding_id = binding_id})
+    local checked = call("bee.gateway.binding:check", {binding_id = binding_id})
     test.eq(tonumber(checked.presented_count), 0)
     test.eq(checked.credential_generation, 0)
     if recorded:find('\\"records\\":[', 1, true) then error(harness.name .. " without the variable read the thread: [" .. recorded:sub(1, 600) .. "]") end
@@ -454,7 +454,7 @@ local function without_variable(harness: Harness)
     end
     leak_free(output, harness.name .. " output")
     leak_free(errors, harness.name .. " stderr")
-    call("bee.gateway:revoke", {binding_id = binding_id})
+    call("bee.gateway.binding:revoke", {binding_id = binding_id})
     shell("rm -rf " .. root)
 end
 -- The hook adapters against the actual gateway: the harness runs directly
@@ -510,10 +510,10 @@ local function hooks_through_gateway(harness: Harness)
     open_gateway()
     local attempt_id = fresh("direct")
     local action_id = "action-" .. attempt_id
-    local admitted = call("bee.gateway:admit", {subject = ACTOR, action_id = action_id, attempt_id = attempt_id, thread_id = thread(), owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, hooks = HOOK_EVENTS})
+    local admitted = call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action_id, attempt_id = attempt_id, thread_id = thread(), owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, hooks = HOOK_EVENTS})
     local binding_id = tostring((admitted.binding :: Object).binding_id)
-    local authorized = call("bee.gateway:authorize_materialization", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id})
-    local minted = call("bee.gateway:materialize", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id, materialization_key = authorized.materialization_key})
+    local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id})
+    local minted = call("bee.gateway.binding:materialize", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id, materialization_key = authorized.materialization_key})
     local address = endpoint_address()
     local home = shell("cd " .. root .. "/home && pwd"):gsub("%s+$", "")
     local work = shell("cd " .. root .. "/work && pwd"):gsub("%s+$", "")
@@ -576,7 +576,7 @@ local function hooks_through_gateway(harness: Harness)
     stop_endpoint()
     local recorded = shell("cat " .. record)
     if not recorded:find('"tool_result": true', 1, true) then error(harness.name .. " with hooks did not complete the read: [" .. recorded:sub(1, 600) .. "]; stdout " .. output:sub(1, 400) .. "; stderr " .. errors:sub(1, 400)) end
-    local queue = call("bee.gateway:hook_queue", {binding_id = binding_id})
+    local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding_id})
     local seen: {[string]: Object} = {}
     for _, item in ipairs(queue.hooks :: {Object}) do seen[tostring(item.event)] = item end
     local expected = harness.name == "claude" and {"UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"} or {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
@@ -603,9 +603,9 @@ local function hooks_through_gateway(harness: Harness)
     -- Five hooks bounded at two seconds each cannot have delayed the turn
     -- past the budget a slow gateway would cost; the gateway answered at once.
     test.is_true(elapsed_ms < 30000)
-    local checked = call("bee.gateway:check", {binding_id = binding_id})
+    local checked = call("bee.gateway.binding:check", {binding_id = binding_id})
     test.is_true((tonumber(checked.presented_count) or 0) >= 3)
-    call("bee.gateway:revoke", {binding_id = binding_id})
+    call("bee.gateway.binding:revoke", {binding_id = binding_id})
     shell("rm -rf " .. root)
 end
 local HARNESSES: {Harness} = {

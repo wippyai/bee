@@ -64,6 +64,19 @@ entries:
     command:
       name: hub-manage-reader
       security: {actor: {id: bee.hub_manage_probe.reader}}
+- name: wrong_host
+  kind: process.lua
+  source: file://main.lua
+  method: wrong_host
+  modules: [funcs, registry, security, logger]
+  imports:
+    bounds: bee.threads.records:bounds
+  security:
+    policies: [bee.hub_manage_probe:policy, bee.hub_manage_probe:management_policy, bee.hub_manage_probe:reader_policy]
+  meta:
+    command:
+      name: hub-manage-wrong-host
+      security: {actor: {id: bee.hub_manage_probe}}
 - name: restart
   kind: process.lua
   source: file://main.lua

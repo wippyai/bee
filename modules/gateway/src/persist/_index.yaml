@@ -1,0 +1,8 @@
+version: '1.0'
+namespace: bee.gateway.persist
+entries:
+- name: surface_store
+  kind: library.lua
+  source: file://surface_store.lua
+  modules: [sql, json]
+  imports: {bounds: bee.threads.records:bounds}

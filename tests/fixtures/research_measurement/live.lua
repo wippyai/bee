@@ -31,7 +31,7 @@ local function call(target: string, request: Object): Object
 end
 local function wait_for_live_inputs()
     for _ = 1, 300 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.registry:address", {})
         local address = not address_error and bounds.object(raw) or nil
         local candidate = registry.get("bee.research.demo:measure")
         if address and type(address.address) == "string" and address.address:match("^127%.0%.0%.1:%d+$")

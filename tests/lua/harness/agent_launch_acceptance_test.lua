@@ -188,7 +188,7 @@ end
 local function open_gateway()
     local entry = registry.get("bee:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
-    call("bee.gateway:open", {address = tostring((entry.data :: Object).address)})
+    call("bee.gateway.binding:open", {address = tostring((entry.data :: Object).address)})
 end
 local function admission(policy_ref: string, thread_id: string, attempt_id: string, workspace_id: string): Object
     local placement = placement_fixture.resolve()
@@ -239,7 +239,7 @@ local function define_tests()
                 BEE_FIXTURE_GATEWAY_BRIEF = "answer the orchestrator", BEE_FIXTURE_WORKER_MARKER = MARKER, BEE_FIXTURE_STREAM = stream("plain.jsonl")}
             local outcome = await_carrier(spawn_carrier(orchestrator), "orchestrator carrier")
             test.eq((outcome.settlement :: Object).outcome, "succeeded")
-            local parent_binding = call("bee.gateway:check", {attempt_id = tostring(orchestrator.attempt_id), carrier_epoch = 1})
+            local parent_binding = call("bee.gateway.binding:check", {attempt_id = tostring(orchestrator.attempt_id), carrier_epoch = 1})
             test.eq((parent_binding.origin_view :: Object).view_id, "view-agent-origin")
             test.eq((parent_binding.origin_view :: Object).instance_id, "instance-agent-origin")
             local seen = report_with(thread_id, "launch_ok")
@@ -273,7 +273,7 @@ local function define_tests()
             test.not_nil(parent_named, "lineage names the launching action")
             local orchestrator_action = tostring(orchestrator.action_id)
             test.eq(parent_named, orchestrator_action)
-            local child_binding = call("bee.gateway:check", {attempt_id = tostring(seen.child_attempt), carrier_epoch = 1})
+            local child_binding = call("bee.gateway.binding:check", {attempt_id = tostring(seen.child_attempt), carrier_epoch = 1})
             test.eq((child_binding.origin_view :: Object).view_id, "view-agent-origin")
             test.eq((child_binding.origin_view :: Object).instance_id, "instance-agent-origin")
             -- The child's answer and terminal receipt are on the thread.

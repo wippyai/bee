@@ -1,0 +1,96 @@
+version: '1.0'
+namespace: bee.gateway.security
+entries:
+- name: store_policy
+  kind: security.policy
+  meta: {comment: Gateway private store; target_db injects only the selected database resource}
+  policy:
+    actions: [db.get]
+    resources: []
+    effect: allow
+- name: database_ref_policy
+  kind: security.policy
+  meta: {comment: Gateway store resolution reads only its component-owned database reference}
+  policy:
+    actions: [registry.get]
+    resources: [bee.gateway:database_ref]
+    effect: allow
+- name: readiness_policy
+  kind: security.policy.expr
+  meta: {comment: Internal readiness only; it pins the selected loopback address and authenticates the nonce response}
+  policy:
+    actions: [http_client.request, http_client.private_ip]
+    resources: '*'
+    expression: '(action == "http_client.private_ip" && resource == "127.0.0.1") || (action == "http_client.request" && resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$")'
+    effect: allow
+- name: address_policy
+  kind: security.policy
+  meta: {comment: Gateway address lookup reads only its listener link, endpoint reference, and selected endpoint configuration}
+  policy:
+    actions: [registry.get]
+    resources: [bee.gateway:listener_ref, bee.gateway.registry:endpoint_ref]
+    effect: allow
+- name: supervisor_policy
+  kind: security.policy
+  meta: {comment: Gateway address lookup reads only supervisor state}
+  policy:
+    actions: [system.read]
+    resources: [supervisor]
+    effect: allow
+- name: address_call_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.registry:address]
+    effect: allow
+- name: execute_policy
+  kind: security.policy.expr
+  meta: {comment: The HTTP MCP adapter constructs a bound subject and scope; host-selected tool policies still define every operation it may invoke}
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "funcs.context" && resource == "context") || (action == "security.scope.create" && resource == "custom") || (action == "security.actor.create" && resource != "")'
+    actions: [funcs.security, funcs.context, security.scope.create, security.actor.create]
+    resources: [security, context, custom, '*']
+    effect: allow
+- name: tool_policy_read_policy
+  kind: security.policy
+  meta: {comment: target_tool_* requirements inject exactly the host-selected policies that the MCP adapter may resolve}
+  policy:
+    actions: [security.policy.get]
+    resources: []
+    effect: allow
+- name: tool_policy_reference_policy
+  kind: security.policy
+  meta: {comment: The MCP adapter reads only its component-owned links to the selected built-in tool policies}
+  policy:
+    actions: [registry.get]
+    resources: [bee.gateway.registry:tool_read_policy_ref, bee.gateway.registry:tool_message_policy_ref, bee.gateway.registry:tool_launch_policy_ref, bee.gateway.registry:tool_overlay_policy_ref, bee.gateway.registry:tool_docs_policy_ref, bee.gateway.registry:tool_components_policy_ref, bee.gateway.registry:tool_delivery_policy_ref, bee.gateway.registry:tool_publish_policy_ref, bee.gateway.registry:tool_application_open_policy_ref]
+    effect: allow
+- name: access_call_policy
+  kind: security.policy
+  meta: {comment: Private per-binding approval access calls only the approval and thread operations required for the effect}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.threads.service:get, bee.threads.service:read_after]
+    effect: allow
+- name: access_reference_policy
+  kind: security.policy
+  meta: {comment: Private per-binding approval access reads only its component-owned policy links}
+  policy:
+    actions: [registry.get]
+    resources: [bee.gateway.registry:approval_request_policy_ref, bee.gateway.registry:approval_consume_policy_ref]
+    effect: allow
+- name: access_policy_read_policy
+  kind: security.policy
+  meta: {comment: target_approval_* requirements inject exactly the host-selected approval policies that a binding may resolve}
+  policy:
+    actions: [security.policy.get]
+    resources: [bee.gateway.security:access_call_policy]
+    effect: allow
+- name: access
+  kind: library.lua
+  source: file://access.lua
+  modules: [funcs, security, hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    surface: bee.gateway:surface

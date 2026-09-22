@@ -141,7 +141,7 @@ end
 
 local function listener_ready()
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.registry:address", {})
         local address = not address_error and bounds.object(raw) or nil
         if address and type(address.address) == "string" then return end
         time.sleep("100ms")
@@ -415,7 +415,7 @@ local function main()
         return "the destination refused your frozen overlay before delivery: " .. tostring(refusal.code)
             .. ": " .. tostring(refusal.message) .. " Remedy: " .. tostring(value.remedy)
     end
-    local file = call("bee.governance:overlay_call", {operation = "read", overlay_id = source_workspace,
+    local file = call("bee.governance.binding:overlay_call", {operation = "read", overlay_id = source_workspace,
         path = "entries.json", snapshot_digest = snapshot_digest})
     if file.overlay_id ~= source_workspace then error("overlay read returned another overlay") end
     report.workspace_revision = bounds.count(file.revision) or 0

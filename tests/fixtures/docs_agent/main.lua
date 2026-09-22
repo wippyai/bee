@@ -25,11 +25,11 @@ local function call(target: string, request: Object): Object
     return (reply :: Object).value :: Object
 end
 local function endpoint(): string
-    local selected, err = funcs.call("bee.gateway:address", {})
+    local selected, err = funcs.call("bee.gateway.registry:address", {})
     for _ = 1, 100 do
         if not err or not tostring(err):find("gateway listener is starting", 1, true) then break end
         time.sleep("20ms")
-        selected, err = funcs.call("bee.gateway:address", {})
+        selected, err = funcs.call("bee.gateway.registry:address", {})
     end
     assert(not err and type(selected) == "table", "gateway endpoint: " .. tostring(err))
     local address = (selected :: Object).address
@@ -39,12 +39,12 @@ end
 -- Admit this subject for exactly the docs tool and materialize its token once,
 -- the same admission and credential path every managed Agent uses.
 local function binding(): (string, string)
-    local admitted = call("bee.gateway:admit", {subject = ACTOR, action_id = "docs-agent", attempt_id = "docs-agent-attempt",
+    local admitted = call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "docs-agent", attempt_id = "docs-agent-attempt",
         thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"docs"}, ttl_ms = 60000})
     local binding_id = tostring((admitted.binding :: Object).binding_id)
     assert(admitted.token == nil, "admit must not return token bytes")
-    local authorized = call("bee.gateway:authorize_materialization", {attempt_id = "docs-agent-attempt", carrier_epoch = 1, binding_id = binding_id})
-    local materialized = call("bee.gateway:materialize", {attempt_id = "docs-agent-attempt", carrier_epoch = 1,
+    local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = "docs-agent-attempt", carrier_epoch = 1, binding_id = binding_id})
+    local materialized = call("bee.gateway.binding:materialize", {attempt_id = "docs-agent-attempt", carrier_epoch = 1,
         materialization_key = authorized.materialization_key})
     return tostring(materialized.token), binding_id
 end
@@ -152,7 +152,7 @@ local function bounds_hold(token: string)
 end
 local function main()
     ADDRESS = endpoint()
-    call("bee.gateway:open", {address = ADDRESS})
+    call("bee.gateway.binding:open", {address = ADDRESS})
     call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = key(), title = "Docs agent"})
     local token, binding_id = binding()
     local status, listed = rpc(token, "tools/list", {})
@@ -164,7 +164,7 @@ local function main()
     local first = terminal_toolkit(token)
     local second = cross_node_sync(token)
     local third = runtime_module(token)
-    call("bee.gateway:revoke", {binding_id = binding_id})
+    call("bee.gateway.binding:revoke", {binding_id = binding_id})
     -- Answers only; no token bytes reach captured output.
     io.print("docs agent: " .. first .. " | " .. second .. " | " .. third)
 end

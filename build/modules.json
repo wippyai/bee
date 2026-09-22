@@ -132,7 +132,13 @@
       "module": "bee/gateway",
       "root": "bee.gateway",
       "namespaces": [
-        "bee.gateway"
+        "bee.gateway",
+        "bee.gateway.api",
+        "bee.gateway.binding",
+        "bee.gateway.migrations",
+        "bee.gateway.persist",
+        "bee.gateway.registry",
+        "bee.gateway.security"
       ]
     },
     {

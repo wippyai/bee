@@ -47,43 +47,16 @@ func copyFixture(root string) error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join("tests", "fixtures", "hub_preview"))); err != nil {
 		return fmt.Errorf("copy Hub preview fixture: %w", err)
 	}
-	if err := os.CopyFS(filepath.Join(root, "src", "hub"), os.DirFS(filepath.Join("src", "hub"))); err != nil {
-		return fmt.Errorf("copy production Hub source: %w", err)
-	}
-	bounds, err := os.ReadFile(filepath.Join("src", "threads", "records", "bounds.lua"))
-	if err != nil {
-		return fmt.Errorf("read production bounds: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "src", "records", "bounds.lua"), bounds, 0600); err != nil {
-		return fmt.Errorf("copy production bounds: %w", err)
-	}
-	for _, name := range []string{"bounds.lua", "canonical.lua"} {
-		contents, readErr := os.ReadFile(filepath.Join("src", "sync", name))
-		if readErr != nil {
-			return fmt.Errorf("read production sync %s: %w", name, readErr)
-		}
-		if writeErr := os.WriteFile(filepath.Join(root, "src", "sync", name), contents, 0600); writeErr != nil {
-			return fmt.Errorf("copy production sync %s: %w", name, writeErr)
+	for _, module := range []string{"hub", "persist", "sync", "threads"} {
+		if err := os.CopyFS(filepath.Join(root, "modules", module), os.DirFS(filepath.Join("modules", module))); err != nil {
+			return fmt.Errorf("stage Hub component dependency %s: %w", module, err)
 		}
 	}
-	if err := os.MkdirAll(filepath.Join(root, "src", "persist"), 0700); err != nil {
-		return err
-	}
-	transaction, err := os.ReadFile(filepath.Join("modules", "persist", "src", "transaction.lua"))
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(root, "src", "persist", "transaction.lua"), transaction, 0600); err != nil {
-		return err
-	}
-	manifest := "version: '1.0'\nnamespace: bee.persist\nentries:\n- name: transaction\n  kind: library.lua\n  source: file://transaction.lua\n  modules: [sql, time]\n"
-	if err := os.WriteFile(filepath.Join(root, "src", "persist", "_index.yaml"), []byte(manifest), 0600); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
+	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n"
+	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write fixture lock: %w", err)
 	}
-	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\n"
+	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
 	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write fixture configuration: %w", err)
 	}

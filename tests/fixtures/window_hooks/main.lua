@@ -43,7 +43,7 @@ end
 local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook: boolean)
     -- 1. Open gateway listener under configured loopback endpoint
     local address = endpoint()
-    local opened_gateway = call("bee.gateway:open", {address = address})
+    local opened_gateway = call("bee.gateway.binding:open", {address = address})
     assert(opened_gateway.value ~= nil, "failed to open gateway listener")
 
     -- The host explicitly admits a session root in this disposable fixture.
@@ -237,7 +237,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(committed_event_id and committed_event_id ~= "", "hook omitted event identity")
     local acknowledged = false
     for _ = 1, 100 do
-        local queue_res = call("bee.gateway:hook_queue", {binding_id = committed_binding_id})
+        local queue_res = call("bee.gateway.binding:hook_queue", {binding_id = committed_binding_id})
         local queue_val = reply(queue_res.value)
         local found_hook: {[string]: unknown}? = nil
         for _, h in ipairs(queue_val.hooks :: {{[string]: unknown}}) do
@@ -295,7 +295,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
             time.sleep("10ms")
         end
         assert(accepted, "additional hook was not accepted before the crash")
-        local queue = reply(call("bee.gateway:hook_queue", {binding_id = committed_binding_id}).value)
+        local queue = reply(call("bee.gateway.binding:hook_queue", {binding_id = committed_binding_id}).value)
         local unclaimed = false
         for _, hook in ipairs(queue.hooks :: {{[string]: unknown}}) do
             local fields = reply(hook.fields)
@@ -504,7 +504,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     if pending_hook then
         -- The existing gateway contract rejects unclaimed rows on revocation.
         -- They remain durable rejections, never fabricated thread commits.
-        local queue = reply(call("bee.gateway:hook_queue", {binding_id = committed_binding_id}).value)
+        local queue = reply(call("bee.gateway.binding:hook_queue", {binding_id = committed_binding_id}).value)
         local rejected = false
         for _, hook in ipairs(queue.hooks :: {{[string]: unknown}}) do
             local fields = reply(hook.fields)

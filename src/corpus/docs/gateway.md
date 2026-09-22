@@ -7,6 +7,22 @@ credential environment names. The gateway owns bindings, credential hashes and
 hook intake. The carrier, placement service and runner own the launch
 lifecycle.
 
+## Component boundary
+
+Gateway is the `bee/gateway` component, loaded from `modules/gateway/src`.
+Its root namespace keeps shared resources and values. Lifecycle and hook queue
+calls use `bee.gateway.binding:*`; HTTP route handlers use
+`bee.gateway.api:*`; endpoint discovery uses
+`bee.gateway.registry:address`. The root namespace has no forwarding functions
+for those calls.
+
+A host composes the component and selects the database, listener, endpoint
+configuration, harness executable storage, approval policies, and the policies
+for admitted built-in tools. The host also owns the HTTP service, router, and
+routes that call the API handlers. An endpoint selection describes where the
+listener runs; it does not give a caller network authority. Tool, caller, and
+listener permissions remain host-selected policies.
+
 ## Connection and credentials
 
 The listener accepts loopback and explicitly selected RFC1918 IPv4 addresses.

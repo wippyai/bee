@@ -58,21 +58,23 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     local existing: inventory.Root? = nil
     local roots: {graph.Edge} = {}
     for _, root in ipairs(installed.roots) do
-        if root.component == request.component then
-            if existing then return nil, "component has multiple roots; host configuration needs review" end
-            existing = root
-        else
-            roots[#roots + 1] = {component = root.component, version = root.version, parameters = root.parameters}
+        if root.id:sub(1, 13) == "bee.hub.deps:" then
+            if root.component == request.component then
+                if existing then return nil, "component has multiple roots; host configuration needs review" end
+                existing = root
+            elseif controlled[root.component] then
+                roots[#roots + 1] = {component = root.component, version = root.version, parameters = root.parameters}
+            end
         end
     end
-    if existing and existing.id ~= root_id then return nil, "component is managed by host configuration at " .. existing.id end
-    if request.action == "install" and existing then return nil, "component already has an installed root; choose update" end
-    if request.action ~= "install" and not existing then return nil, "component has no installed Hub root" end
     for _, item in ipairs(installed.modules) do
         if item.component == request.component and not controlled[item.component] and (item.entries > 0 or item.version ~= "") then
             return nil, "component is managed by the host deployment"
         end
     end
+    if existing and existing.id ~= root_id then return nil, "component is managed by host configuration at " .. existing.id end
+    if request.action == "install" and existing then return nil, "component already has an installed root; choose update" end
+    if request.action ~= "install" and not existing then return nil, "component has no installed Hub root" end
     if request.action == "uninstall" then
         for _, item in ipairs(installed.modules) do
             if item.component == request.component and #item.used_by > 0 then

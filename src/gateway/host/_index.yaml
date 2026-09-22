@@ -25,32 +25,32 @@ entries:
     router: bee:gateway_router
   method: GET
   path: /ready
-  func: bee.gateway:ready_http
+  func: bee.gateway.api:ready_http
 - name: gateway_mcp
   kind: http.endpoint
   meta:
     router: bee:gateway_router
   method: POST
   path: /mcp/:action
-  func: bee.gateway:mcp_http
+  func: bee.gateway.api:mcp_http
 - name: gateway_hook
   kind: http.endpoint
   meta:
     router: bee:gateway_router
   method: POST
   path: /hook/:action
-  func: bee.gateway:hook_http
+  func: bee.gateway.api:hook_http
 - name: gateway_hook_status
   kind: http.endpoint
   meta:
     router: bee:gateway_router
   method: GET
   path: /hook/:action/:event
-  func: bee.gateway:hook_status_http
+  func: bee.gateway.api:hook_status_http
 - name: gateway_hook_mcp
   kind: http.endpoint
   meta:
     router: bee:gateway_router
   method: POST
   path: /hook/:action/mcp
-  func: bee.gateway:hook_mcp_http
+  func: bee.gateway.api:hook_mcp_http

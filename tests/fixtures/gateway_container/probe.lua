@@ -27,7 +27,7 @@ local function main()
     if not callback then error("fixture callback missing") end
     local selected: Object? = nil
     for _ = 1, 100 do
-        local raw, err = funcs.call("bee.gateway:address", {})
+        local raw, err = funcs.call("bee.gateway.registry:address", {})
         if not err and type(raw) == "table" then selected = raw :: Object; break end
         time.sleep("20ms")
     end
@@ -37,12 +37,12 @@ local function main()
         if security.can("http_client.request", url) then error("readiness policy grants an unrelated URL") end
     end
     call("bee.threads.service:create", {thread_id = "container-thread", idempotency_key = "create", title = "Container gateway proof"})
-    local admitted = call("bee.gateway:admit", {subject = "bee.test.container", action_id = "container-action", attempt_id = "container-attempt",
+    local admitted = call("bee.gateway.binding:admit", {subject = "bee.test.container", action_id = "container-action", attempt_id = "container-attempt",
         thread_id = "container-thread", owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, hooks = {"SessionStart"}, ttl_ms = 120000})
     local binding = admitted.binding :: Object
-    local authorized = call("bee.gateway:authorize_materialization", {attempt_id = "container-attempt", carrier_epoch = 1, binding_id = binding.binding_id})
-    local materialized = call("bee.gateway:materialize", {attempt_id = "container-attempt", carrier_epoch = 1, materialization_key = authorized.materialization_key})
-    local ready = call("bee.gateway:ready", {binding_id = binding.binding_id})
+    local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = "container-attempt", carrier_epoch = 1, binding_id = binding.binding_id})
+    local materialized = call("bee.gateway.binding:materialize", {attempt_id = "container-attempt", carrier_epoch = 1, materialization_key = authorized.materialization_key})
+    local ready = call("bee.gateway.binding:ready", {binding_id = binding.binding_id})
     if ready.listening ~= true or ready.binding_valid ~= true then error("gateway readiness refused") end
     local function phase(name: string)
         local payload = json.encode({phase = name, address = address, token = materialized.token, hook_token = materialized.hook_token})
@@ -50,7 +50,7 @@ local function main()
         if not response or err or response.status_code ~= 200 then error("container " .. name .. " proof failed") end
     end
     phase("active")
-    call("bee.gateway:revoke", {binding_id = binding.binding_id})
+    call("bee.gateway.binding:revoke", {binding_id = binding.binding_id})
     phase("revoked")
 end
 local function checked_main()

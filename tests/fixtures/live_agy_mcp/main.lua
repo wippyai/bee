@@ -49,7 +49,7 @@ local function main()
     if not applied then error(tostring(apply_error)) end
     local listener: Object? = nil
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.registry:address", {})
         if not address_error then listener = bounds.object(raw) end
         if listener and type(listener.address) == "string" then break end
         time.sleep("100ms")

@@ -32,7 +32,7 @@ local function isolated(client: funcs.Executor)
 end
 
 local function call(client: funcs.Executor, request: unknown): Object
-    local result, err = client:call("bee.governance:overlay_call", request)
+    local result, err = client:call("bee.governance.binding:overlay_call", request)
     assert(not err, tostring(err))
     local decoded = bounds.object(result)
     assert(decoded, "malformed authoring result")

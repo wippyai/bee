@@ -23,18 +23,18 @@ local function run(options: {[string]: unknown}): {[string]: unknown}
             "bee.hub.security:worker_policy", "bee.hub.security:worker_host_policy", "bee.hub.security:migration_context_policy"}) do
             expect_policy(policy, false)
         end
-        expect_policy("bee:governance_destination_service_policy", true)
-        expect_policy("bee:governance_destination_execution_policy", true)
+        expect_policy("bee.governance.security:destination_service_policy", true)
+        expect_policy("bee.governance.security:destination_execution_policy", true)
     elseif id == CUSTOM then
         expect_policy("bee.hub.security:execution_policy", true)
         expect_policy("bee.hub.security:publisher_policy", true)
-        expect_policy("bee:governance_destination_service_policy", false)
-        expect_policy("bee:governance_destination_execution_policy", false)
+        expect_policy("bee.governance.security:destination_service_policy", false)
+        expect_policy("bee.governance.security:destination_execution_policy", false)
     elseif id == GOVERNANCE then
         expect_policy("bee.hub.security:execution_policy", false)
         expect_policy("bee.hub.security:publisher_policy", false)
-        expect_policy("bee:governance_destination_service_policy", false)
-        expect_policy("bee:governance_destination_execution_policy", false)
+        expect_policy("bee.governance.security:destination_service_policy", false)
+        expect_policy("bee.governance.security:destination_execution_policy", false)
         expect_policy("bee.hub:governance_migration_grant_policy", true)
         assert(options.target_db == "governance:data")
         assert(options.database_id == DB)

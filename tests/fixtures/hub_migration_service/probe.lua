@@ -18,6 +18,14 @@ end
 local function complete(result)
     assert(result.ok and result.value.state == "complete", "apply: " .. tostring(result.code) .. " " .. tostring(result.message or (result.value and result.value.message)))
 end
+local function installed_artifact_count()
+    local installed = call("installed")
+    local count = 0
+    for _, module in ipairs(installed.value.modules) do
+        if module.component:sub(1, 5) == "acme/" then count = count + 1 end
+    end
+    return count
+end
 local function run(mode)
     local installed, digest = apply({action = "install", component = "acme/app", version = "1.0.0", migration_policy = mode == "applied" and "up" or "none"})
     complete(installed)
@@ -112,7 +120,7 @@ local function rollback()
     local result = call("apply", request, digest)
     complete(result)
     assert(result.value.removal.published and result.value.migration_work.rows[1].status == "reverted", "rollback was not verified")
-    assert(#call("installed").value.modules == 0, "orphaned dependency remains installed")
+    assert(installed_artifact_count() == 0, "orphaned dependency remains installed")
     local revision = assert(registry.snapshot()):version():id()
     complete(call("apply", request, digest))
     assert(assert(registry.snapshot()):version():id() == revision, "completed rollback replay wrote registry")
@@ -125,7 +133,7 @@ local function rollback_partial()
     assert(result.ok and result.value.state == "recovery_required" and not result.value.removal.published, "partial rollback lost recovery phase")
     local rows = result.value.migration_work.rows
     assert(#rows == 1 and rows[1].id == "acme.storage:second" and rows[1].status == "reverted", "rollback order or partial result is wrong")
-    assert(#call("installed").value.modules == 2, "partial rollback removed definitions")
+    assert(installed_artifact_count() == 2, "partial rollback removed definitions")
     local status = call("status", nil, digest)
     assert(status.value.migration_work.rows[1].id == "acme.storage:second", "partial rollback receipt was not durable")
     local db = assert(sql.get("probe:db"))
@@ -138,7 +146,7 @@ local function rollback_partial()
         if row.id == "acme.storage:second" then assert(row.reason == "not_applied", "recovery reran reverted migration")
         else assert(row.status == "reverted", "recovery did not revert remaining migration") end
     end
-    assert(#call("installed").value.modules == 0, "recovered rollback did not remove orphans")
+    assert(installed_artifact_count() == 0, "recovered rollback did not remove orphans")
     logger:info("HUB_MIGRATION_SERVICE_PASS rollback_partial")
 end
 local function rollback_recover(published, tamper)
@@ -157,12 +165,12 @@ local function rollback_recover(published, tamper)
     local result = call("apply", receipt.request, receipt.digest)
     if tamper then
         assert(result.ok and result.value.state == "recovery_required" and result.value.message:find("definition digest differs", 1, true), "changed rollback definition accepted")
-        assert(#call("installed").value.modules == 2, "refused rollback removed definitions")
+        assert(installed_artifact_count() == 2, "refused rollback removed definitions")
         logger:info("HUB_MIGRATION_SERVICE_PASS rollback_tamper")
         return
     end
     complete(result)
-    assert(result.replayed and #call("installed").value.modules == 0, "interrupted rollback did not finish removal")
+    assert(result.replayed and installed_artifact_count() == 0, "interrupted rollback did not finish removal")
     if not published then assert(result.value.migration_work.rows[1].reason == "not_applied", "restart reran reverted migration") end
     logger:info("HUB_MIGRATION_SERVICE_PASS " .. (published and "rollback_published" or "rollback_crash"))
 end
@@ -185,7 +193,7 @@ local function new_database(mode)
         assert(result.value.migration_work.ledger_checked and result.value.migration_work.databases[1].id == "acme.storage:db", "new database checkpoint missing")
         if mode == "newdb_rollback" or mode == "newdb_rollback_tamper" then
             complete(apply({action = "uninstall", component = "acme/app", migration_policy = "down"}))
-            assert(#call("installed").value.modules == 0, "new database remained after rollback removal")
+            assert(installed_artifact_count() == 0, "new database remained after rollback removal")
         end
     end
     logger:info("HUB_MIGRATION_SERVICE_PASS " .. mode)
@@ -225,7 +233,7 @@ local function new_database_rollback_changed()
     assert(changes:apply())
     local result = call("apply", receipt.request, receipt.digest)
     assert(result.ok and result.value.state == "recovery_required" and result.value.message:find("database definition differs", 1, true), "rollback accepted changed target database")
-    assert(#call("installed").value.modules == 2, "rollback removed definitions after target changed")
+    assert(installed_artifact_count() == 2, "rollback removed definitions after target changed")
     logger:info("HUB_MIGRATION_SERVICE_PASS newdb_rollback_tamper")
 end
 local function history()

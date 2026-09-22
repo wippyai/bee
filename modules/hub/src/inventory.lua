@@ -115,17 +115,35 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     return {version = version, modules = modules, roots = roots}, nil
 end
 
--- Only the dependency closure reachable from explicit registry roots is
--- controlled by dependency-root changes. Other resident modules belong to
--- the host deployment and survive an unrelated install or removal.
+-- Hub owns only roots it published. Host-declared component roots remain
+-- resident deployment configuration and must not become Hub plan inputs.
 function M.dependency_members(state: Result): {[string]: boolean}
-    local members: {[string]: boolean} = {}
-    for _, root in ipairs(state.roots) do members[root.component] = true end
+    local host_members: {[string]: boolean} = {}
+    for _, root in ipairs(state.roots) do
+        if root.id:sub(1, 13) ~= "bee.hub.deps:" then host_members[root.component] = true end
+    end
+    -- First retain the complete closure of host roots. A Hub root may share
+    -- any member of that closure, but cannot replace or remove it.
     local changed = true
     while changed do
         changed = false
         for _, item in ipairs(state.modules) do
-            if not members[item.component] then
+            if not host_members[item.component] then
+                for _, owner in ipairs(item.used_by) do
+                    if host_members[owner] then host_members[item.component] = true; changed = true; break end
+                end
+            end
+        end
+    end
+    local members: {[string]: boolean} = {}
+    for _, root in ipairs(state.roots) do
+        if root.id:sub(1, 13) == "bee.hub.deps:" and not host_members[root.component] then members[root.component] = true end
+    end
+    changed = true
+    while changed do
+        changed = false
+        for _, item in ipairs(state.modules) do
+            if not members[item.component] and not host_members[item.component] then
                 for _, owner in ipairs(item.used_by) do
                     if members[owner] then members[item.component] = true; changed = true; break end
                 end

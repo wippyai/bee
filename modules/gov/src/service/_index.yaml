@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.governance.service
+entries:
+- name: recovery
+  kind: process.lua
+  source: file://recovery.lua
+  method: main
+  modules: [process]
+  imports: {service: bee.governance.binding:destination_service}

@@ -1,0 +1,35 @@
+version: '1.0'
+namespace: bee.governance.traits
+entries:
+- name: guide
+  kind: library.lua
+  source: file://guide.lua
+  modules: [json]
+  imports: {preflight: bee.governance:preflight}
+- name: authoring_trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Overlay authoring
+    comment: Caller-owned durable staging only; no registry writer or approval capability
+  prompt: |
+    Read the guide operation first for this destination's component contract and one minimal working application example; it names the exact file to freeze. Use BeeComponents to inspect installed components and exact Hub package entries, documentation and examples before inventing a pattern. Use BeeOverlay to author packs and changes as files. `overlay_id` names the authored overlay and is distinct from the agent's runtime workspace. Create with revision zero; list before editing to obtain the current revision. Put replaces one whole file; remove deletes one file. Both need expected_revision and a stable idempotency_key. Retry an uncertain write with the identical request and key; a changed request needs a new key. On conflict, reread and reconcile first. Use content for source text or content_base64 for binary assets. Read returns base64 content and a digest. Paths are relative and confined to this virtual overlay, not OS paths. Freeze with expected_revision and a retry key to retain an exact candidate. Freeze is not approval, installation or execution. For a component candidate, write entries.json as a JSON list of complete registry entries before freezing. Governance canonicalizes it during the separately authorized preparation step; do not construct registry.json. Pass snapshot_digest to list/read to inspect that retained candidate instead of current files; the returned revision is the frozen revision. Host policy admits each overlay operation; this trait grants no authority.
+  tools: [bee.governance.binding:overlay_call]
+- name: application_delivery_trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Application delivery
+    comment: Request delivery of a frozen application and read its status; publishing the reviewed version is separately gated and still leaves approval to others
+  prompt: |
+    Use the delivery tool to request delivery of an application you froze: pass operation request with the destination `workspace_id`, your source `source_overlay_id`, the version and the frozen `snapshot_digest`. The destination workspace is the runtime target; the source overlay is the caller-owned artifact you froze. It publishes your frozen artifact as immutable content, stages that exact version at this destination and returns the destination's own preflight verdict, with a diagnostic code, target, message and remedy for each finding. Repair a refusal and freeze again. When the verdict is ready the person must review and select the plan in Overlays, prepare the activation there, approve it in Approvals, and the activation owner applies the overlay; opening it is the person's act from the start menu. Read its status operation with the same identities, and with an intent_id once the person has prepared it, to see the review, selection and activation outcome. You cannot review, select, approve or apply, and you never write an overlay. Publishing the exact reviewed and applied version is a separate, host-requested capability; ask for it, and publish only after the person's apply succeeds.
+  tools: [bee.governance.binding:delivery_call]
+- name: application_publish_trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Application publish
+    comment: Publish the exact locally reviewed and applied version; never review, approve or apply
+  prompt: |
+    Use BeePublish only after a person has reviewed, selected, prepared, approved and had the activation owner apply the exact version you delivered. It publishes that one version to this destination's publication feed and refuses any version that is not the locally reviewed and applied one. It grants no review, selection, approval, activation or overlay authority.
+  tools: [bee.governance.binding:delivery_call]

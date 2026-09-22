@@ -3,7 +3,13 @@
 This optional Bee component uses the existing native Hub reader and registry
 APIs. It has no Keeper dependency and requires no runtime changes.
 
-The public `bee.hub:call` function accepts `{operation, request?, expected_digest?}`
+Hub now ships as an independently resolved component. Existing immutable
+artifacts retain their recorded definition, receipt, migration, and policy
+identities; upgrading an older assembled artifact to this component layout is
+a reviewed installation change, not a compatibility alias or an automatic
+registry rewrite.
+
+The public `bee.hub.binding:call` function accepts `{operation, request?, expected_digest?}`
 and returns `{ok, value?, code?, message?, replayed}`. The host grants
 `bee.hub.read` or `bee.hub.manage` for the requested component; effect-free
 planning also requires installed-catalog read authority, while apply alone

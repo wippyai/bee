@@ -110,7 +110,7 @@ local function endpoint(): string
     return tostring((entry.data :: Object).address)
 end
 local function open_gateway(): integer
-    local opened = call("bee.gateway:open", {address = endpoint()})
+    local opened = call("bee.gateway.binding:open", {address = endpoint()})
     return math.floor(tonumber(opened.epoch) or 0)
 end
 local function thread(): string
@@ -219,7 +219,7 @@ local function expect_detail(details: {string}, marker: string, present: boolean
     if (detail_with(details, marker) ~= nil) ~= present then error("detail " .. marker .. (present and " missing" or " present") .. " in: " .. table.concat(details, " | ")) end
 end
 local function binding_of(attempt_id: string, carrier_epoch: integer): Object
-    return call("bee.gateway:check", {attempt_id = attempt_id, carrier_epoch = carrier_epoch})
+    return call("bee.gateway.binding:check", {attempt_id = attempt_id, carrier_epoch = carrier_epoch})
 end
 -- Neither the token nor the one-time materialization key may reach any
 -- diagnostic: both are 32 random bytes in base64, so any 44-character
@@ -230,7 +230,7 @@ end
 -- runtime's start latency.
 local function await_presented(attempt_id: string, carrier_epoch: integer, wanted: integer)
     for _ = 1, 200 do
-        local reply = raw_call("bee.gateway:check", {attempt_id = attempt_id, carrier_epoch = carrier_epoch})
+        local reply = raw_call("bee.gateway.binding:check", {attempt_id = attempt_id, carrier_epoch = carrier_epoch})
         if reply.ok and (tonumber((reply.value :: Object).presented_count) or 0) >= wanted then return end
         time.sleep("50ms")
     end
@@ -374,7 +374,7 @@ local function define_tests()
             local retried = run_carrier(launch, "open", nil)
             if not retried.value then error("retried carrier failed: " .. tostring(retried.error)) end
             test.eq((retried.value.settlement :: Object).outcome, "succeeded")
-            local replayed = call("bee.gateway:check", {binding_id = before.binding_id})
+            local replayed = call("bee.gateway.binding:check", {binding_id = before.binding_id})
             test.eq(replayed.credential_generation, 1)
             test.eq(replayed.valid, false)
             test.eq(replayed.reason, "binding is revoked")
@@ -520,7 +520,7 @@ local function define_tests()
             local seen = lose_carrier_then("10", nil, function(attempt_id: string)
                 local live = binding_of(attempt_id, 1)
                 test.eq(live.valid, true)
-                call("bee.gateway:revoke", {binding_id = live.binding_id})
+                call("bee.gateway.binding:revoke", {binding_id = live.binding_id})
             end)
             test.eq(seen.after_hold, 401)
         end)
@@ -573,7 +573,7 @@ local function define_tests()
             test.is_true(text:find("content_digests", 1, true) ~= nil)
             local binding = binding_of(attempt_id, 1)
             test.eq(binding.reason, "binding is revoked")
-            local queue = call("bee.gateway:hook_queue", {binding_id = binding.binding_id})
+            local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding.binding_id})
             for _, item in ipairs(queue.hooks :: {Object}) do test.eq(item.status, "committed") end
             no_token_in({text})
         end)
@@ -597,7 +597,7 @@ local function define_tests()
                 if count ~= 1 then error("hook " .. key .. " committed " .. tostring(count) .. " times after the crash") end
             end
             local binding = binding_of(attempt_id, 2)
-            local queue = call("bee.gateway:hook_queue", {binding_id = binding.binding_id})
+            local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding.binding_id})
             for _, item in ipairs(queue.hooks :: {Object}) do
                 if item.status == "queued" then error("a queued hook survived settlement: " .. tostring(item.event)) end
             end
@@ -612,10 +612,10 @@ local function define_tests()
             local pid = spawn_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_HOOKS = "1", BEE_FIXTURE_HOOKS_FLOOD = "80"}), "open", nil, "attempt_started")
             local binding_id = ""
             for _ = 1, 200 do
-                local reply = raw_call("bee.gateway:check", {attempt_id = attempt_id, carrier_epoch = 1})
+                local reply = raw_call("bee.gateway.binding:check", {attempt_id = attempt_id, carrier_epoch = 1})
                 if reply.ok then
                     binding_id = tostring((reply.value :: Object).binding_id)
-                    local queue = call("bee.gateway:hook_queue", {binding_id = binding_id})
+                    local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding_id})
                     local queued = 0
                     for _, item in ipairs(queue.hooks :: {Object}) do
                         if item.status == "queued" then queued = queued + 1 end
@@ -639,7 +639,7 @@ local function define_tests()
                 if tostring(payload.occurrence):find("toolu_flood_", 1, true) then committed = committed + 1 end
             end
             test.eq(committed, accepted)
-            local queue = call("bee.gateway:hook_queue", {binding_id = binding_id})
+            local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding_id})
             for _, item in ipairs(queue.hooks :: {Object}) do
                 if item.status == "queued" then error("a queued row survived: " .. tostring(item.occurrence)) end
             end
@@ -681,7 +681,7 @@ local function define_tests()
             end
             test.is_true(seen["PreToolUse:tool:toolu_fixture_1"] == 1)
             local binding = binding_of(attempt_id, 2)
-            local queue = call("bee.gateway:hook_queue", {binding_id = binding.binding_id})
+            local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding.binding_id})
             for _, item in ipairs(queue.hooks :: {Object}) do
                 if item.status == "queued" then error("a queued row survived the takeover: " .. tostring(item.occurrence)) end
                 if item.status == "committed" and item.claimed_epoch ~= 2 then error("a row was acknowledged by an epoch that did not claim it: " .. tostring(item.claimed_epoch)) end
@@ -739,7 +739,7 @@ local function define_tests()
             local attempt_id = fresh("attempt")
             local pid = spawn_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_WAIT = "6000"}), "open", nil, "attempt_started")
             time.sleep("900ms")
-            call("bee.gateway:drain", {deadline_ms = 8000})
+            call("bee.gateway.binding:drain", {deadline_ms = 8000})
             continue_carrier(pid)
             local outcome = await_carrier(pid, "draining carrier")
             open_gateway()
@@ -761,7 +761,7 @@ local function define_tests()
             await_presented(attempt_id, 1, 3)
             local live = binding_of(attempt_id, 1)
             test.eq(live.valid, true)
-            call("bee.gateway:revoke", {binding_id = live.binding_id})
+            call("bee.gateway.binding:revoke", {binding_id = live.binding_id})
             call("bee.placement.native:reconcile", {attempt_id = attempt_id})
             continue_carrier(pid)
             local outcome = await_carrier(pid, "revoked carrier")

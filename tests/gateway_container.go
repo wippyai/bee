@@ -141,6 +141,9 @@ func run() error {
 	if err := copyTree("src", filepath.Join(root, "src")); err != nil {
 		return err
 	}
+	if err := copyTree("modules", filepath.Join(root, "modules")); err != nil {
+		return err
+	}
 	if err := copyTree("tests/fixtures/gateway_container", filepath.Join(root, "src/container_probe")); err != nil {
 		return err
 	}
@@ -168,7 +171,7 @@ func run() error {
 	if err := os.WriteFile(manifestPath, []byte(changed), 0600); err != nil {
 		return err
 	}
-	manifestPath = filepath.Join(root, "src/security/gateway/_index.yaml")
+	manifestPath = filepath.Join(root, "modules/gateway/src/security/_index.yaml")
 	manifest, err = os.ReadFile(manifestPath)
 	if err != nil {
 		return err

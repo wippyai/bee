@@ -87,7 +87,7 @@ def application_identity(folder):
 def configure_destination(project, workspace_id=None, source_node="node-1"):
     """Install the destination's local policy in its source composition."""
     if workspace_id is not None:
-        governance_path = project / "src/gov/_index.yaml"
+        governance_path = project / "modules/gov/src/_index.yaml"
         governance = yaml.safe_load(governance_path.read_text())
         profiles = next(item for item in governance["entries"] if item["name"] == "activation_profiles")
         profiles["data"] = {"profiles": [{
@@ -119,6 +119,7 @@ def configure_destination(project, workspace_id=None, source_node="node-1"):
 
 def prepare_destination(destination, evidence, source_node="node-1"):
     shutil.copytree(ROOT / "src", destination / "src")
+    shutil.copytree(ROOT / "modules", destination / "modules")
     for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
         shutil.copy2(ROOT / name, destination / name)
     # This acceptance invokes the assembled runtime directly rather than

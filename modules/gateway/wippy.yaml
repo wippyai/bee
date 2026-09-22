@@ -1,0 +1,6 @@
+organization: bee
+module: gateway
+type: library
+version: 0.1.0-dev
+description: Authenticated managed-agent gateway bindings, hooks, and MCP adapters for Bee
+license: MIT

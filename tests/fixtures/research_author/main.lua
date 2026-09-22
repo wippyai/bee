@@ -59,7 +59,7 @@ local function main()
     if not applied then error(tostring(apply_error)) end
     local listener: Object? = nil
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway:address", {})
+        local raw, address_error = funcs.call("bee.gateway.registry:address", {})
         if not address_error then listener = bounds.object(raw) end
         if listener and type(listener.address) == "string" then break end
         time.sleep("100ms")
@@ -186,7 +186,7 @@ local function main()
     if active[1] ~= "research:read" or active[2] ~= "research:record" then error("wrong selected traits") end
     if context_error or not context or context.experiment ~= "baseline" then error("Gemini did not select the requested context") end
     if not frozen_digest then error("missing frozen artifact") end
-    local file = call("bee.governance:overlay_call", {operation = "read", overlay_id = "research-performance",
+    local file = call("bee.governance.binding:overlay_call", {operation = "read", overlay_id = "research-performance",
         path = "entries.json", snapshot_digest = frozen_digest})
     if type(file.content_base64) ~= "string" then error("missing authored entries") end
     local source, decode_error = base64.decode(file.content_base64)

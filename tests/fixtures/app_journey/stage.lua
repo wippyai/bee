@@ -43,7 +43,7 @@ local function workspace_value(operation: string, workspace_id: string, expected
     if key then request.idempotency_key = key end
     if operation == "put" then request.path, request.content = "entries.json", content end
     if operation == "read" then request.path = "entries.json" end
-    return call_api("bee.governance:overlay_call", request)
+    return call_api("bee.governance.binding:overlay_call", request)
 end
 
 local function read_entries(): {Object}
@@ -136,17 +136,17 @@ local function stage_version(workspace_id: string, workspace: string, version: s
     local frozen = workspace_value("freeze", workspace, next_revision, "freeze-" .. version, nil)
     local snapshot_digest = bounds.id(frozen.digest)
     if not snapshot_digest then error("workspace freeze omitted its digest") end
-    local published = call_api("bee.governance:publication_call", {operation = "prepare", workspace_id = workspace_id,
+    local published = call_api("bee.governance.binding:publication_call", {operation = "prepare", workspace_id = workspace_id,
         component = COMPONENT, version = version, snapshot_digest = snapshot_digest})
     local descriptor = object(published.descriptor, "published descriptor")
-    local available = call_api("bee.governance:destination_call", {operation = "available", workspace_id = workspace_id})
+    local available = call_api("bee.governance.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
     for _, raw in ipairs(available.versions :: {unknown}) do
         local item = object(raw, "available version")
         if item.key == descriptor.key and item.digest == descriptor.digest then found = true end
     end
     if not found then error("published replacement was not discoverable") end
-    local staged = call_api("bee.governance:destination_call", {operation = "stage", workspace_id = workspace_id,
+    local staged = call_api("bee.governance.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
         source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
         descriptor_digest = descriptor.digest, idempotency_key = "stage-" .. workspace})
     if staged.status ~= "staged" or staged.selected == true then error("replacement was not staged only") end

@@ -29,6 +29,56 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
+- name: dependency_governance
+  kind: ns.dependency
+  component: bee/governance
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.governance:db
+  - name: target_publication_profiles
+    value: bee.governance:publication_profiles
+  - name: target_activation_profiles
+    value: bee.governance:activation_profiles
+  - name: target_approval_request_policy
+    value: bee:approval_request_policy
+  - name: target_approval_consume_policy
+    value: bee:approval_consume_policy
+- name: dependency_gateway
+  kind: ns.dependency
+  component: bee/gateway
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.gateway:db
+  - name: target_listener
+    value: bee:gateway_listener
+  - name: target_endpoint
+    value: bee:gateway_endpoint
+  - name: target_hook_storage
+    value: bee.harness.host:environment
+  - name: target_approval_request_policy
+    value: bee:approval_request_policy
+  - name: target_approval_consume_policy
+    value: bee:approval_consume_policy
+  - name: target_tool_read_policy
+    value: bee:gateway_tool_read_policy
+  - name: target_tool_message_policy
+    value: bee:gateway_tool_message_policy
+  - name: target_tool_launch_policy
+    value: bee:gateway_tool_launch_policy
+  - name: target_tool_overlay_policy
+    value: bee:gateway_tool_overlay_policy
+  - name: target_tool_docs_policy
+    value: bee:gateway_tool_docs_policy
+  - name: target_tool_components_policy
+    value: bee:gateway_tool_components_policy
+  - name: target_tool_delivery_policy
+    value: bee:gateway_tool_delivery_policy
+  - name: target_tool_publish_policy
+    value: bee:gateway_tool_publish_policy
+  - name: target_tool_application_open_policy
+    value: bee:gateway_tool_application_open_policy
 - name: dependency_hive
   kind: ns.dependency
   component: bee/hive
@@ -86,6 +136,15 @@ entries:
     workers: 4
   lifecycle:
     auto_start: true
+- name: governance_recovery_service
+  kind: process.service
+  process: bee.governance.service:recovery
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.governance.activation}
+      policies: [bee.governance.security:destination_service_policy]
 - name: sync_exports
   kind: registry.entry
   meta:

@@ -25,13 +25,13 @@ local function decode_reply(raw: unknown): Result?
     return {ok = value.ok, replayed = value.replayed, code = code, message = message, value = value.value}
 end
 local function publish(request: unknown, expected: string): Result
+    local host, host_error = host_resources.process_host()
+    if not host then return transaction.failure("UNAVAILABLE", host_error or "Hub worker host is unavailable") end
     local id, id_error = uuid.v4()
     if not id then return transaction.failure("UNAVAILABLE", tostring(id_error)) end
     local topic = "bee.hub.result." .. id
     local replies, listen_error = process.listen(topic, {message = true})
     if not replies then return transaction.failure("UNAVAILABLE", tostring(listen_error)) end
-    local host, host_error = host_resources.process_host()
-    if not host then return transaction.failure("UNAVAILABLE", host_error or "Hub worker host is unavailable") end
     local pid, spawn_error = process.spawn("bee.hub.service:worker", host, process.pid(), topic, request, expected)
     if not pid then process.unlisten(replies); return transaction.failure("UNAVAILABLE", tostring(spawn_error)) end
     local deadline = time.after("120s")

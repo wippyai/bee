@@ -11,6 +11,12 @@ entries:
   source: file://concurrent_call.lua
   method: handle
   modules: [http_client, json]
+- name: sync_sender
+  kind: library.lua
+  source: file://sync_sender.lua
+  imports:
+    transaction: bee.persist:transaction
+    version: bee.sync:version
 - name: context_tool
   kind: function.lua
   source: file://context_tool.lua
@@ -42,7 +48,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call, http_client.private_ip, http_client.request, process.spawn, process.host, registry.get, bee.threads.lifecycle, bee.threads.carrier]
-    resources: [bee.gateway:open, bee.gateway:admit, bee.gateway:revoke, bee.gateway:drain, bee.gateway:ready, bee.gateway:materialize, bee.gateway:reissue, bee.gateway:revoke_attempt, bee.gateway:check, bee.gateway:authorize_materialization, bee.gateway:hook_queue, bee.gateway:hook_claim, bee.gateway:hook_ack, bee.gateway:hook_reject, bee.threads.carrier:claim, bee.threads.carrier:commit, bee:gateway_endpoint, 127.0.0.1, '*', bee.gateway_probe:drainer, bee:workers]
+    resources: [bee.gateway.binding:open, bee.gateway.binding:admit, bee.gateway.binding:revoke, bee.gateway.binding:drain, bee.gateway.binding:ready, bee.gateway.binding:materialize, bee.gateway.binding:reissue, bee.gateway.binding:revoke_attempt, bee.gateway.binding:check, bee.gateway.binding:authorize_materialization, bee.gateway.binding:hook_queue, bee.gateway.binding:hook_claim, bee.gateway.binding:hook_ack, bee.gateway.binding:hook_reject, bee.threads.carrier:claim, bee.threads.carrier:commit, bee:gateway_endpoint, 127.0.0.1, '*', bee.gateway_probe:drainer, bee:workers]
     effect: allow
 - name: configuration_caller_policy
   kind: security.policy
@@ -50,7 +56,7 @@ entries:
     comment: Privileged fixture caller may construct a selected child scope and invoke the rendering probe
   policy:
     actions: [funcs.security, security.scope.create, security.policy.get]
-    resources: [security, custom, bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_overlay_policy, bee:gateway_tool_docs_policy]
+    resources: [security, custom, bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_overlay_policy, bee:gateway_tool_docs_policy]
     effect: allow
 - name: render_configuration
   kind: function.lua

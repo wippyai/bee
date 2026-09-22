@@ -45,8 +45,8 @@ local function run(request: Object): Object
     return {
         projection = projection,
         placement_db_denied = placement_db == nil and (placement_error and placement_error:kind()) == "PermissionDenied",
-        placement_executor_denied = placement_executor == nil and (executor_error and executor_error:kind()) == "Invalid" and tostring(executor_error):find("permission denied: access executor", 1, true) ~= nil,
-        placement_policy_denied = placement_policy == nil and (policy_error and policy_error:kind()) == "Invalid" and tostring(policy_error):find("permission denied: access policy", 1, true) ~= nil,
+        placement_executor_denied = placement_executor == nil and tostring(executor_error):find("permission denied: access executor", 1, true) ~= nil,
+        placement_policy_denied = placement_policy == nil and tostring(policy_error):find("permission denied: access policy", 1, true) ~= nil,
         funcs_security_denied = recovered_scope == nil and (recovered_error and recovered_error:kind()) == "PermissionDenied",
         scope_create_denied = not created and tostring(create_error):find("not allowed to create custom scopes", 1, true) ~= nil,
     }

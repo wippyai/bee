@@ -1,8 +1,0 @@
-version: '1.0'
-namespace: bee.governance.traits
-entries:
-- name: guide
-  kind: library.lua
-  source: file://guide.lua
-  modules: [json]
-  imports: {preflight: bee.governance:preflight}

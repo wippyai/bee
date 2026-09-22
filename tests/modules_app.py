@@ -417,7 +417,7 @@ def main():
         exercise_real_facade(project, True, pack)
     with fixture_workspace(unit_tests=False) as project:
         (project / "src/hub/facade.lua").write_text(FACADE)
-        (project / "src/gov/publication_method.lua").write_text(PUBLICATION_METHOD)
+        (project / "modules/gov/src/binding/publication_method.lua").write_text(PUBLICATION_METHOD)
         pack = project / "modules-authored-test.wapp"
         pack_fixture(project, pack)
         exercise_authored_publication(project, False, pack)

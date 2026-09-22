@@ -44,12 +44,12 @@ local function call(target: string, request: Object): (Object?, string?)
 end
 
 local function open_gateway()
-    local selected, address_error = funcs.call("bee.gateway:address", {})
+    local selected, address_error = funcs.call("bee.gateway.registry:address", {})
     local endpoint = object(selected)
     if address_error or not endpoint or type(endpoint.address) ~= "string" then
         error("resolve managed gateway: " .. tostring(address_error or "missing address"))
     end
-    local opened, open_error = call("bee.gateway:open", {address = endpoint.address})
+    local opened, open_error = call("bee.gateway.binding:open", {address = endpoint.address})
     if not opened then error("open managed gateway: " .. tostring(open_error)) end
 end
 

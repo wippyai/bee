@@ -58,7 +58,7 @@ local function run(address: string)
             admitted = {request_id = action, principal_id = ACTOR, binding_ref = "b", binding_digest = "d", grant_refs = {}, budget_ref = "budget", input = {text = "test"}}}))
         value(call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = action .. "-prepare", action_id = action, attempt_id = action .. "-attempt",
             prepared = {binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p", placement_binding = "bee.placement.native:binding", placement_attempt_id = action, plan_digest = "plan"}}))
-        local admitted = value(call("bee.gateway:admit", {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD,
+        local admitted = value(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD,
             owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "measure_context"}, ttl_ms = 60000,
             surface = {tools = {{name = "measure_context", operation = "bee.gateway_probe:context_tool", description = "Read selected app state",
                 policies = {"bee.gateway_probe:context_tool_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
@@ -66,8 +66,8 @@ local function run(address: string)
                 base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "approved-app"}, dynamic_keys = {"experiment"},
                 access = {workspace_id = "access-workspace", policy = "mcp-test", traits = {"research:measure"}}}}))
         local binding = object(admitted.binding)
-        local authorized = value(call("bee.gateway:authorize_materialization", {attempt_id = action .. "-attempt", carrier_epoch = 1, binding_id = binding.binding_id}))
-        local materialized = value(call("bee.gateway:materialize", {attempt_id = action .. "-attempt", carrier_epoch = 1, materialization_key = authorized.materialization_key}))
+        local authorized = value(call("bee.gateway.binding:authorize_materialization", {attempt_id = action .. "-attempt", carrier_epoch = 1, binding_id = binding.binding_id}))
+        local materialized = value(call("bee.gateway.binding:materialize", {attempt_id = action .. "-attempt", carrier_epoch = 1, materialization_key = authorized.materialization_key}))
         local token = bounds.text(materialized.token)
         if not token then error("missing token") end
         tokens[action] = token

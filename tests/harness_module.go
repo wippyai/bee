@@ -48,38 +48,49 @@ func runCommand(ctx context.Context, directory, runtime string, env []string, ar
 
 func walkIndexes(root string) (map[string]entrySource, error) {
 	entries := make(map[string]entrySource)
-	err := filepath.WalkDir(filepath.Join(root, "src"), func(path string, item fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if item.IsDir() || item.Name() != "_index.yaml" {
+	sources := []string{filepath.Join(root, "src")}
+	components, err := filepath.Glob(filepath.Join(root, "modules", "*", "src"))
+	if err != nil {
+		return nil, fmt.Errorf("find component sources: %w", err)
+	}
+	sources = append(sources, components...)
+	sort.Strings(sources)
+	for _, source := range sources {
+		if err := filepath.WalkDir(source, func(path string, item fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if item.IsDir() || item.Name() != "_index.yaml" {
+				return nil
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("read %s: %w", path, err)
+			}
+			var document indexFile
+			if err := yaml.Unmarshal(data, &document); err != nil {
+				return fmt.Errorf("decode %s: %w", path, err)
+			}
+			if document.Namespace == "" {
+				return fmt.Errorf("%s has no namespace", path)
+			}
+			for _, entry := range document.Entries {
+				name, ok := entry["name"].(string)
+				if !ok || name == "" {
+					return fmt.Errorf("%s has an entry without a name", path)
+				}
+				identity := document.Namespace + ":" + name
+				if _, exists := entries[identity]; exists {
+					return fmt.Errorf("duplicate registry entry %s", identity)
+				}
+				entries[identity] = entrySource{namespace: document.Namespace, entry: entry, indexDir: filepath.Dir(path)}
+			}
 			return nil
+		}); err != nil {
+			return nil, err
 		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", path, err)
-		}
-		var document indexFile
-		if err := yaml.Unmarshal(data, &document); err != nil {
-			return fmt.Errorf("decode %s: %w", path, err)
-		}
-		if document.Namespace == "" {
-			return fmt.Errorf("%s has no namespace", path)
-		}
-		for _, entry := range document.Entries {
-			name, ok := entry["name"].(string)
-			if !ok || name == "" {
-				return fmt.Errorf("%s has an entry without a name", path)
-			}
-			identity := document.Namespace + ":" + name
-			if _, exists := entries[identity]; exists {
-				return fmt.Errorf("duplicate registry entry %s", identity)
-			}
-			entries[identity] = entrySource{namespace: document.Namespace, entry: entry, indexDir: filepath.Dir(path)}
-		}
-		return nil
-	})
-	return entries, err
+	}
+	return entries, nil
 }
 
 func stringImports(value interface{}) (map[string]string, error) {

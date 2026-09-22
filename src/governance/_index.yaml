@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.governance
+entries:
+- name: publication_profiles
+  kind: registry.entry
+  meta:
+    type: bee.governance.publication_profiles
+    comment: Host-selected source workspaces and overlay owners available for immutable publication
+  data: {profiles: []}
+- name: activation_profiles
+  kind: registry.entry
+  meta:
+    type: bee.governance.activation_profiles
+    comment: Host-selected destination mappings and capability ceilings; remote artifacts cannot edit this entry
+  data: {profiles: []}

@@ -62,8 +62,8 @@ if (cd "$fixture/tampered" && timeout 15s "$runtime" run --verbose --host bee:wo
     fail 'tampered vendor pack loaded'
 fi
 grep -q 'module integrity verification failed' "$fixture/tamper.out" || { cat "$fixture/tamper.out" >&2; fail 'tamper failure lacks integrity evidence'; }
-grep -q 'expected' "$fixture/tamper.out" || { cat "$fixture/tamper.out" >&2; fail 'tamper failure lacks expected digest evidence'; }
-grep -q 'actual' "$fixture/tamper.out" || { cat "$fixture/tamper.out" >&2; fail 'tamper failure lacks actual digest evidence'; }
+grep -Eq 'expected sha256:[0-9a-f]{64}' "$fixture/tamper.out" || { cat "$fixture/tamper.out" >&2; fail 'tamper failure lacks expected digest evidence'; }
+grep -Eq '(actual|got) sha256:[0-9a-f]{64}' "$fixture/tamper.out" || { cat "$fixture/tamper.out" >&2; fail 'tamper failure lacks observed digest evidence'; }
 
 expected_entries=0
 : > "$fixture/expected-vendor.txt"

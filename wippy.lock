@@ -30,6 +30,8 @@ modules:
     version: 0.1.0-dev
   - name: bee/placement-native
     version: 0.1.0-dev
+  - name: bee/harness
+    version: 0.1.0-dev
   - name: bee/credentials
     version: 0.1.0-dev
   - name: bee/driver

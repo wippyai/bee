@@ -21,6 +21,7 @@ workspace:
     bee/resources: ./modules/resources
     bee/placement: ./modules/placement
     bee/placement-native: ./modules/placement-native
+    bee/harness: ./modules/harness
     bee/credentials: ./modules/credentials
     bee/driver: ./modules/driver
     bee/driver-agy: ./modules/driver-agy

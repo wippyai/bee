@@ -124,7 +124,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="bee-thread-storage-") as directory:
         folder = Path(directory)
         shutil.copytree(ROOT / "src", folder / "src")
-        shutil.copytree(ROOT / "modules" / "bee-persist", folder / "modules" / "bee-persist")
+        shutil.copytree(ROOT / "modules", folder / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, folder / name)
         probe = folder / "src/probe"

@@ -103,7 +103,7 @@ func TestHostRegistersReadOnlyEnvironment(t *testing.T) {
 	root := t.TempDir()
 	resolver := hostResolver{
 		lookPath: func(name string) (string, error) {
-			if name == "codex" {
+			if name == "example-tool" {
 				return filepath.Join(root, "bin", name), nil
 			}
 			return "", errors.New("not found")
@@ -139,13 +139,13 @@ func TestHostRegistersReadOnlyEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := storage.Get(ctx, "codex"); err != nil || got != filepath.Join(root, "bin", "codex") {
+	if got, err := storage.Get(ctx, "example-tool"); err != nil || got != filepath.Join(root, "bin", "example-tool") {
 		t.Fatalf("PATH lookup = %q, %v", got, err)
 	}
-	if _, err := storage.Get(ctx, filepath.Join(root, "bin", "codex")); !errors.Is(err, envapi.ErrVariableNotFound) {
+	if _, err := storage.Get(ctx, filepath.Join(root, "bin", "example-tool")); !errors.Is(err, envapi.ErrVariableNotFound) {
 		t.Fatalf("absolute lookup error = %v", err)
 	}
-	if err := storage.Set(ctx, "codex", "other"); err == nil {
+	if err := storage.Set(ctx, "example-tool", "other"); err == nil {
 		t.Fatal("read-only storage accepted Set")
 	}
 }

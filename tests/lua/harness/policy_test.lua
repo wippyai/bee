@@ -121,18 +121,16 @@ local function define_tests()
             test.eq(selected.instructions, "Host instructions\n\nProfile instructions")
             test.eq(selected.executables.claude, host.executables.claude)
         end)
-        test.it("offers a named Codex profile only when the policy enables it", function()
+        test.it("applies declared text options without widening host policy", function()
             local raw = entry({codex = "/bin/codex"})
             local data = raw.data :: Entry
-            -- Unset means the saved field is not offered and is refused by apply.
+            data.profile_options = {config_profile = {kind = "text", max_bytes = 64}}
             local closed, closed_error = policy.decode("test:policy", raw)
             if not closed then error(tostring(closed_error)) end
-            test.is_nil(preferences.apply(data, {config_profile = "ds-flash"}))
-            data.profile_config_profile = true
-            local opened, opened_error = policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, instructions = "", config_profile = "ds-flash"})
+            local opened, opened_error = policy.decode("test:policy", raw, nil, {options = {config_profile = "ds-flash"}, mcp_tools = {}, instructions = ""})
             if not opened then error(tostring(opened_error)) end
             test.eq(opened.prepare_options.config_profile, "ds-flash")
-            data.profile_config_profile = "yes"
+            data.profile_options = {config_profile = {kind = "text", max_bytes = 513}}
             test.is_nil(policy.decode("test:policy", raw))
         end)
 

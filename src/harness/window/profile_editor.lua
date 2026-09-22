@@ -19,13 +19,12 @@ type Profile = {
     options: {[string]: Scalar},
     mcp_tools: {string},
     instructions: string,
-    config_profile: string?,
 }
+type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer}
 type Allowed = {
-    options: {[string]: {Scalar}},
+    options: {[string]: Option},
     mcp_tools: {string},
     instructions: boolean,
-    config_profile: boolean,
 }
 type Draft = {
     title: string,
@@ -33,12 +32,11 @@ type Draft = {
     options: {[string]: Scalar},
     mcp_tools: {string},
     instructions: string,
-    config_profile: string?,
     -- Kept out of the public result. It is copied at construction and is
     -- consulted on every edit and result validation.
     _allowed: Allowed,
 }
-type OptionRow = {name: string, values: {Scalar}, value: Scalar?}
+type OptionRow = {name: string, kind: "enum" | "text", values: {Scalar}?, max_bytes: integer?, value: Scalar?}
 type ToolRow = {name: string, selected: boolean}
 
 local function object(value: unknown): {[string]: unknown}?
@@ -51,14 +49,13 @@ end
 
 local function policy(allowed: Allowed): {[string]: unknown}
     return {profile_options = allowed.options, gateway_tools = allowed.mcp_tools,
-        profile_instructions = allowed.instructions, profile_config_profile = allowed.config_profile,
-        prepare_options = {}}
+        profile_instructions = allowed.instructions, prepare_options = {}}
 end
 
 local function decode_allowed(value: unknown): (Allowed?, string?)
     local raw = object(value)
     if not raw then return nil, "editor allowlist must be an object" end
-    local extra = bounds.fields(raw, {"options", "mcp_tools", "instructions", "config_profile"})
+    local extra = bounds.fields(raw, {"options", "mcp_tools", "instructions"})
     if extra then return nil, "editor allowlist: " .. extra end
     if raw.options == nil or raw.mcp_tools == nil then
         return nil, "editor allowlist needs options and mcp_tools"
@@ -66,36 +63,38 @@ local function decode_allowed(value: unknown): (Allowed?, string?)
     if type(raw.instructions) ~= "boolean" then
         return nil, "editor allowlist.instructions must be a boolean"
     end
-    if raw.config_profile ~= nil and type(raw.config_profile) ~= "boolean" then
-        return nil, "editor allowlist.config_profile must be a boolean"
-    end
-    local allow_config_profile = raw.config_profile == true
-
     -- preferences.apply owns the shared option, tool and instruction bounds.
     -- An empty candidate validates the host declaration without applying any
     -- caller value to it.
     local candidate, candidate_error = preferences.apply({profile_options = raw.options,
         gateway_tools = raw.mcp_tools, profile_instructions = raw.instructions,
-        profile_config_profile = allow_config_profile, prepare_options = {}},
+        prepare_options = {}},
         {options = {}, mcp_tools = {}, instructions = ""})
     if not candidate then return nil, candidate_error or "editor allowlist is invalid" end
 
-    local options: {[string]: {Scalar}} = {}
+    local decoded_options, decoded_options_error = preferences.decode_profile_options(raw.options)
+    if not decoded_options then return nil, decoded_options_error or "editor options are invalid" end
+    local options: {[string]: Option} = {}
     local raw_options = raw.options :: {[string]: unknown}
-    for name, values in pairs(raw_options) do
-        local copied: {Scalar} = {}
-        for index, item in ipairs(values :: {unknown}) do copied[index] = item :: Scalar end
-        options[name] = copied
+    for name in pairs(raw_options) do
+        local declared = decoded_options[name]
+        if not declared then return nil, "editor option declaration is missing" end
+        if declared.kind == "enum" then
+            local copied: {Scalar} = {}
+            for index, item in ipairs(declared.values) do copied[index] = item end
+            options[name] = {kind = "enum", values = copied}
+        else
+            options[name] = {kind = "text", max_bytes = declared.max_bytes}
+        end
     end
     local tools: {string} = {}
     for index, tool in ipairs(raw.mcp_tools :: {unknown}) do tools[index] = tool :: string end
-    return {options = options, mcp_tools = tools, instructions = raw.instructions :: boolean,
-        config_profile = allow_config_profile}, nil
+    return {options = options, mcp_tools = tools, instructions = raw.instructions :: boolean}, nil
 end
 
 local function raw_profile(draft: Draft): {[string]: unknown}
     return {title = draft.title, definition_ref = draft.definition_ref, options = draft.options,
-        mcp_tools = draft.mcp_tools, instructions = draft.instructions, config_profile = draft.config_profile}
+        mcp_tools = draft.mcp_tools, instructions = draft.instructions}
 end
 
 local function result_for(draft: Draft): (Profile?, string?)
@@ -104,7 +103,6 @@ local function result_for(draft: Draft): (Profile?, string?)
     if not profile then return nil, profile_error or "profile is invalid" end
     local _, preference_error = preferences.apply(policy(draft._allowed), {
         options = profile.options, mcp_tools = profile.mcp_tools, instructions = profile.instructions,
-        config_profile = profile.config_profile,
     })
     if preference_error then return nil, preference_error end
     return profile, nil
@@ -120,7 +118,6 @@ local function replace(draft: Draft, profile: Profile)
     draft.options = profile.options
     draft.mcp_tools = profile.mcp_tools
     draft.instructions = profile.instructions
-    draft.config_profile = profile.config_profile
 end
 
 function M.new(profile: Profile, raw_allowed: unknown): (Draft?, string?)
@@ -130,7 +127,7 @@ function M.new(profile: Profile, raw_allowed: unknown): (Draft?, string?)
     if not decoded then return nil, profile_error or "profile is invalid" end
     local draft: Draft = {title = decoded.title, definition_ref = decoded.definition_ref,
         options = decoded.options, mcp_tools = decoded.mcp_tools, instructions = decoded.instructions,
-        config_profile = decoded.config_profile, _allowed = allowed}
+        _allowed = allowed}
     local _, invalid = result_for(draft)
     if invalid then return nil, invalid end
     return draft, nil
@@ -168,27 +165,6 @@ function M.append_guidance(draft: Draft, value: unknown): (boolean, string?)
     return true, nil
 end
 
--- A saved profile may name one Codex config profile. The host decides
--- whether the field exists; the protocol owns the name's admission.
-function M.set_config_profile(draft: Draft, value: unknown): (boolean, string?)
-    local base, base_error = current(draft)
-    if not base then return false, base_error end
-    if not draft._allowed.config_profile then return false, "the harness does not configure a named Codex profile" end
-    local field = bounds.text(value, protocol.MAX_CONFIG_PROFILE_BYTES)
-    if value ~= nil and (not field or (field ~= "" and not field:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$"))) then
-        return false, "named profile must be letters, digits, dash or underscore"
-    end
-    if field == nil or field == "" then
-        base.config_profile = nil
-    else
-        base.config_profile = field
-    end
-    local checked, checked_error = protocol.profile(raw_profile(base))
-    if not checked then return false, checked_error or "named profile is invalid" end
-    draft.config_profile = checked.config_profile
-    return true, nil
-end
-
 function M.set_guidance(draft: Draft, value: unknown): (boolean, string?)
     local base, base_error = current(draft)
     if not base then return false, base_error end
@@ -199,7 +175,34 @@ function M.set_guidance(draft: Draft, value: unknown): (boolean, string?)
     if not checked then return false, checked_error or "guidance is invalid" end
     local _, preference_error = preferences.apply(policy(draft._allowed), {
         options = checked.options, mcp_tools = checked.mcp_tools, instructions = checked.instructions,
-        config_profile = checked.config_profile,
+    })
+    if preference_error then return false, preference_error end
+    replace(draft, checked)
+    return true, nil
+end
+
+function M.set_text_option(draft: Draft, raw_name: unknown, value: unknown): (boolean, string?)
+    local base, base_error = current(draft)
+    if not base then return false, base_error end
+    local name = bounds.id(raw_name)
+    if not name then return false, "option name is not an identifier" end
+    local declared = draft._allowed.options[name]
+    if not declared then return false, "option " .. name .. " is not allowed by the host" end
+    if declared.kind ~= "text" then return false, "option " .. name .. " is an enum" end
+    local text = bounds.text(value, declared.max_bytes)
+    if value == nil or text == "" then
+        base.options[name] = nil
+    elseif text == nil then
+        return false, "option " .. name .. " must contain 1 to " .. tostring(declared.max_bytes) .. " printable bytes"
+    elseif text:find("%c") then
+        return false, "option " .. name .. " must contain 1 to " .. tostring(declared.max_bytes) .. " printable bytes"
+    else
+        base.options[name] = text
+    end
+    local checked, checked_error = protocol.profile(raw_profile(base))
+    if not checked then return false, checked_error or "option is invalid" end
+    local _, preference_error = preferences.apply(policy(draft._allowed), {
+        options = checked.options, mcp_tools = checked.mcp_tools, instructions = checked.instructions,
     })
     if preference_error then return false, preference_error end
     replace(draft, checked)
@@ -211,8 +214,10 @@ function M.cycle_option(draft: Draft, raw_name: unknown, raw_direction: number?)
     if not base then return false, base_error end
     local name = bounds.id(raw_name)
     if not name then return false, "option name is not an identifier" end
-    local values = draft._allowed.options[name]
-    if not values then return false, "option " .. name .. " is not allowed by the host" end
+    local declared = draft._allowed.options[name]
+    if not declared then return false, "option " .. name .. " is not allowed by the host" end
+    if declared.kind ~= "enum" then return false, "option " .. name .. " is a text value" end
+    local values = declared.values
     local direction_value = raw_direction or 1
     local direction = bounds.integer(direction_value)
     if not direction or direction == 0 then return false, "option direction must be a nonzero integer" end
@@ -264,10 +269,14 @@ function M.options(draft: Draft): ({OptionRow}?, string?)
     local base, base_error = current(draft)
     if not base then return nil, base_error end
     local rows: {OptionRow} = {}
-    for name, values in pairs(draft._allowed.options) do
-        local copied: {Scalar} = {}
-        for index, value in ipairs(values) do copied[index] = value end
-        rows[#rows + 1] = {name = name, values = copied, value = base.options[name]}
+    for name, declared in pairs(draft._allowed.options) do
+        if declared.kind == "enum" then
+            local copied: {Scalar} = {}
+            for index, value in ipairs(declared.values) do copied[index] = value end
+            rows[#rows + 1] = {name = name, kind = "enum", values = copied, max_bytes = nil, value = base.options[name]}
+        else
+            rows[#rows + 1] = {name = name, kind = "text", values = nil, max_bytes = declared.max_bytes, value = base.options[name]}
+        end
     end
     table.sort(rows, function(left: OptionRow, right: OptionRow): boolean return left.name < right.name end)
     return rows, nil

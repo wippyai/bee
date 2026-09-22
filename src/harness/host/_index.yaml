@@ -183,8 +183,8 @@ entries:
       - low
       - medium
       - high
+      config_profile: {kind: text, max_bytes: 64}
     profile_instructions: true
-    profile_config_profile: true
     prepare_options: {}
 - name: launch_policy_codex_batch
   kind: registry.entry
@@ -206,9 +206,8 @@ entries:
     allow_host_home: true
     gateway_tools: [thread_read, thread_wait, thread_message, overlay, delivery, docs, components]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
-    profile_options: {effort: [low, medium, high]}
     profile_instructions: true
-    profile_config_profile: true
+    profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
     prepare_options: {sandbox: read-only}
 - name: launch_policy_codex_named_batch
   kind: registry.entry
@@ -230,9 +229,8 @@ entries:
     allow_host_home: true
     gateway_tools: [thread_read, thread_wait, thread_message, overlay, delivery, docs, components]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
-    profile_options: {effort: [low, medium, high]}
     profile_instructions: true
-    profile_config_profile: true
+    profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
     prepare_options: {sandbox: read-only}
 - name: launch_policy_muse_window
   kind: registry.entry

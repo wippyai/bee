@@ -1,0 +1,6 @@
+organization: bee
+module: threads
+type: library
+version: 0.1.0-dev
+description: Durable agent threads, records, delivery, lifecycle and carrier state
+license: MIT

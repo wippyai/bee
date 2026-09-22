@@ -1,0 +1,9 @@
+organization: bee
+module: driver-codex
+type: library
+version: 0.1.0-dev
+description: Bee Codex CLI harness driver
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

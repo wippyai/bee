@@ -1,0 +1,9 @@
+organization: bee
+module: driver-grok
+type: library
+version: 0.1.0-dev
+description: Bee Grok CLI harness driver
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

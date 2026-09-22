@@ -1,17 +1,14 @@
 local bounds = require("bounds")
 local M = {}
 M.SCHEMA = "bee.agent-profile@1"
--- A Codex config profile name is a plain identifier: letters, digits, dash and
--- underscore, never empty, never a path. Codex rejects a leading dash and any
--- dot or separator in `--profile`, so this is the same admission Codex makes.
-M.MAX_CONFIG_PROFILE_BYTES = 64
-type Profile = {title: string, definition_ref: string, options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string, config_profile: string?}
+M.MAX_OPTIONS = 9
+type Profile = {title: string, definition_ref: string, options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string}
 type Request = {operation: string, workspace_id: string, profile_id: string, profile: Profile?, expected_revision: integer, idempotency_key: string, after_key: string, expected_cursor: integer?, limit: integer}
 
 function M.profile(value: unknown): (Profile?, string?)
     local object = bounds.object(value)
     if not object then return nil, "profile must be an object" end
-    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "config_profile"})
+    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions"})
     if extra then return nil, extra end
     local title = bounds.line(object.title, 80)
     if not title or title:match("^%s*$") then return nil, "title must contain 1 to 80 printable bytes" end
@@ -23,7 +20,7 @@ function M.profile(value: unknown): (Profile?, string?)
     local count = 0
     for key, item in pairs(raw_options) do
         count = count + 1
-        if count > 8 then return nil, "profile exceeds 8 options" end
+        if count > M.MAX_OPTIONS then return nil, "profile exceeds " .. tostring(M.MAX_OPTIONS) .. " options" end
         if #key > 80 or not key:match("^[a-z][a-z0-9_]*$") then return nil, "invalid option name" end
         if type(item) == "string" then
             if #item > 512 or item:find("%c") then return nil, "option text must contain at most 512 printable bytes" end
@@ -44,15 +41,7 @@ function M.profile(value: unknown): (Profile?, string?)
             return nil, "instructions contain unsupported control bytes"
         end
     end
-    local config_profile: string? = nil
-    if object.config_profile ~= nil then
-        local declared = bounds.text(object.config_profile, M.MAX_CONFIG_PROFILE_BYTES)
-        if not declared or not declared:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$") then
-            return nil, "config_profile must be a plain Codex profile name"
-        end
-        config_profile = declared
-    end
-    return {title = title, definition_ref = definition_ref, options = options, mcp_tools = tools, instructions = instructions, config_profile = config_profile}, nil
+    return {title = title, definition_ref = definition_ref, options = options, mcp_tools = tools, instructions = instructions}, nil
 end
 
 function M.decode(value: unknown): (Request?, string?)

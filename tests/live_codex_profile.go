@@ -108,7 +108,7 @@ local function main()
     local profile_id = "live-codex-profile-" .. tostring(uuid.v7())
     call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = profile_id,
         expected_revision = 0, idempotency_key = "save-" .. profile_id,
-        profile = {title = "Live Codex named profile", definition_ref = definition, config_profile = config_profile, mcp_tools = {"thread_read"}}})
+        profile = {title = "Live Codex named profile", definition_ref = definition, options = {config_profile = config_profile}, mcp_tools = {"thread_read"}}})
     local plan = call("bee.harness.launch:resolve", {definition_ref = definition, workspace_id = workspace_id,
         saved_profile_id = profile_id, saved_profile_revision = 1})
     reply("bee.harness.launch:setup", {workspace_id = workspace_id, definition_ref = definition,

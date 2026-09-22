@@ -15,7 +15,7 @@ local function define_tests()
             test.eq(value.options.verbose, false)
         end)
         test.it("refuses authority fields rather than silently ignoring them", function()
-            for _, field in ipairs({"executable", "credentials", "endpoint", "environment", "permissions", "owner_id", "instruction_builder", "provider_ref", "isolation"}) do
+            for _, field in ipairs({"executable", "credentials", "endpoint", "environment", "permissions", "owner_id", "instruction_builder", "provider_ref", "isolation", "config_profile"}) do
                 local raw: {[string]: unknown} = {title = "Custom", definition_ref = "bee:codex"}
                 raw[field] = "untrusted"
                 local value = protocol.profile(raw)

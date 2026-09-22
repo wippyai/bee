@@ -1028,7 +1028,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {sandbox: read-only}
-    profile_config_profile: true
+    profile_options: {config_profile: {kind: text, max_bytes: 64}}
 - name: claude_bin
   kind: env.variable
   meta: {type: test_support}

@@ -3,11 +3,41 @@ namespace: bee.driver.agy
 entries:
 - name: definition
   kind: ns.definition
-  module: driver_agy
+  module: driver-agy
   readme: file://README.md
   meta:
     title: Bee Antigravity CLI driver
     comment: Declarative Agy launch, stream-json normalization, and host-selected configuration delivery
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: host_environment
+  kind: ns.requirement
+  meta:
+    comment: Read-only host environment that supplies the selected Agy executable
+  default: bee.harness.host:environment
+  targets:
+  - entry: bee.driver.agy:executable
+    path: .storage
+- name: window_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned Agy window route
+  targets:
+  - entry: bee.driver.agy:default_window
+    path: .data.policy_ref
+- name: batch_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned Agy batch route
+  targets:
+  - entry: bee.driver.agy:research_batch
+    path: .data.policy_ref
 - name: executable
   kind: env.variable
   storage: bee.harness.host:environment
@@ -167,7 +197,7 @@ entries:
     command_names: [agy]
     binding_ref: bee.driver.agy:binding
     profile_id: window
-    policy_ref: bee:launch_policy_agy_window
+    policy_ref: ''
     default_mode: window
     allowed_overrides: []
     workdir_policy: {kind: declared_resource, resource_ref: project}
@@ -188,7 +218,7 @@ entries:
     command_names: []
     binding_ref: bee.driver.agy:binding
     profile_id: batch
-    policy_ref: bee:launch_policy_agy_batch
+    policy_ref: ''
     default_mode: batch
     allowed_overrides: [thread]
     workdir_policy: {kind: declared_resource, resource_ref: project}

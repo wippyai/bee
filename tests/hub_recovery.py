@@ -257,7 +257,7 @@ def prepare_fixture(folder):
     # copied into this disposable source tree; none of these files enter src/.
     shutil.copytree(ROOT / "tests/fixtures/hub_manage", folder / "src")
     shutil.copytree(ROOT / "src/hub", folder / "src/hub")
-    shutil.copy2(ROOT / "src/threads/records/bounds.lua", folder / "src/records/bounds.lua")
+    shutil.copy2(ROOT / "modules/bee-threads/src/records/bounds.lua", folder / "src/records/bounds.lua")
     for name in ("bounds.lua", "canonical.lua"):
         shutil.copy2(ROOT / "src/sync" / name, folder / "src/sync" / name)
     (folder / "src/persist").mkdir()

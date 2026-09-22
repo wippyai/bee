@@ -189,7 +189,7 @@ func setup(root string) error {
 	if err := os.MkdirAll(filepath.Join(root, "src", "records"), 0700); err != nil {
 		return fmt.Errorf("create records composition: %w", err)
 	}
-	if err := copyFile(filepath.Join(root, "src", "records", "bounds.lua"), "src/threads/records/bounds.lua"); err != nil {
+	if err := copyFile(filepath.Join(root, "src", "records", "bounds.lua"), "modules/bee-threads/src/records/bounds.lua"); err != nil {
 		return fmt.Errorf("copy records bounds: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "src", "records", "_index.yaml"), []byte(recordsIndex), 0600); err != nil {

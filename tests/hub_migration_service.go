@@ -57,7 +57,7 @@ func prepareFixture(root, repo string) error {
 	if err := os.CopyFS(filepath.Join(root, "src/hub"), os.DirFS(filepath.Join(repo, "src/hub"))); err != nil {
 		return fmt.Errorf("copy production Hub source: %w", err)
 	}
-	if err := copyServiceFile(filepath.Join(repo, "src/threads/records/bounds.lua"), filepath.Join(root, "src/records/bounds.lua")); err != nil {
+	if err := copyServiceFile(filepath.Join(repo, "modules/bee-threads/src/records/bounds.lua"), filepath.Join(root, "src/records/bounds.lua")); err != nil {
 		return err
 	}
 	for _, name := range []string{"bounds.lua", "canonical.lua"} {

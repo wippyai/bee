@@ -799,7 +799,7 @@ local function define_tests()
             changed_policy.executables = {codex = "/bin/true"}
             changed_policy.provider_ref = nil
             changed_policy.allow_host_home = true
-            changed_policy.profile_config_profile = true
+            changed_policy.profile_options = {config_profile = {kind = "text", max_bytes = 64}}
             changed_policy.gateway_tools = {"thread_read", "thread_wait"}
             changed_policy.gateway_hooks = {"SessionStart", "Stop"}
             changed_policy.prepare_options = {sandbox = "read-only"}
@@ -823,7 +823,7 @@ local function define_tests()
                 codex_policy.data = changed_policy
                 value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"),
-                    profile = {title = "DeepSeek Flash", definition_ref = DEFINITION, config_profile = "ds-flash", mcp_tools = {"thread_read"}}}))
+                    profile = {title = "DeepSeek Flash", definition_ref = DEFINITION, options = {config_profile = "ds-flash"}, mcp_tools = {"thread_read"}}}))
                 local selected = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
@@ -831,7 +831,7 @@ local function define_tests()
                     expected_plan_digest = selected.plan_digest})) :: admission.Admitted
                 local carrier_request = admitted.request :: {[string]: unknown}
                 local preferences = carrier_request.preferences :: {[string]: unknown}
-                test.eq(preferences.config_profile, "ds-flash")
+                test.eq((preferences.options :: {[string]: unknown}).config_profile, "ds-flash")
                 local io = carrier_io()
                 local planned, plan_error = machine.plan(io, admitted.request)
                 if not planned then error(tostring(plan_error)) end

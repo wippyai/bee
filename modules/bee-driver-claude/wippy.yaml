@@ -1,0 +1,9 @@
+organization: bee
+module: driver-claude
+type: library
+version: 0.1.0-dev
+description: Bee Claude Code harness driver
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

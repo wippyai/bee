@@ -26,7 +26,8 @@ Bee turns a terminal into a durable desktop. Shells, managed coding agents,
 standalone applications, approvals, and threads share one workspace while
 remaining separate processes with explicit authority. The executable embeds
 the desktop and its default apps, so an existing installation can start
-offline; Hub access is optional.
+offline; Hub access is optional. Run one Bee on its own, or join multiple Bees
+into a Hive to coordinate work across workstations, servers, and compute nodes.
 
 <p align="center">
   <a href="https://bee.wippy.ai/">
@@ -191,7 +192,7 @@ host launch facts and operating-system I/O events.
 | [`src/ui`](src/ui) | Shared appearance and application-facing UI helpers |
 | [`src/governance`](src/governance) | Overlay authoring, review, activation, and recovery |
 | [`src/hub`](src/hub) | Package inspection, planning, apply, migration, and receipts |
-| [`src/threads`](src/threads) | Durable records, subscriptions, and delivery |
+| [`modules/bee-threads/src`](modules/bee-threads/src) | Durable records, subscriptions, and delivery |
 | [`native`](native) | Generic application launch facts and OS I/O events |
 
 Start with the [agent guide](docs/development/agent-guide.md) and

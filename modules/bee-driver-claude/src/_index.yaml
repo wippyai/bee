@@ -8,6 +8,38 @@ entries:
   meta:
     title: Bee Claude driver
     comment: Optional harness binding; host activation and launch policies authorize its use
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: host_environment
+  kind: ns.requirement
+  meta:
+    comment: Read-only host environment that supplies the selected Claude executable and API key
+  default: bee.harness.host:environment
+  targets:
+  - entry: bee.driver.claude:executable
+    path: .storage
+  - entry: bee.driver.claude:api_key
+    path: .storage
+- name: window_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned Claude window route
+  targets:
+  - entry: bee.driver.claude:default_window
+    path: .data.policy_ref
+- name: batch_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned Claude batch route
+  targets:
+  - entry: bee.driver.claude:research_batch
+    path: .data.policy_ref
 - name: executable
   kind: env.variable
   storage: bee.harness.host:environment
@@ -217,7 +249,7 @@ entries:
     command_names: [claude]
     binding_ref: bee.driver.claude:binding
     profile_id: window
-    policy_ref: bee:launch_policy_claude_window
+    policy_ref: ''
     default_mode: window
     allowed_overrides: []
     workdir_policy: {kind: declared_resource, resource_ref: project}
@@ -237,7 +269,7 @@ entries:
     command_names: []
     binding_ref: bee.driver.claude:binding
     profile_id: batch
-    policy_ref: bee:launch_policy_claude_batch
+    policy_ref: ''
     default_mode: batch
     allowed_overrides: [thread]
     workdir_policy: {kind: declared_resource, resource_ref: project}

@@ -8,6 +8,10 @@ entries:
   meta:
     title: Bee driver contract
     comment: The driver contract, declarative envelopes, activated binding resolution and scoped configuration calls; placement owns execution
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
 - name: types
   kind: library.lua
   source: file://types.lua
@@ -28,7 +32,6 @@ entries:
   source: file://configuration.lua
   modules: [hash, funcs, security]
   imports:
-    address_value: bee.gateway:address_value
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
 - name: preferences

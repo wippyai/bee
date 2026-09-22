@@ -58,8 +58,7 @@ function M.load(workspace: string, choice: selection.Choice, duplicate: boolean)
         id, revision = fresh, 0
     end
     local draft, draft_error = editor.new(profile, {options = policy_data.profile_options or {},
-        mcp_tools = tools, instructions = policy_data.profile_instructions == true,
-        config_profile = policy_data.profile_config_profile == true})
+        mcp_tools = tools, instructions = policy_data.profile_instructions == true})
     if not draft then return nil, draft_error end
     local save_key, save_error = uuid.v7()
     local remove_key, remove_error = uuid.v7()

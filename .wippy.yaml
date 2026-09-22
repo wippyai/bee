@@ -8,3 +8,10 @@ shutdown:
 workspace:
   replacements:
     bee/persist: ./modules/bee-persist
+    bee/threads: ./modules/bee-threads
+    bee/driver: ./modules/bee-driver
+    bee/driver-agy: ./modules/bee-driver-agy
+    bee/driver-claude: ./modules/bee-driver-claude
+    bee/driver-codex: ./modules/bee-driver-codex
+    bee/driver-grok: ./modules/bee-driver-grok
+    bee/driver-muse: ./modules/bee-driver-muse

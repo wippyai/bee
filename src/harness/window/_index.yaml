@@ -137,4 +137,3 @@ entries:
     text: bee.application:text
     editor: bee.harness.window:profile_editor
     forms: bee.harness.window:profile_form
-    protocol: bee.harness.profiles:protocol

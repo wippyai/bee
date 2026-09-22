@@ -1,43 +1,59 @@
 version: '1.0'
-namespace: bee.driver.codex
+namespace: bee.driver.muse
 entries:
 - name: definition
   kind: ns.definition
-  module: driver-codex
+  module: driver-muse
   readme: file://README.md
   meta:
-    title: Bee Codex driver
+    title: Bee Muse driver
     comment: Optional harness binding; host activation and launch policies authorize its use
-- name: default_provider
-  kind: registry.entry
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: host_environment
+  kind: ns.requirement
   meta:
-    type: bee.codex_provider
-    comment: Built-in account login with Codex's default model; host policy selects this configuration
-  data:
-    schema_revision: bee.codex-provider@1
-    name: openai
-    authentication: chatgpt
+    comment: Read-only host environment that supplies the selected Muse executable
+  default: bee.harness.host:environment
+  targets:
+  - entry: bee.driver.muse:executable
+    path: .storage
+- name: window_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned Muse window route
+  targets:
+  - entry: bee.driver.muse:default_window
+    path: .data.policy_ref
+- name: batch_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned Muse batch route
+  targets:
+  - entry: bee.driver.muse:research_batch
+    path: .data.policy_ref
 - name: executable
   kind: env.variable
   storage: bee.harness.host:environment
-  variable: codex
+  variable: muse
   default: ''
   readonly: true
 - name: environment
   kind: env.storage.os
   lifecycle:
     auto_start: true
-- name: config_home
-  kind: env.variable
-  storage: bee.driver.codex:environment
-  variable: CODEX_HOME
-  default: ''
-  readonly: true
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   modules: [json]
   imports:
+    bounds: bee.threads.records:bounds
     events: bee.driver.kit:events
     types: bee.driver:types
 - name: configuration
@@ -47,6 +63,8 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    configure_protocol: bee.driver:configuration
+    quote: bee.driver.kit:quote
 - name: launch
   kind: library.lua
   source: file://launch.lua
@@ -58,53 +76,53 @@ entries:
   source: file://prepare_method.lua
   method: handle
   imports:
-    launch: bee.driver.codex:launch
+    launch: bee.driver.muse:launch
     types: bee.driver:types
 - name: configure
   kind: function.lua
   source: file://configure_method.lua
   method: handle
   imports:
-    configuration: bee.driver.codex:configuration
+    configuration: bee.driver.muse:configuration
     configure_protocol: bee.driver:configuration
 - name: dispatch
   kind: function.lua
   source: file://dispatch_method.lua
   method: handle
   imports:
-    launch: bee.driver.codex:launch
+    launch: bee.driver.muse:launch
     types: bee.driver:types
 - name: normalize
   kind: function.lua
   source: file://normalize_method.lua
   method: handle
   imports:
-    protocol: bee.driver.codex:protocol
+    protocol: bee.driver.muse:protocol
     bounds: bee.threads.records:bounds
 - name: binding
   kind: contract.binding
   contracts:
   - contract: bee.driver:driver
     methods:
-      prepare: bee.driver.codex:prepare
-      dispatch: bee.driver.codex:dispatch
-      normalize: bee.driver.codex:normalize
-      configure: bee.driver.codex:configure
+      prepare: bee.driver.muse:prepare
+      dispatch: bee.driver.muse:dispatch
+      normalize: bee.driver.muse:normalize
+      configure: bee.driver.muse:configure
   meta:
     type: harness.driver
-    driver_id: codex
-    profiles_ref: bee.driver.codex:profiles
+    driver_id: muse
+    profiles_ref: bee.driver.muse:profiles
 - name: profiles
   kind: registry.entry
   meta:
     type: harness.profile
-    driver_ref: bee.driver.codex:binding
+    driver_ref: bee.driver.muse:binding
   data:
     driver:
       schema_revision: bee.driver@1
       kind: harness
-      title: Codex CLI
-      implementation_version: 0.154.0
+      title: Muse CLI
+      implementation_version: 1.3.0
       default_profile: batch
       profiles:
       - id: batch
@@ -112,7 +130,6 @@ entries:
         hooks:
           transports:
           - command
-          - mcp_tool
           events:
           - SessionStart
           - UserPromptSubmit
@@ -121,70 +138,35 @@ entries:
           - PermissionRequest
           - Stop
           - SessionEnd
-          adapter_ref: bee.driver.codex:protocol
+          adapter_ref: bee.driver.muse:protocol
         inbound:
         - next_turn
         protocol: stream-json
-        protocol_revision: exec-json-1
+        protocol_revision: msp-exec-1
         answer_path:
           strategy: accumulate
-          adapter_ref: bee.driver.codex:protocol
+          adapter_ref: bee.driver.muse:protocol
         resume:
           strategy: per-process
           portable: false
         isolation_env:
-          variables:
-          - HOME
-          - CODEX_HOME
+          variables: [HOME]
           private_home: true
         exit_codes_trustworthy: false
         input_ready:
           strategy: protocol
-          adapter_ref: bee.driver.codex:protocol
+          adapter_ref: bee.driver.muse:protocol
           timeout_ms: 15000
         interrupt:
           methods:
           - signal_group
         mcp:
           client_transports:
-          - stdio
           - streamable_http
           initialize_timeout_ms: 30000
         sandbox:
           providers:
-          - codex-sandbox
-          required_placement_features: []
-      - id: named_batch
-        mode: batch
-        protocol: stream-json
-        protocol_revision: exec-json-1
-        answer_path:
-          strategy: accumulate
-          adapter_ref: bee.driver.codex:protocol
-        resume:
-          strategy: per-process
-          portable: false
-        isolation_env:
-          variables:
-          - HOME
-          - CODEX_HOME
-          private_home: false
-        exit_codes_trustworthy: false
-        input_ready:
-          strategy: protocol
-          adapter_ref: bee.driver.codex:protocol
-          timeout_ms: 15000
-        interrupt:
-          methods:
-          - signal_group
-        mcp:
-          client_transports:
-          - stdio
-          - streamable_http
-          initialize_timeout_ms: 30000
-        sandbox:
-          providers:
-          - codex-sandbox
+          - muse-sandbox
           required_placement_features: []
       - id: window
         mode: window
@@ -193,8 +175,8 @@ entries:
         answer_path: {strategy: none}
         resume: {strategy: none, portable: false}
         isolation_env:
-          variables: [HOME, CODEX_HOME]
-          private_home: false
+          variables: [HOME]
+          private_home: true
         exit_codes_trustworthy: false
         input_ready: {strategy: none}
         permission_exchange: {mode: none}
@@ -202,72 +184,49 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Codex window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned Muse window declaration; the host separately selects its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
-    launch_id: codex-window
-    title: Codex CLI
-    command_names: [codex]
-    binding_ref: bee.driver.codex:binding
+    launch_id: muse-window
+    title: Muse CLI
+    command_names: [muse]
+    binding_ref: bee.driver.muse:binding
     profile_id: window
-    policy_ref: bee:launch_policy_codex_window
+    policy_ref: ''
     default_mode: window
     allowed_overrides: []
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: []
+    credentials: [muse_login]
     presentation: {start_menu: true, fullscreen: true, reuse: never}
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Codex batch route for a host-selected coordinator and caller-owned shared thread
+    comment: Component-owned bounded Muse batch route for a host-selected coordinator and caller-owned shared thread
   data:
     schema_revision: bee.launch-definition@1
-    launch_id: codex-research-batch
-    title: Codex researcher
+    launch_id: muse-research-batch
+    title: Muse researcher
     command_names: []
-    binding_ref: bee.driver.codex:binding
+    binding_ref: bee.driver.muse:binding
     profile_id: batch
-    policy_ref: bee:launch_policy_codex_batch
+    policy_ref: ''
     default_mode: batch
     allowed_overrides: [thread]
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
     session_resource: session
-    credentials: [codex_login]
+    credentials: [muse_login]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
-
-- name: named_batch
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    comment: Component-owned structured Codex route that inherits the host Codex home, so a saved profile may name one Codex config profile and the answer lands on the caller's thread as a stream observation
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: codex-named-batch
-    title: Codex named profile
-    command_names: []
-    binding_ref: bee.driver.codex:binding
-    profile_id: named_batch
-    policy_ref: bee:launch_policy_codex_named_batch
-    default_mode: batch
-    allowed_overrides: [thread]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
-    session_resource: session
-    credentials: []
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-
 - name: credential_format
   kind: registry.entry
   meta:
     type: bee.credential_format
   data:
     schema_revision: bee.credential-format@1
-    environment_destination: OPENAI_API_KEY
     file:
-      path: .codex/auth.json
-      content_format: json
+      path: .config/muse/auth.json
+      content_format: opaque
       initialize: []

@@ -4,7 +4,6 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local funcs = require("funcs")
 local security = require("security")
-local address_value = require("address_value")
 local M = {}
 M.MAX_CONFIGURATION_BYTES = 8192
 M.MAX_INSTRUCTIONS_BYTES = 4096
@@ -66,8 +65,12 @@ local function decode_gateway(value: unknown): (GatewayInput?, string?)
     if not item then return nil, "configuration request.gateway must be an object" end
     local unexpected = bounds.fields(item, {"endpoint", "action_id", "tools", "hooks", "token_environment", "hook_token_environment", "hook_command"})
     if unexpected then return nil, "configuration request.gateway: " .. unexpected end
+    -- Gateway chooses and validates its listener before it constructs this
+    -- host-selected configuration input. Driver only carries the bounded
+    -- opaque endpoint to a provider's configuration renderer; it does not
+    -- own network-address policy or gain a Gateway dependency.
     local endpoint = bounds.text(item.endpoint, 512)
-    if not endpoint or not address_value.valid(endpoint, false) then return nil, "configuration request.gateway.endpoint must be a loopback or private IPv4 host and port" end
+    if not endpoint or endpoint == "" or endpoint:find("%c") then return nil, "configuration request.gateway.endpoint must be bounded text" end
     local action_id = bounds.id(item.action_id)
     if not action_id or action_id:find("[/?#%s]") then return nil, "configuration request.gateway.action_id is not a path segment" end
     local declared_tools = bounds.ids(item.tools, true)

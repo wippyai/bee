@@ -11,7 +11,7 @@ def main():
         folder = Path(directory)
         for name in ("node", "sync", "persist"):
             shutil.copytree(ROOT / "src" / name, folder / "src" / name)
-        shutil.copytree(ROOT / "src/threads/records", folder / "src/records")
+        shutil.copytree(ROOT / "modules/bee-threads/src/records", folder / "src/records")
         # Only the pure appearance value library; no desktop actor or terminal.
         appearance = folder / "src/appearance"
         appearance.mkdir()

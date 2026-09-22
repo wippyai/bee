@@ -1,0 +1,9 @@
+organization: bee
+module: driver
+type: library
+version: 0.1.0-dev
+description: Shared Bee managed-harness driver contract
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

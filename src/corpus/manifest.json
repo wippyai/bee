@@ -974,7 +974,7 @@
       "bytes": 2746,
       "id": "component/approvals",
       "sha256": "a1471368df2f4c9a1fa8f15cbd215025767954bac7dc39d18246947c63b80e79",
-      "source": "src/approvals",
+      "source": "src/approvals/README.md",
       "title": "Bee approvals",
       "topic": "component"
     },
@@ -982,7 +982,7 @@
       "bytes": 10662,
       "id": "component/credentials",
       "sha256": "dee1d0243150585b48a5ae937c37f4d7cb73b7cb0c2525d46fc71a12aaf2c319",
-      "source": "src/credentials",
+      "source": "src/credentials/README.md",
       "title": "bee.credentials",
       "topic": "component"
     },
@@ -990,7 +990,7 @@
       "bytes": 1254,
       "id": "component/docs",
       "sha256": "bc55da2a894b1da857ab42c039cdc10af0710fcc9e4c1d77c7930a2537898635",
-      "source": "src/docs",
+      "source": "src/docs/README.md",
       "title": "bee docs",
       "topic": "component"
     },
@@ -998,7 +998,7 @@
       "bytes": 14615,
       "id": "component/driver",
       "sha256": "2c780a3b1cc79780ce162962c0deb62b7f6c6098eb3303e62452ffc30c84f5fb",
-      "source": "src/driver",
+      "source": "src/driver/README.md",
       "title": "bee.driver",
       "topic": "component"
     },
@@ -1006,7 +1006,7 @@
       "bytes": 2443,
       "id": "component/driver:agy",
       "sha256": "46c66c7ace6c5cbfa832a7f285e5fdf61d9df098b7871470d8a8fb2185434070",
-      "source": "src/driver:agy",
+      "source": "src/driver/agy/README.md",
       "title": "bee.driver.agy",
       "topic": "component"
     },
@@ -1014,7 +1014,7 @@
       "bytes": 773,
       "id": "component/driver:claude",
       "sha256": "32e09deb754e38e9840bc12825b4142d013bd64e56cc6b20c5b5b8e7ffe7c7d8",
-      "source": "src/driver:claude",
+      "source": "src/driver/claude/README.md",
       "title": "bee.driver.claude",
       "topic": "component"
     },
@@ -1022,7 +1022,7 @@
       "bytes": 770,
       "id": "component/driver:codex",
       "sha256": "8746840d74bf14107236e171703036d61e9e5c108f17eaf5aa74fe7b51ea023f",
-      "source": "src/driver:codex",
+      "source": "src/driver/codex/README.md",
       "title": "bee.driver.codex",
       "topic": "component"
     },
@@ -1030,7 +1030,7 @@
       "bytes": 3106,
       "id": "component/driver:grok",
       "sha256": "eb312b56f8f07080bd2fa3c72a32e7beb1cde5f6730a019780192d626de950f6",
-      "source": "src/driver:grok",
+      "source": "src/driver/grok/README.md",
       "title": "bee.driver.grok",
       "topic": "component"
     },
@@ -1038,7 +1038,7 @@
       "bytes": 3013,
       "id": "component/driver:muse",
       "sha256": "0c73a7affb3a8818a8186335b9c0d4b068e7cd3e4cc4985caee04aec219b7a74",
-      "source": "src/driver:muse",
+      "source": "src/driver/muse/README.md",
       "title": "bee.driver.muse",
       "topic": "component"
     },
@@ -1046,7 +1046,7 @@
       "bytes": 2544,
       "id": "component/gateway",
       "sha256": "009b26d24934fc074b9e169804e7484df63ead571d2a589cadce248de3c606b0",
-      "source": "src/gateway",
+      "source": "src/gateway/README.md",
       "title": "bee.gateway",
       "topic": "component"
     },
@@ -1054,7 +1054,7 @@
       "bytes": 15048,
       "id": "component/governance",
       "sha256": "4bd458ad5976cfecd07fcee60dbe8c658a6ac4e9af2e0916bfde51785a6ce8a8",
-      "source": "src/governance",
+      "source": "src/governance/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
     },
@@ -1062,7 +1062,7 @@
       "bytes": 17421,
       "id": "component/harness",
       "sha256": "141edf858ff275fb50fba9576f10d8585a9c134b5545315b7b995d8d3a72f4d0",
-      "source": "src/harness",
+      "source": "src/harness/README.md",
       "title": "bee.harness",
       "topic": "component"
     },
@@ -1070,7 +1070,7 @@
       "bytes": 3889,
       "id": "component/hive",
       "sha256": "35ece7e7d76c3b6c85ecacaa5f6e63e012286fd99cbf03568a92360790acbd67",
-      "source": "src/hive",
+      "source": "src/hive/README.md",
       "title": "bee.hive",
       "topic": "component"
     },
@@ -1078,7 +1078,7 @@
       "bytes": 706,
       "id": "component/hive:host",
       "sha256": "6e88aa0e5211e0a0a3062325c1a224dd95c7910e637c1357415220a9eeb3a0fd",
-      "source": "src/hive:host",
+      "source": "src/hive/host/README.md",
       "title": "bee.hive.host",
       "topic": "component"
     },
@@ -1086,7 +1086,7 @@
       "bytes": 4814,
       "id": "component/hub",
       "sha256": "e745577722c1b664696eb47b32db811852d49f4f2f878f5b1a8c20f44fd970d0",
-      "source": "src/hub",
+      "source": "src/hub/README.md",
       "title": "Hub module management",
       "topic": "component"
     },
@@ -1094,7 +1094,7 @@
       "bytes": 1546,
       "id": "component/node",
       "sha256": "ab0ab528792c8c68ad90d228c6c6ea7715d2165b362defb65421bf7ada8313a6",
-      "source": "src/node",
+      "source": "src/node/README.md",
       "title": "Node descriptions",
       "topic": "component"
     },
@@ -1102,7 +1102,7 @@
       "bytes": 3590,
       "id": "component/placement",
       "sha256": "ff729d5dfdf799f3983e81f880d438e53954c22ba6742a9d67d8ead56d88f1eb",
-      "source": "src/placement",
+      "source": "src/placement/README.md",
       "title": "bee.placement",
       "topic": "component"
     },
@@ -1110,7 +1110,7 @@
       "bytes": 17698,
       "id": "component/placement:native",
       "sha256": "22f51f3e4509b587730d766001c3f6b1100c897987d663f5074944c94d253512",
-      "source": "src/placement:native",
+      "source": "src/placement/native/README.md",
       "title": "bee.placement.native",
       "topic": "component"
     },
@@ -1118,7 +1118,7 @@
       "bytes": 2182,
       "id": "component/resources",
       "sha256": "23c89ae9694d58cf5d0d1642d813f4ada479625bb05d4e4fba355952e257fe4a",
-      "source": "src/resources",
+      "source": "src/resources/README.md",
       "title": "bee.resources",
       "topic": "component"
     },
@@ -1126,24 +1126,24 @@
       "bytes": 2247,
       "id": "component/sync",
       "sha256": "fb587cd182e79afffc4aac386bd61ee4e9597dc2f4531c753e664fec3c41f321",
-      "source": "src/sync",
+      "source": "src/sync/README.md",
       "title": "Bee sync",
-      "topic": "component"
-    },
-    {
-      "bytes": 5067,
-      "id": "component/threads",
-      "sha256": "76b604ddc2a87f9ae36b3625c28b1c6a4721563ec1fc23b3ffef0448526eb889",
-      "source": "src/threads",
-      "title": "bee.threads",
       "topic": "component"
     },
     {
       "bytes": 830,
       "id": "component/persist",
       "sha256": "5642db79b763a445a62a255fe3702426bb6fd457f24d2f0d0c6b91a89b7f45f1",
-      "source": "modules/bee-persist/src",
+      "source": "modules/bee-persist/src/README.md",
       "title": "bee.persist",
+      "topic": "component"
+    },
+    {
+      "bytes": 5067,
+      "id": "component/threads",
+      "sha256": "76b604ddc2a87f9ae36b3625c28b1c6a4721563ec1fc23b3ffef0448526eb889",
+      "source": "modules/bee-threads/src/README.md",
+      "title": "bee.threads",
       "topic": "component"
     },
     {
@@ -1156,7 +1156,7 @@
     }
   ],
   "schema": "bee.docs-corpus@1",
-  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per source component. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
+  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
     "bytes": 1243708,
     "documents": 144

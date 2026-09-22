@@ -84,6 +84,32 @@ local function open(node: string): (sync.Store?, string?)
     return sync.open({resource = resource, owner = node, event_capacity = 128, receipt_capacity = 1024})
 end
 
+-- Historical read compatibility only. Older projections stored one named
+-- setting beside the shared options map. Translate that value in memory and
+-- leave the projection, event and revision untouched; all new writes pass
+-- through protocol.profile and therefore use the canonical shape.
+local function historical_profile(value: unknown): (Profile?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "stored profile is not an object" end
+    local legacy = object.config_profile
+    if legacy == nil then return protocol.profile(value) end
+    local options = bounds.object(object.options == nil and {} or object.options)
+    if not options then return nil, "stored profile options are not an object" end
+    local selected = options.config_profile
+    if selected ~= nil and (type(selected) ~= type(legacy) or selected ~= legacy) then
+        return nil, "stored profile has conflicting legacy and canonical option values"
+    end
+    local canonical: {[string]: unknown} = {}
+    for key, item in pairs(object) do
+        if key ~= "config_profile" then canonical[key] = item end
+    end
+    local copied_options: {[string]: unknown} = {}
+    for key, item in pairs(options) do copied_options[key] = item end
+    copied_options.config_profile = legacy
+    canonical.options = copied_options
+    return protocol.profile(canonical)
+end
+
 local function projection(value: unknown): (Stored?, Result?)
     local object = bounds.object(value)
     if not object then return nil, failure("INTERNAL", "profile projection is malformed") end
@@ -95,7 +121,7 @@ local function projection(value: unknown): (Stored?, Result?)
         if object.value ~= nil then return nil, failure("INTERNAL", "profile tombstone contains a value") end
         return {profile_id = profile_id, revision = revision, profile = nil, tombstone = true}, nil
     end
-    local profile, profile_error = protocol.profile(object.value)
+    local profile, profile_error = historical_profile(object.value)
     if not profile then return nil, failure("INTERNAL", profile_error or "stored profile is malformed") end
     return {profile_id = profile_id, revision = revision, profile = profile, tombstone = false}, nil
 end

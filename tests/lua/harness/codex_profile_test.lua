@@ -35,7 +35,7 @@ local function decoded(ref: string): policy.Policy
 end
 
 local function selected(): preferences.Value
-    local value, err = preferences.decode({options = {}, mcp_tools = {}, instructions = "", config_profile = PROFILE})
+    local value, err = preferences.decode({options = {config_profile = PROFILE}, mcp_tools = {}, instructions = ""})
     if not value then error(tostring(err)) end
     return value
 end
@@ -56,11 +56,11 @@ local function define_tests()
         test.it("offers the field only on Codex policies whose launch can see the inherited Codex home", function()
             -- The field is Codex-only and only meaningful where the named
             -- file can exist: a policy that inherits the host Codex home.
-            test.is_true(raw_policy(CODEX_WINDOW).profile_config_profile == true)
-            test.is_true(raw_policy(CODEX_NAMED_BATCH).profile_config_profile == true)
+            test.eq((raw_policy(CODEX_WINDOW).profile_options :: {[string]: unknown}).config_profile.kind, "text")
+            test.eq((raw_policy(CODEX_NAMED_BATCH).profile_options :: {[string]: unknown}).config_profile.kind, "text")
             -- A Claude policy must never advertise a Codex-only field.
-            test.is_nil(raw_policy(CLAUDE_WINDOW).profile_config_profile)
-            test.is_nil(raw_policy(CLAUDE_BATCH).profile_config_profile)
+            test.is_nil((raw_policy(CLAUDE_WINDOW).profile_options :: {[string]: unknown}).config_profile)
+            test.is_nil((raw_policy(CLAUDE_BATCH).profile_options :: {[string]: unknown}).config_profile)
             -- The Codex window profile inherits the host home, so the named
             -- file it declares can resolve there.
             local codex, codex_error = registry.get("bee.driver.codex:profiles")
@@ -88,6 +88,17 @@ local function define_tests()
             local claude, claude_error = claude_launch.decode({profile_id = "window", brief = "", permission_mode = "default", max_turns = 1, config_profile = PROFILE})
             test.is_nil(claude)
             test.is_true(tostring(claude_error):find("config_profile", 1, true) ~= nil)
+            -- Even if a host accidentally offers the generic text option on a
+            -- Claude policy, Claude's own decoder refuses the Codex-only
+            -- launch field before it can become a command-line argument.
+            local offered_policy: {[string]: unknown} = {}
+            for key, item in pairs(raw_policy(CLAUDE_WINDOW)) do offered_policy[key] = item end
+            offered_policy.profile_options = {config_profile = {kind = "text", max_bytes = 64}}
+            local offered, offered_error = preferences.apply(offered_policy, selected())
+            if not offered then error(tostring(offered_error)) end
+            local _, offered_launch_error = claude_launch.decode({profile_id = "window", brief = "", permission_mode = "default",
+                config_profile = (offered.prepare_options :: {[string]: unknown}).config_profile})
+            test.is_true(tostring(offered_launch_error):find("config_profile", 1, true) ~= nil)
         end)
 
         test.it("keeps the private-home Codex route refusing the named profile, as the design decided", function()
@@ -95,7 +106,7 @@ local function define_tests()
             -- the field, so the refusal names the profile the driver declared
             -- rather than a vague policy message. This is the documented
             -- private-home behavior: such a home never carries the named file.
-            test.is_true(raw_policy(CODEX_BATCH).profile_config_profile == true)
+            test.eq((raw_policy(CODEX_BATCH).profile_options :: {[string]: unknown}).config_profile.kind, "text")
             local codex, codex_error = registry.get("bee.driver.codex:profiles")
             if not codex then error(tostring(codex_error)) end
             local driver = (codex.data :: {[string]: unknown}).driver :: {[string]: unknown}

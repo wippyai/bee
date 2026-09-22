@@ -6,7 +6,7 @@ tool's guide operation and, until now, nothing else: it cannot look up how the
 runtime's process, tty, registry, sql, http or fs modules work, nor Bee's own
 contracts. This script snapshots the part of https://wippy.ai/llm an application
 author calls, Bee's own contracts from docs/, every component README under src/
-or a selected physical component source,
+and modules/,
 and one terminal toolkit reference, into an embeddable, read-only filesystem.
 
 Storage shape: `src/corpus/` is declared as one `fs.directory` entry
@@ -31,7 +31,7 @@ Selection rule, stated once and enforced by this table:
     boundary or the path a frozen artifact travels, including application,
     thread, placement, gateway, carrier, storage and UI contracts. Repository
     process and design pages are left out.
-  * component READMEs: one page per source component, the owner's own statement
+  * component READMEs: one page per Bee component, the owner's own statement
     of that package's contract.
   * toolkit: one generated reference to Bee's terminal toolkit (tty plus the
     appearance and application client libraries Bee's own apps use).
@@ -316,12 +316,20 @@ def toolkit_reference() -> bytes:
 
 def component_documents() -> "list[tuple[str, str, bytes, str]]":
     documents = []
-    for path in sorted((ROOT / "src").rglob("README.md")):
-        relative = path.relative_to(ROOT / "src")
-        identity = ":".join(relative.parts[:-1]) or "bee"
-        documents.append((f"component/{identity}", "component", path.read_bytes(), f"src/{identity}"))
-    persist = ROOT / "modules" / "bee-persist" / "src" / "README.md"
-    documents.append(("component/persist", "component", persist.read_bytes(), "modules/bee-persist/src"))
+    roots = [(ROOT / "src", None)]
+    roots.extend((path, path.parent.name.removeprefix("bee-"))
+                 for path in sorted((ROOT / "modules").glob("*/src")))
+    for root, module_name in roots:
+        for path in sorted(root.rglob("README.md")):
+            relative = path.relative_to(root)
+            if module_name is None:
+                identity = ":".join(relative.parts[:-1]) or "bee"
+            else:
+                identity = ":".join(module_name.split("-"))
+                if relative.parts[:-1]:
+                    identity += ":" + ":".join(relative.parts[:-1])
+            documents.append((f"component/{identity}", "component", path.read_bytes(),
+                              str(path.relative_to(ROOT))))
     return documents
 
 
@@ -424,7 +432,7 @@ SELECTION_RULE = (
     "pages that state an implemented callable boundary or the path a frozen artifact travels "
     "(application, threads, placement, gateway, carrier, storage, ui, harness, approvals, "
     "registry, platform), excluding repository process and design pages. "
-    "Component: one README per source component. Terminal toolkit: one generated page composed from "
+    "Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from "
     "src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest."
 )
 

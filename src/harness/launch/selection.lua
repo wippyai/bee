@@ -191,12 +191,8 @@ local function plan_digest(plan: unknown, definition_ref: string, profile_id: st
     return digest
 end
 
--- A saved profile's row detail names the driver and, when the host allows it,
--- the one Codex config profile the profile selects. It carries no other value.
-function M.row_detail(driver_title: string, config_profile: string?): string
-    local detail = "Saved profile · " .. driver_title
-    if config_profile then detail = detail .. " · Codex " .. config_profile end
-    return detail
+function M.row_detail(driver_title: string): string
+    return "Saved profile · " .. driver_title
 end
 local function saved_choice(pinned: catalog.Pinned, workspace: string, row: ProfileRow): (Choice?, string?)
     if row.tombstone or not row.profile then return nil, nil end
@@ -209,7 +205,7 @@ local function saved_choice(pinned: catalog.Pinned, workspace: string, row: Prof
     if definition.default_mode ~= "window" or not definition.presentation.start_menu then return nil, nil end
     local plan, refused = admission.resolve(definition_ref, "window", workspace, row.profile_id, row.revision)
     local digest = plan_digest(plan, definition_ref, row.profile_id, row.revision)
-    local detail = M.row_detail(definition.title, profile.config_profile)
+    local detail = M.row_detail(definition.title)
     if digest then
         return {definition_ref = definition_ref, title = profile.title, launch_id = definition.launch_id, plan_digest = digest,
             saved_profile_id = row.profile_id, saved_profile_revision = row.revision, summary = detail}, nil

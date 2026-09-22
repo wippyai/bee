@@ -1,0 +1,310 @@
+version: '1.0'
+namespace: bee.driver.codex
+entries:
+- name: definition
+  kind: ns.definition
+  module: driver-codex
+  readme: file://README.md
+  meta:
+    title: Bee Codex driver
+    comment: Optional harness binding; host activation and launch policies authorize its use
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: host_environment
+  kind: ns.requirement
+  meta:
+    comment: Read-only host environment that supplies the selected Codex executable
+  default: bee.harness.host:environment
+  targets:
+  - entry: bee.driver.codex:executable
+    path: .storage
+- name: window_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned Codex window route
+  targets:
+  - entry: bee.driver.codex:default_window
+    path: .data.policy_ref
+- name: batch_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned bounded Codex batch route
+  targets:
+  - entry: bee.driver.codex:research_batch
+    path: .data.policy_ref
+- name: named_batch_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned Codex named-profile batch route
+  targets:
+  - entry: bee.driver.codex:named_batch
+    path: .data.policy_ref
+- name: default_provider
+  kind: registry.entry
+  meta:
+    type: bee.codex_provider
+    comment: Built-in account login with Codex's default model; host policy selects this configuration
+  data:
+    schema_revision: bee.codex-provider@1
+    name: openai
+    authentication: chatgpt
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: codex
+  default: ''
+  readonly: true
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: config_home
+  kind: env.variable
+  storage: bee.driver.codex:environment
+  variable: CODEX_HOME
+  default: ''
+  readonly: true
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  modules: [json]
+  imports:
+    events: bee.driver.kit:events
+    types: bee.driver:types
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+- name: launch
+  kind: library.lua
+  source: file://launch.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.driver:types
+- name: prepare
+  kind: function.lua
+  source: file://prepare_method.lua
+  method: handle
+  imports:
+    launch: bee.driver.codex:launch
+    types: bee.driver:types
+- name: configure
+  kind: function.lua
+  source: file://configure_method.lua
+  method: handle
+  imports:
+    configuration: bee.driver.codex:configuration
+    configure_protocol: bee.driver:configuration
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch_method.lua
+  method: handle
+  imports:
+    launch: bee.driver.codex:launch
+    types: bee.driver:types
+- name: normalize
+  kind: function.lua
+  source: file://normalize_method.lua
+  method: handle
+  imports:
+    protocol: bee.driver.codex:protocol
+    bounds: bee.threads.records:bounds
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.codex:prepare
+      dispatch: bee.driver.codex:dispatch
+      normalize: bee.driver.codex:normalize
+      configure: bee.driver.codex:configure
+  meta:
+    type: harness.driver
+    driver_id: codex
+    profiles_ref: bee.driver.codex:profiles
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.codex:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Codex CLI
+      implementation_version: 0.154.0
+      default_profile: batch
+      profiles:
+      - id: batch
+        mode: batch
+        hooks:
+          transports:
+          - command
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PermissionRequest
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.codex:protocol
+        inbound:
+        - next_turn
+        protocol: stream-json
+        protocol_revision: exec-json-1
+        answer_path:
+          strategy: accumulate
+          adapter_ref: bee.driver.codex:protocol
+        resume:
+          strategy: per-process
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          - CODEX_HOME
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: protocol
+          adapter_ref: bee.driver.codex:protocol
+          timeout_ms: 15000
+        interrupt:
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          initialize_timeout_ms: 30000
+        sandbox:
+          providers:
+          - codex-sandbox
+          required_placement_features: []
+      - id: named_batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: exec-json-1
+        answer_path:
+          strategy: accumulate
+          adapter_ref: bee.driver.codex:protocol
+        resume:
+          strategy: per-process
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          - CODEX_HOME
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: protocol
+          adapter_ref: bee.driver.codex:protocol
+          timeout_ms: 15000
+        interrupt:
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          initialize_timeout_ms: 30000
+        sandbox:
+          providers:
+          - codex-sandbox
+          required_placement_features: []
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: native-window-1
+        answer_path: {strategy: none}
+        resume: {strategy: none, portable: false}
+        isolation_env:
+          variables: [HOME, CODEX_HOME]
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready: {strategy: none}
+        permission_exchange: {mode: none}
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Codex window declaration; the host separately selects its policy, activation, executable and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: codex-window
+    title: Codex CLI
+    command_names: [codex]
+    binding_ref: bee.driver.codex:binding
+    profile_id: window
+    policy_ref: ''
+    default_mode: window
+    allowed_overrides: []
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    session_resource: session
+    credentials: []
+    presentation: {start_menu: true, fullscreen: true, reuse: never}
+- name: research_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned bounded Codex batch route for a host-selected coordinator and caller-owned shared thread
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: codex-research-batch
+    title: Codex researcher
+    command_names: []
+    binding_ref: bee.driver.codex:binding
+    profile_id: batch
+    policy_ref: ''
+    default_mode: batch
+    allowed_overrides: [thread]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    session_resource: session
+    credentials: [codex_login]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+
+- name: named_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned structured Codex route that inherits the host Codex home, so a saved profile may name one Codex config profile and the answer lands on the caller's thread as a stream observation
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: codex-named-batch
+    title: Codex named profile
+    command_names: []
+    binding_ref: bee.driver.codex:binding
+    profile_id: named_batch
+    policy_ref: ''
+    default_mode: batch
+    allowed_overrides: [thread]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    session_resource: session
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+
+- name: credential_format
+  kind: registry.entry
+  meta:
+    type: bee.credential_format
+  data:
+    schema_revision: bee.credential-format@1
+    environment_destination: OPENAI_API_KEY
+    file:
+      path: .codex/auth.json
+      content_format: json
+      initialize: []

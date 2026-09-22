@@ -31,7 +31,7 @@ local function define_tests()
             local false_value = preferences.decode({options = {enabled = false}})
             if not false_value then error("false scalar was rejected") end
             test.is_false(false_value.options.enabled)
-            for _, field in ipairs({"profile_id", "brief", "resume_ref", "permission_exchange", "gateway_tools", "gateway_hooks", "unknown"}) do
+            for _, field in ipairs({"profile_id", "brief", "resume_ref", "permission_exchange", "gateway_tools", "gateway_hooks", "config_profile", "unknown"}) do
                 local raw: {[string]: unknown} = {}
                 raw[field] = true
                 test.is_nil(preferences.decode(raw))
@@ -51,18 +51,18 @@ local function define_tests()
             test.is_nil(preferences.apply(policy(), {mcp_tools = {"outside"}}))
         end)
 
-        test.it("carries a named Codex profile only when the policy enables it", function()
+        test.it("accepts enum shorthand and bounded text option descriptors", function()
             local host = policy()
-            test.is_nil(preferences.apply(host, {config_profile = "ds-flash"}))
-            host.profile_config_profile = true
-            local applied = apply({config_profile = "ds-flash"}, host)
-            test.eq(applied.prepare_options.config_profile, "ds-flash")
-            test.is_nil(preferences.decode({config_profile = "a/b"}))
-            test.is_nil(preferences.decode({config_profile = ""}))
-            test.is_nil(preferences.decode({config_profile = string.rep("x", 65)}))
-            test.is_nil(preferences.decode({config_profile = "a.b"}))
-            host.profile_config_profile = "yes"
-            test.is_nil(preferences.apply(host, {config_profile = "ds-flash"}))
+            host.profile_options.label = {kind = "text", max_bytes = 12}
+            local applied = apply({options = {label = "plain text"}}, host)
+            test.eq(applied.prepare_options.label, "plain text")
+            test.is_nil(preferences.apply(host, {options = {label = ""}}))
+            test.is_nil(preferences.apply(host, {options = {label = string.rep("x", 13)}}))
+            test.is_nil(preferences.apply(host, {options = {label = "bad\27value"}}))
+            test.is_nil(preferences.apply(host, {options = {label = true}}))
+            host.profile_options.mode = {kind = "enum", values = {"one", "two"}}
+            local enum = apply({options = {mode = "two"}}, host)
+            test.eq(enum.prepare_options.mode, "two")
         end)
 
         test.it("rejects malformed host option allowlists before applying a profile", function()
@@ -72,6 +72,10 @@ local function define_tests()
                 {model = {string.rep("x", 513)}},
                 {model = {{nested = true}}},
                 {profile_id = {"unsafe"}},
+                {model = {kind = "enum", values = {"small"}, extra = true}},
+                {model = {kind = "text", max_bytes = 513}},
+                {model = {kind = "text", max_bytes = 0}},
+                {model = {kind = "other", max_bytes = 8}},
             }) do
                 local host = policy()
                 host.profile_options = malformed

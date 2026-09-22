@@ -86,7 +86,7 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
     with tempfile.TemporaryDirectory(prefix="bee-fixtures-") as temporary:
         folder = Path(temporary)
         shutil.copytree(ROOT / "src", folder / "src")
-        shutil.copytree(ROOT / "modules" / "bee-persist", folder / "modules" / "bee-persist")
+        shutil.copytree(ROOT / "modules", folder / "modules")
         if presenter_probe:
             # Test-only incarnation marker proves an identical screen was drawn
             # by a fresh process. No diagnostics or test flags enter the core pack.

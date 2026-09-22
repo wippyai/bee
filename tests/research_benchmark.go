@@ -47,7 +47,7 @@ func check() error {
 	if err = os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join(repo, "tests/fixtures/performance_research"))); err != nil {
 		return err
 	}
-	source, err := os.ReadFile(filepath.Join(repo, "src/threads/records/canonical.lua"))
+	source, err := os.ReadFile(filepath.Join(repo, "modules/bee-threads/src/records/canonical.lua"))
 	if err != nil {
 		return err
 	}

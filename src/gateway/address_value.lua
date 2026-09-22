@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- Pure gateway address values, shared by admission and driver rendering.
+-- Pure gateway address values, shared by Gateway admission and listener checks.
 -- Parsing an address grants no permission to bind or reach it.
 local M = {}
 function M.valid(value: unknown, allow_zero: boolean): boolean

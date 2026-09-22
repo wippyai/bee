@@ -9,13 +9,13 @@ local function state(): view.State
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"})
 end
-local function codex_state(): view.State
-    local draft, err = editor.new({title = "Codex", definition_ref = "host:codex", options = {},
-        mcp_tools = {"thread_read"}, instructions = "Keep changes small.", config_profile = "ds-flash"},
-        {options = {}, mcp_tools = {"thread_read"}, instructions = true, config_profile = true})
+local function text_state(): view.State
+    local draft, err = editor.new({title = "Agent", definition_ref = "host:agent", options = {label = "ds-flash"},
+        mcp_tools = {"thread_read"}, instructions = "Keep changes small."},
+        {options = {label = {kind = "text", max_bytes = 64}}, mcp_tools = {"thread_read"}, instructions = true})
     if not draft then error(tostring(err)) end
-    return view.new({workspace_id = "workspace", profile_id = "codex", revision = 1, draft = draft,
-        save_key = "save-codex", remove_key = "remove-codex"})
+    return view.new({workspace_id = "workspace", profile_id = "agent", revision = 1, draft = draft,
+        save_key = "save-agent", remove_key = "remove-agent"})
 end
 local function define_tests()
     test.describe("Agent profile form input", function()
@@ -49,10 +49,10 @@ local function define_tests()
             test.eq(s.title, "Agent")
             test.eq(view.action(s, "save"), "save")
         end)
-        test.it("edits the named Codex profile from its own value", function()
-            local s = codex_state()
+        test.it("edits a bounded text option from its own value", function()
+            local s = text_state()
             local frame = view.draw(60, 16, appearance.defaults(), s)
-            -- Name, instructions, then the named Codex profile.
+            -- Name, instructions, then the text option.
             for _ = 1, 2 do
                 view.input(s, {type = "key", action = "press", key = "", key_type = "tab",
                     ctrl = false, alt = false, shift = false}, frame)
@@ -60,10 +60,10 @@ local function define_tests()
             view.input(s, {type = "key", action = "press", key = "", key_type = "backspace",
                 ctrl = false, alt = false, shift = false}, frame)
             view.input(s, {type = "paste", text = "h"}, frame)
-            test.eq(s.config_profile, "ds-flash")
+            test.eq(s.option_text.label, "ds-flash")
             test.eq(s.guidance, "Keep changes small.")
             test.eq(view.action(s, "save"), "save")
-            test.eq(s.form.draft.config_profile, "ds-flash")
+            test.eq(s.form.draft.options.label, "ds-flash")
             test.eq(s.form.draft.instructions, "Keep changes small.")
         end)
         test.it("keeps rows and mouse targets within compact terminal sizes", function()

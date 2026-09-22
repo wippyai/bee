@@ -5,14 +5,14 @@ local protocol = require("protocol")
 
 local function profile(): protocol.Profile
     local value, err = protocol.profile({title = "Original", definition_ref = "bee:codex",
-        options = {model = "small", enabled = false}, mcp_tools = {"thread_read"},
+        options = {model = "small", enabled = false, note = "initial"}, mcp_tools = {"thread_read"},
         instructions = "Keep changes small."})
     if not value then error(tostring(err)) end
     return value
 end
 
 local function allowed(): {[string]: unknown}
-    return {options = {model = {"small", "large"}, enabled = {false, true}},
+    return {options = {model = {"small", "large"}, enabled = {false, true}, note = {kind = "text", max_bytes = 16}},
         mcp_tools = {"thread_read", "thread_wait"}, instructions = true}
 end
 
@@ -39,6 +39,7 @@ local function define_tests()
             test.is_false(value.options.enabled)
             test.eq(value.mcp_tools[1], "thread_read")
             test.eq(value.instructions, "Keep changes small.")
+            test.eq(value.options.note, "initial")
             local result, err = editor.result(value)
             if not result then error(tostring(err)) end
             test.is_false(result.options.enabled)
@@ -84,6 +85,8 @@ local function define_tests()
             if not rows then error(tostring(rows_error)) end
             test.eq(rows[1].name, "enabled")
             test.is_true(rows[1].value == true)
+            test.eq(rows[3].name, "note")
+            test.eq(rows[3].kind, "text")
         end)
 
         test.it("starts an unset allowed option at the selected end", function()
@@ -124,32 +127,27 @@ local function define_tests()
             test.not_nil(err)
         end)
 
-        test.it("names a Codex config profile only where the host offers it", function()
-            -- The host does not enable the field: the editor must refuse it.
+        test.it("edits bounded text options without applying enum rules", function()
             local value = draft()
-            local changed, err = editor.set_config_profile(value, "ds-flash")
+            local changed, err = editor.set_text_option(value, "note", "updated")
+            if not changed then error(tostring(err)) end
+            test.eq(value.options.note, "updated")
+            changed = editor.cycle_option(value, "note")
             test.is_false(changed)
-            test.not_nil(err)
-            -- With the field enabled, a plain name round-trips and an empty
-            -- value clears it back to the base configuration.
-            local host = allowed()
-            host.config_profile = true
-            local enabled, open_error = editor.new(profile(), host)
-            if not enabled then error(tostring(open_error)) end
-            changed, err = editor.set_config_profile(enabled, "ds-flash")
-            if not changed then error(tostring(err)) end
-            test.eq(enabled.config_profile, "ds-flash")
-            local result, result_error = editor.result(enabled)
+            changed = editor.set_text_option(value, "note", "")
+            test.is_true(changed)
+            test.is_nil(value.options.note)
+            changed = editor.set_text_option(value, "note", "bad\27value")
+            test.is_false(changed)
+            changed = editor.set_text_option(value, "note", "restored")
+            test.is_true(changed)
+            changed = editor.set_text_option(value, "note", 17)
+            test.is_false(changed)
+            changed = editor.set_text_option(value, "note", string.rep("x", 17))
+            test.is_false(changed)
+            local result, result_error = editor.result(value)
             if not result then error(tostring(result_error)) end
-            test.eq(result.config_profile, "ds-flash")
-            changed, err = editor.set_config_profile(enabled, "")
-            if not changed then error(tostring(err)) end
-            test.is_nil(enabled.config_profile)
-            -- A path, a dot, a leading dash, a space and an overlong name are refused.
-            for _, name in ipairs({"/etc/passwd", "a.b", "-x", "a b", "a/b", string.rep("x", 65)}) do
-                changed = editor.set_config_profile(enabled, name)
-                test.is_false(changed)
-            end
+            test.eq(result.options.note, "restored")
         end)
     end)
 end

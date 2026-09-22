@@ -1,6 +1,20 @@
 directories:
-    modules: .wippy
-    src: ./src
+  modules: .wippy
+  src: ./src
 modules:
-    - name: bee/persist
-      version: 0.1.0-dev
+  - name: bee/persist
+    version: 0.1.0-dev
+  - name: bee/threads
+    version: 0.1.0-dev
+  - name: bee/driver
+    version: 0.1.0-dev
+  - name: bee/driver-agy
+    version: 0.1.0-dev
+  - name: bee/driver-claude
+    version: 0.1.0-dev
+  - name: bee/driver-codex
+    version: 0.1.0-dev
+  - name: bee/driver-grok
+    version: 0.1.0-dev
+  - name: bee/driver-muse
+    version: 0.1.0-dev

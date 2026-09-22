@@ -51,14 +51,14 @@ func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService
 	if err := os.MkdirAll(canonicalDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	canonical, err := os.ReadFile(filepath.Join(repository, "src/threads/records/canonical.lua"))
+	canonical, err := os.ReadFile(filepath.Join(repository, "modules/bee-threads/src/records/canonical.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(canonicalDir, "canonical.lua"), canonical, 0600); err != nil {
 		t.Fatal(err)
 	}
-	bounds, err := os.ReadFile(filepath.Join(repository, "src/threads/records/bounds.lua"))
+	bounds, err := os.ReadFile(filepath.Join(repository, "modules/bee-threads/src/records/bounds.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"values", "types"} {
-		body, err := os.ReadFile(filepath.Join(repository, "src/threads/records", name+".lua"))
+		body, err := os.ReadFile(filepath.Join(repository, "modules/bee-threads/src/records", name+".lua"))
 		if err != nil {
 			t.Fatal(err)
 		}

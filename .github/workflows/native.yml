@@ -40,6 +40,9 @@ jobs:
         pattern="^v$number\.$number\.$number(-$identifier(\.$identifier)*)?$"
         [[ "$GITHUB_REF_NAME" =~ $pattern ]]
         git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+    - name: Verify the native pin names the tagged tree
+      if: github.ref_type == 'tag'
+      run: make native-pin-check NATIVE_PIN_COMMIT="$GITHUB_SHA"
     - name: Select validation platforms
       id: targets
       env:

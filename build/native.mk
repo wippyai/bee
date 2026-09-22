@@ -5,9 +5,13 @@ BEE_BINARY ?= dist/bee
 BEE_BUILD_MANIFEST ?= wippy.build.json
 BEE_BUNDLE_MANIFEST ?= dist/bee.bundle.build.json
 AGY_MODEL ?= gemini-3.8-flash
-.PHONY: native-tools native-check native-bootstrap-check portable-pack-atomic-check native-pack portable-deployment-check standalone native-binary-check native-portable-check
+.PHONY: native-tools native-check native-bootstrap-check portable-pack-atomic-check native-pack portable-deployment-check standalone native-binary-check native-portable-check native-pin-check
+NATIVE_PIN_COMMIT ?= HEAD
 native-tools:
 	$(BUILDER) toolchain "$(BEE_BUILD_MANIFEST)" --output "$(NATIVE_WIPPY)"
+
+native-pin-check:
+	build/native-pin.sh "$(BEE_BUILD_MANIFEST)" "$(NATIVE_PIN_COMMIT)"
 
 native-bootstrap-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go test -race build/bootstrap.go build/bootstrap_test.go

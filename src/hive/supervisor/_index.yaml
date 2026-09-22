@@ -15,7 +15,7 @@ entries:
   imports:
     types: bee.hive:types
     peers: bee.hive.supervisor:peers
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
 - name: main
   kind: process.lua
   source: file://main.lua
@@ -32,7 +32,7 @@ entries:
     replica_admission: bee.hive.supervisor:replica_admission
     desktop_owner: bee.hive.desktop:owner
     desktop_protocol: bee.hive.desktop:protocol
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
 - name: advertise
   kind: function.lua
   source: file://advertise_method.lua
@@ -56,7 +56,7 @@ entries:
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
     bounds: bee.hive:bounds
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     principals: bee.hive.supervisor:principals
     canonical: bee.threads.records:canonical
 - name: admit_policy
@@ -70,7 +70,7 @@ entries:
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
     bounds: bee.hive:bounds
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     principals: bee.hive.supervisor:principals
     canonical: bee.threads.records:canonical
 - name: policy_identity_policy
@@ -92,7 +92,7 @@ entries:
   imports:
     types: bee.hive:types
     bounds: bee.hive:bounds
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     version: bee.sync:version
     dispatch: bee.hive.supervisor:dispatch
     canonical: bee.threads.records:canonical
@@ -117,7 +117,7 @@ entries:
     types: bee.hive:types
     bounds: bee.hive:bounds
     canonical: bee.threads.records:canonical
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     principals: bee.hive.supervisor:principals
 - name: invoke_check
   kind: function.lua
@@ -125,7 +125,7 @@ entries:
   method: handle
   modules: [security]
   imports:
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     bounds: bee.hive:bounds
 - name: thread_admission_policy
   kind: security.policy
@@ -161,7 +161,7 @@ entries:
   imports:
     canonical: bee.threads.records:canonical
     types: bee.hive:types
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     bounds: bee.hive:bounds
 
 - name: execute
@@ -172,5 +172,5 @@ entries:
   imports:
     canonical: bee.threads.records:canonical
     types: bee.hive:types
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     bounds: bee.hive:bounds

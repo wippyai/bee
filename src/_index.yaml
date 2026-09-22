@@ -9,9 +9,22 @@ entries:
   kind: ns.dependency
   component: bee/persist
   version: 0.1.0-dev
+- name: dependency_sync
+  kind: ns.dependency
+  component: bee/sync
+  version: 0.1.0-dev
+  parameters:
+  - name: target_sender
+    value: bee.hive.host:replica_sender
+  - name: target_exports
+    value: bee:sync_exports
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
+  version: 0.1.0-dev
+- name: dependency_hive
+  kind: ns.dependency
+  component: bee/hive
   version: 0.1.0-dev
 - name: dependency_application
   kind: ns.dependency
@@ -62,6 +75,33 @@ entries:
     workers: 4
   lifecycle:
     auto_start: true
+- name: sync_exports
+  kind: registry.entry
+  meta:
+    type: bee.sync.exports
+    comment: Host-selected immutable feeds exported to connected non-client Hive nodes
+  data:
+    exports:
+    - feed: governance.application_versions
+      content_kinds: [bee.governance-application-version@2]
+- name: sync_distribution_policy
+  kind: security.policy
+  meta:
+    comment: Generic immutable feed delivery to connected non-client Hive members
+  policy:
+    actions: [db.get, registry.get, system.read, hive.invoke, process.registry.lookup,
+      process.listen, process.unlisten, process.send]
+    resources: '*'
+    effect: allow
+- name: sync_distribution_service
+  kind: process.service
+  process: bee.sync.service:distribution_worker
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.sync.distribution}
+      policies: [bee:sync_distribution_policy]
 - name: terminal
   kind: terminal.host
   hide_logs: true

@@ -51,7 +51,7 @@ entries:
     - bee.approvals.binding:read
     - bee.approvals.binding:decide
     - bee.approvals.binding:withdraw
-    - bee.sync:replica_receive
+    - bee.sync.binding:replica_receive
     effect: allow
 - name: policy_admission_policy
   kind: security.policy
@@ -73,7 +73,7 @@ entries:
     - bee.approvals.binding:read
     - bee.approvals.binding:decide
     - bee.approvals.binding:withdraw
-    - bee.sync:replica_receive
+    - bee.sync.binding:replica_receive
     effect: allow
 - name: hive_replica_admission_policy
   kind: security.policy

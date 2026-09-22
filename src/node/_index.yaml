@@ -50,7 +50,7 @@ entries:
   imports:
     protocol: bee.node:protocol
     resources: bee.node:resources
-    sync: bee.sync:store
+    sync: bee.sync.persist:store
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical

@@ -61,7 +61,7 @@ func prepareFixture(root, repo string) error {
 		return err
 	}
 	for _, name := range []string{"bounds.lua", "canonical.lua"} {
-		if err := copyServiceFile(filepath.Join(repo, "src/sync", name), filepath.Join(root, "src/sync", name)); err != nil {
+		if err := copyServiceFile(filepath.Join(repo, "modules/bee-sync/src", name), filepath.Join(root, "src/sync", name)); err != nil {
 			return err
 		}
 	}

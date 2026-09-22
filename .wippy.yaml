@@ -8,8 +8,10 @@ shutdown:
 workspace:
   replacements:
     bee/persist: ./modules/bee-persist
+    bee/sync: ./modules/bee-sync
     bee/threads: ./modules/bee-threads
     bee/docs: ./modules/bee-docs
+    bee/hive: ./modules/bee-hive
     bee/approvals: ./modules/bee-approvals
     bee/application: ./modules/bee-application
     bee/resources: ./modules/bee-resources

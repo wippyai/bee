@@ -20,12 +20,12 @@ type Excerpt = {id: string, title: string, topic: string, section: string, line:
 -- Opens the corpus volume. The volume does not require release; the system
 -- detaches it with the filesystem. A missing volume is a build fault, not a
 -- caller fault, and is reported as such.
-function M.open(resource: string): (any?, string?)
+function M.open(resource: string): (fs.FS?, string?)
     local volume, volume_error = fs.get(resource)
     if not volume then return nil, "documentation corpus is unavailable: " .. tostring(volume_error) end
     return volume, nil
 end
-function M.manifest(volume: any): (Manifest?, string?)
+function M.manifest(volume: fs.FS): (Manifest?, string?)
     local read, read_error = volume:readfile("/" .. M.MANIFEST)
     if not read then return nil, "corpus manifest is unavailable: " .. tostring(read_error) end
     local payload = read :: string
@@ -116,7 +116,7 @@ end
 -- Case-insensitive literal search over the corpus, one bounded page of
 -- excerpts with the section each match sits under. The query is literal so a
 -- caller cannot smuggle a pattern; the topic filter is optional.
-function M.search(volume: any, manifest: Manifest, query: string, topic: string?,
+function M.search(volume: fs.FS, manifest: Manifest, query: string, topic: string?,
                   offset: integer, limit: integer): ({Excerpt}, integer, boolean, string?)
     local lowered = string.lower(query)
     local excerpts: {Excerpt} = {}
@@ -150,7 +150,7 @@ function M.search(volume: any, manifest: Manifest, query: string, topic: string?
 end
 -- Reads one bounded window of one document, optionally from a section's first
 -- heading. The reply names the exact byte window so a caller can continue.
-function M.read(volume: any, manifest: Manifest, id: string, section: string?,
+function M.read(volume: fs.FS, manifest: Manifest, id: string, section: string?,
                 offset: integer, limit: integer): ({content: string, offset: integer, next_offset: integer?, eof: boolean, section: string?, title: string?, topic: string?, source: string?, size: integer}?, string?)
     local document = M.find(manifest, id)
     if not document then return nil, "unknown document id" end

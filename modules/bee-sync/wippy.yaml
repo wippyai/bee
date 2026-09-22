@@ -1,0 +1,6 @@
+organization: bee
+module: sync
+type: library
+version: 0.1.0-dev
+description: Owner-local synchronized projections, receipts, and immutable replica storage for Bee
+license: MIT

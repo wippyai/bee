@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.sync.security
+entries:
+- name: replica_store_policy
+  kind: security.policy
+  policy:
+    actions: [db.get, registry.get]
+    resources: [bee.sync:db, bee.sync:database_ref]
+    effect: allow

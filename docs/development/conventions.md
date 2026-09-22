@@ -29,7 +29,7 @@ upstream licenses.
 | `modules/bee-docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/bee-resources/src` | Resource associations, scoped grants and owner-local ledger |
 | `modules/bee-placement/src` | Shared placement contract, launch values, transition rules and binding resolution |
-| `src/sync` | Owner-local projection, event and receipt ledger |
+| `modules/bee-sync/src` | Owner-local projection, event and receipt ledger |
 | `modules/bee-approvals/src` | Durable approval owner, inbox feed and outbox worker |
 | `src/placement/native` | Native launch attempts, executor boundary, evidence and cleanup state |
 | `src/node` | Authorized native-node descriptions and metadata |

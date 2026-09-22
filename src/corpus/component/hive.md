@@ -9,10 +9,11 @@ decides; a grant may open a direct session.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `catalog` (exposure and interfaces), `client`, and the supervisor host |
-| `bee.hive.host` | The host-owned default supervisor service composition |
+| `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `client`, and the supervisor-host provenance resource |
+| `bee.hive.registry` | `catalog`, the registry read model for operation exposure and interfaces |
 | `bee.hive.telemetry` | The first open operations: `presence`, `stats`, `catalog_list` |
-| `bee.hive.supervisor` | The supervisor: hello, admission, forwarding, guarded dispatch, epochs (Astra's lane) |
+| `bee.hive.supervisor` | The root-owned supervisor: hello, admission, forwarding, guarded dispatch, epochs (Astra's lane) |
+| `bee.hive.desktop` and `bee.hive.host` | Root-owned desktop integration and host-selected default service composition |
 
 ## Host composition
 
@@ -21,6 +22,11 @@ decides; a grant may open a direct session.
 `configured_nodes` list, so a fresh Bee can route local calls while remaining
 portable and offline. Its lifecycle actor and policies are selected by the
 host composition, not by an ordinary application.
+
+The `bee/hive` component supplies portable protocol values, the catalog read
+model, client, telemetry operations, and the protected supervisor-host resource.
+It does not select or start a supervisor, desktop, or host policy; the Bee root
+keeps those integration and authority decisions.
 
 An admitted host overlay may replace that service input with peer node IDs and
 an optional validated desktop configuration. TLS, seeds, ports and native

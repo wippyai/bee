@@ -194,6 +194,7 @@ host launch facts and operating-system I/O events.
 | [`src/hub`](src/hub) | Package inspection, planning, apply, migration, and receipts |
 | [`modules/bee-threads/src`](modules/bee-threads/src) | Durable records, subscriptions, and delivery |
 | [`modules/bee-docs/src`](modules/bee-docs/src) | Offline documentation protocol and read-only corpus facade |
+| [`modules/bee-sync/src`](modules/bee-sync/src) | Owner-local synchronized projections and immutable replica storage |
 | [`native`](native) | Generic application launch facts and OS I/O events |
 
 Start with the [agent guide](docs/development/agent-guide.md) and

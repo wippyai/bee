@@ -12,7 +12,7 @@ resize behavior and interaction shapes rather than its literal sample content.
 
 ## Semantic palette
 
-Use `bee.desktop:appearance`; never embed the Honey hex values in an app.
+Use `bee.application:appearance`; never embed the Honey hex values in an app.
 
 | Role | Honey | Use |
 |---|---:|---|

@@ -60,7 +60,7 @@ entries:
   source: file://catalog_list.lua
   method: handle
   imports:
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     types: bee.hive:types
     bounds: bee.hive:bounds
   meta:

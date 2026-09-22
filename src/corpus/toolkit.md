@@ -279,7 +279,7 @@ entries:
   modules: [tty, process, channel, uuid]
   imports:
     client: bee.application:client
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
     view: bee.stylebook:view
   meta:
     type: bee.application
@@ -297,7 +297,7 @@ entries:
   source: file://view.lua
   modules: [tty]
   imports:
-    appearance: bee.desktop:appearance
+    appearance: bee.application:appearance
 ```
 
 ### Process (`src/apps/stylebook/app.lua`)

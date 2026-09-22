@@ -12,8 +12,8 @@ local M = {}
 type Object = {[string]: unknown}
 type State = {state: string, received_bytes: integer, total_bytes: integer}
 type Options = {timeout: string?, source_cursor: integer}
-local OPERATION = "bee.sync:replica_receive"
-local SERVICE = "bee.sync"
+local OPERATION = "bee.sync.binding:replica_receive"
+local SERVICE = "bee.sync.binding"
 local MAX_CONTENT_BYTES = 16777216
 local CHUNK_BYTES = 32768
 
@@ -113,7 +113,7 @@ local function mutation(client: unknown, node: string, descriptor: version.Descr
     return failure("CONFLICT", "destination replica advanced unexpectedly")
 end
 
-function M.send(destination_node: string, raw_descriptor: unknown, content: string, options: Options): transaction.Result
+function M.send(destination_node: string, raw_descriptor: version.Descriptor, content: string, options: Options): transaction.Result
     local descriptor, descriptor_error = version.decode(raw_descriptor)
     if not descriptor then return failure("INVALID", descriptor_error or "invalid version descriptor") end
     if not bounds.id(destination_node) then return failure("INVALID", "destination node is invalid") end

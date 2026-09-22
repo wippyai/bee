@@ -11,14 +11,15 @@ local cursors = require("cursors")
 local sender = require("sender")
 local resources = require("resources")
 local transaction = require("transaction")
+local types = require("types")
 
 local M = {}
-local CONFIG = "bee.sync:exports"
 local PAGE = 16
 local MAX_PAGES = 4
 local MAX_EXPORTS = 64
 local MAX_KINDS = 32
 type Result = transaction.Result
+type Sender = types.Sender
 type Object = {[string]: unknown}
 type Export = {feed: string, content_kinds: {[string]: boolean}}
 
@@ -100,7 +101,8 @@ local function send_one(replica_store: replicas.Store, destination: string, expo
     if not stored.ok then return stored end
     local value = object(stored.value)
     if not value or type(value.content) ~= "string" then return failure("INTERNAL", "exported Sync bytes are unavailable") end
-    return sender.send(destination, descriptor, value.content, {source_cursor = source_cursor, timeout = "60s"})
+    local selected: Sender = sender
+    return selected.send(destination, descriptor, value.content, {source_cursor = source_cursor, timeout = "60s"})
 end
 
 local function snapshot(feed_store: sync.Store, replica_store: replicas.Store, destination: string,
@@ -179,7 +181,9 @@ function M.distribute(resource: string, source: string, destination: string, exp
 end
 
 local function load(): ({Export}?, string?)
-    local entry, entry_error = registry.get(CONFIG)
+    local config, config_error = resources.exports()
+    if not config then return nil, config_error or "Sync exports are unavailable" end
+    local entry, entry_error = registry.get(config)
     if not entry then return nil, tostring(entry_error or "Sync exports are unavailable") end
     return M.configuration(entry.data)
 end

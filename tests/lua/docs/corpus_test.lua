@@ -2,11 +2,12 @@
 -- complete and hashed, list names topics and ids, search returns the section a
 -- match sits under, read returns one bounded window and every bound holds.
 local test = require("test")
+local fs = require("fs")
 local corpus = require("corpus")
 local protocol = require("protocol")
 local resources = require("resources")
 local method = require("method")
-local function volume(): any
+local function volume(): fs.FS
     local resource, resource_error = resources.corpus()
     if not resource then error(tostring(resource_error)) end
     local opened, open_error = corpus.open(resource)

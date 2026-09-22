@@ -194,7 +194,7 @@ entries:
     test: wippy.test:test
     destination: bee.governance.binding:destination
     plan_store: bee.governance.persist:plan_store
-    replicas: bee.sync:replicas
+    replicas: bee.sync.persist:replicas
     delivery: bee.governance:delivery
     artifact: bee.governance:artifact
     preflight: bee.governance:preflight
@@ -223,8 +223,8 @@ entries:
     publisher: bee.governance.binding:publisher
     delivery: bee.governance:delivery
     artifact: bee.governance:artifact
-    replicas: bee.sync:replicas
-    sync: bee.sync:store
+    replicas: bee.sync.persist:replicas
+    sync: bee.sync.persist:store
     staging: bee.governance.persist:staging
 - name: plan_protocol_test
   kind: function.lua

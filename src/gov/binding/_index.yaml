@@ -14,7 +14,7 @@ entries:
     canonical: bee.sync:canonical
     approval: bee.governance.binding:approval
     plan_store: bee.governance.persist:plan_store
-    replicas: bee.sync:replicas
+    replicas: bee.sync.persist:replicas
     delivery: bee.governance:delivery
     preflight: bee.governance:preflight
     transaction: bee.persist:transaction
@@ -25,8 +25,8 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     delivery: bee.governance:delivery
-    replicas: bee.sync:replicas
-    sync: bee.sync:store
+    replicas: bee.sync.persist:replicas
+    sync: bee.sync.persist:store
     transaction: bee.persist:transaction
 - name: publication_service
   kind: library.lua
@@ -41,7 +41,7 @@ entries:
     staging: bee.governance.persist:staging
     activation_store: bee.governance.persist:activation_store
     resources: bee.governance.registry:staging_resources
-    sync_resources: bee.sync:resources
+    sync_resources: bee.sync.registry:resources
     transaction: bee.persist:transaction
 - name: activation_owner
   kind: library.lua
@@ -77,8 +77,8 @@ entries:
     canonical: bee.sync:canonical
     transaction: bee.persist:transaction
     resources: bee.governance.registry:staging_resources
-    sync_resources: bee.sync:resources
-    replicas: bee.sync:replicas
+    sync_resources: bee.sync.registry:resources
+    replicas: bee.sync.persist:replicas
     plan_store: bee.governance.persist:plan_store
     activation_store: bee.governance.persist:activation_store
     activation_owner: bee.governance.binding:activation_owner

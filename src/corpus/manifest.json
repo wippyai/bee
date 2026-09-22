@@ -835,17 +835,17 @@
       "topic": "terminal"
     },
     {
-      "bytes": 3170,
+      "bytes": 3272,
       "id": "docs/readme",
-      "sha256": "6f593f9ef319fff81078ac696f565b122a295d67bb0107b8eef4d41ac60a8b4a",
+      "sha256": "f2d426d39dd9f00c5816acfbcce36316c03bae359991404c799cb064f1ecf7f1",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
     },
     {
-      "bytes": 5311,
+      "bytes": 5330,
       "id": "docs/agent_guide",
-      "sha256": "f7b4d9473bb7cacdb3bc100548e9c1c73101451b9bc1ff58974e341647ca76a3",
+      "sha256": "bff41257f828c672fa96229a554d552d3b7f6d1e955525a1f4df12ad3d114738",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -891,9 +891,9 @@
       "topic": "application"
     },
     {
-      "bytes": 7096,
+      "bytes": 7100,
       "id": "docs/ui_brand_book",
-      "sha256": "9c11c6f2d6ff8e3749e8a952b37580a00ac55622046f4feacfdc1d3114067bec",
+      "sha256": "13780e7450391cb3fdc0a4b0797629ad71ba4ba74a844e471d6805336818a23e",
       "source": "docs/guides/ui.md",
       "title": "Bee UI brand book",
       "topic": "ui"
@@ -971,14 +971,6 @@
       "topic": "storage"
     },
     {
-      "bytes": 1254,
-      "id": "component/docs",
-      "sha256": "bc55da2a894b1da857ab42c039cdc10af0710fcc9e4c1d77c7930a2537898635",
-      "source": "src/docs/README.md",
-      "title": "bee docs",
-      "topic": "component"
-    },
-    {
       "bytes": 2544,
       "id": "component/gateway",
       "sha256": "009b26d24934fc074b9e169804e7484df63ead571d2a589cadce248de3c606b0",
@@ -1000,14 +992,6 @@
       "sha256": "141edf858ff275fb50fba9576f10d8585a9c134b5545315b7b995d8d3a72f4d0",
       "source": "src/harness/README.md",
       "title": "bee.harness",
-      "topic": "component"
-    },
-    {
-      "bytes": 3889,
-      "id": "component/hive",
-      "sha256": "35ece7e7d76c3b6c85ecacaa5f6e63e012286fd99cbf03568a92360790acbd67",
-      "source": "src/hive/README.md",
-      "title": "bee.hive",
       "topic": "component"
     },
     {
@@ -1051,6 +1035,14 @@
       "topic": "component"
     },
     {
+      "bytes": 1156,
+      "id": "component/application",
+      "sha256": "c3ca9029234040ce670483e6c83e21790feb1a61ea8a3b2d768496c1b3bb6606",
+      "source": "modules/bee-application/src/README.md",
+      "title": "bee.application",
+      "topic": "component"
+    },
+    {
       "bytes": 3238,
       "id": "component/approvals",
       "sha256": "3d1eb61bb8691733e8c298ce678869e060d10de44b72b3fce8c77beb402e7d9b",
@@ -1064,6 +1056,14 @@
       "sha256": "99955508425840768d8a3de904de85f285fc0ba5941d9eefd2688d9ddc9c4454",
       "source": "modules/bee-credentials/src/README.md",
       "title": "bee.credentials",
+      "topic": "component"
+    },
+    {
+      "bytes": 1334,
+      "id": "component/docs",
+      "sha256": "b2205eadbc4070bd063c1965b2d11a8c67079d2812e1b322464d0f2828ab3b0d",
+      "source": "modules/bee-docs/src/README.md",
+      "title": "bee docs",
       "topic": "component"
     },
     {
@@ -1115,6 +1115,14 @@
       "topic": "component"
     },
     {
+      "bytes": 4316,
+      "id": "component/hive",
+      "sha256": "bb8458e4601133e48ecd6c149a78ec53989f44c75c8e654e804ced38015085a5",
+      "source": "modules/bee-hive/src/README.md",
+      "title": "bee.hive",
+      "topic": "component"
+    },
+    {
       "bytes": 830,
       "id": "component/persist",
       "sha256": "5642db79b763a445a62a255fe3702426bb6fd457f24d2f0d0c6b91a89b7f45f1",
@@ -1147,18 +1155,18 @@
       "topic": "component"
     },
     {
-      "bytes": 23170,
+      "bytes": 23178,
       "id": "toolkit",
-      "sha256": "0e5cd8d5683226e170ebdbfef3d7114d42963a17719e7336158ecc550be41b9d",
-      "source": "generated: src/ui, src/apps, src/gov/traits/guide.lua",
+      "sha256": "edd19fb26e706e920174147ac1cc33d57b1660bcebdcfeafb5ac7dd0fd3713c3",
+      "source": "generated: modules/bee-application/src, src/apps, src/gov/traits/guide.lua",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
     }
   ],
   "schema": "bee.docs-corpus@1",
-  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from src/ui, src/apps and src/gov/traits/guide.lua and digest-checked with the rest.",
+  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/bee-application/src, src/apps and src/gov/traits/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 1225334,
-    "documents": 144
+    "bytes": 1227130,
+    "documents": 145
   }
 }

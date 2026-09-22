@@ -31,7 +31,7 @@ entries:
     types: bee.hive:types
     admission: bee.hive.supervisor:admission
     peers: bee.hive.supervisor:peers
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
 - name: dispatch_probe
   kind: function.lua
   source: file://dispatch_probe.lua
@@ -85,7 +85,7 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     version: bee.sync:version
 - name: local_name_policy
   kind: security.policy

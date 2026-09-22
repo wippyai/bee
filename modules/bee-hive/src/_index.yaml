@@ -7,7 +7,11 @@ entries:
   readme: file://README.md
   meta:
     title: Bee hive
-    comment: Cross-node protocol envelopes, exposure catalog, interfaces and the one client every caller uses
+    comment: Cross-node protocol envelopes, client, open telemetry and registry catalog; host composition and policy selection remain in Bee
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
@@ -18,14 +22,6 @@ entries:
   imports:
     canonical: bee.threads.records:canonical
     bounds: bee.hive:bounds
-- name: catalog
-  kind: library.lua
-  source: file://catalog.lua
-  modules: [registry, security, json, hash]
-  imports:
-    canonical: bee.threads.records:canonical
-    bounds: bee.hive:bounds
-    types: bee.hive:types
 - name: client
   kind: library.lua
   source: file://client.lua

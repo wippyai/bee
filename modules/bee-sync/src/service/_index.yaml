@@ -1,0 +1,22 @@
+version: '1.0'
+namespace: bee.sync.service
+entries:
+- name: distributor
+  kind: library.lua
+  source: file://distributor.lua
+  modules: [registry, system]
+  imports:
+    bounds: bee.sync:bounds
+    version: bee.sync:version
+    sync: bee.sync.persist:store
+    replicas: bee.sync.persist:replicas
+    cursors: bee.sync.persist:distribution_store
+    resources: bee.sync.registry:resources
+    transaction: bee.persist:transaction
+    types: bee.sync:types
+- name: distribution_worker
+  kind: process.lua
+  source: file://distribution_worker.lua
+  method: main
+  modules: [process, channel, time]
+  imports: {distributor: bee.sync.service:distributor}

@@ -130,7 +130,7 @@ local function must(result: {[string]: unknown}, operation: string): {[string]: 
     return object(result.value)
 end
 local function configure_exports()
-    local entry = assert(registry.get("bee.sync:exports"))
+    local entry = assert(registry.get("bee:sync_exports"))
     entry.data = {exports = {
         {feed = delivery.FEED, content_kinds = {delivery.CONTENT_KIND}},
         {feed = "replica-feed", content_kinds = {"test.binary"}},

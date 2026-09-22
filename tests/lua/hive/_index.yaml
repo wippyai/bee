@@ -69,7 +69,7 @@ entries:
   method: handle
   meta: {type: test_support}
   imports:
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
 - name: fake_supervisor
   kind: process.lua
   source: file://fake_supervisor.lua
@@ -103,7 +103,7 @@ entries:
   modules: [funcs, security]
   imports:
     test: wippy.test:test
-    catalog: bee.hive:catalog
+    catalog: bee.hive.registry:catalog
     types: bee.hive:types
 - name: client_test
   kind: function.lua

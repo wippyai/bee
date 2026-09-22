@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.hive.registry
+entries:
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [registry, security, json, hash]
+  imports:
+    canonical: bee.threads.records:canonical
+    bounds: bee.hive:bounds
+    types: bee.hive:types

@@ -20,16 +20,41 @@ const savedProfilesRuntime = ".wippy/bin/bee-wippy"
 const savedProfilesRootIndex = `version: '1.0'
 namespace: bee
 entries:
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: 0.1.0-dev
+- name: dependency_sync
+  kind: ns.dependency
+  component: bee/sync
+  version: 0.1.0-dev
+  parameters:
+  - name: target_sender
+    value: bee:sync_sender
+  - name: target_exports
+    value: bee:sync_exports
 - name: workers
   kind: process.host
   host: {workers: 2, max_processes: 8}
   lifecycle: {auto_start: true}
+- name: sync_exports
+  kind: registry.entry
+  data: {exports: []}
+- name: sync_sender
+  kind: library.lua
+  source: file://sync_sender.lua
+  imports: {transaction: bee.persist:transaction, version: bee.sync:version}
 - name: profile_store_policy
   kind: security.policy
   policy:
     actions: [db.get, registry.get, system.read]
     resources: [bee.node:db, bee.harness.profiles:database_ref, node]
     effect: allow
+`
+
+const savedProfilesSyncSender = `local transaction = require("transaction")
+local version = require("version")
+return {send = function(_: string, _: version.Descriptor, _: string, _: {timeout: string?, source_cursor: integer}): transaction.Result return transaction.failure("UNAVAILABLE", "saved profile fixture does not distribute replicas") end}
 `
 
 const savedProfilesNodeRootIndex = `version: '1.0'
@@ -139,50 +164,6 @@ func savedProfilesWrite(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0600)
 }
 
-// Stage the production sync entry definitions needed by bee.sync:store and
-// its import closure. The saved-profile fixture calls sync.open with its
-// explicitly selected resource, so transport, replica and distribution
-// entries are outside this acceptance's host composition.
-func savedProfilesStageSyncStoreIndex(source, destination string) error {
-	contents, err := os.ReadFile(source)
-	if err != nil {
-		return err
-	}
-	needed := map[string]struct{}{
-		"bounds": {}, "canonical": {}, "migrations": {},
-		"database": {}, "resources": {}, "store": {},
-	}
-	found := make(map[string]bool, len(needed))
-	var header, selected, entry []string
-	entryName := ""
-	flush := func() {
-		if _, ok := needed[entryName]; ok {
-			selected = append(selected, entry...)
-			found[entryName] = true
-		}
-	}
-	for _, line := range strings.SplitAfter(string(contents), "\n") {
-		if strings.HasPrefix(line, "- name: ") {
-			flush()
-			entryName = strings.TrimSpace(strings.TrimPrefix(line, "- name: "))
-			entry = []string{line}
-			continue
-		}
-		if entryName == "" {
-			header = append(header, line)
-		} else {
-			entry = append(entry, line)
-		}
-	}
-	flush()
-	for name := range needed {
-		if !found[name] {
-			return fmt.Errorf("production sync index is missing store dependency %q", name)
-		}
-	}
-	return savedProfilesWrite(destination, strings.Join(append(header, selected...), ""))
-}
-
 func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesWrite(filepath.Join(root, "src", "_index.yaml"), savedProfilesRootIndex); err != nil {
 		return err
@@ -196,16 +177,14 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesCopyTree(filepath.Join(root, "src", "harness", "profiles"), filepath.Join(source, "src", "harness", "profiles")); err != nil {
 		return fmt.Errorf("copy profiles source: %w", err)
 	}
-	syncSource := filepath.Join(source, "src", "sync")
-	syncDestination := filepath.Join(root, "src", "sync")
-	if err := savedProfilesCopyTree(syncDestination, syncSource); err != nil {
-		return fmt.Errorf("copy sync source: %w", err)
+	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "bee-sync"), filepath.Join(source, "modules", "bee-sync")); err != nil {
+		return fmt.Errorf("copy sync module: %w", err)
 	}
-	if err := savedProfilesStageSyncStoreIndex(filepath.Join(syncSource, "_index.yaml"), filepath.Join(syncDestination, "_index.yaml")); err != nil {
-		return fmt.Errorf("stage sync store import closure: %w", err)
+	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "bee-persist"), filepath.Join(source, "modules", "bee-persist")); err != nil {
+		return fmt.Errorf("copy persist module: %w", err)
 	}
-	if err := savedProfilesCopyTree(filepath.Join(root, "src", "persist"), filepath.Join(source, "modules", "bee-persist", "src")); err != nil {
-		return fmt.Errorf("copy persist source: %w", err)
+	if err := savedProfilesWrite(filepath.Join(root, "src", "sync_sender.lua"), savedProfilesSyncSender); err != nil {
+		return err
 	}
 	if err := savedProfilesCopyFile(filepath.Join(root, "src", "node", "README.md"), filepath.Join(source, "src", "node", "README.md")); err != nil {
 		return fmt.Errorf("copy node README: %w", err)
@@ -213,10 +192,10 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesWrite(filepath.Join(root, "src", "node", "_index.yaml"), savedProfilesNodeRootIndex); err != nil {
 		return err
 	}
-	if err := savedProfilesCopyFile(filepath.Join(root, "src", "threads", "records", "bounds.lua"), filepath.Join(source, "src", "threads", "records", "bounds.lua")); err != nil {
+	if err := savedProfilesCopyFile(filepath.Join(root, "src", "threads", "records", "bounds.lua"), filepath.Join(source, "modules", "bee-threads", "src", "records", "bounds.lua")); err != nil {
 		return err
 	}
-	if err := savedProfilesCopyFile(filepath.Join(root, "src", "threads", "records", "canonical.lua"), filepath.Join(source, "src", "threads", "records", "canonical.lua")); err != nil {
+	if err := savedProfilesCopyFile(filepath.Join(root, "src", "threads", "records", "canonical.lua"), filepath.Join(source, "modules", "bee-threads", "src", "records", "canonical.lua")); err != nil {
 		return err
 	}
 	if err := savedProfilesWrite(filepath.Join(root, "src", "threads", "records", "_index.yaml"), savedProfilesRecordsIndex); err != nil {
@@ -225,10 +204,13 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesCopyTree(filepath.Join(root, "src", "saved_profiles_probe"), filepath.Join(source, "tests", "fixtures", "saved_profiles")); err != nil {
 		return fmt.Errorf("copy saved profile fixture: %w", err)
 	}
-	if err := savedProfilesWrite(filepath.Join(root, "wippy.lock"), "directories:\n  modules: .wippy\n  src: ./src\n"); err != nil {
+	if err := savedProfilesWrite(filepath.Join(root, "wippy.lock"), "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n"); err != nil {
 		return err
 	}
-	return savedProfilesWrite(filepath.Join(root, ".wippy.yaml"), "version: '1.0'\nshutdown:\n  timeout: 2s\n")
+	if err := savedProfilesWrite(filepath.Join(root, ".wippy.yaml"), "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/persist: ./modules/bee-persist\n    bee/sync: ./modules/bee-sync\n"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func savedProfilesBoot(runtime, root, phase, expectedNode string) (string, error) {

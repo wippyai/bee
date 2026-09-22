@@ -9,7 +9,15 @@
     {
       "module": "bee/sync",
       "root": "bee.sync",
-      "namespaces": ["bee.sync"]
+      "namespaces": [
+        "bee.sync",
+        "bee.sync.binding",
+        "bee.sync.migrations",
+        "bee.sync.persist",
+        "bee.sync.registry",
+        "bee.sync.security",
+        "bee.sync.service"
+      ]
     },
     {
       "module": "bee/approvals",
@@ -34,6 +42,9 @@
         "bee.desktop",
         "bee.overlays",
         "bee.hive_manager",
+        "bee.hive.desktop",
+        "bee.hive.host",
+        "bee.hive.supervisor",
         "bee.host",
         "bee.inbox",
         "bee.interaction",
@@ -157,9 +168,7 @@
       "root": "bee.hive",
       "namespaces": [
         "bee.hive",
-        "bee.hive.desktop",
-        "bee.hive.host",
-        "bee.hive.supervisor",
+        "bee.hive.registry",
         "bee.hive.telemetry"
       ]
     },

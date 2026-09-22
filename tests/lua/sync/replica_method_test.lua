@@ -53,7 +53,7 @@ local function caller(actor: string, source_policy: string?): funcs.Executor
 end
 
 local function call(executor: funcs.Executor, request: Object): Result
-    local reply, err = executor:call("bee.sync:replica_receive", request)
+    local reply, err = executor:call("bee.sync.binding:replica_receive", request)
     if err then error("replica_receive: " .. tostring(err)) end
     return reply :: Result
 end

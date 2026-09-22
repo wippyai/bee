@@ -258,8 +258,34 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		if err := os.RemoveAll(filepath.Join(project, "src", "hive", "host")); err != nil {
 			t.Fatal(err)
 		}
+		// The fixture owns supervisor startup, but it still composes the real
+		// Hive sender that the root Sync dependency injects into distribution.
+		hostDir := filepath.Join(project, "src", "hive", "host")
+		if err := os.MkdirAll(hostDir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		sender, err := os.ReadFile(filepath.Join(repository, "src", "hive", "host", "replica_sender.lua"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(hostDir, "replica_sender.lua"), sender, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(hostDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.hive.host\nentries:\n- name: replica_sender\n  kind: library.lua\n  source: file://replica_sender.lua\n  modules: [hash, base64]\n  imports:\n    hive: bee.hive:client\n    version: bee.sync:version\n    transaction: bee.persist:transaction\n    bounds: bee.sync:bounds\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{
+			"approvals", "credentials", "driver", "driver-agy", "driver-claude",
+			"driver-codex", "driver-grok", "driver-muse", "persist", "placement",
+			"resources", "sync", "threads",
+		} {
+			module := "bee-" + name
+			if err := os.CopyFS(filepath.Join(project, "modules", module), os.DirFS(filepath.Join(repository, "modules", module))); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if i == 0 && agent == nil {
-			governancePath := filepath.Join(project, "src", "governance", "_index.yaml")
+			governancePath := filepath.Join(project, "src", "gov", "_index.yaml")
 			governance, err := os.ReadFile(governancePath)
 			if err != nil {
 				t.Fatal(err)
@@ -299,7 +325,15 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 				t.Fatal(err)
 			}
 		}
-		if err := os.WriteFile(filepath.Join(project, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
+		lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
+		for _, name := range []string{
+			"approvals", "credentials", "driver", "driver-agy", "driver-claude",
+			"driver-codex", "driver-grok", "driver-muse", "persist", "placement",
+			"resources", "sync", "threads",
+		} {
+			lock += "- name: bee/" + name + "\n  version: 0.1.0-dev\n"
+		}
+		if err := os.WriteFile(filepath.Join(project, "wippy.lock"), []byte(lock), 0600); err != nil {
 			t.Fatal(err)
 		}
 		projectConfig, err := os.ReadFile(filepath.Join(repository, "wippy.yaml"))
@@ -324,6 +358,15 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 				"internode":  map[string]any{"bind_addr": "127.0.0.1", "bind_port": 0, "auto_port": true, "identity_key": keys[i], "trusted_peer_keys": trusted, "tls": transportTLS},
 			},
 		}
+		replacements := map[string]string{}
+		for _, name := range []string{
+			"approvals", "credentials", "driver", "driver-agy", "driver-claude",
+			"driver-codex", "driver-grok", "driver-muse", "persist", "placement",
+			"resources", "sync", "threads",
+		} {
+			replacements["bee/"+name] = "./modules/bee-" + name
+		}
+		config["workspace"] = map[string]any{"replacements": replacements}
 		data, err := json.Marshal(config)
 		if err != nil {
 			t.Fatal(err)

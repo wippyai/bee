@@ -13,10 +13,10 @@ import bundle
 class BundleTest(unittest.TestCase):
     def setUp(self):
         self.plan = {"schema": 1, "modules": [
-            {"module": "bee/bee", "root": "bee", "namespaces": ["bee", "bee.hive_manager"]},
-            {"module": "bee/hive", "root": "bee.hive", "namespaces": ["bee.hive", "bee.hive.telemetry"]}]}
-        self.entries = {"bee:definition": "ns.definition", "bee.hive_manager:app": "process.lua",
-                        "bee.hive:definition": "ns.definition", "bee.hive.telemetry:read": "function.lua"}
+            {"module": "bee/bee", "root": "bee", "namespaces": ["bee", "bee.hive_manager", "bee.hive.supervisor"]},
+            {"module": "bee/hive", "root": "bee.hive", "namespaces": ["bee.hive", "bee.hive.registry", "bee.hive.telemetry"]}]}
+        self.entries = {"bee:definition": "ns.definition", "bee.hive_manager:app": "process.lua", "bee.hive.supervisor:main": "process.lua",
+                        "bee.hive:definition": "ns.definition", "bee.hive.registry:catalog": "library.lua", "bee.hive.telemetry:read": "function.lua"}
 
     def test_every_database_requires_a_state_binding(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -48,6 +48,8 @@ class BundleTest(unittest.TestCase):
     def test_exact_ownership_not_prefix_guess(self):
         owners = bundle.ownership(self.plan, self.entries)
         self.assertEqual(owners["bee.hive_manager"], "bee/bee")
+        self.assertEqual(owners["bee.hive.supervisor"], "bee/bee")
+        self.assertEqual(owners["bee.hive.registry"], "bee/hive")
         self.assertEqual(owners["bee.hive.telemetry"], "bee/hive")
 
     def test_build_metadata_uses_manifest_pins_and_staged_source_revision(self):

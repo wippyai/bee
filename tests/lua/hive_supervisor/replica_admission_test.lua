@@ -11,7 +11,7 @@ local catalog = require("catalog")
 local version = require("version")
 
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
-local OPERATION = "bee.sync:replica_receive"
+local OPERATION = "bee.sync.binding:replica_receive"
 
 local function request(source: string, descriptor_owner: string): types.Request
     local local_node = assert(system.node.id())
@@ -29,7 +29,7 @@ local function request(source: string, descriptor_owner: string): types.Request
         idempotency_key = assert(uuid.v7()),
         caller_node_id = source,
         caller_incarnation = "replica-admission-incarnation",
-        owner_ref = {node_id = local_node, service_id = "bee.sync"},
+        owner_ref = {node_id = local_node, service_id = "bee.sync.binding"},
         operation_ref = OPERATION,
         operation_revision = operation.revision,
         input = input,

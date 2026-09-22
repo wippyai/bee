@@ -12,7 +12,7 @@ local dispatch = require("dispatch")
 local canonical = require("canonical")
 
 local M = {}
-M.OPERATION = "bee.sync:replica_receive"
+M.OPERATION = "bee.sync.binding:replica_receive"
 
 local function denied(id: string, code: string, message: string): types.Reply
     return types.reply_error(id, types.fault(code, message))
@@ -33,7 +33,7 @@ function M.handle(value: unknown): types.Reply
     if request.operation_ref ~= M.OPERATION then return denied(id, "DENIED", "operation is not node replica receipt") end
     local node, node_error = system.node.id()
     if node_error or not node or request.owner_ref.node_id ~= node
-        or request.owner_ref.service_id ~= "bee.sync" or request.owner_ref.resource_ref ~= nil then
+        or request.owner_ref.service_id ~= "bee.sync.binding" or request.owner_ref.resource_ref ~= nil then
         return denied(id, "DENIED", "replica owner is not this node")
     end
     if request.principal_ref.issuer ~= request.caller_node_id then

@@ -25,7 +25,7 @@ entries:
   kind: security.policy
   policy:
     actions: [hive.expose.policy]
-    resources: [bee.sync:replica_receive]
+    resources: [bee.sync.binding:replica_receive]
     effect: allow
 - name: hive_thread_exposure_policy
   kind: security.policy
@@ -43,7 +43,7 @@ entries:
   kind: security.policy
   policy:
     actions: [registry.get, system.read, funcs.call]
-    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check, bee.sync:replica_receive]
+    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check, bee.sync.binding:replica_receive]
     effect: allow
 - name: hive_dispatch_policy
   kind: security.policy

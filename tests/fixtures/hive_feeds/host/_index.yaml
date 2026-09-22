@@ -1,6 +1,18 @@
 version: '1.0'
 namespace: bee
 entries:
+- name: dependency_sync
+  kind: ns.dependency
+  component: bee/sync
+  version: 0.1.0-dev
+  parameters:
+  - name: target_sender
+    value: bee.hive.host:replica_sender
+  - name: target_exports
+    value: bee:sync_exports
+- name: sync_exports
+  kind: registry.entry
+  data: {exports: []}
 - name: hive_feed_exposure_policy
   kind: security.policy
   policy:

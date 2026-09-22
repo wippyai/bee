@@ -259,7 +259,7 @@ def prepare_fixture(folder):
     shutil.copytree(ROOT / "src/hub", folder / "src/hub")
     shutil.copy2(ROOT / "modules/bee-threads/src/records/bounds.lua", folder / "src/records/bounds.lua")
     for name in ("bounds.lua", "canonical.lua"):
-        shutil.copy2(ROOT / "src/sync" / name, folder / "src/sync" / name)
+        shutil.copy2(ROOT / "modules/bee-sync/src" / name, folder / "src/sync" / name)
     (folder / "src/persist").mkdir()
     shutil.copy2(ROOT / "modules/bee-persist/src/transaction.lua", folder / "src/persist/transaction.lua")
     (folder / "src/persist/_index.yaml").write_text(

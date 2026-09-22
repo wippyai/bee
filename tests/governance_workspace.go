@@ -207,7 +207,7 @@ func copyFile(destination, source string) error {
 func setup(root string) error {
 	for _, source := range []struct{ name, path string }{
 		{name: "gov", path: "src/gov"},
-		{name: "sync", path: "src/sync"},
+		{name: "sync", path: "modules/bee-sync/src"},
 		{name: "persist", path: "modules/bee-persist/src"},
 	} {
 		if err := copyTree(filepath.Join(root, "src", source.name), source.path); err != nil {

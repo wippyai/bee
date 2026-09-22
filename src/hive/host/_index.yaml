@@ -1,6 +1,15 @@
 version: '1.0'
 namespace: bee.hive.host
 entries:
+- name: replica_sender
+  kind: library.lua
+  source: file://replica_sender.lua
+  modules: [hash, base64]
+  imports:
+    hive: bee.hive:client
+    version: bee.sync:version
+    transaction: bee.persist:transaction
+    bounds: bee.sync:bounds
 - name: supervisor_service
   kind: process.service
   process: bee.hive.supervisor:main

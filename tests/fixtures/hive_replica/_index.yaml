@@ -43,7 +43,7 @@ entries:
   kind: security.policy
   policy:
     actions: [hive.invoke, funcs.call, bee.sync.replica.receive]
-    resources: [bee.sync:replica_receive, node-1]
+    resources: [bee.sync.binding:replica_receive, node-1]
     effect: allow
 - name: inspect_policy
   kind: security.policy
@@ -60,8 +60,8 @@ entries:
   imports:
     types: bee.hive:types
     client: bee.hive:client
-    sender: bee.sync:replica_sender
-    replicas: bee.sync:replicas
+    sender: bee.hive.host:replica_sender
+    replicas: bee.sync.persist:replicas
     version: bee.sync:version
     canonical: bee.sync:canonical
     artifact: bee.governance:artifact
@@ -71,7 +71,7 @@ entries:
     materializer: bee.governance.registry:materializer
     overlay_resolver: bee.governance.registry:overlay_resolver
     publisher: bee.governance.binding:publisher
-    sync: bee.sync:store
+    sync: bee.sync.persist:store
   meta:
     command:
       name: hive-replica-probe

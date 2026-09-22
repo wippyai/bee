@@ -1,0 +1,9 @@
+organization: bee
+module: hive
+type: library
+version: 0.1.0-dev
+description: Portable Hive protocol values, registry exposure catalog, client, and open telemetry operations for Bee
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

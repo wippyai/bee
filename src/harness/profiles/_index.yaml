@@ -23,7 +23,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    sync: bee.sync:store
+    sync: bee.sync.persist:store
     transaction: bee.persist:transaction
     protocol: bee.harness.profiles:protocol
 - name: contract

@@ -9,8 +9,9 @@ from workspace import ROOT, RUNTIME, database_environment
 def main():
     with tempfile.TemporaryDirectory(prefix="bee-sync-module-") as directory:
         folder = Path(directory)
-        for name in ("node", "sync", "persist"):
-            shutil.copytree(ROOT / "src" / name, folder / "src" / name)
+        shutil.copytree(ROOT / "src" / "node", folder / "src" / "node")
+        shutil.copytree(ROOT / "modules" / "bee-sync", folder / "modules" / "bee-sync")
+        shutil.copytree(ROOT / "modules" / "bee-persist", folder / "modules" / "bee-persist")
         shutil.copytree(ROOT / "modules/bee-threads/src/records", folder / "src/records")
         # Only the pure appearance value library; no desktop actor or terminal.
         appearance = folder / "src/appearance"
@@ -18,8 +19,57 @@ def main():
         shutil.copy2(ROOT / "modules/bee-application/src/appearance.lua", appearance / "appearance.lua")
         (appearance / "_index.yaml").write_text("version: '1.0'\nnamespace: bee.application\nentries:\n- name: appearance\n  kind: library.lua\n  source: file://appearance.lua\n")
         shutil.copytree(ROOT / "tests/fixtures/sync_module", folder / "src/probe")
-        (folder / "wippy.lock").write_text("directories:\n  modules: .wippy\n  src: ./src\n")
-        (folder / ".wippy.yaml").write_text("version: '1.0'\nshutdown:\n  timeout: 2s\n")
+        (folder / "src" / "_index.yaml").write_text("""version: '1.0'
+namespace: bee
+entries:
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: 0.1.0-dev
+- name: dependency_sync
+  kind: ns.dependency
+  component: bee/sync
+  version: 0.1.0-dev
+  parameters:
+  - name: target_sender
+    value: bee.sync_probe:sender
+  - name: target_exports
+    value: bee:sync_exports
+- name: sync_exports
+  kind: registry.entry
+  data: {exports: []}
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+""")
+        (folder / "src" / "probe" / "sender.lua").write_text("""local transaction = require(\"transaction\")
+local version = require(\"version\")
+return {send = function(_: string, _: version.Descriptor, _: string, _: {timeout: string?, source_cursor: integer}): transaction.Result return transaction.failure(\"UNAVAILABLE\", \"probe sender is not used\") end}
+""")
+        probe_index = folder / "src" / "probe" / "_index.yaml"
+        probe_index.write_text(probe_index.read_text() + """\n- name: sender
+  kind: library.lua
+  source: file://sender.lua
+  imports: {transaction: bee.persist:transaction, version: bee.sync:version}
+""")
+        (folder / "wippy.lock").write_text("""directories:
+  modules: .wippy
+  src: ./src
+modules:
+  - name: bee/persist
+    version: 0.1.0-dev
+  - name: bee/sync
+    version: 0.1.0-dev
+""")
+        (folder / ".wippy.yaml").write_text("""version: '1.0'
+shutdown:
+  timeout: 2s
+workspace:
+  replacements:
+    bee/persist: ./modules/bee-persist
+    bee/sync: ./modules/bee-sync
+""")
         environment = database_environment(folder)
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=folder, check=True, timeout=60, env=environment)
         for phase in ("FIRST", "SECOND"):

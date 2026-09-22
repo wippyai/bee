@@ -1,0 +1,46 @@
+version: '1.0'
+namespace: bee.sync.binding
+entries:
+- name: replica_receive
+  kind: function.lua
+  source: file://replica_method.lua
+  method: handle
+  modules: [security]
+  security:
+    policies: [bee.sync.security:replica_store_policy]
+  imports:
+    protocol: bee.sync:replica_protocol
+    replicas: bee.sync.persist:replicas
+    resources: bee.sync.registry:resources
+    transaction: bee.persist:transaction
+  meta:
+    hive: policy
+    hive_operation:
+      revision: '1'
+      title: Receive immutable synchronized content
+      limits: {max_input_bytes: 65536, max_output_bytes: 4096}
+      input:
+        type: object
+        additionalProperties: false
+        required: [action]
+        properties:
+          action: {type: string, enum: [begin, put, finish, status]}
+          source_owner: {type: string, minLength: 1, maxLength: 160}
+          feed: {type: string, minLength: 1, maxLength: 160}
+          version_key: {type: string, minLength: 1, maxLength: 160}
+          descriptor_digest: {type: string, minLength: 64, maxLength: 64}
+          descriptor: {type: object}
+          source_cursor: {type: integer, minimum: 0}
+          offset: {type: integer, minimum: 0, maximum: 16777216}
+          content_base64: {type: string, maxLength: 43692}
+      output:
+        type: object
+        additionalProperties: false
+        required: [ok, replayed]
+        properties:
+          ok: {type: boolean}
+          code: {type: string}
+          message: {type: string}
+          value: {}
+          replayed: {type: boolean}
+          commit: {type: boolean}

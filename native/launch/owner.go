@@ -36,15 +36,21 @@ const (
 	desktopApplication = "bee.harness.window:app"
 )
 
-// ownerComponents returns the boot components the owner route adds. The
-// enrollment publisher is owner-only: it writes the host-owned Hive enrollment
-// entry from the trusted directory the client writes into.
-func ownerComponents(state string) ([]boot.Component, error) {
+// ownerComponents returns the boot components the owner route adds: the
+// rendezvous publisher that advertises this owner's live join address for local
+// clients, and the enrollment publisher that mirrors the trusted client
+// directory into the supervisor's admission entry.
+func ownerComponents(state, execution string) ([]boot.Component, error) {
+	directory := filepath.Join(state, rendezvous.DirectoryName)
+	rendezvousPublisher, err := rendezvous.Publisher(directory, execution)
+	if err != nil {
+		return nil, err
+	}
 	publisher, err := enrollmentPublisher(state)
 	if err != nil {
 		return nil, err
 	}
-	return []boot.Component{publisher}, nil
+	return []boot.Component{rendezvousPublisher, publisher}, nil
 }
 
 // prepareOwner opens the owner's retained host resources. The runtime calls it
@@ -75,7 +81,7 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 	}
 	public := private.Public().(ed25519.PublicKey)
 
-	execution, err := randomExecution()
+	execution, err := ensureExecution(directory)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -112,11 +118,18 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 		"local_clients": true,
 		"application":   desktopApplication,
 	}
+	// The supervisor service takes one input object. The override key is
+	// namespace:entry:path, and the entry declares its input as a list, so the
+	// whole input is replaced with the owner-selected configuration.
+	supervisorInput := []any{map[string]any{
+		"configured_nodes": []any{},
+		"desktop":          desktop,
+	}}
 	config := boot.NewConfig(
 		boot.WithSection("relay", map[string]any{"node_name": node}),
 		boot.WithSection("cluster", cluster),
 		boot.WithSection("override", map[string]any{
-			"bee.hive.host:supervisor_service.input.desktop": desktop,
+			"bee.hive.host:supervisor_service:input": supervisorInput,
 		}),
 	)
 	return config, func() error { return nil }, nil
@@ -128,6 +141,38 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 func ownerExpiry() string {
 	now := time.Now().UTC().Add(30 * 24 * time.Hour)
 	return now.Format("2006-01-02T15:04:05.000Z")
+}
+
+// executionName persists the owner execution identity so the rendezvous
+// descriptor the publisher writes names the same execution the desktop bridge
+// admits, across the planning and boot phases of one owner run.
+const executionName = "execution"
+
+// ensureExecution returns this owner's execution identity, creating it once.
+func ensureExecution(directory string) (string, error) {
+	if err := privatefile.EnsurePrivateDir(directory); err != nil {
+		return "", err
+	}
+	path := filepath.Join(directory, executionName)
+	if data, err := os.ReadFile(path); err == nil {
+		value := strings.TrimSpace(string(data))
+		if len(value) == 32 {
+			if _, decodeErr := hex.DecodeString(value); decodeErr == nil {
+				return value, nil
+			}
+		}
+		return "", errors.New("owner execution identity is invalid")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	value, err := randomExecution()
+	if err != nil {
+		return "", err
+	}
+	if err := writeOwnerFile(path, []byte(value+"\n")); err != nil {
+		return "", err
+	}
+	return value, nil
 }
 
 // ownerDirectory is the owner-owned state subdirectory, and ownerTrustedDirectory

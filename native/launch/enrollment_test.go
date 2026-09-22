@@ -7,12 +7,18 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/registry"
+	bootpkg "github.com/wippyai/runtime/boot"
+	"go.uber.org/zap"
 )
 
 // recordingRegistry captures the change sets the publisher applies.
@@ -127,20 +133,76 @@ func TestEnrollmentPublisherIgnoresMalformedTrustedFiles(t *testing.T) {
 	}
 }
 
-func TestOwnerComponentsIncludeEnrollmentPublisher(t *testing.T) {
+// flakyRegistry fails the first applies, modelling the runtime applying the
+// deployment's entries after boot components start.
+type flakyRegistry struct {
+	enrollmentRegistryStub
+	failures atomic.Int64
+	applied  atomic.Int64
+}
+
+func (r *flakyRegistry) Apply(_ context.Context, changes registry.ChangeSet) (registry.Version, error) {
+	if r.failures.Load() > 0 {
+		r.failures.Add(-1)
+		return nil, errors.New("entry does not exist")
+	}
+	r.applied.Add(1)
+	return nil, nil
+}
+
+func TestEnrollmentPublisherRetriesUntilTheEntryExists(t *testing.T) {
 	state := t.TempDir()
-	components, err := ownerComponents(state)
+	writeClientKey(t, ownerTrustedDirectory(state), "client-a")
+	reg := &flakyRegistry{}
+	reg.failures.Store(2)
+	component, err := enrollmentPublisher(state)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(components) != 1 || components[0].Name() != "bee.launch.enrollment" {
-		t.Fatalf("owner components = %#v", components)
+	base, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
 	}
-	if deps := components[0].DependsOn(); len(deps) != 1 || deps[0] != "cluster" {
-		t.Fatalf("publisher dependencies = %v", deps)
+	ctx := registry.WithRegistry(base, reg)
+	starter, ok := component.(boot.Starter)
+	if !ok {
+		t.Fatal("publisher is not a starter")
+	}
+	if err := starter.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for reg.applied.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if reg.applied.Load() == 0 {
+		t.Fatal("publisher never applied after the entry appeared")
+	}
+	if stopper, ok := component.(boot.Stopper); ok {
+		if err := stopper.Stop(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestOwnerComponentsIncludeEnrollmentPublisher(t *testing.T) {
+	state := t.TempDir()
+	components, err := ownerComponents(state, "0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(components))
+	for _, component := range components {
+		names = append(names, component.Name())
+		if deps := component.DependsOn(); len(deps) != 1 || deps[0] != "cluster" {
+			t.Fatalf("component %s dependencies = %v", component.Name(), deps)
+		}
+	}
+	if len(components) != 2 || names[0] != "bee.hive.rendezvous" || names[1] != "bee.launch.enrollment" {
+		t.Fatalf("owner components = %v", names)
 	}
 	// A relative state directory is refused before any filesystem work.
-	if _, err := ownerComponents("relative"); err == nil {
+	if _, err := ownerComponents("relative", "0123456789abcdef0123456789abcdef"); err == nil {
 		t.Fatal("relative state directory was accepted")
 	}
 }

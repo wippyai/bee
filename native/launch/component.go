@@ -161,7 +161,11 @@ func (host *Host) Start(ctx context.Context) error {
 	if host.ownerState == "" {
 		return nil
 	}
-	components, err := ownerComponents(host.ownerState)
+	execution, err := ensureExecution(ownerDirectory(host.ownerState))
+	if err != nil {
+		return err
+	}
+	components, err := ownerComponents(host.ownerState, execution)
 	if err != nil {
 		return err
 	}

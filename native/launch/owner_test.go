@@ -96,15 +96,27 @@ func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 		}
 	}
 
-	// The desktop bridge is enabled for the retained window application and
-	// admits local clients without pre-listing node identities.
-	desktop, present := config.Get("override.bee.hive.host:supervisor_service.input.desktop")
+	// The supervisor input override carries the desktop bridge enabled for the
+	// retained window application, admitting local clients without pre-listing
+	// node identities.
+	input, present := config.Get("override.bee.hive.host:supervisor_service:input")
 	if !present {
-		t.Fatal("desktop bridge override is missing")
+		t.Fatal("supervisor input override is missing")
 	}
-	bridge, ok := desktop.(map[string]any)
+	inputs, ok := input.([]any)
+	if !ok || len(inputs) != 1 {
+		t.Fatalf("supervisor input override = %#v", input)
+	}
+	settings, ok := inputs[0].(map[string]any)
 	if !ok {
-		t.Fatalf("desktop override type = %T", desktop)
+		t.Fatalf("supervisor input object = %T", inputs[0])
+	}
+	if _, ok := settings["configured_nodes"].([]any); !ok {
+		t.Fatalf("supervisor configured_nodes = %#v", settings["configured_nodes"])
+	}
+	bridge, ok := settings["desktop"].(map[string]any)
+	if !ok {
+		t.Fatalf("desktop override type = %T", settings["desktop"])
 	}
 	if bridge["local_clients"] != true {
 		t.Fatalf("desktop local_clients = %v", bridge["local_clients"])

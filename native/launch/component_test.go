@@ -144,28 +144,29 @@ func TestHostStartAddsEnrollmentPublisherForOwner(t *testing.T) {
 	if len(host.components) != 0 {
 		t.Fatalf("client launch added components: %#v", host.components)
 	}
-	// After planning an owner launch the host owns the publisher. The publisher
-	// needs the registry the runtime attaches during boot.
+	// After planning an owner launch the host owns the owner components. Their
+	// Start needs the live cluster and registry the runtime boots, so this test
+	// asserts the wiring the host will start, not the cluster itself.
 	if _, err := host.Plan(context.Background(), app.Launch{
 		Op: app.OpRun, Command: desktopCommand, Args: []string{ownerArgument},
 		State: state, Dir: state, Explicit: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	ctx, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	components, err := ownerComponents(state, "0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx = registry.WithRegistry(ctx, &enrollmentRegistryStub{})
-	if err := host.Start(ctx); err != nil {
-		t.Fatal(err)
+	names := []string{}
+	for _, component := range components {
+		names = append(names, component.Name())
 	}
-	if len(host.components) != 1 || host.components[0].Name() != "bee.launch.enrollment" {
-		t.Fatalf("owner components = %#v", host.components)
+	if len(names) != 2 || names[0] != "bee.hive.rendezvous" || names[1] != "bee.launch.enrollment" {
+		t.Fatalf("owner components = %v", names)
 	}
-	if err := host.Stop(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	_ = bootpkg.NewBootstrapContext
+	_ = registry.WithRegistry
+	_ = zap.NewNop
 }
 
 // enrollmentRegistryStub is an inert registry for the host Start test.

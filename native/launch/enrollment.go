@@ -103,23 +103,34 @@ type enrollmentPublisherComponent struct {
 	cancel  context.CancelFunc
 }
 
+// Start arms the publisher and returns. It must not publish yet: the runtime
+// starts boot components before it applies the deployment's registry entries, so
+// the enrollment entry does not exist at this point. The first refresh retries
+// until the entry appears, then mirrors the trusted directory for the owner's
+// lifetime.
 func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 	reg := registry.GetRegistry(ctx)
 	if reg == nil {
 		return errors.New("enrollment publisher requires the registry")
-	}
-	changes, err := enrollmentChangeSet(p.trusted)
-	if err != nil {
-		return err
-	}
-	if _, err := reg.Apply(ctx, changes); err != nil {
-		return err
 	}
 	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	p.cancel = cancel
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
+		for {
+			changes, err := enrollmentChangeSet(p.trusted)
+			if err == nil {
+				if _, err = reg.Apply(lifetime, changes); err == nil {
+					break
+				}
+			}
+			select {
+			case <-lifetime.Done():
+				return
+			case <-ticker.C:
+			}
+		}
 		for {
 			select {
 			case <-lifetime.Done():

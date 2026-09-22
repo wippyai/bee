@@ -153,6 +153,9 @@ func TestHostStartAddsEnrollmentPublisherForOwner(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, _, err := prepareOwner(state); err != nil {
+		t.Fatal(err)
+	}
 	components, err := ownerComponents(state, "0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatal(err)

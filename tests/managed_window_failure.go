@@ -286,6 +286,9 @@ func run() error {
 	if err := copyTree(filepath.Join(dir, "src"), filepath.Join(repo, "src")); err != nil {
 		return err
 	}
+	if err := copyTree(filepath.Join(dir, "modules"), filepath.Join(repo, "modules")); err != nil {
+		return err
+	}
 	fixture := filepath.Join(dir, "src", "tests", "managed_window_app")
 	if err := copyTree(fixture, filepath.Join(repo, "tests", "fixtures", "managed_window_app")); err != nil {
 		return err
@@ -349,7 +352,7 @@ func run() error {
 	if err := os.WriteFile(hostPath, []byte(rootIndex), 0600); err != nil {
 		return err
 	}
-	receiptPath := filepath.Join(dir, "src", "threads", "service", "receipt_method.lua")
+	receiptPath := filepath.Join(dir, "modules", "threads", "src", "service", "receipt_method.lua")
 	receipt, err := os.ReadFile(receiptPath)
 	if err != nil {
 		return err
@@ -363,7 +366,7 @@ func run() error {
 	if err := os.WriteFile(receiptPath, []byte(receiptText), 0600); err != nil {
 		return err
 	}
-	receiptIndexPath := filepath.Join(dir, "src", "threads", "service", "_index.yaml")
+	receiptIndexPath := filepath.Join(dir, "modules", "threads", "src", "service", "_index.yaml")
 	receiptIndex, err := os.ReadFile(receiptIndexPath)
 	if err != nil {
 		return err
@@ -449,8 +452,25 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	lockText := strings.TrimRight(string(lock), "\n") + "\n" + strings.TrimLeft(string(dependencies), "\n")
-	if err := os.WriteFile(filepath.Join(dir, "wippy.lock"), []byte(lockText), 0600); err != nil {
+	// The root lock already selects Bee's physical modules; the test framework
+	// modules join that same list.
+	var lockDocument map[string]interface{}
+	if err := yaml.Unmarshal(lock, &lockDocument); err != nil {
+		return fmt.Errorf("decode wippy.lock: %w", err)
+	}
+	var dependencyDocument struct {
+		Modules []interface{} `yaml:"modules"`
+	}
+	if err := yaml.Unmarshal(dependencies, &dependencyDocument); err != nil {
+		return fmt.Errorf("decode tests/dependencies.yaml: %w", err)
+	}
+	selected, _ := lockDocument["modules"].([]interface{})
+	lockDocument["modules"] = append(selected, dependencyDocument.Modules...)
+	lockText, err := yaml.Marshal(lockDocument)
+	if err != nil {
+		return fmt.Errorf("encode wippy.lock: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "wippy.lock"), lockText, 0600); err != nil {
 		return err
 	}
 	for _, name := range []string{"home", "config", "data", "state"} {

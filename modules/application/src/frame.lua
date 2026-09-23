@@ -23,6 +23,10 @@ type Window = {offset: integer, capacity: integer}
 -- A table column: width 0 is the single flexible column; align "right" for numbers.
 type Column = {title: string, width: integer, align: string?}
 type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?}
+-- A cell rectangle: x and y are one-based, width and height may be zero.
+type Rect = {x: integer, y: integer, width: integer, height: integer}
+-- The rows of the canonical anatomy; tabs and actions are 0 when absent.
+type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer: integer}
 
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
 local function minimum(a: integer, b: integer): integer if a < b then return a end; return b end
@@ -293,11 +297,169 @@ function M.table(painter: Painter, first: integer, last: integer, value: Table):
     return window
 end
 
+-- The size class of a canvas: "narrow" below 80x24, "compact" from 80x24,
+-- "standard" from 120x36 and "wide" from 160x48. Both dimensions must reach a
+-- class; layouts change only at these breakpoints.
+function M.size(width: integer, height: integer): string
+    if width >= 160 and height >= 48 then return "wide" end
+    if width >= 120 and height >= 36 then return "standard" end
+    if width >= 80 and height >= 24 then return "compact" end
+    return "narrow"
+end
+
+-- The canonical anatomy for this canvas: header on row 1, tabs on row 2 when
+-- requested and the canvas has at least 6 rows, one blank row, the work area
+-- from column 2 to the column before the last, the action bar on the
+-- penultimate row when requested and the canvas has at least 6 rows, and the
+-- footer on the final row when the canvas has at least 2 rows.
+function M.layout(painter: Painter, tabs: boolean, actions: boolean): Layout
+    local height = painter.height
+    local roomy = height >= 6
+    local tab_row = (tabs and roomy) and 2 or 0
+    local action_row = (actions and roomy) and height - 1 or 0
+    local footer_row = height >= 2 and height or 0
+    local first = roomy and (tab_row > 0 and 4 or 3) or 2
+    local last = action_row > 0 and action_row - 1 or (footer_row > 0 and footer_row - 1 or height)
+    return {size = M.size(painter.width, height), tabs = tab_row, actions = action_row, footer = footer_row,
+        work = {x = 2, y = first, width = maximum(0, painter.width - 2), height = maximum(0, last - first + 1)}}
+end
+
+local function spans(total: integer, sizes: {integer}, gap: integer): {integer}
+    local fixed, flexible = 0, 0
+    for _, size in ipairs(sizes) do
+        if size > 0 then fixed = fixed + size else flexible = flexible + 1 end
+    end
+    local rest = maximum(0, total - fixed - gap * maximum(0, #sizes - 1))
+    local result: {integer} = {}
+    local given = 0
+    for index, size in ipairs(sizes) do
+        if size > 0 then result[index] = size
+        else
+            local share = rest // maximum(1, flexible)
+            if given < rest % maximum(1, flexible) then share = share + 1 end
+            given = given + 1
+            result[index] = share
+        end
+    end
+    return result
+end
+
+-- Splits a rectangle into columns left to right. A size of 0 is flexible and
+-- shares the remaining width; gap (default 2) separates the columns. Columns
+-- that do not fit keep their position with a clipped width.
+function M.split(rect: Rect, sizes: {integer}, gap: integer?): {Rect}
+    local space = gap or 2
+    local result: {Rect} = {}
+    local x = rect.x
+    for index, size in ipairs(spans(rect.width, sizes, space)) do
+        local width = maximum(0, minimum(size, rect.x + rect.width - x))
+        result[index] = {x = x, y = rect.y, width = width, height = rect.height}
+        x = x + size + space
+    end
+    return result
+end
+
+-- Splits a rectangle into rows top to bottom, like split; gap defaults to 1.
+function M.stack(rect: Rect, sizes: {integer}, gap: integer?): {Rect}
+    local space = gap or 1
+    local result: {Rect} = {}
+    local y = rect.y
+    for index, size in ipairs(spans(rect.height, sizes, space)) do
+        local height = maximum(0, minimum(size, rect.y + rect.height - y))
+        result[index] = {x = rect.x, y = y, width = rect.width, height = height}
+        y = y + size + space
+    end
+    return result
+end
+
+-- A dashboard grid of columns by rows equal cells in reading order, two cells
+-- between columns and one row between rows. Leftover cells go to the first
+-- columns and rows.
+function M.grid(rect: Rect, columns: integer, rows: integer): {Rect}
+    local widths: {integer} = {}
+    for index = 1, maximum(1, columns) do widths[index] = 0 end
+    local heights: {integer} = {}
+    for index = 1, maximum(1, rows) do heights[index] = 0 end
+    local result: {Rect} = {}
+    for _, line in ipairs(M.stack(rect, heights, 1)) do
+        for _, cell in ipairs(M.split(line, widths, 2)) do result[#result + 1] = cell end
+    end
+    return result
+end
+
+-- A titled panel without a border: the uppercase title in muted at the top of
+-- rect, an optional summary aligned right in text, and the returned rectangle
+-- below the title for the panel's content.
+function M.panel(painter: Painter, rect: Rect, title: string, summary: string?): Rect
+    if rect.width <= 0 or rect.height <= 0 then return {x = rect.x, y = rect.y, width = 0, height = 0} end
+    local drawn = M.put(painter, rect.x, rect.y, string.upper(title), rect.width, painter.theme.muted)
+    if summary and summary ~= "" then
+        local room = rect.width - drawn - 2
+        if room >= 4 then
+            local shown = M.fit(summary, room)
+            local size = tty.text.width(shown)
+            M.put(painter, rect.x + rect.width - size, rect.y, shown, size, painter.theme.text)
+        end
+    end
+    return {x = rect.x, y = rect.y + 1, width = rect.width, height = rect.height - 1}
+end
+
+-- One form field on row y: the muted label padded to label_width, then the
+-- value. The selected field takes the row selection and its target; an error
+-- replaces the value's trailing room in the error role after " · ".
+function M.field(painter: Painter, y: integer, label: string, value: string, label_width: integer, selected: boolean, index: integer, error_text: string?)
+    local text = M.pad(label, label_width) .. "  " .. value
+    M.row(painter, y, text, selected, "field", index, "")
+    if not selected then M.put(painter, 2, y, M.pad(label, label_width), label_width, painter.theme.muted) end
+    if error_text and error_text ~= "" then
+        local x = 2 + tty.text.width(M.fit(text, painter.width - 2)) + 1
+        M.put(painter, x, y, "· " .. error_text, painter.width - x, painter.theme.error,
+            selected and painter.theme.accent or painter.theme.surface)
+    end
+end
+
+-- A wizard step strip on row y: "1 Source › 2 Review › 3 Deliver". The current
+-- step uses the accent pair, finished steps carry "✓" and later steps are muted.
+-- On a narrow row only the current step shows, as "Step 2/3 Review".
+function M.steps(painter: Painter, y: integer, labels: {string}, current: integer)
+    M.fill(painter, y)
+    local parts: {string} = {}
+    for index, label in ipairs(labels) do
+        parts[index] = (index < current and "✓ " or (tostring(index) .. " ")) .. label
+    end
+    local full = 0
+    for index, part in ipairs(parts) do full = full + tty.text.width(part) + (index > 1 and 3 or 0) + 2 end
+    local theme = painter.theme
+    if full > painter.width - 2 then
+        local label = labels[current] or ""
+        M.put(painter, 2, y, " Step " .. tostring(current) .. "/" .. tostring(#labels) .. " " .. label .. " ",
+            painter.width - 2, appearance.selection_text(theme), theme.accent)
+        return
+    end
+    local x = 2
+    for index, part in ipairs(parts) do
+        if index > 1 then x = x + M.put(painter, x, y, " › ", 3, theme.muted) end
+        local label = " " .. part .. " "
+        if index == current then x = x + M.put(painter, x, y, label, painter.width - x, appearance.selection_text(theme), theme.accent)
+        else x = x + M.put(painter, x, y, label, painter.width - x, index < current and theme.text or theme.muted) end
+    end
+end
+
 -- An empty, loading or failure state: what is absent or wrong on row y and the
--- next useful action on the row below it.
-function M.empty(painter: Painter, y: integer, title: string, action: string?)
+-- next useful action on the row below it. Inside a panel, area bounds both
+-- rows to the panel's columns and leaves the rest of the rows untouched.
+function M.empty(painter: Painter, y: integer, title: string, action: string?, area: Rect?)
+    local has_action = action ~= nil and action ~= ""
+    if area then
+        if area.width <= 0 or area.height <= 0 then return end
+        M.put(painter, area.x, y, title, area.width, painter.theme.text)
+        if has_action and y + 1 < area.y + area.height then
+            M.put(painter, area.x, y + 1, action or "", area.width, painter.theme.muted)
+        end
+        return
+    end
     M.line(painter, y, title, painter.theme.text)
-    if action and action ~= "" then M.line(painter, y + 1, action, painter.theme.muted) end
+    if has_action then M.line(painter, y + 1, action or "", painter.theme.muted) end
 end
 
 return M

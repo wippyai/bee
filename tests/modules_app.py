@@ -3,7 +3,9 @@
 The real facade and publication boundary are covered by hub-manage-check.
 This fixture exercises the actual broker, app process, presenter and keyboard.
 """
+import re
 import tempfile
+import time
 from pathlib import Path
 import yaml
 
@@ -225,6 +227,39 @@ def exercise(project, packed, pack):
             ui.close()
 
 
+def install_receipt(ui, packed, pack):
+    """Wait for the confirmed installation's receipt and explain a refusal.
+
+    A packed deployment carries Bee's own modules only as locked packs, so the
+    installation re-resolves every locked bee/* module online: the Hub must
+    serve each one at the locked version with the locked pack digest."""
+    end = time.monotonic() + 30
+    while time.monotonic() < end:
+        ui.pump()
+        if "Completed:" in ui.text():
+            return
+        if "Not completed:" in ui.text():
+            break
+    else:
+        ui.wait("Completed:", timeout=0)
+    rows = ui.text().splitlines()
+    first = next(index for index, row in enumerate(rows) if "Not completed:" in row)
+    last = next(index for index, row in enumerate(rows) if "Receipt state:" in row)
+    reason = "".join(row[row.index("│") + 2:row.rindex("│") - 1] for row in rows[first + 1:last] if row.count("│") >= 2).rstrip()
+    if not packed:
+        raise AssertionError(f"Hub installation failed in the source workspace: {reason}")
+    locked = {module["name"]: module for module in yaml.safe_load((pack / "wippy.lock").read_text())["modules"]}
+    causes = []
+    for module, version in re.findall(r"(bee/[a-z0-9-]+)@([0-9A-Za-z.+*-]+): module not found", reason):
+        causes.append(f"{module}@{version} is not on the Hub")
+    for module, version in re.findall(r"manifest digest mismatch for (bee/[a-z0-9-]+)@([0-9A-Za-z.+-]+)", reason):
+        causes.append(f"{module}@{version} on the Hub is not the pack this deployment locks ({locked.get(module, {}).get('hash')})")
+    raise AssertionError(
+        "Hub installation into the packed deployment needs every locked bee/* module on the Hub at its locked "
+        "version and digest (make hub-publish publishes them; a pack built from this checkout never carries a "
+        f"published digest). {'; '.join(causes) or 'Runtime reason follows.'}\nReason: {reason}")
+
+
 def exercise_real_facade(project, packed, pack):
     """Use the production Modules -> Hub facade -> service path.
 
@@ -304,7 +339,7 @@ def exercise_real_facade(project, packed, pack):
             ui.key(b"\r")
             ui.wait("MODULES  CONFIRM")
             ui.key(b"\r")
-            ui.wait("Completed:", timeout=30)
+            install_receipt(ui, packed, pack)
             ui.wait("Receipt state: complete")
             click("Installed")
             ui.wait("MODULES  INSTALLED", timeout=20)

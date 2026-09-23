@@ -40,6 +40,22 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         put(1, y, string.rep(" ", width), width, fg, bg)
         put(2, y, tty.text.truncate(value, maximum(0, width - 2), "…"), maximum(0, width - 2), fg, bg)
     end
+    -- Splits each value into rows that fit the body width.
+    local function wrap(values: {string}): {string}
+        local wrapped: {string} = {}
+        local available_width = maximum(2, width - 2)
+        for _, raw_line in ipairs(values) do
+            local remaining = raw_line
+            while tty.text.width(remaining) > available_width do
+                local part = tty.text.truncate(remaining, available_width, "")
+                if part == "" then break end
+                wrapped[#wrapped + 1] = part
+                remaining = remaining:sub(#part + 1)
+            end
+            wrapped[#wrapped + 1] = remaining
+        end
+        return wrapped
+    end
     local function button(x: integer, y: integer, kind: string, label: string, enabled: boolean): integer
         local size = tty.text.width(label)
         if x + size > width or y < 1 or y > height then return x end
@@ -385,19 +401,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         else
             body[#body + 1] = "No migration rows recorded"
         end
-        local wrapped: {string} = {}
-        local available_width = maximum(2, width - 2)
-        for _, raw_line in ipairs(body) do
-            local remaining = raw_line
-            while tty.text.width(remaining) > available_width do
-                local part = tty.text.truncate(remaining, available_width, "")
-                if part == "" then break end
-                wrapped[#wrapped + 1] = part
-                remaining = remaining:sub(#part + 1)
-            end
-            wrapped[#wrapped + 1] = remaining
-        end
-        body = wrapped
+        body = wrap(body)
         local body_capacity = maximum(0, height - 8)
         local body_offset = math.floor(math.max(0, math.min(math.max(0, #body - body_capacity), offset)))
         line(5, "Digest " .. recovery.digest .. (#body > body_capacity and (" · detail " .. tostring(body_offset + 1) .. "–" .. tostring(math.min(#body, body_offset + body_capacity)) .. "/" .. tostring(#body)) or ""), theme.muted)
@@ -413,8 +417,16 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     if state.phase == "result" and state.result then
         local result = state.result
         line(3, (result.ok and "Completed" or "Not completed") .. ": " .. result.code, result.ok and theme.accent or theme.text)
-        line(4, result.message, theme.text)
-        line(6, "Receipt state: " .. result.state .. (result.replayed and "  replayed" or ""), theme.muted)
+        local message = wrap({result.message})
+        local message_capacity = maximum(1, height - 8)
+        local shown = #message
+        if shown > message_capacity then shown = message_capacity end
+        for slot = 1, shown do
+            local value = message[slot]
+            if slot == message_capacity and #message > message_capacity then value = tty.text.truncate(value .. " …", maximum(0, width - 2), "…") end
+            line(3 + slot, value, theme.text)
+        end
+        line(5 + shown, "Receipt state: " .. result.state .. (result.replayed and "  replayed" or ""), theme.muted)
         button(2, height - 1, "status", " Check status ", state.plan ~= nil or state.selected_operation ~= nil)
         button(18, height - 1, "catalog", " Catalog ", true)
         line(height, status ~= "" and status or "R checks this measured operation · Esc returns to catalog", theme.muted)

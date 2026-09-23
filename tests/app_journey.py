@@ -715,17 +715,28 @@ def exercise():
                 assert time.monotonic() < deadline, guide_ui.text()
                 guide_ui.pump(.1)
 
-            guide_ui.key(b"\x1b")
-            guide_ui.wait("No applications open", timeout=20)
-            open_catalog_app(guide_ui, GUIDE_TITLE, COLD_BOOT)
-            guide_ui.wait("COUNTER APP", timeout=20)
-            guide_ui.wait("Count: 2", timeout=20)
-            guide_ui.wait("Saved: 2", timeout=20)
-            guide_ui.window_control("×")
-            guide_ui.wait("No applications open", timeout=20)
+            # Workspace shutdown retains the automatic instance and its
+            # acknowledged checkpoint; the next boot restores both.
             guide_ui.quit()
         finally:
             guide_ui.close()
+        guide_restarted = Desktop(guide_root, project=project)
+        try:
+            guide_restarted.wait("COUNTER APP", timeout=COLD_BOOT)
+            guide_restarted.wait("Count: 2", timeout=20)
+            guide_restarted.wait("Saved: 2", timeout=20)
+            # A clean return closes the view and removes its resume record,
+            # so the next open starts from an empty count.
+            guide_restarted.key(b"\x1b")
+            guide_restarted.wait("No applications open", timeout=20)
+            open_catalog_app(guide_restarted, GUIDE_TITLE, COLD_BOOT)
+            guide_restarted.wait("COUNTER APP", timeout=20)
+            guide_restarted.wait("Count: 0", timeout=20)
+            guide_restarted.window_control("×")
+            guide_restarted.wait("No applications open", timeout=20)
+            guide_restarted.quit()
+        finally:
+            guide_restarted.close()
         evidence = deliver(project, folder)
         assert_shared_database(project)
         inspect(project, folder)

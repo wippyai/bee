@@ -10,6 +10,7 @@ entries:
     client: bee.application:client
     appearance: bee.application:appearance
     view: bee.stylebook:view
+    frame: bee.application:frame
   meta:
     type: bee.application
     application:
@@ -24,6 +25,6 @@ entries:
 - name: view
   kind: library.lua
   source: file://view.lua
-  modules: [tty]
   imports:
     appearance: bee.application:appearance
+    frame: bee.application:frame

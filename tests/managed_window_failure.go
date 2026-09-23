@@ -125,6 +125,11 @@ local function run()
         end
     end
     assert(opened.error_code == "", tostring(opened.error))
+    -- A picker open stays threadless, so the thread owner admits the
+    -- host-issued principal of the exact instance the open reported.
+    local head = (call("bee.threads.service:get", {thread_id = thread}).value :: {[string]: unknown}).summary :: {[string]: unknown}
+    call("bee.threads.service:join", {thread_id = thread, idempotency_key = "managed-window-failure-join",
+        member_id = "bee.application:" .. WORKSPACE .. ":" .. tostring(opened.instance_id), role = "participant", expected_revision = head.revision})
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind", op = "bind", workspace_id = WORKSPACE,
         id = opened.id, instance_id = opened.instance_id, recipient = owner}))
     local mounted = ""

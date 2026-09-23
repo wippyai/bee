@@ -26,6 +26,16 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copytree(ROOT / "tests/fixtures/desktop_client", project / "src/client_probe")
+        # Terminal shells read their rc files from the executor's HOME. The probe
+        # owns that HOME so the prompt it waits for is independent of the host user.
+        shell_home = root / "shell-home"
+        shell_home.mkdir()
+        (shell_home / ".bashrc").write_text("PS1='$ '\n")
+        console = project / "src/apps/console/_index.yaml"
+        manifest = yaml.safe_load(console.read_text())
+        executor = next(entry for entry in manifest["entries"] if entry["name"] == "executor")
+        executor["default_env"]["HOME"] = str(shell_home)
+        console.write_text(yaml.safe_dump(manifest, sort_keys=False))
         if _transfer_failure in ("source", "target"):
             client = project / "src/core/client/main.lua"
             code = client.read_text()

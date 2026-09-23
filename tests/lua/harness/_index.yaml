@@ -124,6 +124,59 @@ entries:
     test: wippy.test:test
     hooks: bee.harness.window:hooks
     checkpoint: bee.harness.carrier:checkpoint
+- name: window_ready_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Launch policy of the managed window readiness fixture; its constructor never starts the executable
+  data:
+    schema_revision: bee.launch-policy@2
+    allow_host_home: true
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+- name: window_ready_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: A direct window launch that needs no credential, so it reaches the native open in the test runner
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: window-ready-fixture
+    title: Window readiness fixture
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: window
+    policy_ref: bee.harness.catalog:window_ready_policy
+    default_mode: window
+    allowed_overrides: []
+    thread_policy: {kind: new}
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: window_ready_probe
+  kind: process.lua
+  source: file://window_ready_probe.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]
+  imports:
+    runtime: bee.harness.window:runtime
+- name: window_ready_test
+  kind: function.lua
+  source: file://window_ready_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [process, channel, time, tty, uuid]
+  imports:
+    test: wippy.test:test
+    recovery: bee.harness.window:recovery
 - name: window_recovery_test
   kind: function.lua
   source: file://window_recovery_test.lua

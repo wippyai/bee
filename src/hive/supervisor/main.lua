@@ -11,6 +11,7 @@ local types = require("types")
 local bounds = require("bounds")
 local peers = require("peers")
 local enrollment = require("enrollment")
+local registration = require("registration")
 local registry = require("registry")
 local admission = require("admission")
 local thread_admission = require("thread_admission")
@@ -305,13 +306,22 @@ local function main(configuration: unknown)
         local named, name_error = process.registry.register(types.SUPERVISOR_NAME)
         if not named then error("Register local supervisor: " .. tostring(name_error)) end
         registered = true
-        -- Local clients discover the retained desktop through this private
-        -- loopback mesh. Optional external Hive publication must not delay it.
-        if native_node ~= "" and desktop ~= nil then
-            local published, publish_error = process.registry.register(distributed_name, self, process.registry.EVENTUAL)
-            if not published then error("Publish local desktop supervisor: " .. tostring(publish_error)) end
-            advertised = true
+        -- A local client discovers this supervisor only through this eventual
+        -- name, so publish it whenever the node has a native identity. The
+        -- desktop bridge is not a condition: its failure must not remove the
+        -- only discovery path. Publishing grants no admission on its own.
+        local decision = registration.decide(native_node, distributed_name)
+        if decision.publish then
+            local published, publish_error = process.registry.register(decision.name, self, process.registry.EVENTUAL)
+            if not published then
+                log:error("Hive supervisor name publication failed", {name = decision.name, cause = tostring(publish_error)})
+                advertise(elapsed())
+            else
+                advertised = true
+            end
         else
+            -- A local-only node publishes no cluster-visible name; the optional
+            -- external Hive path still has a chance to advertise.
             advertise(elapsed())
         end
         local desktop_ready = desktop and desktop.ready

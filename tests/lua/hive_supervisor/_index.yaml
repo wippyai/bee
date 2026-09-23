@@ -20,6 +20,14 @@ entries:
     peers: bee.hive.supervisor:peers
     types: bee.hive:types
     bounds: bee.hive:bounds
+- name: registration_test
+  kind: function.lua
+  source: file://registration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    registration: bee.hive.supervisor:registration
 - name: admission_test
   kind: function.lua
   source: file://admission_test.lua

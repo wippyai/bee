@@ -8,6 +8,9 @@ entries:
   imports:
     types: bee.hive:types
     bounds: bee.hive:bounds
+- name: registration
+  kind: library.lua
+  source: file://registration.lua
 - name: enrollment
   kind: library.lua
   source: file://enrollment.lua
@@ -32,6 +35,7 @@ entries:
     bounds: bee.hive:bounds
     peers: bee.hive.supervisor:peers
     enrollment: bee.hive.supervisor:enrollment
+    registration: bee.hive.supervisor:registration
     admission: bee.hive.supervisor:admission
     thread_admission: bee.hive.supervisor:thread_admission
     policy_admission: bee.hive.supervisor:policy_admission

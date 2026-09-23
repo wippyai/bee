@@ -301,13 +301,17 @@ managed-launch-fixture-check: fixture-gateway-client
 thread-launch-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py
 
-.PHONY: docs-agent-check agent-corpus
+.PHONY: docs-agent-check agent-corpus agent-corpus-local
 # The embedded documentation corpus: build it from the published runtime docs
 # and Bee's own contracts, or verify the committed snapshot offline.
 agent-corpus:
 	python3 build/agent_corpus.py
 agent-corpus-check:
 	python3 build/agent_corpus.py --check
+# Rebuild the repository-generated corpus documents offline; the runtime pages
+# stay as committed until a networked agent-corpus build.
+agent-corpus-local:
+	python3 build/agent_corpus.py --local
 # An admitted fixture agent answers three questions from the embedded corpus
 # through the read-only docs tool, with no network.
 docs-agent-check:

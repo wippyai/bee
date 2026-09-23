@@ -11,6 +11,7 @@ local contract = require("contract")
 local bounds = require("bounds")
 local catalog = require("catalog")
 local lifecycle = require("lifecycle")
+local decode = require("decode")
 local attachment = require("attachment")
 local execution = require("execution")
 local principal = require("principal")
@@ -1039,7 +1040,7 @@ local function main(owner: string, initial_preferences: unknown)
                 if item and replacement then
                     replacement.exited = true
                     start_replacement(item)
-                elseif item then transition(item, item.state.phase == "ready" and "unexpected_exit" or "exit") end
+                elseif item then transition(item, lifecycle.exit_event(item.state, decode.exit_error(event.result) ~= nil)) end
             end
         elseif selected.channel == ticks then
             refresh_admission()

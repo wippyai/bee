@@ -40,6 +40,10 @@ type BindingOpen = {request: contract.Request, provenance: open_protocol.Provena
 type BindingCoordinator = {instance_id: string, state: thread_binding_reducer.State, open: BindingOpen?, retry_at: number,
     failure_code: string?, failure_message: string?, stop_event: lifecycle.Event?, settle_after_revoke: boolean?,
     effect: thread_binding_reducer.Effect?}
+-- Time an execution has to stop what it owns after CANCEL before the broker
+-- terminates it. A PTY application waits for its child, which the runtime's
+-- terminal proxy signals with TERM and escalates to KILL after its 3 s grace.
+local STOP_GRACE = "8s"
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function application_actor(workspace_id: string, instance_id: string, definition_id: string,
     definition_revision: string, execution_generation: integer): security.Actor
@@ -1566,8 +1570,15 @@ local function main(owner: string, initial_preferences: unknown)
         end
     end
     ticker:stop()
-    -- Owner loss is the emergency path; normal shutdown has already cooperated.
-    for _, item in pairs(instances) do process.terminate(item.execution_pid); item.view:close() end
+    -- Owner loss and CANCEL are the emergency path; normal shutdown has already
+    -- cooperated. Each live execution is cancelled so it can stop what it owns,
+    -- and the broker exits only after every one has.
+    local live: {string} = {}
+    for _, item in pairs(instances) do
+        if not (item.replacement and item.replacement.exited) then live[#live + 1] = item.execution_pid end
+    end
+    execution.stop(live, events, STOP_GRACE)
+    for _, item in pairs(instances) do item.view:close() end
     process.unlisten(shutdown_requests)
     process.unlisten(close_replies)
     process.unlisten(queries); process.unlisten(answers)

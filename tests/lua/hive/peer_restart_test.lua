@@ -66,6 +66,23 @@ local function define_tests()
             test.eq(peer.supervisor_incarnation, "inc-b2")
         end)
 
+        test.it("replaces an established session with the previous supervisor", function()
+            for _, fresh_tag in ipairs({"0x0000d", "0x0000c"}) do
+                local state = node()
+                local stale, fresh = pid("hive-b", "0x0000c"), pid("hive-b", fresh_tag)
+                local answer = peers.receive(state, stale, hello("inc-b1", "b-old-challenge"), "a-old-challenge", 1000)
+                if not answer then error("the first exchange was refused") end
+                local _, established = peers.receive(state, stale, hello("inc-b1", "b-old-challenge", answer.challenge), nil, 1100)
+                if not established then error("the first session was not established") end
+                local renewed, _, err = peers.receive(state, fresh, hello("inc-b2", "b-new-challenge"), "a-new-challenge", 1500)
+                test.is_nil(err)
+                local peer = complete(state, fresh, renewed, 1600)
+                if not peer then error("no established peer") end
+                test.eq(peer.pid, fresh)
+                test.eq(peer.supervisor_incarnation, "inc-b2")
+            end
+        end)
+
         test.it("keeps an exchange with the current supervisor against its own stale response", function()
             local state = node()
             local stale, fresh = pid("hive-b", "0x0000c"), pid("hive-b", "0x0000d")

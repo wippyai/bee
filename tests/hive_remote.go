@@ -30,6 +30,10 @@ import (
 //go:embed fixtures/hive_remote/*
 var fixture embed.FS
 
+// nodeConfigName is each node's cluster configuration, layered over the
+// project's .wippy.yaml.
+const nodeConfigName = "hive-node.yaml"
+
 type safeBuffer struct {
 	sync.Mutex
 	buf       []byte
@@ -752,8 +756,20 @@ func run() (retErr error) {
 			}
 		}
 
-		if err := os.WriteFile(filepath.Join(stagingFolder, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
-			return fmt.Errorf("write wippy.lock: %w", err)
+		// Bee is several physical modules: stage them with the project's own
+		// lock and workspace replacements, and keep the node's settings in a
+		// second configuration file layered over the project's.
+		if err := os.CopyFS(filepath.Join(stagingFolder, "modules"), os.DirFS("modules")); err != nil {
+			return fmt.Errorf("copy modules: %w", err)
+		}
+		for _, name := range []string{"wippy.lock", ".wippy.yaml"} {
+			data, err := os.ReadFile(name)
+			if err != nil {
+				return fmt.Errorf("read project %s: %w", name, err)
+			}
+			if err := os.WriteFile(filepath.Join(stagingFolder, name), data, 0600); err != nil {
+				return fmt.Errorf("write %s: %w", name, err)
+			}
 		}
 
 		role := "client"
@@ -800,7 +816,7 @@ func run() (retErr error) {
 		if err != nil {
 			return fmt.Errorf("marshal config: %w", err)
 		}
-		return os.WriteFile(filepath.Join(stagingFolder, ".wippy.yaml"), cfgData, 0600)
+		return os.WriteFile(filepath.Join(stagingFolder, nodeConfigName), cfgData, 0600)
 	}
 
 	folderA := filepath.Join(root, "node-0")
@@ -863,12 +879,12 @@ func run() (retErr error) {
 
 	var cmdA *exec.Cmd
 	if cfg.sshTarget == "" {
-		cmdA = exec.CommandContext(ctx, cfg.runtimePath, "run", "--verbose", "hive-remote-host")
+		cmdA = exec.CommandContext(ctx, cfg.runtimePath, "run", "--config", ".wippy.yaml", "--config", nodeConfigName, "--verbose", "hive-remote-host")
 		cmdA.Dir = folderA
 		cmdA.Env = append(os.Environ(), append([]string{"GOMAXPROCS=2"}, beeDataEnv(folderA)...)...)
 	} else {
 		remoteEnv := append([]string{"GOMAXPROCS=2"}, beeDataEnv(remoteFolderA)...)
-		remoteCmd := fmt.Sprintf("cd %s && echo $$ > host.pid && sed 's/^.*) //' /proc/$$/stat | awk '{print $20}' > host.starttime && exec env %s %s run --verbose hive-remote-host",
+		remoteCmd := fmt.Sprintf("cd %s && echo $$ > host.pid && sed 's/^.*) //' /proc/$$/stat | awk '{print $20}' > host.starttime && exec env %s %s run --config .wippy.yaml --config "+nodeConfigName+" --verbose hive-remote-host",
 			shellQuote(remoteFolderA),
 			shellEnvironment(remoteEnv),
 			shellQuote(cfg.remoteRuntimePath),
@@ -948,7 +964,7 @@ func run() (retErr error) {
 		return fmt.Errorf("node B must not contain destination proof file %s", proofFileName)
 	}
 
-	cmdB := exec.CommandContext(ctx, cfg.runtimePath, "run", "--silent", "hive-remote-client", "--",
+	cmdB := exec.CommandContext(ctx, cfg.runtimePath, "run", "--config", ".wippy.yaml", "--config", nodeConfigName, "--silent", "hive-remote-client", "--",
 		hostPID, workspaceID, supervisorPID, destToken, proofFileName,
 		strconv.FormatBool(cfg.stallProbe), strconv.FormatBool(cfg.presenterStall), strconv.FormatBool(cfg.desktopProbe))
 	cmdB.Dir = folderB

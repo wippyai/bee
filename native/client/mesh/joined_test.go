@@ -83,7 +83,7 @@ func TestJoinedClientLeavesPromptly(t *testing.T) {
 		t.Fatal(err)
 	}
 	var departed time.Time
-	err = Joined(ctx, directory, directory, "client", clientKey, func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error {
+	err = Joined(ctx, JoinConfig{Directory: directory, EnrollmentDirectory: directory, Node: "client", Key: clientKey}, func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error {
 		departed = time.Now()
 		return nil
 	})

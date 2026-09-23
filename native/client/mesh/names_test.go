@@ -13,6 +13,7 @@ import (
 	"github.com/wippyai/runtime/api/pid"
 	topapi "github.com/wippyai/runtime/api/topology"
 	stackpkg "github.com/wippyai/runtime/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 func TestActorDiscoversOwnerThroughRuntimeNames(t *testing.T) {
@@ -26,7 +27,7 @@ func TestActorDiscoversOwnerThroughRuntimeNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	var retired *Actor
-	err := Local(ctx, LocalConfig{Directory: dir}, func(ctx context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+	err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(ctx context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return WithActor(ctx, stack, owner.Node, func(frame context.Context, actor *Actor) error {
 			retired = actor
 			canceled, cancel := context.WithCancel(frame)

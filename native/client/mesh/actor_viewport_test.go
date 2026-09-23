@@ -113,7 +113,7 @@ func TestNativeActorLifecycleRetiresViewportWithoutStoppingOwner(t *testing.T) {
 	for range 2 {
 		var mounted ttyapi.Viewport
 		var retiredFrame context.Context
-		err := Local(ctx, LocalConfig{Directory: dir}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
+		err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
 			return WithActor(ctx, stack, descriptor.Node, func(frame context.Context, actor *Actor) error {
 				retiredFrame = frame
 				ref, err := viewport.(ttyapi.MountableViewport).Mount(producer, actor.PID(), ttyapi.MountRights{Observe: true})

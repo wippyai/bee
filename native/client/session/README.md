@@ -1,10 +1,15 @@
 # Native client session
 
-`Join(ctx, Config, stdin, stdout)` composes the existing SameAccount native mesh,
-Hive desktop binding and physical presenter. It is gated by `meshclient` and
-`physicalclient`; ordinary public launch calls it after selecting or starting the
-project owner. It creates no owner,
-workspace database, transport implementation or registry deployment.
+`JoinEnrolled(ctx, Config, node, key, stdin, stdout)` joins the project owner
+with the identity the launch route enrolled, over loopback with the owner's mesh
+credential (`Config.TLS`, the owner's `hive/mesh.pem` and
+`hive/mesh-authorities.pem`), and presents a desktop through the Hive desktop
+binding and physical presenter. `ListEnrolled` reads the owner's displays and
+`Operate` runs one `bee hive` operation (`hive.Join`) without attaching a
+desktop. They are gated by `meshclient` and `physicalclient`; the launch route
+calls them after selecting or starting the project owner and enrolling the
+client. They create no owner, workspace database, transport implementation or
+registry deployment.
 
 The host selects a protected discovery directory, an explicit control/observe
 mode, and optionally an exact workspace/desktop pair. With no pair, one workspace
@@ -20,29 +25,15 @@ context and keeps operation and cleanup failures visible.
 
 The caller owns physical files and the signal context. Ctrl+] detaches locally;
 applications remain owned by the remote runtime. Starting that owner and deciding
-its lifetime are launcher responsibilities, not side effects of Join.
+its lifetime are launcher responsibilities, not side effects of a session.
 
-`make -C native client-session-check MESH_RUNTIME=/absolute/reviewed/runtime`
-checks selection and validation plus race/vet. The stronger optional
-`localowner.TestFreshClientDesktopComposition` proves a fresh second native client
-presents the retained Terminal through an OS PTY, reads the earlier client's shell
-variable, and detaches. It uses actual Bee modules and supervisor admission, not
-fixture-issued viewport grants. See the localowner README for the command.
-
-`Probe(ctx, directory)` shares authenticated supervisor/catalog readiness with
-Join but creates no attachment. It is bounded to 15 seconds including transport
-startup, and is used by explicit start when another runtime owns the state lock.
-It does not select control, resize a viewport or claim delivery obligations.
-
-When an elected owner is still preparing under the application lock, Probe waits
-for missing discovery within its existing 15-second budget before authenticating.
-The wait only reads; it creates no owner state. Corruption and permission errors
-return immediately. This prevents a concurrent losing `start` invocation from
-failing solely because the winner has not published yet.
+Waiting for an owner that is still preparing belongs to the launch route; it
+only reads, creates no owner state and returns corruption and permission errors
+at once. A session against an unpublished owner fails without creating state.
 
 Foreground cancellation stops presentation first. The native connection and
 admitted actor receive at most three seconds to finish explicit detach, restore
 terminal settings and close normally. A stalled cleanup cannot keep transport
-alive indefinitely. Owner credential expiry still fences that connection.
+alive indefinitely.
 If the transport grace has already expired, no further mutation is sent under
 retired actor authority. Operation errors are retained.

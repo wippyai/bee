@@ -219,9 +219,11 @@ func TestHostStartAddsEnrollmentPublisherForOwner(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := prepareOwner(state); err != nil {
+	_, release, err := prepareOwner(state)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() { _ = release() }()
 	components, err := ownerComponents(state, "0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatal(err)
@@ -230,7 +232,7 @@ func TestHostStartAddsEnrollmentPublisherForOwner(t *testing.T) {
 	for _, component := range components {
 		names = append(names, component.Name())
 	}
-	if len(names) != 2 || names[0] != "bee.hive.rendezvous" || names[1] != "bee.launch.enrollment" {
+	if len(names) != 3 || names[0] != "bee.hive.rendezvous" || names[1] != "bee.launch.join" || names[2] != "bee.launch.enrollment" {
 		t.Fatalf("owner components = %v", names)
 	}
 	_ = bootpkg.NewBootstrapContext

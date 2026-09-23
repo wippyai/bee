@@ -72,7 +72,7 @@ func enrollmentChange(clients, peers []trustedKey) registry.ChangeSet {
 }
 
 // readExecution reads the owner execution persisted by prepareOwner, and
-// readMembershipSecret reads the owner's membership secret.
+// readMembershipSecret reads the secret the owner's mesh uses.
 func readExecution(directory string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(directory, executionName))
 	if err != nil {
@@ -85,8 +85,12 @@ func readExecution(directory string) (string, error) {
 	return value, nil
 }
 
-func readMembershipSecret(directory string) ([]byte, error) {
-	data, err := os.ReadFile(filepath.Join(directory, membershipSecretName))
+func readMembershipSecret(state string) ([]byte, error) {
+	path, err := membershipSecretPath(state)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +150,7 @@ func enrollmentPublisher(state string) (boot.Component, error) {
 	if err != nil {
 		return nil, err
 	}
-	secret, err := readMembershipSecret(directory)
+	secret, err := readMembershipSecret(state)
 	if err != nil {
 		return nil, err
 	}

@@ -29,6 +29,55 @@ malformed route arguments fail planning, so nothing is selected, read or
 started. Whether a well-formed NAME exists depends on the project's admitted
 applications and managed agents; the owner resolves it after the client joins.
 
+`bee hive VERB` manages this node's Hive membership and is decoded before
+project selection like every other command:
+
+    bee hive invite            mint a single-use invite and print it as one line
+    bee hive invites           list the invites the supervisor recorded
+    bee hive revoke INVITE_ID  revoke a pending invite
+    bee hive peers             list the Hive peers and their supervisor sessions
+    bee hive join INVITE       join the hive the invite names
+    bee hive leave NODE        retire the Hive peer NODE
+
+`invite`, `invites`, `revoke` and `peers` are Requests from an enrolled local
+client to the owner's supervisor (service `bee.hive.join`), so they start the
+owner when none runs and print only their own output. An invite reads
+
+    bee-hive://INVITE_ID:SECRET@HOST:PORT/NODE?key=FINGERPRINT
+
+HOST:PORT is the owner's join listener (component `bee.launch.join`), bound on
+the mesh advertise address with an automatically selected port and published in
+the rendezvous descriptor; NODE and FINGERPRINT name the owner's node and the
+sha256 of its internode identity key. The supervisor keeps only the secret's
+digest; an invite lives 15 minutes, is redeemed once, and every outstanding
+invite is void after an owner restart.
+
+`join` runs while no owner holds the state: the owner holds `hive/owner.lock`
+for its lifetime, because a node's mesh joins a hive when its owner boots. The
+joiner dials the listener over TLS 1.3, accepts the listener only when its
+certificate key matches FINGERPRINT, proves its own identity key with its
+client certificate and then sends the secret, its node and a fresh mesh key.
+The listener redeems the invite with its supervisor from the native host
+`bee.hive:join_host`, pins the joiner in `hive/peers/NODE.pub`, certifies the
+joiner's mesh key with the owner's authority, and returns its node, gossip
+address, mesh secret and authority pool. The joiner pins the hive node, writes
+`hive/joined.json`, `hive/joined.secret` and `hive/joined.pem`, starts its
+owner and waits until the two supervisors hold an established session. A node
+that already joined a hive, or that other nodes joined, refuses to join.
+
+`leave` needs no owner: it removes `hive/peers/NODE.pub`, and the joined record
+when NODE is the hive this node joined. The owner's enrollment publisher then
+retires the peer and its session ends; the next owner boot of a node that left
+its hive uses its own mesh.
+
+Every owner boot runs its mesh over the runtime's internode TLS with the
+credential `hive/mesh.pem` and pool `hive/mesh-authorities.pem`: the node's own
+authority (`hive/authority.pem`) certifies a fresh leaf, or, on a joined node,
+the leaf its hive node certified is used and that hive's pool is trusted beside
+the node's own authority. Local clients join with the same credential.
+`internode.peer_key_source` resolves local clients from `hive/trusted` and Hive
+peers from `hive/peers`; the enrollment entry names them as `nodes` and `peers`.
+
 `bee version` is not answered by the host: the embedded pack version and the
 pinned runtime commit are not visible to `app.Host`, so the word reaches the
 owner as an application command.

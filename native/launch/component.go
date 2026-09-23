@@ -137,6 +137,24 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		plan.DefaultState = ""
 		route := host.clientRoute
 		plan.Run = func(ctx context.Context) error { return route(ctx, selected, intent) }
+		if intent.hive != nil {
+			command := *intent.hive
+			switch command.verb {
+			case hiveLeave:
+				// Retiring a peer is a change of this node's pins; it needs no owner.
+				plan.Run = func(context.Context) error { return leaveHive(os.Stdout, state, command.node) }
+			case hiveJoin:
+				// The exchange runs while no owner holds the state; the owner it then
+				// starts boots into the hive and the route waits for the session.
+				plan.Run = func(ctx context.Context) error {
+					if err := redeemInvite(ctx, state, command.invite); err != nil {
+						return err
+					}
+					await := hiveCommand{verb: hiveAwait, node: command.node}
+					return route(ctx, selected, clientIntent{hive: &await})
+				}
+			}
+		}
 	}
 	return plan, nil
 }

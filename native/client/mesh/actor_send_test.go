@@ -15,6 +15,7 @@ import (
 	"github.com/wippyai/runtime/api/pid"
 	"github.com/wippyai/runtime/api/relay"
 	stackpkg "github.com/wippyai/runtime/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 type requestCapture struct{ requests chan Message }
@@ -44,7 +45,7 @@ func TestActorSendsControlAcrossNativeMesh(t *testing.T) {
 	if err := owner.Node.RegisterHost("admission-fixture", requestCapture{requests}); err != nil {
 		t.Fatal(err)
 	}
-	err := Local(ctx, LocalConfig{Directory: dir}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
+	err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
 		return WithActor(ctx, stack, descriptor.Node, func(frame context.Context, actor *Actor) error {
 			target := pid.PID{Node: descriptor.Node, Host: "admission-fixture", UniqID: "owner"}
 			deadline, cancel := context.WithTimeout(frame, 3*time.Second)

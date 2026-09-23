@@ -55,9 +55,15 @@ func (r *recordingRegistry) Apply(_ context.Context, changes registry.ChangeSet)
 // prepareOwnerState creates the owner files the publisher reads.
 func prepareOwnerState(t *testing.T, state string) {
 	t.Helper()
-	if _, _, err := prepareOwner(state); err != nil {
+	_, release, err := prepareOwner(state)
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := release(); err != nil {
+			t.Error(err)
+		}
+	})
 }
 
 func writeClientKey(t *testing.T, trusted, node string) ed25519.PublicKey {
@@ -219,7 +225,7 @@ func TestOwnerComponentsIncludeEnrollmentPublisher(t *testing.T) {
 			t.Fatalf("component %s dependencies = %v", component.Name(), deps)
 		}
 	}
-	if len(components) != 2 || names[0] != "bee.hive.rendezvous" || names[1] != "bee.launch.enrollment" {
+	if len(components) != 3 || names[0] != "bee.hive.rendezvous" || names[1] != "bee.launch.join" || names[2] != "bee.launch.enrollment" {
 		t.Fatalf("owner components = %v", names)
 	}
 	// A relative state directory is refused before any filesystem work.

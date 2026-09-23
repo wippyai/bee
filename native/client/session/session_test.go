@@ -5,6 +5,8 @@ package session
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"io"
 	"os"
@@ -104,7 +106,11 @@ func TestAutomaticDisplaySelectionNeverRetriesUnknownOrExplicitRefusal(t *testin
 
 func TestMissingPhysicalInputDoesNotCreateDiscoveryState(t *testing.T) {
 	directory := t.TempDir() + "/missing"
-	if err := Join(context.Background(), Config{Directory: directory, Mode: hive.Control}, nil, io.Discard); err == nil {
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := JoinEnrolled(context.Background(), Config{Directory: directory, EnrollmentDir: directory, Mode: hive.Control}, "client", key, nil, io.Discard); err == nil {
 		t.Fatal("missing input accepted")
 	}
 	if _, err := os.Stat(directory); !errors.Is(err, os.ErrNotExist) {
@@ -158,25 +164,24 @@ func TestCatalogWaitCancellationStopsFurtherRequests(t *testing.T) {
 	}
 }
 
-func TestProbeWaitsForPublicationWithoutCreatingOwnerState(t *testing.T) {
+// An owner that has not published yet is a missing rendezvous: a Hive
+// operation fails without creating owner state. The launch route waits for
+// the publication before it joins.
+func TestOperateWithoutPublicationCreatesNoOwnerState(t *testing.T) {
 	directory := t.TempDir() + "/missing"
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	if err := Probe(ctx, directory); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal("missing owner did not wait", err)
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = Operate(context.Background(), Config{Directory: directory, EnrollmentDir: directory}, "client", key, func(context.Context, *hive.Join, rendezvous.Descriptor) error {
+		t.Error("an unpublished owner reached the operation")
+		return nil
+	})
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("unpublished owner", err)
 	}
 	if _, err := os.Stat(directory); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("probe created owner state", err)
-	}
-}
-
-func TestPublicationWaitDoesNotHideCorruptionOrPermissionFailure(t *testing.T) {
-	for _, failure := range []error{rendezvous.ErrDescriptor, os.ErrPermission} {
-		calls := 0
-		err := awaitPublication(context.Background(), func(context.Context) (rendezvous.Descriptor, error) { calls++; return rendezvous.Descriptor{}, failure })
-		if err != failure || calls != 1 {
-			t.Fatal(err, calls)
-		}
+		t.Fatal("operation created owner state", err)
 	}
 }
 
@@ -198,18 +203,20 @@ func TestForegroundCancellationCannotLeaveTransportAliveIndefinitely(t *testing.
 	}
 }
 
-func TestJoinWaitsForOwnerPublicationWithoutCreatingState(t *testing.T) {
+func TestJoinWithoutPublicationCreatesNoOwnerState(t *testing.T) {
 	directory := t.TempDir() + "/preparing-owner"
 	input, err := os.Open(os.DevNull)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer input.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	err = Join(ctx, Config{Directory: directory, Mode: hive.Control}, input, io.Discard)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal("client failed before owner could publish", err)
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = JoinEnrolled(context.Background(), Config{Directory: directory, EnrollmentDir: directory, Mode: hive.Control}, "client", key, input, io.Discard)
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("client joined an unpublished owner", err)
 	}
 	if _, err := os.Stat(directory); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("client created owner state", err)

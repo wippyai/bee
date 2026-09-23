@@ -8,6 +8,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"os"
 	"os/exec"
@@ -15,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wippyai/bee/native/hive/localtls"
+	"github.com/wippyai/bee/native/hive/meshtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
@@ -58,11 +59,7 @@ func localOwnerTransport(t *testing.T, transport internode.ManagerTLSConfig, pro
 	}
 	execution := "0123456789abcdef0123456789abcdef"
 	if provision {
-		credentials, err := localtls.Prepare(ctx, dir, execution, time.Now().Add(time.Hour))
-		if err != nil {
-			t.Fatal(err)
-		}
-		transport = credentials.TLS
+		transport = provisionMesh(t, dir)
 	}
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
@@ -125,6 +122,79 @@ func localOwnerTransport(t *testing.T, transport internode.ManagerTLSConfig, pro
 	return ctx, dir, owner, enrollment, descriptor
 }
 
+// provisionMesh writes the owner's mesh credential and authority pool into
+// directory the way the owner route does, for the owner and its local clients.
+func provisionMesh(t *testing.T, directory string) internode.ManagerTLSConfig {
+	t.Helper()
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	document, err := meshtls.NewAuthority(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority, err := meshtls.DecodeAuthority(document, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := authority.Issue(public, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential, err := meshtls.Credential(leaf, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, meshtls.CredentialFile), credential, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, meshtls.AuthoritiesFile), authority.Certificate(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return meshtls.Config(directory)
+}
+
+// joinFresh enrolls a fresh identity with the fixture owner for the callback's
+// duration and joins with it, as the launch route enrolls and joins a client.
+func joinFresh(ctx context.Context, dir string, transport internode.ManagerTLSConfig, run func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error) (result error) {
+	store, err := rendezvous.New(dir)
+	if err != nil {
+		return err
+	}
+	descriptor, err := store.Read(ctx)
+	if err != nil {
+		return err
+	}
+	enrollment, err := rendezvous.NewEnrollment(dir)
+	if err != nil {
+		return err
+	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return err
+	}
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return err
+	}
+	node := "bee-client-" + hex.EncodeToString(id[:])
+	lease, _, err := enrollment.RegisterHeld(ctx, descriptor.Execution, node, public)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
+		result = errors.Join(result, lease.Close(cleanup))
+	}()
+	return Joined(ctx, JoinConfig{Directory: dir, EnrollmentDirectory: dir, Node: node, Key: private, TLS: transport}, run)
+}
+
 // This is a genuinely separate OS client, using the same executable solely as
 // an acceptance harness. No fixture preset client key or PID is supplied.
 func TestLocalSeparateClientProcess(t *testing.T) {
@@ -172,7 +242,7 @@ func TestLocalClientSubprocess(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-	if err := Local(ctx, LocalConfig{Directory: dir}, func(ctx context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+	if err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(ctx context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		if owner.Node != "owner" {
 			return errors.New("wrong owner")
 		}
@@ -189,7 +259,7 @@ func TestLocalCallbackFailureCleansEnrollment(t *testing.T) {
 	ctx, dir, _, enrollment, descriptor := localOwner(t)
 	stopped := errors.New("admission refused")
 	var node string
-	err := Local(ctx, LocalConfig{Directory: dir}, func(_ context.Context, stack *stackpkg.Stack, _ rendezvous.Descriptor) error {
+	err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(_ context.Context, stack *stackpkg.Stack, _ rendezvous.Descriptor) error {
 		node = stack.Node.ID()
 		return stopped
 	})
@@ -211,7 +281,7 @@ func TestLocalRejectsStaleEndpointBeforeAdmission(t *testing.T) {
 	if err := store.Publish(ctx, descriptor); err != nil {
 		t.Fatal(err)
 	}
-	err := Local(ctx, LocalConfig{Directory: dir}, func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error {
+	err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error {
 		t.Error("stale endpoint reached admission")
 		return nil
 	})
@@ -222,7 +292,7 @@ func TestLocalRejectsStaleEndpointBeforeAdmission(t *testing.T) {
 
 func TestStartupDeadlineDoesNotEndAdmittedClient(t *testing.T) {
 	ctx, dir, _, _, _ := localOwner(t)
-	err := Local(ctx, LocalConfig{Directory: dir}, func(ctx context.Context, stack *stackpkg.Stack, _ rendezvous.Descriptor) error {
+	err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(ctx context.Context, stack *stackpkg.Stack, _ rendezvous.Descriptor) error {
 		timer := time.NewTimer(startupTimeout + 100*time.Millisecond)
 		defer timer.Stop()
 		select {
@@ -242,7 +312,7 @@ func TestStartupDeadlineDoesNotEndAdmittedClient(t *testing.T) {
 
 func TestMissingOwnerCreatesNoClientState(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "missing")
-	err := Local(context.Background(), LocalConfig{Directory: dir}, func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error {
+	err := joinFresh(context.Background(), dir, internode.ManagerTLSConfig{}, func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error {
 		t.Error("missing owner reached callback")
 		return nil
 	})

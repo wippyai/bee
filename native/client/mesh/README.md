@@ -1,55 +1,41 @@
-# Local native mesh client startup
+# Native mesh client join
 
-`Local(ctx, LocalConfig, callback)` is a compiled client startup path, gated by
-`meshclient`. The native launcher selects the discovery directory and the runtime
-TLS certificate/key/CA configuration. Selected TLS never falls back to plaintext.
-`SameAccount(ctx, directory, callback)` loads protected execution-bound credentials
-from `hive/localtls` after validating loopback discovery and before enrolling the
-client. It bounds the client lifetime by credential expiry. Missing or invalid
-credentials fail without enrollment, plaintext fallback or owner startup.
-Certificate provisioning is available to the lock-held owner bootstrap; public
-launcher selection remains unimplemented.
-The zero TLS configuration is retained for local mechanism fixtures. It reads an
-existing same-account discovery directory, enrolls a fresh random node/signing
-identity, and starts Wippy's native membership and internode stack on automatic
-loopback ports. It does not start an owner, acquire its application lock, open
-application databases or create a Bee transport. A missing descriptor creates
-no state. Private signing keys stay in the client process.
+`Joined(ctx, JoinConfig, callback)` is the one client join, gated by
+`meshclient`. The launch route selects the owner's rendezvous directory, the
+owner-seeded enrollment, the identity it enrolled for this client and the
+owner's mesh credential (`hive/meshtls.Config`). The owner and its local clients
+share that credential as one OS account; selected TLS never falls back to
+plaintext. Native node identity stays with the pinned Ed25519 keys: the client
+trusts only its own key and the descriptor's owner key.
 
-The callback runs only after the pinned owner key has authenticated and the
-advertised endpoints match the descriptor. The protected descriptor and enrollment
-execution are rechecked before the callback. These checks establish a transport
-connection; the supervisor must still bind the execution to its admission response,
-select a desktop and issue recipient-bound grants. A readable descriptor is not
-admission. No application operation is retried by this layer.
+The join reads the descriptor and accepts only loopback endpoints of one address
+family, refuses an identity the enrollment does not list with this key, and
+starts Wippy's native membership and internode stack on automatic loopback
+ports. The callback runs only after the pinned owner key has authenticated and
+the advertised endpoints match the descriptor; the descriptor endpoints and the
+enrollment are then read again, and any change refuses the join. These checks
+establish a transport connection; the supervisor still admits every operation.
+The startup deadline is disarmed after connection while caller cancellation
+remains attached to the transport lifetime. The join never starts an owner,
+acquires its application lock, opens application databases or writes the
+enrollment; enrolling and retiring the client belong to the launch route.
+Clients do not enter Raft's voter set, and their loopback gossip cadence keeps
+their departure prompt.
 
-This local path accepts only loopback endpoints of the same address family.
-Remote invitations and LAN enrollment are separate work. Clients do not enter
-Raft's voter set. The startup deadline is disarmed after connection while caller
-cancellation remains attached to the transport lifetime. The callback must honor
-that context and finish its actor/viewport cleanup before returning.
+TLS failure tests cover invalid, missing and plaintext-owner credentials; they
+prove the callback is not entered and the enrollment is unchanged.
 
-On every return, the client stops its native stack before removing its exact
-execution/node/key enrollment. Cleanup uses a separately bounded context so caller
-cancellation does not skip it. Startup, callback and cleanup errors remain visible.
-Each client holds an OS-locked enrollment slot. After abrupt process death, the
-next holder of that slot reclaims its stale row; live holders are never evicted.
-This does not clean up application grants or replace remote process monitoring.
+## Owner endpoint
 
-```
-make -C native mesh-client-check MESH_RUNTIME=/absolute/reviewed/runtime
-```
-
-Race tests and vet cover a separate client OS process authenticating to a live
-owner with a generated key, normal and failed-admission cleanup, unchanged owner
-lock exclusion, missing-owner behavior, stale-endpoint refusal and transport
-lifetime beyond the startup deadline. The subprocess is an acceptance harness,
-not the public `bee` command. Production supervisor admission and Bee retained-desktop composition remain
-the next integration step.
+`OpenEndpoint(ctx, host)` registers a native host inside a running node through
+the runtime's owned-host registration and returns an endpoint with bounded JSON
+send and receive, like the physical-client actor. The owner's join listener uses
+it on `bee.hive:join_host` to redeem invites with its own supervisor, which
+admits redemption only from that host on its own node.
 
 ## Native process and viewport composition
 
-Inside `Local`, `WithActor` starts the runtime's standard native process host and
+Inside `Joined`, `WithActor` starts the runtime's standard native process host and
 PID generator, registers the process in topology, and gives the callback its sealed
 process frame. That frame has an explicit empty security scope. The host uses one
 scheduler worker for this physical client. `actor.go` owns bounded control-message
@@ -60,7 +46,7 @@ A single TTY service shares the connection manager through the runtime's
 `internode.NewSurfaceTransport`, also used by standard boot. Actor completion
 cancels the callback and retires local viewport handles before releasing its frame.
 The callback must finish physical presentation before returning; `WithActor` then
-drains its host before `Local` stops networking.
+drains its host before `Joined` stops networking.
 
 The control inbox retains at most 32 JSON messages of 16 KiB each. At its native
 boundary it accepts explicit JSON objects and the Go maps Wippy normalizes from

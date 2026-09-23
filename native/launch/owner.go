@@ -3,6 +3,7 @@
 package launch
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wippyai/bee/native/hive/meshtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
 	"github.com/wippyai/runtime/api/boot"
@@ -39,11 +41,16 @@ const (
 
 // ownerComponents returns the boot components the owner route adds: the
 // rendezvous publisher that advertises this owner's live join address for local
-// clients, and the enrollment publisher that mirrors the trusted client
-// directory into the supervisor's admission entry.
+// clients, the join listener that redeems Hive invites, and the enrollment
+// publisher that mirrors the trusted client and peer directories into the
+// supervisor's admission entry.
 func ownerComponents(state, execution string) ([]boot.Component, error) {
 	directory := filepath.Join(state, rendezvous.DirectoryName)
 	rendezvousPublisher, err := rendezvous.Publisher(directory, execution)
+	if err != nil {
+		return nil, err
+	}
+	listener, err := joinListener(state)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +58,7 @@ func ownerComponents(state, execution string) ([]boot.Component, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []boot.Component{rendezvousPublisher, publisher}, nil
+	return []boot.Component{rendezvousPublisher, listener, publisher}, nil
 }
 
 // prepareOwner opens the owner's retained host resources. The runtime calls it
@@ -67,30 +74,49 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 	if err := privatefile.EnsurePrivateDir(directory); err != nil {
 		return nil, nil, err
 	}
-	trustedPath := ownerTrustedDirectory(state)
-	if err := privatefile.EnsurePrivateDir(trustedPath); err != nil {
+	unlock, err := lockOwner(context.Background(), state)
+	if err != nil {
 		return nil, nil, err
 	}
-	secretPath := filepath.Join(directory, membershipSecretName)
-	if _, err := ensureSecretFile(secretPath, 32); err != nil {
-		return nil, nil, err
+	config, err := prepareLockedOwner(state)
+	if err != nil {
+		return nil, nil, errors.Join(err, unlock())
+	}
+	return config, unlock, nil
+}
+
+// prepareLockedOwner builds the owner's boot configuration while it holds the
+// owner lock.
+func prepareLockedOwner(state string) (boot.Config, error) {
+	directory := ownerDirectory(state)
+	trustedPath := ownerTrustedDirectory(state)
+	if err := privatefile.EnsurePrivateDir(trustedPath); err != nil {
+		return nil, err
+	}
+	if _, err := ensureSecretFile(filepath.Join(directory, membershipSecretName), 32); err != nil {
+		return nil, err
 	}
 	keyPath := filepath.Join(directory, internodeKeyName)
 	private, _, err := ensureIdentityFile(keyPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	public := private.Public().(ed25519.PublicKey)
 
 	execution, err := ensureExecution(directory)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	node := ownerNodeName(state)
+	secretPath, seed, err := prepareMesh(state, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	transport := meshtls.Config(directory)
 
 	peersPath := ownerPeersDirectory(state)
 	if err := privatefile.EnsurePrivateDir(peersPath); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	peerSource := clusterapi.PeerKeySource(func(nodeID string) (ed25519.PublicKey, bool) {
 		if key, ok := resolveTrustedKey(trustedPath, nodeID); ok {
@@ -103,21 +129,25 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 		"name":                                node,
 		"raft.enabled":                        false,
 		"raft.role":                           "client",
-		"membership.bind_addr":                "127.0.0.1",
+		"membership.bind_addr":                meshAddress.String(),
 		"membership.bind_port":                0,
-		"membership.advertise_addr":           "127.0.0.1",
-		"membership.join_addrs":               "",
+		"membership.advertise_addr":           meshAddress.String(),
+		"membership.join_addrs":               seed,
 		"membership.secret_file":              secretPath,
 		"membership.secret_key":               "",
-		"internode.bind_addr":                 "127.0.0.1",
+		"internode.bind_addr":                 meshAddress.String(),
 		"internode.bind_port":                 0,
 		"internode.auto_port":                 true,
-		"internode.advertise_addr":            "127.0.0.1",
+		"internode.advertise_addr":            meshAddress.String(),
 		"internode.advertise_port":            0,
 		"internode.identity_key_file":         keyPath,
 		"internode.identity_key":              "",
 		"internode.trusted_peer_keys." + node: base64.RawStdEncoding.EncodeToString(public),
 		"internode.peer_key_source":           peerSource,
+		"internode.tls.enabled":               transport.Enabled,
+		"internode.tls.cert_file":             transport.CertFile,
+		"internode.tls.key_file":              transport.KeyFile,
+		"internode.tls.ca_file":               transport.CAFile,
 	}
 	desktop := map[string]any{
 		"execution":     execution,
@@ -132,14 +162,13 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 		"configured_nodes": []any{},
 		"desktop":          desktop,
 	}}
-	config := boot.NewConfig(
+	return boot.NewConfig(
 		boot.WithSection("relay", map[string]any{"node_name": node}),
 		boot.WithSection("cluster", cluster),
 		boot.WithSection("override", map[string]any{
 			"bee.hive.host:supervisor_service:input": supervisorInput,
 		}),
-	)
-	return config, func() error { return nil }, nil
+	), nil
 }
 
 // ownerExpiry is the desktop-configuration expiry. The owner admits local
@@ -303,11 +332,33 @@ func validTrustedName(nodeID string) bool {
 	return !strings.ContainsAny(nodeID, `/\`) && !strings.Contains(nodeID, "..") && !strings.ContainsRune(nodeID, 0)
 }
 
-func writeOwnerFile(path string, data []byte) error {
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+// writeOwnerFile replaces path atomically with an owner-only file.
+func writeOwnerFile(path string, data []byte) (result error) {
+	file, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
 		return err
 	}
-	return privatefile.SetOwnerOnlyPermissions(path)
+	defer func() {
+		if result != nil {
+			_ = os.Remove(file.Name())
+		}
+	}()
+	if err := privatefile.SetOwnerOnlyPermissions(file.Name()); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), path)
 }
 
 func sha256Hex(value string) string {

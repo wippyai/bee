@@ -15,13 +15,11 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
-	"github.com/wippyai/bee/native/client/mesh"
 	"github.com/wippyai/bee/native/client/session"
+	"github.com/wippyai/bee/native/hive/meshtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	app "github.com/wippyai/runtime/cmd/app"
 )
-
-var _ = mesh.Local
 
 // runClientRoute is the production client route: ensure the retained owner
 // exists, enroll this process's identity and join the owner's mesh. Ctrl-Q ends
@@ -84,19 +82,27 @@ func readDescriptor(ctx context.Context, directory string) (rendezvous.Descripto
 }
 
 // joinOwner boots the client against the owner's published mesh and presents the
-// retained desktop, using the exact node identity it enrolled. The owner seeded
-// that key, so the join is plaintext loopback with the pinned identity.
+// retained desktop, or runs a `bee hive` command, using the exact node identity
+// it enrolled. The owner seeded that key; the join is loopback with the pinned
+// identity and the owner's mesh credential.
 func joinOwner(ctx context.Context, join joinRequest) error {
 	if len(join.Key) != ed25519.PrivateKeySize {
 		return errors.New("client identity is missing")
 	}
 	// The rendezvous directory holds the published join address; the owner
-	// directory holds the enrollment the owner seeded. mesh.Joined reads both.
+	// directory holds the enrollment the owner seeded and its mesh credential.
 	config := session.Config{
 		Directory:     join.Directory,
 		EnrollmentDir: ownerDirectory(join.State),
+		TLS:           meshtls.Config(ownerDirectory(join.State)),
 		Selection:     session.Selection{Workspace: join.Intent.workspace, Desktop: join.Intent.desktop},
 		Mode:          hive.Control,
+	}
+	if join.Intent.hive != nil {
+		command := *join.Intent.hive
+		return session.Operate(ctx, config, join.Node, join.Key, func(ctx context.Context, client *hive.Join, _ rendezvous.Descriptor) error {
+			return runHive(ctx, os.Stdout, client, join.Directory, command)
+		})
 	}
 	if join.Intent.observe {
 		config.Mode = hive.Observe

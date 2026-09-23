@@ -13,13 +13,14 @@ end
 local function turn_signal(key: string, phase: string): Object
     return {type = "turn.signal", event_key = key, data = {type = "turn.signal", phase = phase}}
 end
-local function records(client: any, thread_id: string): {Object}
-    local page = harness.value(client:call("read_after", {thread_id = thread_id, cursor = 0, limit = 64}))
+local viewer = harness.principal("alice", harness.ALL)
+local function records(thread_id: string): {Object}
+    local page = harness.value(viewer:call("read_after", {thread_id = thread_id, cursor = 0, limit = 64}))
     return page.records :: {Object}
 end
-local function notices(client: any, thread_id: string): {Object}
+local function notices(thread_id: string): {Object}
     local found: {Object} = {}
-    for _, item in ipairs(records(client, thread_id)) do
+    for _, item in ipairs(records(thread_id)) do
         local body = item.body :: Object
         if item.kind == "message" and tostring(body.message_id):sub(1, 7) == "notice:" then found[#found + 1] = item end
     end
@@ -43,26 +44,26 @@ local function define_tests()
         end
         local function observe(target: string, key: string, phase: string): Object
             return harness.value(alice:call("record", {thread_id = target, idempotency_key = harness.key(), kind = "observation", source = "stream",
-                body = turn_signal(key, phase), context = {action_id = "target-action", attempt_id = "target-attempt"}}))
+                body = turn_signal(key, phase), context = {action_id = "target-action", attempt_id = "target-attempt"}})) :: Object
         end
-        local function notify(client: any, watcher: string, target: string, key: string, watcher_action: string?): any
+        local function notify(watcher: string, target: string, key: string, watcher_action: string?)
             local request: Object = {thread_id = watcher, idempotency_key = key, target_thread_id = target, target_action_id = "target-action"}
             if watcher_action then request.watcher_action_id = watcher_action end
-            return client:call("notify", request)
+            return alice:call("notify", request)
         end
         test.it("tells the watcher once when the watched action ends its turn", function()
             local watcher, target = sessions()
             local key = harness.key()
-            local registered = harness.value(notify(alice, watcher, target, key, "watcher-action"))
+            local registered = harness.value(notify(watcher, target, key, "watcher-action"))
             test.eq(registered.state, "pending")
-            local replayed = notify(alice, watcher, target, key, "watcher-action")
+            local replayed = notify(watcher, target, key, "watcher-action")
             test.is_true(replayed.replayed)
             test.eq(harness.value(replayed).notice_id, registered.notice_id)
             local before = harness.head_sequence(watcher)
             observe(target, "turn-start", "started")
             test.eq(harness.head_sequence(watcher), before)
             local ended = observe(target, "turn-end", "ended")
-            local told = notices(alice, watcher)
+            local told = notices(watcher)
             test.eq(#told, 1)
             local body = told[1].body :: Object
             test.eq(body.message_kind, "notification")
@@ -74,11 +75,11 @@ local function define_tests()
             test.eq(causation.thread_id, target)
             test.eq(causation.record_id, ended.record_id)
             observe(target, "turn-end-2", "ended")
-            test.eq(#notices(alice, watcher), 1)
+            test.eq(#notices(watcher), 1)
         end)
         test.it("wakes a watcher blocked in a wait on its own thread", function()
             local watcher, target = sessions()
-            harness.value(notify(alice, watcher, target, harness.key(), "watcher-action"))
+            harness.value(notify(watcher, target, harness.key(), "watcher-action"))
             local head = harness.head_sequence(watcher)
             local waiting = alice:start("watch", {thread_id = watcher, after_sequence = head, wait_ms = 20000})
             observe(target, "turn-end", "ended")
@@ -88,10 +89,10 @@ local function define_tests()
         end)
         test.it("tells the watcher when the watched attempt exits", function()
             local watcher, target = sessions()
-            harness.value(notify(alice, watcher, target, harness.key(), nil))
+            harness.value(notify(watcher, target, harness.key(), nil))
             local receipt = harness.value(alice:call("receipt", {thread_id = target, idempotency_key = harness.key(), action_id = "target-action", attempt_id = "target-attempt",
                 receipt = {scope = "attempt", outcome = "uncertain", evidence_refs = {}, error = {code = "lost", message = "lost", retryable = false}}}))
-            local told = notices(alice, watcher)
+            local told = notices(watcher)
             test.eq(#told, 1)
             local body = told[1].body :: Object
             test.eq(body.outcome, "uncertain")
@@ -103,9 +104,9 @@ local function define_tests()
             local watcher, target = sessions()
             local receipt = harness.value(alice:call("receipt", {thread_id = target, idempotency_key = harness.key(), action_id = "target-action", attempt_id = "target-attempt",
                 receipt = {scope = "attempt", outcome = "succeeded", evidence_refs = {}}}))
-            local registered = harness.value(notify(alice, watcher, target, harness.key(), "watcher-action"))
+            local registered = harness.value(notify(watcher, target, harness.key(), "watcher-action"))
             test.eq(registered.state, "fired")
-            local told = notices(alice, watcher)
+            local told = notices(watcher)
             test.eq(#told, 1)
             test.eq((told[1].causation :: Object).record_id, receipt.record_id)
             test.eq((told[1].body :: Object).outcome, "succeeded")
@@ -114,11 +115,11 @@ local function define_tests()
             local watcher, target = sessions()
             local foreign = harness.thread(bob, "Bob's session")
             test.eq(harness.code(bob:call("notify", {thread_id = foreign, idempotency_key = harness.key(), target_thread_id = target, target_action_id = "target-action"})), "DENIED")
-            test.eq(harness.code(notify(alice, watcher, target, harness.key(), "target-action")), "INVALID_ARGUMENT")
+            test.eq(harness.code(notify(watcher, target, harness.key(), "target-action")), "INVALID_ARGUMENT")
             harness.value(alice:call("join", {thread_id = watcher, idempotency_key = harness.key(), member_id = "bob", role = "participant", expected_revision = 1}))
             harness.value(bob:call("admit_action", {thread_id = watcher, idempotency_key = harness.key(), action_id = "bob-action", admitted = admitted_for("bob")}))
-            test.eq(harness.code(notify(alice, watcher, target, harness.key(), "bob-action")), "DENIED")
-            test.eq(harness.code(notify(alice, watcher, target, harness.key(), "missing-action") ), "INVALID_ARGUMENT")
+            test.eq(harness.code(notify(watcher, target, harness.key(), "bob-action")), "DENIED")
+            test.eq(harness.code(notify(watcher, target, harness.key(), "missing-action") ), "INVALID_ARGUMENT")
             test.eq(harness.code(alice:call("notify", {thread_id = watcher, idempotency_key = harness.key(), target_thread_id = target, target_action_id = "missing"})), "NOT_FOUND")
             local observed = harness.thread(alice, "Observed")
             harness.value(alice:call("join", {thread_id = observed, idempotency_key = harness.key(), member_id = "bob", role = "observer", expected_revision = 1}))

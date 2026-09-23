@@ -29,6 +29,7 @@ type Limits = {
     max_waiters: integer,
     recap_summary_lines: integer,
     recap_line_bytes: integer,
+    max_pending_notices_per_thread: integer,
 }
 type Delivery = {
     channels: {string},

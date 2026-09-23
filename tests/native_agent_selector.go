@@ -1098,6 +1098,11 @@ func savedProfileLaunch(binary string) error {
 	if err := ui.waitFor("Choose a profile", 25*time.Second); err != nil {
 		return err
 	}
+	// New duplicates the selected row, so it acts only once the asynchronous
+	// catalog reply has listed the profiles.
+	if err := ui.waitFor("Muse", 25*time.Second); err != nil {
+		return err
+	}
 	if err := ui.send("n"); err != nil {
 		return err
 	}

@@ -45,15 +45,25 @@ local TOOLS: {Tool} = {
     {name = "thread_wait", description = "Wait, read-only and bounded, for the bound thread to move past a cursor; claims nothing", operation = "bee.threads.delivery:watch",
         policies = {TOOL_POLICY_REFS.read},
         schema = {type = "object", additionalProperties = false, properties = {after_sequence = {type = "integer", minimum = 0}, wait_ms = {type = "integer", minimum = 0}}}, annotations = READ_ANNOTATIONS},
-    {name = "thread_message", description = "Append one message to the bound thread as the authenticated subject", operation = "bee.threads.service:record",
+    {name = "thread_sessions", description = "List the running agent sessions in your workspace whose threads you may read, yourself included (self). Each has a session address (its action_id), attempt, thread and title. Pass an action_id, attempt_id, or a thread_id holding one session as session to thread_message or thread_notify.", operation = "bee.threads.service:get",
+        policies = {TOOL_POLICY_REFS.read},
+        schema = {type = "object", additionalProperties = false, properties = {}}, annotations = READ_ANNOTATIONS},
+    {name = "thread_message", description = "Append one message as the authenticated subject: to the bound thread with recipient_ids, or with session to that running session's thread, addressed to it; it reads the message at its next thread_read and a thread_wait there wakes", operation = "bee.threads.service:record",
         policies = {TOOL_POLICY_REFS.message}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"idempotency_key", "message_id", "message_kind", "recipient_ids", "content"}, properties = {
+        schema = {type = "object", additionalProperties = false, required = {"idempotency_key", "message_id", "message_kind", "content"}, properties = {
             idempotency_key = {type = "string", minLength = 1, maxLength = 160}, message_id = {type = "string", minLength = 1, maxLength = 160},
+            session = {type = "string", minLength = 1, maxLength = 160},
             message_kind = {type = "string", enum = {"request", "progress", "reply", "notification"}},
             recipient_ids = {type = "array", maxItems = 64, items = {type = "string", minLength = 1, maxLength = 160}},
             content = {type = "object", additionalProperties = false, properties = {text = {type = "string", maxLength = 16384}, artifact_ref = {type = "string", minLength = 1, maxLength = 160}}},
             in_reply_to = {type = "object", additionalProperties = false, required = {"thread_id", "record_id"}, properties = {thread_id = {type = "string", minLength = 1, maxLength = 160}, record_id = {type = "string", minLength = 1, maxLength = 160}}},
             outcome = {type = "string", enum = {"succeeded", "failed", "cancelled", "uncertain"}},
+        }}},
+    {name = "thread_notify", description = "Be told once when a running session ends its current turn or exits: a notification message lands on your own thread, where thread_wait wakes on it. session is an action_id, attempt_id, or a thread_id holding one session; a session that has already exited is reported at once.", operation = "bee.threads.service:notify",
+        policies = {TOOL_POLICY_REFS.message}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"session", "idempotency_key"}, properties = {
+            session = {type = "string", minLength = 1, maxLength = 160},
+            idempotency_key = {type = "string", minLength = 1, maxLength = 160},
         }}},
     {name = "thread_launch", description = "Start one host-allow-listed managed agent in your own workspace and thread. Returns the admitted definition and title, submitted brief, and child thread, action and attempt IDs for thread_read, thread_message and thread_wait.", operation = "bee.harness.launch:agent_launch_call",
         policies = {TOOL_POLICY_REFS.launch}, annotations = WRITE_ANNOTATIONS,
@@ -223,18 +233,30 @@ function M.wait_arguments(params: Object): (Object?, string?)
 end
 -- Message arguments are the public message shape without sender, thread or
 -- lifecycle context. The full message decoder remains the authority for its
--- nested content, references and kind-specific invariants.
+-- nested content, references and kind-specific invariants. A message to a
+-- session names no recipients: the endpoint addresses the resolved session
+-- and names the caller's own action as the sender's.
 function M.message_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
-    local unknown_field = bounds.fields(arguments, {"idempotency_key", "message_id", "message_kind", "recipient_ids", "content", "in_reply_to", "outcome"})
+    local unknown_field = bounds.fields(arguments, {"idempotency_key", "message_id", "message_kind", "recipient_ids", "session", "content", "in_reply_to", "outcome"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(arguments.idempotency_key)
     if not key then return nil, "idempotency_key is required and must be an identifier" end
+    local session: string? = nil
+    if arguments.session ~= nil then
+        session = bounds.id(arguments.session)
+        if not session then return nil, "session must be an identifier" end
+        local named = arguments.recipient_ids
+        if named ~= nil and (type(named) ~= "table" or next(named :: {[unknown]: unknown}) ~= nil) then
+            return nil, "a message to a session names no recipient_ids; the session is the recipient"
+        end
+    end
     local candidate: Object = {}
     for _, name in ipairs({"message_id", "message_kind", "recipient_ids", "content", "in_reply_to", "outcome"}) do
         if arguments[name] ~= nil then candidate[name] = arguments[name] end
     end
+    if session then candidate.recipient_ids = {} end
     -- message.decode requires a sender; the endpoint strips this sentinel
     -- before calling the owner, which supplies the authenticated actor.
     candidate.sender_id = "gateway-mcp-subject"
@@ -243,7 +265,32 @@ function M.message_arguments(params: Object): (Object?, string?)
     local body: Object = {message_id = decoded.message_id, message_kind = decoded.message_kind, recipient_ids = decoded.recipient_ids, content = decoded.content}
     if decoded.in_reply_to then body.in_reply_to = decoded.in_reply_to end
     if decoded.outcome then body.outcome = decoded.outcome end
-    return {idempotency_key = key, body = body}, nil
+    return {idempotency_key = key, body = body, session = session}, nil
+end
+-- Session discovery takes no arguments: the binding selects the workspace.
+function M.sessions_arguments(params: Object): (Object?, string?)
+    local arguments: Object = {}
+    if params.arguments ~= nil then
+        local declared = bounds.object(params.arguments)
+        if not declared then return nil, "arguments must be an object" end
+        arguments = declared
+    end
+    local unknown_field = bounds.fields(arguments, {})
+    if unknown_field then return nil, unknown_field end
+    return {}, nil
+end
+-- A notice names the watched session and a retry key; the endpoint supplies
+-- the caller's own thread and action as where and to whom it is delivered.
+function M.notify_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"session", "idempotency_key"})
+    if unknown_field then return nil, unknown_field end
+    local session = bounds.id(arguments.session)
+    if not session then return nil, "session is required and must be an identifier" end
+    local key = bounds.id(arguments.idempotency_key)
+    if not key then return nil, "idempotency_key is required and must be an identifier" end
+    return {session = session, idempotency_key = key}, nil
 end
 
 -- Launch arguments are the launch facade's own bounded request; the endpoint

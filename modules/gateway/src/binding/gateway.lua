@@ -26,6 +26,7 @@ local mcp = require("mcp")
 local surface = require("surface")
 local surface_store = require("surface_store")
 local access = require("access")
+local sessions = require("sessions")
 local M = {}
 function M.accepts_host(value: unknown): boolean
     local current = configuration.current()
@@ -1026,6 +1027,33 @@ function M.authenticate(token: string, action_id: string, kind: string): (Bindin
     db:release()
     if count_error then return nil, fail("STORAGE", "count presentation") end
     return binding, nil
+end
+-- The running sessions of the caller's workspace: bindings valid under the
+-- current listener generation whose intake is not sealed, one per action.
+-- This lists what runs; whether the caller may see or reach a session is
+-- the thread owner's membership decision, taken as the caller.
+M.MAX_WORKSPACE_BINDINGS = 256
+function M.workspace_sessions(binding: Binding): ({sessions.Candidate}?, Reply?)
+    local workspace_id = binding.workspace_id
+    if not workspace_id then return nil, fail("UNAVAILABLE", "this binding names no workspace, so it has no peer sessions") end
+    local db, open_failure = open()
+    if not db then return nil, open_failure end
+    local generation, generation_failure = M.generation(db)
+    if not generation then db:release(); return nil, generation_failure end
+    local rows, err = db:query("SELECT * FROM bee_gateway_bindings WHERE workspace_id = ? AND revoked_at IS NULL AND sealed_at IS NULL AND epoch = ? ORDER BY created_at DESC LIMIT ?",
+        {workspace_id, generation.epoch, M.MAX_WORKSPACE_BINDINGS})
+    db:release()
+    if err or not rows then return nil, fail("STORAGE", "read workspace bindings") end
+    local candidates: {sessions.Candidate} = {}
+    for _, row in ipairs(rows) do
+        local live, decode_error = binding_of(row :: Row)
+        if not live then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
+        if M.valid(live, generation) then
+            candidates[#candidates + 1] = {binding_id = live.binding_id, subject = live.subject, action_id = live.action_id, attempt_id = live.attempt_id,
+                thread_id = live.thread_id, carrier_epoch = live.carrier_epoch}
+        end
+    end
+    return sessions.latest(candidates), nil
 end
 -- submit_hook: an observation the attempt reports about itself, queued in
 -- the gateway store under the binding's identity until a carrier commits

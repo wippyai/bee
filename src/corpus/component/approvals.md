@@ -11,6 +11,17 @@ ingress `bee.threads.approvals:append` under a stable event id, and
 acknowledges a row only after the ingress replies; a lost acknowledgement
 repeats the delivery and the thread replays the same record.
 
+A transition record states the outcome but owes nobody anything, and only a
+message commit creates the recipient obligation the delivery layer carries. So
+every terminal change of a thread-bound request enqueues a second outbox row
+beside its transition, under `<approval_id>:<revision>:notice`: a
+`notification` addressed to the requester naming the outcome and the approval.
+A denial, an expiry and a withdrawal are announced as an approval is, because
+what leaves an agent waiting is the silence rather than the answer. The notice
+is a side effect of the decision and never a condition of it: a thread that
+refuses it is retried, and an exhausted row stays visible with its last error
+while the decision it announces stands.
+
 States run `pending` to `decided`, `expired` or `withdrawn`; the thread
 projection records them as `approved`/`denied`, `expired` and `cancelled`.
 Expiry is enforced by the owner when a decision or withdrawal arrives and by

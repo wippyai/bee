@@ -1,8 +1,33 @@
-name: Hub credential check
+name: Hub credential and publication check
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Release version the publication dry run packs
+        required: true
+        default: 0.1.0-dev
+        type: string
 permissions: {}
 jobs:
+  publication:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - name: Build pinned publication runtime
+      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
+      with:
+        mode: toolchain
+        manifest: wippy.build.json
+        output: .wippy/bin/bee-wippy
+    - name: Dry-run every Bee module publication
+      env:
+        REQUESTED_VERSION: ${{ inputs.version }}
+      run: make hub-check BEE_VERSION="$REQUESTED_VERSION"
   check:
     environment: hub
     runs-on: ubuntu-24.04

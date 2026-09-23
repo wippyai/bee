@@ -225,7 +225,10 @@ thread association, geometry, mode and preferences. On boot it reopens
 automatic instances in saved order after admission checks; manual instances
 resume from Start. Process and terminal capabilities are recreated. Failed
 restores retain their checkpoint. Closing a live view-owned instance removes
-its resume record after EXIT; workspace shutdown retains it. A revoked thread
+its resume record after EXIT; workspace shutdown retains it. An application
+that returns normally has closed its view. An EXIT with an error result from a
+ready application is an application failure, and the workspace keeps an
+automatic instance's record and display assignment for recovery. A revoked thread
 binding removes the saved record and prevents restoration. Stored JSON never
 contains credentials, grants, PIDs or runtime objects. Native Terminal has no
 cold-resume contract; a surviving session service would be required to rejoin
@@ -256,6 +259,9 @@ ordinary question becomes `busy`.
 Workspace quit gathers opted-in decisions while continuing checkpoint writes
 and reports incomplete cleanup after its bounded deadline. Only a successful
 checkpoint receipt guarantees a save. Ctrl+Q and fatal process or terminal loss
-remain emergency exits without a graceful-close guarantee. Closing a view stops
-its view-owned process; work that must outlive a view belongs to a supervised
-owner service.
+remain emergency exits without a graceful-close guarantee. When the workspace
+host stops or is lost, the broker cancels every application and exits only after
+each has exited; an application still running eight seconds after its cancel is
+terminated. The Terminal application returns only after its PTY child is reaped,
+so a stopped owner leaves no shell behind. Closing a view stops its view-owned
+process; work that must outlive a view belongs to a supervised owner service.

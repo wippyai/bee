@@ -78,10 +78,10 @@ HUB_VISIBILITY ?= private
 hub-check:
 	@test -n "$(BEE_VERSION)" || { echo 'Set BEE_VERSION to the release version.' >&2; exit 1; }
 	$(MAKE) lint WIPPY="$(abspath $(NATIVE_WIPPY))"
-	"$(abspath $(NATIVE_WIPPY))" publish --dry-run --version "$(BEE_VERSION)"
+	WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_VERSION="$(BEE_VERSION)" build/hub-publish.sh check
 
 hub-publish: hub-check
-	"$(abspath $(NATIVE_WIPPY))" publish --version "$(BEE_VERSION)" --protected --module-visibility "$(HUB_VISIBILITY)"
+	WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_VERSION="$(BEE_VERSION)" HUB_VISIBILITY="$(HUB_VISIBILITY)" build/hub-publish.sh publish
 
 # Two real executables, one disposable state directory; no --base workaround.
 .PHONY: native-upgrade-check

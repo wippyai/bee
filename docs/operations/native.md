@@ -73,9 +73,11 @@ checks out the selected runtime in a temporary directory before compiling.
 Uploads still require separate credentials. [Runtime integration](../development/runtime.md)
 describes the boundary between Bee and the selected runtime.
 
-`BEE_VERSION=0.1.0-dev make native-pack` stages the real root and physical module
-layout only to write About metadata, then runs `wippy pack --module` for
-`bee/bee` and every dependency selected by the root lock. It writes immutable
+`BEE_VERSION=0.1.0-dev make native-pack` stages the release source with
+`build/release-source.sh` (About metadata, and `bee/bee` plus every `bee/*`
+module and sibling `ns.dependency` at `BEE_VERSION`, the versions Hub
+publication uses), then runs `wippy pack --module` for `bee/bee` and every
+dependency selected by the staged lock. It writes immutable
 pack generations under `dist/native-packs/`, a source-free lock/vendor deployment
 at `dist/portable-deployment/`, and seals every exact WAPP path and SHA-256 into
 `dist/bee.bundle.build.json`. The deployment has an empty source path and no

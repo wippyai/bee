@@ -76,6 +76,18 @@ exhausted until an authorized manager returns it to the queue. A queued send is
 not execution success. An uncertain native effect is reconciled by its effect
 owner before a retry.
 
+A decision nobody is told of is not delivered. Only a message commit creates a
+recipient obligation, so a transition record states the outcome and owes no
+one anything. When a request is bound to a thread, every terminal change
+therefore enqueues a second event beside its transition, under
+`<approval_id>:<revision>:notice`: a `notification` addressed to the requester
+that names the outcome and the approval. An approval, a denial, an expiry and a
+withdrawal are announced alike, because what leaves an agent waiting is the
+silence rather than the answer. The notice is a side effect of the decision and
+never a condition of it: it rides the same outbox, so a thread that refuses it
+is retried and finally exhausted in view of `deliveries` while the decision it
+announces stands.
+
 The owner enforces persisted deadlines on every operation and on worker
 passes. A disconnected or unavailable owner is shown as unavailable; missing
 updates do not imply approval, expiry or deletion. A stale process PID is not a

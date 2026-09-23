@@ -72,6 +72,7 @@ func Joined(ctx context.Context, directory, enrollmentDirectory, node string, pr
 		InternodeIdentityKey:     base64.RawStdEncoding.EncodeToString(private),
 		InternodeTrustedPeerKeys: map[string]string{node: base64.RawStdEncoding.EncodeToString(public), descriptor.Node: descriptor.PublicKey},
 		JoinAddrs:                []string{descriptor.Gossip},
+		MembershipGossipInterval: loopbackGossipInterval,
 		Meta:                     clusterapi.NodeMeta{"raft_eligible": "false", internode.MetadataSurfaceProtocol: "1"},
 	})
 	if err != nil {

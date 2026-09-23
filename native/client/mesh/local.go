@@ -31,6 +31,12 @@ import (
 )
 
 const startupTimeout = 15 * time.Second
+
+// loopbackGossipInterval is memberlist's loopback cadence. A client's mesh is
+// a same-machine loopback pair, and its graceful leave waits for the leave
+// broadcast to be gossiped, which the runtime's multi-node default of 500ms
+// stretches to about a second of every client exit.
+const loopbackGossipInterval = 100 * time.Millisecond
 const cleanupTimeout = 3 * time.Second
 
 // LocalConfig is selected by the native launcher, not by remote metadata.
@@ -137,6 +143,7 @@ func local(ctx context.Context, config LocalConfig, run func(context.Context, *s
 		InternodeTLS:             config.TLS,
 		InternodeTrustedPeerKeys: map[string]string{node: base64.RawStdEncoding.EncodeToString(public), descriptor.Node: descriptor.PublicKey},
 		JoinAddrs:                []string{descriptor.Gossip},
+		MembershipGossipInterval: loopbackGossipInterval,
 		Meta:                     clusterapi.NodeMeta{"raft_eligible": "false", internode.MetadataSurfaceProtocol: "1"},
 	})
 	if err != nil {

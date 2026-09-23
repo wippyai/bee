@@ -10,7 +10,7 @@ local preflight = require("preflight")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@5"
+M.REVISION = "bee.governance-component-guide@6"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -268,6 +268,8 @@ function M.document(): string
         .. " bee.application:appearance, authenticate appearance messages by their broker sender, and"
         .. " declare exactly the native modules and library imports the source uses."
     lines[#lines + 1] = ""
+    lines[#lines + 1] = M.visual_style()
+    lines[#lines + 1] = ""
     lines[#lines + 1] = CONFIG_SHAPE_RULE
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Every authoring operation except guide names its overlay_id; it is distinct from the agent's runtime workspace."
@@ -289,6 +291,43 @@ function M.document(): string
     lines[#lines + 1] = "Minimal example: put the JSON below at path " .. M.ENTRIES_PATH
         .. " and freeze it. Its entry id is " .. M.DEFINITION_ID .. " and its title " .. M.TITLE .. "."
     return table.concat(lines, "\n")
+end
+
+-- The application archetypes of docs/guides/app-style.md: the request each
+-- one answers and the frame and visualization kit calls that compose it.
+type Archetype = {name: string, request: string, calls: {string}}
+local ARCHETYPES: {Archetype} = {
+    {name = "list and detail", request = "a collection of items to browse, select and act on",
+        calls = {"frame.table", "frame.window", "frame.split", "frame.panel"}},
+    {name = "dashboard grid", request = "several independent measurements at once",
+        calls = {"frame.grid", "frame.panel", "viz.tiles", "viz.bars", "viz.line", "viz.gauge"}},
+    {name = "form", request = "values the person enters or edits", calls = {"frame.field", "frame.actions"}},
+    {name = "wizard", request = "a task done in ordered steps", calls = {"frame.steps", "frame.field", "frame.actions"}},
+    {name = "log and stream", request = "an append-only sequence of lines or events",
+        calls = {"frame.row", "frame.window", "viz.series"}},
+    {name = "monitor", request = "a measurement that changes over time",
+        calls = {"viz.tiles", "viz.line", "viz.series", "viz.cadence", "frame.table"}},
+}
+M.ARCHETYPES = ARCHETYPES
+
+-- How an application looks: the style contract, the size classes, the
+-- archetype for a request and the visualization kit.
+function M.visual_style(): string
+    local routes: {string} = {}
+    for _, archetype in ipairs(ARCHETYPES) do
+        routes[#routes + 1] = archetype.name .. ": " .. archetype.request .. " (" .. table.concat(archetype.calls, ", ") .. ")"
+    end
+    return "Read the visual style, docs/guides/app-style.md (corpus document docs/app_style), before drawing:"
+        .. " it fixes the rows, gaps, color roles, states and mouse targets, and every rule names its frame call."
+        .. " Layouts change only at the size classes frame.size reports, compact from 80x24, standard from 120x36"
+        .. " and wide from 160x48, and frame.layout returns the header, tabs, work, action bar and footer rows."
+        .. " Pick the archetype that matches the request and compose it from its calls, so even a complex"
+        .. " dashboard is a one-shot composition: " .. table.concat(routes, "; ") .. "."
+        .. " Chart with the visualization kit bee.application:viz, imported as viz = \"bee.application:viz\":"
+        .. " viz.sparkline, viz.line (area too), viz.bars, viz.columns, viz.stacked, viz.histogram, viz.heatmap,"
+        .. " viz.waffle, viz.gauge, viz.progress, viz.tiles, viz.bar_cell, viz.timeline and viz.graph, with viz.series"
+        .. " rings and a viz.cadence for live data. The runnable dashboard reference is System Monitor,"
+        .. " src/apps/monitor/ (Tools → Learn); the toolkit document shows every kit call with an example and its screen."
 end
 
 -- Where the platform documentation lives and how to look things up with the

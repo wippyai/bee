@@ -7,11 +7,15 @@ window has room. The `Honey` appearance is the canonical expression of the
 brand; every other appearance preserves the same semantic roles.
 
 Every Bee application, bundled or agent-built, draws through the shared
-application frame, `bee.application:frame`. The runnable reference is **UI
-Guide** under **Tools → Learn**; its source is `src/apps/stylebook/` and it
-demonstrates every frame component. Application authors should copy its
-process/view split, resize behavior and interaction shapes rather than its
-literal sample content.
+application frame, `bee.application:frame`. The exact placement, color, state
+and breakpoint rules, with one layout per application archetype, are in
+[Application visual style](app-style.md); read it before drawing. Two runnable
+references live under **Tools → Learn**: **UI Guide** (`src/apps/stylebook/`)
+demonstrates every frame component, and **System Monitor**
+(`src/apps/monitor/`) is a live dashboard composed from the frame and the
+visualization kit `bee.application:viz` at the three size classes.
+Application authors should copy their process/view split, resize behavior and
+interaction shapes rather than their literal sample content.
 
 ## Semantic palette
 
@@ -27,9 +31,14 @@ Use `bee.application:appearance`; never embed the Honey hex values in an app.
 | `accent` | `#ffc963` | Focus, selection and the primary action |
 | `pattern` | `#1c2937` | Quiet desktop texture |
 | `selection_text(theme)` | derived | Text drawn on `accent` |
+| `ok` | `#7ee787` | A success word; data inside a healthy range |
+| `warn` | `#ffa657` | An attention word; data past a warning threshold |
+| `error` | `#ff7b72` | A failure word; an inline field error; data past a failure threshold |
 
-Color expresses interaction, not business state. Write `Ready`, `Waiting`,
-`Failed` or `Needs review`; do not make red or green the only carrier of meaning.
+Accent expresses interaction. The status roles `ok`, `warn` and `error` repeat
+a meaning that words or numbers in the same row already carry: write `Ready`,
+`Waiting`, `Failed` or `Needs review`, and never make red or green the only
+carrier of meaning.
 One screen should normally have one accent selection and one primary action.
 Instance accents belong to window chrome and do not recolor application content.
 
@@ -141,8 +150,11 @@ continues afterward.
 ## Patterns to avoid
 
 - Raw hex colors or a private theme table inside an application.
-- Private copies of header, button, row, table or footer drawing; use the frame.
-- Accent on text that is neither focus, selection nor the primary action.
+- Private copies of header, button, row, table, footer, sparkline or chart
+  drawing; use the frame and `bee.application:viz`.
+- Accent on text that is neither focus, selection, the primary action nor the
+  primary chart series.
+- A status role on a whole row, a background, a border or a title.
 - A permanent legend that consumes several rows when one footer will do.
 - Borders around every region, decorative gradients or shadow-like glyph noise.
 - A wide table merely clipped on narrow screens.

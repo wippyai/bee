@@ -22,9 +22,10 @@ local function sample(step: integer): probe.Snapshot
         services[index] = {id = "bee.demo:s" .. tostring(index), state = index == 7 and "failed" or (index == 9 and "starting" or "running"),
             desired = "running", restarts = index == 7 and 3 or 0}
     end
-    return {processes = processes, services = services, heap = (12 + step % 5) * 1048576, heap_objects = 120000,
-        reserved = 48 * 1048576, gc_cycles = 38, goroutines = 214, queue = step % 3, executed = step * 900,
-        host_executed = {main = step * 900}, error = ""}
+    local executed = step * 800 + (step * step * 37) % 400
+    return {processes = processes, services = services, heap = (10 + (step * 7) % 9) * 1048576, heap_objects = 120000,
+        reserved = 48 * 1048576, gc_cycles = 38, goroutines = 214, queue = step % 3, executed = executed,
+        host_executed = {main = executed}, error = ""}
 end
 local function history(): probe.History
     local value = probe.new_history()
@@ -66,6 +67,123 @@ local function has(screen: string, needle: string): boolean
     return screen:find(needle, 1, true) ~= nil
 end
 
+local MONITOR_COMPACT: {string} = {
+    " SYSTEM MONITOR                                        Live · 1s · 24 processes ",
+    "                                                                                ",
+    " HEAP                SCHEDULER           PROCESSES           GOROUTINES         ",
+    " 16.0 MiB            403 steps/s         24 on 3 hosts       214 38 GC          ",
+    " ▇▆▅█▇▆▅██▇▆▅█▇▆▅██  ▆▆▇▇▅▆▆▇▇▅█▆▆▄▇▅█▃                                         ",
+    "                                                                                ",
+    " HEAP                          16.0 MiB  PROCESSES BY STATE        24 processes ",
+    " 18 MiB ┤ █▄   ▆▁  █▄   ▆▁  █▄   ▆▁  █▄  idle     █████████████████████████  12 ",
+    "        │ ██▇▃ ██▅ ██▇▃ ██▅ ██▇▃ ██▅ ██  running  ████████████▌               6 ",
+    "        │█████▆████████▆████████▆██████  waiting  ████████████▌               6 ",
+    "        │██████████████████████████████                                         ",
+    "  0 MiB ┤██████████████████████████████                                         ",
+    "        └──────────────────────────────                                         ",
+    "         -60s                       now                                         ",
+    "                                                                                ",
+    " SCHEDULER                  403 steps/s  SERVICES                   30 services ",
+    " 1.1k ┤  ⢀⣤ ⣠⡄ ⣀⣶⢀⡀⣿ ⣤ ⣀⣶⢀⣰⡆ ⣤ ⣠⡄ ⣀⣶ ⣤⣿  28 running · 1 failed · 1 starting     ",
+    "      │   ⠸⠞⠁⣧⠞⢹⡟⠋⣧⠏⢹⡿⠞⢹⡟⠋⣿⠷⢻⡿⠞⠁⠧⠞⢹⡟⢻⡿⢿                                         ",
+    "      │             ⠈⠁    ⠉ ⠈⠁      ⠈⠁⠸  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀         ",
+    "    0 ┤                                                                         ",
+    "      └────────────────────────────────                                         ",
+    "       -60s                         now                                         ",
+    "  Enter Refresh   P Pause                                                       ",
+    " Enter refresh · P pause · Esc close                                            "}
+local MONITOR_STANDARD: {string} = {
+    " SYSTEM MONITOR                                                                                Live · 1s · 24 processes ",
+    "                                                                                                                        ",
+    " HEAP                          SCHEDULER                     PROCESSES                     GOROUTINES                   ",
+    " 16.0 MiB                      403 steps/s                   24 on 3 hosts                 214 38 GC                    ",
+    " █▇▆▅█▇▆▅██▇▆▅█▇▆▅██▇▆▅█▇▆▅██  ▆▇▄█▅▆▇▄█▅▆▆▇▇▅▆▆▇▇▅█▆▆▄▇▅█▃                                                             ",
+    "                                                                                                                        ",
+    " HEAP                          16.0 MiB  PROCESSES BY STATE        24 processes  SCHEDULER                  403 steps/s ",
+    " 18 MiB ┤ █    ▃   █    ▃   █    ▃   █   idle     █████████████████████████  12  1.1k ┤         ⣤  ⣿    ⣀          ⣤  ⣿ ",
+    "        │ █▆   █▁  █▆   █▁  █▆   █▁  █▆  running  ████████████▌               6       │   ⣶ ⢀⡀  ⣿  ⣿ ⣿  ⣿ ⢸⡇ ⣶ ⢠⡄ ⣀⣿ ⣤⣿ ",
+    "        │ ██▄  ██  ██▄  ██  ██▄  ██  ██  waiting  ████████████▌               6       │  ⠈⢹ ⡞⡇⢀⣿⣿⢰⡆⣿⣤⣿⢀⣿⣿⢠⣼⡇⣀⣿ ⡞⡇⢠⢿⣿⣀⣿⣿ ",
+    "        │ ███▃ ███ ███▃ ███ ███▃ ███ ██                                               │   ⢸⣸⠁⡇⡞⢸⣿⡏⡇⡟⢻⣿⡼⢸⣿⡏⣿⣷⢻⣿⣸⠁⡇⡞⢸⡿⢿⣿⣿ ",
+    "        │▆████▁███▆████▁███▆████▁███▆██                                               │   ⠸⠇ ⣿⠁⢸⡇ ⣇⡇⢸⡟⠃⢸⡇ ⣿⠉⢸⡟⠃ ⣿⠁⢸⡇⢸⡿⢿ ",
+    "        │██████████████████████████████                                               │        ⠈⠁ ⠛ ⠸⠇ ⠘⠃ ⠿ ⢸⡇    ⠈⠁⢸⡇⢸ ",
+    "        │██████████████████████████████                                               │                             ⠈⠁⢸ ",
+    "        │██████████████████████████████                                               │                               ⠈ ",
+    "        │██████████████████████████████                                               │                                 ",
+    "        │██████████████████████████████                                               │                                 ",
+    "  0 MiB ┤██████████████████████████████                                             0 ┤                                 ",
+    "        └──────────────────────────────                                               └──────────────────────────────── ",
+    "         -60s                       now                                                -60s                         now ",
+    "                                                                                                                        ",
+    " SERVICES                   30 services  HOSTS                          3 hosts  MEMORY               48.0 MiB reserved ",
+    " 28 running · 1 failed · 1 starting      █ idle  ▓ running  ▒ waiting            Heap ██████████░░░░░░░░░░░░░░░░░░░ 33% ",
+    "                                         bee:host      ███████████▓▓▓▓▓▒▒▒▒▒  8                                         ",
+    " ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀          bee:terminal  ███████████▓▓▓▓▓▒▒▒▒▒  8  120k objects · 38 GC cycles            ",
+    "                                         bee:workers   ███████████▓▓▓▓▓▒▒▒▒▒  8                                         ",
+    "                                                                                                                        ",
+    "                                                                                                                        ",
+    "                                                                                                                        ",
+    "                                                                                                                        ",
+    "                                                                                                                        ",
+    "                                                                                                                        ",
+    "                                                                                                                        ",
+    "                                                                                                                        ",
+    "  Enter Refresh   P Pause                                                                                               ",
+    " Enter refresh · P pause · Esc close                                                                                    "}
+local MONITOR_WIDE: {string} = {
+    " SYSTEM MONITOR                                                                                                                        Live · 1s · 24 processes ",
+    "                                                                                                                                                                ",
+    " HEAP                                    SCHEDULER                               PROCESSES                               GOROUTINES                             ",
+    " 16.0 MiB                                403 steps/s                             24 on 3 hosts                           214 38 GC                              ",
+    " ██▇▆▅█▇▆▅██▇▆▅█▇▆▅██▇▆▅█▇▆▅██▇▆▅█▇▆▅██  ▇▄█▅▆▆▇▅█▆▆▇▄█▅▆▇▄█▅▆▆▇▇▅▆▆▇▇▅█▆▆▄▇▅█▃                                                                                 ",
+    "                                                                                                                                                                ",
+    " HEAP                          16.0 MiB  PROCESSES BY STATE        24 processes  SCHEDULER                  403 steps/s  SERVICES                   30 services ",
+    " 18 MiB ┤ █        █        █        █   idle     █████████████████████████  12  1.1k ┤         ⣀  ⣶               ⣀  ⣿  28 running · 1 failed · 1 starting     ",
+    "        │ █▁   █   █▁   █   █▁   █   █▁  running  ████████████▌               6       │         ⣿  ⣿ ⣀  ⣿ ⢠⡄       ⣿  ⣿                                         ",
+    "        │ ██   █▁  ██   █▁  ██   █▁  ██  waiting  ████████████▌               6       │   ⣶ ⢠⡄  ⣿  ⣿ ⣿  ⣿ ⢸⡇ ⣿ ⢠⡄ ⣀⣿ ⣶⣿  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀         ",
+    "        │ ██▂  ██  ██▂  ██  ██▂  ██  ██                                               │  ⠐⢻ ⣸⡇ ⣿⣿⢠⡄⣿ ⣿ ⣶⣿⢀⣸⡇ ⣿ ⡼⡇ ⣿⣿ ⣿⣿                                         ",
+    "        │ ███  ██▂ ███  ██▂ ███  ██▂ ██                                               │   ⢸⢀⡇⡇⢸⢹⣿⡼⡇⣿⣿⣿⢰⢻⣿⣸⣿⡇⣶⣿⢠⠇⡇⢸⢹⣿⣤⣿⣿                                         ",
+    "        │ ███▃ ███ ███▃ ███ ███▃ ███ ██                                               │   ⢸⢸ ⡇⡞⢸⣿⡇⡇⡏⢹⣿⡼⢸⣿⡇⣿⣷⢻⣿⣸ ⡇⡏⢸⡿⢿⣿⣿                                         ",
+    "        │▃████ ███▃████ ███▃████ ███▃██                                               │   ⢸⡏ ⣷⠃⢸⡇ ⡇⡇⢸⡿⠇⢸⡏⠁⣿⠛⢸⣿⡇ ⣷⠃⢸⡇⢸⣿⣿                                         ",
+    "        │█████▄████████▄████████▄██████                                               │   ⠈⠁ ⠿ ⢸⡇ ⣷⠃⢸⡇ ⢸⡇ ⣿ ⢸⡇  ⠛ ⢸⡇⢸⡏⢹                                         ",
+    "        │██████████████████████████████                                               │           ⠛ ⢸⡇ ⠈⠁ ⠿ ⢸⡇      ⢸⡇⢸                                         ",
+    "        │██████████████████████████████                                               │                     ⠈⠁      ⠘⠃⢸                                         ",
+    "        │██████████████████████████████                                               │                               ⢸                                         ",
+    "        │██████████████████████████████                                               │                                                                         ",
+    "        │██████████████████████████████                                               │                                                                         ",
+    "        │██████████████████████████████                                               │                                                                         ",
+    "        │██████████████████████████████                                               │                                                                         ",
+    "        │██████████████████████████████                                               │                                                                         ",
+    "  0 MiB ┤██████████████████████████████                                             0 ┤                                                                         ",
+    "        └──────────────────────────────                                               └────────────────────────────────                                         ",
+    "         -60s                       now                                                -60s                         now                                         ",
+    "                                                                                                                                                                ",
+    " HOSTS                          3 hosts  MEMORY               48.0 MiB reserved  TOPOLOGY                     this node  STEPS PER PROCESS         distribution ",
+    " █ idle  ▓ running  ▒ waiting            Heap ██████████░░░░░░░░░░░░░░░░░░░ 33%                                                      ███                  ███   ",
+    " bee:host      ███████████▓▓▓▓▓▒▒▒▒▒  8                                                                                              ███                  ███   ",
+    " bee:terminal  ███████████▓▓▓▓▓▒▒▒▒▒  8  120k objects · 38 GC cycles                            ┌────▸● bee:host                     ███                  ███   ",
+    " bee:workers   ███████████▓▓▓▓▓▒▒▒▒▒  8                                                         │       8 processes                  ███                  ███   ",
+    "                                                                                                │                                    ███                  ███   ",
+    "                                                                                                │                           ▃▃▃▃▃▃▃▃▃███▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃███   ",
+    "                                                                                                │                           █████████████████████████████████   ",
+    "                                                                                                │                           █████████████████████████████████   ",
+    "                                                                                 ● node   ──────┼────▸● bee:terminal        █████████████████████████████████   ",
+    "                                                                                   3 hosts      │       8 processes         █████████████████████████████████   ",
+    "                                                                                                │                           █████████████████████████████████   ",
+    "                                                                                                │                           █████████████████████████████████   ",
+    "                                                                                                │                           █████████████████████████████████   ",
+    "                                                                                                │                           █████████████████████████████████   ",
+    "                                                                                                └────▸● bee:workers         █████████████████████████████████   ",
+    "                                                                                                        8 processes         █████████████████████████████████   ",
+    "                                                                                                                            █████████████████████████████████   ",
+    "                                                                                                                         0                                948   ",
+    "  Enter Refresh   P Pause                                                                                                                                       ",
+    " Enter refresh · P pause · Esc close                                                                                                                            "}
+
+local function golden(rows: {string}, expected: {string})
+    test.eq(#rows, #expected)
+    for index, row in ipairs(rows) do test.eq((row:gsub("\27%[[0-9;]*m", "")), expected[index]) end
+end
+
 local function define_tests()
     test.describe("System Monitor", function()
         test.it("keeps every frame and target inside the canvas at every size", function()
@@ -86,14 +204,14 @@ local function define_tests()
             local series = history()
             local snapshot = sample(60)
             local compact = plain(view.draw(80, 24, appearance.defaults(), snapshot, series, false).rows)
-            for _, needle in ipairs({"SYSTEM MONITOR", "Live · 1s · 24 processes", "HEAP", "12.0 MiB", "SCHEDULER", "900 steps/s",
-                "PROCESSES BY STATE", "idle", "SERVICES", "28 running · 1 failed · 1 starting", "on 3 hosts", "16 MiB ┤", "-60s",
+            for _, needle in ipairs({"SYSTEM MONITOR", "Live · 1s · 24 processes", "HEAP", "16.0 MiB", "SCHEDULER", "403 steps/s",
+                "PROCESSES BY STATE", "idle", "SERVICES", "28 running · 1 failed · 1 starting", "on 3 hosts", "18 MiB ┤", "-60s",
                 "Enter Refresh", "P Pause", "Enter refresh · P pause · Esc close"}) do
                 test.eq(needle .. (has(compact, needle) and "" or " missing"), needle)
             end
             test.is_false(has(compact, "HOSTS"))
             local standard = plain(view.draw(120, 36, appearance.defaults(), snapshot, series, false).rows)
-            for _, needle in ipairs({"HOSTS", "bee:terminal", "█ idle  ▓ running  ▒ waiting", "MEMORY", "48.0 MiB reserved", "25%",
+            for _, needle in ipairs({"HOSTS", "bee:terminal", "█ idle  ▓ running  ▒ waiting", "MEMORY", "48.0 MiB reserved", "33%",
                 "120k objects · 38 GC cycles"}) do
                 test.eq(needle .. (has(standard, needle) and "" or " missing"), needle)
             end
@@ -103,9 +221,20 @@ local function define_tests()
                 test.eq(needle .. (has(wide, needle) and "" or " missing"), needle)
             end
             local narrow = plain(view.draw(60, 16, appearance.defaults(), snapshot, series, false).rows)
-            test.is_true(has(narrow, "Heap 12.0 MiB · 900 steps/s"))
+            test.is_true(has(narrow, "Heap 16.0 MiB · 403 steps/s"))
             test.is_true(has(narrow, "30 services · 3 hosts"))
             test.is_false(has(narrow, "PROCESSES BY STATE"))
+        end)
+        test.it("draws the exact dashboard at each size class", function()
+            -- example: System Monitor
+            local series = history()
+            local snapshot = sample(60)
+            local compact = view.draw(80, 24, appearance.defaults(), snapshot, series, false)
+            golden(compact.rows, MONITOR_COMPACT)
+            local standard = view.draw(120, 36, appearance.defaults(), snapshot, series, false)
+            golden(standard.rows, MONITOR_STANDARD)
+            local wide = view.draw(160, 48, appearance.defaults(), snapshot, series, false)
+            golden(wide.rows, MONITOR_WIDE)
         end)
         test.it("marks the paused state in words and on the active toggle", function()
             local theme = appearance.theme("honey")

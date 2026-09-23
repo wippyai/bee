@@ -20,6 +20,30 @@ entries:
     transaction: bee.threads.persist:transaction
     types: bee.threads.service:types
     access: bee.threads.service:access
+    notices: bee.threads.service:notices
+- name: notices
+  kind: library.lua
+  source: file://notices.lua
+  modules: [sql, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    record: bee.threads.records:record
+    message: bee.threads.records:message
+    record_types: bee.threads.records:types
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+    access: bee.threads.service:access
+- name: notify
+  kind: function.lua
+  source: file://notify_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    notices: bee.threads.service:notices
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
 - name: authority
   kind: library.lua
   source: file://authority.lua

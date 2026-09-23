@@ -34,6 +34,7 @@ local function notice(actor: string, value: unknown): ({[string]: unknown}?, str
     submission.sender_id = actor
     if submission.message_kind ~= "notification" then return nil, "message_kind must be notification" end
     if submission.in_reply_to ~= nil then return nil, "a projected notification answers nothing" end
+    if submission.sender_action_id ~= nil then return nil, "an ingress authority sends from no admitted action" end
     local recipients = submission.recipient_ids
     if type(recipients) ~= "table" or #(recipients :: {unknown}) == 0 then return nil, "recipient_ids names at least one recipient" end
     return submission, nil

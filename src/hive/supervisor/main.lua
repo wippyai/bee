@@ -155,11 +155,14 @@ local function main(configuration: unknown)
             end
         end
     end
-    -- reconcile_enrollment applies the host-selected local client nodes. It runs
-    -- on the tick because a registry entry has no change notification here; each
-    -- pass reads one bounded entry and only enrolls or retires nodes the boot set
-    -- does not own. A missing or malformed entry admits and retires nothing.
-    local function reconcile_enrollment()
+    -- reconcile_enrollment applies the host-selected local client nodes to the
+    -- peer set and the desktop bridge. It runs on the tick, because a registry
+    -- entry has no change notification here, and before a client-host sender the
+    -- bridge does not yet admit is refused, because the host enrolls a node before
+    -- that node's first request. Each pass reads one bounded entry and only
+    -- enrolls or retires nodes the boot set does not own. A missing or malformed
+    -- entry admits and retires nothing.
+    local function reconcile_enrollment(now_ms: integer)
         local entry = registry.get(enrollment.ENTRY)
         if not entry or type(entry.data) ~= "table" then return end
         local desired, decode_error = enrollment.decode(entry.data)
@@ -176,6 +179,7 @@ local function main(configuration: unknown)
             local enrolled, enroll_error = peers.enroll(state, selected)
             if not enrolled and enroll_error then log:warn("Hive enrollment refused", {node = selected, cause = enroll_error}) end
         end
+        if desktop then desktop_owner.enroll(desktop, enrollment.enrolled(boot, enrollment.configured_view(state)), now_ms) end
     end
     local function discover(now_ms: integer)
         for _, remote in ipairs(nodes) do
@@ -193,6 +197,9 @@ local function main(configuration: unknown)
         end
     end
     local function admit(message: process.Message)
+        if desktop and desktop_owner.client_host(message) and not desktop_owner.handles(desktop, message) then
+            reconcile_enrollment(elapsed())
+        end
         if desktop and desktop_owner.handles(desktop, message) then
             desktop_owner.request(desktop, message, elapsed())
             return
@@ -370,7 +377,7 @@ local function main(configuration: unknown)
                         else expire_route(route, "DEADLINE_EXCEEDED", "supervisor request deadline passed") end
                     end
                 end
-                reconcile_enrollment()
+                reconcile_enrollment(now_ms)
                 if now_ms - last_discovery >= 5000 then discover(now_ms); last_discovery = now_ms end
                 if now_ms - last_advertisement >= 5000 then advertise(now_ms) end
             elseif advertising_response and selected.channel == advertising_response and advertising then

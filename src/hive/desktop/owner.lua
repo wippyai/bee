@@ -20,7 +20,7 @@ type State = {
     ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
     catalogs: Channel<process.Message>, activations: Channel<process.Message>, reader_updates: Channel<process.Message>,
     observers: Channel<process.Message>, catalog: catalog.State,
-    workspace_id: string, desktop_id: string, allowed: {[string]: boolean}, catalog_readers: {[string]: boolean}, pending_catalog_readers: retained.CatalogReaders?,
+    workspace_id: string, desktop_id: string, allowed: {[string]: boolean}, enrolled: {[string]: boolean}, catalog_readers: {[string]: boolean}, pending_catalog_readers: retained.CatalogReaders?,
     clients: {[string]: Client}, receipts: {[string]: Receipt}, client_count: integer, receipt_count: integer,
     expires_at: time.Time, stopped: boolean,
 }
@@ -80,7 +80,7 @@ function M.start(config: protocol.Configuration, node: string): State
     local clients: {[string]: Client} = {}
     local receipts: {[string]: Receipt} = {}
     return {config = config, node = node, supervisor = tostring(owner), ready = ready, results = results, copies = copies, launches = launches,
-        workspace_id = "", desktop_id = "", allowed = allowed, catalogs = catalogs, activations = activations, reader_updates = reader_updates,
+        workspace_id = "", desktop_id = "", allowed = allowed, enrolled = {}, catalogs = catalogs, activations = activations, reader_updates = reader_updates,
         observers = observers, catalog = catalog.new(),
         catalog_readers = {}, pending_catalog_readers = nil, clients = clients, receipts = receipts,
         client_count = 0, receipt_count = 0, expires_at = expiry, stopped = false}
@@ -195,19 +195,39 @@ function M.catalog_readers(state: State, message: process.Message)
     else install_catalog_readers(state, snapshot) end
 end
 -- Only a native sender from an explicitly admitted client node enters
--- this route. Unknown clients continue to the ordinary supervisor refusal path.
-local function allowed_client(state: State, sender: string): boolean
+-- this route: a node the host grant names, or, when the host selected local
+-- clients, a node the host currently enrolls. Unknown clients continue to the
+-- ordinary supervisor refusal path.
+function M.admits(state: State, sender: string): boolean
     local node, host = types.pid_parts(sender)
     if not node or host ~= protocol.CLIENT_HOST then return false end
     if state.allowed[node] == true then return true end
-    return state.config.local_clients == true and security.can("bee.desktop.local_client", sender)
+    return state.config.local_clients == true and state.enrolled[node] == true
+end
+-- client_host reports whether a sender speaks from the native desktop client
+-- host, whose admission depends on the host enrollment.
+function M.client_host(message: process.Message): boolean
+    local _, host = types.pid_parts(tostring(message:from()))
+    return host == protocol.CLIENT_HOST
 end
 function M.handles(state: State, message: process.Message): boolean
-    return allowed_client(state, tostring(message:from()))
+    return M.admits(state, tostring(message:from()))
+end
+-- enroll installs the host's current local client enrollment and revokes the
+-- attachments of every node that left it.
+function M.enroll(state: State, nodes: {[string]: boolean}, now: integer)
+    local enrolled: {[string]: boolean} = {}
+    for node, present in pairs(nodes) do
+        if present then enrolled[node] = true end
+    end
+    state.enrolled = enrolled
+    for recipient, client in pairs(state.clients) do
+        if not M.admits(state, recipient) then revoke(state, client, now) end
+    end
 end
 function M.request(state: State, message: process.Message, now: integer)
     local sender = tostring(message:from())
-    if not allowed_client(state, sender) then return end
+    if not M.admits(state, sender) then return end
     local call = types.decode_call(message:payload():data())
     if not call then return end
     if state.stopped or not time.now():before(state.expires_at) then failure(sender, call.request_id, "UNAVAILABLE", "Desktop owner stopped"); return end

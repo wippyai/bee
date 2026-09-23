@@ -13,11 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	topapi "github.com/wippyai/runtime/api/topology"
 
 	"github.com/wippyai/runtime/api/attrs"
 	"github.com/wippyai/runtime/api/boot"
+	"github.com/wippyai/runtime/api/logs"
 	"github.com/wippyai/runtime/api/payload"
 	"github.com/wippyai/runtime/api/registry"
 )
@@ -34,13 +37,22 @@ const (
 )
 
 // enrollmentChangeSet builds the one-entry update that publishes the enrolled
-// local client nodes. It follows the runtime's own host-entry write path
-// (cmd/internal/entries/loader.go ApplyToRegistry -> Registry.Apply with an
-// EntryUpdate operation); a malformed or non-key file is never admitted.
+// local client nodes of the trusted directory.
 func enrollmentChangeSet(trusted string) (registry.ChangeSet, error) {
-	nodes, err := trustedNodes(trusted)
+	keys, err := trustedKeys(trusted)
 	if err != nil {
 		return nil, err
+	}
+	return enrollmentChange(keys), nil
+}
+
+// enrollmentChange follows the runtime's own host-entry write path
+// (cmd/internal/entries/loader.go ApplyToRegistry -> Registry.Apply with an
+// EntryUpdate operation); only validated keys are named.
+func enrollmentChange(keys []trustedKey) registry.ChangeSet {
+	nodes := make([]any, 0, len(keys))
+	for _, key := range keys {
+		nodes = append(nodes, key.node)
 	}
 	entry := registry.Entry{
 		ID:   registry.ParseID(enrollmentEntry),
@@ -48,7 +60,7 @@ func enrollmentChangeSet(trusted string) (registry.ChangeSet, error) {
 		Data: payload.New(map[string]any{"nodes": nodes}),
 		Meta: attrs.NewBagFrom(map[string]any{"type": "bee.hive.supervisor_enrollment"}),
 	}
-	return registry.ChangeSet{{Kind: registry.EntryUpdate, Entry: entry}}, nil
+	return registry.ChangeSet{{Kind: registry.EntryUpdate, Entry: entry}}
 }
 
 // readExecution reads the owner execution persisted by prepareOwner, and
@@ -77,17 +89,23 @@ func readMembershipSecret(directory string) ([]byte, error) {
 	return secret, nil
 }
 
-// trustedNodes lists the enrolled client nodes from the trusted directory,
-// validating each key before it is admitted.
-func trustedNodes(trusted string) ([]any, error) {
+// trustedKey is one enrolled client node and its validated public key.
+type trustedKey struct {
+	node string
+	key  ed25519.PublicKey
+}
+
+// trustedKeys lists the enrolled client nodes of the trusted directory in node
+// order, validating each key before it is admitted.
+func trustedKeys(trusted string) ([]trustedKey, error) {
 	entries, err := os.ReadDir(trusted)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return []any{}, nil
+			return nil, nil
 		}
 		return nil, err
 	}
-	names := make([]string, 0, len(entries))
+	keys := make([]trustedKey, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pub") {
 			continue
@@ -96,17 +114,14 @@ func trustedNodes(trusted string) ([]any, error) {
 		if !validTrustedName(node) {
 			continue
 		}
-		if _, ok := resolveTrustedKey(trusted, node); !ok {
+		public, ok := resolveTrustedKey(trusted, node)
+		if !ok {
 			continue
 		}
-		names = append(names, node)
+		keys = append(keys, trustedKey{node: node, key: public})
 	}
-	sort.Strings(names)
-	out := make([]any, 0, len(names))
-	for _, name := range names {
-		out = append(out, name)
-	}
-	return out, nil
+	sort.Slice(keys, func(i, j int) bool { return keys[i].node < keys[j].node })
+	return keys, nil
 }
 
 // enrollmentPublisher mirrors the owner's trusted client directory into the
@@ -173,85 +188,75 @@ type enrollmentPublisherComponent struct {
 }
 
 // seedEnrollment initializes the owner's local enrollment from its membership
-// secret and registers every trusted client key under its node name, so the
+// secret and registers each given client key under its node name, so the
 // joining client's mesh handshake resolves.
-func (p *enrollmentPublisherComponent) seedEnrollment(ctx context.Context, enrollment *rendezvous.Enrollment) error {
+func (p *enrollmentPublisherComponent) seedEnrollment(ctx context.Context, enrollment *rendezvous.Enrollment, keys []trustedKey) error {
 	if err := enrollment.Initialize(ctx, p.execution, p.secret); err != nil {
 		return err
 	}
-	entries, err := os.ReadDir(p.trusted)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pub") {
-			continue
-		}
-		node := strings.TrimSuffix(entry.Name(), ".pub")
-		if !validTrustedName(node) {
-			continue
-		}
-		public, ok := resolveTrustedKey(p.trusted, node)
-		if !ok {
-			continue
-		}
-		if _, err := enrollment.Register(ctx, p.execution, node, public); err != nil {
+	for _, key := range keys {
+		if _, err := enrollment.Register(ctx, p.execution, key.node, key.key); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// publish mirrors one snapshot of the trusted directory. A client waits on the
+// local enrollment and then sends its first request, and the supervisor admits
+// from the host entry, so the entry is written first and the local enrollment
+// lists only the nodes that write named.
+func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry.Registry, enrollment *rendezvous.Enrollment) error {
+	keys, err := trustedKeys(p.trusted)
+	if err != nil {
+		return err
+	}
+	if _, err := reg.Apply(ctx, enrollmentChange(keys)); err != nil {
+		return err
+	}
+	if err := p.seedEnrollment(ctx, enrollment, keys); err != nil {
+		return err
+	}
+	p.publishSupervisor(ctx)
+	return nil
+}
+
 // Start arms the publisher and returns. It must not publish yet: the runtime
-// starts boot components before it applies the deployment's registry entries, so
-// the enrollment entry does not exist at this point. The first refresh retries
-// until the entry appears, then mirrors the trusted directory for the owner's
-// lifetime.
+// starts boot components before it applies the deployment's registry entries,
+// so the enrollment entry does not exist at this point. Each refresh publishes
+// one snapshot; until the entry exists the write is refused and nothing is
+// listed locally.
 func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 	reg := registry.GetRegistry(ctx)
 	if reg == nil {
 		return errors.New("enrollment publisher requires the registry")
+	}
+	log := logs.GetLogger(ctx).Named("bee.launch.enrollment")
+	enrollment, err := rendezvous.NewEnrollment(p.directory)
+	if err != nil {
+		return err
 	}
 	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	p.cancel = cancel
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
-		// Seed the local enrollment the joining client reads: the owner's gossip
-		// secret plus this node's mesh identity, and one entry per trusted client
-		// key. The client registers itself under the node it announces.
-		enrollment, err := rendezvous.NewEnrollment(p.directory)
-		if err != nil {
-			return
-		}
+		published := false
 		for {
-			if err := p.seedEnrollment(lifetime, enrollment); err == nil {
-				break
+			if err := p.publish(lifetime, reg, enrollment); err != nil {
+				// Before the first publish the entry is still being applied.
+				if published {
+					log.Warn("enrollment publication failed", zap.Error(err))
+				} else {
+					log.Debug("enrollment entry not yet writable", zap.Error(err))
+				}
+			} else {
+				published = true
 			}
 			select {
 			case <-lifetime.Done():
 				return
 			case <-ticker.C:
-			}
-		}
-		publish := func() {
-			changes, err := enrollmentChangeSet(p.trusted)
-			if err == nil {
-				_, _ = reg.Apply(lifetime, changes)
-			}
-			_ = p.seedEnrollment(lifetime, enrollment)
-			p.publishSupervisor(lifetime)
-		}
-		publish()
-		for {
-			select {
-			case <-lifetime.Done():
-				return
-			case <-ticker.C:
-				publish()
 			}
 		}
 	}()
@@ -265,6 +270,3 @@ func (p *enrollmentPublisherComponent) Stop(context.Context) error {
 	}
 	return nil
 }
-
-var _ = ed25519.PublicKeySize
-var _ = base64.StdEncoding

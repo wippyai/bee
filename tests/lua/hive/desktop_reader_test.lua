@@ -46,7 +46,7 @@ local function define_tests()
             local node = "local"
             local state: owner.State = {
                 supervisor = "", stopped = false, workspace_id = WORKSPACE, desktop_id = "", node = node,
-                allowed = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = false},
+                allowed = {}, enrolled = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = false},
                 ready = snapshots, results = snapshots, copies = snapshots, launches = snapshots, catalogs = snapshots,
                 activations = snapshots, reader_updates = snapshots, observers = snapshots, catalog_readers = {}, pending_catalog_readers = nil,
                 catalog = catalog.new(), clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = time.now(),

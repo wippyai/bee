@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/registry"
 	bootpkg "github.com/wippyai/runtime/boot"
@@ -232,5 +233,89 @@ func TestEnrollmentPublisherHandlesMissingDirectory(t *testing.T) {
 	}
 	if len(reg.lastNodes) != 0 {
 		t.Fatalf("published nodes for absent directory = %v", reg.lastNodes)
+	}
+}
+
+// orderedRegistry refuses the enrollment entry until opened and records
+// whether the client already resolved in the local enrollment at each apply.
+type orderedRegistry struct {
+	enrollmentRegistryStub
+	open     atomic.Bool
+	applied  atomic.Int64
+	early    atomic.Bool
+	resolved func() bool
+}
+
+func (r *orderedRegistry) Apply(_ context.Context, _ registry.ChangeSet) (registry.Version, error) {
+	if r.resolved() {
+		if r.applied.Load() == 0 {
+			r.early.Store(true)
+		}
+	}
+	if !r.open.Load() {
+		return nil, errors.New("entry does not exist")
+	}
+	r.applied.Add(1)
+	return nil, nil
+}
+
+// A client waits on the local enrollment and then sends its first request, so
+// the enrollment may list a node only after the host entry the supervisor
+// admits from names it.
+func TestEnrollmentPublisherListsClientsOnlyAfterTheEntryNamesThem(t *testing.T) {
+	state := t.TempDir()
+	prepareOwnerState(t, state)
+	writeClientKey(t, ownerTrustedDirectory(state), "client-a")
+	execution, err := readExecution(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := rendezvous.NewEnrollment(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved := func() bool {
+		_, ok := local.Resolve(context.Background(), execution, "client-a")
+		return ok
+	}
+	reg := &orderedRegistry{resolved: resolved}
+	component, err := enrollmentPublisher(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	starter, ok := component.(boot.Starter)
+	if !ok {
+		t.Fatal("publisher is not a starter")
+	}
+	if err := starter.Start(registry.WithRegistry(base, reg)); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if stopper, ok := component.(boot.Stopper); ok {
+			_ = stopper.Stop(context.Background())
+		}
+	}()
+	// The entry stays unwritable across more than one refresh interval.
+	refused := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(refused) {
+		if resolved() {
+			t.Fatal("the local enrollment listed a client the host entry does not name")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	reg.open.Store(true)
+	deadline := time.Now().Add(5 * time.Second)
+	for !resolved() && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !resolved() {
+		t.Fatal("the local enrollment never listed the enrolled client")
+	}
+	if reg.early.Load() {
+		t.Fatal("the local enrollment listed the client before the host entry was written")
 	}
 }

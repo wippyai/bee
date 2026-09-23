@@ -30,6 +30,16 @@ end
 function M.configured_view(state: State): {[string]: boolean}
     return state.configured_nodes
 end
+-- enrolled returns the nodes the enrollment admitted: configured, and not owned
+-- by the boot set.
+function M.enrolled(boot: {[string]: boolean}, configured: {[string]: boolean}): {[string]: boolean}
+    local nodes: {[string]: boolean} = {}
+    for node in pairs(configured) do
+        local candidate: string = node
+        if not boot[candidate] then nodes[candidate] = true end
+    end
+    return nodes
+end
 -- diff returns the nodes to enroll and to retire to reach the desired set.
 -- Boot-configured nodes are authoritative and always excluded from both lists,
 -- so an enrollment edit can never retire a boot peer or re-enroll it.

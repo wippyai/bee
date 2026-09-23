@@ -866,6 +866,11 @@ func countThreadWork(state string) error {
 	return nil
 }
 
+// rawManagedAliasRefusal proves that a managed alias with raw arguments is
+// refused without work. The owner resolves the alias, so the first launch
+// also boots the retained owner under the cold-start budget the other
+// first-launch scenarios use; the second launch joins that owner and must
+// refuse promptly.
 func rawManagedAliasRefusal(binary string) error {
 	root, err := os.MkdirTemp("", "bee-native-agent-raw-alias-")
 	if err != nil {
@@ -876,28 +881,39 @@ func rawManagedAliasRefusal(binary string) error {
 	if err := os.MkdirAll(filepath.Join(project, "bin"), 0700); err != nil {
 		return err
 	}
-	ui, err := newDesktopWithArguments(binary, project, state, home,
-		[]string{"codex", "--dangerously-bypass-profile"})
-	if err != nil {
-		return err
+	defer func() { _ = stopFixtureOwners(binary, state) }()
+	if err := refuseRawAlias(binary, project, state, home, 25*time.Second); err != nil {
+		return fmt.Errorf("cold owner: %w", err)
 	}
-	defer func() {
-		ui.close()
-		_ = stopFixtureOwners(binary, state)
-	}()
-	select {
-	case <-ui.wait:
-	case <-time.After(5 * time.Second):
-		return errors.New("managed alias with raw arguments did not refuse promptly")
+	if len(ownerPids(binary, state)) == 0 {
+		return errors.New("the refused launch did not leave its retained owner running")
 	}
-	_, _, log := ui.snapshot()
-	if !strings.Contains(string(log), "Managed Bee command does not accept raw arguments: codex") {
-		return fmt.Errorf("managed raw-argument refusal was not visible:\n%s", string(log))
+	if err := refuseRawAlias(binary, project, state, home, 5*time.Second); err != nil {
+		return fmt.Errorf("retained owner: %w", err)
 	}
 	if _, err := os.Stat(filepath.Join(state, "threads.db")); err == nil {
 		return countThreadWork(state)
 	} else if !os.IsNotExist(err) {
 		return err
+	}
+	return nil
+}
+
+func refuseRawAlias(binary, project, state, home string, timeout time.Duration) error {
+	ui, err := newDesktopWithArguments(binary, project, state, home,
+		[]string{"codex", "--dangerously-bypass-profile"})
+	if err != nil {
+		return err
+	}
+	defer ui.close()
+	select {
+	case <-ui.wait:
+	case <-time.After(timeout):
+		return errors.New("managed alias with raw arguments did not refuse promptly")
+	}
+	_, _, log := ui.snapshot()
+	if !strings.Contains(string(log), "Managed Bee command does not accept raw arguments: codex") {
+		return fmt.Errorf("managed raw-argument refusal was not visible:\n%s", string(log))
 	}
 	return nil
 }

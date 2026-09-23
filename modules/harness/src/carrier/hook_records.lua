@@ -29,6 +29,10 @@ local ACTIVITY: {[string]: string} = {
     StopFailure = "Needs attention", SessionEnd = "Session ended",
 }
 
+-- Events that report the harness ended its turn, and the outcome the event
+-- itself states. A stop names no outcome; a stop failure ended as failed.
+local TURN_ENDED: {[string]: string} = {Stop = "", StopFailure = "failed"}
+
 local ALLOWED_TOP_FIELDS: {string} = {
     "event_id",
     "event",
@@ -177,8 +181,19 @@ function M.batch(binding_id: string, turn_id: string?, items: unknown): (Batch?,
             record.turn_id = valid_turn_id
         end
 
-        records[index] = record
+        records[#records + 1] = record
         event_ids[index] = event_id
+        -- A turn-ending hook is also a hook-sourced turn signal, keyed to the
+        -- same occurrence, so thread readers see a window harness end its
+        -- turn the way a stream harness reports it.
+        local ended_outcome = TURN_ENDED[tostring(item.event)]
+        if ended_outcome ~= nil then
+            local signal: {[string]: unknown} = {type = "turn.signal", phase = "ended"}
+            if ended_outcome ~= "" then signal.reported_outcome = ended_outcome end
+            local turn_record: {[string]: unknown} = {source = "hook", body = {type = "turn.signal", event_key = key .. ":turn", data = signal}}
+            if valid_turn_id ~= nil then turn_record.turn_id = valid_turn_id end
+            records[#records + 1] = turn_record
+        end
         local label = ACTIVITY[item.event]
         -- Ambiguity is about occurrence identity, not about what the event
         -- says happened. An ambiguous tool or prompt observation cannot be

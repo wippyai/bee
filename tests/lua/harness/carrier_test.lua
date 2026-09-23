@@ -365,6 +365,19 @@ local function define_tests()
             end
             error("write " .. wanted .. " never committed on " .. thread_id)
         end
+        -- Placement's record that the runner installed a generation: the old
+        -- generation's input and acknowledgements are refused from then on.
+        local function await_fenced(attempt_id: string, generation: integer)
+            local wanted = "runner installed generation " .. tostring(generation)
+            for _ = 1, 600 do
+                local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 128})
+                for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
+                    if item.kind == "attach.fenced" and item.detail == wanted then return end
+                end
+                time.sleep("50ms")
+            end
+            error("generation " .. tostring(generation) .. " was never fenced on " .. attempt_id)
+        end
         test.it("continues from what a live carrier committed between the replacement's checkpoint read and its claim", function()
             local thread_id = thread()
             local launch = request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_READ = "1", BEE_FIXTURE_PACE = "0.3"})
@@ -398,10 +411,15 @@ local function define_tests()
         test.it("fences a live carrier once a replacement claims the attempt", function()
             local thread_id = thread()
             local launch = request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_PACE = "0.4"})
-            local old = spawn_carrier("bee.harness.carrier:process", launch, "open", nil)
-            time.sleep("1200ms")
+            -- The old carrier holds mid-stream, after committing its first
+            -- output, until the replacement is fenced in.
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
+            local old = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, nil, "committed")
+            await_paused(paused, old, "committed")
+            process.unlisten(paused)
             local replacement_pid = spawn_carrier("bee.harness.carrier:process", launch, "resume", nil)
-            time.sleep("600ms")
+            await_fenced(launch.attempt_id :: string, 2)
+            process.send(old, "bee.carrier.continue", {go = true})
             process.send(old, "bee.carrier.input", {write_id = "late", data = "late\n"})
             local stale = await_carrier(old)
             test.is_nil(stale.value)
@@ -418,10 +436,12 @@ local function define_tests()
             local thread_id = thread()
             local launch = request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_READ = "1", BEE_FIXTURE_PACE = "0.3"})
             local old = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, nil, "write_intended")
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             process.send(old, "bee.carrier.input", {write_id = "w9", data = "ping\n"})
-            time.sleep("1500ms")
+            await_paused(paused, old, "write_intended")
+            process.unlisten(paused)
             local replacement_pid = spawn_carrier("bee.harness.carrier:process", launch, "resume", nil)
-            time.sleep("1000ms")
+            await_fenced(launch.attempt_id :: string, 2)
             process.send(old, "bee.carrier.continue", {go = true})
             local both = await_carriers({old, replacement_pid}, "old carrier and replacement")
             local stale = both[old]

@@ -93,7 +93,7 @@ return {handle = handle}
 def exercise(project, packed, pack):
     with tempfile.TemporaryDirectory(prefix="bee-modules-ui-") as directory:
         (Path(directory) / ".wippy").mkdir()
-        ui = Desktop(directory, packed=packed, project=project, pack_file=pack, apps=("bee.modules:app",))
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.modules:app",))
         try:
             ui.wait("MODULES", timeout=20)
             ui.wait("Preview fixture", timeout=10)
@@ -233,7 +233,7 @@ def exercise_real_facade(project, packed, pack):
     its confirmation screen must leave local inventory unchanged.
     """
     with tempfile.TemporaryDirectory(prefix="bee-modules-real-hub-") as directory:
-        ui = Desktop(directory, packed=packed, project=project, pack_file=pack,
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack,
                      apps=("bee.modules:app",))
         try:
             def click(label):
@@ -329,7 +329,7 @@ def exercise_real_facade(project, packed, pack):
 def exercise_authored_publication(project, packed, pack):
     """Prove Modules sends explicit prepare then publish requests through Governance."""
     with tempfile.TemporaryDirectory(prefix="bee-modules-authored-") as directory:
-        ui = Desktop(directory, packed=packed, project=project, pack_file=pack,
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack,
                      apps=("bee.modules:app",))
         try:
             ui.wait("MODULES", timeout=20)
@@ -411,14 +411,14 @@ def main():
         lock["modules"] = [module for module in lock.get("modules", [])
                             if module.get("name") not in {"wippy/test", "wippy/terminal"}]
         (project / "wippy.lock").write_text(yaml.safe_dump(lock, sort_keys=False))
-        pack = project / "modules-real-hub-test.wapp"
+        pack = project / "modules-real-hub-deployment"
         pack_fixture(project, pack)
         exercise_real_facade(project, False, pack)
         exercise_real_facade(project, True, pack)
     with fixture_workspace(unit_tests=False) as project:
         (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
         (project / "modules/gov/src/binding/publication_method.lua").write_text(PUBLICATION_METHOD)
-        pack = project / "modules-authored-test.wapp"
+        pack = project / "modules-authored-deployment"
         pack_fixture(project, pack)
         exercise_authored_publication(project, False, pack)
         exercise_authored_publication(project, True, pack)

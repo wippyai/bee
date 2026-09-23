@@ -87,7 +87,7 @@ return {handle = handle}
 def exercise(project, packed, pack):
     with tempfile.TemporaryDirectory(prefix="bee-modules-update-") as directory:
         (Path(directory) / ".wippy").mkdir()
-        ui = Desktop(directory, packed=packed, project=project, pack_file=pack, apps=("bee.modules:app",))
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.modules:app",))
         try:
             ui.wait("MODULES", timeout=20)
             ui.wait("Update fixture")
@@ -133,7 +133,7 @@ def main():
         (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
         manifest = project / "modules/hub/src/binding/_index.yaml"
         manifest.write_text(manifest.read_text().replace("modules: [security, funcs]", "modules: [security, funcs, time]", 1))
-        pack = project / "modules-update-test.wapp"
+        pack = project / "modules-update-deployment"
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)

@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from tui_smoke import Desktop, ROOT, RUNTIME
+from workspace import pack_deployment
 
 
 def copies(ui, start):
@@ -50,10 +51,10 @@ def exercise(packed):
         executor = next(entry for entry in document['entries'] if entry['name'] == 'executor')
         executor['default_env'].update({'HOME': str(folder), 'HISTFILE': '/dev/null', 'PS1': '$ '})
         index.write_text(yaml.safe_dump(document, sort_keys=False))
-        pack = folder / 'selection.wapp'
+        pack = project / 'selection-deployment'
         if packed:
-            subprocess.run([str(RUNTIME), 'pack', str(pack)], cwd=project, check=True)
-        ui = Desktop(folder, packed, project=project, pack_file=pack,
+            pack_deployment(project, pack)
+        ui = Desktop(folder, packed, project=project, deployment=pack,
                      apps=('bee.console:app',))
         try:
             ui.wait('Terminal')

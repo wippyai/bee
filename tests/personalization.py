@@ -3,7 +3,7 @@ import tempfile
 import shutil
 import subprocess
 from pathlib import Path
-from workspace import ROOT, RUNTIME
+from workspace import ROOT, RUNTIME, pack_deployment
 from tui_smoke import Desktop
 from recovery import client_stored
 
@@ -132,12 +132,12 @@ def acknowledged_layout():
         session.write_text(code.replace(anchor,
             'if command.op ~= "personalize" and (desktop ~= before or command.op == "snapshot" or command.op == "place") then send_scene() end'))
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=project, check=True)
-        pack = root / "ack.wapp"
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack = root / "ack-deployment"
+        pack_deployment(project, pack)
         for packed in (False, True):
             folder = root / ("pack" if packed else "source")
             folder.mkdir()
-            ui = Desktop(folder, packed, project=project, pack_file=pack, apps=("bee.settings:app",))
+            ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.settings:app",))
             try:
                 ui.wait("BEE SETTINGS")
                 rename(ui, "Settings", "Committed label")
@@ -148,7 +148,7 @@ def acknowledged_layout():
                 ui.process.wait(timeout=3)
             finally:
                 ui.close()
-            ui = Desktop(folder, packed, project=project, pack_file=pack)
+            ui = Desktop(folder, packed, project=project, deployment=pack)
             try:
                 ui.wait("Committed label")
                 ui.quit()

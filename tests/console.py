@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import yaml
 from tui_smoke import Desktop, ROOT, RUNTIME
+from workspace import pack_deployment
 
 PROBE = '''
     local security = require("security")
@@ -69,10 +70,10 @@ def exercise(packed, theme="honey"):
         next(b for b in bindings if b["definition_id"] == "bee.console:app")["policies"].append("bee:probe_broad_policy")
         host_index.write_text(yaml.safe_dump(host, sort_keys=False))
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
-        pack = folder / "probe.wapp"
+        pack = project / "probe-deployment"
         if packed:
-            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-        ui = Desktop(folder, packed, project=project, pack_file=pack, apps=("bee.console:app", "bee.console:app"))
+            pack_deployment(project, pack)
+        ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.console:app", "bee.console:app"))
         try:
             ui.wait("Terminal")
             ui.key(b"printf 'SHELL_%s\\n' READY\r")
@@ -161,10 +162,10 @@ def command_handlers(packed):
         app["meta"]["application"]["commands"].append({
             "name": "probe", "arguments": ["/bin/cat"], "fullscreen": True})
         index.write_text(yaml.safe_dump(document, sort_keys=False))
-        pack = folder / "probe.wapp"
+        pack = project / "probe-deployment"
         if packed:
-            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-        ui = Desktop(folder, packed, project=project, pack_file=pack, apps=("probe",))
+            pack_deployment(project, pack)
+        ui = Desktop(folder, packed, project=project, deployment=pack, apps=("probe",))
         try:
             ui.wait("/bin/cat")
             ui.key(b"HANDLER_READY\r")

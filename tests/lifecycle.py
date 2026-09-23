@@ -1,5 +1,5 @@
 """Adversarial app lifecycle scenarios using disposable production compositions."""
-from workspace import database_environment
+from workspace import database_environment, deployment_copy, pack_deployment
 from pathlib import Path
 import os
 import shutil
@@ -256,13 +256,15 @@ def detached():
             next(e for e in admission["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "bee.attachment_probe:app", "policies": []})
             admission_index.write_text(yaml.safe_dump(admission, sort_keys=False))
             subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
-            pack = folder / "detached.wapp"
+            pack = project / "detached-deployment"
             if packed:
-                subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+                pack_deployment(project, pack)
             (folder / ".wippy").mkdir(exist_ok=True)
             (project / ".wippy").mkdir(exist_ok=True)
             for mode in ("detached", "failed-open", "terminal", "observation", "host", "host-manual", "clients", "clients-commit"):
-                args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
+                if packed:
+                    deployment_copy(pack, folder)
+                args = [str(RUNTIME), "--console", "run", "attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
                                         env=database_environment(folder, BEE_WORKSPACE_DB=str(folder / f"workspace-{mode}.db")))
                 assert result.returncode == 0, f"Attachment mode={mode}, packed={packed}, exit={result.returncode}\n" + result.stdout + result.stderr

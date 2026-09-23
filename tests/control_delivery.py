@@ -9,6 +9,7 @@ import time
 
 from recovery import stored
 from tui_smoke import Desktop, ROOT, RUNTIME
+from workspace import pack_deployment
 
 CASES = {
     "bind": ("client", 'topic == "bee.app.request" and type(value) == "table" and value.op == "bind"'),
@@ -52,8 +53,8 @@ def run(packed, cases=CASES):
 
             project = folder / "project"
             shutil.copytree(ROOT / "src", project / "src")
-            for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copytree(ROOT / "modules", project / "modules")
+            for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                 shutil.copy2(ROOT / name, project / name)
             actor = project / "src/core" / owner / ("supervisor.lua" if owner == "launch" else "main.lua")
             source = actor.read_text()
@@ -69,11 +70,11 @@ def run(packed, cases=CASES):
         end'''
             actor.write_text(source.replace(anchor, injection))
             subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
-            pack = folder / "failure.wapp"
+            pack = project / "failure-deployment"
             if packed:
-                subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+                pack_deployment(project, pack)
             started = time.monotonic()
-            ui = Desktop(folder, packed, project=project, pack_file=pack)
+            ui = Desktop(folder, packed, project=project, deployment=pack)
             try:
                 if case in ("shutdown",):
                     ui.wait("BEE SETTINGS")
@@ -122,8 +123,8 @@ def routine(packed, cases=("open", "close", "prepare")):
             folder = Path(directory)
             project = folder / "project"
             shutil.copytree(ROOT / "src", project / "src")
-            for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copytree(ROOT / "modules", project / "modules")
+            for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                 shutil.copy2(ROOT / name, project / name)
             if case == "prepare":
                 actor = project / "src/core/host/main.lua"
@@ -154,10 +155,10 @@ def routine(packed, cases=("open", "close", "prepare")):
                                         'reject(state, client, request, "delivery_failed", tostring(err))')
             actor.write_text(source)
             subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
-            pack = folder / "routine.wapp"
+            pack = project / "routine-deployment"
             if packed:
-                subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+                pack_deployment(project, pack)
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          apps=("bee.console:app" if case == "prepare" else "bee.settings:app",))
             try:
                 ui.wait("Terminal" if case == "prepare" else "BEE SETTINGS")
@@ -189,8 +190,8 @@ def targeting(packed):
                 folder = Path(directory)
                 project = folder / "project"
                 shutil.copytree(ROOT / "src", project / "src")
-                for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                 shutil.copytree(ROOT / "modules", project / "modules")
+                for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                     shutil.copy2(ROOT / name, project / name)
                 if boundary == "workspace":
                     actor = project / "src/core/client/main.lua"
@@ -220,10 +221,10 @@ def targeting(packed):
 '''
                 actor.write_text(source.replace(anchor, prefix + injection + delivery))
                 subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
-                pack = folder / "target.wapp"
+                pack = project / "target-deployment"
                 if packed:
-                    subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-                ui = Desktop(folder, packed, project=project, pack_file=pack, apps=("bee.settings:app",))
+                    pack_deployment(project, pack)
+                ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.settings:app",))
                 try:
                     ui.wait("BEE SETTINGS")
                     if operation == "open":

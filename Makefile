@@ -205,11 +205,11 @@ check: identity-native-check installer-check agent-corpus-check docs-agent-check
 	$(MAKE) desktop-check WIPPY="$(abspath $(WIPPY))"
 
 .PHONY: desktop-check fresh-pack-check about-check
-about-check: pack
+about-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/about.py
 fresh-pack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fresh_pack.py
-desktop-check: pack
+desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/connection_ui.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/tui_smoke.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fresh_pack.py

@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import yaml
 from tui_smoke import Desktop, ROOT, RUNTIME
+from workspace import pack_deployment
 
 SOURCE = '''local tty = require("tty")
 local client = require("client")
@@ -86,8 +87,8 @@ def run(packed):
         folder = Path(temporary)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
-        for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
         shutil.copytree(ROOT / "modules", project / "modules")
+        for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         fixture = project / "src/probe"
         fixture.mkdir()
@@ -118,11 +119,11 @@ def run(packed):
         end''')
         broker.write_text(code)
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
-        pack = folder / "recovery.wapp"
+        pack = project / "recovery-deployment"
         if packed:
-            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+            pack_deployment(project, pack)
         def boot(apps=()):
-            return Desktop(folder, packed, project=project, pack_file=pack, apps=apps)
+            return Desktop(folder, packed, project=project, deployment=pack, apps=apps)
         ui = boot(("probe:app",))
         try:
             ui.wait("Saved: 0")
@@ -184,7 +185,7 @@ def run(packed):
         entry["meta"]["application"]["restart_policy"] = "manual"
         (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": [entry]}, sort_keys=False))
         if packed:
-            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+            pack_deployment(project, pack)
         ui = boot(("probe:app",))
         try:
             ui.wait("Saved: 0"); ui.key(b"m"); ui.wait("Saved: 1"); ui.quit()
@@ -200,7 +201,7 @@ def run(packed):
         entry["meta"]["application"]["resume_schema"] = "counter.v2"
         (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": [entry]}, sort_keys=False))
         if packed:
-            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+            pack_deployment(project, pack)
         ui = boot()
         try:
             ui.wait("No applications open")

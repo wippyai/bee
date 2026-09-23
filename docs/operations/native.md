@@ -231,7 +231,8 @@ The reusable builder action is pinned by full commit and shared within the
 organization; native module fetching uses the consuming repository's token.
 
 Archives contain the executable, input manifest provenance, effective Go module
-files, available dependency license notices and the runtime patch sources.
+files, available dependency license notices and any runtime patch sources the
+manifest lists.
 Archive timestamps and ownership are normalized; pack timestamps and the native
 C toolchain still affect binary reproducibility. Each release target needs its
 own dependency inventory and root license notices. See [dependency

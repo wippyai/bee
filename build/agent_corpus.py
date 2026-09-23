@@ -186,11 +186,20 @@ def toolkit_reference() -> bytes:
     guide_source = source_match.group(1).strip()
     client = (ROOT / "modules/application/src/client.lua").read_text()
     appearance = (ROOT / "modules/application/src/appearance.lua").read_text()
+    frame = (ROOT / "modules/application/src/frame.lua").read_text()
+    frame_api = []
+    for match in re.finditer(r"((?:^--[^\n]*\n)*)^function M\.([a-z_]+)\(([^)]*)\)(?:: ([^\n]+))?$", frame, re.M):
+        comment = " ".join(line[2:].strip() for line in match.group(1).splitlines())
+        returns = f" -> {match.group(4)}" if match.group(4) else ""
+        frame_api.append(f"| `frame.{match.group(2)}({match.group(3)}){returns}` | {comment or 'See the source.'} |")
+    frame_types = re.findall(r"^type ([A-Za-z]+ = [^\n]+)$", frame, re.M)
+    if not frame_api or not frame_types:
+        raise SystemExit("modules/application/src/frame.lua has no documented functions or types")
     stylebook_manifest = (ROOT / "src/apps/stylebook/_index.yaml").read_text().rstrip()
     stylebook_app = (ROOT / "src/apps/stylebook/app.lua").read_text().rstrip()
     stylebook_view = (ROOT / "src/apps/stylebook/view.lua").read_text().rstrip()
     apps = sorted((ROOT / "src/apps").glob("*/view.lua"))
-    calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance + guide_source
+    calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance + frame + guide_source
                                   + "".join(p.read_text() for p in apps))))
     sections = [
         "# Bee terminal toolkit",
@@ -236,11 +245,12 @@ def toolkit_reference() -> bytes:
         "",
         "## Layout, styles and input",
         "",
-        "* A frame is plain rows. Bee's apps read the theme from",
-        "  `require(\"appearance\").theme(preferences.theme)` and wrap styled runs as",
-        "  `appearance.style(fg, bg) .. text .. \"\\27[0m\"`; the view interprets nothing.",
-        "* Layout is arithmetic on `width`/`height`; `tty.text.truncate` bounds each run",
-        "  and every app repaints on `resize` at the new size.",
+        "* A frame is plain rows. Bee's apps draw every frame through",
+        "  `bee.application:frame` (below), which reads the theme from",
+        "  `require(\"appearance\").theme(preferences.theme)` and styles each run with a",
+        "  semantic role; the view interprets nothing.",
+        "* Layout is arithmetic on `width`/`height`; the frame bounds each run by display",
+        "  width with an ellipsis and every app repaints on `resize` at the new size.",
         "* Input arrives as events; a `key` event carries `action` (`press`, `repeat`,",
         "  `release`) and the key identity. Bee's counter application increments on",
         "  every action except `release`, repaints and checkpoints, then leaves on",
@@ -248,6 +258,25 @@ def toolkit_reference() -> bytes:
         "* `client.checkpoint(launch, json)` queues up to 64 KiB of app-owned JSON when",
         "  the application metadata declares a `resume_schema`; a start with a nonempty",
         "  `resume_state` restores from exactly that state.",
+        "",
+        "## Application frame",
+        "",
+        "`bee.application:frame` is the shared toolkit every Bee application draws with.",
+        "Import it as `frame = \"bee.application:frame\"` next to `appearance`. One frame",
+        "reads top to bottom: row 1 header (uppercase title, muted summary at the right),",
+        "optional tabs, the work area (tables, rows, empty states), the action bar on the",
+        "penultimate row with one primary button, and the footer on the final row with the",
+        "status at the left and the key hints at the right. Selected rows keep their text,",
+        "use the accent pair and carry a `›` marker in column 1. Hits are recorded as the",
+        "frame draws; resolve mouse input with `frame.hit(hits, x, y)`.",
+        "",
+        "```lua",
+        *[f"type {value}" for value in frame_types],
+        "```",
+        "",
+        "| Call | Meaning |",
+        "|------|---------|",
+        *frame_api,
         "",
         "## Application client",
         "",
@@ -266,8 +295,9 @@ def toolkit_reference() -> bytes:
         "## Minimal authored application",
         "",
         "This is the exact inline source returned by Governance's read-only authoring",
-        "guide in this Bee revision. It demonstrates semantic appearance, bounded",
-        "responsive rows, keyboard/mouse parity and correlated checkpoint receipts.",
+        "guide in this Bee revision. It draws through the application frame and",
+        "demonstrates semantic appearance, bounded responsive rows, keyboard/mouse",
+        "parity and correlated checkpoint receipts.",
         "",
         "```lua",
         guide_source,
@@ -275,7 +305,7 @@ def toolkit_reference() -> bytes:
         "",
         "## Toolkit names in this Bee revision",
         "",
-        "`tty` and `appearance`/`client` members this repository actually calls:",
+        "`tty` members this repository's client, appearance, frame, guide and views call:",
         "",
         "```",
         " ".join(calls),
@@ -288,9 +318,10 @@ def toolkit_reference() -> bytes:
         "## Canonical UI Guide source",
         "",
         "These are the exact files used by Bee's runnable **Tools → Learn → UI Guide**",
-        "in this revision. Copy its process/view split, resize handling, bounded cell",
-        "geometry and keyboard/mouse parity as a starting point. Keep application-specific",
-        "state and actions in the authored app; this reference is not a widget framework.",
+        "in this revision. It demonstrates every frame component: header, tabs, an aligned",
+        "table with a marked selection, button roles and the status and key-hint footer.",
+        "Copy its process/view split, resize handling and keyboard/mouse parity as a",
+        "starting point; keep application-specific state and actions in the authored app.",
         "",
         "### Registry manifest (`src/apps/stylebook/_index.yaml`)",
         "",

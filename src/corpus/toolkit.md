@@ -41,11 +41,12 @@ output:close(); tty.stop()             -- on process.event.CANCEL
 
 ## Layout, styles and input
 
-* A frame is plain rows. Bee's apps read the theme from
-  `require("appearance").theme(preferences.theme)` and wrap styled runs as
-  `appearance.style(fg, bg) .. text .. "\27[0m"`; the view interprets nothing.
-* Layout is arithmetic on `width`/`height`; `tty.text.truncate` bounds each run
-  and every app repaints on `resize` at the new size.
+* A frame is plain rows. Bee's apps draw every frame through
+  `bee.application:frame` (below), which reads the theme from
+  `require("appearance").theme(preferences.theme)` and styles each run with a
+  semantic role; the view interprets nothing.
+* Layout is arithmetic on `width`/`height`; the frame bounds each run by display
+  width with an ellipsis and every app repaints on `resize` at the new size.
 * Input arrives as events; a `key` event carries `action` (`press`, `repeat`,
   `release`) and the key identity. Bee's counter application increments on
   every action except `release`, repaints and checkpoints, then leaves on
@@ -53,6 +54,51 @@ output:close(); tty.stop()             -- on process.event.CANCEL
 * `client.checkpoint(launch, json)` queues up to 64 KiB of app-owned JSON when
   the application metadata declares a `resume_schema`; a start with a nonempty
   `resume_state` restores from exactly that state.
+
+## Application frame
+
+`bee.application:frame` is the shared toolkit every Bee application draws with.
+Import it as `frame = "bee.application:frame"` next to `appearance`. One frame
+reads top to bottom: row 1 header (uppercase title, muted summary at the right),
+optional tabs, the work area (tables, rows, empty states), the action bar on the
+penultimate row with one primary button, and the footer on the final row with the
+status at the left and the key hints at the right. Selected rows keep their text,
+use the accent pair and carry a `›` marker in column 1. Hits are recorded as the
+frame draws; resolve mouse input with `frame.hit(hits, x, y)`.
+
+```lua
+type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
+type Painter = {width: integer, height: integer, theme: appearance.Theme, canvas: tty.Canvas, hits: {Hit}}
+type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?}
+type Tab = {kind: string, label: string, short: string?}
+type Hint = {key: string, verb: string}
+type Window = {offset: integer, capacity: integer}
+type Column = {title: string, width: integer, align: string?}
+type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?}
+```
+
+| Call | Meaning |
+|------|---------|
+| `frame.fit(value: string, room: integer) -> string` | Replaces control characters and truncates to a display width with an ellipsis. |
+| `frame.pad(value: string, room: integer, align: string?) -> string` | Pads a fitted value to exactly room cells, aligned left or right. |
+| `frame.new(width: integer, height: integer, preferences: appearance.Preferences) -> Painter` | A painter over a canvas cleared to the theme's surface, with no hits yet. |
+| `frame.rows(painter: Painter) -> {string}` | The painted rows, ready for output:present. |
+| `frame.put(painter: Painter, x: integer, y: integer, value: string, room: integer, fg: string?, bg: string?) -> integer` | Draws value at (x, y) within room cells and returns the drawn width. |
+| `frame.fill(painter: Painter, y: integer, bg: string?)` | Clears row y to the surface, or to bg. |
+| `frame.line(painter: Painter, y: integer, value: string, fg: string?, bg: string?)` | One content row: one blank cell at each edge, text from column 2. |
+| `frame.rule(painter: Painter, y: integer)` | A full-width separator in the border role. |
+| `frame.add_hit(painter: Painter, kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer)` | Records a target clipped to the canvas; targets outside it are dropped. |
+| `frame.hit(hits: {Hit}, x: integer, y: integer) -> Hit?` | The first recorded target containing the cell (x, y), if any. |
+| `frame.header(painter: Painter, title: string, summary: string?)` | Row 1: the uppercase identity at the left and an optional muted live summary aligned right. The summary never overlaps the title; it is truncated first and omitted when fewer than four cells remain. |
+| `frame.tabs(painter: Painter, y: integer, tabs: {Tab}, selected: string) -> integer` | A tab row. Every label switches to its short form when the full set does not fit. Returns the column after the last drawn tab. |
+| `frame.button(painter: Painter, x: integer, y: integer, button: Button) -> integer` | One button at (x, y); returns the next column, unchanged when it does not fit. |
+| `frame.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?) -> integer` | The action bar: buttons in order from column x (default 2) on row y. |
+| `frame.hints(hints: {Hint}) -> string` | Canonical key-hint text: "↑↓ select · Enter open · Esc close". |
+| `frame.footer(painter: Painter, status: string, hints: string)` | The final row: the changing status at the left and the stable key hints at the right. A status wins the row when both do not fit; with no status the hints stand alone. |
+| `frame.window(count: integer, capacity: integer, selected: integer, offset: integer) -> Window` | The visible window of a scrolling list of count rows in capacity slots, keeping the selected index (0 for none) visible. |
+| `frame.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)` | A whole-row target. Selection keeps its text, uses the accent pair and marks column 1 with "›" so focus is visible without color. Unfocused selection (another pane owns focus) keeps the marker in accent on the surface. span extends the target over the item's following rows. |
+| `frame.table(painter: Painter, first: integer, last: integer, value: Table) -> Window` | A table between rows first and last: a muted column caption on row first and rows below it. On a narrow canvas each row becomes its first cell followed by the other nonempty cells joined with " · ". Returns the visible window. |
+| `frame.empty(painter: Painter, y: integer, title: string, action: string?)` | An empty, loading or failure state: what is absent or wrong on row y and the next useful action on the row below it. |
 
 ## Application client
 
@@ -71,8 +117,9 @@ including negotiated close, shell queries and appearance.
 ## Minimal authored application
 
 This is the exact inline source returned by Governance's read-only authoring
-guide in this Bee revision. It demonstrates semantic appearance, bounded
-responsive rows, keyboard/mouse parity and correlated checkpoint receipts.
+guide in this Bee revision. It draws through the application frame and
+demonstrates semantic appearance, bounded responsive rows, keyboard/mouse
+parity and correlated checkpoint receipts.
 
 ```lua
 local tty = require("tty")
@@ -81,8 +128,9 @@ local process = require("process")
 local channel = require("channel")
 local json = require("json")
 local appearance = require("appearance")
+local frame = require("frame")
 
-local RESET = "\27[0m"
+local HINTS = frame.hints({{key = "Enter", verb = "add one"}, {key = "Esc", verb = "exit"}})
 
 local function main(value: unknown)
     local launch = client.launch(value)
@@ -110,69 +158,30 @@ local function main(value: unknown)
     local pending_count: integer? = nil
     local status = "Ready"
     local running = true
-    local action_y = 0
-    local increment_x, increment_width = 0, 0
-    local exit_x, exit_width = 0, 0
+    local hits: {frame.Hit} = {}
 
-    local function clip(value: string, room: integer): string
-        if room <= 0 then return "" end
-        return tty.text.truncate(value:gsub("%c", " "), room, "…")
-    end
-
-    local function fit(value: string, room: integer): string
-        local clipped = clip(value, room)
-        return clipped .. string.rep(" ", math.max(0, room - tty.text.width(clipped)))
-    end
-
+    -- One frame: header, work rows, the action bar and the status footer.
+    -- Every row is bounded to the canvas; hits come from what was drawn.
     local function paint()
-        local theme = appearance.theme(preferences.theme)
-        local canvas = tty.canvas(width, height)
-        local function line(y: integer, value: string, foreground: string?, background: string?)
-            if y < 1 or y > height then return end
-            local fg = foreground or theme.text
-            local bg = background or theme.surface
-            canvas:put(1, y, appearance.style(fg, bg) .. fit(value, width) .. RESET, width)
-        end
-        local function put(x: integer, y: integer, value: string, foreground: string, background: string): integer
-            if x < 1 or x > width or y < 1 or y > height then return 0 end
-            local room = width - x + 1
-            local clipped = clip(value, room)
-            canvas:put(x, y, appearance.style(foreground, background) .. clipped .. RESET, room)
-            return tty.text.width(clipped)
-        end
-        canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-        for y = 1, height do line(y, "") end
-
-        local title = height >= 3 and "COUNTER APP" or "COUNTER APP · " .. tostring(count)
-        line(1, title, theme.text)
-        if height >= 5 then
-            line(2, "WORK", theme.muted)
-            line(3, "Count: " .. tostring(count), theme.accent)
-            local saved_text = saved == nil and "Saved: —" or "Saved: " .. tostring(saved)
-            line(4, saved_text, theme.muted)
+        local painter = frame.new(width, height, preferences)
+        local theme = painter.theme
+        frame.header(painter, "COUNTER APP", height < 4 and ("Count: " .. tostring(count)) or nil)
+        if height >= 6 then
+            frame.line(painter, 2, "WORK", theme.muted)
+            frame.line(painter, 3, "Count: " .. tostring(count), theme.text)
+            frame.line(painter, 4, saved == nil and "Saved: —" or ("Saved: " .. tostring(saved)), theme.muted)
         elseif height >= 4 then
-            line(2, "Count: " .. tostring(count), theme.accent)
+            frame.line(painter, 2, "Count: " .. tostring(count), theme.text)
         end
-
-        action_y = height >= 2 and height or 0
-        if height >= 3 then line(height - 1, "Status: " .. status, theme.muted) end
-        increment_x, increment_width, exit_x, exit_width = 0, 0, 0, 0
-        if action_y > 0 then
-            line(action_y, "", theme.text)
-            local increment_label = width >= 24 and " [Enter] Add one " or (width >= 10 and " [Enter] +1 " or " +1 ")
-            local exit_label = width >= 24 and " [Escape] Exit " or (width >= 10 and " [Esc] Exit " or " Esc ")
-            local x = width >= 2 and 2 or 1
-            local increment_size = tty.text.width(increment_label)
-            if x + increment_size - 1 <= width then
-                increment_x, increment_width = x, put(x, action_y, increment_label, appearance.selection_text(theme), theme.accent)
-                x = x + increment_width + 1
-            end
-            local exit_size = tty.text.width(exit_label)
-            if x + exit_size - 1 <= width then
-                exit_x, exit_width = x, put(x, action_y, exit_label, theme.text, theme.surface)
-            end
+        if height >= 3 then
+            frame.actions(painter, height - 1, {
+                {kind = "increment", key = "Enter", label = width >= 30 and "Add one" or "+1", enabled = true, primary = true},
+                {kind = "exit", key = "Esc", label = "Exit", enabled = true},
+            })
         end
-        assert(output:present(canvas:rows()))
+        if height >= 2 then frame.footer(painter, "Status: " .. status, HINTS) end
+        hits = painter.hits
+        assert(output:present(frame.rows(painter)))
     end
 
     local function checkpoint()
@@ -235,9 +244,9 @@ local function main(value: unknown)
                 if data.key_type == "enter" then increment()
                 elseif data.key_type == "escape" or data.key_type == "esc" then running = false end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local x, y = math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0)
-                if y == action_y and x >= increment_x and x < increment_x + increment_width then increment()
-                elseif y == action_y and x >= exit_x and x < exit_x + exit_width then running = false end
+                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
+                if hit and hit.kind == "increment" then increment()
+                elseif hit and hit.kind == "exit" then running = false end
             end
         end
     end
@@ -249,7 +258,7 @@ return {main = main}
 
 ## Toolkit names in this Bee revision
 
-`tty` and `appearance`/`client` members this repository actually calls:
+`tty` members this repository's client, appearance, frame, guide and views call:
 
 ```
 tty.Canvas tty.canvas tty.events tty.mouse tty.screen_size tty.start tty.stop tty.surface tty.text.truncate tty.text.width
@@ -262,9 +271,10 @@ under `runtime/lua/` and `runtime/system/` in this corpus. The guide example in
 ## Canonical UI Guide source
 
 These are the exact files used by Bee's runnable **Tools → Learn → UI Guide**
-in this revision. Copy its process/view split, resize handling, bounded cell
-geometry and keyboard/mouse parity as a starting point. Keep application-specific
-state and actions in the authored app; this reference is not a widget framework.
+in this revision. It demonstrates every frame component: header, tabs, an aligned
+table with a marked selection, button roles and the status and key-hint footer.
+Copy its process/view split, resize handling and keyboard/mouse parity as a
+starting point; keep application-specific state and actions in the authored app.
 
 ### Registry manifest (`src/apps/stylebook/_index.yaml`)
 
@@ -281,6 +291,7 @@ entries:
     client: bee.application:client
     appearance: bee.application:appearance
     view: bee.stylebook:view
+    frame: bee.application:frame
   meta:
     type: bee.application
     application:
@@ -295,9 +306,9 @@ entries:
 - name: view
   kind: library.lua
   source: file://view.lua
-  modules: [tty]
   imports:
     appearance: bee.application:appearance
+    frame: bee.application:frame
 ```
 
 ### Process (`src/apps/stylebook/app.lua`)
@@ -310,6 +321,7 @@ local channel = require("channel")
 local uuid = require("uuid")
 local client = require("client")
 local appearance = require("appearance")
+local frame = require("frame")
 local view = require("view")
 
 local function main(value: unknown)
@@ -325,7 +337,7 @@ local function main(value: unknown)
     local preferences = appearance.defaults()
     local section: integer = 1
     local selected: integer = 1
-    local hits: {view.Hit} = {}
+    local hits: {frame.Hit} = {}
     local running, dirty, ready = true, true, false
 
     if broker then
@@ -333,9 +345,9 @@ local function main(value: unknown)
     end
     while running do
         if dirty then
-            local frame = view.draw(width, height, preferences, section, selected)
-            hits = frame.hits
-            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local drawn = view.draw(width, height, preferences, section, selected)
+            hits = drawn.hits
+            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not ready then client.ready(launch); ready = true end
             dirty = false
         end
@@ -361,9 +373,10 @@ local function main(value: unknown)
                 elseif key == "down" then if selected < view.item_count(section) then selected = selected + 1 end; dirty = true
                 elseif key == "esc" or key == "escape" then running = false end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                 if hit then
-                    if hit.kind == "section" then section = hit.index; selected = 1
+                    local chosen = view.section_of(hit.kind)
+                    if chosen > 0 then section = chosen; selected = 1
                     elseif hit.kind == "item" then selected = hit.index end
                     dirty = true
                 end
@@ -381,125 +394,86 @@ return {main = main}
 ### Pure view (`src/apps/stylebook/view.lua`)
 
 ```lua
--- Pure, responsive reference frame. No calls, polling or mutable ownership.
-local tty = require("tty")
+-- Pure, responsive reference frame built from the shared application frame:
+-- header, tabs, a table with selection, button roles, an empty state and the
+-- status and key-hint footer. No calls, polling or mutable ownership.
 local appearance = require("appearance")
+local frame = require("frame")
 
-type Hit = {kind: string, index: integer, x: integer, y: integer, width: integer, height: integer}
-type Frame = {rows: {string}, hits: {Hit}}
+type Frame = {rows: {string}, hits: {frame.Hit}}
 local M = {}
-local RESET = "\27[0m"
-local sections = {"Principles", "Components", "States", "Layout"}
+local sections: {frame.Tab} = {
+    {kind = "principles", label = "Principles", short = "P"},
+    {kind = "components", label = "Components", short = "C"},
+    {kind = "states", label = "States", short = "S"},
+    {kind = "layout", label = "Layout", short = "L"},
+}
 local samples: {{{string}}} = {
     {{"Ground", "desktop context"}, {"Surface", "application work"},
         {"Accent", "focus and primary action"}, {"Muted", "metadata and disabled controls"}},
-    {{"Selected row", "whole-row keyboard and mouse target"},
+    {{"Selected row", "whole-row target, › marker and accent pair"},
         {" Run ", "one clear primary action"}, {"Name", "Value stays next to its label"}},
     {{"Ready", "work can begin"}, {"Loading", "catalog from this workspace"},
         {"Waiting", "owner approval"}, {"Unavailable", "node is disconnected · retry"},
         {"Empty", "no runs yet · start one"}},
-    {{"Identity", "one dense header"}, {"Work", "selection before detail"},
-        {"Feedback", "stable penultimate row"}, {"Actions", "stable final row"}},
+    {{"Identity", "header row: title left, muted summary right"}, {"Work", "tables and lists; selection before detail"},
+        {"Feedback", "status at the left of the final row"}, {"Actions", "action bar above; key hints beside the status"}},
 }
+local HINTS = frame.hints({{key = "←→/Tab", verb = "section"}, {key = "↑↓", verb = "inspect"}, {key = "Esc", verb = "close"}})
+local COLUMNS: {frame.Column} = {{title = "Element", width = 18}, {title = "Meaning", width = 0}}
 
-local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
 function M.section_count(): integer return #sections end
 function M.item_count(section: integer): integer return samples[section] and #samples[section] or 1 end
-function M.hit(hits: {Hit}, x: integer, y: integer): Hit?
-    for _, item in ipairs(hits) do
-        if x >= item.x and x < item.x + item.width and y >= item.y and y < item.y + item.height then return item end
-    end
-    return nil
+-- The section a tab hit selects, or 0 for any other hit kind.
+function M.section_of(kind: string): integer
+    for index, tab in ipairs(sections) do if tab.kind == kind then return index end end
+    return 0
 end
 
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, section: integer, selected: integer): Frame
-    local theme = appearance.theme(preferences.theme)
-    local canvas = tty.canvas(width, height)
-    local hits: {Hit} = {}
-    local function put(x: integer, y: integer, value: string, size: integer, fg: string?, bg: string?)
-        if x < 1 or x > width or y < 1 or y > height or size <= 0 then return end
-        local room = math.floor(math.min(size, width - x + 1))
-        if room <= 0 then return end
-        local safe = tty.text.truncate(value:gsub("%c", " "), room, "…")
-        canvas:put(x, y, appearance.style(fg or theme.text, bg or theme.surface) .. safe .. RESET, room)
-    end
-    local function line(y: integer, value: string, fg: string?, bg: string?)
-        put(1, y, string.rep(" ", width), width, fg, bg)
-        put(2, y, value, maximum(0, width - 2), fg, bg)
-    end
-    local function rule(y: integer) put(1, y, string.rep("─", width), width, theme.border) end
-    local function row(y: integer, index: integer, title: string, detail: string)
-        local active = index == selected
-        line(y, "", active and appearance.selection_text(theme) or theme.text, active and theme.accent or theme.surface)
-        local marker = active and "› " or "  "
-        if width < 54 then
-            put(2, y, marker .. title .. " · " .. detail, maximum(0, width - 2), active and appearance.selection_text(theme) or theme.text,
-                active and theme.accent or theme.surface)
-        else
-            put(2, y, marker .. title, 20, active and appearance.selection_text(theme) or theme.text, active and theme.accent or theme.surface)
-            put(24, y, detail, maximum(0, width - 24), active and appearance.selection_text(theme) or theme.muted,
-                active and theme.accent or theme.surface)
-        end
-        hits[#hits + 1] = {kind = "item", index = index, x = 1, y = y, width = width, height = 1}
-    end
-    local function rows(first: integer, items: {{string}})
-        local last = height - 2
-        local capacity = math.max(0, last - first + 1)
-        if capacity == 0 then return end
-        local offset = math.max(0, math.min(#items - capacity, selected - capacity))
-        for slot = 1, math.min(capacity, #items - offset) do
-            local index = offset + slot
-            row(first + slot - 1, index, items[index][1], items[index][2])
-        end
-    end
-    canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-    line(1, "BEE UI GUIDE", theme.text)
-    if width >= 42 then
-        local label = "HONEY SYSTEM"
-        put(width - #label, 1, label, #label, theme.accent)
-    end
+    local painter = frame.new(width, height, preferences)
+    local theme = painter.theme
+    local items = samples[section]
+    frame.header(painter, "BEE UI GUIDE", "HONEY SYSTEM")
     if height >= 4 then
-        local x = 2
-        for index, title in ipairs(sections) do
-            local label = width < 48 and (" " .. title:sub(1, 1) .. " ") or (" " .. title .. " ")
-            local size = tty.text.width(label)
-            if x <= width then
-                local active = index == section
-                put(x, 2, label, size, active and appearance.selection_text(theme) or theme.muted,
-                    active and theme.accent or theme.surface)
-                if x + size - 1 <= width then
-                    hits[#hits + 1] = {kind = "section", index = index, x = x, y = 2, width = size, height = 1}
-                end
-                x = x + size + 1
-            end
-        end
-        rule(3)
+        frame.tabs(painter, 2, sections, sections[section].kind)
+        frame.rule(painter, 3)
+    end
+    local function table_at(first: integer)
+        local cells: {{string}} = {}
+        for index, item in ipairs(items) do cells[index] = {item[1], item[2]} end
+        frame.table(painter, first, height - 1, {columns = COLUMNS, cells = cells, kind = "item", selected = selected, offset = 0})
     end
     local compact = height >= 5 and height < 12
     if compact then
-        local sample = samples[section][selected]
-        row(height - 1, selected, sample[1], sample[2])
+        local sample = items[selected]
+        frame.row(painter, height - 1, sample[1] .. " · " .. sample[2], true, "item", selected, "")
     elseif height >= 12 and section == 1 then
-        line(5, "Calm tools for busy hives.", theme.accent)
-        if height >= 7 then line(7, "Semantic color · compact hierarchy · visible focus", theme.text) end
-        if height >= 8 then line(8, "Keyboard parity · bounded text · responsive frames", theme.muted) end
-        rows(10, samples[1])
+        frame.line(painter, 5, "Calm tools for busy hives.", theme.accent)
+        frame.line(painter, 7, "Semantic color · compact hierarchy · visible focus", theme.text)
+        frame.line(painter, 8, "Keyboard parity · bounded text · responsive frames", theme.muted)
+        table_at(10)
     elseif height >= 12 and section == 2 then
-        line(5, "CONTROLS", theme.muted)
-        if height >= 6 then line(6, "  Disabled · visible, muted, no hit target", theme.muted) end
-        rows(8, samples[2])
+        frame.line(painter, 5, "CONTROLS", theme.muted)
+        local x = frame.put(painter, 2, 6, " Run ", 5, appearance.selection_text(theme), theme.accent) + 3
+        x = x + frame.put(painter, x, 6, " Details ", 9, theme.accent) + 1
+        frame.put(painter, x, 6, " Disabled · visible, muted, no hit target", painter.width - x, theme.muted)
+        table_at(8)
     elseif height >= 12 and section == 3 then
-        line(5, "FEEDBACK", theme.muted)
-        if height >= 6 then line(6, "State always has words; color never carries it alone.", theme.muted) end
-        rows(8, samples[3])
+        frame.line(painter, 5, "FEEDBACK", theme.muted)
+        frame.line(painter, 6, "State always has words; color never carries it alone.", theme.muted)
+        table_at(8)
     elseif height >= 12 then
-        line(5, width < 54 and "COMPACT" or "RESPONSIVE LAYOUT", theme.muted)
-        if height >= 6 then line(6, width < 54 and "Narrow keeps the next useful action." or "Wide views add detail; narrow views preserve the task.", theme.text) end
-        rows(8, samples[4])
+        frame.line(painter, 5, width < 54 and "COMPACT" or "RESPONSIVE LAYOUT", theme.muted)
+        frame.line(painter, 6, width < 54 and "Narrow keeps the next useful action." or "Wide views add detail; narrow views preserve the task.", theme.text)
+        table_at(8)
     end
-    if height >= 3 and not compact then line(height - 1, sections[section] .. " · " .. tostring(selected) .. "/" .. tostring(M.item_count(section)), theme.muted) end
-    if height >= 2 then line(height, "←→ / Tab Section   ↑↓ Inspect   Esc Close", theme.muted) end
-    return {rows = canvas:rows(), hits = hits}
+    -- Narrow frames keep the key hints; the position is visible in the selection.
+    if height >= 2 then
+        local position = sections[section].label .. " · " .. tostring(selected) .. "/" .. tostring(M.item_count(section))
+        frame.footer(painter, width >= 60 and position or "", HINTS)
+    end
+    return {rows = frame.rows(painter), hits = painter.hits}
 end
 
 return M

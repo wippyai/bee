@@ -77,11 +77,14 @@ local function define_tests()
             test.eq(modules[4], "json")
             test.eq(imports.client, "bee.application:client")
             test.eq(imports.appearance, "bee.application:appearance")
+            test.eq(imports.frame, "bee.application:frame")
             test.is_true(#source < 10000)
             for _, fragment in ipairs({
                 "local appearance = require(\"appearance\")", "appearance.defaults()",
-                "appearance.style", "appearance.selection_text", "tty.text.truncate", "canvas:rows()",
-                "tty.mouse(true)", "COUNTER APP", "WORK", "Status:",
+                "local frame = require(\"frame\")", "frame.new(width, height, preferences)",
+                "frame.header(painter, \"COUNTER APP\"", "frame.actions(painter, height - 1", "primary = true",
+                "frame.footer(painter, \"Status: \" .. status, HINTS)", "frame.hints(", "frame.hit(hits",
+                "frame.rows(painter)", "tty.mouse(true)", "WORK",
                 "message:from() == launch.broker_pid", "data.version == 1",
                 "data.request_id == pending_request_id", "local submitted = pending_count",
                 "data.error_code == \"\"", "saved = submitted", "data.error_code == \"superseded\"",

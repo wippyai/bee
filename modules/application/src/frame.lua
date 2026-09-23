@@ -22,8 +22,7 @@ type Hint = {key: string, verb: string}
 type Window = {offset: integer, capacity: integer}
 -- A table column: width 0 is the single flexible column; align "right" for numbers.
 type Column = {title: string, width: integer, align: string?}
-type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer,
-    focused: boolean?}
+type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?}
 
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
 local function minimum(a: integer, b: integer): integer if a < b then return a end; return b end
@@ -43,6 +42,7 @@ function M.pad(value: string, room: integer, align: string?): string
     return fitted .. gap
 end
 
+-- A painter over a canvas cleared to the theme's surface, with no hits yet.
 function M.new(width: integer, height: integer, preferences: appearance.Preferences): Painter
     local theme = appearance.theme(preferences.theme)
     local canvas = tty.canvas(width, height)
@@ -50,7 +50,10 @@ function M.new(width: integer, height: integer, preferences: appearance.Preferen
     return {width = width, height = height, theme = theme, canvas = canvas, hits = {}}
 end
 
-function M.rows(painter: Painter): {string} return painter.canvas:rows() end
+-- The painted rows, ready for output:present.
+function M.rows(painter: Painter): {string}
+    return painter.canvas:rows()
+end
 
 -- Draws value at (x, y) within room cells and returns the drawn width.
 function M.put(painter: Painter, x: integer, y: integer, value: string, room: integer, fg: string?, bg: string?): integer
@@ -65,6 +68,7 @@ function M.put(painter: Painter, x: integer, y: integer, value: string, room: in
     return drawn
 end
 
+-- Clears row y to the surface, or to bg.
 function M.fill(painter: Painter, y: integer, bg: string?)
     if y < 1 or y > painter.height or painter.width < 1 then return end
     local theme = painter.theme
@@ -77,17 +81,20 @@ function M.line(painter: Painter, y: integer, value: string, fg: string?, bg: st
     M.put(painter, 2, y, value, painter.width - 2, fg, bg)
 end
 
+-- A full-width separator in the border role.
 function M.rule(painter: Painter, y: integer)
     if y < 1 or y > painter.height then return end
     M.put(painter, 1, y, string.rep("─", painter.width), painter.width, painter.theme.border)
 end
 
+-- Records a target clipped to the canvas; targets outside it are dropped.
 function M.add_hit(painter: Painter, kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer)
     if width <= 0 or height <= 0 or x < 1 or y < 1 or x > painter.width or y > painter.height then return end
     painter.hits[#painter.hits + 1] = {kind = kind, index = index, key = key, x = x, y = y,
         width = minimum(width, painter.width - x + 1), height = minimum(height, painter.height - y + 1)}
 end
 
+-- The first recorded target containing the cell (x, y), if any.
 function M.hit(hits: {Hit}, x: integer, y: integer): Hit?
     for _, item in ipairs(hits) do
         if x >= item.x and x < item.x + item.width and y >= item.y and y < item.y + item.height then return item end
@@ -197,8 +204,7 @@ end
 -- column 1 with "›" so focus is visible without color. Unfocused selection
 -- (another pane owns focus) keeps the marker in accent on the surface. span
 -- extends the target over the item's following rows.
-function M.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer,
-    key: string, fg: string?, focused: boolean?, span: integer?)
+function M.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)
     local theme = painter.theme
     local has_focus = focused == nil or focused
     local text_fg = fg or theme.text

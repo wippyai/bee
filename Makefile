@@ -30,7 +30,7 @@ native-modules-lifecycle-check:
 	python3 tests/native_modules_lifecycle.py "$(BEE_BINARY)"
 .PHONY: modules-app-check
 modules-app-check:
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_app.py
+	BEE_RUNTIME="$(abspath $(WIPPY))" BEE_RELEASE_DEPLOYMENT="$(abspath $(BEE_DEPLOYMENT))" python3 tests/modules_app.py
 .PHONY: modules-update-check
 modules-update-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_update.py

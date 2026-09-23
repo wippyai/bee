@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"unicode/utf8"
 
 	"github.com/wippyai/bee/native/internal/privatefile"
@@ -59,6 +60,16 @@ func (s Snapshot) GossipKey() []byte { return bytes.Clone(s.secret) }
 func (s Snapshot) PeerKey(node string) (ed25519.PublicKey, bool) {
 	key, ok := s.peers[node]
 	return bytes.Clone(key), ok
+}
+
+// Peers lists the enrolled client nodes in order.
+func (s Snapshot) Peers() []string {
+	nodes := make([]string, 0, len(s.peers))
+	for node := range s.peers {
+		nodes = append(nodes, node)
+	}
+	sort.Strings(nodes)
+	return nodes
 }
 func (s Snapshot) Format(out fmt.State, _ rune) {
 	_, _ = fmt.Fprintf(out, "BeeEnrollment(execution=%s, peers=%d)", s.execution, len(s.peers))

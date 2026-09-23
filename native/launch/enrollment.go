@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
+	"github.com/wippyai/bee/native/internal/privatefile"
 	topapi "github.com/wippyai/runtime/api/topology"
 
 	"github.com/wippyai/runtime/api/attrs"
@@ -188,14 +189,65 @@ type enrollmentPublisherComponent struct {
 }
 
 // seedEnrollment initializes the owner's local enrollment from its membership
-// secret and registers each given client key under its node name, so the
-// joining client's mesh handshake resolves.
+// secret and makes its peers exactly the given client keys, so a joining
+// client's mesh handshake resolves and a departed client's no longer does.
 func (p *enrollmentPublisherComponent) seedEnrollment(ctx context.Context, enrollment *rendezvous.Enrollment, keys []trustedKey) error {
 	if err := enrollment.Initialize(ctx, p.execution, p.secret); err != nil {
 		return err
 	}
+	current, err := enrollment.Read(ctx, p.execution)
+	if err != nil {
+		return err
+	}
+	wanted := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		wanted[key.node] = true
+	}
+	for _, node := range current.Peers() {
+		if wanted[node] {
+			continue
+		}
+		key, _ := current.PeerKey(node)
+		if err := enrollment.Remove(ctx, p.execution, node, key); err != nil {
+			return err
+		}
+	}
 	for _, key := range keys {
 		if _, err := enrollment.Register(ctx, p.execution, key.node, key.key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// retireDepartedClients removes the trusted key of every client that no longer
+// holds its liveness lock. Holding the lock proves the client process is
+// alive; the OS releases it when the process ends, however it ends.
+func retireDepartedClients(ctx context.Context, trusted string) error {
+	entries, err := os.ReadDir(trusted)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pub") {
+			continue
+		}
+		node := strings.TrimSuffix(entry.Name(), ".pub")
+		if !validTrustedName(node) {
+			continue
+		}
+		unlock, err := privatefile.TryLock(ctx, trusted, clientLockName(node))
+		if errors.Is(err, privatefile.ErrLockBusy) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		removed := os.Remove(filepath.Join(trusted, entry.Name()))
+		if err := errors.Join(removed, unlock(), os.Remove(filepath.Join(trusted, clientLockName(node)))); err != nil {
 			return err
 		}
 	}
@@ -207,6 +259,9 @@ func (p *enrollmentPublisherComponent) seedEnrollment(ctx context.Context, enrol
 // from the host entry, so the entry is written first and the local enrollment
 // lists only the nodes that write named.
 func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry.Registry, enrollment *rendezvous.Enrollment) error {
+	if err := retireDepartedClients(ctx, p.trusted); err != nil {
+		return err
+	}
 	keys, err := trustedKeys(p.trusted)
 	if err != nil {
 		return err

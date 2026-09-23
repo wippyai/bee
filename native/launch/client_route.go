@@ -39,8 +39,9 @@ func defaultClientSeams() clientSeams {
 	}
 }
 
-// waitEnrolled polls the owner-seeded enrollment until it lists the client node.
-func waitEnrolled(ctx context.Context, state, node string) error {
+// waitEnrolled polls the owner-seeded enrollment until it lists the client node
+// with this client's key.
+func waitEnrolled(ctx context.Context, state, node string, public ed25519.PublicKey) error {
 	enrollment, err := rendezvous.NewEnrollment(ownerDirectory(state))
 	if err != nil {
 		return err
@@ -52,7 +53,7 @@ func waitEnrolled(ctx context.Context, state, node string) error {
 		}
 		descriptor, err := readDescriptor(ctx, filepath.Join(state, rendezvous.DirectoryName))
 		if err == nil {
-			if _, ok := enrollment.Resolve(ctx, descriptor.Execution, node); ok {
+			if key, ok := enrollment.Resolve(ctx, descriptor.Execution, node); ok && key.Equal(public) {
 				return nil
 			}
 		}

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
+	"github.com/wippyai/bee/native/internal/privatefile"
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/registry"
 	bootpkg "github.com/wippyai/runtime/boot"
@@ -265,7 +266,8 @@ func (r *orderedRegistry) Apply(_ context.Context, _ registry.ChangeSet) (regist
 func TestEnrollmentPublisherListsClientsOnlyAfterTheEntryNamesThem(t *testing.T) {
 	state := t.TempDir()
 	prepareOwnerState(t, state)
-	writeClientKey(t, ownerTrustedDirectory(state), "client-a")
+	_, release := holdClient(t, state, "client-a")
+	defer release()
 	execution, err := readExecution(ownerDirectory(state))
 	if err != nil {
 		t.Fatal(err)
@@ -317,5 +319,79 @@ func TestEnrollmentPublisherListsClientsOnlyAfterTheEntryNamesThem(t *testing.T)
 	}
 	if reg.early.Load() {
 		t.Fatal("the local enrollment listed the client before the host entry was written")
+	}
+}
+
+// holdClient models a live client: it holds its node's liveness lock.
+func holdClient(t *testing.T, state, node string) (ed25519.PublicKey, func()) {
+	t.Helper()
+	unlock, err := privatefile.TryLock(context.Background(), ownerTrustedDirectory(state), node+".lock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	public := writeClientKey(t, ownerTrustedDirectory(state), node)
+	return public, func() {
+		if err := unlock(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A client whose process is gone no longer holds its liveness lock; the owner
+// retires its key from the trusted directory, the host entry and the local
+// enrollment, while a live client stays enrolled.
+func TestEnrollmentPublisherRetiresDepartedClients(t *testing.T) {
+	state := t.TempDir()
+	prepareOwnerState(t, state)
+	liveKey, releaseLive := holdClient(t, state, "client-live")
+	defer releaseLive()
+	_, releaseGone := holdClient(t, state, "client-gone")
+	execution, err := readExecution(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := rendezvous.NewEnrollment(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	component, err := enrollmentPublisher(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publisher := component.(boot.Starter)
+	reg := &flakyRegistry{}
+	base, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := publisher.Start(registry.WithRegistry(base, reg)); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = component.(boot.Stopper).Stop(context.Background()) }()
+	resolved := func(node string) bool {
+		_, ok := local.Resolve(context.Background(), execution, node)
+		return ok
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !(resolved("client-live") && resolved("client-gone")) && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !resolved("client-gone") {
+		t.Fatal("a live client was never enrolled")
+	}
+	releaseGone()
+	deadline = time.Now().Add(5 * time.Second)
+	for resolved("client-gone") && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if resolved("client-gone") {
+		t.Fatal("a departed client stayed in the local enrollment")
+	}
+	if _, err := os.Stat(filepath.Join(ownerTrustedDirectory(state), "client-gone.pub")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a departed client's key stayed trusted: %v", err)
+	}
+	key, ok := local.Resolve(context.Background(), execution, "client-live")
+	if !ok || !key.Equal(liveKey) {
+		t.Fatal("the live client lost its enrollment")
 	}
 }

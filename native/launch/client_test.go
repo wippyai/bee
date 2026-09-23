@@ -50,7 +50,7 @@ func (f *fakeOwner) seams(directory string) clientSeams {
 			f.joined++
 			return nil
 		},
-		waitEnrolled: func(context.Context, string, string) error { return nil },
+		waitEnrolled: func(context.Context, string, string, ed25519.PublicKey) error { return nil },
 		report:       io.Discard,
 	}
 }
@@ -72,9 +72,37 @@ func fakeDescriptor(t *testing.T) rendezvous.Descriptor {
 func TestClientSpawnsDetachedOwnerAndJoins(t *testing.T) {
 	state := t.TempDir()
 	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
-	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), owner.seams(filepath.Join(state, rendezvous.DirectoryName)), joinRequest{})
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	join := seams.join
+	checked := false
+	seams.join = func(ctx context.Context, request joinRequest) error {
+		// While joined, the client's public key is pinned in the owner's
+		// trusted directory, owner-only.
+		trusted := ownerTrustedDirectory(state)
+		data, err := os.ReadFile(filepath.Join(trusted, request.Node+".pub"))
+		if err != nil {
+			t.Fatalf("trusted key: %v", err)
+		}
+		decoded, err := base64.RawStdEncoding.DecodeString(string(data[:len(data)-1]))
+		if err != nil || !request.Public.Equal(ed25519.PublicKey(decoded)) {
+			t.Fatalf("trusted key does not match announced key")
+		}
+		info, err := os.Stat(filepath.Join(trusted, request.Node+".pub"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("trusted key mode = %o, want 0600", info.Mode().Perm())
+		}
+		checked = true
+		return join(ctx, request)
+	}
+	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !checked {
+		t.Fatal("client did not join")
 	}
 	if owner.started != 1 {
 		t.Fatalf("owner started %d times, want 1", owner.started)
@@ -87,23 +115,6 @@ func TestClientSpawnsDetachedOwnerAndJoins(t *testing.T) {
 	}
 	if len(owner.lastJoin.Public) != ed25519.PublicKeySize {
 		t.Fatalf("join public key length = %d", len(owner.lastJoin.Public))
-	}
-	// The client's public key is pinned in the owner's trusted directory.
-	trusted := ownerTrustedDirectory(state)
-	data, err := os.ReadFile(filepath.Join(trusted, owner.lastJoin.Node+".pub"))
-	if err != nil {
-		t.Fatalf("trusted key: %v", err)
-	}
-	decoded, err := base64.RawStdEncoding.DecodeString(string(data[:len(data)-1]))
-	if err != nil || !owner.lastJoin.Public.Equal(ed25519.PublicKey(decoded)) {
-		t.Fatalf("trusted key does not match announced key")
-	}
-	info, err := os.Stat(filepath.Join(trusted, owner.lastJoin.Node+".pub"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("trusted key mode = %o, want 0600", info.Mode().Perm())
 	}
 }
 
@@ -128,7 +139,7 @@ func TestClientWaitsForEnrollmentBeforeJoining(t *testing.T) {
 	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
 	waited := false
 	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
-	seams.waitEnrolled = func(_ context.Context, gotState, node string) error {
+	seams.waitEnrolled = func(_ context.Context, gotState, node string, _ ed25519.PublicKey) error {
 		waited = true
 		if gotState != state || node == "" {
 			t.Fatalf("waitEnrolled(%q, %q)", gotState, node)
@@ -204,5 +215,45 @@ func TestClientReportsItsRoute(t *testing.T) {
 				t.Fatalf("route report = %q, want %q", report.String(), route.want)
 			}
 		})
+	}
+}
+
+// Every launch is its own client node: concurrent clients of one state never
+// share a mesh identity, and a returning client is never mistaken for the one
+// that left. The trusted key exists exactly while the client is joined.
+func TestClientIdentityIsPerLaunchAndRetiredOnExit(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	var nodes []string
+	join := seams.join
+	seams.join = func(ctx context.Context, request joinRequest) error {
+		if request.Node != clientNodeName(request.Public) {
+			t.Fatalf("join node %q does not name its key", request.Node)
+		}
+		if _, ok := resolveTrustedKey(ownerTrustedDirectory(state), request.Node); !ok {
+			t.Fatal("joined without a trusted key")
+		}
+		nodes = append(nodes, request.Node)
+		return join(ctx, request)
+	}
+	for range 2 {
+		if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(nodes) != 2 || nodes[0] == nodes[1] {
+		t.Fatalf("client nodes = %v, want two distinct nodes", nodes)
+	}
+	entries, err := os.ReadDir(ownerTrustedDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		names := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		t.Fatalf("departed clients left %v", names)
 	}
 }

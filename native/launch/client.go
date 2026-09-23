@@ -39,7 +39,7 @@ type clientSeams struct {
 	join           func(ctx context.Context, join joinRequest) error
 	// waitEnrolled blocks until the owner has registered the client's node in the
 	// local enrollment, or the context ends.
-	waitEnrolled func(ctx context.Context, state, node string) error
+	waitEnrolled func(ctx context.Context, state, node string, public ed25519.PublicKey) error
 	// report receives the foreground route line.
 	report io.Writer
 }
@@ -58,7 +58,7 @@ type joinRequest struct {
 // client's identity and joins the owner's mesh. It never starts a second owner:
 // when the state is already owned it waits for the published descriptor and
 // joins without spawning. Ctrl-Q ends only the joining runtime, never the owner.
-func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientSeams, join joinRequest) error {
+func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientSeams, join joinRequest) (result error) {
 	if ctx == nil {
 		return errors.New("client launch requires a context")
 	}
@@ -99,7 +99,6 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	}
 	join.Directory = directory
 	join.Owner = owner
-	join.Node = clientNodeName(launch.State)
 	if join.Key == nil {
 		public, private, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
@@ -107,13 +106,17 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		}
 		join.Public, join.Key = public, private
 	}
-	if err := enrollClient(launch.State, directory, join.Node, join.Public); err != nil {
+	join.Node = clientNodeName(join.Public)
+	release, err := enrollClient(ctx, launch.State, join.Node, join.Public)
+	if err != nil {
 		return err
 	}
+	defer func() { result = errors.Join(result, release()) }()
 	// The owner registers the trusted key on its own bounded refresh, so wait
-	// until the enrollment lists this node before the mesh handshake.
+	// until the enrollment lists this node with this key before the mesh
+	// handshake.
 	if seams.waitEnrolled != nil {
-		if err := seams.waitEnrolled(ctx, launch.State, join.Node); err != nil {
+		if err := seams.waitEnrolled(ctx, launch.State, join.Node, join.Public); err != nil {
 			return err
 		}
 	}
@@ -156,26 +159,42 @@ func waitDescriptorOrExit(ctx context.Context, read func(context.Context, string
 	}
 }
 
-// clientNodeName derives a stable per-attachment node name for the client.
-func clientNodeName(state string) string {
-	digest := sha256Hex(filepath.Clean(state))
-	return "bee-client-" + digest[:16]
+// clientNodeName names the client node after its per-launch public key, so
+// concurrent clients of one state never share a mesh identity and a returning
+// client is never taken for the one that left.
+func clientNodeName(public ed25519.PublicKey) string {
+	return "bee-client-" + sha256Hex(string(public))[:16]
 }
 
-// enrollClient writes the caller's public key into the owner's trusted
-// directory under the pending enrollment directory the owner scans. The write
-// is owner-only; a malformed key is never written.
-func enrollClient(state, directory, node string, public ed25519.PublicKey) error {
+// enrollClient holds the node's liveness lock and writes the caller's public
+// key into the owner's trusted directory. The owner retires a key whose lock
+// is free, so an abruptly ended client leaves nothing enrolled. The returned
+// release retires the key on a clean exit.
+func enrollClient(ctx context.Context, state, node string, public ed25519.PublicKey) (func() error, error) {
 	if len(public) != ed25519.PublicKeySize {
-		return errors.New("client public key has an invalid length")
+		return nil, errors.New("client public key has an invalid length")
 	}
 	if !validTrustedName(node) {
-		return errors.New("client node name is invalid")
+		return nil, errors.New("client node name is invalid")
 	}
 	trusted := ownerTrustedDirectory(state)
 	if err := privatefile.EnsurePrivateDir(trusted); err != nil {
-		return err
+		return nil, err
 	}
+	unlock, err := privatefile.TryLock(ctx, trusted, clientLockName(node))
+	if err != nil {
+		return nil, err
+	}
+	key := filepath.Join(trusted, node+".pub")
 	encoded := base64.RawStdEncoding.EncodeToString(public)
-	return writeOwnerFile(filepath.Join(trusted, node+".pub"), []byte(encoded+"\n"))
+	if err := writeOwnerFile(key, []byte(encoded+"\n")); err != nil {
+		return nil, errors.Join(err, unlock(), os.Remove(filepath.Join(trusted, clientLockName(node))))
+	}
+	return func() error {
+		removed := os.Remove(key)
+		return errors.Join(removed, unlock(), os.Remove(filepath.Join(trusted, clientLockName(node))))
+	}, nil
 }
+
+// clientLockName is the liveness lock a joined client holds for its node.
+func clientLockName(node string) string { return node + ".lock" }

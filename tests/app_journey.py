@@ -440,7 +440,7 @@ def run_open_probe(project, directory, packed=False, deployment=None):
             ui.mouse(0, fixture_x, fixture_row)
             ui.mouse(0, fixture_x, fixture_row, True)
             ui.key(b"\r")
-            ui.wait("HOOK_HTTP_CODE:202", timeout=20)
+            ui.wait("HOOK_TOOL:http-202", timeout=20)
             ui.key(b"first-pty-check\r")
             ui.wait("HOOK_CHILD_INPUT:first-pty-check", timeout=10)
             ui.wait("Window hooks fixture · Using tool", timeout=10)

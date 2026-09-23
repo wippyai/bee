@@ -59,6 +59,7 @@ native-binary-check:
 	python3 tests/native_modules.py "$(BEE_BINARY)"
 	BEE_ABOUT_SOURCE="$(BEE_ABOUT_SOURCE)" python3 tests/native_about.py "$(BEE_BINARY)"
 	$(MAKE) native-agent-selector-check BEE_BINARY="$(BEE_BINARY)"
+	$(MAKE) window-command-hooks-check BEE_BINARY="$(BEE_BINARY)"
 
 BEE_RELEASE_ARCHIVE ?= dist/release/bee-$(shell go env GOOS)-$(shell go env GOARCH).tar.gz
 .PHONY: release
@@ -151,6 +152,12 @@ native-hive-catalog-check:
 native-project-nodes-check:
 	python3 tests/native_project_nodes.py "$(BEE_BINARY)" $(if $(PREVIOUS_BEE),"$(PREVIOUS_BEE)",)
 
+# The shipped executable's hook-post command submits a native window's command
+# hooks to a live gateway run by the development runtime.
+.PHONY: window-command-hooks-check
+window-command-hooks-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/window_hooks.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/window_hooks.go -runtime "$(abspath $(NATIVE_WIPPY))" -bee "$(abspath $(BEE_BINARY))"
 .PHONY: native-agent-selector-check
 native-agent-selector-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native test ../tests/native_agent_selector.go ../tests/native_agent_selector_test.go -count=1

@@ -195,6 +195,7 @@ func runHarness() error {
 	crash := flag.Bool("crash", false, "terminate the window actor before checkpoint restore")
 	pendingHook := flag.Bool("pending-hook", false, "crash after an accepted hook before its first claim")
 	cancelRecovery := flag.Bool("cancel-recovery", false, "close the recovery view before delayed admission finishes")
+	beeFlag := flag.String("bee", "", "shipped Bee executable whose hook-post command submits the child's command hooks")
 	flag.Parse()
 
 	runtimePath, err := filepath.Abs(*runtimeFlag)
@@ -239,6 +240,19 @@ func runHarness() error {
 	}
 
 	env := isolatedEnvironment(tempDir)
+	if *beeFlag != "" {
+		if *crash || *pendingHook || *cancelRecovery {
+			return fmt.Errorf("-bee runs the command-hook acceptance and takes no recovery mode")
+		}
+		beePath, err := filepath.Abs(*beeFlag)
+		if err != nil {
+			return fmt.Errorf("resolve Bee executable: %w", err)
+		}
+		if _, err := os.Stat(beePath); err != nil {
+			return fmt.Errorf("Bee executable not found at %s: %w", beePath, err)
+		}
+		env = append(env, "BEE_WINDOW_HOOKS_COMMAND="+beePath)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -254,7 +268,9 @@ func runHarness() error {
 
 	// 2. Run acceptance command process fixture on bee:terminal host
 	command := "window-hooks-acceptance"
-	if *pendingHook {
+	if *beeFlag != "" {
+		command = "window-hooks-command-acceptance"
+	} else if *pendingHook {
 		command = "window-hooks-pending-acceptance"
 	} else if *cancelRecovery {
 		command = "window-hooks-cancel-recovery-acceptance"

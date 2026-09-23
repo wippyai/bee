@@ -21,17 +21,28 @@ if [ -f "$settings" ]; then
     IFS= read -r url < "$settings"
 fi
 
+# post EVENT PAYLOAD ROLE submits through the configured transport and prints
+# ROLE with the transport result: the host-selected hook command's exit status
+# for command hooks, the HTTP status of a direct endpoint POST otherwise.
+post() {
+    if [ -f "$HOME/hook-$1" ]; then
+        IFS= read -r command < "$HOME/hook-$1"
+        printf '%s' "$2" | sh -c "$command"
+        printf '%s:exit-%s\n' "$3" "$?"
+    else
+        code=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $BEE_GATEWAY_HOOK_TOKEN" -H "Content-Type: application/json" -d "$2")
+        printf '%s:http-%s\n' "$3" "$code"
+    fi
+}
+
 if [ -z "$BEE_GATEWAY_HOOK_TOKEN" ]; then
     printf 'HOOK_ERR:NO_TOKEN\n'
-elif [ -z "$url" ]; then
+elif [ -z "$url" ] && [ ! -f "$HOME/hook-PreToolUse" ]; then
     printf 'HOOK_ERR:NO_URL\n'
 else
     if [ "$phase" != "continuation" ]; then
-        start_payload='{"hook_event_name":"SessionStart","session_id":"s1","source":"startup"}'
-        start_code=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" -X POST "$url" \
-            -H "Authorization: Bearer $BEE_GATEWAY_HOOK_TOKEN" -H "Content-Type: application/json" \
-            -d "$start_payload")
-        printf 'HOOK_START_CODE:%s\n' "$start_code"
+        post SessionStart '{"hook_event_name":"SessionStart","session_id":"s1","source":"startup"}' HOOK_START
     fi
     if [ "$phase" = "continuation" ]; then
         payload='{"hook_event_name":"PreToolUse","session_id":"s1","prompt_id":"p2","tool_use_id":"toolu_2","tool_name":"Bash","tool_input":{"command":"echo continued"}}'
@@ -39,11 +50,7 @@ else
         payload='{"hook_event_name":"PreToolUse","session_id":"s1","prompt_id":"p1","tool_use_id":"toolu_1","tool_name":"Bash","tool_input":{"command":"echo test"}}'
     fi
     for delivery in 1 2; do
-    http_code=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" -X POST "$url" \
-        -H "Authorization: Bearer $BEE_GATEWAY_HOOK_TOKEN" \
-        -H "Content-Type: application/json" \
-        -d "$payload")
-    printf 'HOOK_HTTP_CODE:%s\n' "$http_code"
+        post PreToolUse "$payload" HOOK_TOOL
     done
 fi
 
@@ -51,9 +58,7 @@ while IFS= read -r line; do
     printf 'HOOK_CHILD_INPUT:%s\n' "$line"
     if [ "$line" = "pending-hook" ]; then
         pending_payload='{"hook_event_name":"PreToolUse","session_id":"s1","prompt_id":"pending","tool_use_id":"toolu_pending","tool_name":"Bash","tool_input":{"command":"echo accepted"}}'
-        pending_code=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" -X POST "$url" \
-            -H "Authorization: Bearer $BEE_GATEWAY_HOOK_TOKEN" -H "Content-Type: application/json" -d "$pending_payload")
-        printf 'HOOK_PENDING_CODE:%s\n' "$pending_code"
+        post PreToolUse "$pending_payload" HOOK_PENDING
     fi
     if [ "$line" = "exit" ] || [ "$line" = "quit" ]; then
         break

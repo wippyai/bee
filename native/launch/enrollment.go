@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
+	topapi "github.com/wippyai/runtime/api/topology"
 
 	"github.com/wippyai/runtime/api/attrs"
 	"github.com/wippyai/runtime/api/boot"
@@ -126,7 +127,7 @@ func enrollmentPublisher(state string) (boot.Component, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &enrollmentPublisherComponent{directory: directory, trusted: trusted, execution: execution, secret: secret}
+	p := &enrollmentPublisherComponent{state: state, directory: directory, trusted: trusted, execution: execution, secret: secret, node: ownerNodeName(state)}
 	return boot.New(boot.P{
 		Name:      "bee.launch.enrollment",
 		DependsOn: []string{"cluster"},
@@ -135,10 +136,38 @@ func enrollmentPublisher(state string) (boot.Component, error) {
 	}), nil
 }
 
+// publishSupervisor records the live Hive supervisor address in the rendezvous
+// descriptor. A raft-disabled owner never registers the cluster-wide name, so
+// this direct address is how a local client reaches the supervisor. The
+// supervisor registers its local name at boot; until then the descriptor carries
+// no address and the client keeps waiting.
+func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) {
+	pidRegistry := topapi.GetRegistry(ctx)
+	if pidRegistry == nil {
+		return
+	}
+	supervisor, found := pidRegistry.Lookup("bee.hive.supervisor")
+	if !found || supervisor.Node != p.node || supervisor.Host != "bee.hive:supervisor_host" || supervisor.UniqID == "" {
+		return
+	}
+	store, err := rendezvous.New(filepath.Join(p.state, rendezvous.DirectoryName))
+	if err != nil {
+		return
+	}
+	descriptor, err := store.Read(ctx)
+	if err != nil || descriptor.Supervisor == supervisor.String() {
+		return
+	}
+	descriptor.Supervisor = supervisor.String()
+	_ = store.Publish(ctx, descriptor)
+}
+
 type enrollmentPublisherComponent struct {
+	state     string
 	directory string
 	trusted   string
 	execution string
+	node      string
 	secret    []byte
 	cancel    context.CancelFunc
 }
@@ -214,6 +243,7 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 				_, _ = reg.Apply(lifetime, changes)
 			}
 			_ = p.seedEnrollment(lifetime, enrollment)
+			p.publishSupervisor(lifetime)
 		}
 		publish()
 		for {

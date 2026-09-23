@@ -192,3 +192,28 @@ func TestLocalAliasMatchesExternallyAdvertisedOwner(t *testing.T) {
 		t.Fatal("local alias accepted a different listener")
 	}
 }
+
+func TestDescriptorSupervisorAddress(t *testing.T) {
+	base := sample()
+	if err := base.validate(); err != nil {
+		t.Fatalf("descriptor without a supervisor address: %v", err)
+	}
+	// The published supervisor address must name this node and the supervisor
+	// host; anything else is refused so a descriptor cannot redirect a client.
+	base.Supervisor = "{forge@bee.hive:supervisor_host|0x1}"
+	if err := base.validate(); err != nil {
+		t.Fatalf("valid supervisor address refused: %v", err)
+	}
+	for _, bad := range []string{
+		"{other@bee.hive:supervisor_host|0x1}",
+		"{forge@bee:workers|0x1}",
+		"{forge@bee.hive:supervisor_host|}",
+		"not-a-pid",
+	} {
+		invalid := base
+		invalid.Supervisor = bad
+		if err := invalid.validate(); err == nil {
+			t.Fatalf("supervisor address %q was accepted", bad)
+		}
+	}
+}

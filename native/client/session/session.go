@@ -21,6 +21,7 @@ import (
 	"github.com/wippyai/bee/native/client/mesh"
 	"github.com/wippyai/bee/native/client/physical"
 	"github.com/wippyai/bee/native/hive/rendezvous"
+	"github.com/wippyai/runtime/api/pid"
 	"github.com/wippyai/runtime/api/tty"
 	stackpkg "github.com/wippyai/runtime/cluster"
 )
@@ -181,6 +182,15 @@ func JoinEnrolled(ctx context.Context, cfg Config, node string, private ed25519.
 	}
 	return mesh.Joined(transport, cfg.Directory, enrollmentDirectory, node, private, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
+			// The descriptor publishes the owner's supervisor address because a
+			// raft-disabled owner never registers the cluster-wide name. Pin it so
+			// the client addresses the supervisor directly; OwnerSupervisor still
+			// verifies node, host and identity.
+			if owner.Supervisor != "" {
+				if address, err := pid.ParsePID(owner.Supervisor); err == nil {
+					actor.PinSupervisor(address)
+				}
+			}
 			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
 		})
 	})

@@ -40,10 +40,30 @@ func prepareNames(ctx context.Context, stack *stackpkg.Stack, bus eventapi.Bus) 
 	return root, component, nil
 }
 
+// PinSupervisor records the owner's supervisor address the rendezvous
+// descriptor published. A raft-disabled owner never registers the cluster-wide
+// name, so a local client addresses the supervisor directly by node and process
+// id. The address is still verified on every use: node, host and identity must
+// match, and the supervisor authenticates the sender independently.
+func (a *Actor) PinSupervisor(p pid.PID) { a.pinned = p }
+
+// pinnedSupervisor returns the pinned address when it is a valid supervisor
+// identity for this actor's owner.
+func (a *Actor) pinnedSupervisor() (pid.PID, bool) {
+	p := a.pinned
+	if p.Node != a.owner || p.Host != "bee.hive:supervisor_host" || p.UniqID == "" {
+		return pid.PID{}, false
+	}
+	return p, true
+}
+
 // OwnerSupervisor resolves the existing Hive name. Discovery supplies only an
 // address; the caller must still verify the native sender, execution and admission replies.
 // Absence is transient and never starts an owner or replays an operation.
 func (a *Actor) OwnerSupervisor(ctx context.Context) (pid.PID, error) {
+	if pinned, ok := a.pinnedSupervisor(); ok {
+		return pinned, nil
+	}
 	if ctx == nil {
 		return pid.PID{}, errors.New("mesh client: missing lookup context")
 	}

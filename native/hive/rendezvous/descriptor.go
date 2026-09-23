@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/wippyai/runtime/api/cluster"
+	"github.com/wippyai/runtime/api/pid"
 	"github.com/wippyai/runtime/cluster/internode"
 )
 
@@ -33,6 +34,12 @@ type Descriptor struct {
 	Gossip    string `json:"gossip"`
 	Transport string `json:"transport"`
 	PublicKey string `json:"public_key"`
+	// Supervisor is the owner's Hive supervisor process address
+	// ({node@bee.hive:supervisor_host|uniq}). A raft-disabled owner never
+	// publishes the cluster-wide name, so a local client addresses the
+	// supervisor directly. It is a hint: the client still verifies node, host
+	// and identity and the supervisor authenticates the sender.
+	Supervisor string `json:"supervisor,omitempty"`
 }
 
 func (d Descriptor) validate() error {
@@ -56,6 +63,12 @@ func (d Descriptor) validate() error {
 	key, err := base64.RawStdEncoding.DecodeString(d.PublicKey)
 	if err != nil || len(key) != ed25519.PublicKeySize || base64.RawStdEncoding.EncodeToString(key) != d.PublicKey {
 		return ErrDescriptor
+	}
+	if d.Supervisor != "" {
+		address, err := pid.ParsePID(d.Supervisor)
+		if err != nil || address.Node != d.Node || address.Host != "bee.hive:supervisor_host" || address.UniqID == "" {
+			return ErrDescriptor
+		}
 	}
 	return nil
 }

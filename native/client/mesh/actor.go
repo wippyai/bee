@@ -36,6 +36,10 @@ type Actor struct {
 	owner  string
 	router relay.Receiver
 	inbox  chan Message
+	// pinned is the owner supervisor address the rendezvous descriptor
+	// published. It is used instead of the cluster-wide name, which a
+	// raft-disabled owner never registers.
+	pinned pid.PID
 }
 
 func (a *Actor) PID() pid.PID { return a.id }

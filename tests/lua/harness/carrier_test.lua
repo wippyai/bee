@@ -228,6 +228,23 @@ local function define_tests()
             test.eq(count(list, "receipt"), 1)
             test.eq(count(list, "turn.end"), 1)
         end)
+        test.it("settles a stream that ends without a result only after the child's exit and remaining output", function()
+            local thread_id = thread()
+            local cut = run_carrier("bee.harness.carrier:process", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_LATE_STDERR = "1"}), "open", nil)
+            if not cut.value then error("carrier failed: " .. tostring(cut.error)) end
+            local settlement = cut.value.settlement :: {[string]: unknown}
+            test.eq(settlement.outcome, "uncertain")
+            test.is_true(settlement.exit_reconciled == true)
+            local placement = cut.value.placement :: {[string]: unknown}
+            test.eq((placement.exit :: {[string]: unknown}).code, 0)
+            local _, records = kinds(thread_id)
+            local late = 0
+            for _, item in ipairs(observations(records, nil)) do
+                local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
+                if data.type == "notice" and data.code == "stderr" and tostring((data.content :: {[string]: unknown}).text):find("late:stderr", 1, true) then late = late + 1 end
+            end
+            test.eq(late, 1, "stderr written after stdout ended")
+        end)
         local function stream_counts(records: {{[string]: unknown}}): (integer, integer, integer)
             local texts, ended, reads = 0, 0, 0
             for _, item in ipairs(observations(records, nil)) do

@@ -77,7 +77,9 @@ Starting an attempt that is not `prepared` is `INVALID_STATE`. If placement
 starts and a thread commit fails, recovery reconciles that same attempt; it
 does not launch another child. Settlement observes process exit, drains
 remaining output within the selected bounds, and then decides a missing
-terminal envelope as `uncertain`. The attempt receipt is committed once after
+terminal envelope as `uncertain`. Stdout ending without a result envelope is
+such a missing envelope: the driver's end-of-stream terminal waits for the exit
+and the drain, so stderr the child wrote before exiting is still recorded. The attempt receipt is committed once after
 turn settlement. Later cleanup is a placement observation, not a second
 receipt.
 

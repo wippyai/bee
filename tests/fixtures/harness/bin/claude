@@ -126,6 +126,12 @@ elif [ -n "${BEE_FIXTURE_TRUNCATE:-}" ]; then
 else
   cat "$stream"
 fi
+if [ -n "${BEE_FIXTURE_LATE_STDERR:-}" ]; then
+  # Stdout ends first; the last stderr line and the exit follow the pause.
+  exec 1>&-
+  sleep "$BEE_FIXTURE_LATE_STDERR"
+  printf '%s\n' "late:stderr" >&2
+fi
 if [ -n "$stream_json" ]; then
   # A stream-json session ends when stdin closes, as the real executable's does.
   while IFS= read -r _; do :; done

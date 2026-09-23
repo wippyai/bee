@@ -109,6 +109,14 @@ local function define_tests()
             kept.output = "unobserved"
             local _, conclusion_error = checkpoint.decode(kept)
             test.eq(conclusion_error, "output must be open, complete or truncated")
+            local ended = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            ended.stream_ended = true
+            local decoded_ended, ended_error = checkpoint.decode(ended)
+            if not decoded_ended then error(tostring(ended_error)) end
+            test.eq(decoded_ended.stream_ended, true)
+            ended.stream_ended = "yes"
+            local _, flag_error = checkpoint.decode(ended)
+            test.eq(flag_error, "stream_ended must be a boolean")
             local loose = checkpoint.new(pinned, 1) :: {[string]: unknown}
             loose.extra = true
             test.is_nil(checkpoint.decode(loose))
@@ -118,23 +126,37 @@ local function define_tests()
         end)
         test.it("settles from the terminal envelope and never from exit alone", function()
             local terminal: driver_types.Terminal = {outcome = "succeeded", answer = "42", resume_ref = "s1", usage = nil, error = nil}
-            local settled = settle.decide({terminal = terminal, exit = nil, drained = false, exit_codes_trustworthy = false})
+            local settled = settle.decide({terminal = terminal, exit = nil, stream_ended = false, drained = false, exit_codes_trustworthy = false})
             if not settled then error("terminal envelope decides") end
             test.eq(settled.outcome, "succeeded")
             test.eq(settled.answer, "42")
             test.is_false(settled.exit_reconciled)
-            test.is_nil(settle.decide({terminal = nil, exit = {code = 0, signal = nil, uncertain = false}, drained = false, exit_codes_trustworthy = false}))
-            local missing = settle.decide({terminal = nil, exit = {code = 0, signal = nil, uncertain = false}, drained = true, exit_codes_trustworthy = false})
+            test.is_nil(settle.decide({terminal = nil, exit = {code = 0, signal = nil, uncertain = false}, stream_ended = false, drained = false, exit_codes_trustworthy = false}))
+            local missing = settle.decide({terminal = nil, exit = {code = 0, signal = nil, uncertain = false}, stream_ended = false, drained = true, exit_codes_trustworthy = false})
             if not missing then error("drained exit decides") end
             test.eq(missing.outcome, "uncertain")
-            local killed = settle.decide({terminal = nil, exit = {code = 137, signal = 9, uncertain = false}, drained = true, exit_codes_trustworthy = false})
+            local killed = settle.decide({terminal = nil, exit = {code = 137, signal = 9, uncertain = false}, stream_ended = false, drained = true, exit_codes_trustworthy = false})
             test.eq((killed :: settle.Settlement).outcome, "cancelled")
-            local disagreeing = settle.decide({terminal = terminal, exit = {code = 3, signal = nil, uncertain = false}, drained = true, exit_codes_trustworthy = true})
+            local disagreeing = settle.decide({terminal = terminal, exit = {code = 3, signal = nil, uncertain = false}, stream_ended = false, drained = true, exit_codes_trustworthy = true})
             test.eq((disagreeing :: settle.Settlement).outcome, "uncertain")
             test.eq((disagreeing :: settle.Settlement).answer, "42")
-            local untrusted = settle.decide({terminal = terminal, exit = {code = 3, signal = nil, uncertain = false}, drained = true, exit_codes_trustworthy = false})
+            local untrusted = settle.decide({terminal = terminal, exit = {code = 3, signal = nil, uncertain = false}, stream_ended = false, drained = true, exit_codes_trustworthy = false})
             test.eq((untrusted :: settle.Settlement).outcome, "succeeded")
             test.is_true((untrusted :: settle.Settlement).exit_reconciled)
+        end)
+        test.it("decides a stream that ended without a result envelope only after exit and the drain", function()
+            local ended: driver_types.Terminal = {outcome = "uncertain", answer = nil, resume_ref = "s1", usage = nil,
+                error = {code = "stream_ended", message = "the stream ended without a result envelope", retryable = false}}
+            local exited = {code = 143, signal = nil, uncertain = false}
+            test.is_nil(settle.decide({terminal = ended, stream_ended = true, exit = nil, drained = false, exit_codes_trustworthy = false}))
+            test.is_nil(settle.decide({terminal = ended, stream_ended = true, exit = nil, drained = true, exit_codes_trustworthy = false}))
+            test.is_nil(settle.decide({terminal = ended, stream_ended = true, exit = exited, drained = false, exit_codes_trustworthy = false}))
+            local settled = settle.decide({terminal = ended, stream_ended = true, exit = exited, drained = true, exit_codes_trustworthy = false})
+            if not settled then error("exit and drain decide the ended stream") end
+            test.eq(settled.outcome, "uncertain")
+            test.eq(settled.resume_ref, "s1")
+            test.is_true(settled.exit_reconciled)
+            test.eq(settled.reason, "the stream ended without a result envelope")
         end)
         test.it("preserves canonical payload and stable event keys across old and new implementation", function()
             local binding_id = "bind-gateway-123"

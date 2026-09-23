@@ -178,11 +178,11 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		modules := "modules: [process, channel, time, uuid, funcs, logger]"
+		modules := "modules: [process, channel, time, uuid, funcs, logger, registry]"
 		if strings.Count(string(manifest), modules) != 1 {
 			t.Fatal("supervisor module assertion anchor changed")
 		}
-		observedManifest := strings.Replace(string(manifest), modules, "modules: [process, channel, time, uuid, funcs, logger, security]", 1)
+		observedManifest := strings.Replace(string(manifest), modules, "modules: [process, channel, time, uuid, funcs, logger, registry, security]", 1)
 		if err := os.WriteFile(manifestPath, []byte(observedManifest), 0600); err != nil {
 			t.Fatal(err)
 		}

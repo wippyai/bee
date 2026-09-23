@@ -3,6 +3,7 @@ local appearance = require("appearance")
 local frame = require("frame")
 local probe = require("probe")
 local text = require("text")
+local viz = require("viz")
 type Row = {pid: string, source: string, state: string, steps: number}
 type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
 local M = {}
@@ -19,18 +20,6 @@ function M.items(snapshot: probe.Snapshot, services: boolean): {Row}
     end
     return rows
 end
-local bars: {string} = {"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
-function M.spark(values: {number}, width: integer): string
-    local peak = 1
-    local first = math.floor(math.max(1, #values - width + 1))
-    for index = first, #values do peak = math.max(peak, values[index]) end
-    local out = string.rep(" ", math.floor(math.max(0, width - #values)))
-    for index = first, #values do
-        local value = values[index]
-        out = out .. (value < 0 and "·" or bars[math.floor(math.min(8, math.max(1, math.ceil(value / peak * 8))))])
-    end
-    return out
-end
 -- A PID's local suffix ("0x00017" in "{node@host|0x00017}") names one of
 -- several processes from the same source.
 function M.pid_suffix(pid: string): string
@@ -39,7 +28,7 @@ function M.pid_suffix(pid: string): string
     return pid:sub(math.floor(math.max(1, #pid - 7)))
 end
 local function number(value: number?): string
-    if value == nil or value < 0 then return "—" end
+    if value == nil or viz.is_gap(value) or value < 0 then return "—" end
     return string.format("%.0f", value)
 end
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Tab", verb = "switch"}, {key = "S", verb = "sort"},
@@ -56,14 +45,14 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
     local first = 4
     if width >= 48 and height >= 14 then
         local col = math.floor((width - 3) / 2)
-        local function metric(index: integer, title: string, value: string, values: {number})
+        local function metric(index: integer, title: string, value: string, values: viz.Series)
             local x = 2 + (index - 1) * (col + 1)
             frame.put(painter, x, 4, title, col, theme.muted)
             frame.put(painter, x, 5, value, col)
-            frame.put(painter, x, 6, M.spark(values, col), col, theme.accent)
+            viz.sparkline(painter, x, 6, col, viz.values(values))
         end
         metric(1, "Heap", snapshot.heap and string.format("%.1f MiB", snapshot.heap / 1048576) or "—", history.heap)
-        local last = history.rate[#history.rate]
+        local last = viz.latest(history.rate)
         metric(2, "Scheduler", number(last) .. " steps/s", history.rate)
         frame.line(painter, 7, number(snapshot.goroutines) .. " goroutines · " .. number(snapshot.gc_cycles) .. " GC · "
             .. (snapshot.reserved and string.format("%.1f MiB reserved", snapshot.reserved / 1048576) or "—"), theme.muted)

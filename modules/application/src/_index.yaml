@@ -59,3 +59,10 @@ entries:
   source: file://thread_protocol.lua
   imports:
     bounds: bee.threads.records:bounds
+- name: viz
+  kind: library.lua
+  source: file://viz.lua
+  modules: [tty]
+  imports:
+    appearance: bee.application:appearance
+    frame: bee.application:frame

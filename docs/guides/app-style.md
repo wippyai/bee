@@ -250,7 +250,8 @@ On a narrow canvas the strip folds to ` Step 2/3 Review `.
 An append-only sequence. `frame.row` per line in a `frame.window` pinned to
 the newest line; the header summary says whether the view follows; a selected
 line stops following. Keep at most the lines the window can show plus a
-bounded history; never grow without bound.
+bounded history (`viz.series` for numbers, a fixed-size list for lines);
+never grow without bound.
 
 ```
  BUILD LOG                                         Following · 1,204 lines
@@ -267,7 +268,7 @@ bounded history; never grow without bound.
 A measurement over time. A top row of stat tiles, then one large chart, then
 a table of the items behind it. The redraw cadence is fixed (1 s by default)
 and stated in the header summary; data arriving faster is buffered, not
-drawn.
+drawn. Draw it with `viz.tiles`, `viz.line` and `frame.table` (section 12).
 
 ```
  MONITOR                                                     Live · 1s
@@ -284,7 +285,50 @@ drawn.
  Sampled 1s ago                                P pause · Esc close
 ```
 
-## 12. Acceptance
+## 12. Visualizations
+
+The visualization kit is `bee.application:viz`. Choose by the question:
+
+| Question | Function |
+|---|---|
+| How is one value moving? | `viz.sparkline` |
+| How did values change over a window? | `viz.line` (area with `area = true`) |
+| How do categories compare? | `viz.bars` (horizontal), `viz.columns` (vertical) |
+| What is each category made of? | `viz.stacked` |
+| How are values distributed? | `viz.histogram` |
+| Where is activity concentrated in two dimensions? | `viz.heatmap` |
+| Which of many items pass or fail? | `viz.waffle` beside the counts in words |
+| How full is one capacity or how far is one task? | `viz.gauge`, `viz.progress` |
+| What are the headline numbers? | `viz.tiles` |
+| How do rows compare inside a table? | `viz.bar_cell` in a `frame.table` column |
+| What ran when? | `viz.timeline` |
+| How are nodes connected? | `viz.graph` |
+| How do I keep a live series bounded? | `viz.series`, `viz.push`, `viz.values`, `viz.cadence`, `viz.due` |
+
+Chart rules:
+
+- Every chart has a `frame.panel` title naming the measure and its window
+  (`HEAP · 60 s`), axis labels at the minimum and maximum with units, and the
+  latest value in the panel summary.
+- The primary series is `accent` and solid; the second and third series use
+  `text` and `muted` and are dotted. At most three series share one chart;
+  stacked segments use the shades `█ ▓ ▒ ░` with a legend row.
+- A missing sample is `viz.GAP` and draws as a gap (`·` in a sparkline).
+- Thresholds are declared values (`warn`, `error` on `viz.Scale` and
+  `viz.Meter`); marks past them take the status role and the numeric value
+  stays printed.
+- Heatmap intensity uses the shades `░ ▒ ▓ █` of one role, zero is a muted
+  `·`. A status grid (`viz.waffle`) packs two items per cell and is always
+  accompanied by the counts in words (`500 tests · 463 passed · 37 failed`).
+- Graphs are small topologies (up to `viz.GRAPH_NODES` nodes) laid out left
+  to right by dependency; edges are `border` lines ending in `▸`, a node's dot
+  carries its status role and its label and note carry the words.
+- Charts draw inside the rectangle they are given and never outside it; they
+  hold no state between frames. Live state lives in a `viz.series` owned by
+  the process, pushed on each sample and read in the pure view; a
+  `viz.cadence` decides when the process repaints.
+
+## 13. Acceptance
 
 Test every view at the three breakpoints plus one narrow size: exact row
 count, exact display width for every row, every hit inside the canvas, and the

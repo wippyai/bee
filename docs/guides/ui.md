@@ -148,7 +148,8 @@ continues afterward.
 ## Patterns to avoid
 
 - Raw hex colors or a private theme table inside an application.
-- Private copies of header, button, row, table or footer drawing; use the frame.
+- Private copies of header, button, row, table, footer, sparkline or chart
+  drawing; use the frame and `bee.application:viz`.
 - Accent on text that is neither focus, selection, the primary action nor the
   primary chart series.
 - A status role on a whole row, a background, a border or a title.

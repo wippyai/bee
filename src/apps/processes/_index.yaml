@@ -33,6 +33,8 @@ entries:
   source: file://probe.lua
   modules:
   - system
+  imports:
+    viz: bee.application:viz
 - name: view
   kind: library.lua
   source: file://view.lua
@@ -41,3 +43,4 @@ entries:
     appearance: bee.application:appearance
     probe: bee.processes:probe
     text: bee.application:text
+    viz: bee.application:viz

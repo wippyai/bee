@@ -1,5 +1,6 @@
 local test = require("test")
 local probe = require("probe")
+local viz = require("viz")
 
 local function snapshot(executed: number?, hosts: {[string]: number}, heap: number?, queue: number?): probe.Snapshot
     return {
@@ -23,10 +24,10 @@ local function define_tests()
             local history = probe.new_history()
             probe.append(history, snapshot(10, {main = 10}, 128, 2), nil, 0)
 
-            test.eq(#history.heap, 1)
-            test.eq(history.heap[1], 128)
-            test.eq(history.queue[1], 2)
-            test.eq(history.rate[1], probe.GAP)
+            test.eq(#viz.values(history.heap), 1)
+            test.eq(viz.values(history.heap)[1], 128)
+            test.eq(viz.values(history.queue)[1], 2)
+            test.is_true(viz.is_gap(viz.values(history.rate)[1]))
         end)
 
         test.it("computes scheduler rate from stable host counters", function()
@@ -35,9 +36,9 @@ local function define_tests()
             local current = snapshot(16, {main = 16}, 144, 3)
             probe.append(history, current, previous, 2)
 
-            test.eq(history.rate[1], 3)
-            test.eq(history.heap[1], 144)
-            test.eq(history.queue[1], 3)
+            test.eq(viz.values(history.rate)[1], 3)
+            test.eq(viz.values(history.heap)[1], 144)
+            test.eq(viz.values(history.queue)[1], 3)
         end)
 
         test.it("leaves an explicit gap for resets and host changes", function()
@@ -46,22 +47,22 @@ local function define_tests()
             probe.append(history, snapshot(2, {main = 2}, 160, 4), previous, 1)
             probe.append(history, snapshot(3, {main = 3, worker = 1}, 176, 5), previous, 1)
 
-            test.eq(history.rate[1], probe.GAP)
-            test.eq(history.rate[2], probe.GAP)
+            test.is_true(viz.is_gap(viz.values(history.rate)[1]))
+            test.is_true(viz.is_gap(viz.values(history.rate)[2]))
         end)
 
         test.it("keeps missing metrics as gaps instead of zeroes", function()
             local history = probe.new_history()
             probe.append(history, snapshot(nil, {}, nil, nil), nil, 1)
 
-            test.eq(history.heap[1], probe.GAP)
-            test.eq(history.queue[1], probe.GAP)
-            test.eq(history.rate[1], probe.GAP)
+            test.is_true(viz.is_gap(viz.values(history.heap)[1]))
+            test.is_true(viz.is_gap(viz.values(history.queue)[1]))
+            test.is_true(viz.is_gap(viz.values(history.rate)[1]))
             local unavailable = snapshot(nil, {}, nil, nil)
             probe.append(history, unavailable, unavailable, 1)
-            test.eq(history.rate[2], probe.GAP)
+            test.is_true(viz.is_gap(viz.values(history.rate)[2]))
             probe.append(history, snapshot(0, {}, 0, 0), snapshot(0, {}, 0, 0), math.huge)
-            test.eq(history.rate[3], probe.GAP)
+            test.is_true(viz.is_gap(viz.values(history.rate)[3]))
         end)
 
         test.it("bounds every series to the same sixty samples", function()
@@ -73,12 +74,12 @@ local function define_tests()
                 previous = current
             end
 
-            test.eq(#history.heap, 60)
-            test.eq(#history.rate, 60)
-            test.eq(#history.queue, 60)
-            test.eq(history.heap[1], 6)
-            test.eq(history.rate[1], 1)
-            test.eq(history.queue[#history.queue], 65)
+            test.eq(#viz.values(history.heap), 60)
+            test.eq(#viz.values(history.rate), 60)
+            test.eq(#viz.values(history.queue), 60)
+            test.eq(viz.values(history.heap)[1], 6)
+            test.eq(viz.values(history.rate)[1], 1)
+            test.eq(viz.latest(history.queue), 65)
         end)
     end)
 end

@@ -32,6 +32,20 @@ local function call(target: string, value: unknown): {[string]: unknown}
     return result
 end
 
+-- The launch created this thread, so the launch admits the host-issued
+-- principal the broker just started. Picker launches cannot name the thread
+-- in the open (their definition forbids the override and resolves its named
+-- thread instead), so the broker never sees it; the thread owner joins the
+-- exact instance the open reported, before driving any input.
+local function admit_app(thread_id: string, instance_id: string, idempotency_key: string)
+    local thread = call("bee.threads.service:get", {thread_id = thread_id})
+    local value = thread.value :: {[string]: unknown}
+    local summary = value.summary :: {[string]: unknown}
+    local revision = summary.revision
+    if type(revision) ~= "number" or revision < 1 then error("admit application thread: thread head is unavailable") end
+    call("bee.threads.service:join", {thread_id = thread_id, idempotency_key = idempotency_key,
+        member_id = "bee.application:" .. WORKSPACE .. ":" .. instance_id, role = "participant", expected_revision = revision})
+end
 local function apply(entry: {[string]: unknown})
     local changes = registry.snapshot():changes()
     changes:update(entry)
@@ -53,7 +67,7 @@ local function clone_entry(entry: {[string]: unknown}): {[string]: unknown}
     if type(copied) ~= "table" then error(tostring(decode_error or "decode registry entry")) end
     return copied :: {[string]: unknown}
 end
-local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?, retained_id: string?, cancel_activation: boolean?): string?
+local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?, retained_id: string?, cancel_activation: boolean?): (string?, string?)
     local THREAD = selected and "managed_window_selector" or (natural and "managed_window_natural" or "managed_window_thread")
     if retained_id then THREAD = "managed-window-thread:" .. retained_id end
     local definition_ref = retained_id and "bee.managed_window_fixture:retained_definition" or "bee.managed_window_fixture:definition"
@@ -93,8 +107,13 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local request = assert(json.encode({request_id = request_id, definition_ref = definition_ref, brief = retained_id or "managed window",
         thread_id = THREAD, expected_plan_digest = plan.plan_digest}))
     local picker_started = time.now():unix_nano()
+    -- A picker launch resolves its named thread at activation, and its
+    -- definition forbids naming one in the request, so the open stays
+    -- threadless and the launch admits the instance below instead.
+    local open_thread: string? = nil
+    if not selected then open_thread = THREAD end
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app", arguments = selected and {} or {request}}))
+        definition_id = "bee.harness.window:app", thread_id = open_thread, arguments = selected and {} or {request}}))
     local opened: {[string]: unknown}? = nil
     while not opened do
         local message = receive_reply()
@@ -104,6 +123,8 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         end
     end
     assert(opened.error_code == "", "managed app did not become ready: " .. tostring(opened.error))
+    local instance_id = assert(opened.instance_id) :: string
+    if selected then admit_app(THREAD, instance_id, "managed-window-picker-join") end
     if selected then
         assert(time.now():unix_nano() - picker_started < 1000000000,
             "Agent picker readiness waited for profile discovery")
@@ -193,6 +214,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
                     and data.request_id == "open-after-cancel" and data.op == "open" then opened = data :: {[string]: unknown} end
             end
             assert(opened.error_code == "", "replacement picker did not become ready: " .. tostring(opened.error))
+            admit_app(THREAD, assert(opened.instance_id) :: string, "managed-window-picker-rejoin")
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind-after-cancel", op = "bind",
                 workspace_id = WORKSPACE, id = opened.id, instance_id = opened.instance_id, recipient = owner}))
             mounted = ""
@@ -370,7 +392,8 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     next_view:close(); view:close()
     process.terminate(broker)
     process.unlisten(catalogs); process.unlisten(replies); process.unlisten(checkpoints)
-    return session_ref
+    local finished = assert(opened)
+    return session_ref, assert(finished.instance_id) :: string
 end
 
 -- Broker replies are the owner's recovery projection. A checkpoint belongs in
@@ -667,8 +690,11 @@ M.retained = function()
         local actor = security.actor()
         if not actor then error("fixture has no authenticated actor") end
         local vol = assert(fs.get("bee.placement.native:root"))
-        local function marker(session_ref: string): string
-            local key, key_error = homes.session_key(actor:id(), session_ref)
+        -- Retained sessions are owned by the launch principal that created
+        -- them, so the key derives from the application instance, never from
+        -- this launcher.
+        local function marker(session_ref: string, instance_id: string): string
+            local key, key_error = homes.session_key("bee.application:" .. WORKSPACE .. ":" .. instance_id, session_ref)
             if not key then error(tostring(key_error)) end
             local file, open_error = vol:open("/sessions/" .. key .. "/home/marker.txt", "r")
             if not file then error("retained child marker is absent: " .. tostring(open_error)) end
@@ -677,14 +703,14 @@ M.retained = function()
             assert(type(content) == "string", "retained marker is not text")
             return content :: string
         end
-        local first = run(false, false, nil, nil, "retained-first")
-        if not first then error("first window has no retained session") end
-        assert(marker(first) == "retained-first", "normal close lost the first child's files")
-        local second = run(false, false, nil, nil, "retained-second")
-        if not second then error("second window has no retained session") end
+        local first, first_instance = run(false, false, nil, nil, "retained-first")
+        if not first or not first_instance then error("first window has no retained session") end
+        assert(marker(first, first_instance) == "retained-first", "normal close lost the first child's files")
+        local second, second_instance = run(false, false, nil, nil, "retained-second")
+        if not second or not second_instance then error("second window has no retained session") end
         assert(first ~= second, "distinct launches share a session")
-        assert(marker(second) == "retained-second", "second child wrote outside its retained home")
-        assert(marker(first) == "retained-first", "second child overwrote the first conversation")
+        assert(marker(second, second_instance) == "retained-second", "second child wrote outside its retained home")
+        assert(marker(first, first_instance) == "retained-first", "second child overwrote the first conversation")
     end)
     apply(roots)
     apply(mode)

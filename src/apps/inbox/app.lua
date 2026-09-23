@@ -13,6 +13,7 @@ local json = require("json")
 local funcs = require("funcs")
 local registry = require("registry")
 local appearance = require("appearance")
+local frame = require("frame")
 local model = require("model")
 local view = require("view")
 local inbox = require("inbox")
@@ -79,7 +80,7 @@ local function main(value: unknown)
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid inbox checkpoint") end
     local rows: {model.Row} = {}
     local offset = 0
-    local hits: {view.Hit} = {}
+    local hits: {frame.Hit} = {}
     local status = ""
     local announced = false
     local last_checkpoint = ""
@@ -236,7 +237,7 @@ local function main(value: unknown)
                 elseif text == "t" then model.toggle_technical(state); dirty = true
                 elseif key == "esc" or key == "escape" then running = false end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                 if hit then
                     status = ""
                     if hit.kind == "row" then

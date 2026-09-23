@@ -8,6 +8,10 @@ non-explicit launch opens state, it selects:
 An explicit --state is preserved unchanged. Planning does not create
 directories, write receipts, inspect databases or acquire locks.
 
+`bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT` is planned first: it
+runs the [hook POST helper](../hookpost/README.md) without project selection,
+state, the client route or the retained owner.
+
 The runtime owns state opening, locking, deployment history, migrations, process
 ownership and application lifecycle. The native host provides the selected
 default state and a read-only environment store with home, cwd, self and safe

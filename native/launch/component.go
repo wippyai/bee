@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/wippyai/bee/native/hookpost"
 	"github.com/wippyai/runtime/api/boot"
 	envapi "github.com/wippyai/runtime/api/env"
 	"github.com/wippyai/runtime/api/registry"
@@ -22,6 +23,7 @@ const (
 	desktopCommand           = "bee"
 	ownerCommand             = "bee-owner"
 	ownerArgument            = "start"
+	hookArgument             = "hook-post"
 )
 
 // Host is both Bee's app.Host and its sole native boot component. The runtime
@@ -80,6 +82,18 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	}
 	if err := ctx.Err(); err != nil {
 		return app.Plan{}, err
+	}
+	// A harness hook process carries a token the gateway authorizes. It posts one
+	// event within the hook deadline and never selects a project, opens state or
+	// reaches the retained owner.
+	if launch.Op == app.OpRun && launch.Command == desktopCommand && len(launch.Args) > 0 && launch.Args[0] == hookArgument {
+		if len(launch.Args) != 5 {
+			return app.Plan{}, errors.New("hook-post: expected ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT")
+		}
+		args := launch.Args
+		return app.Plan{Run: func(ctx context.Context) error {
+			return hookpost.Run(ctx, os.Stdin, args[1], args[2], args[3], args[4])
+		}}, nil
 	}
 	plan := app.Plan{}
 	if !launch.Explicit {

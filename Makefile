@@ -295,6 +295,10 @@ managed-launch-fixture-check: fixture-gateway-client
 thread-launch-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py
 
+.PHONY: cross-session-check
+cross-session-check: fixture-gateway-client
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/cross_session.py
+
 .PHONY: docs-agent-check agent-corpus
 # The embedded documentation corpus: build it from the published runtime docs
 # and Bee's own contracts, or verify the committed snapshot offline.

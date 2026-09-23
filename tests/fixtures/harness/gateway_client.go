@@ -215,11 +215,63 @@ func mcpConfig(literal string) (string, string, bool) {
 	return url, authorization, true
 }
 
+// codexConfig reads the bee server from a Codex config.toml the way Codex
+// does: its url and the environment variable that holds the bearer token.
+func codexConfig(path string) (string, string, bool) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", false
+	}
+	url, variable, section := "", "", ""
+	for _, line := range strings.Split(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			section = line
+			continue
+		}
+		if section != "[mcp_servers.bee]" {
+			continue
+		}
+		name, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		unquoted, unquoteErr := strconv.Unquote(strings.TrimSpace(value))
+		if unquoteErr != nil {
+			continue
+		}
+		switch strings.TrimSpace(name) {
+		case "url":
+			url = unquoted
+		case "bearer_token_env_var":
+			variable = unquoted
+		}
+	}
+	token := os.Getenv(variable)
+	if url == "" || variable == "" || token == "" {
+		return "", "", false
+	}
+	return url, "Bearer " + token, true
+}
+
 func runGateway(mcpLiteral string) int {
 	url, authorization, ok := mcpConfig(mcpLiteral)
 	if !ok {
 		return 0
 	}
+	return runGatewayAt(url, authorization)
+}
+
+func runCodexGateway(configPath string) int {
+	url, authorization, ok := codexConfig(configPath)
+	if !ok {
+		writeReport("gateway", object{"codex_config": "unreadable"})
+		return 0
+	}
+	return runGatewayAt(url, authorization)
+}
+
+func runGatewayAt(url, authorization string) int {
 	stopping := make(chan os.Signal, 1)
 	signal.Notify(stopping, syscall.SIGTERM)
 	defer signal.Stop(stopping)
@@ -279,6 +331,9 @@ func runGateway(mcpLiteral string) int {
 	}
 	if os.Getenv("BEE_FIXTURE_GATEWAY_SURFACE") == "1" {
 		reportSurface(client, url, authorization, report)
+	}
+	if role := os.Getenv("BEE_FIXTURE_PEER_ROLE"); role != "" {
+		reportPeer(url, authorization, report, role)
 	}
 	if waitMS, err := strconv.Atoi(os.Getenv("BEE_FIXTURE_GATEWAY_WAIT")); err == nil && waitMS > 0 {
 		reportWait(client, url, authorization, report, readValue, waitMS)
@@ -644,6 +699,136 @@ func reportSurface(client *httpClient, url, authorization string, report object)
 		"active_traits": []string{"research:read"}, "context": object{"project": "foreign"}}, 25)
 }
 
+// The scripted peer sessions of the cross-session acceptance. Each finds the
+// other among its workspace's running sessions. The waiter asks to be told
+// when the sender's turn ends, tells the sender it is ready, and blocks in
+// thread_wait until the sender's "go ahead" arrives, then until the notice
+// does. The sender waits for "ready" and answers "go ahead". Every step uses
+// only the gateway tools the session's own launch policy admits.
+func reportPeer(url, authorization string, report object, role string) {
+	ident := 100
+	call := func(name string, args object) object {
+		ident++
+		return outcome(rpcWithTimeout(nil, url, authorization, "tools/call", object{"name": name, "arguments": args}, ident, 20*time.Second))
+	}
+	self, peer := "", ""
+	for attempt := 0; attempt < 180 && (self == "" || peer == ""); attempt++ {
+		listed := call("thread_sessions", object{})
+		value := mustObject(listed["value"])
+		sessions, _ := value["sessions"].([]any)
+		report["sessions_seen"] = len(sessions)
+		for _, raw := range sessions {
+			item := mustObject(raw)
+			if item["self"] == true {
+				self = stringField(item, "session")
+			} else if peer == "" {
+				peer = stringField(item, "session")
+				report["peer_thread"] = item["thread_id"]
+				report["peer_title"] = item["title"]
+			}
+		}
+		if self == "" || peer == "" {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+	report["self"] = self
+	report["peer"] = peer
+	if self == "" || peer == "" {
+		return
+	}
+	cursor := 0
+	addressed := func(record object, sender string, text string) bool {
+		if stringField(record, "kind") != "message" {
+			return false
+		}
+		body := mustObject(record["body"])
+		recipients, _ := body["recipient_action_ids"].([]any)
+		mine := false
+		for _, item := range recipients {
+			if item == self {
+				mine = true
+			}
+		}
+		if !mine || (sender != "" && stringField(body, "sender_action_id") != sender) {
+			return false
+		}
+		return text == "" || stringField(mustObject(body["content"]), "text") == text
+	}
+	// Reads the thread forward from the cursor, returning the first match.
+	scan := func(match func(object) bool) object {
+		for {
+			read := mustObject(call("thread_read", object{"cursor": cursor, "limit": 64})["value"])
+			records, _ := read["records"].([]any)
+			for _, raw := range records {
+				record := mustObject(raw)
+				if sequence, ok := record["sequence"].(float64); ok {
+					cursor = int(sequence)
+				}
+				if match(record) {
+					return record
+				}
+			}
+			if scanned, ok := read["scanned_through"].(float64); ok && int(scanned) > cursor {
+				cursor = int(scanned)
+			}
+			if read["has_more"] != true {
+				return nil
+			}
+		}
+	}
+	// Blocks in thread_wait past the cursor, then reads what moved the
+	// thread; reports how the wait that preceded the match ended.
+	await := func(match func(object) bool, prefix string) object {
+		for waits := 1; waits <= 60; waits++ {
+			started := time.Now()
+			waited := mustObject(call("thread_wait", object{"after_sequence": cursor, "wait_ms": 5000})["value"])
+			report[prefix+"_wait_status"] = waited["status"]
+			report[prefix+"_wait_ms"] = time.Since(started).Milliseconds()
+			report[prefix+"_waits"] = waits
+			if found := scan(match); found != nil {
+				return found
+			}
+		}
+		return nil
+	}
+	// Start from the thread's head, so everything awaited below is later.
+	scan(func(object) bool { return false })
+	switch role {
+	case "waiter":
+		notified := call("thread_notify", object{"session": peer, "idempotency_key": "notify-" + peer})
+		report["notify_ok"] = notified["ok"]
+		report["notify_state"] = mustObject(notified["value"])["state"]
+		ready := call("thread_message", object{"idempotency_key": "ready-" + self, "message_id": "ready-" + self, "message_kind": "notification",
+			"session": peer, "content": object{"text": "ready"}})
+		report["ready_sent"] = ready["ok"]
+		goAhead := await(func(record object) bool { return addressed(record, peer, "go ahead") }, "go_ahead")
+		if goAhead == nil {
+			return
+		}
+		report["go_ahead"] = stringField(mustObject(mustObject(goAhead["body"])["content"]), "text")
+		report["go_ahead_sender"] = stringField(mustObject(goAhead["body"]), "sender_action_id")
+		notice := await(func(record object) bool {
+			return addressed(record, "", "") && strings.HasPrefix(stringField(mustObject(record["body"]), "message_id"), "notice:")
+		}, "notice")
+		if notice == nil {
+			return
+		}
+		body := mustObject(notice["body"])
+		report["notice_text"] = stringField(mustObject(body["content"]), "text")
+		report["notice_outcome"] = body["outcome"]
+		report["notice_cause_thread"] = stringField(mustObject(notice["causation"]), "thread_id")
+	case "sender":
+		ready := await(func(record object) bool { return addressed(record, peer, "ready") }, "ready")
+		report["ready_seen"] = ready != nil
+		if ready == nil {
+			return
+		}
+		sent := call("thread_message", object{"idempotency_key": "go-ahead-" + self, "message_id": "go-ahead-" + self, "message_kind": "notification",
+			"session": peer, "content": object{"text": "go ahead"}})
+		report["go_ahead_sent"] = sent["ok"]
+	}
+}
+
 func reportWait(client *httpClient, url string, authorization string, report object, readValue object, waitMS int) {
 	started := time.Now()
 	head := 0
@@ -940,6 +1125,8 @@ func main() {
 		status = runHooks(os.Args[2])
 	case "gateway":
 		status = runGateway(os.Args[2])
+	case "codex":
+		status = runCodexGateway(os.Args[2])
 	}
 	if status != 0 {
 		os.Exit(status)

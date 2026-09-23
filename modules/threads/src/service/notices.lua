@@ -106,6 +106,15 @@ end
 -- commit on the target thread and when the owner starts; the caller wakes
 -- the returned watcher threads.
 function M.fire(db: sql.DB, target_thread_id: string?): ({string}?, string?)
+    -- Most commits watch nothing; a read decides that without taking the
+    -- store's write lock.
+    local waiting = transaction.read(db, function(tx: sql.Transaction): Result
+        local pending, pending_err = reader.pending_notices(tx, target_thread_id, 1)
+        if not pending then return storage(pending_err or "read pending notices") end
+        return transaction.success(#pending > 0, false)
+    end)
+    if not waiting.ok then return nil, waiting.message or "read pending notices" end
+    if waiting.value ~= true then return {}, nil end
     local woken: {string} = {}
     local result = transaction.write(db, function(tx: sql.Transaction): Result
         woken = {}

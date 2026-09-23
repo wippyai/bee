@@ -111,6 +111,19 @@ func TestPlanRoutesOrdinaryLaunchThroughClientAndOwnerThroughPrepare(t *testing.
 		t.Fatalf("client plan leaked runtime selection: %#v", client)
 	}
 
+	// An explicit application ID keeps the runtime's own entry for recovery and
+	// development launches.
+	application, err := host.Plan(context.Background(), app.Launch{
+		Op: app.OpRun, Command: desktopCommand, Args: []string{"bee.harness.window:app"},
+		State: state, Dir: project, Explicit: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if application.Run != nil || application.Prepare != nil {
+		t.Fatalf("explicit application ID was routed through the client: %#v", application)
+	}
+
 	// The owner route prepares resources and records the state for the
 	// enrollment publisher the host starts.
 	owner, err := host.Plan(context.Background(), app.Launch{

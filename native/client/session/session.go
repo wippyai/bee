@@ -182,18 +182,52 @@ func JoinEnrolled(ctx context.Context, cfg Config, node string, private ed25519.
 	}
 	return mesh.Joined(transport, cfg.Directory, enrollmentDirectory, node, private, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			// The descriptor publishes the owner's supervisor address because a
-			// raft-disabled owner never registers the cluster-wide name. Pin it so
-			// the client addresses the supervisor directly; OwnerSupervisor still
-			// verifies node, host and identity.
-			if owner.Supervisor != "" {
-				if address, err := pid.ParsePID(owner.Supervisor); err == nil {
-					actor.PinSupervisor(address)
-				}
-			}
+			pinSupervisor(actor, owner)
 			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
 		})
 	})
+}
+
+// ListEnrolled reads the durable desktop identities of an owner whose local
+// enrollment lists node with this key. It creates no desktop, viewport grant or
+// controller session.
+func ListEnrolled(ctx context.Context, cfg Config, node string, private ed25519.PrivateKey) (hive.DesktopCatalog, error) {
+	var catalog hive.DesktopCatalog
+	if ctx == nil || cfg.Directory == "" || node == "" || len(private) != ed25519.PrivateKeySize {
+		return catalog, errors.New("invalid enrolled desktop listing")
+	}
+	bounded, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	enrollmentDirectory := cfg.EnrollmentDir
+	if enrollmentDirectory == "" {
+		enrollmentDirectory = cfg.Directory
+	}
+	err := mesh.Joined(bounded, cfg.Directory, enrollmentDirectory, node, private, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
+			pinSupervisor(actor, owner)
+			_, result, err := readyDesktop(frame, frame, actor, owner)
+			if err == nil {
+				catalog = result
+			}
+			return err
+		})
+	})
+	if err != nil {
+		return hive.DesktopCatalog{}, err
+	}
+	return catalog, nil
+}
+
+// pinSupervisor addresses the owner's supervisor directly. The descriptor
+// publishes its address because a raft-disabled owner never registers the
+// cluster-wide name; OwnerSupervisor still verifies node, host and identity.
+func pinSupervisor(actor *mesh.Actor, owner rendezvous.Descriptor) {
+	if owner.Supervisor == "" {
+		return
+	}
+	if address, err := pid.ParsePID(owner.Supervisor); err == nil {
+		actor.PinSupervisor(address)
+	}
 }
 
 func present(ctx context.Context, foreground context.Context, actor *mesh.Actor, owner rendezvous.Descriptor, cfg Config, stdin *os.File, stdout io.Writer) (result error) {

@@ -8,6 +8,8 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,7 +27,19 @@ var _ = mesh.Local
 // exists, enroll this process's identity and join the owner's mesh. Ctrl-Q ends
 // only this process.
 func runClientRoute(ctx context.Context, launch app.Launch) error {
-	return runClientEnsuresOwner(ctx, launch, defaultClientSeams(), joinRequest{})
+	intent, err := parseClientIntent(launch.Args)
+	if err != nil {
+		return err
+	}
+	if intent.command != nil && !intentCommand(intent).Valid() {
+		return errors.New("invalid Bee command arguments")
+	}
+	return runClientEnsuresOwner(ctx, launch, defaultClientSeams(), joinRequest{Intent: intent})
+}
+
+// intentCommand is the application launch the joined session submits.
+func intentCommand(intent clientIntent) hive.DesktopCommand {
+	return hive.DesktopCommand{Name: intent.command[0], Arguments: append([]string{}, intent.command[1:]...)}
 }
 
 func defaultClientSeams() clientSeams {
@@ -85,11 +99,46 @@ func joinOwner(ctx context.Context, join joinRequest) error {
 	}
 	// The rendezvous directory holds the published join address; the owner
 	// directory holds the enrollment the owner seeded. mesh.Joined reads both.
-	return session.JoinEnrolled(ctx, session.Config{
+	config := session.Config{
 		Directory:     join.Directory,
 		EnrollmentDir: ownerDirectory(join.State),
+		Selection:     session.Selection{Workspace: join.Intent.workspace, Desktop: join.Intent.desktop},
 		Mode:          hive.Control,
-	}, join.Node, join.Key, os.Stdin, os.Stdout)
+	}
+	if join.Intent.observe {
+		config.Mode = hive.Observe
+	}
+	if join.Intent.command != nil {
+		command := intentCommand(join.Intent)
+		config.Command = &command
+	}
+	if join.Intent.listing {
+		catalog, err := session.ListEnrolled(ctx, config, join.Node, join.Key)
+		if err != nil {
+			return err
+		}
+		return printDesktops(os.Stdout, catalog)
+	}
+	return session.JoinEnrolled(ctx, config, join.Node, join.Key, os.Stdin, os.Stdout)
+}
+
+// printDesktops writes one line per durable display of the running Bee.
+func printDesktops(out io.Writer, catalog hive.DesktopCatalog) error {
+	if _, err := fmt.Fprintln(out, "WORKSPACE                         DISPLAY                           DEFAULT"); err != nil {
+		return err
+	}
+	for _, workspace := range catalog.Workspaces {
+		for _, desktop := range workspace.Desktops {
+			marker := ""
+			if desktop.IsDefault {
+				marker = "yes"
+			}
+			if _, err := fmt.Fprintf(out, "%s  %s  %s\n", workspace.ID, desktop.ID, marker); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // startDetachedOwner starts `bee --state <state> start` in its own session so the

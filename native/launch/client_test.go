@@ -12,6 +12,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -255,5 +257,68 @@ func TestClientIdentityIsPerLaunchAndRetiredOnExit(t *testing.T) {
 			names = append(names, entry.Name())
 		}
 		t.Fatalf("departed clients left %v", names)
+	}
+}
+
+func TestClientIntentGrammar(t *testing.T) {
+	workspace, desktop := strings.Repeat("a", 32), strings.Repeat("b", 32)
+	for _, case_ := range []struct {
+		args []string
+		want clientIntent
+	}{
+		{args: nil, want: clientIntent{}},
+		{args: []string{"observe"}, want: clientIntent{observe: true, refusal: "No running Bee to observe; start bee first"}},
+		{args: []string{"observe", workspace, desktop}, want: clientIntent{observe: true, workspace: workspace, desktop: desktop,
+			refusal: "No running Bee to observe; start bee first"}},
+		{args: []string{"attach", workspace, desktop}, want: clientIntent{workspace: workspace, desktop: desktop,
+			refusal: "No running Bee for the selected desktop; start bee first"}},
+		{args: []string{"client"}, want: clientIntent{refusal: "No running Bee for this project; run bee to start its node"}},
+		{args: []string{"desktops"}, want: clientIntent{listing: true, refusal: "No running Bee to list; start bee first"}},
+		{args: []string{"terminal", "bash", "-c", "printf %s ; $(exit 4)"}, want: clientIntent{command: []string{"terminal", "bash", "-c", "printf %s ; $(exit 4)"}}},
+		{args: []string{"agent"}, want: clientIntent{command: []string{"agent"}}},
+	} {
+		got, err := parseClientIntent(case_.args)
+		if err != nil {
+			t.Fatalf("parseClientIntent(%q): %v", case_.args, err)
+		}
+		if !reflect.DeepEqual(got, case_.want) {
+			t.Fatalf("parseClientIntent(%q) = %#v, want %#v", case_.args, got, case_.want)
+		}
+	}
+	for _, bad := range [][]string{
+		{"attach"},
+		{"attach", workspace},
+		{"observe", workspace},
+		{"observe", "not-hex", desktop},
+		{"client", workspace, strings.ToUpper(desktop)},
+		{"desktops", "extra"},
+	} {
+		if _, err := parseClientIntent(bad); err == nil {
+			t.Fatalf("parseClientIntent(%q) accepted", bad)
+		}
+	}
+}
+
+// Observing, attaching, selecting and listing act on a running Bee only: with
+// no owner they refuse promptly, start nothing and write nothing.
+func TestClientAttachOnlyIntentsNeverStartAnOwner(t *testing.T) {
+	for _, args := range [][]string{{"observe"}, {"client"}, {"desktops"}} {
+		state := filepath.Join(t.TempDir(), "state")
+		owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+		intent, err := parseClientIntent(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = runClientEnsuresOwner(context.Background(), app.Launch{Op: app.OpRun, Command: desktopCommand, State: state, Dir: filepath.Dir(state), Explicit: true},
+			owner.seams(filepath.Join(state, rendezvous.DirectoryName)), joinRequest{Intent: intent})
+		if err == nil || err.Error() != intent.refusal {
+			t.Fatalf("%q without an owner: %v", args, err)
+		}
+		if owner.started != 0 || owner.joined != 0 {
+			t.Fatalf("%q started %d owners and joined %d times", args, owner.started, owner.joined)
+		}
+		if _, err := os.Stat(state); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%q created the state directory: %v", args, err)
+		}
 	}
 }

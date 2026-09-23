@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/wippyai/runtime/api/boot"
 	envapi "github.com/wippyai/runtime/api/env"
@@ -108,6 +109,11 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
 			return prepareOwner(state)
 		}
+		return plan, nil
+	}
+	// An explicit application ID keeps the runtime's own entry, which is how
+	// recovery and development launches still reach an application directly.
+	if launch.Op == app.OpRun && launch.Command == desktopCommand && len(launch.Args) > 0 && strings.Contains(launch.Args[0], ":") {
 		return plan, nil
 	}
 	// Every other ordinary launch of this executable is a client of the retained

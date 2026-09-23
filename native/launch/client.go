@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -44,8 +45,65 @@ type clientSeams struct {
 	report io.Writer
 }
 
+// clientIntent is what one ordinary invocation asks of the retained owner.
+type clientIntent struct {
+	observe   bool
+	listing   bool
+	workspace string
+	desktop   string
+	// command is an application name followed by its literal arguments; the
+	// joined session submits it after admission, never the owner's startup.
+	command []string
+	// refusal is set when the intent acts on a running Bee only; it is the
+	// answer when no owner holds the state, and no owner is started.
+	refusal string
+}
+
+// parseClientIntent maps the invocation's arguments onto the client grammar:
+// no arguments presents the project desktop; `observe`, `client` and `attach`
+// join a running Bee, optionally pinned to one WORKSPACE DISPLAY pair;
+// `desktops` lists a running Bee's displays; anything else names an
+// application to launch into the desktop.
+func parseClientIntent(args []string) (clientIntent, error) {
+	if len(args) == 0 {
+		return clientIntent{}, nil
+	}
+	switch args[0] {
+	case "desktops":
+		if len(args) != 1 {
+			return clientIntent{}, errors.New("bee desktops takes no arguments")
+		}
+		return clientIntent{listing: true, refusal: "No running Bee to list; start bee first"}, nil
+	case "observe", "client", "attach":
+		intent := clientIntent{observe: args[0] == "observe"}
+		switch {
+		case len(args) == 3:
+			for _, id := range args[1:] {
+				decoded, err := hex.DecodeString(id)
+				if err != nil || len(decoded) != 16 || hex.EncodeToString(decoded) != id {
+					return clientIntent{}, errors.New("workspace and display must be 32 lowercase hexadecimal characters")
+				}
+			}
+			intent.workspace, intent.desktop = args[1], args[2]
+		case args[0] == "attach" || len(args) != 1:
+			return clientIntent{}, errors.New("bee attach requires WORKSPACE DISPLAY; bee observe/client takes no application arguments or one WORKSPACE DISPLAY pair")
+		}
+		switch {
+		case intent.observe:
+			intent.refusal = "No running Bee to observe; start bee first"
+		case intent.workspace != "":
+			intent.refusal = "No running Bee for the selected desktop; start bee first"
+		default:
+			intent.refusal = "No running Bee for this project; run bee to start its node"
+		}
+		return intent, nil
+	}
+	return clientIntent{command: append([]string{}, args...)}, nil
+}
+
 // joinRequest is the client's authenticated join into the owner's mesh.
 type joinRequest struct {
+	Intent    clientIntent
 	State     string
 	Directory string
 	Node      string
@@ -73,14 +131,20 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	if err != nil {
 		return err
 	}
-	// The route line describes routing only; the owner's publication and the
-	// authenticated join still decide whether startup succeeds.
-	route := "Starting Bee…"
-	if owned {
-		route = "Connecting to Hive…"
+	if join.Intent.refusal != "" && !owned {
+		return errors.New(join.Intent.refusal)
 	}
-	if _, err := fmt.Fprintln(seams.report, route); err != nil {
-		return err
+	// The route line describes routing only; the owner's publication and the
+	// authenticated join still decide whether startup succeeds. A join to a
+	// running Bee only names no route.
+	if join.Intent.refusal == "" {
+		route := "Starting Bee…"
+		if owned {
+			route = "Connecting to Hive…"
+		}
+		if _, err := fmt.Fprintln(seams.report, route); err != nil {
+			return err
+		}
 	}
 	if !owned {
 		done, wait, err := seams.startOwner(ctx, launch)

@@ -1,4 +1,5 @@
 """Standalone Bee acceptance: no source or Wippy executable in the launch folder."""
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -36,7 +37,11 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
         recovery.quit()
     finally:
         recovery.close()
-    assert (state / "recovery" / "registry.db").is_file(), "Recovery launch did not isolate registry history"
+    # Every recovery boots a fresh history under recovery/, named by the receipt.
+    receipt = json.loads((state / "recovery" / "receipt.json").read_text())
+    recovery_history = Path(receipt["history"]).resolve()
+    assert recovery_history.name == "registry.db" and recovery_history.is_file(), "Recovery launch did not record its registry history"
+    assert recovery_history.parent.parent == (state / "recovery").resolve(), "Recovery launch did not isolate registry history"
     # This suite verifies explicit in-process application launches. The public
     # owner/client route (which retains its owner after exit) is exercised by
     # native_client.py with explicit fixture-owned process cleanup.

@@ -164,7 +164,8 @@ is not implemented.
 
 The executable's immutable bundle is seeded under `deployments/<bundle-id>`.
 `run` continues the selected deployment, while `recover` starts the shipped
-bundle with a separate `recovery/registry.db` history and records its receipt.
+bundle with a fresh `recovery/run-*/registry.db` history per recovery and
+records it in `recovery/receipt.json`.
 Neither operation resets application databases. Existing migration checks can
 reject older code against newer data. Code activation requires a restart; schema
 rollback requires an application-specific migration strategy.
@@ -246,8 +247,8 @@ Standalone packaging checks every shipped `db.sql.sqlite` entry against the
 application's `data` bindings. A new database without a state-bound path
 refuses packaging; a relative source default is insufficient. The client store
 inherits the workspace path with a `.client` suffix. Ordinary runs use
-`registry.db`, while `recover` uses `recovery/registry.db`. The host manifest
-also binds governance and sync storage, so adding either component cannot
+`registry.db`, while each `recover` uses a fresh `recovery/run-*/registry.db`.
+The host manifest also binds governance and sync storage, so adding either component cannot
 silently put its database in the launch directory.
 
 `make native-project-nodes-check BEE_BINARY=/absolute/bee` reads the executable's

@@ -90,6 +90,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         op = "open",
         workspace_id = WORKSPACE,
         definition_id = "bee.harness.window:app",
+        thread_id = THREAD,
         arguments = {request},
     }))
 
@@ -262,7 +263,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
             local data: unknown = message:payload():data()
             if type(data) == "table" and data.op == "title" and data.id == opened.id
                 and data.instance_id == opened.instance_id then
-                assert(data.title == "Window hooks fixture" or data.title == "Window hooks fixture · Using tool",
+                assert(data.title == "Window hooks fixture" or data.title == "Window hooks fixture · Using tool"
+                    or data.title == "Window hooks fixture · Session started",
                     "unexpected fixture hook title: " .. tostring(data.title))
                 titled = data.title == "Window hooks fixture · Using tool"
             end
@@ -341,15 +343,24 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         end
     end
     assert(receipts == (crashed and 0 or 1), "unexpected receipt count before recovery")
-    local hook_count = 0
+    local tool_hooks = 0
+    local lifecycle_hooks = 0
     for _, record in ipairs(final_page.records :: {{[string]: unknown}}) do
         assert(record.kind ~= "turn.request" and record.kind ~= "turn.end", "native hooks invented a logical turn")
         if record.kind == "observation" then
             local body = reply(record.body)
-            if tostring(body.event_key):find("^hook:") then hook_count = hook_count + 1 end
+            if tostring(body.event_key):find("^hook:") and type(body.data) == "table" then
+                local data = body.data :: {[string]: unknown}
+                local decoded = data.payload_json and json.decode(tostring(data.payload_json)) or nil
+                local payload = type(decoded) == "table" and decoded :: {[string]: unknown} or {}
+                if payload.event == "SessionStart" then lifecycle_hooks = lifecycle_hooks + 1
+                elseif payload.event == "PreToolUse" then tool_hooks = tool_hooks + 1
+                else error("unexpected committed hook event: " .. tostring(payload.event)) end
+            end
         end
     end
-    assert(hook_count == 1, "replayed child submissions must leave exactly one hook observation")
+    assert(tool_hooks == 1, "replayed child submissions must leave exactly one tool hook observation")
+    assert(lifecycle_hooks == 1, "provider startup must leave exactly one session lifecycle observation")
 
     -- 13. Gracefully continue the closed window through the broker's real
     -- checkpoint restore path, using the application's acknowledged checkpoint.
@@ -380,8 +391,9 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     end
     if continued.error_code ~= "" then
         local checkpoint = reply(call("bee.threads.carrier:checkpoint", {thread_id = THREAD, attempt_id = previous_attempt_id}).value)
-        local placement = reply(call("bee.placement.native:status", {attempt_id = previous_attempt_id}).value)
-        local attempt = reply(placement.attempt)
+        local status_db = assert(store.open())
+        local attempt = assert(store.attempt(status_db, previous_attempt_id), "previous placement attempt is missing")
+        status_db:release()
         error("window continuation did not become ready: " .. tostring(continued.error) .. "; code=" .. tostring(continued.error_code)
             .. "; previous thread attempt=" .. tostring(checkpoint.attempt_state)
             .. "; native execution=" .. tostring(attempt.execution_state)
@@ -494,13 +506,13 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
                 end
             end
         end
-        if total_hooks == 2 and continuation_attempt_id and continuation_attempt_id ~= ""
+        if total_hooks == 3 and continuation_attempt_id and continuation_attempt_id ~= ""
             and continuation_binding_id and continuation_binding_id ~= "" and continuation_session_id == "s1" then
             break
         end
         time.sleep("50ms")
     end
-    assert(total_hooks == 2, "continuation must preserve the committed hook and add only the new attempt hook")
+    assert(total_hooks == 3, "continuation must preserve the committed hooks and add only the new attempt hook")
     if pending_hook then
         -- The existing gateway contract rejects unclaimed rows on revocation.
         -- They remain durable rejections, never fabricated thread commits.
@@ -517,10 +529,10 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(continuation_attempt_id and continuation_attempt_id ~= previous_attempt_id, "continuation did not receive a fresh native attempt")
     assert(continuation_binding_id and continuation_binding_id ~= committed_binding_id, "continuation did not receive a fresh gateway binding")
     assert(continuation_session_id == "s1", "continuation did not preserve the provider conversation")
-    local old_status = reply(call("bee.placement.native:status", {attempt_id = previous_attempt_id}).value)
-    local old_attempt = reply(old_status.attempt)
-    local new_status = reply(call("bee.placement.native:status", {attempt_id = continuation_attempt_id}).value)
-    local new_attempt = reply(new_status.attempt)
+    local status_db = assert(store.open())
+    local old_attempt = assert(store.attempt(status_db, previous_attempt_id), "previous placement attempt is missing")
+    local new_attempt = assert(store.attempt(status_db, continuation_attempt_id), "continuation placement attempt is missing")
+    status_db:release()
     assert(old_attempt.execution_state == "exited" and old_attempt.cleanup_state == "complete",
         "continuation did not complete cleanup of the previous execution")
     assert(type(old_attempt.session_ref) == "string" and old_attempt.session_ref == new_attempt.session_ref,

@@ -159,7 +159,7 @@ Production packs select `src/`; architecture acceptance checks loaded entries
 and the source/pack boundary. Tests, local databases, credentials and development
 stores must stay outside the application pack. The release archive contains the
 binary, provenance, effective Go module files, available dependency notices and
-runtime patch sources. Runtime patches retain their upstream MPL-2.0 license.
+any runtime patch sources the manifest lists. Runtime patches retain their upstream MPL-2.0 license.
 
 Resolve missing dependency notices before a stable public release. Signing and
 Hub credentials require separate configuration. Keep private keys in

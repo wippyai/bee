@@ -505,6 +505,36 @@ function M.is_configured(state: State, node: string): boolean
     return state.configured_nodes[id] == true
 end
 
+-- enroll admits one owner-selected local client node into the configured set.
+-- The owner decides admission from its protected enrollment source; this file
+-- only enforces the same bounds the boot set obeys. Enrollment never changes an
+-- established peer and never exceeds the shared node cap.
+function M.enroll(state: State, node: string): (boolean, string?)
+    local id = bounds.id(node)
+    if not id then return false, "node is not an identifier" end
+    if id == state.local_node then return false, "cannot enroll local node" end
+    if state.configured_nodes[id] then return false, "node is already enrolled" end
+    local count = 0
+    for _ in pairs(state.configured_nodes) do count = count + 1 end
+    if count >= M.CAP_MAX_NODES then
+        return false, "enrolled nodes exceed " .. tostring(M.CAP_MAX_NODES)
+    end
+    state.configured_nodes[id] = true
+    return true, nil
+end
+
+-- retire revokes an enrollment and any exchange that depended on it. A node
+-- admitted only while its enrollment exists loses both its established peer and
+-- its in-flight exchange; its owner separately retires outstanding routes.
+function M.retire(state: State, node: string): (boolean, string?)
+    local id = bounds.id(node)
+    if not id then return false, "node is not an identifier" end
+    if not state.configured_nodes[id] then return false, "node is not enrolled" end
+    state.configured_nodes[id] = nil
+    M.forget(state, id)
+    return true, nil
+end
+
 function M.active_peers(state: State): {Peer}
     local result: {Peer} = {}
     for _, a in pairs(state.active) do

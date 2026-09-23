@@ -107,7 +107,19 @@ func bootstrap() error {
 	if err = run(checkout, "go", "build", "-mod=readonly", "-trimpath", "-o", binary, "./cmd/wippy-builder"); err != nil {
 		return err
 	}
-	return run(root, binary, os.Args[1:]...)
+	command := exec.Command(binary, os.Args[1:]...)
+	command.Dir = root
+	command.Env = os.Environ()
+	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
+	// A development build (BEE_NATIVE_LOCAL=1) serves the checked-out native
+	// module through a file proxy at a worktree pseudo-version. The pinned
+	// builder otherwise resolves such modules through direct VCS by recomputing
+	// GOPRIVATE/GONOPROXY/GONOSUMDB, so publish the dev overrides to its child
+	// environment. The release path sets none of these.
+	if os.Getenv("BEE_NATIVE_LOCAL") != "" {
+		command.Env = append(command.Env, "GOPRIVATE=none", "GONOPROXY=none")
+	}
+	return command.Run()
 }
 func main() {
 	if err := bootstrap(); err != nil {

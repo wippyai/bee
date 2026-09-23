@@ -20,7 +20,7 @@ entries:
     executables: {sh: /bin/sh}
     environment: {}
     gateway_tools: [thread_read]
-    gateway_hooks: [PreToolUse]
+    gateway_hooks: [PreToolUse, SessionStart]
 - name: binding
   kind: contract.binding
   meta:

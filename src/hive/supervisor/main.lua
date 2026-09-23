@@ -10,6 +10,9 @@ local logger = require("logger")
 local types = require("types")
 local bounds = require("bounds")
 local peers = require("peers")
+local enrollment = require("enrollment")
+local registration = require("registration")
+local registry = require("registry")
 local admission = require("admission")
 local thread_admission = require("thread_admission")
 local policy_admission = require("policy_admission")
@@ -45,7 +48,7 @@ local function main(configuration: unknown)
     local trapping, trap_error = process.set_options({trap_links = true})
     if not trapping then error("Cannot handle Hive link loss: " .. tostring(trap_error)) end
     local config = bounds.object(configuration)
-    if not config or bounds.fields(config, {"configured_nodes", "desktop"}) then error("Invalid Hive supervisor configuration") end
+    if not config or bounds.fields(config, {"configured_nodes", "desktop", "enrollment"}) then error("Invalid Hive supervisor configuration") end
     local nodes, config_error = bounds.ids(config.configured_nodes)
     if not nodes then error("Invalid configured Hive nodes: " .. tostring(config_error)) end
     local desktop_config: desktop_protocol.Configuration? = nil
@@ -65,6 +68,10 @@ local function main(configuration: unknown)
     local incarnation = nonce()
     local state, state_error = peers.new({local_node = node, local_incarnation = incarnation, configured_nodes = nodes, ttl_ms = 10000})
     if not state then error(tostring(state_error)) end
+    -- The boot set stays authoritative; enrollment only adds and retires local
+    -- client nodes the host names in its own registry entry.
+    local boot: {[string]: boolean} = {}
+    for _, configured in ipairs(nodes) do boot[configured] = true end
     local started = time.now()
     local function elapsed(): integer return math.floor(time.now():sub(started):milliseconds()) end
     local log = logger:named("bee.hive.supervisor")
@@ -98,8 +105,12 @@ local function main(configuration: unknown)
     local advertising_response: Channel<unknown>? = nil
     local last_advertisement = -5000
     local registered = false
+    -- The name is published whenever this node has a native identity, even with
+    -- no boot-configured peers: a local client must be able to discover the
+    -- supervisor to ask for admission. Admission itself still requires an
+    -- established peer or a host enrollment, so publication grants nothing.
     local function advertise(now_ms: integer)
-        if native_node == "" or #nodes == 0 or advertised or advertising then return end
+        if native_node == "" or advertised or advertising then return end
         local future, future_error = funcs.async("bee.hive.supervisor:advertise", {name = distributed_name, pid = self})
         if not future or future_error then
             log:warn("Hive name publication unavailable")
@@ -144,6 +155,32 @@ local function main(configuration: unknown)
             end
         end
     end
+    -- reconcile_enrollment applies the host-selected local client nodes to the
+    -- peer set and the desktop bridge. It runs on the tick, because a registry
+    -- entry has no change notification here, and before a client-host sender the
+    -- bridge does not yet admit is refused, because the host enrolls a node before
+    -- that node's first request. Each pass reads one bounded entry and only
+    -- enrolls or retires nodes the boot set does not own. A missing or malformed
+    -- entry admits and retires nothing.
+    local function reconcile_enrollment(now_ms: integer)
+        local entry = registry.get(enrollment.ENTRY)
+        if not entry or type(entry.data) ~= "table" then return end
+        local desired, decode_error = enrollment.decode(entry.data)
+        if not desired then
+            log:warn("Hive enrollment refused", {cause = tostring(decode_error):sub(1, 256)})
+            return
+        end
+        local enroll, retire = enrollment.diff(desired.nodes, boot, enrollment.configured_view(state))
+        for _, selected in ipairs(retire) do
+            local retired, retire_error = peers.retire(state, selected)
+            if not retired and retire_error then log:warn("Hive enrollment retire refused", {node = selected, cause = retire_error}) end
+        end
+        for _, selected in ipairs(enroll) do
+            local enrolled, enroll_error = peers.enroll(state, selected)
+            if not enrolled and enroll_error then log:warn("Hive enrollment refused", {node = selected, cause = enroll_error}) end
+        end
+        if desktop then desktop_owner.enroll(desktop, enrollment.enrolled(boot, enrollment.configured_view(state)), now_ms) end
+    end
     local function discover(now_ms: integer)
         for _, remote in ipairs(nodes) do
             local candidate = process.registry.lookup(types.SUPERVISOR_NAME .. "/" .. remote)
@@ -160,6 +197,9 @@ local function main(configuration: unknown)
         end
     end
     local function admit(message: process.Message)
+        if desktop and desktop_owner.client_host(message) and not desktop_owner.handles(desktop, message) then
+            reconcile_enrollment(elapsed())
+        end
         if desktop and desktop_owner.handles(desktop, message) then
             desktop_owner.request(desktop, message, elapsed())
             return
@@ -273,13 +313,22 @@ local function main(configuration: unknown)
         local named, name_error = process.registry.register(types.SUPERVISOR_NAME)
         if not named then error("Register local supervisor: " .. tostring(name_error)) end
         registered = true
-        -- Local clients discover the retained desktop through this private
-        -- loopback mesh. Optional external Hive publication must not delay it.
-        if native_node ~= "" and desktop ~= nil then
-            local published, publish_error = process.registry.register(distributed_name, self, process.registry.EVENTUAL)
-            if not published then error("Publish local desktop supervisor: " .. tostring(publish_error)) end
-            advertised = true
+        -- A local client discovers this supervisor only through this eventual
+        -- name, so publish it whenever the node has a native identity. The
+        -- desktop bridge is not a condition: its failure must not remove the
+        -- only discovery path. Publishing grants no admission on its own.
+        local decision = registration.decide(native_node, distributed_name)
+        if decision.publish then
+            local published, publish_error = process.registry.register(decision.name, self, process.registry.EVENTUAL)
+            if not published then
+                log:error("Hive supervisor name publication failed", {name = decision.name, cause = tostring(publish_error)})
+                advertise(elapsed())
+            else
+                advertised = true
+            end
         else
+            -- A local-only node publishes no cluster-visible name; the optional
+            -- external Hive path still has a chance to advertise.
             advertise(elapsed())
         end
         local desktop_ready = desktop and desktop.ready
@@ -288,10 +337,12 @@ local function main(configuration: unknown)
         local desktop_launches = desktop and desktop.launches
         local desktop_catalogs = desktop and desktop.catalogs
         local desktop_activations = desktop and desktop.activations
+        local desktop_observers = desktop and desktop.observers
         while true do
             local cases = {requests:case_receive(), replies:case_receive(), hellos:case_receive(), events:case_receive(), ticks:case_receive()}
             if desktop_catalogs then cases[#cases + 1] = desktop_catalogs:case_receive() end
             if desktop_activations then cases[#cases + 1] = desktop_activations:case_receive() end
+            if desktop_observers then cases[#cases + 1] = desktop_observers:case_receive() end
             if desktop_copies then cases[#cases + 1] = desktop_copies:case_receive() end
             if desktop_launches then cases[#cases + 1] = desktop_launches:case_receive() end
             if desktop_ready and desktop_results then
@@ -326,6 +377,7 @@ local function main(configuration: unknown)
                         else expire_route(route, "DEADLINE_EXCEEDED", "supervisor request deadline passed") end
                     end
                 end
+                reconcile_enrollment(now_ms)
                 if now_ms - last_discovery >= 5000 then discover(now_ms); last_discovery = now_ms end
                 if now_ms - last_advertisement >= 5000 then advertise(now_ms) end
             elseif advertising_response and selected.channel == advertising_response and advertising then
@@ -344,6 +396,8 @@ local function main(configuration: unknown)
                 desktop_owner.activated(desktop, selected.value, now_ms)
             elseif desktop_ready and selected.channel == desktop_ready and desktop then
                 desktop_owner.ready(desktop, selected.value)
+            elseif desktop_observers and selected.channel == desktop_observers and desktop then
+                desktop_owner.observe(desktop, selected.value)
             elseif desktop_results and selected.channel == desktop_results and desktop then
                 desktop_owner.result(desktop, selected.value, now_ms)
             elseif desktop_launches and selected.channel == desktop_launches and desktop then

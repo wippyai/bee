@@ -6,28 +6,38 @@ local types = require("types")
 local protocol = require("protocol")
 local bounds = require("bounds")
 local contract = require("contract")
-type Pending = {id: string, recipient: string, call: types.Call, desktop_id: string?, due: integer}
+type Waiter = {recipient: string, call: types.Call, due: integer}
+-- listeners are further listings answered by this same catalog read.
+type Pending = {id: string, recipient: string, call: types.Call, desktop_id: string?, due: integer, listeners: {Waiter}}
 type State = {pending: Pending?}
 type Identity = {desktop_id: string, is_default: boolean}
 type Result = {code: string, message: string, desktops: {Identity}}
+local MAX_LISTENERS = 16
 local M = {}
 function M.new(): State return {} end
 local function answer(recipient: string, reply: types.Reply)
     process.send(recipient, types.TOPIC_REPLY, reply)
 end
-local function uncertain(pending: Pending): types.Reply
+local function uncertain(pending: Pending, call: types.Call): types.Reply
     if pending.desktop_id then
-        return types.reply_error(pending.call.request_id, types.uncertain("Desktop allocation may have committed; retry the same desktop identity",
-            {operation_ref = protocol.CREATE, idempotency_key = pending.call.idempotency_key}))
+        return types.reply_error(call.request_id, types.uncertain("Desktop allocation may have committed; retry the same desktop identity",
+            {operation_ref = protocol.CREATE, idempotency_key = call.idempotency_key}))
     end
-    return types.reply_error(pending.call.request_id, types.fault("UNAVAILABLE", "Desktop catalog did not complete"))
+    return types.reply_error(call.request_id, types.fault("UNAVAILABLE", "Desktop catalog did not complete"))
 end
 function M.request(state: State, owner: string, workspace: string, sender: string, call: types.Call, desktop: string?, due: integer)
-    if state.pending then
+    local current = state.pending
+    if current then
+        -- A listing is a read: another listing joins the pending read. An
+        -- allocation stays exclusive, and so does any request during one.
+        if not desktop and not current.desktop_id and #current.listeners < MAX_LISTENERS then
+            current.listeners[#current.listeners + 1] = {recipient = sender, call = call, due = due}
+            return
+        end
         answer(sender, types.reply_error(call.request_id, types.fault("BUSY", "Desktop catalog request already pending")))
         return
     end
-    local pending: Pending = {id = uuid.v7(), recipient = sender, call = call, desktop_id = desktop, due = due}
+    local pending: Pending = {id = uuid.v7(), recipient = sender, call = call, desktop_id = desktop, due = due, listeners = {}}
     state.pending = pending
     local sent, err = process.send(owner, "bee.retained.desktops", {version = 1, workspace_id = workspace,
         request_id = pending.id, op = desktop and "allocate" or "list", desktop_id = desktop})
@@ -78,6 +88,9 @@ function M.revoke(state: State, message: string)
     if not pending then return end
     state.pending = nil
     answer(pending.recipient, types.reply_error(pending.call.request_id, types.fault("DENIED", message)))
+    for _, listener in ipairs(pending.listeners) do
+        answer(listener.recipient, types.reply_error(listener.call.request_id, types.fault("DENIED", message)))
+    end
 end
 function M.result(state: State, value: unknown, workspace: string, execution: string, now: integer)
     local pending = state.pending
@@ -85,25 +98,38 @@ function M.result(state: State, value: unknown, workspace: string, execution: st
     if not pending or type(value) ~= "table" or value.request_id ~= pending.id then return end
     state.pending = nil
     local result = decode(value, workspace, pending)
-    if now >= pending.due or not result or result.code == "UNAVAILABLE" then
-        answer(pending.recipient, uncertain(pending)); return
+    local function settle(recipient: string, call: types.Call, due: integer)
+        if now >= due or not result or result.code == "UNAVAILABLE" then
+            answer(recipient, uncertain(pending, call)); return
+        end
+        if result.code ~= "OK" then
+            local code = result.code == "CAPACITY" and "LIMIT_EXCEEDED" or result.code
+            answer(recipient, types.reply_error(call.request_id, types.fault(code, result.message)))
+        elseif pending.desktop_id then
+            answer(recipient, types.reply_ok(call.request_id, {owner_execution = execution,
+                workspace_id = workspace, desktop_id = pending.desktop_id}))
+        else
+            answer(recipient, types.reply_ok(call.request_id, {owner_execution = execution,
+                workspaces = {{workspace_id = workspace, desktops = result.desktops}}}))
+        end
     end
-    if result.code ~= "OK" then
-        local code = result.code == "CAPACITY" and "LIMIT_EXCEEDED" or result.code
-        answer(pending.recipient, types.reply_error(pending.call.request_id, types.fault(code, result.message)))
-    elseif pending.desktop_id then
-        answer(pending.recipient, types.reply_ok(pending.call.request_id, {owner_execution = execution,
-            workspace_id = workspace, desktop_id = pending.desktop_id}))
-    else
-        answer(pending.recipient, types.reply_ok(pending.call.request_id, {owner_execution = execution,
-            workspaces = {{workspace_id = workspace, desktops = result.desktops}}}))
-    end
+    settle(pending.recipient, pending.call, pending.due)
+    for _, listener in ipairs(pending.listeners) do settle(listener.recipient, listener.call, listener.due) end
 end
 function M.tick(state: State, now: integer)
     local pending = state.pending
-    if pending and now >= pending.due then
+    if not pending then return end
+    if now >= pending.due then
         state.pending = nil
-        answer(pending.recipient, uncertain(pending))
+        answer(pending.recipient, uncertain(pending, pending.call))
+        for _, listener in ipairs(pending.listeners) do answer(listener.recipient, uncertain(pending, listener.call)) end
+        return
     end
+    local waiting: {Waiter} = {}
+    for _, listener in ipairs(pending.listeners) do
+        if now >= listener.due then answer(listener.recipient, uncertain(pending, listener.call))
+        else waiting[#waiting + 1] = listener end
+    end
+    pending.listeners = waiting
 end
 return M

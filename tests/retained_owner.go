@@ -38,10 +38,14 @@ func databaseEnvironment(root string) []string {
 	return append(environment, "BEE_CLIENT_DB="+filepath.Join(root, "client.db"), "BEE_PLACEMENT_ROOT="+filepath.Join(root, "placement"))
 }
 
-func boot(runtime, root string) error {
+func boot(runtime, root string, configs ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-	args := []string{"run", "--verbose", "--host", "bee:terminal", "--", "bee-owner"}
+	args := []string{"run", "--verbose", "--host", "bee:terminal"}
+	for _, config := range configs {
+		args = append(args, "--config", config)
+	}
+	args = append(args, "--", "bee-owner")
 	command := exec.CommandContext(ctx, runtime, args...)
 	command.Dir = root
 	command.Env = append(os.Environ(), databaseEnvironment(root)...)
@@ -151,7 +155,7 @@ local function main()
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:desktop_policy", "bee:retained_owner_spawn_policy", "bee:retained_owner_node_policy"}) do
+    for _, name in ipairs({"bee:desktop_policy", "bee:retained_owner_spawn_policy", "bee:retained_owner_name_policy", "bee:retained_owner_node_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error(tostring(policy_error)) end
         policies[#policies + 1] = policy
@@ -181,6 +185,25 @@ end
 
 return {main = main}
 `
+
+// desktopAdmission is the host configuration the native owner selects: the
+// Hive supervisor's desktop bridge admits local clients and composes the
+// retained workspace, so the owner route must learn readiness from the bridge.
+func desktopAdmission(root string) (string, error) {
+	expires := time.Now().Add(time.Hour).UTC().Format("2006-01-02T15:04:05.000Z07:00")
+	config := fmt.Sprintf(`version: "1.0"
+override:
+  "bee.hive.host:supervisor_service:input":
+  - configured_nodes: []
+    desktop:
+      execution: %s
+      expires_at: "%s"
+      allowed_nodes: []
+      local_clients: true
+`, strings.Repeat("a", 32), expires)
+	path := filepath.Join(root, "desktop-admission.yaml")
+	return path, os.WriteFile(path, []byte(config), 0600)
+}
 
 func writeProbe(root string) error {
 	directory := filepath.Join(root, "src", "retained_owner_probe")
@@ -238,6 +261,13 @@ func run() error {
 	if err := boot(runtime, root); err != nil {
 		return fmt.Errorf("retained owner source: %w", err)
 	}
+	admission, err := desktopAdmission(root)
+	if err != nil {
+		return err
+	}
+	if err := boot(runtime, root, filepath.Join(root, ".wippy.yaml"), admission); err != nil {
+		return fmt.Errorf("retained owner with desktop admission: %w", err)
+	}
 	// The cancellation probe is intentionally source-only; test commands are
 	// not part of the shipped portable deployment.
 	if err := stop(runtime, root); err != nil {
@@ -278,5 +308,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println("Retained owner: source cancellation and source-free portable deployment boot the Lua workspace/desktop supervisor cleanly")
+	fmt.Println("Retained owner: source cancellation, desktop admission and source-free portable deployment boot the Lua workspace/desktop supervisor cleanly")
 }

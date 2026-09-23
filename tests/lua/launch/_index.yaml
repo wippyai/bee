@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.launch
 entries:
+- name: ownership_test
+  kind: function.lua
+  source: file://ownership_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    ownership: bee.launch:ownership
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua

@@ -3,23 +3,15 @@
   "name": "bee",
   "runtime": {
     "repository": "https://github.com/wippyai/runtime.git",
-    "commit": "f987190b3133a94140b39bbc917e1ac02fea77f9",
+    "commit": "0feb7d4af5b7a592cb80a18c8d444f705fdd89ad",
     "go": "1.27.0",
     "tags": [
       "fts5",
       "sqlite_vec",
       "treesitter",
-      "sqlite_preupdate_hook"
-    ],
-    "patches": [
-      {
-        "path": "build/patches/runtime-terminal-session-identity.patch",
-        "sha256": "c2c8bcdb957b64163af90a348497dd3dab9151c234c013d60346050686cf3167"
-      },
-      {
-        "path": "build/patches/runtime-app-default-state.patch",
-        "sha256": "b4cae0ba1d95390927cc23a735b2eb49f3ea68dc2223ab34804eb59a8a9b3572"
-      }
+      "sqlite_preupdate_hook",
+      "meshclient",
+      "physicalclient"
     ]
   },
   "application": {
@@ -50,14 +42,14 @@
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260922003932-abe10a701b17",
+      "version": "v0.0.0-20260923024442-4df6e28497e1",
       "package": "github.com/wippyai/bee/native/ioevents",
       "factory": "Component",
       "private": true
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260922003932-abe10a701b17",
+      "version": "v0.0.0-20260923024442-4df6e28497e1",
       "package": "github.com/wippyai/bee/native/launch",
       "factory": "Component",
       "private": true,

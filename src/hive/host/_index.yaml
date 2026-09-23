@@ -29,5 +29,8 @@ entries:
       - bee:hive_names_policy
       - bee:hive_advertise_policy
       - bee:hive_execute_policy
+      # The supervisor composes the retained desktop bridge, so it needs the
+      # desktop host policy that authorizes desktop admission.
+      - bee.hive.desktop:host_policy
   meta:
     comment: Host-owned local Hive supervisor; a host overlay may replace input with admitted peer IDs and optional desktop configuration

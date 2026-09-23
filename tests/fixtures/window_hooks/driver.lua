@@ -26,6 +26,13 @@ if [ -z "$BEE_GATEWAY_HOOK_TOKEN" ]; then
 elif [ -z "$url" ]; then
     printf 'HOOK_ERR:NO_URL\n'
 else
+    if [ "$phase" != "continuation" ]; then
+        start_payload='{"hook_event_name":"SessionStart","session_id":"s1","source":"startup"}'
+        start_code=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $BEE_GATEWAY_HOOK_TOKEN" -H "Content-Type: application/json" \
+            -d "$start_payload")
+        printf 'HOOK_START_CODE:%s\n' "$start_code"
+    fi
     if [ "$phase" = "continuation" ]; then
         payload='{"hook_event_name":"PreToolUse","session_id":"s1","prompt_id":"p2","tool_use_id":"toolu_2","tool_name":"Bash","tool_input":{"command":"echo continued"}}'
     else

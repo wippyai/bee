@@ -8,6 +8,7 @@ entries:
   modules: [security, process, channel, tty, uuid, registry, time, ctx, funcs]
   imports:
     attachment: bee.applications:attachment
+    bounds: bee.threads.records:bounds
     execution: bee.applications:execution
     principal: bee.applications:principal
     contract: bee.protocol:application

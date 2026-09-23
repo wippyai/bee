@@ -103,6 +103,28 @@ hub-publish-script-check:
 hub-release-install-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_release_install.py "$(if $(BEE_DEPLOYMENT),$(abspath $(BEE_DEPLOYMENT)))" "$(BEE_VERSION)"
 
+# Publish one GitHub release's modules to the Hub from that release's own
+# deployment archive, then run the post-publication check against it. TAG
+# names the release (drafts included). Credentials come from WIPPY_TOKEN or
+# the Wippy CLI login. hub-check-release restores and dry-runs only.
+HUB_RELEASE_DIR ?= dist/hub-release
+HUB_RELEASE_DEPLOYMENT = $(abspath $(HUB_RELEASE_DIR))/deployment
+.PHONY: hub-release-restore hub-check-release hub-publish-release hub-release-script-check
+hub-release-restore:
+	@test -n "$(TAG)" || { echo 'Set TAG to the release tag, for example TAG=v0.1.0.' >&2; exit 1; }
+	build/hub-release.sh "$(TAG)" "$(abspath $(HUB_RELEASE_DIR))"
+
+hub-check-release: hub-release-restore
+	$(MAKE) hub-check BEE_VERSION="$(patsubst v%,%,$(TAG))" BEE_DEPLOYMENT="$(HUB_RELEASE_DEPLOYMENT)"
+
+hub-publish-release: hub-release-restore
+	$(MAKE) hub-publish BEE_VERSION="$(patsubst v%,%,$(TAG))" BEE_DEPLOYMENT="$(HUB_RELEASE_DEPLOYMENT)"
+	$(MAKE) hub-release-install-check BEE_VERSION="$(patsubst v%,%,$(TAG))" BEE_DEPLOYMENT="$(HUB_RELEASE_DEPLOYMENT)"
+
+check: hub-release-script-check
+hub-release-script-check:
+	tests/hub_release.sh
+
 # Two real executables, one disposable state directory; no --base workaround.
 .PHONY: native-upgrade-check
 native-upgrade-check:

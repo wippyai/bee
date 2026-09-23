@@ -6,8 +6,8 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/stretchr/testify v1.12.1
 	github.com/syncthing/notify v0.0.0-20250528144937-c7027d4f7465
-	github.com/wippyai/go-lua v1.5.22
-	github.com/wippyai/runtime v0.1.14-0.20260923034835-0feb7d4af5b7
+	github.com/wippyai/go-lua v1.5.23
+	github.com/wippyai/runtime v0.1.14-0.20260923141838-e63bfded1f93
 	go.uber.org/zap v1.28.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0

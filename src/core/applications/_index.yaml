@@ -14,6 +14,7 @@ entries:
     contract: bee.protocol:application
     catalog: bee.applications:catalog
     lifecycle: bee.applications:lifecycle
+    decode: bee.protocol:decode
     shutdown: bee.applications:shutdown
     interaction: bee.application:interaction
     interactions: bee.applications:interactions

@@ -12,6 +12,12 @@ function M.accepts_updates(state: State): boolean
         or state.phase == "close_confirming" or state.phase == "close_unresponsive"
 end
 function M.start(now: number): State return {phase = "starting", deadline = now + 3, failure = ""} end
+-- A ready producer that returns without an error result closed its own view.
+-- Only an error result from a ready producer is an unexpected exit.
+function M.exit_event(state: State, failed: boolean): Event
+    if failed and state.phase == "ready" then return "unexpected_exit" end
+    return "exit"
+end
 function M.reduce(state: State, event: Event, now: number, close_grace_ms: integer?): (State, Effect)
     if state.phase == "stopped" then return state, "none" end
     if event == "unexpected_exit" then

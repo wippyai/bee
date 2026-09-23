@@ -224,7 +224,11 @@ func runGateway(mcpLiteral string) int {
 	signal.Notify(stopping, syscall.SIGTERM)
 	defer signal.Stop(stopping)
 	report := object{}
-	client := newHTTPClient(10 * time.Second)
+	// An MCP client waits for the gateway's reply: the gateway serves an
+	// ordinary tool call to completion, and a delivery preflight on a loaded
+	// machine can take longer than any fixed transport cutoff. Long-polling
+	// waits carry their own budget through rpcWithTimeout.
+	client := newHTTPClient(0)
 	initialized := rpc(client, url, authorization, "initialize", object{
 		"protocolVersion": "2025-06-18",
 		"capabilities":    object{},

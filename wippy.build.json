@@ -3,7 +3,7 @@
   "name": "bee",
   "runtime": {
     "repository": "https://github.com/wippyai/runtime.git",
-    "commit": "0feb7d4af5b7a592cb80a18c8d444f705fdd89ad",
+    "commit": "e63bfded1f93d69020a0f78764b9b6a30cffcbf5",
     "go": "1.27.0",
     "tags": [
       "fts5",
@@ -42,14 +42,14 @@
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260923113546-63cfd11c3643",
+      "version": "v0.0.0-20260923144742-598272a17d75",
       "package": "github.com/wippyai/bee/native/ioevents",
       "factory": "Component",
       "private": true
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260923113546-63cfd11c3643",
+      "version": "v0.0.0-20260923144742-598272a17d75",
       "package": "github.com/wippyai/bee/native/launch",
       "factory": "Component",
       "private": true,

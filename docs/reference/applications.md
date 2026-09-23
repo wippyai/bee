@@ -225,7 +225,10 @@ thread association, geometry, mode and preferences. On boot it reopens
 automatic instances in saved order after admission checks; manual instances
 resume from Start. Process and terminal capabilities are recreated. Failed
 restores retain their checkpoint. Closing a live view-owned instance removes
-its resume record after EXIT; workspace shutdown retains it. A revoked thread
+its resume record after EXIT; workspace shutdown retains it. An application
+that returns normally has closed its view. An EXIT with an error result from a
+ready application is an application failure, and the workspace keeps an
+automatic instance's record and display assignment for recovery. A revoked thread
 binding removes the saved record and prevents restoration. Stored JSON never
 contains credentials, grants, PIDs or runtime objects. Native Terminal has no
 cold-resume contract; a surviving session service would be required to rejoin

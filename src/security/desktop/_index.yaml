@@ -103,6 +103,7 @@ entries:
     - process.registry.register
     - process.registry.unregister
     - process.terminate
+    - process.cancel
     - process.host
     - process.context
     - process.security

@@ -256,6 +256,9 @@ ordinary question becomes `busy`.
 Workspace quit gathers opted-in decisions while continuing checkpoint writes
 and reports incomplete cleanup after its bounded deadline. Only a successful
 checkpoint receipt guarantees a save. Ctrl+Q and fatal process or terminal loss
-remain emergency exits without a graceful-close guarantee. Closing a view stops
-its view-owned process; work that must outlive a view belongs to a supervised
-owner service.
+remain emergency exits without a graceful-close guarantee. When the workspace
+host stops or is lost, the broker cancels every application and exits only after
+each has exited; an application still running eight seconds after its cancel is
+terminated. The Terminal application returns only after its PTY child is reaped,
+so a stopped owner leaves no shell behind. Closing a view stops its view-owned
+process; work that must outlive a view belongs to a supervised owner service.

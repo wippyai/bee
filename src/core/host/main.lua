@@ -18,6 +18,11 @@ local inventory = require("inventory")
 local transfer = require("transfer")
 local open_protocol = require("open_protocol")
 local binding_protocol = require("binding_protocol")
+local execution = require("execution")
+
+-- The broker gives its applications 8 s to stop what they own before it
+-- terminates them; its own stop outlasts that.
+local BROKER_STOP_GRACE = "10s"
 
 local function main(owner: string, database_resource: string?)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
@@ -114,6 +119,7 @@ local function main(owner: string, database_resource: string?)
     local ready = false
     local stopping = false
     local fatal: string? = nil
+    local broker_exited = false
     local client_connections = connections.new(owner, broker, workspace_id, connections.assignment_access(
         function(value: unknown) return database.assignments:get(value) end,
         function() return database.assignments:reconcile() end,
@@ -328,6 +334,7 @@ local function main(owner: string, database_resource: string?)
                 local event = selected.value
                 if event.kind == process.event.CANCEL then break end
                 if event.kind == process.event.EXIT and tostring(event.from) == broker then
+                    broker_exited = true
                     fatal = "Workspace broker exited: " .. (decode.exit_error(event.result) or "without completing cleanup"); break
                 end
                 if event.kind == process.event.EXIT and tostring(event.from) == owner then break end
@@ -651,8 +658,9 @@ local function main(owner: string, database_resource: string?)
     if open_timer then open_timer:stop() end
     pending_opens = {}
     database:close()
-    process.terminate(broker)
     process.registry.unregister(host_registry_name)
+    -- A cancelled broker runs its application cleanup before it exits.
+    if not broker_exited then execution.stop({broker}, events, BROKER_STOP_GRACE) end
     for _, subscription in ipairs({requests, open_requests, replies, catalogs, catalog_readers, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, selections, client_answers, appearance_changes, client_appearance, broker_ready, binding_requests, binding_recovered}) do
         process.unlisten(subscription)
     end

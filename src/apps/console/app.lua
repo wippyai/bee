@@ -40,7 +40,9 @@ local function main(value: unknown)
         end
     end
     process.unlisten(closes)
+    -- The application owns its shell: it returns only after the child is reaped.
     terminal:close()
+    done:receive()
     executor:release()
     tty.stop()
 end

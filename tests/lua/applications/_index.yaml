@@ -97,3 +97,12 @@ entries:
   imports:
     test: wippy.test:test
     appearance: bee.application:appearance
+- name: broker_stop_test
+  kind: function.lua
+  source: file://broker_stop_test.lua
+  method: run
+  modules: [process, channel, time, security, exec, uuid]
+  meta: {type: test, suite: bee, timeout: "60s"}
+  imports:
+    test: wippy.test:test
+    appearance: bee.application:appearance

@@ -240,7 +240,7 @@ entries:
 - name: window
   kind: library.lua
   source: file://service/window.lua
-  modules: [process, exec, tty, time, security, funcs]
+  modules: [process, exec, tty, security, funcs]
   imports:
     protocol: bee.placement.native:protocol
     store: bee.placement.native:store

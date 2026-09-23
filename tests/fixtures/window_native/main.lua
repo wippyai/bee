@@ -57,8 +57,9 @@ local function process_group_recorded(attempt_id: string): boolean
     return row.capability == "process_group" and row.required_cleanup == "process_group"
         and captured_identity(attempt_id)
 end
-local function child_scope(): security.Scope
+local function child_scope(extra: string?): security.Scope
     local names = {"bee:placement_store_policy", "bee:placement_exec_policy", "bee:placement_runner_policy", "bee:resource_resolve_policy", "bee.window_native:child_policy"}
+    if extra then names[#names + 1] = extra end
     local policies: {security.Policy} = {}
     for index, name in ipairs(names) do policies[index] = assert(security.policy(name)) end
     return security.new_scope(policies)
@@ -260,6 +261,45 @@ local function run()
             if data.ok == true then race_successes = race_successes + 1 end
         end
     end
+
+    -- A stop committed while executor:terminal() starts the child wins: the
+    -- window either refuses to open or ends without its owner closing it, and
+    -- reconciliation proves the child gone.
+    local startup_attempt = prepare("window-startup-stop-" .. tostring(time.now():unix_nano()))
+    local startup_view = assert(tty.viewport({width = 24, height = 8}))
+    local startup_child = assert(process.with_options({terminal = assert(startup_view:grant())}):with_actor(security.new_actor(OWNER))
+        :with_scope(child_scope("bee.window_native:caller_policy"))
+        :spawn_monitored("bee.window_native:child", "bee:workers", parent, startup_attempt, "startup_stop"))
+    local startup: {[string]: unknown}? = nil
+    local startup_deadline = time.after("15s")
+    while not startup do
+        local selected = channel.select({results:case_receive(), startup_deadline:case_receive()})
+        if not selected.ok or selected.channel == startup_deadline then break end
+        local message = selected.value
+        local data = message:payload():data()
+        if tostring(message:from()) == startup_child and type(data) == "table" and data.phase == "startup_stop" then
+            startup = data :: {[string]: unknown}
+        end
+    end
+    test.not_nil(startup, "startup-stop child reported")
+    test.eq(startup and startup.stop_ok, true, "stop is committed while the window starts: " .. tostring(startup and startup.stop_error))
+    if startup and startup.ok == true then
+        test.eq(startup.stop_seen, true, "an opened window ends from the committed stop")
+        test.eq(startup.finished, true)
+    else
+        test.eq(startup and startup.error, "window stopped during startup")
+    end
+    local startup_settled = false
+    for _ = 1, 50 do
+        local raw = caller():call("bee.placement.native:reconcile", {attempt_id = startup_attempt})
+        local result = type(raw) == "table" and raw :: {[string]: unknown} or nil
+        local attempt = result and type(result.value) == "table" and result.value :: {[string]: unknown} or nil
+        if attempt and attempt.execution_state == "exited" then startup_settled = true; break end
+        time.sleep("100ms")
+    end
+    test.ok(startup_settled, "a stop during startup settles to exited")
+    startup_view:close()
+
     process.unlisten(results)
     test.eq(race_results, 2)
     test.eq(race_successes, 1)

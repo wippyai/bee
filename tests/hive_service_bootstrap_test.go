@@ -79,7 +79,7 @@ func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
 	wantPolicies := []string{
 		"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy",
 		"bee:hive_policy_exposure_policy", "bee:hive_dispatch_policy", "bee:hive_names_policy",
-		"bee:hive_advertise_policy", "bee:hive_execute_policy", "bee.hive.desktop:host_policy",
+		"bee:hive_advertise_policy", "bee:hive_execute_policy", "bee:hive_invite_policy", "bee.hive.desktop:host_policy",
 	}
 	if len(service.Lifecycle.Security.Policies) != len(wantPolicies) {
 		t.Fatalf("Hive supervisor service policy count = %d", len(service.Lifecycle.Security.Policies))
@@ -178,13 +178,11 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		modules := "modules: [process, channel, time, uuid, funcs, logger, registry]"
+		// The startup assertions call security; the production supervisor entry
+		// already imports it, so the manifest is used as shipped.
+		modules := "modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash]"
 		if strings.Count(string(manifest), modules) != 1 {
 			t.Fatal("supervisor module assertion anchor changed")
-		}
-		observedManifest := strings.Replace(string(manifest), modules, "modules: [process, channel, time, uuid, funcs, logger, registry, security]", 1)
-		if err := os.WriteFile(manifestPath, []byte(observedManifest), 0600); err != nil {
-			t.Fatal(err)
 		}
 
 		// Replace only the default service input with the trusted peer selected by

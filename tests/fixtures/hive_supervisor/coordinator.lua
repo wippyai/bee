@@ -19,8 +19,9 @@ local function main(remote: string)
     end
     local events = assert(process.events())
     local function start(): string
-        local pid = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-            :spawn_monitored("bee.hive.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {remote}})))
+        local spawned, spawn_error = process.with_options({}):with_scope(security.new_scope(policies))
+            :spawn_monitored("bee.hive.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {remote}})
+        local pid = tostring(assert(spawned, tostring(spawn_error)))
         local deadline = time.now():add("5s")
         while time.now():before(deadline) do
             if client.supervisor() == pid then return pid end

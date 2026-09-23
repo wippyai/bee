@@ -7,6 +7,8 @@ local logger = require("logger")
 local io = require("io")
 local system = require("system")
 local retained = require("retained")
+local ownership = require("ownership")
+local registry = require("registry")
 local decode = require("decode")
 
 local function main()
@@ -24,10 +26,19 @@ local function main()
             policies[#policies + 1] = policy
         end
         local self = tostring(process.pid())
-        local started, start_error = process.with_options({}):with_context({["bee.retained_owner"] = self})
-            :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self)
-        if not started then error(tostring(start_error)) end
-        supervisor = tostring(started)
+        -- Exactly one composition owns the retained workspace supervisor: its
+        -- workspace host registers bee.workspace.host/<workspace_id>, so a second
+        -- spawn dies with "name already registered". When the host configured a
+        -- desktop bridge, the bridge already composed it and this route only
+        -- reports its readiness.
+        local bridge = registry.get("bee.hive.host:supervisor_service")
+        local desktop_host = bridge ~= nil and bridge.data ~= nil
+        if ownership.spawn_retained(desktop_host) then
+            local started, start_error = process.with_options({}):with_context({["bee.retained_owner"] = self})
+                :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self)
+            if not started then error(tostring(start_error)) end
+            supervisor = tostring(started)
+        end
         local announced = false
         local deadline = time.after("10s")
         while true do

@@ -26,14 +26,7 @@ var _ = mesh.Local
 // runClientRoute is the production client route: ensure the retained owner
 // exists, enroll this process's identity and join the owner's mesh. Ctrl-Q ends
 // only this process.
-func runClientRoute(ctx context.Context, launch app.Launch) error {
-	intent, err := parseClientIntent(launch.Args)
-	if err != nil {
-		return err
-	}
-	if intent.command != nil && !intentCommand(intent).Valid() {
-		return errors.New("invalid Bee command arguments")
-	}
+func runClientRoute(ctx context.Context, launch app.Launch, intent clientIntent) error {
 	return runClientEnsuresOwner(ctx, launch, defaultClientSeams(), joinRequest{Intent: intent})
 }
 

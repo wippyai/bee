@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
 	app "github.com/wippyai/runtime/cmd/app"
@@ -63,7 +64,8 @@ type clientIntent struct {
 // no arguments presents the project desktop; `observe`, `client` and `attach`
 // join a running Bee, optionally pinned to one WORKSPACE DISPLAY pair;
 // `desktops` lists a running Bee's displays; anything else names an
-// application to launch into the desktop.
+// application command to launch into the desktop. A word that cannot name an
+// application command is refused here, before any state is selected.
 func parseClientIntent(args []string) (clientIntent, error) {
 	if len(args) == 0 {
 		return clientIntent{}, nil
@@ -97,6 +99,13 @@ func parseClientIntent(args []string) (clientIntent, error) {
 			intent.refusal = "No running Bee for this project; run bee to start its node"
 		}
 		return intent, nil
+	}
+	if !(hive.DesktopCommand{Name: args[0]}).Valid() {
+		return clientIntent{}, fmt.Errorf("unknown Bee command %q; run bee --help", args[0])
+	}
+	command := hive.DesktopCommand{Name: args[0], Arguments: append([]string{}, args[1:]...)}
+	if !command.Valid() {
+		return clientIntent{}, errors.New("invalid Bee command arguments")
 	}
 	return clientIntent{command: append([]string{}, args...)}, nil
 }

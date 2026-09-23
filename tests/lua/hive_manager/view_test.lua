@@ -5,6 +5,7 @@ local test = require("test")
 local tty = require("tty")
 local model = require("model")
 local view = require("view")
+local frames = require("frames")
 local directory = require("directory")
 local types = require("types")
 local appearance = require("appearance")
@@ -27,6 +28,30 @@ local function populated(source: string): model.State
     model.move(state, 1)
     model.toggle_technical(state)
     return state
+end
+-- The cell under a column caption in the first row containing needle, in
+-- display columns: every multibyte character counts as one cell.
+local function cell(rows: {string}, needle: string, caption: string, size: integer): string?
+    local plain: {string} = {}
+    for index, row in ipairs(rows) do
+        local stripped: string = row:gsub("\27%[[0-9;]*m", "")
+        local narrow: string = stripped:gsub("[\194-\244][\128-\191]*", "?")
+        plain[index] = narrow
+    end
+    local column = 0
+    for _, row in ipairs(plain) do
+        local found: number? = tonumber(row:find(caption, 1, true))
+        if found then column = math.floor(found); break end
+    end
+    if column == 0 then return nil end
+    local target: string = needle:gsub("[\194-\244][\128-\191]*", "?")
+    for _, row in ipairs(plain) do
+        if row:find(target, 1, true) then
+            local value: string = row:sub(column, column + size - 1):gsub("%s+$", "")
+            return value
+        end
+    end
+    return nil
 end
 local function define_tests()
     test.describe("Hive Manager frame", function()
@@ -54,8 +79,10 @@ local function define_tests()
             local text = table.concat(frame.rows, "\n")
             test.is_true(text:find("HIVE MANAGER", 1, true) ~= nil)
             test.is_true(text:find("this unavailable", 1, true) == nil)
-            test.is_true(text:find("this present      Forge (forge)", 1, true) ~= nil)
-            test.is_true(text:find("     present      node-2", 1, true) ~= nil)
+            test.eq(cell(frame.rows, "Forge (forge) · this node", "MEMBERSHIP", 10), "present")
+            test.eq(cell(frame.rows, "Forge (forge) · this node", "BEE SERVICE", 11), "ready")
+            test.eq(cell(frame.rows, "node-2 ", "MEMBERSHIP", 10), "present")
+            test.eq(cell(frame.rows, "node-2 ", "BEE SERVICE", 11), "unavailable")
             test.is_true(text:find("controlled by bee.client.laptop", 1, true) ~= nil)
             test.is_true(text:find("3.0 MiB", 1, true) ~= nil)
             local wide = table.concat(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "\n")
@@ -64,7 +91,7 @@ local function define_tests()
             for _, hit in ipairs(frame.hits) do kinds[hit.kind] = true end
             test.is_true(kinds["node"] and kinds["desktop"] and kinds["control"] and kinds["observe"] and kinds["refresh"] and kinds["technical"])
             test.is_nil(kinds["open"])
-            local found = view.hit(frame.hits, 3, 4)
+            local found = frames.hit(frame.hits, 3, 4)
             test.eq(found and found.kind, "node")
             test.eq(found and found.key, "forge")
         end)
@@ -108,18 +135,34 @@ local function define_tests()
                 {node_id = "display", is_local = false, addr = ""}})
             model.apply_presence(state, "local", types.reply_ok("r", {role = "non-member", cluster_size = 2}))
             model.apply_presence(state, "display", types.reply_error("r", types.fault("UNAVAILABLE", "destination node is not configured")))
-            local text = table.concat(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "\n")
+            local drawn = view.draw(180, 30, appearance.defaults(), state, 0, "").rows
+            local text = table.concat(drawn, "\n")
             test.is_true(text:find("MEMBERSHIP", 1, true) ~= nil)
             test.is_true(text:find("BEE SERVICE", 1, true) ~= nil)
-            test.is_true(text:find("this present      local", 1, true) ~= nil)
-            test.is_true(text:find("     present      display", 1, true) ~= nil)
+            test.eq(cell(drawn, "local · this node", "MEMBERSHIP", 10), "present")
+            test.eq(cell(drawn, "display ", "MEMBERSHIP", 10), "present")
             test.is_nil(text:find("non-member", 1, true))
             model.toggle_technical(state)
             text = table.concat(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "\n")
             test.is_true(text:find("Raft role non-member", 1, true) ~= nil)
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}})
-            text = table.concat(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "\n")
-            test.is_true(text:find("     left         display", 1, true) ~= nil)
+            test.eq(cell(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "display ", "MEMBERSHIP", 10), "left")
+        end)
+        test.it("puts the desktops right under a short node list and names an empty hive's next action", function()
+            local state = model.new({})
+            model.set_supervisor(state, true, "")
+            model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}})
+            local rows: {string} = {}
+            for index, row in ipairs(view.draw(160, 48, appearance.defaults(), state, 0, "").rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            test.is_true(rows[4]:find("local · this node", 1, true) ~= nil)
+            test.eq(rows[5], string.rep("─", 160))
+            test.is_true(rows[6]:find("Node local", 1, true) ~= nil)
+            test.is_true(rows[7]:find("Open the node to list its desktops", 1, true) ~= nil)
+            local empty = model.new({})
+            model.set_supervisor(empty, true, "")
+            local lonely = table.concat(view.draw(100, 20, appearance.defaults(), empty, 0, "").rows, "\n")
+            test.is_true(lonely:find("No nodes reported", 1, true) ~= nil)
+            test.is_true(lonely:find("Nodes appear here when they join this hive · R refresh", 1, true) ~= nil)
         end)
         test.it("offers no control over a controlled desktop", function()
             local state = populated("live")

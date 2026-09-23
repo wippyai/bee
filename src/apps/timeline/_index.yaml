@@ -45,7 +45,6 @@ entries:
 - name: view
   kind: library.lua
   source: file://view.lua
-  modules: [tty]
   imports:
     frame: bee.application:frame
     appearance: bee.application:appearance

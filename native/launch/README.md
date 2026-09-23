@@ -12,6 +12,24 @@ directories, write receipts, inspect databases or acquire locks.
 runs the [hook POST helper](../hookpost/README.md) without project selection,
 state, the client route or the retained owner.
 
+`bee help`, `bee -h` and `bee --help` are planned next: the host prints the
+command grammar and the state this invocation would use, computed from the
+launch alone, and exits 0 without selecting a project or reading state.
+
+Every other ordinary launch is decoded before project selection. `bee start`
+takes no arguments; `bee MODULE:ENTRY` keeps the runtime's own entry; the rest
+is the client grammar (`observe`, `client`, `attach WORKSPACE DISPLAY`,
+`desktops`, or an application command `NAME [ARGUMENTS...]`). A first word that
+cannot name an application command (`hive.DesktopCommand.Valid`: lowercase
+letter first, then lowercase letters, digits, `_` or `-`, at most 40 bytes) and
+malformed route arguments fail planning, so nothing is selected, read or
+started. Whether a well-formed NAME exists depends on the project's admitted
+applications and managed agents; the owner resolves it after the client joins.
+
+`bee version` is not answered by the host: the embedded pack version and the
+pinned runtime commit are not visible to `app.Host`, so the word reaches the
+owner as an application command.
+
 The runtime owns state opening, locking, deployment history, migrations, process
 ownership and application lifecycle. The native host provides the selected
 default state and a read-only environment store with home, cwd, self and safe

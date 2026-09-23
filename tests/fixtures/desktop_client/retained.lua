@@ -83,7 +83,8 @@ local function main()
             if snapshot and table.concat(snapshot.rows, "\n"):find(needle, 1, true) then return end
             time.sleep("10ms")
         end
-        error("Missing retained text: " .. needle)
+        local last = view:snapshot()
+        error("Missing retained text: " .. needle .. "\n" .. (last and table.concat(last.rows, "\n") or "No frame"))
     end
     local function attach(mode: string?, selected_id: string?): (string, tty.Viewport)
         local screen, screen_error = tty.viewport({width = 100, height = 32})

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -39,6 +40,8 @@ type clientSeams struct {
 	// waitEnrolled blocks until the owner has registered the client's node in the
 	// local enrollment, or the context ends.
 	waitEnrolled func(ctx context.Context, state, node string) error
+	// report receives the foreground route line.
+	report io.Writer
 }
 
 // joinRequest is the client's authenticated join into the owner's mesh.
@@ -68,6 +71,15 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	directory := filepath.Join(launch.State, rendezvous.DirectoryName)
 	owned, err := seams.owned(launch.State)
 	if err != nil {
+		return err
+	}
+	// The route line describes routing only; the owner's publication and the
+	// authenticated join still decide whether startup succeeds.
+	route := "Starting Bee…"
+	if owned {
+		route = "Connecting to Hive…"
+	}
+	if _, err := fmt.Fprintln(seams.report, route); err != nil {
 		return err
 	}
 	if !owned {

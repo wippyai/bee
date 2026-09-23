@@ -35,6 +35,7 @@ func defaultClientSeams() clientSeams {
 		waitDescriptor: readDescriptor,
 		join:           joinOwner,
 		waitEnrolled:   waitEnrolled,
+		report:         os.Stdout,
 	}
 }
 

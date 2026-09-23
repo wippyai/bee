@@ -3,11 +3,13 @@
 package launch
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -49,6 +51,7 @@ func (f *fakeOwner) seams(directory string) clientSeams {
 			return nil
 		},
 		waitEnrolled: func(context.Context, string, string) error { return nil },
+		report:       io.Discard,
 	}
 }
 
@@ -152,7 +155,8 @@ func TestClientFailsWhenOwnerExitsBeforePublishing(t *testing.T) {
 		waitDescriptor: func(context.Context, string) (rendezvous.Descriptor, error) {
 			return rendezvous.Descriptor{}, os.ErrNotExist
 		},
-		join: func(context.Context, joinRequest) error { return errors.New("join must not run") },
+		join:   func(context.Context, joinRequest) error { return errors.New("join must not run") },
+		report: io.Discard,
 	}
 	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
 	if err == nil {
@@ -170,5 +174,35 @@ func TestWaitDescriptorTimesOutBoundedly(t *testing.T) {
 		"x", nil, nil)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("wait error = %v, want deadline exceeded", err)
+	}
+}
+
+// The foreground names its route before the owner decides success: a free
+// state starts the owner, an owned state connects to it.
+func TestClientReportsItsRoute(t *testing.T) {
+	for _, route := range []struct {
+		name    string
+		running bool
+		want    string
+	}{
+		{name: "cold", running: false, want: "Starting Bee…\n"},
+		{name: "warm", running: true, want: "Connecting to Hive…\n"},
+	} {
+		t.Run(route.name, func(t *testing.T) {
+			state := t.TempDir()
+			owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+			if route.running {
+				owner.started = 1
+			}
+			var report bytes.Buffer
+			seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+			seams.report = &report
+			if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{}); err != nil {
+				t.Fatal(err)
+			}
+			if report.String() != route.want {
+				t.Fatalf("route report = %q, want %q", report.String(), route.want)
+			}
+		})
 	}
 }

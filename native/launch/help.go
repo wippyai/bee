@@ -20,11 +20,7 @@ func (host *Host) usage(launch app.Launch) string {
 	if launch.Explicit {
 		state = launch.State + " (--state)"
 	} else {
-		root := launch.State
-		if root == "" {
-			root = host.defaultRoot
-		}
-		state = filepath.Join(root, "projects") + string(filepath.Separator) + "<sha256 of the working directory>"
+		state = filepath.Join(launch.State, "projects") + string(filepath.Separator) + "<sha256 of the working directory>"
 	}
 	return strings.Join([]string{
 		"Usage: bee [--state DIR] [COMMAND [ARGUMENTS...]]",

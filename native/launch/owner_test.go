@@ -25,10 +25,7 @@ func ownerLaunch(state string) app.Launch {
 
 func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 	state := t.TempDir()
-	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	plan, err := host.Plan(context.Background(), ownerLaunch(state))
 	if err != nil {
 		t.Fatal(err)
@@ -132,10 +129,7 @@ func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 
 func TestPrepareOwnerIsIdempotentAcrossRuns(t *testing.T) {
 	state := t.TempDir()
-	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	prepare := func() (string, string) {
 		plan, err := host.Plan(context.Background(), ownerLaunch(state))
 		if err != nil {
@@ -172,10 +166,7 @@ func TestPrepareOwnerIsIdempotentAcrossRuns(t *testing.T) {
 
 func TestTrustedClientKeysResolveThroughPeerKeySource(t *testing.T) {
 	state := t.TempDir()
-	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	plan, err := host.Plan(context.Background(), ownerLaunch(state))
 	if err != nil {
 		t.Fatal(err)

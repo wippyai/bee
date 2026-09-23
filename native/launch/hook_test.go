@@ -45,10 +45,7 @@ func TestPlanRunsHookPostBeforeProjectSelectionAndClientRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	missing := filepath.Join(base, "missing")
-	host, err := newHost(state, systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	t.Setenv("BEE_TEST_HOOK_TOKEN", "hook-secret")
 
 	plan, err := host.Plan(context.Background(), app.Launch{
@@ -103,11 +100,8 @@ func TestPlanRunsHookPostBeforeProjectSelectionAndClientRoute(t *testing.T) {
 }
 
 func TestPlanRefusesMalformedHookPost(t *testing.T) {
-	host, err := newHost(filepath.Join(t.TempDir(), "state"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = host.Plan(context.Background(), app.Launch{
+	host := newHost(systemHostResolver())
+	_, err := host.Plan(context.Background(), app.Launch{
 		Op: app.OpRun, Command: desktopCommand, State: t.TempDir(), Dir: filepath.Join(t.TempDir(), "missing"),
 		Args: []string{"hook-post", "127.0.0.1:1", "action-1", "TOKEN"},
 	})

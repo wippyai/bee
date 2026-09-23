@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/wippyai/bee/native/hookpost"
@@ -31,41 +30,25 @@ const (
 // calls Plan before it opens state, while Load registers the one read-only host
 // environment storage needed by native integrations.
 type Host struct {
-	defaultRoot string
 	// ownerState is the state directory selected for a retained owner launch. It
 	// is set during planning so Load can add the owner's enrollment publisher.
 	ownerState string
 	components []boot.Component
 	resolver   hostResolver
-	initErr    error
+	// clientRoute runs an ordinary launch against the retained owner in the
+	// planned state.
+	clientRoute func(context.Context, app.Launch, clientIntent) error
 }
 
-// New creates the launch host for a known default Bee state root. It does not
-// inspect or create the root.
-func New(defaultRoot string) (*Host, error) {
-	return newHost(defaultRoot, systemHostResolver())
-}
-
-func newHost(defaultRoot string, resolver hostResolver) (*Host, error) {
-	if !filepath.IsAbs(defaultRoot) {
-		return nil, errors.New("Bee default state root must be absolute")
-	}
-	return &Host{defaultRoot: filepath.Clean(defaultRoot), resolver: resolver}, nil
+func newHost(resolver hostResolver) *Host {
+	return &Host{resolver: resolver, clientRoute: runClientRoute}
 }
 
 // Component is the native factory named by wippy.build.json. The returned
 // value is also passed to the runtime as app.Host; no second host component is
 // needed for environment registration.
 func Component() *Host {
-	config, err := os.UserConfigDir()
-	if err != nil {
-		return &Host{initErr: errors.New("resolve Bee config directory: " + err.Error())}
-	}
-	host, err := New(filepath.Join(config, "bee"))
-	if err != nil {
-		return &Host{initErr: err}
-	}
-	return host
+	return newHost(systemHostResolver())
 }
 
 func (host *Host) Name() string { return ComponentName }
@@ -75,9 +58,6 @@ func (host *Host) DependsOn() []string { return []string{bootsystem.EnvironmentN
 // Plan selects a project-specific default before the runtime opens state.
 // Explicit --state remains entirely under the caller's control.
 func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error) {
-	if host.initErr != nil {
-		return app.Plan{}, host.initErr
-	}
 	if ctx == nil {
 		return app.Plan{}, errors.New("Bee launch planning requires a context")
 	}
@@ -126,27 +106,23 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		}
 		intent = parsed
 	}
+	// The runtime resolves a launch without --state to the executable's default
+	// root; the project state under that root is this launch's state.
 	plan := app.Plan{}
+	state := launch.State
 	if !launch.Explicit {
-		root := launch.State
-		if root == "" {
-			root = host.defaultRoot
-		}
-		selected, err := DefaultProjectStateDir(root, launch.Dir)
+		selected, err := DefaultProjectStateDir(launch.State, launch.Dir)
 		if err != nil {
 			return app.Plan{}, err
 		}
 		plan.DefaultState = selected
+		state = selected
 	}
 	// The retained owner route keeps the runtime's own application start, so it
 	// prepares the owner's cluster, desktop bridge and enrollment publisher.
 	if owner {
 		plan.Command = ownerCommand
 		plan.Args = []string{}
-		state := launch.State
-		if state == "" {
-			state = plan.DefaultState
-		}
 		host.ownerState = state
 		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
 			return prepareOwner(state)
@@ -157,29 +133,15 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	// ownership, starts the owner when needed, enrolls this process and joins.
 	if client {
 		selected := launch
-		if selected.State == "" {
-			selected.State = plan.DefaultState
-		}
-		selected.State = resolvePlannedState(selected)
+		selected.State = state
 		plan.DefaultState = ""
-		plan.Run = func(ctx context.Context) error { return runClientRoute(ctx, selected, intent) }
+		route := host.clientRoute
+		plan.Run = func(ctx context.Context) error { return route(ctx, selected, intent) }
 	}
 	return plan, nil
 }
 
-// resolvePlannedState makes a host-selected default absolute against the
-// invocation's working directory, matching the runtime's own resolution.
-func resolvePlannedState(launch app.Launch) string {
-	if launch.State == "" || filepath.IsAbs(launch.State) {
-		return launch.State
-	}
-	return filepath.Join(launch.Dir, launch.State)
-}
-
 func (host *Host) Load(ctx context.Context) (context.Context, error) {
-	if host.initErr != nil {
-		return ctx, host.initErr
-	}
 	registry := envapi.GetRegistry(ctx)
 	if registry == nil {
 		return ctx, errors.New("environment registry is unavailable")
@@ -197,9 +159,6 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 // it starts the publisher directly; the cluster it depends on is already up by
 // the time Start runs.
 func (host *Host) Start(ctx context.Context) error {
-	if host.initErr != nil {
-		return host.initErr
-	}
 	if host.ownerState == "" {
 		return nil
 	}

@@ -1,5 +1,5 @@
 """Actual independent desktop owners over native viewport grants."""
-from workspace import database_environment
+from workspace import database_environment, deployment_copy, pack_deployment
 import os
 import re
 from pathlib import Path
@@ -24,6 +24,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copytree(ROOT / "tests/fixtures/desktop_client", project / "src/client_probe")
         if _transfer_failure in ("source", "target"):
             client = project / "src/core/client/main.lua"
@@ -327,14 +328,16 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             shutil.copy2(ROOT / name, project / name)
         lint = subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=project, capture_output=True, text=True)
         assert lint.returncode == 0, lint.stdout + lint.stderr
-        pack = root / "client-desktop.wapp"
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack = root / "client-desktop-deployment"
+        pack_deployment(project, pack)
         for packed in (False, True):
             folder = root / ("pack" if packed else "source")
             folder.mkdir()
             # Optional subsystem stores use .wippy defaults inside this disposable host.
             ((folder if packed else project) / ".wippy").mkdir(exist_ok=True)
-            args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else [])
+            if packed:
+                deployment_copy(pack, folder)
+            args = [str(RUNTIME), "--console", "run"]
             fixture_mode = "transfer" if _transfer_failure == "success" else f"transfer-{_transfer_failure}-save-failure"
             args += [command] + ([fixture_mode] if transfer_probe else (["shared-store"] if shared_store else [])) + [ "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
             try:

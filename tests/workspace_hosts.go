@@ -129,15 +129,17 @@ func run() error {
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
-		return fmt.Errorf("write wippy.lock: %w", err)
+	if err := os.CopyFS(filepath.Join(root, "modules"), os.DirFS("modules")); err != nil {
+		return fmt.Errorf("copy modules: %w", err)
 	}
-	manifest, manifestErr := os.ReadFile("wippy.yaml")
-	if manifestErr != nil {
-		return fmt.Errorf("read wippy.yaml: %w", manifestErr)
-	}
-	if err := os.WriteFile(filepath.Join(root, "wippy.yaml"), manifest, 0600); err != nil {
-		return fmt.Errorf("write wippy.yaml: %w", err)
+	for _, name := range []string{"wippy.lock", ".wippy.yaml", "wippy.yaml"} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), data, 0600); err != nil {
+			return fmt.Errorf("write %s: %w", name, err)
+		}
 	}
 
 	// Step 1: Strict Lua lint
@@ -160,23 +162,20 @@ func run() error {
 
 	// Step 3: Pack execution
 	fmt.Println("=== Step 3: Pack Execution Check ===")
-	packFile := filepath.Join(root, "bee.wapp")
+	// A packed Bee is a source-free deployment: a lock pinning one pack per
+	// physical module beside those packs.
+	packedDir := filepath.Join(root, "packed")
 	packBuildCtx, packBuildCancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer packBuildCancel()
 
-	packOut, err := runCommand(packBuildCtx, root, nil, runtime, "pack", packFile)
+	packOut, err := runCommand(packBuildCtx, ".", []string{"BEE_RUNTIME=" + runtime}, "python3", "tests/pack_deployment.py", root, packedDir)
 	if err != nil {
-		return fmt.Errorf("pack build failed: %w\nOutput:\n%s", err, string(packOut))
+		return fmt.Errorf("deployment build failed: %w\nOutput:\n%s", err, string(packOut))
 	}
-	fmt.Printf("Pack build succeeded: %s\n", packFile)
-
-	packedDir := filepath.Join(root, "packed")
-	if err := os.Mkdir(packedDir, 0700); err != nil {
-		return fmt.Errorf("create packed dir: %w", err)
-	}
+	fmt.Printf("Deployment build succeeded: %s\n", packedDir)
 
 	packEnv := databaseEnvironment(packedDir)
-	if err := runSupervisor(runtime, packedDir, packEnv, "Pack acceptance", budget, "run", packFile, "--verbose", "--host", "bee:workers", "--", command); err != nil {
+	if err := runSupervisor(runtime, packedDir, packEnv, "Pack acceptance", budget, "run", "--verbose", "--host", "bee:workers", "--", command); err != nil {
 		return err
 	}
 

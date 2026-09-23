@@ -58,9 +58,15 @@ local function main()
 
     local token = "bee.application.open/00000000-0000-7000-8000-000000000001"
     assert(process.registry.register(token))
+    -- Runtime opens carry the gateway's approved-trait provenance; this
+    -- regression's stub broker records none of it.
+    local provenance = {thread_id = "delayed-thread", subject = "workspace_hosts.delayed_supervisor",
+        initiating_owner = "workspace_hosts.delayed_supervisor", binding_id = "delayed-binding",
+        access_approval_id = "delayed-approval", access_proposal_digest = string.rep("a", 64),
+        surface_revision = 1, surface_digest = string.rep("b", 64)}
     local request = {version = 1, workspace_id = workspace_id, request_id = "late-open",
         definition_id = "bee.workspace_hosts:delayed", arguments = {}, caller_token = token,
-        origin_view = {view_id = origin_id, instance_id = origin_instance}}
+        origin_view = {view_id = origin_id, instance_id = origin_instance}, provenance = provenance}
     assert(process.send(host, "bee.host.application", request))
     local uncertain = false
     deadline = time.after("35s")

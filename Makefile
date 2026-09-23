@@ -205,11 +205,11 @@ check: identity-native-check installer-check agent-corpus-check docs-agent-check
 	$(MAKE) desktop-check WIPPY="$(abspath $(WIPPY))"
 
 .PHONY: desktop-check fresh-pack-check about-check
-about-check: pack
+about-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/about.py
 fresh-pack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fresh_pack.py
-desktop-check: pack
+desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/connection_ui.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/tui_smoke.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fresh_pack.py
@@ -308,9 +308,9 @@ docs-agent-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/docs_agent.py
 
 .PHONY: headless-check
-headless-check:
+headless-check: native-pack
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/headless.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/headless.go "$(abspath $(WIPPY))"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/headless.go "$(abspath $(WIPPY))" "$(dir $(BEE_BUNDLE_MANIFEST))portable-deployment"
 
 .PHONY: retained-owner-check
 retained-owner-check: native-pack

@@ -25,7 +25,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tui_smoke import Desktop  # noqa: E402
 from workspace import (ROOT, RUNTIME, configure_managed_gateway,
-                       database_environment)  # noqa: E402
+                       database_environment, deployment_copy, pack_deployment)  # noqa: E402
 
 DEFINITION_ID = "bee.app_journey_demo:app"
 TITLE = "App Journey"
@@ -131,13 +131,12 @@ def open_admitted(ui, timeout):
         ui.pump(.5)
 
 
-def deliver(project, folder, pack_file=None):
-    args = [str(RUNTIME), "run"]
-    if pack_file:
-        args.append(str(pack_file))
-    args += ["--verbose", "app-journey-deliver", "--host", "bee:workers",
+def deliver(project, folder, deployment=None):
+    if deployment:
+        deployment_copy(deployment, folder)
+    args = [str(RUNTIME), "run", "--verbose", "app-journey-deliver", "--host", "bee:workers",
             "--set", f"registry.history_path={folder}/registry.db"]
-    result = subprocess.run(args, cwd=folder if pack_file else project, capture_output=True, text=True,
+    result = subprocess.run(args, cwd=folder if deployment else project, capture_output=True, text=True,
                             timeout=300, env=database_environment(
                                 folder, BEE_APP_JOURNEY_WORKSPACE=workspace_identity(folder)))
     output = result.stdout + result.stderr
@@ -399,12 +398,12 @@ def configure_open_agent(project):
     approvals.write_text(yaml.safe_dump(approval_document, sort_keys=False))
 
 
-def run_open_probe(project, directory, packed=False, pack_file=None):
+def run_open_probe(project, directory, packed=False, deployment=None):
     """Call application_open over the real loopback MCP endpoint."""
     Path(directory).mkdir(parents=True, exist_ok=True)
     report_path = (Path(directory) if packed else project) / "evidence/open.json"
     report_path.unlink(missing_ok=True)
-    ui = Desktop(directory, packed=packed, project=project, pack_file=pack_file)
+    ui = Desktop(directory, packed=packed, project=project, deployment=deployment)
     try:
         try:
             ui.wait("No applications open", timeout=COLD_BOOT)
@@ -486,7 +485,7 @@ def run_open_probe(project, directory, packed=False, pack_file=None):
     assert report["removed_instance"] == report["first_instance"] and report["removed_access"] == "denied", report
     assert report["surviving_instance"] == report["second_instance"] and report["surviving_access"] == "active", report
     assert report["direct_sender_refused"] is True, report
-    restarted = Desktop(directory, packed=packed, project=project, pack_file=pack_file)
+    restarted = Desktop(directory, packed=packed, project=project, deployment=deployment)
     try:
         restarted.wait("APP JOURNEY DELIVERED", timeout=COLD_BOOT)
         restarted.wait("Count: 1")
@@ -853,12 +852,8 @@ def exercise():
 
         packed_root = folder / "packed"
         packed_root.mkdir()
-        (packed_root / ".wippy").mkdir()
-        shutil.copy2(project / ".wippy.yaml", packed_root / ".wippy.yaml")
-        pack_file = packed_root / "bee.wapp"
-        subprocess.run([str(RUNTIME), "pack", str(pack_file)], cwd=project,
-                       check=True, timeout=300)
-        packed_initial = Desktop(packed_root, packed=True, project=project, pack_file=pack_file)
+        deployment = pack_deployment(project, folder / "deployment")
+        packed_initial = Desktop(packed_root, packed=True, project=project, deployment=deployment)
         try:
             packed_initial.wait("No applications open", timeout=COLD_BOOT)
             packed_initial.quit()
@@ -866,10 +861,10 @@ def exercise():
             packed_initial.close()
         # Packed entries have a different composed base (embedded assets).
         # Review that exact base rather than replaying a source-base approval.
-        deliver(project, packed_root, pack_file)
+        deliver(project, packed_root, deployment)
         assert_shared_database(packed_root)
         open_packed = run_open_probe(project, packed_root, packed=True,
-                                     pack_file=pack_file)
+                                     deployment=deployment)
         for field in ("unapproved_refused", "agent_exited", "direct_sender_refused"):
             assert open_source[field] == open_packed[field], (field, open_source, open_packed)
     print("App journey guide: the MCP guide example authored as "

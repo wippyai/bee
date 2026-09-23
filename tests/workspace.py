@@ -1,6 +1,9 @@
 """Compose test-only entries outside the production source and registry history."""
 from contextlib import contextmanager
 from pathlib import Path
+import atexit
+import hashlib
+import json
 import os
 import shutil
 import socket
@@ -152,6 +155,60 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         yield folder
 
 
+def pack_deployment(folder, destination, excluded=()):
+    """Assemble a source-free deployment of one composition.
+
+    Bee is several physical modules, so a portable launch is a lock that pins
+    one pack per module, the bee/bee root among them, beside those packs in
+    its vendor directory; build/portable-pack.sh assembles the same layout for
+    the product. Modules that tests/dependencies.yaml adds for test suites
+    never enter the deployment."""
+    folder, destination = Path(folder), Path(destination)
+    version = next(pack["version"] for pack in json.loads((ROOT / "wippy.build.json").read_text())["application"]["packs"]
+                   if pack["module"] == "bee/bee")
+    test_modules = {module["name"] for module in yaml.safe_load((ROOT / "tests/dependencies.yaml").read_text())["modules"]}
+    with tempfile.TemporaryDirectory(prefix="bee-deployment-") as temporary:
+        source = Path(temporary) / "source"
+        for name in ("src", "modules", ".wippy/vendor"):
+            if (folder / name).exists():
+                shutil.copytree(folder / name, source / name, symlinks=True)
+        for name in ("wippy.yaml", ".wippy.yaml", "wippy.lock"):
+            shutil.copy2(folder / name, source / name)
+        # bee/bee is implicit in editable development; --module needs it named.
+        lock = yaml.safe_load((source / "wippy.lock").read_text())
+        selected = [module for module in lock.get("modules", []) if module["name"] not in test_modules]
+        lock["modules"] = [{"name": "bee/bee", "version": version, "root": True}] + lock.get("modules", [])
+        (source / "wippy.lock").write_text(yaml.safe_dump(lock, sort_keys=False))
+        configuration = yaml.safe_load((source / ".wippy.yaml").read_text())
+        configuration["workspace"]["replacements"]["bee/bee"] = "."
+        (source / ".wippy.yaml").write_text(yaml.safe_dump(configuration, sort_keys=False))
+        # A repacked composition replaces its earlier deployment.
+        shutil.rmtree(destination, ignore_errors=True)
+        vendor = destination / ".wippy/vendor/bee"
+        vendor.mkdir(parents=True)
+        (destination / "empty").mkdir()
+        pinned = []
+        for module in [{"name": "bee/bee", "version": version}] + selected:
+            organization, name = module["name"].split("/")
+            assert organization == "bee", f"deployment module {module['name']} is outside Bee"
+            pack = vendor / f"{name}-{module['version']}.wapp"
+            args = [str(RUNTIME), "pack", "--silent", "--module", module["name"], "--exclude-ns", "wippy.test"]
+            for identity in sorted(excluded):
+                args += ["--exclude", identity]
+            subprocess.run(args + [str(pack)], cwd=source, check=True)
+            entry = {"name": module["name"], "version": module["version"],
+                     "hash": "sha256:" + hashlib.sha256(pack.read_bytes()).hexdigest()}
+            if module["name"] == "bee/bee":
+                entry["root"] = True
+            pinned.append(entry)
+    (destination / "wippy.lock").write_text(yaml.safe_dump(
+        {"directories": {"modules": ".wippy", "src": "./empty"}, "modules": pinned}, sort_keys=False))
+    (destination / ".wippy.yaml").write_text(yaml.safe_dump(
+        {"version": "1.0", "registry": {"enable_history": True, "history_type": "sqlite", "history_path": ".wippy/registry.db"},
+         "shutdown": {"timeout": "3s"}}, sort_keys=False))
+    return destination
+
+
 def pack_fixture(folder, destination):
     """Exclude all test entries by metadata so a new suite cannot leak into a pack."""
     excluded = {"bee:test_dependency"}
@@ -161,7 +218,23 @@ def pack_fixture(folder, destination):
             meta = entry.get("meta", {})
             if meta.get("type") in {"test", "test_support"} or meta.get("test_support") is True:
                 excluded.add(f'{document["namespace"]}:{entry["name"]}')
-    args = [str(RUNTIME), "pack", "--exclude-ns", "wippy.test"]
-    for identity in sorted(excluded):
-        args += ["--exclude", identity]
-    subprocess.run(args + [str(destination)], cwd=folder, check=True)
+    return pack_deployment(folder, destination, excluded)
+
+
+_product_deployment = None
+
+
+def product_deployment():
+    """This checkout's development deployment, assembled once per test process."""
+    global _product_deployment
+    if _product_deployment is None:
+        holder = Path(tempfile.mkdtemp(prefix="bee-product-deployment-"))
+        atexit.register(shutil.rmtree, holder, True)
+        _product_deployment = pack_deployment(ROOT, holder / "deployment")
+    return _product_deployment
+
+
+def deployment_copy(deployment, directory):
+    """Place a deployment in the disposable working directory of one launch."""
+    shutil.copytree(deployment, directory, symlinks=True, dirs_exist_ok=True)
+    return Path(directory)

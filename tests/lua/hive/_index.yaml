@@ -11,6 +11,15 @@ entries:
     peers: bee.hive.supervisor:peers
     enrollment: bee.hive.supervisor:enrollment
     types: bee.hive:types
+- name: peer_restart_test
+  kind: function.lua
+  source: file://peer_restart_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    peers: bee.hive.supervisor:peers
+    types: bee.hive:types
 - name: invites_test
   kind: function.lua
   source: file://invites_test.lua

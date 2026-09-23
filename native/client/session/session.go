@@ -24,6 +24,7 @@ import (
 	"github.com/wippyai/runtime/api/pid"
 	"github.com/wippyai/runtime/api/tty"
 	stackpkg "github.com/wippyai/runtime/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 // Selection pins an existing durable display. Empty lets an ordinary local Bee
@@ -37,13 +38,19 @@ type Selection struct{ Workspace, Desktop string }
 const detachTimeout = 200 * time.Millisecond
 
 type Config struct {
+	// Directory holds the owner's rendezvous descriptor.
 	Directory string
-	// EnrollmentDir holds the owner-seeded local enrollment. Empty uses
-	// Directory, where the same-account path keeps both.
+	// EnrollmentDir holds the owner-seeded local enrollment.
 	EnrollmentDir string
-	Selection     Selection
-	Command       *hive.DesktopCommand
-	Mode          hive.DesktopMode
+	// TLS is the owner's mesh credential, shared by its local clients.
+	TLS       internode.ManagerTLSConfig
+	Selection Selection
+	Command   *hive.DesktopCommand
+	Mode      hive.DesktopMode
+}
+
+func (cfg Config) join(node string, private ed25519.PrivateKey) mesh.JoinConfig {
+	return mesh.JoinConfig{Directory: cfg.Directory, EnrollmentDirectory: cfg.EnrollmentDir, Node: node, Key: private, TLS: cfg.TLS}
 }
 
 func selectDesktop(catalog hive.DesktopCatalog, selection Selection) (Selection, error) {
@@ -124,47 +131,15 @@ func attachDesktop(ctx context.Context, client desktopOperations, catalog hive.D
 	return client.Attach(ctx, "session-attach-created", created.Workspace, created.Desktop, mode)
 }
 
-// Join runs until local detach, cancellation or an operation failure. The caller
-// owns the physical files and signal context. Input and mutations are never
-// replayed, and every request still goes through the discovered owner supervisor.
-func Join(ctx context.Context, cfg Config, stdin *os.File, stdout io.Writer) error {
-	if ctx == nil || stdin == nil || stdout == nil || cfg.Directory == "" ||
-		(cfg.Mode != hive.Control && cfg.Mode != hive.Observe) ||
-		((cfg.Selection.Workspace == "") != (cfg.Selection.Desktop == "")) ||
-		(cfg.Command != nil && (!cfg.Command.Valid() || cfg.Mode != hive.Control)) {
-		return errors.New("invalid native client session configuration")
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	// Another ordinary launch may already hold the runtime lock while its
-	// owner is still preparing. Wait for its discovery publication before
-	// entering native authentication; absence is not a reason to start a peer.
-	store, err := rendezvous.New(cfg.Directory)
-	if err != nil {
-		return err
-	}
-	publication, cancelPublication := context.WithTimeout(ctx, 15*time.Second)
-	err = awaitPublication(publication, store.Read)
-	cancelPublication()
-	if err != nil {
-		return fmt.Errorf("wait for owner discovery: %w", err)
-	}
-	transport, closeTransport := cleanupLifetime(ctx)
-	defer closeTransport()
-	return mesh.SameAccount(transport, cfg.Directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
-		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
-		})
-	})
-}
-
 // JoinEnrolled joins an owner whose local enrollment already lists node with the
-// supplied private key, over plaintext loopback. The owner seeded that key, so no
-// TLS credentials are needed. It never starts an owner or opens application
+// supplied private key, over loopback with the owner's mesh credential, and
+// presents the selected desktop until local detach, cancellation or an
+// operation failure. The caller owns the physical files and signal context.
+// Input and mutations are never replayed, and every request still goes
+// through the owner supervisor. It never starts an owner or opens application
 // stores.
 func JoinEnrolled(ctx context.Context, cfg Config, node string, private ed25519.PrivateKey, stdin *os.File, stdout io.Writer) error {
-	if ctx == nil || stdin == nil || stdout == nil || cfg.Directory == "" || node == "" ||
+	if ctx == nil || stdin == nil || stdout == nil || cfg.Directory == "" || cfg.EnrollmentDir == "" || node == "" ||
 		len(private) != ed25519.PrivateKeySize ||
 		(cfg.Mode != hive.Control && cfg.Mode != hive.Observe) ||
 		((cfg.Selection.Workspace == "") != (cfg.Selection.Desktop == "")) ||
@@ -176,11 +151,7 @@ func JoinEnrolled(ctx context.Context, cfg Config, node string, private ed25519.
 	}
 	transport, closeTransport := cleanupLifetime(ctx)
 	defer closeTransport()
-	enrollmentDirectory := cfg.EnrollmentDir
-	if enrollmentDirectory == "" {
-		enrollmentDirectory = cfg.Directory
-	}
-	return mesh.Joined(transport, cfg.Directory, enrollmentDirectory, node, private, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+	return mesh.Joined(transport, cfg.join(node, private), func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
 			pinSupervisor(actor, owner)
 			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
@@ -193,16 +164,12 @@ func JoinEnrolled(ctx context.Context, cfg Config, node string, private ed25519.
 // controller session.
 func ListEnrolled(ctx context.Context, cfg Config, node string, private ed25519.PrivateKey) (hive.DesktopCatalog, error) {
 	var catalog hive.DesktopCatalog
-	if ctx == nil || cfg.Directory == "" || node == "" || len(private) != ed25519.PrivateKeySize {
+	if ctx == nil || cfg.Directory == "" || cfg.EnrollmentDir == "" || node == "" || len(private) != ed25519.PrivateKeySize {
 		return catalog, errors.New("invalid enrolled desktop listing")
 	}
 	bounded, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	enrollmentDirectory := cfg.EnrollmentDir
-	if enrollmentDirectory == "" {
-		enrollmentDirectory = cfg.Directory
-	}
-	err := mesh.Joined(bounded, cfg.Directory, enrollmentDirectory, node, private, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+	err := mesh.Joined(bounded, cfg.join(node, private), func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
 			pinSupervisor(actor, owner)
 			_, result, err := readyDesktop(frame, frame, actor, owner)
@@ -216,6 +183,48 @@ func ListEnrolled(ctx context.Context, cfg Config, node string, private ed25519.
 		return hive.DesktopCatalog{}, err
 	}
 	return catalog, nil
+}
+
+// Operate joins an owner whose local enrollment lists node with this key and
+// runs one Hive join client over the joined actor. It creates no desktop,
+// viewport grant or controller session.
+func Operate(ctx context.Context, cfg Config, node string, private ed25519.PrivateKey, run func(context.Context, *hive.Join, rendezvous.Descriptor) error) error {
+	if ctx == nil || run == nil || cfg.Directory == "" || cfg.EnrollmentDir == "" || node == "" || len(private) != ed25519.PrivateKeySize {
+		return errors.New("invalid enrolled Hive operation")
+	}
+	bounded, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	return mesh.Joined(bounded, cfg.join(node, private), func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
+			pinSupervisor(actor, owner)
+			if err := awaitSupervisor(frame, actor); err != nil {
+				return err
+			}
+			join, err := hive.NewJoin(frame, actor, owner.Node)
+			if err != nil {
+				return err
+			}
+			return run(frame, join, owner)
+		})
+	})
+}
+
+// awaitSupervisor waits until the owner supervisor is addressable.
+func awaitSupervisor(ctx context.Context, actor *mesh.Actor) error {
+	ready, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if _, err := actor.OwnerSupervisor(ready); err == nil {
+			return nil
+		}
+		select {
+		case <-ready.Done():
+			return fmt.Errorf("discover owner supervisor: %w", ready.Err())
+		case <-tick.C:
+		}
+	}
 }
 
 // pinSupervisor addresses the owner's supervisor directly. The descriptor
@@ -323,63 +332,11 @@ func waitCatalog(ctx context.Context, list func(context.Context, string) (hive.D
 	}
 }
 
-// Probe authenticates the owner and reads its catalog without creating a desktop
-// attachment. It is used by an explicit start that loses the runtime lock race.
-// Successful lock contention alone is never reported as an available owner.
-func Probe(ctx context.Context, directory string) error {
-	_, err := readCatalog(ctx, directory, 15*time.Second)
-	return err
-}
-
-// List authenticates the selected Bee and reads its durable desktop identities.
-// It creates no desktop, viewport grant or controller session.
-func List(ctx context.Context, directory string) (hive.DesktopCatalog, error) {
-	return readCatalog(ctx, directory, 60*time.Second)
-}
-
-func readCatalog(ctx context.Context, directory string, timeout time.Duration) (hive.DesktopCatalog, error) {
-	var catalog hive.DesktopCatalog
-	if ctx == nil || directory == "" {
-		return catalog, errors.New("invalid owner probe")
-	}
-	bounded, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	store, err := rendezvous.New(directory)
-	if err != nil {
-		return catalog, err
-	}
-	if err := awaitPublication(bounded, store.Read); err != nil {
-		return catalog, err
-	}
-	err = mesh.SameAccount(bounded, directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
-		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			_, result, err := readyDesktop(frame, frame, actor, owner)
-			if err == nil {
-				catalog = result
-			}
-			return err
-		})
-	})
-	if err != nil {
-		return hive.DesktopCatalog{}, err
-	}
-	return catalog, nil
-}
-
 func readyDesktop(ctx context.Context, operations context.Context, actor *mesh.Actor, owner rendezvous.Descriptor) (*hive.Desktop, hive.DesktopCatalog, error) {
 	ready, cancelReady := context.WithTimeout(operations, 15*time.Second)
 	defer cancelReady()
-	tick := time.NewTicker(50 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		if _, err := actor.OwnerSupervisor(ready); err == nil {
-			break
-		}
-		select {
-		case <-ready.Done():
-			return nil, hive.DesktopCatalog{}, fmt.Errorf("discover owner supervisor: %w", ready.Err())
-		case <-tick.C:
-		}
+	if err := awaitSupervisor(ready, actor); err != nil {
+		return nil, hive.DesktopCatalog{}, err
 	}
 	client, err := hive.NewDesktop(ctx, actor, owner.Node, owner.Execution)
 	if err != nil {
@@ -391,31 +348,6 @@ func readyDesktop(ctx context.Context, operations context.Context, actor *mesh.A
 		return nil, hive.DesktopCatalog{}, err
 	}
 	return client, catalog, nil
-}
-
-// The winner may hold the application lock before publishing discovery. Waiting
-// reads only; it creates no files, enrollments or desktop attachments. A decoded
-// descriptor remains only a hint and is authenticated by SameAccount afterward.
-func awaitPublication(ctx context.Context, read func(context.Context) (rendezvous.Descriptor, error)) error {
-	tick := time.NewTicker(25 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		_, err := read(ctx)
-		if err == nil {
-			return nil
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-tick.C:
-		}
-	}
 }
 
 // Keep native admission alive briefly after foreground cancellation so the

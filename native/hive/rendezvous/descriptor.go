@@ -40,12 +40,18 @@ type Descriptor struct {
 	// supervisor directly. It is a hint: the client still verifies node, host
 	// and identity and the supervisor authenticates the sender.
 	Supervisor string `json:"supervisor,omitempty"`
+	// Join is the owner's invite listener, where a node redeems an invite to
+	// join this node's hive. It is bound on the mesh advertise address with an
+	// automatically selected port.
+	Join string `json:"join,omitempty"`
 }
 
 // Endpoint is the owner identity the live membership record authenticates:
-// the descriptor without the supervisor hint, which membership never carries.
+// the descriptor without the supervisor and join hints, which membership
+// never carries.
 func (d Descriptor) Endpoint() Descriptor {
 	d.Supervisor = ""
+	d.Join = ""
 	return d
 }
 
@@ -70,6 +76,12 @@ func (d Descriptor) validate() error {
 	key, err := base64.RawStdEncoding.DecodeString(d.PublicKey)
 	if err != nil || len(key) != ed25519.PublicKeySize || base64.RawStdEncoding.EncodeToString(key) != d.PublicKey {
 		return ErrDescriptor
+	}
+	if d.Join != "" {
+		address, err := netip.ParseAddrPort(d.Join)
+		if err != nil || address.Port() == 0 || address.Addr().Zone() != "" || !address.Addr().IsGlobalUnicast() && !address.Addr().IsLoopback() {
+			return ErrDescriptor
+		}
 	}
 	if d.Supervisor != "" {
 		address, err := pid.ParsePID(d.Supervisor)
@@ -187,7 +199,7 @@ func Decode(data []byte) (Descriptor, error) {
 			return Descriptor{}, ErrDescriptor
 		}
 		switch name {
-		case "version", "execution", "node", "gossip", "transport", "public_key", "supervisor":
+		case "version", "execution", "node", "gossip", "transport", "public_key", "supervisor", "join":
 		default:
 			return Descriptor{}, ErrDescriptor
 		}
@@ -198,11 +210,13 @@ func Decode(data []byte) (Descriptor, error) {
 		fields[name] = value
 	}
 	last, err := dec.Token()
-	// Six fields are required; the owner adds its supervisor address once the
-	// supervisor has registered.
+	// Six fields are required; the owner adds its join listener once it
+	// listens and its supervisor address once the supervisor has registered.
 	required := 6
-	if fields["supervisor"] != nil {
-		required = 7
+	for _, optional := range []string{"supervisor", "join"} {
+		if fields[optional] != nil {
+			required++
+		}
 	}
 	if err != nil || last != json.Delim('}') || len(fields) != required {
 		return Descriptor{}, ErrDescriptor

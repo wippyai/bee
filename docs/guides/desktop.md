@@ -112,9 +112,10 @@ not recreated at its former instruction.
 - A desktop client currently boots against one workspace. Mixed tabs from
   several workspaces or several owning nodes are not a supported client mode.
 - Local retained desktops and authenticated attachment paths are available.
-  General public Hive enrollment, discovery, remote workspace composition and
-  automatic cross-node desktop reconnect are not exposed as a single desktop
-  workflow.
+  Nodes of one host join one hive with `bee hive invite` and `bee hive join`
+  (see the [Hive module](../../modules/hive/src/README.md)); joins across
+  machines, discovery, remote workspace composition and automatic cross-node
+  desktop reconnect are not exposed as a single desktop workflow.
 - A workspace has one writable host owner. Node loss does not create a writable
   clone or silently move the workspace to another node.
 - Desktop layout has one writer. Multiple displays may observe a desktop, but

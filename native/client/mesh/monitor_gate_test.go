@@ -14,6 +14,7 @@ import (
 	"github.com/wippyai/runtime/api/relay"
 	topapi "github.com/wippyai/runtime/api/topology"
 	stackpkg "github.com/wippyai/runtime/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 	topologysys "github.com/wippyai/runtime/system/topology"
 )
 
@@ -44,7 +45,7 @@ func TestNativeRemoteMonitorMustObserveClientActorExit(t *testing.T) {
 	if err := topology.Register(watcher); err != nil {
 		t.Fatal(err)
 	}
-	err := Local(ctx, LocalConfig{Directory: dir}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
+	err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
 		err := WithActor(ctx, stack, descriptor.Node, func(frame context.Context, actor *Actor) error {
 			if err := topology.Monitor(watcher, actor.PID()); err != nil {
 				return err

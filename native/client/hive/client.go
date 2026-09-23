@@ -64,7 +64,10 @@ type wireCall struct {
 	Input    json.RawMessage `json:"input"`
 	Deadline string          `json:"deadline"`
 }
-type transport interface {
+
+// Transport is a native sender with one inbox: a physical-client actor or an
+// endpoint inside the owner node.
+type Transport interface {
 	OwnerSupervisor(context.Context) (pid.PID, error)
 	Send(context.Context, pid.PID, string, []byte) error
 	Receive(context.Context) (mesh.Message, error)
@@ -75,7 +78,7 @@ type transport interface {
 // A Client pins its first accepted supervisor; owner replacement requires a new
 // Client and requires operation-specific admission again.
 type Client struct {
-	actor      transport
+	actor      Transport
 	owner      string
 	gate       chan struct{}
 	supervisor pid.PID
@@ -84,10 +87,18 @@ type Client struct {
 }
 
 func New(lifetime context.Context, actor *mesh.Actor, ownerNode string) (*Client, error) {
-	if lifetime == nil || lifetime.Done() == nil || actor == nil || !identifier(ownerNode) {
+	if actor == nil {
 		return nil, errors.New("invalid native Hive client")
 	}
-	return &Client{actor: actor, ctx: lifetime, owner: ownerNode, gate: make(chan struct{}, 1)}, nil
+	return NewClient(lifetime, actor, ownerNode)
+}
+
+// NewClient binds a client to any native transport of the owner node.
+func NewClient(lifetime context.Context, transport Transport, ownerNode string) (*Client, error) {
+	if lifetime == nil || lifetime.Done() == nil || transport == nil || !identifier(ownerNode) {
+		return nil, errors.New("invalid native Hive client")
+	}
+	return &Client{actor: transport, ctx: lifetime, owner: ownerNode, gate: make(chan struct{}, 1)}, nil
 }
 
 func live(lifetime <-chan struct{}) bool {

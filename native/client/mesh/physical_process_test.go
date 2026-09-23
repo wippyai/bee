@@ -145,7 +145,7 @@ func TestPhysicalClientSubprocess(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-	err := Local(ctx, LocalConfig{Directory: dir, TLS: internode.ManagerTLSConfig{Enabled: true, CertFile: os.Getenv("BEE_PHYSICAL_TEST_TLS_CERT"), KeyFile: os.Getenv("BEE_PHYSICAL_TEST_TLS_KEY"), CAFile: os.Getenv("BEE_PHYSICAL_TEST_TLS_CA")}}, func(ctx context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+	err := joinFresh(ctx, dir, internode.ManagerTLSConfig{Enabled: true, CertFile: os.Getenv("BEE_PHYSICAL_TEST_TLS_CERT"), KeyFile: os.Getenv("BEE_PHYSICAL_TEST_TLS_KEY"), CAFile: os.Getenv("BEE_PHYSICAL_TEST_TLS_CA")}, func(ctx context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return WithActor(ctx, stack, owner.Node, func(frame context.Context, actor *Actor) error {
 			recipient := actor.PID()
 			if err := os.WriteFile(os.Getenv("BEE_PHYSICAL_TEST_RECIPIENT"), []byte(recipient.String()), 0600); err != nil {

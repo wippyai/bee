@@ -96,6 +96,12 @@ func TestPlanAnswersHelpBeforeProjectSelection(t *testing.T) {
 			"bee MODULE:ENTRY [ARGUMENTS...]",
 			"bee start",
 			"bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT",
+			"bee hive invite",
+			"bee hive invites",
+			"bee hive revoke INVITE_ID",
+			"bee hive join INVITE",
+			"bee hive peers",
+			"bee hive leave NODE",
 			"bee help",
 			"bee update",
 			"bee recover",
@@ -172,6 +178,11 @@ func TestPlanRefusesMalformedRouteBeforeProjectSelection(t *testing.T) {
 		{[]string{"attach"}, "bee attach requires WORKSPACE DISPLAY; bee observe/client takes no application arguments or one WORKSPACE DISPLAY pair"},
 		{[]string{"desktops", "extra"}, "bee desktops takes no arguments"},
 		{[]string{"agent", "line\nfeed"}, "invalid Bee command arguments"},
+		{[]string{"hive"}, "bee hive takes invite, invites, peers, revoke INVITE_ID, join INVITE or leave NODE"},
+		{[]string{"hive", "invite", "now"}, "bee hive invite takes no arguments"},
+		{[]string{"hive", "revoke", "ABC"}, "an invite id is 32 lowercase hexadecimal characters"},
+		{[]string{"hive", "join", "https://example.test"}, "invalid Bee Hive invite"},
+		{[]string{"hive", "leave", "../node"}, "bee hive leave requires a NODE identity"},
 	} {
 		state, missing, untouched := untouchedLaunch(t)
 		host := newHost(systemHostResolver())

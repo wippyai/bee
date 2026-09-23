@@ -20,6 +20,7 @@ import (
 	"github.com/wippyai/runtime/api/security"
 	topapi "github.com/wippyai/runtime/api/topology"
 	stackpkg "github.com/wippyai/runtime/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 func TestNativeActorReceivesOwnerReplyAndRetiresFrame(t *testing.T) {
@@ -27,7 +28,7 @@ func TestNativeActorReceivesOwnerReplyAndRetiresFrame(t *testing.T) {
 	var retained context.Context
 	var previous pid.PID
 	for range 2 {
-		err := Local(ctx, LocalConfig{Directory: dir}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
+		err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
 			err := WithActor(ctx, stack, descriptor.Node, func(frame context.Context, actor *Actor) error {
 				retained = frame
 				actual, ok := runtime.GetFramePID(frame)
@@ -88,7 +89,7 @@ func TestNativeActorReceivesOwnerReplyAndRetiresFrame(t *testing.T) {
 
 func TestActorInboxOverflowCancelsConsumer(t *testing.T) {
 	ctx, dir, _, _, _ := localOwner(t)
-	err := Local(ctx, LocalConfig{Directory: dir}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
+	err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
 		return WithActor(ctx, stack, descriptor.Node, func(frame context.Context, actor *Actor) error {
 			source := pid.PID{Node: descriptor.Node, Host: "fixture", UniqID: "supervisor"}
 			pkg := relay.AcquirePackage()

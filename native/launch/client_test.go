@@ -380,3 +380,57 @@ func TestClientWaitsForAFreshPublicationAfterStartingAnOwner(t *testing.T) {
 		t.Fatalf("publication = %#v, %v; want the fresh descriptor", got, err)
 	}
 }
+
+// Waiting for an owner's publication reads only: a missing descriptor is
+// awaited until the deadline and creates no state, while corruption and
+// permission failures end the wait at once.
+func TestPublicationWaitReadsOnlyAndSurfacesFailures(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "preparing-owner")
+	read := func(ctx context.Context, dir string) (rendezvous.Descriptor, error) {
+		store, err := rendezvous.New(dir)
+		if err != nil {
+			return rendezvous.Descriptor{}, err
+		}
+		return store.Read(ctx)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if _, err := waitDescriptorOrExit(ctx, read, directory, rendezvous.Descriptor{}, nil, nil, nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("unpublished owner wait = %v", err)
+	}
+	if _, err := os.Stat(directory); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the wait created owner state: %v", err)
+	}
+	for _, failure := range []error{rendezvous.ErrDescriptor, os.ErrPermission} {
+		calls := 0
+		_, err := waitDescriptorOrExit(context.Background(), func(context.Context, string) (rendezvous.Descriptor, error) {
+			calls++
+			return rendezvous.Descriptor{}, failure
+		}, directory, rendezvous.Descriptor{}, nil, nil, nil)
+		if !errors.Is(err, failure) || calls != 1 {
+			t.Fatalf("failure %v hidden: %v after %d reads", failure, err, calls)
+		}
+	}
+}
+
+// Hive operations reach the owner through the client route and print only
+// their own output: no route line precedes a pasteable invite.
+func TestHiveOperationsJoinTheOwnerWithoutARouteLine(t *testing.T) {
+	for _, words := range [][]string{{"hive", "invite"}, {"hive", "invites"}, {"hive", "peers"}, {"hive", "revoke", strings.Repeat("a", 32)}} {
+		intent, err := parseClientIntent(words)
+		if err != nil || intent.hive == nil || intent.hive.verb != words[1] {
+			t.Fatalf("%v intent = %+v, %v", words, intent, err)
+		}
+		state := t.TempDir()
+		owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+		seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+		var report bytes.Buffer
+		seams.report = &report
+		if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: intent}); err != nil {
+			t.Fatal(err)
+		}
+		if report.Len() != 0 || owner.joined != 1 || owner.lastJoin.Intent.hive == nil {
+			t.Fatalf("%v: report %q, joined %d", words, report.String(), owner.joined)
+		}
+	}
+}

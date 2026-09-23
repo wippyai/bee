@@ -286,6 +286,19 @@ function M.receive(state: State, actualSenderPID: string, unknownHello: unknown,
 
     local active = state.active[sender_node]
 
+    -- An initial hello from another supervisor of the node supersedes an
+    -- exchange held with its previous one. The runtime derives the sender from
+    -- the actual process on the node's supervisor host, so this is the node's
+    -- current supervisor; the previous one restarted and no longer answers. A
+    -- restarted supervisor can reuse its process id, so a new incarnation on
+    -- the same id supersedes too.
+    if pending and hello.response == nil and (pending.pid ~= actualSenderPID
+        or (pending.peer_incarnation ~= nil and pending.peer_incarnation ~= hello.supervisor_incarnation)) then
+        state.pending[sender_node] = nil
+        state.pending_count = state.pending_count - 1
+        pending = nil
+    end
+
     if pending and hello.challenge == pending.local_challenge then
         return nil, nil, "peer challenge reflects local challenge"
     end

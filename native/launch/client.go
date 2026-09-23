@@ -58,6 +58,9 @@ type clientIntent struct {
 	// refusal is set when the intent acts on a running Bee only; it is the
 	// answer when no owner holds the state, and no owner is started.
 	refusal string
+	// hive is a `bee hive` command. Its output is the command's own; the
+	// route line is not printed.
+	hive *hiveCommand
 }
 
 // parseClientIntent maps the invocation's arguments onto the client grammar:
@@ -71,6 +74,12 @@ func parseClientIntent(args []string) (clientIntent, error) {
 		return clientIntent{}, nil
 	}
 	switch args[0] {
+	case "hive":
+		command, err := parseHive(args)
+		if err != nil {
+			return clientIntent{}, err
+		}
+		return clientIntent{hive: &command}, nil
 	case "desktops":
 		if len(args) != 1 {
 			return clientIntent{}, errors.New("bee desktops takes no arguments")
@@ -146,7 +155,7 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	// The route line describes routing only; the owner's publication and the
 	// authenticated join still decide whether startup succeeds. A join to a
 	// running Bee only names no route.
-	if join.Intent.refusal == "" {
+	if join.Intent.refusal == "" && join.Intent.hive == nil {
 		route := "Starting Bee…"
 		if owned {
 			route = "Connecting to Hive…"

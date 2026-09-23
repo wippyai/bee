@@ -272,3 +272,33 @@ func TestEndpointMatchesTheLiveMembershipCapture(t *testing.T) {
 		t.Fatalf("a moved listener matched the endpoint: %v", err)
 	}
 }
+
+// The owner publishes its invite listener beside its supervisor; the address
+// decodes on every later read, is a literal unicast or loopback endpoint, and
+// is not part of the identity membership authenticates.
+func TestDescriptorJoinListenerAddress(t *testing.T) {
+	published := sample()
+	published.Supervisor = "{forge@bee.hive:supervisor_host|0x1}"
+	published.Join = "127.0.0.1:4410"
+	data, err := json.Marshal(published)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := Decode(data)
+	if err != nil || decoded != published {
+		t.Fatalf("published join address decoded as %#v, %v", decoded, err)
+	}
+	if endpoint := published.Endpoint(); endpoint.Join != "" || endpoint.Supervisor != "" {
+		t.Fatalf("endpoint keeps hints: %#v", endpoint)
+	}
+	for _, bad := range []string{"127.0.0.1:0", "0.0.0.0:4410", "join.example:4410", "[fe80::1%eth0]:4410", "127.0.0.1"} {
+		invalid := published
+		invalid.Join = bad
+		if err := invalid.validate(); err == nil {
+			t.Fatalf("join address %q was accepted", bad)
+		}
+	}
+	if _, err := Decode(bytes.Replace(data, []byte(`"127.0.0.1:4410"`), []byte(`null`), 1)); err == nil {
+		t.Fatal("a null join address was accepted")
+	}
+}

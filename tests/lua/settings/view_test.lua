@@ -42,6 +42,11 @@ local function define_tests()
             local pages = 0
             for _, hit in ipairs(drawn.hits) do if hit.kind == "page" then pages = pages + 1; test.eq(hit.y, 23) end end
             test.eq(pages, 1)
+            for _, pane in ipairs({"theme", "background"}) do
+                for _, row in ipairs(view.draw(80, 24, appearance.defaults(), pane, 0).rows) do
+                    test.is_nil(row:find("…", 1, true))
+                end
+            end
             local about = view.draw(80, 12, appearance.defaults(), "about", 0)
             test.is_true(about.rows[12]:find("Tab switch", 1, true) ~= nil)
         end)

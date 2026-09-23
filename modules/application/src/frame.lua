@@ -68,6 +68,20 @@ function M.put(painter: Painter, x: integer, y: integer, value: string, room: in
     return drawn
 end
 
+-- Draws a decorative value (a pattern, a swatch or a border run) clipped to
+-- room cells with no ellipsis; text a reader needs uses put.
+function M.clip(painter: Painter, x: integer, y: integer, value: string, room: integer, fg: string?, bg: string?): integer
+    if y < 1 or y > painter.height or x < 1 or x > painter.width then return 0 end
+    local size = minimum(room, painter.width - x + 1)
+    if size <= 0 then return 0 end
+    local clipped = tty.text.truncate((value:gsub("[%z\1-\31\127]", " ")), size, "")
+    local drawn = tty.text.width(clipped)
+    if drawn == 0 then return 0 end
+    local theme = painter.theme
+    painter.canvas:put(x, y, appearance.style(fg or theme.text, bg or theme.surface) .. clipped .. RESET, drawn)
+    return drawn
+end
+
 -- Clears row y to the surface, or to bg.
 function M.fill(painter: Painter, y: integer, bg: string?)
     if y < 1 or y > painter.height or painter.width < 1 then return end

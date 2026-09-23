@@ -13,7 +13,7 @@ local function state_label(row: model.Row): string
     return row.state
 end
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "A", verb = "approve"},
-    {key = "D", verb = "deny"}, {key = "W", verb = "withdraw"}, {key = "R", verb = "refresh"}, {key = "T", verb = "details"}})
+    {key = "D", verb = "deny"}, {key = "W", verb = "withdraw"}, {key = "R", verb = "refresh"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string): Frame
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme

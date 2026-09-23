@@ -27,7 +27,7 @@ local function bytes(value: integer?): string
     end
 end
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "Tab", verb = "desktops"},
-    {key = "C", verb = "control"}, {key = "O", verb = "observe"}, {key = "R", verb = "refresh"}, {key = "T", verb = "details"}})
+    {key = "C", verb = "control"}, {key = "O", verb = "observe"}, {key = "R", verb = "refresh"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string): Frame
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme

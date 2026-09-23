@@ -106,26 +106,26 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local selected = id == (pane == "taskbar" and (preferences.taskbar or "labels") or (pane == "theme" and preferences.theme or preferences.background))
         local edge = selected and theme.accent or theme.border
         local inside = grid.card_width - 2
-        frame.put(painter, x, y, "╭" .. string.rep("─", inside) .. "╮", grid.card_width, edge)
+        frame.clip(painter, x, y, "╭" .. string.rep("─", inside) .. "╮", grid.card_width, edge)
         for row = 1, 3 do
-            frame.put(painter, x, y + row, "│" .. string.rep(" ", inside) .. "│", grid.card_width, edge)
+            frame.clip(painter, x, y + row, "│" .. string.rep(" ", inside) .. "│", grid.card_width, edge)
         end
-        frame.put(painter, x, y + 4, "╰" .. string.rep("─", inside) .. "╯", grid.card_width, edge)
+        frame.clip(painter, x, y + 4, "╰" .. string.rep("─", inside) .. "╯", grid.card_width, edge)
         frame.put(painter, x + 1, y, " " .. (selected and "✓ " or "") .. title .. " ", inside, selected and theme.accent or theme.text)
         if pane == "taskbar" then
             frame.put(painter, x + 1, y + 2, index == 1 and " Terminal  Settings " or " >_  S  P ", inside, theme.text)
         elseif pane == "background" then
             for row = 1, 3 do
-                frame.put(painter, x + 1, y + row, appearance.background_row(id, inside, row, 3), inside, theme.pattern, theme.ground)
+                frame.clip(painter, x + 1, y + row, appearance.background_row(id, inside, row, 3), inside, theme.pattern, theme.ground)
             end
         else
             local candidate = themes[index]
-            frame.put(painter, x + 1, y + 1, string.rep(" ", inside), inside, candidate.text, candidate.ground)
-            frame.put(painter, x + 1, y + 2, "  Aa   Bee" .. string.rep(" ", inside), inside, candidate.text, candidate.surface)
+            frame.clip(painter, x + 1, y + 1, string.rep(" ", inside), inside, candidate.text, candidate.ground)
+            frame.clip(painter, x + 1, y + 2, "  Aa   Bee" .. string.rep(" ", inside), inside, candidate.text, candidate.surface)
             local band = maximum(1, inside // 3)
-            frame.put(painter, x + 1, y + 3, string.rep(" ", inside), inside, candidate.text, candidate.accent)
-            frame.put(painter, x + 1 + band, y + 3, string.rep(" ", band), band, candidate.text, candidate.border)
-            frame.put(painter, x + 1 + band * 2, y + 3, string.rep(" ", inside - band * 2), inside - band * 2, candidate.text, candidate.muted)
+            frame.clip(painter, x + 1, y + 3, string.rep(" ", inside), inside, candidate.text, candidate.accent)
+            frame.clip(painter, x + 1 + band, y + 3, string.rep(" ", band), band, candidate.text, candidate.border)
+            frame.clip(painter, x + 1 + band * 2, y + 3, string.rep(" ", inside - band * 2), inside - band * 2, candidate.text, candidate.muted)
         end
         frame.add_hit(painter, "select", index, id, x, y, grid.card_width, 5)
     end

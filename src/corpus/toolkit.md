@@ -84,6 +84,7 @@ type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: strin
 | `frame.new(width: integer, height: integer, preferences: appearance.Preferences) -> Painter` | A painter over a canvas cleared to the theme's surface, with no hits yet. |
 | `frame.rows(painter: Painter) -> {string}` | The painted rows, ready for output:present. |
 | `frame.put(painter: Painter, x: integer, y: integer, value: string, room: integer, fg: string?, bg: string?) -> integer` | Draws value at (x, y) within room cells and returns the drawn width. |
+| `frame.clip(painter: Painter, x: integer, y: integer, value: string, room: integer, fg: string?, bg: string?) -> integer` | Draws a decorative value (a pattern, a swatch or a border run) clipped to room cells with no ellipsis; text a reader needs uses put. |
 | `frame.fill(painter: Painter, y: integer, bg: string?)` | Clears row y to the surface, or to bg. |
 | `frame.line(painter: Painter, y: integer, value: string, fg: string?, bg: string?)` | One content row: one blank cell at each edge, text from column 2. |
 | `frame.rule(painter: Painter, y: integer)` | A full-width separator in the border role. |

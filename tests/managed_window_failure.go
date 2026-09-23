@@ -28,6 +28,7 @@ local appearance = require("appearance")
 local admission = require("admission")
 local registry = require("registry")
 local fs = require("fs")
+local placement_store = require("placement_store")
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
@@ -196,9 +197,12 @@ local function run()
     assert(prepared == ((STAGE == "placement" or STAGE == "generation") and 1 or 0), "incorrect attempt preparation count")
     if STAGE == "placement" or STAGE == "generation" then
         local cleaned = false
+        -- The attempt belongs to the window's launch principal, so its
+        -- cleanup is read through the fixture's own store access.
         for _ = 1, 80 do
-            local status = call("bee.placement.native:status", {attempt_id = attempt_id}).value
-            local attempt = (status :: {[string]: unknown}).attempt :: {[string]: unknown}
+            local status_db = assert(placement_store.open())
+            local attempt = assert(placement_store.attempt(status_db, attempt_id), "prepared placement attempt is missing")
+            status_db:release()
             if attempt.execution_state == "exited" and attempt.cleanup_state == "complete" then
                 assert(attempt.runner == nil, "refused window created a runner")
                 cleaned = true; break
@@ -321,13 +325,14 @@ func run() error {
 		}
 		if name == "test" {
 			entry["source"], entry["method"] = "file://failure.lua", "run"
-			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee.managed_window_fixture:failure_evidence_policy")
+			entry["imports"].(map[string]interface{})["placement_store"] = "bee.placement.native:store"
+			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee:placement_store_policy", "bee.managed_window_fixture:failure_evidence_policy")
 		}
 		kept = append(kept, entry)
 	}
 	index.Entries = append(kept,
 		map[string]interface{}{"name": "failure_evidence", "kind": "fs.directory", "directory": "evidence", "auto_init": true},
-		map[string]interface{}{"name": "failure_evidence_policy", "kind": "security.policy", "policy": map[string]interface{}{"actions": []string{"fs.get", "funcs.call"}, "resources": []string{"bee.managed_window_fixture:failure_evidence", "bee.placement.native:status"}, "effect": "allow"}},
+		map[string]interface{}{"name": "failure_evidence_policy", "kind": "security.policy", "policy": map[string]interface{}{"actions": []string{"fs.get"}, "resources": []string{"bee.managed_window_fixture:failure_evidence"}, "effect": "allow"}},
 	)
 	indexData, err = yaml.Marshal(&index)
 	if err != nil {

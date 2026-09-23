@@ -47,6 +47,17 @@ local function qualified_name(value: unknown, label: string): (string?, string?)
     return name, nil
 end
 
+-- A dependency parameter addresses requirements the way the native linker
+-- does: a canonical ns:name selects that exact requirement, and a bare name
+-- selects every requirement of that name the dependency owns.
+local function parameter_name(value: unknown, label: string): (string?, string?)
+    local name = bounds.id(value)
+    if not name or not (name:match("^[^:%s]+$") or name:match("^[^:%s]+:[^:%s]+$")) then
+        return nil, label .. " must be a requirement name or a qualified identifier"
+    end
+    return name, nil
+end
+
 local function target_path(value: unknown): (string?, string?)
     local path = bounds.line(value, M.MAX_TARGET_PATH_BYTES)
     -- Native linking owns the path language, including selectors and append.
@@ -66,7 +77,7 @@ function M.parameters(value: unknown): ({Parameter}?, string?)
         if not parameter then return nil, "parameters[" .. tostring(index) .. "] must be an object" end
         local unexpected = bounds.fields(parameter, {"name", "value"})
         if unexpected then return nil, "parameters[" .. tostring(index) .. "]: " .. unexpected end
-        local name, name_error = qualified_name(parameter.name, "parameters[" .. tostring(index) .. "].name")
+        local name, name_error = parameter_name(parameter.name, "parameters[" .. tostring(index) .. "].name")
         if not name then return nil, name_error end
         local supplied = parameter.value
         if supplied == nil then return nil, "parameters[" .. tostring(index) .. "].value is required" end
@@ -105,6 +116,7 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
     if not raw_entries then return nil, entries_error end
     local requirements: {Requirement} = {}
     local by_id: {[string]: integer} = {}
+    local by_name: {[string]: {integer}} = {}
     for index, item in ipairs(raw_entries) do
         local entry = bounds.object(item)
         if not entry then return nil, "package entry must be an object" end
@@ -132,14 +144,24 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
             end
             requirements[#requirements + 1] = {id = id, default = data.default, has_default = has_default, targets = targets, has_selected = false}
             by_id[id] = #requirements
+            local bare = id:match(":([^:]+)$")
+            if bare then
+                local owned = by_name[bare] or {}
+                owned[#owned + 1] = #requirements
+                by_name[bare] = owned
+            end
         end
     end
     for _, parameter in ipairs(parameters) do
-        local requirement_index = by_id[parameter.name]
-        if not requirement_index then return nil, "parameter names no requirement " .. parameter.name end
-        local requirement = requirements[requirement_index]
-        requirement.selected = parameter.value
-        requirement.has_selected = true
+        local addressed = by_name[parameter.name]
+        local exact = by_id[parameter.name]
+        if exact then addressed = {exact} end
+        if not addressed then return nil, "parameter names no requirement " .. parameter.name end
+        for _, requirement_index in ipairs(addressed) do
+            local requirement = requirements[requirement_index]
+            requirement.selected = parameter.value
+            requirement.has_selected = true
+        end
     end
     local missing: {string} = {}
     for _, requirement in ipairs(requirements) do

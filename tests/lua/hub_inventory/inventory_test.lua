@@ -32,6 +32,17 @@ local function define_tests()
             test.eq(result.modules[2].entries, 1)
             test.eq(result.roots[2].parameters[1].value, 8080)
         end)
+        test.it("reads a host root whose parameters address requirements by bare name", function()
+            local result, problem = inventory.decode({entries = {
+                {id = "host:dependency_store", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "acme/store", version = "0.1.0", parameters = {{name = "target_db", value = "host:db"}}}},
+            }}, 3)
+            test.is_nil(problem)
+            test.not_nil(result)
+            if not result then return end
+            test.eq(result.roots[1].parameters[1].name, "target_db")
+            test.eq(result.roots[1].parameters[1].value, "host:db")
+        end)
         test.it("does not infer a root or owner from authored metadata", function()
             local result = inventory.decode({entries = {
                 {id = "app.deps:fake", kind = "ns.dependency", registry = {owner = "", root = false},

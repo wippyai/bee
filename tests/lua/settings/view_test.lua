@@ -1,6 +1,7 @@
 local test = require("test")
 local tty = require("tty")
 local view = require("view")
+local frames = require("frames")
 local appearance = require("appearance")
 local function define_tests()
     test.describe("Appearance chooser", function()
@@ -23,12 +24,26 @@ local function define_tests()
                             test.is_true(hit.x >= 1 and hit.y >= 1)
                             test.is_true(hit.x + hit.width - 1 <= width)
                             test.is_true(hit.y + hit.height - 1 <= height)
-                            test.is_true(view.hit(frame.hits, hit.x, hit.y) ~= nil)
+                            test.is_true(frames.hit(frame.hits, hit.x, hit.y) ~= nil)
                         end
-                        test.is_nil(view.hit(frame.hits, width + 1, 1))
+                        test.is_nil(frames.hit(frame.hits, width + 1, 1))
                     end
                 end
             end
+        end)
+        test.it("puts the pager on the action row and status with key hints on the final row", function()
+            local drawn = view.draw(80, 24, appearance.defaults(), "theme", 0)
+            local rows: {string} = {}
+            for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            test.is_true(rows[23]:find("‹ 1–9/16 ›", 1, true) ~= nil)
+            test.is_true(rows[24]:find("Theme: Honey  Background: dots", 1, true) ~= nil)
+            test.is_true(rows[24]:find("Tab switch", 1, true) ~= nil)
+            test.is_true(rows[1]:find("Use node default (D)", 1, true) ~= nil)
+            local pages = 0
+            for _, hit in ipairs(drawn.hits) do if hit.kind == "page" then pages = pages + 1; test.eq(hit.y, 23) end end
+            test.eq(pages, 1)
+            local about = view.draw(80, 12, appearance.defaults(), "about", 0)
+            test.is_true(about.rows[12]:find("Tab switch", 1, true) ~= nil)
         end)
         test.it("allows browsing past the selection and reveals it only on request", function()
             local grid = view.grid(62, 18)

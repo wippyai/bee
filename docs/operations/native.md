@@ -258,8 +258,9 @@ resource catalog or add a file browser to Bee.
 ## GitHub pipeline
 
 `.github/workflows/native.yml` runs full Linux amd64 acceptance for PRs and main.
-Release tags and manual runs build Linux and macOS binaries on amd64 and arm64
-runners and exercise each executable. Linux acceptance disables networking.
+One pack job seals the application packs; release tags and manual runs build
+Linux and macOS binaries from those packs on amd64 and arm64 runners and
+exercise each executable. Linux acceptance disables networking.
 Each target uploads an archive and checksum. Application tags also prepare a
 draft GitHub release, with write permission isolated to that job. The separate
 native-module workflow checks and releases the nested Go module. See the

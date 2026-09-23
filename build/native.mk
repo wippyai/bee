@@ -52,6 +52,13 @@ portable-deployment-check: native-pack
 	tests/portable_deployment.sh "$(abspath $(NATIVE_WIPPY))" "$(dir $(BEE_BUNDLE_MANIFEST))portable-deployment"
 
 standalone: native-pack
+	$(MAKE) standalone-sealed
+
+# Assembles the executable from an already sealed pack set, so every target
+# of one release embeds the same packs the Hub receives.
+.PHONY: standalone-sealed
+standalone-sealed:
+	@test -f "$(BEE_BUNDLE_MANIFEST)" || { echo 'Run make native-pack before assembling Bee.' >&2; exit 1; }
 	$(BUILDER) build "$(BEE_BUNDLE_MANIFEST)" --output "$(BEE_BINARY)"
 
 native-binary-check:

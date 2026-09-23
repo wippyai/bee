@@ -56,6 +56,28 @@ jobs:
         mode: toolchain
         manifest: wippy.build.json
         output: .wippy/bin/bee-wippy
+    # The release's deployment archive holds the sealed packs every release
+    # executable embeds; provenance proves it before any upload.
+    - name: Restore the release deployment
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        mkdir -p release dist/portable-deployment
+        gh release download "$RELEASE_TAG" --dir release \
+          --pattern bee-deployment.tar.gz --pattern bee-deployment.tar.gz.sha256 \
+          --pattern bee-linux-amd64.tar.gz --pattern bee-linux-amd64.tar.gz.sha256
+        (cd release && sha256sum -c bee-deployment.tar.gz.sha256 bee-linux-amd64.tar.gz.sha256)
+        tar -xzf release/bee-deployment.tar.gz -C dist/portable-deployment
+        tar -xzf release/bee-linux-amd64.tar.gz -C release bee.provenance.json
+        python3 - release/bee.provenance.json dist/portable-deployment/wippy.lock <<'PY'
+        import json, re, sys
+        embedded = {pack["module"]: (pack["version"], "sha256:" + pack["sha256"])
+                    for pack in json.load(open(sys.argv[1]))["manifest"]["application"]["packs"]}
+        locked = dict((name, (version, digest)) for name, version, digest in re.findall(
+            r"- name: (\S+)\n\s+version: (\S+)\n\s+hash: (\S+)", open(sys.argv[2]).read()))
+        if embedded != locked:
+            sys.exit(f"release deployment differs from the executable's embedded packs: {embedded} != {locked}")
+        PY
     - name: Validate and publish every Bee module at the release version
       env:
         WIPPY_TOKEN: ${{ secrets.WIPPY_HUB_TOKEN }}

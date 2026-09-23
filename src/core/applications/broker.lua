@@ -8,6 +8,7 @@ local time = require("time")
 local registry = require("registry")
 local ctx = require("ctx")
 local contract = require("contract")
+local bounds = require("bounds")
 local catalog = require("catalog")
 local lifecycle = require("lifecycle")
 local attachment = require("attachment")
@@ -94,6 +95,71 @@ local function main(owner: string, initial_preferences: unknown)
         local reply, call_error = scoped:call(target, request)
         if call_error or not reply then return nil, tostring(call_error or "thread call returned no reply") end
         return reply, nil
+    end
+    -- A broker-launched application runs under its own host-issued principal,
+    -- so it is not a member of the thread its open names. The broker holds the
+    -- owner authority for owner-launched threads and admits the exact
+    -- principal it is about to start, before the app reads or writes the
+    -- thread. A caller cannot select the member: the ID is derived from the
+    -- workspace and the instance the broker itself chose.
+    local function active_principal(reply: unknown, actor_id: string): boolean?
+        if type(reply) ~= "table" then return nil end
+        local visible = reply :: {[string]: unknown}
+        if visible.ok ~= true then
+            local fault = bounds.object(visible.error)
+            local code = fault and bounds.id(fault.code) or nil
+            if code == "DENIED" or code == "NOT_FOUND" then return false end
+            return nil
+        end
+        local value = bounds.object(visible.value)
+        local membership = value and bounds.object(value.membership)
+        if not membership or membership.member_id ~= actor_id then return nil end
+        return membership.active == true
+    end
+    local function admit_principal(thread_id: string, instance_id: string): (boolean, string?, string?)
+        local actor_id = thread_binding.actor(workspace_id, instance_id)
+        if not actor_id then return false, "permission_denied", "Application identity is invalid" end
+        -- Prove the app's own membership through the app's own authority, so
+        -- a reopened or already-bound instance is never joined twice.
+        local member_reply = thread_call(actor_id, "bee.threads.service:get", {thread_id = thread_id})
+        if active_principal(member_reply, actor_id) == true then return true, nil, nil end
+        if member_reply == nil then
+            return false, "permission_denied", "Application thread membership could not be read"
+        end
+        local read, read_error = funcs.new():with_scope(membership_scope):call("bee.threads.service:get", {thread_id = thread_id})
+        if read_error or type(read) ~= "table" then
+            return false, "permission_denied", "Application thread membership could not be read"
+        end
+        local visible = read :: {[string]: unknown}
+        if visible.ok ~= true then
+            local fault = bounds.object(visible.error)
+            local code = fault and bounds.id(fault.code) or "DENIED"
+            local message = fault and fault.message or "the thread is unavailable"
+            return false, code == "NOT_FOUND" and "thread_conflict" or "permission_denied", tostring(message)
+        end
+        local value = bounds.object(visible.value) or {}
+        local head = bounds.object(value.summary)
+        local revision = head and bounds.integer(head.revision) or nil
+        if not revision or revision < 1 then return false, "permission_denied", "the thread head is unavailable" end
+        local joined, join_error = funcs.new():with_scope(membership_scope):call("bee.threads.service:join", {thread_id = thread_id,
+            idempotency_key = "open:" .. instance_id .. ":join", member_id = actor_id, role = "participant", expected_revision = revision})
+        if join_error or type(joined) ~= "table" then
+            return false, "permission_denied", "Application thread membership could not be admitted"
+        end
+        local reply = joined :: {[string]: unknown}
+        if reply.ok == true then return true, nil, nil end
+        local fault = bounds.object(reply.error)
+        local code = fault and bounds.id(fault.code) or nil
+        if code == "CONFLICT" then
+            -- The row may already exist from a reopened or bound instance, or
+            -- the head moved under a concurrent join. Re-prove through the
+            -- app's own authority instead of assuming either outcome.
+            if active_principal(thread_call(actor_id, "bee.threads.service:get", {thread_id = thread_id}), actor_id) == true then
+                return true, nil, nil
+            end
+            return false, "thread_conflict", "Application thread changed while opening"
+        end
+        return false, "permission_denied", tostring(fault and fault.message or "the thread refused the application principal")
     end
     local function facade_call(actor_id: string, target: string, request: unknown)
         local actor, actor_error = security.new_actor(actor_id)
@@ -1426,36 +1492,49 @@ local function main(owner: string, initial_preferences: unknown)
                             local selected_descriptor: contract.Descriptor = descriptor :: contract.Descriptor
                             local view_id = req.restore_view_id ~= "" and req.restore_view_id or uuid.v7()
                             local instance_id = req.restore_instance_id ~= "" and req.restore_instance_id or uuid.v7()
-                            local token = uuid.v7()
-                            local theme = appearance.theme(preferences.theme)
-                            local view, err = tty.viewport({width = 60, height = 16, page = appearance.page(theme, selected_descriptor.role == "terminal")})
-                            if not view then emit(contract.reply(req.request_id, "open", "viewport_failed", tostring(err)), true)
+                            -- The app reads the thread it was launched for as
+                            -- its own principal; admit it before it starts, or
+                            -- refuse the open instead of starting an app that
+                            -- can never reach its thread.
+                            local admitted_member, member_code, member_message = true, nil, nil
+                            if req.thread_id then
+                                admitted_member, member_code, member_message = admit_principal(req.thread_id, instance_id)
+                            end
+                            if not admitted_member then
+                                emit(contract.reply(req.request_id, "open", member_code or "permission_denied",
+                                    member_message or "Application thread membership was not admitted"), true)
                             else
-                                local grant, grant_err = view:grant()
-                                if not grant then view:close(); emit(contract.reply(req.request_id, "open", "grant_failed", tostring(grant_err)), true)
+                                local token = uuid.v7()
+                                local theme = appearance.theme(preferences.theme)
+                                local view, err = tty.viewport({width = 60, height = 16, page = appearance.page(theme, selected_descriptor.role == "terminal")})
+                                if not view then emit(contract.reply(req.request_id, "open", "viewport_failed", tostring(err)), true)
                                 else
-                                    local version = assert(registry.current_version())
-                                    local scope = admitted.scopes[req.definition_id]
-                                    if not scope then error("Admitted application scope is unavailable") end
-                                    local launch: execution.Launch = {definition_id = req.definition_id,
-                                        scope = scope, workspace_pid = owner, workspace_id = workspace_id,
-                                        actor = application_actor(workspace_id, instance_id, req.definition_id,
-                                            selected_descriptor.definition_revision, 1),
-                                        instance_id = instance_id, view_id = view_id, thread_id = req.thread_id,
-                                        execution_generation = 1,
-                                        definition_revision = selected_descriptor.definition_revision,
-                                        registry_revision = version:string(), launch_token = token, resume_schema = selected_descriptor.resume_schema,
-                                        resume_state = req.resume_state, arguments = req.arguments}
-                                    local started = execution.start(grant, launch)
-                                    if not started.pid then view:close(); emit(contract.reply(req.request_id, "open", started.error_code, started.error), true)
+                                    local grant, grant_err = view:grant()
+                                    if not grant then view:close(); emit(contract.reply(req.request_id, "open", "grant_failed", tostring(grant_err)), true)
                                     else
-                                        local instance: Instance = {view_id = view_id, instance_id = instance_id, thread_id = req.thread_id, execution_pid = started.pid, view = view,
-                                            descriptor = selected_descriptor, binding = selected_binding, launch_token = token, observers = {},
-                                            state = lifecycle.start(now()), open_request = req.request_id, opened = false,
-                                            resume_state = req.resume_state, arguments = req.arguments, replacement = nil,
-                                            waiters = {}, attempts = 0, producer_generation = 1}
-                                        instances[view_id] = instance
-                                        if selected_binding.catalog_read then publish_catalog_readers() end
+                                        local version = assert(registry.current_version())
+                                        local scope = admitted.scopes[req.definition_id]
+                                        if not scope then error("Admitted application scope is unavailable") end
+                                        local launch: execution.Launch = {definition_id = req.definition_id,
+                                            scope = scope, workspace_pid = owner, workspace_id = workspace_id,
+                                            actor = application_actor(workspace_id, instance_id, req.definition_id,
+                                                selected_descriptor.definition_revision, 1),
+                                            instance_id = instance_id, view_id = view_id, thread_id = req.thread_id,
+                                            execution_generation = 1,
+                                            definition_revision = selected_descriptor.definition_revision,
+                                            registry_revision = version:string(), launch_token = token, resume_schema = selected_descriptor.resume_schema,
+                                            resume_state = req.resume_state, arguments = req.arguments}
+                                        local started = execution.start(grant, launch)
+                                        if not started.pid then view:close(); emit(contract.reply(req.request_id, "open", started.error_code, started.error), true)
+                                        else
+                                            local instance: Instance = {view_id = view_id, instance_id = instance_id, thread_id = req.thread_id, execution_pid = started.pid, view = view,
+                                                descriptor = selected_descriptor, binding = selected_binding, launch_token = token, observers = {},
+                                                state = lifecycle.start(now()), open_request = req.request_id, opened = false,
+                                                resume_state = req.resume_state, arguments = req.arguments, replacement = nil,
+                                                waiters = {}, attempts = 0, producer_generation = 1}
+                                            instances[view_id] = instance
+                                            if selected_binding.catalog_read then publish_catalog_readers() end
+                                        end
                                     end
                                 end
                             end

@@ -26,12 +26,14 @@ and the manual credential check receive it only as `WIPPY_TOKEN` in their
 request steps. The environment is limited to `main` and `v*` tags; pull-request
 jobs, build assembly and ordinary workflows receive no Hub token.
 
-`BEE_HUB_VISIBILITY` is an optional repository variable whose default is
-`private`. It controls first-time Hub module creation and does not change the
+`BEE_HUB_VISIBILITY` is an optional repository variable; the Hub publication
+workflow defaults it to `public`. It controls first-time Hub module creation and does not change the
 repository's visibility.
 
 Checkout uses `persist-credentials: false`. Release jobs may have only the
-write access needed to create draft releases. Do not add deploy keys, webhooks,
+write access needed to create draft releases; the Hub publication job has
+`contents: write` only because a draft release's assets are visible solely with
+push access, and it passes the GitHub token to its restore step alone. Do not add deploy keys, webhooks,
 repository-wide copies of the Hub token or credentials to artifacts and logs.
 
 After replacing the Hub token, run the **Hub credential check** workflow from

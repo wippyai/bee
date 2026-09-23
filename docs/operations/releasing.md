@@ -2,8 +2,8 @@
 
 Bee launches through its own executable. The embedded application is the
 recoverable deployment source for first install and update. Hub publication
-follows publication of a validated GitHub release; no Hub launch entry point is
-required.
+happens from a tag's validated draft release, before that release is published;
+no Hub launch entry point is required.
 
 | Deliverable | Repository | Tag | Artifact |
 |---|---|---|---|
@@ -75,8 +75,10 @@ assumptions; it is outside this release matrix. Builder has Windows CLI builds.
 After merging, an administrator selects a version and creates its tag on the
 reviewed main commit.
 The workflow verifies ancestry. Tag updates and deletions are blocked. Passing
-checks produce a **draft** GitHub release with checksummed assets. Review the
-assets, dependency notices and release notes before publishing. Module tags
+checks produce a **draft** GitHub release with checksummed assets. Publish the
+Hub modules from it and run the post-publication check (see
+[Release procedure](#release-procedure)), then review the assets, dependency
+notices and release notes before publishing the release. Module tags
 produce an archive containing only the `native/` tree. GitHub also provides its
 standard repository source downloads.
 
@@ -87,6 +89,22 @@ and cannot satisfy the Hub publication gate.
 A manual Bee workflow run accepts a preview version and uploads artifacts.
 
 ## Release procedure
+
+A Bee application release proceeds in this order:
+
+1. An administrator tags the reviewed main commit (`vMAJOR.MINOR.PATCH`).
+2. The `Native Bee` tag workflow runs `make check`, builds every target and
+   creates a **draft** GitHub release carrying `bee-deployment.tar.gz`.
+3. The Hub modules are published from that draft release's deployment: the
+   **Bee Hub publication** workflow for the tag, or `make hub-publish-release
+   TAG=vX` locally (see [Hub publication](#hub-publication)).
+4. The post-publication check installs a real Hub package into that same
+   deployment; both paths run it right after publishing.
+5. The draft release is reviewed and published.
+
+`make check` cannot prove step 4: the release deployment re-resolves every
+locked `bee/*` module from the Hub at the release version, which holds only
+after step 3.
 
 Bee application releases use tags of the form `vMAJOR.MINOR.PATCH` (with an
 optional `-identifier` prerelease suffix). Create the tag on the reviewed main
@@ -219,17 +237,50 @@ pins, and online resolution of a released deployment finds each locked module
 at its locked digest. `make hub-publish-script-check` exercises the script
 against a mocked publisher.
 
-`.github/workflows/hub.yml` runs when an application GitHub release is published.
-It requires a semantic version tag on main, a published release and a successful
-native tag workflow for the same commit. It downloads the release's
-`bee-deployment.tar.gz` and the Linux amd64 archive, verifies both checksums,
-requires the deployment lock to name exactly the packs and hashes the
-executable's `bee.provenance.json` records, then runs `make hub-publish` for
-every Bee module at the tag's version from that deployment. Native-module tags do not trigger it.
-The publication job grants its GitHub token `contents: read` and `actions: read`
-to inspect the release and its completed build run.
-Manual dispatch retries an existing published application release through the
-same checks. Failure stays visible; the workflow never substitutes a mutable label
+### Publishing a release to the Hub
+
+`make hub-publish-release TAG=vX` publishes one GitHub release's modules from
+that release's own deployment archive. `build/hub-release.sh` downloads
+`bee-deployment.tar.gz`, `bee-linux-amd64.tar.gz` and their `.sha256`
+documents with `gh release download` (a draft release requires push access),
+verifies both checksums, extracts the deployment to
+`dist/hub-release/deployment` (`HUB_RELEASE_DIR` selects another directory)
+and requires its lock to name exactly the packs and hashes the executable's
+`bee.provenance.json` records. `HUB_RELEASE_ASSETS` names a directory already
+holding those four assets instead of downloading them. The target then runs
+`make hub-publish` for every Bee module at the tag's version from that
+deployment, then `make hub-release-install-check` against it.
+`make hub-check-release TAG=vX` restores and dry-runs only;
+`make hub-release-script-check` exercises the restore against a mocked GitHub
+CLI.
+
+`make hub-release-install-check BEE_DEPLOYMENT=DIR BEE_VERSION=X` is the
+post-publication check. It refuses a directory without a release lock or a
+lock that pins any `bee/*` module at another version, then launches the Modules
+app on a copy of that deployment and installs a real Hub package through the
+production facade. The installation resolves every locked `bee/*` module from
+the Hub; a failure names each module that is missing from the Hub or whose Hub
+digest differs from the lock. `make check` keeps the Modules scenarios that do
+not depend on the release being published: the fixture Hub flows in source and
+packed launches, the real Hub install into the source workspace, and authored
+publication.
+
+Publication resolves credentials as `wippy publish` does: `WIPPY_TOKEN`, then
+the repository's `.wippy/credentials.yaml`, then the user's `wippy auth login`
+store. An authenticated CLI needs no token variable. The dry run needs no
+credential.
+
+`.github/workflows/hub.yml` runs on manual dispatch with an application tag,
+while its release is still a draft. It requires a semantic version tag on main,
+an existing release for that tag and a successful native tag workflow for the
+same commit, then runs `make hub-release-restore` and `make
+hub-release-publish`: the same restore, publication and post-publication check
+as `make hub-publish-release`, and a failure of any of them fails the workflow.
+Only the restore step receives the GitHub token, which has `contents: write`
+because draft releases are visible only with push access, and `actions: read`
+to inspect the completed build run. Only the publication step receives the Hub
+token. Native-module tags do not trigger it. A retry dispatches the same tag
+again. Failure stays visible; the workflow never substitutes a mutable label
 or increments the version automatically.
 
 Configure `WIPPY_HUB_TOKEN` in the GitHub `hub` environment with permission to
@@ -244,14 +295,13 @@ version without the credential.
 The runtime receives it as `WIPPY_TOKEN` only for publication. Set repository
 variable `BEE_HUB_VISIBILITY` to
 `public` or `private` for first-time module creation; the workflow default is
-public (Bee is MIT), and local `make hub-publish` defaults to private.
-Existing module visibility is preserved. Local publication accepts the equivalent
-`HUB_VISIBILITY` variable and Wippy's normal credential store or token environment.
+public (Bee is MIT), and local `make hub-publish` and `make hub-publish-release`
+default to private; pass `HUB_VISIBILITY=public` to match the workflow.
+Existing module visibility is preserved.
 
-The local dry run needs no publication credential. Actual publication requires
-the configured Hub credential and creates only the selected immutable version.
-Run the dry run before publishing and verify the resulting release artifact
-through the normal update path.
+Actual publication requires a Hub credential and creates only the selected
+immutable version. Run `make hub-check-release` before publishing and verify
+the resulting release artifact through the normal update path.
 
 ## Distribution access
 

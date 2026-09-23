@@ -308,9 +308,9 @@ docs-agent-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/docs_agent.py
 
 .PHONY: headless-check
-headless-check:
+headless-check: native-pack
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/headless.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/headless.go "$(abspath $(WIPPY))"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/headless.go "$(abspath $(WIPPY))" "$(dir $(BEE_BUNDLE_MANIFEST))portable-deployment"
 
 .PHONY: retained-owner-check
 retained-owner-check: native-pack

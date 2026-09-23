@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func boot(runtime, root, pack string) (string, error) {
+func boot(runtime, root string) (string, error) {
 	// Source-free fixtures need the normal local resource directory too.
 	if err := os.MkdirAll(filepath.Join(root, ".wippy"), 0700); err != nil {
 		return "", err
@@ -24,11 +24,7 @@ func boot(runtime, root, pack string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	verbosity := "--verbose"
-	args := []string{"run"}
-	if pack != "" {
-		args = append(args, pack)
-	}
-	args = append(args, verbosity, "--host", "bee:workers", "--", "bee-host")
+	args := []string{"run", verbosity, "--host", "bee:workers", "--", "bee-host"}
 	cmd := exec.CommandContext(ctx, runtime, args...)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "BEE_WORKSPACE_DB="+filepath.Join(root, "workspace.db"), "BEE_THREADS_DB="+filepath.Join(root, "threads.db"))
@@ -108,10 +104,14 @@ func boot(runtime, root, pack string) (string, error) {
 }
 
 func run() error {
-	if len(os.Args) != 2 {
-		return fmt.Errorf("usage: headless RUNTIME")
+	if len(os.Args) != 3 {
+		return fmt.Errorf("usage: headless RUNTIME PORTABLE_DEPLOYMENT")
 	}
 	runtime, err := filepath.Abs(os.Args[1])
+	if err != nil {
+		return err
+	}
+	deployment, err := filepath.EvalSymlinks(os.Args[2])
 	if err != nil {
 		return err
 	}
@@ -123,21 +123,23 @@ func run() error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS("src")); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
+	if err := os.CopyFS(filepath.Join(root, "modules"), os.DirFS("modules")); err != nil {
 		return err
 	}
-	manifest, manifestErr := os.ReadFile("wippy.yaml")
-	if manifestErr != nil {
-		return manifestErr
+	for _, name := range []string{"wippy.lock", ".wippy.yaml", "wippy.yaml"} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(root, name), data, 0600); err != nil {
+			return err
+		}
 	}
-	if err := os.WriteFile(filepath.Join(root, "wippy.yaml"), manifest, 0600); err != nil {
-		return err
-	}
-	first, err := boot(runtime, root, "")
+	first, err := boot(runtime, root)
 	if err != nil {
 		return err
 	}
-	second, err := boot(runtime, root, "")
+	second, err := boot(runtime, root)
 	if err != nil {
 		return err
 	}
@@ -145,21 +147,17 @@ func run() error {
 		return fmt.Errorf("workspace identity changed across headless restart: %q %q", first, second)
 	}
 	fmt.Println("Headless source: piped boot, recovered readiness, stable workspace identity and bounded signal shutdown")
-	pack := filepath.Join(root, "bee.wapp")
-	packing := exec.Command(runtime, "pack", pack)
-	packing.Dir = root
-	if output, err := packing.CombinedOutput(); err != nil {
-		return fmt.Errorf("pack headless source: %w: %s", err, output)
-	}
+	// The packed launch is the product's portable deployment: a lock pinning
+	// one pack per Bee module, copied into a directory with no source.
 	packed := filepath.Join(root, "packed")
-	if err := os.Mkdir(packed, 0700); err != nil {
+	if err := os.CopyFS(packed, os.DirFS(deployment)); err != nil {
 		return err
 	}
-	first, err = boot(runtime, packed, pack)
+	first, err = boot(runtime, packed)
 	if err != nil {
 		return err
 	}
-	second, err = boot(runtime, packed, pack)
+	second, err = boot(runtime, packed)
 	if err != nil {
 		return err
 	}

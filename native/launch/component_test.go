@@ -21,10 +21,7 @@ import (
 func TestPlanUsesProjectDefaultAndLeavesExplicitStateAlone(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "state")
 	project := makeProject(t)
-	host, err := newHost(root, systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 
 	plan, err := host.Plan(context.Background(), app.Launch{Dir: project, State: root})
 	if err != nil {
@@ -48,11 +45,73 @@ func TestPlanUsesProjectDefaultAndLeavesExplicitStateAlone(t *testing.T) {
 	}
 }
 
-func TestPlanMapsOnlyExplicitOwnerStart(t *testing.T) {
-	host, err := newHost(filepath.Join(t.TempDir(), "state"), systemHostResolver())
+// launchThroughRuntime runs the executable's own argument grammar with the
+// production host and returns the launch the client route receives.
+func launchThroughRuntime(t *testing.T, args []string) app.Launch {
+	t.Helper()
+	host := Component()
+	var routed []app.Launch
+	host.clientRoute = func(_ context.Context, launch app.Launch, _ clientIntent) error {
+		routed = append(routed, launch)
+		return nil
+	}
+	executable := app.Executable{Name: desktopCommand, Command: desktopCommand, Host: host}
+	if err := app.Run(context.Background(), executable, args); err != nil {
+		t.Fatal(err)
+	}
+	if len(routed) != 1 {
+		t.Fatalf("client route ran %d times", len(routed))
+	}
+	return routed[0]
+}
+
+// A plain bee run selects this project's state under the config root, and
+// --state replaces that selection.
+func TestRuntimeClientLaunchUsesProjectState(t *testing.T) {
+	scratch := t.TempDir()
+	config := filepath.Join(scratch, "config")
+	t.Setenv("HOME", filepath.Join(scratch, "home"))
+	t.Setenv("XDG_CONFIG_HOME", config)
+	project := makeProject(t)
+	t.Chdir(project)
+
+	want, err := ProjectStateDir(filepath.Join(config, desktopCommand), project)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if got := launchThroughRuntime(t, []string{}).State; got != want {
+		t.Fatalf("client state = %q, want %q", got, want)
+	}
+
+	explicit := filepath.Join(scratch, "chosen")
+	if got := launchThroughRuntime(t, []string{"--state", explicit}).State; got != explicit {
+		t.Fatalf("client state = %q, want explicit %q", got, explicit)
+	}
+}
+
+// A non-explicit owner start carries the runtime's default root in its launch;
+// the owner's enrollment state is the project state the runtime opens.
+func TestPlanOwnerStartUsesProjectState(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "config", desktopCommand)
+	project := makeProject(t)
+	host := newHost(systemHostResolver())
+	plan, err := host.Plan(context.Background(), app.Launch{
+		Op: app.OpRun, Command: desktopCommand, Args: []string{ownerArgument}, State: root, Dir: project,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := ProjectStateDir(root, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.DefaultState != want || host.ownerState != want {
+		t.Fatalf("owner state = %q, runtime state = %q, want %q", host.ownerState, plan.DefaultState, want)
+	}
+}
+
+func TestPlanMapsOnlyExplicitOwnerStart(t *testing.T) {
+	host := newHost(systemHostResolver())
 	project := makeProject(t)
 	plan, err := host.Plan(context.Background(), app.Launch{
 		Dir: project, State: t.TempDir(), Explicit: true, Op: app.OpRun,
@@ -86,10 +145,7 @@ func TestPlanMapsOnlyExplicitOwnerStart(t *testing.T) {
 
 func TestPlanRoutesOrdinaryLaunchThroughClientAndOwnerThroughPrepare(t *testing.T) {
 	state := t.TempDir()
-	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	project := makeProject(t)
 
 	// An ordinary launch is the client route: the host decides ownership, so the
@@ -146,10 +202,7 @@ func TestPlanRoutesOrdinaryLaunchThroughClientAndOwnerThroughPrepare(t *testing.
 
 func TestHostStartAddsEnrollmentPublisherForOwner(t *testing.T) {
 	state := t.TempDir()
-	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	// A client launch starts nothing.
 	if err := host.Start(context.Background()); err != nil {
 		t.Fatal(err)
@@ -207,10 +260,7 @@ func (enrollmentRegistryStub) RegisterDependencyPattern(registry.DependencyPatte
 }
 
 func TestHostIsOneBootComponentAndHost(t *testing.T) {
-	host, err := newHost(filepath.Join(t.TempDir(), "state"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	var _ boot.Component = host
 	var _ app.Host = host
 	if host.Name() != ComponentName {
@@ -234,10 +284,7 @@ func TestHostRegistersReadOnlyEnvironment(t *testing.T) {
 		getwd:      func() (string, error) { return filepath.Join(root, "work"), nil },
 		executable: func() (string, error) { return filepath.Join(root, "bin", "bee"), nil },
 	}
-	host, err := newHost(filepath.Join(root, "state"), resolver)
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(resolver)
 	ctx, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
 	if err != nil {
 		t.Fatal(err)

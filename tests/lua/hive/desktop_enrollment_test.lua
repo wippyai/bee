@@ -62,10 +62,15 @@ local function define_tests()
             test.eq(state.client_count, 1)
         end)
 
-        test.it("derives the enrolled set from the configured peers the boot set does not own", function()
-            local enrolled = enrollment.enrolled({forge = true}, {forge = true, ["client-1"] = true})
-            test.is_true(enrolled["client-1"] == true)
-            test.is_nil(enrolled.forge)
+        test.it("derives the local clients from the configured nodes the boot set does not own", function()
+            local decoded = enrollment.decode({nodes = {"forge", "client-1", "client-2"}, peers = {"hive-1"}})
+            if not decoded then error("expected a decoded enrollment") end
+            local configured = {forge = true, ["client-1"] = true, ["hive-1"] = true}
+            local clients = enrollment.set(decoded.nodes, {forge = true}, configured)
+            test.is_true(clients["client-1"] == true)
+            test.is_nil(clients.forge, "a boot peer took the local client role")
+            test.is_nil(clients["client-2"], "an unconfigured node was presented as admitted")
+            test.is_nil(clients["hive-1"], "a Hive peer reached the desktop bridge")
         end)
     end)
 end

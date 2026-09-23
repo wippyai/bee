@@ -74,24 +74,35 @@ local function define_tests()
             test.eq(over_err, "enrolled nodes exceed " .. tostring(peers.CAP_MAX_NODES))
         end)
 
-        test.it("decodes a host-selected enrollment list through shared bounds", function()
+        test.it("decodes a host-selected enrollment of local clients and peers through shared bounds", function()
             -- The host writes one typed entry; the supervisor only reads it.
-            local decoded, decode_err = enrollment.decode({nodes = {"client-1", "client-2"}})
+            local decoded, decode_err = enrollment.decode({nodes = {"client-1", "client-2"}, peers = {"hive-1"}})
             test.is_nil(decode_err)
             if not decoded then error("expected a decoded enrollment") end
             test.eq(#decoded.nodes, 2)
+            test.eq(#decoded.peers, 1)
+            local desired = enrollment.desired(decoded)
+            test.eq(#desired, 3)
+            test.eq(desired[3], "hive-1")
 
-            -- Shape is exact: unknown fields and non-dense lists are refused.
-            local _, unknown = enrollment.decode({nodes = {"client-1"}, extra = true})
+            -- Shape is exact: unknown fields, missing lists and non-dense lists are refused.
+            local _, unknown = enrollment.decode({nodes = {"client-1"}, peers = {}, extra = true})
             test.eq(unknown, "unknown field extra")
-            local _, sparse = enrollment.decode({nodes = {[2] = "client-1"}})
+            local _, missing = enrollment.decode({nodes = {"client-1"}})
+            test.eq(missing, "peers: expected a list")
+            local _, sparse = enrollment.decode({nodes = {[2] = "client-1"}, peers = {}})
             test.is_true(sparse ~= nil)
-            local _, not_list = enrollment.decode({nodes = "client-1"})
+            local _, not_list = enrollment.decode({nodes = "client-1", peers = {}})
             test.is_true(not_list ~= nil)
-            -- An empty list is a valid, closed enrollment.
-            local empty, empty_err = enrollment.decode({nodes = {}})
+            -- A node holds one role: a local client is never also a Hive peer.
+            local _, both = enrollment.decode({nodes = {"client-1"}, peers = {"client-1"}})
+            test.eq(both, "peers[1] repeats a node")
+            -- Empty lists are a valid, closed enrollment.
+            local empty, empty_err = enrollment.decode({nodes = {}, peers = {}})
             test.is_nil(empty_err)
+            if not empty then error("expected an empty enrollment") end
             test.eq(#empty.nodes, 0)
+            test.eq(#empty.peers, 0)
         end)
 
         test.it("diffs desired, boot and configured sets without touching boot nodes", function()

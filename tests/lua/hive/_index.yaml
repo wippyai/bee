@@ -11,6 +11,14 @@ entries:
     peers: bee.hive.supervisor:peers
     enrollment: bee.hive.supervisor:enrollment
     types: bee.hive:types
+- name: invites_test
+  kind: function.lua
+  source: file://invites_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    invites: bee.hive.supervisor:invites
 - name: probe_exposure_policy
   kind: security.policy
   meta: {type: test_support}

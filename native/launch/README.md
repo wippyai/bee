@@ -5,7 +5,10 @@ non-explicit launch opens state, it selects:
 
     <Bee config directory>/bee/projects/<sha256(canonical working directory)>
 
-An explicit --state is preserved unchanged. Planning does not create
+The runtime resolves a launch without --state to `<config directory>/bee` and
+marks it not explicit; the host selects the project state under that root, and
+the client route, the owner it starts and a plain `bee start` all use it. An
+explicit --state is preserved unchanged. Planning does not create
 directories, write receipts, inspect databases or acquire locks.
 
 `bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT` is planned first: it

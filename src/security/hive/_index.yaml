@@ -187,3 +187,17 @@ entries:
     - bee.hive.supervisor:admit_policy
     - bee.hive.supervisor:advertise
     effect: allow
+- name: hive_invite_policy
+  kind: security.policy
+  meta:
+    comment: Selected by the host for its Hive supervisor to mint, list, revoke and redeem invites and to report its peers; without it every invite operation is refused
+  policy:
+    actions:
+    - hive.invite
+    resources:
+    - bee.hive.join:invite
+    - bee.hive.join:invites
+    - bee.hive.join:revoke
+    - bee.hive.join:peers
+    - bee.hive.join:redeem
+    effect: allow

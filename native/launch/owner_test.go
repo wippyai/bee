@@ -25,10 +25,7 @@ func ownerLaunch(state string) app.Launch {
 
 func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 	state := t.TempDir()
-	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	plan, err := host.Plan(context.Background(), ownerLaunch(state))
 	if err != nil {
 		t.Fatal(err)
@@ -132,10 +129,7 @@ func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 
 func TestPrepareOwnerIsIdempotentAcrossRuns(t *testing.T) {
 	state := t.TempDir()
-	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	prepare := func() (string, string) {
 		plan, err := host.Plan(context.Background(), ownerLaunch(state))
 		if err != nil {
@@ -172,10 +166,7 @@ func TestPrepareOwnerIsIdempotentAcrossRuns(t *testing.T) {
 
 func TestTrustedClientKeysResolveThroughPeerKeySource(t *testing.T) {
 	state := t.TempDir()
-	host, err := newHost(filepath.Join(state, "default"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	plan, err := host.Plan(context.Background(), ownerLaunch(state))
 	if err != nil {
 		t.Fatal(err)
@@ -208,6 +199,22 @@ func TestTrustedClientKeysResolveThroughPeerKeySource(t *testing.T) {
 	got, found := peerKey("client-1")
 	if !found || !public.Equal(got) {
 		t.Fatalf("peer_key_source did not resolve an enrolled key: %v %v", found, got)
+	}
+	// A pinned Hive peer resolves through the same source.
+	peer, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	peers := ownerPeersDirectory(state)
+	if err := os.MkdirAll(peers, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(peers, "bee-owner-peer.pub"), []byte(base64.RawStdEncoding.EncodeToString(peer)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, found = peerKey("bee-owner-peer")
+	if !found || !peer.Equal(got) {
+		t.Fatalf("peer_key_source did not resolve a pinned peer: %v %v", found, got)
 	}
 	_ = netip.Addr{}
 }

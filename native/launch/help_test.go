@@ -68,10 +68,7 @@ func captureStdout(t *testing.T, fn func() error) (string, error) {
 func TestPlanAnswersHelpBeforeProjectSelection(t *testing.T) {
 	for _, word := range []string{"help", "-h", "--help"} {
 		state, missing, untouched := untouchedLaunch(t)
-		host, err := newHost(state, systemHostResolver())
-		if err != nil {
-			t.Fatal(err)
-		}
+		host := newHost(systemHostResolver())
 		plan, err := host.Plan(context.Background(), app.Launch{
 			Op: app.OpRun, Command: desktopCommand, State: state, Dir: missing, Args: []string{word},
 		})
@@ -117,10 +114,7 @@ func TestPlanAnswersHelpBeforeProjectSelection(t *testing.T) {
 // An explicit --state names the state the help describes.
 func TestHelpNamesExplicitState(t *testing.T) {
 	state, missing, untouched := untouchedLaunch(t)
-	host, err := newHost(filepath.Join(filepath.Dir(state), "default"), systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := newHost(systemHostResolver())
 	plan, err := host.Plan(context.Background(), app.Launch{
 		Op: app.OpRun, Command: desktopCommand, State: state, Dir: missing, Args: []string{"--help"}, Explicit: true,
 	})
@@ -139,11 +133,8 @@ func TestHelpNamesExplicitState(t *testing.T) {
 
 func TestPlanRefusesHelpWithArguments(t *testing.T) {
 	state, missing, untouched := untouchedLaunch(t)
-	host, err := newHost(state, systemHostResolver())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = host.Plan(context.Background(), app.Launch{
+	host := newHost(systemHostResolver())
+	_, err := host.Plan(context.Background(), app.Launch{
 		Op: app.OpRun, Command: desktopCommand, State: state, Dir: missing, Args: []string{"help", "agent"},
 	})
 	if err == nil || err.Error() != "bee help takes no arguments" {
@@ -157,11 +148,8 @@ func TestPlanRefusesHelpWithArguments(t *testing.T) {
 func TestPlanRefusesMalformedCommandBeforeProjectSelection(t *testing.T) {
 	for _, word := range []string{"-x", "--nope", "--version", "Agent", "terminal;id", strings.Repeat("x", 41)} {
 		state, missing, untouched := untouchedLaunch(t)
-		host, err := newHost(state, systemHostResolver())
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = host.Plan(context.Background(), app.Launch{
+		host := newHost(systemHostResolver())
+		_, err := host.Plan(context.Background(), app.Launch{
 			Op: app.OpRun, Command: desktopCommand, State: state, Dir: missing, Args: []string{word},
 		})
 		want := "unknown Bee command " + `"` + word + `"; run bee --help`
@@ -186,11 +174,8 @@ func TestPlanRefusesMalformedRouteBeforeProjectSelection(t *testing.T) {
 		{[]string{"agent", "line\nfeed"}, "invalid Bee command arguments"},
 	} {
 		state, missing, untouched := untouchedLaunch(t)
-		host, err := newHost(state, systemHostResolver())
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = host.Plan(context.Background(), app.Launch{
+		host := newHost(systemHostResolver())
+		_, err := host.Plan(context.Background(), app.Launch{
 			Op: app.OpRun, Command: desktopCommand, State: state, Dir: missing, Args: case_.args,
 		})
 		if err == nil || err.Error() != case_.want {

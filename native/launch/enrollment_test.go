@@ -27,21 +27,28 @@ import (
 type recordingRegistry struct {
 	applied   int
 	lastNodes []string
+	lastPeers []string
 }
 
 func (r *recordingRegistry) Apply(_ context.Context, changes registry.ChangeSet) (registry.Version, error) {
 	r.applied++
-	r.lastNodes = r.lastNodes[:0]
+	r.lastNodes, r.lastPeers = nil, nil
 	for _, operation := range changes {
 		raw, _ := operation.Entry.Data.Data().(map[string]any)
-		nodes, _ := raw["nodes"].([]any)
-		for _, node := range nodes {
-			if name, ok := node.(string); ok {
-				r.lastNodes = append(r.lastNodes, name)
+		for field, into := range map[string]*[]string{"nodes": &r.lastNodes, "peers": &r.lastPeers} {
+			list, present := raw[field].([]any)
+			if !present {
+				return nil, errors.New("enrollment entry lacks " + field)
+			}
+			for _, node := range list {
+				if name, ok := node.(string); ok {
+					*into = append(*into, name)
+				}
 			}
 		}
 	}
 	sort.Strings(r.lastNodes)
+	sort.Strings(r.lastPeers)
 	return nil, nil
 }
 
@@ -77,7 +84,7 @@ func TestEnrollmentPublisherAppliesAddedAndRetiredNodes(t *testing.T) {
 	writeClientKey(t, trusted, "client-b")
 
 	reg := &recordingRegistry{}
-	changes, err := enrollmentChangeSet(trusted)
+	changes, err := enrollmentChangeSet(state)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +112,7 @@ func TestEnrollmentPublisherAppliesAddedAndRetiredNodes(t *testing.T) {
 	if err := os.Remove(filepath.Join(trusted, "client-b.pub")); err != nil {
 		t.Fatal(err)
 	}
-	changes, err = enrollmentChangeSet(trusted)
+	changes, err = enrollmentChangeSet(state)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +139,7 @@ func TestEnrollmentPublisherIgnoresMalformedTrustedFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(trusted, "notes.txt"), []byte("ignore\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	changes, err := enrollmentChangeSet(trusted)
+	changes, err := enrollmentChangeSet(state)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +231,7 @@ func TestOwnerComponentsIncludeEnrollmentPublisher(t *testing.T) {
 func TestEnrollmentPublisherHandlesMissingDirectory(t *testing.T) {
 	state := t.TempDir()
 	prepareOwnerState(t, state)
-	changes, err := enrollmentChangeSet(ownerTrustedDirectory(state))
+	changes, err := enrollmentChangeSet(state)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,5 +400,33 @@ func TestEnrollmentPublisherRetiresDepartedClients(t *testing.T) {
 	key, ok := local.Resolve(context.Background(), execution, "client-live")
 	if !ok || !key.Equal(liveKey) {
 		t.Fatal("the live client lost its enrollment")
+	}
+}
+
+// A Hive peer is pinned durably in the peers directory: the entry names it
+// under peers, never as a local client, and the liveness sweep that retires
+// departed clients leaves it in place.
+func TestEnrollmentPublisherPublishesPinnedPeers(t *testing.T) {
+	state := t.TempDir()
+	prepareOwnerState(t, state)
+	writeClientKey(t, ownerPeersDirectory(state), "bee-owner-peer")
+	_, release := holdClient(t, state, "client-live")
+	defer release()
+	if err := retireDepartedClients(context.Background(), ownerTrustedDirectory(state)); err != nil {
+		t.Fatal(err)
+	}
+	changes, err := enrollmentChangeSet(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := &recordingRegistry{}
+	if _, err := reg.Apply(context.Background(), changes); err != nil {
+		t.Fatal(err)
+	}
+	if len(reg.lastNodes) != 1 || reg.lastNodes[0] != "client-live" {
+		t.Fatalf("published local clients = %v", reg.lastNodes)
+	}
+	if len(reg.lastPeers) != 1 || reg.lastPeers[0] != "bee-owner-peer" {
+		t.Fatalf("published peers = %v", reg.lastPeers)
 	}
 }

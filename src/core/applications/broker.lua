@@ -101,7 +101,9 @@ local function main(owner: string, initial_preferences: unknown)
     -- owner authority for owner-launched threads and admits the exact
     -- principal it is about to start, before the app reads or writes the
     -- thread. A caller cannot select the member: the ID is derived from the
-    -- workspace and the instance the broker itself chose.
+    -- workspace and the instance the broker itself chose. A named thread that
+    -- does not exist yet admits nothing: the application creates it on first
+    -- use and owns it from birth.
     local function active_principal(reply: unknown, actor_id: string): boolean?
         if type(reply) ~= "table" then return nil end
         local visible = reply :: {[string]: unknown}
@@ -134,8 +136,9 @@ local function main(owner: string, initial_preferences: unknown)
         if visible.ok ~= true then
             local fault = bounds.object(visible.error)
             local code = fault and bounds.id(fault.code) or "DENIED"
+            if code == "NOT_FOUND" then return true, nil, nil end
             local message = fault and fault.message or "the thread is unavailable"
-            return false, code == "NOT_FOUND" and "thread_conflict" or "permission_denied", tostring(message)
+            return false, "permission_denied", tostring(message)
         end
         local value = bounds.object(visible.value) or {}
         local head = bounds.object(value.summary)
@@ -150,6 +153,11 @@ local function main(owner: string, initial_preferences: unknown)
         if reply.ok == true then return true, nil, nil end
         local fault = bounds.object(reply.error)
         local code = fault and bounds.id(fault.code) or nil
+        if code == "NOT_FOUND" then
+            -- The thread vanished after the read above; the application did
+            -- not create it, so starting it now would strand the launch.
+            return false, "thread_conflict", "Application thread disappeared while opening"
+        end
         if code == "CONFLICT" then
             -- The row may already exist from a reopened or bound instance, or
             -- the head moved under a concurrent join. Re-prove through the

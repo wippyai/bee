@@ -90,6 +90,43 @@ local function define_tests()
             test.eq(member.role, "participant")
             test.is_true(member.active == true)
         end)
+        test.it("opens a window that names a thread created later", function()
+            local missing = "open-missing-launch-thread"
+            local owner = tostring(process.pid())
+            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
+                ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee:broker_policy")),
+                assert(security.policy("bee:core_spawn_boundary"))}))
+                :spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())
+            if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
+            local broker = tostring(broker_pid)
+            assert(catalogs:receive():from() == broker)
+
+            local request_id = "open-missing-request"
+            assert(process.send(broker, "bee.app.request", {version = 1, request_id = request_id, op = "open",
+                workspace_id = WORKSPACE, thread_id = missing, definition_id = DEFINITION, arguments = {}}))
+            local opened: {[string]: unknown}? = nil
+            local deadline = time.after("30s")
+            while not opened do
+                local received = channel.select({replies:case_receive(), deadline:case_receive()})
+                assert(received.ok and received.channel == replies, "open reply timed out")
+                local message = received.value
+                if tostring(message:from()) == broker then
+                    local data: unknown = message:payload():data()
+                    if type(data) == "table" and (data :: {[string]: unknown}).request_id == request_id
+                        and (data :: {[string]: unknown}).op == "open" then opened = data :: {[string]: unknown} end
+                end
+            end
+            assert(opened.error_code == "", "window that names a missing thread did not become ready: " .. tostring(opened.error))
+            local instance_id = assert(opened.instance_id) :: string
+
+            local ok, fault = pcall(as_application, instance_id, "bee.threads.service:get", {thread_id = missing})
+            if ok then error("broker fabricated membership for a missing thread") end
+            if not tostring(fault):find("NOT_FOUND", 1, true) then
+                error("missing thread refusal changed: " .. tostring(fault))
+            end
+        end)
     end)
 end
 return test.run_cases(define_tests)

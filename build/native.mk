@@ -95,6 +95,14 @@ check: hub-publish-script-check
 hub-publish-script-check:
 	tests/hub_publish.sh
 
+# Post-publication check: a real Hub package installs into the published
+# release deployment, which resolves every locked bee/* module from the Hub.
+# It holds only once that release's packs are published, so `make check` never
+# runs it; hub-publish-release does, right after publication.
+.PHONY: hub-release-install-check
+hub-release-install-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_release_install.py "$(if $(BEE_DEPLOYMENT),$(abspath $(BEE_DEPLOYMENT)))" "$(BEE_VERSION)"
+
 # Two real executables, one disposable state directory; no --base workaround.
 .PHONY: native-upgrade-check
 native-upgrade-check:

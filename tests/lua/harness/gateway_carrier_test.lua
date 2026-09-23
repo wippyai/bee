@@ -458,6 +458,36 @@ local function define_tests()
             expect_detail(details, "lost under generation 1; no takeover", true)
             no_token_in(details)
         end)
+        -- Placement evidence the runner records on its own schedule.
+        local function await_evidence(attempt_id: string, kind: string)
+            for _ = 1, 200 do
+                local names = evidence_kinds(attempt_id)
+                if has(names, kind) then return end
+                time.sleep("50ms")
+            end
+            local _, details = evidence_kinds(attempt_id)
+            error("evidence " .. kind .. " never recorded: " .. table.concat(details, " | "))
+        end
+        test.it("records a carrier lost after its child exited, whichever the runner observes first", function()
+            local thread_id = thread()
+            local attempt_id = fresh("attempt")
+            local launch = request(thread_id, attempt_id, {})
+            local pid = spawn_carrier(launch, "open", nil, "attempt_started")
+            -- The child ends on its own while the carrier holds, so the runner
+            -- has observed its exit before the carrier is terminated.
+            await_presented(attempt_id, 1, 3)
+            await_evidence(attempt_id, "child.exited")
+            assert(process.terminate(pid), "terminate carrier")
+            await_carrier(pid, "terminated carrier")
+            await_evidence(attempt_id, "carrier.lost")
+            local resumed = run_carrier(launch, "resume", nil)
+            if not resumed.value then error("resumed carrier failed: " .. tostring(resumed.error)) end
+            test.eq((resumed.value.settlement :: Object).outcome, "succeeded")
+            test.eq(report(thread_id, attempt_id).read, 200)
+            local names, details = evidence_kinds(attempt_id)
+            expect_evidence(names, details, "carrier.replaced", true)
+            no_token_in(details)
+        end)
         test.it("keeps the child's token across a takeover and ignores the old carrier's delayed exit", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")

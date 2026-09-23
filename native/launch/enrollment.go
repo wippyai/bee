@@ -29,8 +29,8 @@ import (
 const (
 	// enrollmentEntry is the host-owned registry entry the Hive supervisor
 	// reconciles (src/hive/supervisor/enrollment.lua). The owner rewrites it
-	// from its trusted directory, so a local client node is admitted exactly
-	// while its public key file exists.
+	// from its trusted and peers directories, so a local client or Hive peer is
+	// admitted exactly while its public key file exists.
 	enrollmentEntry = "bee.hive.supervisor:enrollment_nodes"
 	// enrollmentEntryKind must match the entry's declared kind, so the update is
 	// a same-kind replacement the registry accepts.
@@ -38,27 +38,34 @@ const (
 )
 
 // enrollmentChangeSet builds the one-entry update that publishes the enrolled
-// local client nodes of the trusted directory.
-func enrollmentChangeSet(trusted string) (registry.ChangeSet, error) {
-	keys, err := trustedKeys(trusted)
+// local client nodes of the trusted directory and the pinned Hive peers.
+func enrollmentChangeSet(state string) (registry.ChangeSet, error) {
+	clients, err := trustedKeys(ownerTrustedDirectory(state))
 	if err != nil {
 		return nil, err
 	}
-	return enrollmentChange(keys), nil
+	peers, err := trustedKeys(ownerPeersDirectory(state))
+	if err != nil {
+		return nil, err
+	}
+	return enrollmentChange(clients, peers), nil
 }
 
 // enrollmentChange follows the runtime's own host-entry write path
 // (cmd/internal/entries/loader.go ApplyToRegistry -> Registry.Apply with an
 // EntryUpdate operation); only validated keys are named.
-func enrollmentChange(keys []trustedKey) registry.ChangeSet {
-	nodes := make([]any, 0, len(keys))
-	for _, key := range keys {
-		nodes = append(nodes, key.node)
+func enrollmentChange(clients, peers []trustedKey) registry.ChangeSet {
+	names := func(keys []trustedKey) []any {
+		result := make([]any, 0, len(keys))
+		for _, key := range keys {
+			result = append(result, key.node)
+		}
+		return result
 	}
 	entry := registry.Entry{
 		ID:   registry.ParseID(enrollmentEntry),
 		Kind: enrollmentEntryKind,
-		Data: payload.New(map[string]any{"nodes": nodes}),
+		Data: payload.New(map[string]any{"nodes": names(clients), "peers": names(peers)}),
 		Meta: attrs.NewBagFrom(map[string]any{"type": "bee.hive.supervisor_enrollment"}),
 	}
 	return registry.ChangeSet{{Kind: registry.EntryUpdate, Entry: entry}}
@@ -96,8 +103,8 @@ type trustedKey struct {
 	key  ed25519.PublicKey
 }
 
-// trustedKeys lists the enrolled client nodes of the trusted directory in node
-// order, validating each key before it is admitted.
+// trustedKeys lists the nodes of one key directory in node order, validating
+// each key before it is admitted.
 func trustedKeys(trusted string) ([]trustedKey, error) {
 	entries, err := os.ReadDir(trusted)
 	if err != nil {
@@ -266,7 +273,11 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 	if err != nil {
 		return err
 	}
-	if _, err := reg.Apply(ctx, enrollmentChange(keys)); err != nil {
+	peers, err := trustedKeys(ownerPeersDirectory(p.state))
+	if err != nil {
+		return err
+	}
+	if _, err := reg.Apply(ctx, enrollmentChange(keys, peers)); err != nil {
 		return err
 	}
 	if err := p.seedEnrollment(ctx, enrollment, keys); err != nil {

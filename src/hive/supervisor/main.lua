@@ -11,6 +11,10 @@ local types = require("types")
 local bounds = require("bounds")
 local peers = require("peers")
 local enrollment = require("enrollment")
+local invites = require("invites")
+local security = require("security")
+local crypto = require("crypto")
+local hash = require("hash")
 local registration = require("registration")
 local registry = require("registry")
 local admission = require("admission")
@@ -72,6 +76,11 @@ local function main(configuration: unknown)
     -- client nodes the host names in its own registry entry.
     local boot: {[string]: boolean} = {}
     for _, configured in ipairs(nodes) do boot[configured] = true end
+    -- The host enrollment names two roles: local clients of this owner and
+    -- peers of this node's hive. Both are configured; only peers are discovered.
+    local local_clients: {[string]: boolean} = {}
+    local hive_peers: {[string]: boolean} = {}
+    local invitations = invites.new()
     local started = time.now()
     local function elapsed(): integer return math.floor(time.now():sub(started):milliseconds()) end
     local log = logger:named("bee.hive.supervisor")
@@ -170,7 +179,7 @@ local function main(configuration: unknown)
             log:warn("Hive enrollment refused", {cause = tostring(decode_error):sub(1, 256)})
             return
         end
-        local enroll, retire = enrollment.diff(desired.nodes, boot, enrollment.configured_view(state))
+        local enroll, retire = enrollment.diff(enrollment.desired(desired), boot, enrollment.configured_view(state))
         for _, selected in ipairs(retire) do
             local retired, retire_error = peers.retire(state, selected)
             if not retired and retire_error then log:warn("Hive enrollment retire refused", {node = selected, cause = retire_error}) end
@@ -179,10 +188,16 @@ local function main(configuration: unknown)
             local enrolled, enroll_error = peers.enroll(state, selected)
             if not enrolled and enroll_error then log:warn("Hive enrollment refused", {node = selected, cause = enroll_error}) end
         end
-        if desktop then desktop_owner.enroll(desktop, enrollment.enrolled(boot, enrollment.configured_view(state)), now_ms) end
+        local configured = enrollment.configured_view(state)
+        local_clients = enrollment.set(desired.nodes, boot, configured)
+        hive_peers = enrollment.set(desired.peers, boot, configured)
+        if desktop then desktop_owner.enroll(desktop, local_clients, now_ms) end
     end
     local function discover(now_ms: integer)
-        for _, remote in ipairs(nodes) do
+        local remotes: {string} = {}
+        for _, remote in ipairs(nodes) do remotes[#remotes + 1] = remote end
+        for remote in pairs(hive_peers) do remotes[#remotes + 1] = remote end
+        for _, remote in ipairs(remotes) do
             local candidate = process.registry.lookup(types.SUPERVISOR_NAME .. "/" .. remote)
             if candidate then
                 local active = peers.current(state, remote)
@@ -196,9 +211,80 @@ local function main(configuration: unknown)
             end
         end
     end
+    local function session(remote: string): string
+        if peers.current(state, remote) then return "established" end
+        if peers.pending(state, remote) then return "pending" end
+        return "none"
+    end
+    -- join answers the invite operations of service bee.hive.join. An enrolled
+    -- local client mints, lists and revokes invites and reads the peer view;
+    -- only the owner's native join listener redeems. The host policy gates every
+    -- operation, and invites live only in this execution: after a restart an
+    -- earlier invite is unknown and refused.
+    local function join(sender: string, call: types.Call, now_ms: integer)
+        local sender_node, sender_host = types.pid_parts(sender)
+        local operation = call.target.operation_ref
+        if not operation or call.owner_ref.node_id ~= node or call.owner_ref.resource_ref then
+            failed(sender, call.request_id, "DENIED", "invite operations are served only by their own node"); return
+        end
+        local input, input_error = invites.decode(operation, call.input)
+        if not input then failed(sender, call.request_id, "INVALID_ARGUMENT", input_error or "invalid invite input"); return end
+        if operation == invites.REDEEM then
+            if native_node == "" or sender_node ~= native_node or sender_host ~= invites.JOIN_HOST then
+                failed(sender, call.request_id, "DENIED", "only the native join listener redeems invites"); return
+            end
+        else
+            if sender_host == desktop_protocol.CLIENT_HOST and sender_node and not local_clients[sender_node] then reconcile_enrollment(now_ms) end
+            if sender_host ~= desktop_protocol.CLIENT_HOST or not sender_node or not local_clients[sender_node] then
+                failed(sender, call.request_id, "DENIED", "invite operations require an enrolled local client"); return
+            end
+        end
+        if not security.can(invites.ACTION, operation) then
+            failed(sender, call.request_id, "DENIED", "the host did not grant invite operations"); return
+        end
+        if operation == invites.INVITE then
+            local id, id_error = crypto.random.string(32, "0123456789abcdef")
+            local secret, secret_error = crypto.random.string(64, "0123456789abcdef")
+            local digest = secret and hash.sha256(secret) or nil
+            if not id or id_error or not secret or secret_error or not digest then
+                failed(sender, call.request_id, "INTERNAL", "invite secret unavailable"); return
+            end
+            local expires_at = time.now():add(tostring(invites.LIFETIME_MS) .. "ms"):utc():format(FORMAT)
+            local minted, mint_error = invites.mint(invitations, id, digest, now_ms, expires_at)
+            if not minted then failed(sender, call.request_id, "LIMIT_EXCEEDED", mint_error or "invite refused"); return end
+            send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {invite_id = minted.invite_id, secret = secret, expires_at = minted.expires_at}))
+        elseif operation == invites.LIST then
+            send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {invites = invites.list(invitations, now_ms)}))
+        elseif operation == invites.REVOKE and input.invite_id then
+            local revoked, code, message = invites.revoke(invitations, input.invite_id, now_ms)
+            if not revoked then failed(sender, call.request_id, code or "INVALID_STATE", message or "invite not revoked"); return end
+            send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, revoked))
+        elseif operation == invites.PEERS then
+            local listed: {{node_id: string, session: string}} = {}
+            local remotes: {string} = {}
+            for _, remote in ipairs(nodes) do remotes[#remotes + 1] = remote end
+            for remote in pairs(hive_peers) do remotes[#remotes + 1] = remote end
+            table.sort(remotes)
+            for _, remote in ipairs(remotes) do listed[#listed + 1] = {node_id = remote, session = session(remote)} end
+            send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {node_id = node, peers = listed}))
+        elseif operation == invites.REDEEM and input.invite_id and input.secret and input.node_id then
+            if input.node_id == node then failed(sender, call.request_id, "DENIED", "a node cannot join its own hive"); return end
+            if peers.is_configured(state, input.node_id) then failed(sender, call.request_id, "CONFLICT", "node is already a peer"); return end
+            local digest = hash.sha256(input.secret)
+            if not digest then failed(sender, call.request_id, "INTERNAL", "invite digest unavailable"); return end
+            local redeemed, code, message = invites.redeem(invitations, input.invite_id, digest, input.node_id, now_ms)
+            if not redeemed then failed(sender, call.request_id, code or "DENIED", message or "invite refused"); return end
+            send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {invite_id = redeemed.invite_id, node_id = input.node_id}))
+        end
+    end
     local function admit(message: process.Message)
         if desktop and desktop_owner.client_host(message) and not desktop_owner.handles(desktop, message) then
             reconcile_enrollment(elapsed())
+        end
+        local join_call = types.decode_call(message:payload():data())
+        if join_call and join_call.owner_ref.service_id == invites.SERVICE then
+            join(tostring(message:from()), join_call, elapsed())
+            return
         end
         if desktop and desktop_owner.handles(desktop, message) then
             desktop_owner.request(desktop, message, elapsed())

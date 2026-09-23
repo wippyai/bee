@@ -26,9 +26,13 @@ const (
 	// directory holding the membership secret, the internode identity and the
 	// client enrollment material.
 	ownerDirectoryName = "hive"
-	// trustedDirectoryName holds the public keys of enrolled local client nodes.
-	// internode.peer_key_source reads exactly this directory.
+	// trustedDirectoryName holds the public keys of enrolled local client nodes,
+	// each kept only while its client holds the liveness lock beside it.
 	trustedDirectoryName = "trusted"
+	// peersDirectoryName holds the pinned identity keys of this node's Hive
+	// peers. A pin stays until the peer is retired. internode.peer_key_source
+	// reads this directory and the trusted one.
+	peersDirectoryName = "peers"
 	membershipSecretName = "membership.secret"
 	internodeKeyName     = "internode.key"
 )
@@ -84,8 +88,15 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 	}
 	node := ownerNodeName(state)
 
+	peersPath := ownerPeersDirectory(state)
+	if err := privatefile.EnsurePrivateDir(peersPath); err != nil {
+		return nil, nil, err
+	}
 	peerSource := clusterapi.PeerKeySource(func(nodeID string) (ed25519.PublicKey, bool) {
-		return resolveTrustedKey(trustedPath, nodeID)
+		if key, ok := resolveTrustedKey(trustedPath, nodeID); ok {
+			return key, true
+		}
+		return resolveTrustedKey(peersPath, nodeID)
 	})
 	cluster := map[string]any{
 		"enabled":                             true,
@@ -182,6 +193,10 @@ func ownerTrustedDirectory(state string) string {
 	return filepath.Join(ownerDirectory(state), trustedDirectoryName)
 }
 
+func ownerPeersDirectory(state string) string {
+	return filepath.Join(ownerDirectory(state), peersDirectoryName)
+}
+
 // ownerNodeName derives a stable mesh node name from the exact state directory,
 // so two projects on one machine never share a node identity.
 func ownerNodeName(state string) string {
@@ -259,9 +274,9 @@ func decodeIdentity(encoded string) (ed25519.PrivateKey, error) {
 	}
 }
 
-// resolveTrustedKey reads one enrolled client public key from the trusted
-// directory. The filename is the node id; the content is base64. A missing or
-// malformed file refuses the node.
+// resolveTrustedKey reads one public key from a key directory (trusted clients
+// or pinned peers). The filename is the node id; the content is base64. A
+// missing or malformed file refuses the node.
 func resolveTrustedKey(trustedPath, nodeID string) (ed25519.PublicKey, bool) {
 	if !validTrustedName(nodeID) {
 		return nil, false

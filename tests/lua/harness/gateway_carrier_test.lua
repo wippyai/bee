@@ -737,10 +737,15 @@ local function define_tests()
         test.it("releases a waiting child when the gateway drains", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            local pid = spawn_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_WAIT = "6000"}), "open", nil, "attempt_started")
-            time.sleep("900ms")
-            call("bee.gateway.binding:drain", {deadline_ms = 8000})
+            -- The carrier holds before it records the attempt start, so the
+            -- child reads the thread and waits on a cursor the start record
+            -- then moves past: its first wait is ready, and the wait it
+            -- starts from the new head is the one the drain releases.
+            local pid = spawn_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_WAIT = "6000"}), "open", nil, "placement_started")
+            await_presented(attempt_id, 1, 4)
             continue_carrier(pid)
+            await_presented(attempt_id, 1, 5)
+            call("bee.gateway.binding:drain", {deadline_ms = 8000})
             local outcome = await_carrier(pid, "draining carrier")
             open_gateway()
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end

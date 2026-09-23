@@ -232,6 +232,9 @@ def exercise_real_facade(project, packed, pack):
     are written only to Desktop's disposable local registry. Opening a plan or
     its confirmation screen must leave local inventory unchanged.
     """
+    # Bee's own physical modules are installed packages of the launched
+    # composition; a deployment also pins its bee/bee root.
+    baseline = yaml.safe_load(((pack if packed else project) / "wippy.lock").read_text())["modules"]
     with tempfile.TemporaryDirectory(prefix="bee-modules-real-hub-") as directory:
         ui = Desktop(directory, packed=packed, project=project, deployment=pack,
                      apps=("bee.modules:app",))
@@ -262,7 +265,8 @@ def exercise_real_facade(project, packed, pack):
             ui.key(b"\x7f\x7f\x7f\r")
             ui.wait("Keyword: all")
             search_test()
-            click("wippy/test")
+            # The catalog row, not the header that names the current selection.
+            click("wippy/test  ·")
             ui.wait("Test Framework")
             ui.key(b"v")
             ui.wait("0.4.17", timeout=30)
@@ -279,7 +283,7 @@ def exercise_real_facade(project, packed, pack):
             ui.wait("MODULES  CONFIRM")
             assert "Completed:" not in ui.text(), "review applied the local dependency root"
             click("Installed")
-            ui.wait("No installed Hub modules", timeout=20)
+            ui.wait(f"Your installed packages · {len(baseline)}", timeout=20)
 
             # Return through the real catalog, prepare a fresh measured plan,
             # and explicitly confirm it. This publishes only to the isolated
@@ -288,7 +292,8 @@ def exercise_real_facade(project, packed, pack):
             click("Catalog")
             ui.wait("MODULES  CATALOG")
             search_test()
-            click("wippy/test")
+            # The catalog row, not the header that names the current selection.
+            click("wippy/test  ·")
             ui.wait("Test Framework")
             ui.key(b"v")
             ui.wait("0.4.17", timeout=30)
@@ -302,6 +307,10 @@ def exercise_real_facade(project, packed, pack):
             ui.wait("Completed:", timeout=30)
             ui.wait("Receipt state: complete")
             click("Installed")
+            ui.wait("MODULES  INSTALLED", timeout=20)
+            # wippy/test sorts after Bee's own modules and its dependency;
+            # select down to its row before reading the installed version.
+            ui.key(b"\x1b[B" * (len(baseline) + 2))
             ui.wait("wippy/test", timeout=20)
             ui.wait("0.4.17")
             # Authored publication is separate from a selected Hub installation.

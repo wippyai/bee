@@ -195,9 +195,10 @@ end
 
 -- A whole-row target. Selection keeps its text, uses the accent pair and marks
 -- column 1 with "›" so focus is visible without color. Unfocused selection
--- (another pane owns focus) keeps the marker in accent on the surface.
+-- (another pane owns focus) keeps the marker in accent on the surface. span
+-- extends the target over the item's following rows.
 function M.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer,
-    key: string, fg: string?, focused: boolean?)
+    key: string, fg: string?, focused: boolean?, span: integer?)
     local theme = painter.theme
     local has_focus = focused == nil or focused
     local text_fg = fg or theme.text
@@ -206,7 +207,7 @@ function M.row(painter: Painter, y: integer, value: string, selected: boolean, k
     elseif selected then text_fg = theme.accent end
     M.line(painter, y, value, text_fg, bg)
     if selected then M.put(painter, 1, y, MARKER, 1, text_fg, bg) end
-    M.add_hit(painter, kind, index, key, 1, y, painter.width, 1)
+    M.add_hit(painter, kind, index, key, 1, y, painter.width, span or 1)
 end
 
 -- Column geometry for a table at the canvas width, or nil when the flexible

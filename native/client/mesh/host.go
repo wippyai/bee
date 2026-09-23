@@ -28,7 +28,9 @@ import (
 	"go.uber.org/zap"
 )
 
-const actorHost = "bee.client:native"
+// ActorHost is the host of the physical client's actor. The owner's desktop
+// bridge admits native desktop calls only from this host.
+const ActorHost = "bee.hive.desktop:display_host"
 const actorSource = "bee.client:physical"
 
 // WithActor uses the standard process host, PID generator and topology lifecycle.
@@ -71,16 +73,16 @@ func WithActor(ctx context.Context, stack *stackpkg.Stack, owner string, run fun
 	ready := make(chan context.Context, 1)
 	proc := &nativeActor{ready: ready, actor: &Actor{owner: owner, router: stack.Router, inbox: make(chan Message, maxMessages)}}
 	engine := actorengine.NewScheduler(scheduler.NewRegistry(), actorengine.WithWorkers(1), actorengine.WithMaxProcesses(1), actorengine.WithLifecycle(lifecycle))
-	host := hostsvc.NewHost(registry.ParseID(actorHost), &hostapi.EntryConfig{}, engine, &actorFactory{proc: proc}, process.GetPIDGenerator(root), zap.NewNop(), hostsvc.WithPIDRegistry(pidRegistry))
+	host := hostsvc.NewHost(registry.ParseID(ActorHost), &hostapi.EntryConfig{}, engine, &actorFactory{proc: proc}, process.GetPIDGenerator(root), zap.NewNop(), hostsvc.WithPIDRegistry(pidRegistry))
 	// Capture completion before releasing the process frame. Cancellation tells
 	// the physical loop to retire; released frame references fail closed in Wippy.
 	lifecycle.Register("client", proc)
 	lifecycle.Register("tty", tty)
 	lifecycle.Register("frame", host)
-	if err := stack.Node.RegisterHost(actorHost, host); err != nil {
+	if err := stack.Node.RegisterHost(ActorHost, host); err != nil {
 		return err
 	}
-	defer stack.Node.UnregisterHost(actorHost)
+	defer stack.Node.UnregisterHost(ActorHost)
 	if _, err := host.Start(root); err != nil {
 		return err
 	}

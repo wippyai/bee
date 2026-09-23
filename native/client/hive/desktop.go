@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/wippyai/bee/native/client/mesh"
 	"github.com/wippyai/runtime/api/pid"
 )
 
@@ -171,7 +172,7 @@ func desktopList(raw json.RawMessage, into any) bool {
 }
 
 func DecodeDesktopMount(reply Reply, selected DesktopSelection, recipient pid.PID, mode DesktopMode, now time.Time) (DesktopMount, error) {
-	if !selected.valid() || recipient.Node == "" || recipient.Host != "bee.client:native" || recipient.UniqID == "" ||
+	if !selected.valid() || recipient.Node == "" || recipient.Host != mesh.ActorHost || recipient.UniqID == "" ||
 		(mode != Control && mode != Observe) || now.IsZero() || !desktopValue(reply) {
 		return DesktopMount{}, ErrDesktopReply
 	}

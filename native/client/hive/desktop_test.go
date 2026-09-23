@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wippyai/bee/native/client/mesh"
 	"github.com/wippyai/runtime/api/pid"
 )
 
 var selection = DesktopSelection{Execution: strings.Repeat("a", 32), Workspace: strings.Repeat("b", 32), Desktop: strings.Repeat("c", 32)}
-var desktopRecipient = pid.PID{Node: "client", Host: "bee.client:native", UniqID: "one"}
+var desktopRecipient = pid.PID{Node: "client", Host: mesh.ActorHost, UniqID: "one"}
 var desktopNow = time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
 
 func mountValue() map[string]any {
@@ -58,7 +59,7 @@ func TestDesktopMountRejectsSubstitutedAuthorityAndMalformedFields(t *testing.T)
 			}
 		})
 	}
-	for field, wrong := range map[string]any{"owner_execution": strings.Repeat("d", 32), "workspace_id": strings.Repeat("d", 32), "desktop_id": strings.Repeat("d", 32), "session_id": "", "recipient": "{other@bee.client:native|one}", "mode": "observe", "mount_ref": "bad\x00mount", "expires_at": "2026-09-09T12:00:00.000Z", "extra": true} {
+	for field, wrong := range map[string]any{"owner_execution": strings.Repeat("d", 32), "workspace_id": strings.Repeat("d", 32), "desktop_id": strings.Repeat("d", 32), "session_id": "", "recipient": "{other@" + mesh.ActorHost + "|one}", "mode": "observe", "mount_ref": "bad\x00mount", "expires_at": "2026-09-09T12:00:00.000Z", "extra": true} {
 		t.Run("wrong_"+field, func(t *testing.T) {
 			value := mountValue()
 			value[field] = wrong

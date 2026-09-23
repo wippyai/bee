@@ -34,7 +34,7 @@ func NewDesktop(lifetime context.Context, actor *mesh.Actor, ownerNode, executio
 		return nil, errors.New("invalid desktop owner execution")
 	}
 	recipient := actor.PID()
-	if recipient.Node == "" || recipient.Host != "bee.client:native" || recipient.UniqID == "" {
+	if recipient.Node == "" || recipient.Host != mesh.ActorHost || recipient.UniqID == "" {
 		return nil, errors.New("desktop requires a native physical-client actor")
 	}
 	client, err := New(lifetime, actor, ownerNode)

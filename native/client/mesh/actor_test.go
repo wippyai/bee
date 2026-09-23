@@ -31,7 +31,7 @@ func TestNativeActorReceivesOwnerReplyAndRetiresFrame(t *testing.T) {
 			err := WithActor(ctx, stack, descriptor.Node, func(frame context.Context, actor *Actor) error {
 				retained = frame
 				actual, ok := runtime.GetFramePID(frame)
-				if !ok || !samePID(actual, actor.PID()) || actual.Node != stack.Node.ID() || actual.Host != actorHost || actual.UniqID == "" {
+				if !ok || !samePID(actual, actor.PID()) || actual.Node != stack.Node.ID() || actual.Host != ActorHost || actual.UniqID == "" {
 					t.Fatalf("invalid runtime recipient: %v", actual)
 				}
 				if samePID(actual, previous) {
@@ -69,7 +69,7 @@ func TestNativeActorReceivesOwnerReplyAndRetiresFrame(t *testing.T) {
 				}
 				return nil
 			})
-			if _, ok := stack.Node.GetHost(actorHost); ok {
+			if _, ok := stack.Node.GetHost(ActorHost); ok {
 				t.Fatal("native client host leaked")
 			}
 			return err

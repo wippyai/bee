@@ -292,6 +292,9 @@ func TestClientIntentGrammar(t *testing.T) {
 		{"observe", "not-hex", desktop},
 		{"client", workspace, strings.ToUpper(desktop)},
 		{"desktops", "extra"},
+		{"-x"},
+		{"Agent"},
+		{"agent", "line\nfeed"},
 	} {
 		if _, err := parseClientIntent(bad); err == nil {
 			t.Fatalf("parseClientIntent(%q) accepted", bad)

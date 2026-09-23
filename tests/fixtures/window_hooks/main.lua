@@ -40,7 +40,11 @@ local function endpoint(): string
     return address :: string
 end
 
-local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook: boolean)
+-- Command hooks submit through the host-selected `hook-post` executable, which
+-- reports acceptance by its exit status; direct hooks report the HTTP status.
+local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook: boolean, command_hooks: boolean)
+    local definition = command_hooks and "bee.window_hooks_fixture:command_definition" or "bee.window_hooks_fixture:definition"
+    local accepted_result = command_hooks and "exit-0" or "http-202"
     -- 1. Open gateway listener under configured loopback endpoint
     local address = endpoint()
     local opened_gateway = call("bee.gateway.binding:open", {address = address})
@@ -73,12 +77,12 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(catalogs:receive():from() == broker)
 
     -- 4. Resolve plan and open bee.harness.window:app
-    local plan, refused = admission.resolve("bee.window_hooks_fixture:definition", "window")
+    local plan, refused = admission.resolve(definition, "window")
     if not plan then error("resolve window plan: " .. tostring(refused and refused.error and refused.error.message)) end
 
     local request = assert(json.encode({
         request_id = "window-hooks-req",
-        definition_ref = "bee.window_hooks_fixture:definition",
+        definition_ref = definition,
         brief = "window hooks acceptance",
         thread_id = THREAD,
         expected_plan_digest = plan.plan_digest,
@@ -159,16 +163,16 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local view = assert(tty.attach(mounted))
     assert(view:send({type = "resize", width = 80, height = 24}))
 
-    -- 6. Verify child submitted hook and gateway returned 202 Accepted
+    -- 6. Verify child submitted hook and the real gateway accepted it
     local hook_submitted = false
     local hook_status = "not observed"
     for _ = 1, 160 do
         local frame, frame_error = view:snapshot()
         if frame then
             local text = table.concat(frame.rows)
-            local code = text:match("HOOK_HTTP_CODE:(%d%d%d)")
-            if code then hook_status = code end
-            if text:find("HOOK_HTTP_CODE:202", 1, true) then
+            local result = text:match("HOOK_TOOL:([%w%-]+)")
+            if result then hook_status = result end
+            if text:find("HOOK_TOOL:" .. accepted_result, 1, true) then
                 hook_submitted = true
                 break
             end
@@ -177,7 +181,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     end
     -- Keep diagnostics to the nonsecret status marker, never configuration,
     -- authorization headers or arbitrary terminal content.
-    assert(hook_submitted, "actual hook was not accepted by real gateway (expected HOOK_HTTP_CODE:202; observed " .. hook_status .. ")")
+    assert(hook_submitted, "actual hook was not accepted by real gateway (expected HOOK_TOOL:" .. accepted_result .. "; observed " .. hook_status .. ")")
 
     -- 7. Verify terminal input is functional
     local input_started = time.now():unix_nano()
@@ -293,7 +297,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         local accepted = false
         for _ = 1, 60 do
             local frame = view:snapshot()
-            if frame and table.concat(frame.rows):find("HOOK_PENDING_CODE:202", 1, true) then accepted = true; break end
+            if frame and table.concat(frame.rows):find("HOOK_PENDING:" .. accepted_result, 1, true) then accepted = true; break end
             time.sleep("10ms")
         end
         assert(accepted, "additional hook was not accepted before the crash")
@@ -467,7 +471,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         local frame = view_two:snapshot()
         local screen = frame and table.concat(frame.rows) or ""
         if screen:find("HOOK_HOME_SENTINEL:retained", 1, true) then retained_home = true end
-        if screen:find("HOOK_HTTP_CODE:202", 1, true) then continued_hook_submitted = true end
+        if screen:find("HOOK_TOOL:" .. accepted_result, 1, true) then continued_hook_submitted = true end
         if retained_home and continued_hook_submitted then break end
         time.sleep("50ms")
     end
@@ -572,10 +576,11 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     io.print("BEE_WINDOW_HOOKS_ACCEPTANCE: OK")
 end
 
-M.main = function() execute(false, false, false) end
+M.main = function() execute(false, false, false, false) end
 M.run = M.main
-M.crash = function() execute(true, false, false) end
-M.cancel_recovery = function() execute(true, true, false) end
-M.pending_hook = function() execute(true, false, true) end
+M.crash = function() execute(true, false, false, false) end
+M.cancel_recovery = function() execute(true, true, false, false) end
+M.pending_hook = function() execute(true, false, true, false) end
+M.command_hooks = function() execute(false, false, false, true) end
 
 return M

@@ -142,8 +142,11 @@ release jobs run it with networking disabled.
 ./dist/bee wippy auth --help
 ```
 
-The default state directory is the OS user configuration directory plus `bee`
-(`~/.config/bee` on Linux). The caller's working directory is preserved. The build
+Without `--state`, each working directory selects its own state directory,
+`<OS user configuration directory>/bee/projects/<sha256 of the canonical working
+directory>` (`~/.config/bee/projects/...` on Linux); a legacy project receipt
+keeps an older project on its original root. The caller's working directory is
+preserved. The build
 manifest maps workspace, thread, approval, resource, credential and placement
 databases into this directory, plus the placement filesystem root. Client layout
 uses the adjacent `workspace.db.client` file. Explicit subsystem environment
@@ -182,6 +185,37 @@ operation uses standalone staging. Native code updates
 require a new executable; Hub updates replace application packs. Lint catches
 missing module exports and type incompatibilities, but a semantic native-version
 requirement gate is not implemented.
+
+### Command grammar
+
+`bee --help` prints this grammar and the state the invocation would use. It
+answers before project selection, reads and writes no state and exits 0.
+
+```text
+bee [--state DIR] [COMMAND [ARGUMENTS...]]
+
+bee                              open this project's desktop, starting its owner when none runs
+bee NAME [ARGUMENTS...]          open the application command NAME (for example agent or terminal)
+bee observe [WORKSPACE DISPLAY]  watch a running Bee without control
+bee client [WORKSPACE DISPLAY]   join a running Bee with control
+bee attach WORKSPACE DISPLAY     join one display of a running Bee with control
+bee desktops                     list the displays of a running Bee
+bee start                        run this project's retained owner in the foreground
+bee MODULE:ENTRY [ARGUMENTS...]  run one application entry directly
+bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT
+bee help | -h | --help
+bee update | recover | wippy [ARGUMENTS...]
+```
+
+`--state DIR` precedes every command. A first word that cannot name an
+application command (for example `-x` or `Agent`) and malformed route arguments
+fail before project selection and exit 1; the runtime's `app.Main` reports every
+failure with exit status 1. A well-formed NAME is resolved by the owner against
+its admitted applications and managed agents, so an unregistered name is
+reported only after the client has joined the project's owner. `bee version` is
+not a host command yet: the embedded pack version and pinned runtime commit are
+recorded only in the pack's `build_info.lua` and `dist/bee.provenance.json`, which
+the launch host cannot read. Settings > About shows them.
 
 ## Shared startup cache
 

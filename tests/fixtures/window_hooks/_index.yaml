@@ -72,6 +72,52 @@ entries:
     session_resource: retained
     credentials: []
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+# The command-hook variant receives the Bee executable named by the harness
+# through BEE_WINDOW_HOOKS_COMMAND, as shipped drivers receive `self`.
+- name: hook_environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: hook_executable
+  kind: env.variable
+  storage: bee.window_hooks_fixture:hook_environment
+  variable: BEE_WINDOW_HOOKS_COMMAND
+  default: ''
+  readonly: true
+- name: command_policy
+  kind: registry.entry
+  meta: {type: bee.launch_policy, test_support: true}
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 5000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {sh: /bin/sh}
+    environment: {}
+    gateway_tools: [thread_read]
+    gateway_hooks: [PreToolUse, SessionStart]
+    hook_command_ref: bee.window_hooks_fixture:hook_executable
+- name: command_definition
+  kind: registry.entry
+  meta: {type: bee.launch_definition, test_support: true}
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: window-hooks-command-fixture
+    title: Window hooks fixture
+    command_names: []
+    binding_ref: bee.window_hooks_fixture:binding
+    profile_id: window
+    policy_ref: bee.window_hooks_fixture:command_policy
+    default_mode: window
+    allowed_overrides: [brief, thread]
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: caller}
+    session_resource: retained
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
 - name: prepare
   kind: function.lua
   source: file://driver.lua
@@ -91,6 +137,7 @@ entries:
   modules: [hash]
   imports:
     configuration: bee.driver:configuration
+    quote: bee.driver.kit:quote
 - name: fixture_policy
   kind: security.policy
   meta: {type: test_support}
@@ -164,6 +211,23 @@ entries:
     command:
       name: window-hooks-cancel-recovery-acceptance
       short: Prove native-window hook acceptance
+      security:
+        actor: {id: bee.test.gateway}
+- name: command_hooks
+  kind: process.lua
+  source: file://main.lua
+  method: command_hooks
+  modules: [process, channel, time, security, tty, funcs, json, registry, io]
+  imports:
+    appearance: bee.application:appearance
+    admission: bee.harness.launch:admission
+    store: bee.placement.native:store
+  security:
+    policies: [bee:placement_store_policy, bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_lifecycle_policy, bee:thread_observe_policy, bee:thread_carrier_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee.window_hooks_fixture:fixture_policy]
+  meta:
+    command:
+      name: window-hooks-command-acceptance
+      short: Prove native-window command-hook acceptance
       security:
         actor: {id: bee.test.gateway}
 - name: test

@@ -5,6 +5,7 @@ package launch
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,6 +96,36 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			return hookpost.Run(ctx, os.Stdin, args[1], args[2], args[3], args[4])
 		}}, nil
 	}
+	desktop := launch.Op == app.OpRun && launch.Command == desktopCommand
+	if desktop && len(launch.Args) > 0 && helpWords[launch.Args[0]] {
+		if len(launch.Args) != 1 {
+			return app.Plan{}, errors.New("bee help takes no arguments")
+		}
+		usage := host.usage(launch)
+		return app.Plan{Run: func(context.Context) error {
+			_, err := io.WriteString(os.Stdout, usage)
+			return err
+		}}, nil
+	}
+	owner := desktop && len(launch.Args) > 0 && launch.Args[0] == ownerArgument
+	if owner && len(launch.Args) != 1 {
+		return app.Plan{}, errors.New("bee start takes no arguments")
+	}
+	// An explicit application ID keeps the runtime's own entry, which is how
+	// recovery and development launches still reach an application directly.
+	application := desktop && len(launch.Args) > 0 && strings.Contains(launch.Args[0], ":")
+	// Every other ordinary launch of this executable is a client of the retained
+	// owner. Its words are decoded before a project is selected, so a malformed
+	// invocation reads no state.
+	client := desktop && !owner && !application
+	var intent clientIntent
+	if client {
+		parsed, err := parseClientIntent(launch.Args)
+		if err != nil {
+			return app.Plan{}, err
+		}
+		intent = parsed
+	}
 	plan := app.Plan{}
 	if !launch.Explicit {
 		root := launch.State
@@ -109,10 +140,7 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	}
 	// The retained owner route keeps the runtime's own application start, so it
 	// prepares the owner's cluster, desktop bridge and enrollment publisher.
-	if launch.Op == app.OpRun && launch.Command == desktopCommand && len(launch.Args) > 0 && launch.Args[0] == ownerArgument {
-		if len(launch.Args) != 1 {
-			return app.Plan{}, errors.New("bee start takes no arguments")
-		}
+	if owner {
 		plan.Command = ownerCommand
 		plan.Args = []string{}
 		state := launch.State
@@ -125,22 +153,16 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		}
 		return plan, nil
 	}
-	// An explicit application ID keeps the runtime's own entry, which is how
-	// recovery and development launches still reach an application directly.
-	if launch.Op == app.OpRun && launch.Command == desktopCommand && len(launch.Args) > 0 && strings.Contains(launch.Args[0], ":") {
-		return plan, nil
-	}
-	// Every other ordinary launch of this executable is a client of the retained
-	// owner. The runtime never opens the client's state for it: the host decides
+	// The runtime never opens the client's state for it: the host decides
 	// ownership, starts the owner when needed, enrolls this process and joins.
-	if launch.Op == app.OpRun && launch.Command == desktopCommand {
+	if client {
 		selected := launch
 		if selected.State == "" {
 			selected.State = plan.DefaultState
 		}
 		selected.State = resolvePlannedState(selected)
 		plan.DefaultState = ""
-		plan.Run = func(ctx context.Context) error { return runClientRoute(ctx, selected) }
+		plan.Run = func(ctx context.Context) error { return runClientRoute(ctx, selected, intent) }
 	}
 	return plan, nil
 }

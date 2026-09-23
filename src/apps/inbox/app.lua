@@ -174,10 +174,10 @@ local function main(value: unknown)
     end)
     while running do
         if dirty then
-            local frame = view.draw(width, height, preferences, state, rows, offset, status)
-            hits = frame.hits
-            offset = frame.offset
-            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local drawn = view.draw(width, height, preferences, state, rows, offset, status)
+            hits = drawn.hits
+            offset = drawn.offset
+            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
             local checkpoint = model.checkpoint(state)
             if checkpoint ~= last_checkpoint then

@@ -3,6 +3,7 @@
 package rendezvous
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -214,6 +215,37 @@ func TestDescriptorSupervisorAddress(t *testing.T) {
 		invalid.Supervisor = bad
 		if err := invalid.validate(); err == nil {
 			t.Fatalf("supervisor address %q was accepted", bad)
+		}
+	}
+}
+
+// The owner publishes its supervisor address after startup; every later read
+// must decode it, and a null or repeated address stays refused.
+func TestDescriptorDecodesPublishedSupervisorAddress(t *testing.T) {
+	published := sample()
+	published.Supervisor = "{forge@bee.hive:supervisor_host|0x1}"
+	data, err := json.Marshal(published)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := Decode(data)
+	if err != nil {
+		t.Fatalf("published supervisor address refused on read: %v", err)
+	}
+	if decoded != published {
+		t.Fatalf("decoded descriptor = %#v, want %#v", decoded, published)
+	}
+	withoutField := bytes.Replace(data, []byte(`,"supervisor":"{forge@bee.hive:supervisor_host|0x1}"`), nil, 1)
+	if _, err := Decode(withoutField); err != nil {
+		t.Fatalf("descriptor without a supervisor address refused: %v", err)
+	}
+	for _, bad := range [][]byte{
+		bytes.Replace(data, []byte(`"{forge@bee.hive:supervisor_host|0x1}"`), []byte(`null`), 1),
+		append(data[:len(data)-1:len(data)-1], []byte(`,"supervisor":"{forge@bee.hive:supervisor_host|0x2}"}`)...),
+		bytes.Replace(data, []byte(`"{forge@bee.hive:supervisor_host|0x1}"`), []byte(`"{other@bee.hive:supervisor_host|0x1}"`), 1),
+	} {
+		if _, err := Decode(bad); err == nil {
+			t.Fatalf("descriptor %s was accepted", bad)
 		}
 	}
 }

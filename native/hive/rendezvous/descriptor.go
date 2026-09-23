@@ -169,7 +169,7 @@ func Decode(data []byte) (Descriptor, error) {
 	if err != nil || first != json.Delim('{') {
 		return Descriptor{}, ErrDescriptor
 	}
-	fields := make(map[string]json.RawMessage, 6)
+	fields := make(map[string]json.RawMessage, 7)
 	for dec.More() {
 		token, err := dec.Token()
 		if err != nil {
@@ -180,7 +180,7 @@ func Decode(data []byte) (Descriptor, error) {
 			return Descriptor{}, ErrDescriptor
 		}
 		switch name {
-		case "version", "execution", "node", "gossip", "transport", "public_key":
+		case "version", "execution", "node", "gossip", "transport", "public_key", "supervisor":
 		default:
 			return Descriptor{}, ErrDescriptor
 		}
@@ -191,7 +191,13 @@ func Decode(data []byte) (Descriptor, error) {
 		fields[name] = value
 	}
 	last, err := dec.Token()
-	if err != nil || last != json.Delim('}') || len(fields) != 6 {
+	// Six fields are required; the owner adds its supervisor address once the
+	// supervisor has registered.
+	required := 6
+	if fields["supervisor"] != nil {
+		required = 7
+	}
+	if err != nil || last != json.Delim('}') || len(fields) != required {
 		return Descriptor{}, ErrDescriptor
 	}
 	if _, err := dec.Token(); err != io.EOF {

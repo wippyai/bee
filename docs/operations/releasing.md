@@ -186,30 +186,31 @@ the full `make check` includes it. The installer does not change workspace data.
 
 ```sh
 make native-tools
+make standalone BEE_VERSION=0.1.0-dev
 make hub-check BEE_VERSION=0.1.0-dev
 ```
 
-The preflight runs strict lint, stages the release source and runs Wippy's
-actual publication packer with `--dry-run` for every physical module and then
-for the `bee/bee` root. `build/release-source.sh` stages that source for both
-publication and `make native-pack`: the release lock names `bee/bee` and every
-`bee/*` module at `BEE_VERSION`, each module's `wippy.yaml` carries that
-version, and every `ns.dependency` on a sibling Bee module is pinned to it.
-Development keeps `0.1.0-dev`; only the staged copy changes. Modules publish in
-dependency order (`tsort` over their sibling `ns.dependency` entries), so a
-module is never published before a Bee module it requires. Production source
-selection and test exclusions come from each `wippy.yaml` and the runtime
-publisher. `make hub-publish BEE_VERSION=…` runs that preflight and publishes
-each immutable protected version through the native Wippy CLI with `--create`,
-so a module the Hub does not have yet is registered with `HUB_VISIBILITY`.
+Hub publication uploads the sealed packs of the release deployment, never a
+repack of the source. `build/release-source.sh` stages the source `make
+native-pack` packs: the release lock names `bee/bee` and every `bee/*` module
+at `BEE_VERSION`, each module's `wippy.yaml` carries that version, and every
+`ns.dependency` on a sibling Bee module is pinned to it. Development keeps
+`0.1.0-dev`; only the staged copy changes.
 
-The portable deployment a release embeds therefore locks the same versions the
-Hub receives. The Hub resolver also compares each locked pack hash with the
-digest it serves for that version; the CLI publisher packs its own WAPP, so the
-published bytes differ from the release's sealed packs until the runtime can
-publish a sealed pack as-is. Online resolution of a released deployment at the
-published version (in-app installation, or an update when no newer version
-exists) stops with a manifest digest mismatch until then.
+`build/hub-publish.sh` reads `dist/portable-deployment` (`BEE_DEPLOYMENT`
+selects another). It requires every lock row to be a Bee module at
+`BEE_VERSION`, every Bee module to be locked, and every vendor pack to match
+its lock hash. It then runs `wippy publish --wapp` with each module's own
+`wippy.yaml` for identity and metadata, in dependency order (`tsort` over
+sibling `ns.dependency` entries) with `bee/bee` last. `make hub-check` dry-runs
+each upload, prints the lock hash beside the `Digest:` the publisher reports,
+and fails when any pair differs. `make hub-publish BEE_VERSION=…` runs that
+check and uploads each immutable protected version with `--create`, so a
+module the Hub does not have yet is registered with `HUB_VISIBILITY`. The Hub
+therefore serves exactly the bytes the release executable's deployment lock
+pins, and online resolution of a released deployment finds each locked module
+at its locked digest. `make hub-publish-script-check` exercises the script
+against a mocked publisher.
 
 `.github/workflows/hub.yml` runs when an application GitHub release is published.
 It requires a semantic version tag on main, a published release and a successful

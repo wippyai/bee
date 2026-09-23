@@ -106,8 +106,9 @@ def run(packed, cases=CASES):
                 ], f"{case}: failed delivery lost recovery identity"
             finally:
                 ui.close()
-            # The faulted launch must not poison the next healthy source launch.
-            ui = Desktop(folder)
+            # The faulted launch must not poison the next healthy launch of the
+            # same form; a packed workspace keeps its deployment's registry.
+            ui = Desktop(folder, packed)
             try:
                 ui.wait("BEE SETTINGS")
                 assert workspace_identity(folder) == baseline_id, f"{case}: recovery changed workspace identity"

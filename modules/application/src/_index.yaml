@@ -45,6 +45,12 @@ entries:
 - name: appearance
   kind: library.lua
   source: file://appearance.lua
+- name: frame
+  kind: library.lua
+  source: file://frame.lua
+  modules: [tty]
+  imports:
+    appearance: bee.application:appearance
 - name: names
   kind: library.lua
   source: file://names.lua

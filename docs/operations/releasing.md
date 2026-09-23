@@ -213,7 +213,8 @@ exists) stops with a manifest digest mismatch until then.
 
 `.github/workflows/hub.yml` runs when an application GitHub release is published.
 It requires a semantic version tag on main, a published release and a successful
-native tag workflow for the same commit. Native-module tags do not trigger it.
+native tag workflow for the same commit, then runs `make hub-publish` for every
+Bee module at the tag's version. Native-module tags do not trigger it.
 The publication job grants its GitHub token `contents: read` and `actions: read`
 to inspect the release and its completed build run.
 Manual dispatch retries an existing published application release through the
@@ -221,14 +222,18 @@ same checks. Failure stays visible; the workflow never substitutes a mutable lab
 or increments the version automatically.
 
 Configure `WIPPY_HUB_TOKEN` in the GitHub `hub` environment with permission to
-create and publish modules in the Hub `bee` organization. Limit that environment to the `main` branch and `v*` tags;
+create and publish modules in the Hub `bee` organization. Limit that
+environment to the `main` branch and `v*` tags;
 release-tag creation is restricted to administrators. Keep the token out of
 repository-wide secrets, which same-repository PR workflows can access.
-After replacing the token, run the **Hub credential check** workflow on main.
-It validates authentication and publish authorization without creating an upload.
+After replacing the token, run the **Hub credential and publication check**
+workflow on main. It validates authentication and publish authorization without
+creating an upload, and separately runs `make hub-check` for the requested
+version without the credential.
 The runtime receives it as `WIPPY_TOKEN` only for publication. Set repository
 variable `BEE_HUB_VISIBILITY` to
-`public` or `private` for first-time module creation; the default is private.
+`public` or `private` for first-time module creation; the workflow default is
+public (Bee is MIT), and local `make hub-publish` defaults to private.
 Existing module visibility is preserved. Local publication accepts the equivalent
 `HUB_VISIBILITY` variable and Wippy's normal credential store or token environment.
 

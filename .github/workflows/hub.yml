@@ -47,7 +47,7 @@ jobs:
         WIPPY_TOKEN: ${{ secrets.WIPPY_HUB_TOKEN }}
       run: |
         if [ -z "$WIPPY_TOKEN" ]; then
-          echo 'Configure WIPPY_HUB_TOKEN with publish access to bee/bee.' >&2
+          echo 'Configure WIPPY_HUB_TOKEN with create and publish access to the bee organization.' >&2
           exit 1
         fi
     - name: Build pinned publication runtime
@@ -56,8 +56,8 @@ jobs:
         mode: toolchain
         manifest: wippy.build.json
         output: .wippy/bin/bee-wippy
-    - name: Validate and publish immutable Hub version
+    - name: Validate and publish every Bee module at the release version
       env:
         WIPPY_TOKEN: ${{ secrets.WIPPY_HUB_TOKEN }}
-        HUB_VISIBILITY: ${{ vars.BEE_HUB_VISIBILITY || 'private' }}
+        HUB_VISIBILITY: ${{ vars.BEE_HUB_VISIBILITY || 'public' }}
       run: make hub-publish BEE_VERSION="${RELEASE_TAG#v}"

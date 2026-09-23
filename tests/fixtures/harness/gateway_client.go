@@ -665,8 +665,10 @@ func reportWait(client *httpClient, url string, authorization string, report obj
 		if status != http.StatusOK || result == nil || result["status"] != "ready" {
 			break
 		}
-		if scanned, ok := result["scanned_through"].(float64); ok {
-			head = int(scanned)
+		// A ready watch reports the thread's head and leaves scanned_through
+		// at the cursor it was given; the next wait starts from the head.
+		if moved, ok := result["head_sequence"].(float64); ok {
+			head = int(moved)
 		}
 	}
 	report["wait"] = object{"status": status, "elapsed_ms": time.Since(started).Milliseconds(), "outcome": result}

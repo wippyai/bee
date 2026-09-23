@@ -457,9 +457,13 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 retire_gateway("runner cancelled")
                 break
             elseif event.kind == process.event.EXIT and recipient ~= nil and tostring(event.from) == recipient then
-                -- A carrier that leaves after the child ended is closing, not
-                -- lost; only a carrier lost while the child lives arms the grace.
-                if gateway_binding and not takeover_armed and not exited then
+                -- A carrier that returns has closed the attempt; one that ends
+                -- in an error, a crash or a termination, is lost, whether or
+                -- not the child has exited, so the order in which the runner
+                -- observes the two exits decides nothing.
+                local result: unknown = event.result
+                local closed = type(result) == "table" and (result :: {[string]: unknown}).error == nil
+                if gateway_binding and not takeover_armed and not closed then
                     lost_generation = generation
                     takeover_timer = time.after(tostring(protocol.TAKEOVER_GRACE_MS) .. "ms")
                     takeover_armed = true

@@ -95,6 +95,44 @@ check: hub-publish-script-check
 hub-publish-script-check:
 	tests/hub_publish.sh
 
+# Post-publication check: a real Hub package installs into the published
+# release deployment, which resolves every locked bee/* module from the Hub.
+# It holds only once that release's packs are published, so `make check` never
+# runs it; hub-publish-release does, right after publication.
+.PHONY: hub-release-install-check
+hub-release-install-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_release_install.py "$(if $(BEE_DEPLOYMENT),$(abspath $(BEE_DEPLOYMENT)))" "$(BEE_VERSION)"
+
+# Publish one GitHub release's modules to the Hub from that release's own
+# deployment archive, then run the post-publication check against it. TAG
+# names the release (drafts included). hub-release-restore downloads and
+# verifies the deployment; hub-release-publish uploads the restored deployment
+# with WIPPY_TOKEN or the Wippy CLI login and runs the post-publication check;
+# hub-check-release restores and dry-runs only.
+HUB_RELEASE_DIR ?= dist/hub-release
+HUB_RELEASE_DEPLOYMENT = $(abspath $(HUB_RELEASE_DIR))/deployment
+HUB_RELEASE_VERSION = $(patsubst v%,%,$(TAG))
+.PHONY: hub-release-tag hub-release-restore hub-release-publish hub-check-release hub-publish-release hub-release-script-check
+hub-release-tag:
+	@test -n "$(TAG)" || { echo 'Set TAG to the release tag, for example TAG=v0.1.0.' >&2; exit 1; }
+
+hub-release-restore: hub-release-tag
+	build/hub-release.sh "$(TAG)" "$(abspath $(HUB_RELEASE_DIR))"
+
+hub-release-publish: hub-release-tag
+	$(MAKE) hub-publish BEE_VERSION="$(HUB_RELEASE_VERSION)" BEE_DEPLOYMENT="$(HUB_RELEASE_DEPLOYMENT)"
+	$(MAKE) hub-release-install-check BEE_VERSION="$(HUB_RELEASE_VERSION)" BEE_DEPLOYMENT="$(HUB_RELEASE_DEPLOYMENT)"
+
+hub-check-release: hub-release-restore
+	$(MAKE) hub-check BEE_VERSION="$(HUB_RELEASE_VERSION)" BEE_DEPLOYMENT="$(HUB_RELEASE_DEPLOYMENT)"
+
+hub-publish-release: hub-release-restore
+	$(MAKE) hub-release-publish
+
+check: hub-release-script-check
+hub-release-script-check:
+	tests/hub_release.sh
+
 # Two real executables, one disposable state directory; no --base workaround.
 .PHONY: native-upgrade-check
 native-upgrade-check:

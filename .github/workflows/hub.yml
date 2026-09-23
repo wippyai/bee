@@ -1,36 +1,38 @@
 name: Bee Hub publication
+# Runs on a tag's draft release, before the release is published: the release
+# deployment's packs go to the Hub, then the post-publication check installs a
+# real Hub package into that same deployment.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing published application release tag
+        description: Application release tag whose draft release CI built
         required: true
         type: string
 permissions:
   contents: read
 concurrency:
-  group: bee-hub-${{ github.event.release.tag_name || inputs.tag }}
+  group: bee-hub-${{ inputs.tag }}
   cancel-in-progress: false
 jobs:
   publish:
     environment: hub
-    if: startsWith(github.event.release.tag_name || inputs.tag, 'v')
+    if: startsWith(inputs.tag, 'v')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # Listing a draft release and its assets requires push access.
     permissions:
-      contents: read
+      contents: write
       actions: read
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      RELEASE_TAG: ${{ inputs.tag }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: ${{ github.event.release.tag_name || inputs.tag }}
+        ref: ${{ inputs.tag }}
         fetch-depth: 0
         persist-credentials: false
-    - name: Validate published release
+    - name: Validate the release
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
@@ -39,7 +41,7 @@ jobs:
         pattern="^v$number\.$number\.$number(-$identifier(\.$identifier)*)?$"
         [[ "$RELEASE_TAG" =~ $pattern ]]
         git merge-base --is-ancestor HEAD origin/main
-        test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = false
+        test "$(gh release view "$RELEASE_TAG" --json tagName --jq .tagName)" = "$RELEASE_TAG"
         release_commit=$(git rev-parse HEAD)
         test "$(gh run list --workflow native.yml --branch "$RELEASE_TAG" --event push --commit "$release_commit" --status success --limit 1 --json databaseId --jq length)" = 1
     - name: Require Hub credentials
@@ -56,30 +58,16 @@ jobs:
         mode: toolchain
         manifest: wippy.build.json
         output: .wippy/bin/bee-wippy
-    # The release's deployment archive holds the sealed packs every release
-    # executable embeds; provenance proves it before any upload.
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: '3.12'
+    - run: python3 -m pip install -r tests/requirements.txt
     - name: Restore the release deployment
       env:
         GH_TOKEN: ${{ github.token }}
-      run: |
-        mkdir -p release dist/portable-deployment
-        gh release download "$RELEASE_TAG" --dir release \
-          --pattern bee-deployment.tar.gz --pattern bee-deployment.tar.gz.sha256 \
-          --pattern bee-linux-amd64.tar.gz --pattern bee-linux-amd64.tar.gz.sha256
-        (cd release && sha256sum -c bee-deployment.tar.gz.sha256 bee-linux-amd64.tar.gz.sha256)
-        tar -xzf release/bee-deployment.tar.gz -C dist/portable-deployment
-        tar -xzf release/bee-linux-amd64.tar.gz -C release bee.provenance.json
-        python3 - release/bee.provenance.json dist/portable-deployment/wippy.lock <<'PY'
-        import json, re, sys
-        embedded = {pack["module"]: (pack["version"], "sha256:" + pack["sha256"])
-                    for pack in json.load(open(sys.argv[1]))["manifest"]["application"]["packs"]}
-        locked = dict((name, (version, digest)) for name, version, digest in re.findall(
-            r"- name: (\S+)\n\s+version: (\S+)\n\s+hash: (\S+)", open(sys.argv[2]).read()))
-        if embedded != locked:
-            sys.exit(f"release deployment differs from the executable's embedded packs: {embedded} != {locked}")
-        PY
-    - name: Validate and publish every Bee module at the release version
+      run: make hub-release-restore TAG="$RELEASE_TAG"
+    - name: Publish every Bee module at the release version, then install from the Hub into it
       env:
         WIPPY_TOKEN: ${{ secrets.WIPPY_HUB_TOKEN }}
         HUB_VISIBILITY: ${{ vars.BEE_HUB_VISIBILITY || 'public' }}
-      run: make hub-publish BEE_VERSION="${RELEASE_TAG#v}"
+      run: make hub-release-publish TAG="$RELEASE_TAG"

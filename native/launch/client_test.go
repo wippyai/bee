@@ -184,7 +184,7 @@ func TestWaitDescriptorTimesOutBoundedly(t *testing.T) {
 		func(context.Context, string) (rendezvous.Descriptor, error) {
 			return rendezvous.Descriptor{}, os.ErrNotExist
 		},
-		"x", nil, nil)
+		"x", rendezvous.Descriptor{}, nil, nil, nil)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("wait error = %v, want deadline exceeded", err)
 	}
@@ -320,5 +320,60 @@ func TestClientAttachOnlyIntentsNeverStartAnOwner(t *testing.T) {
 		if _, err := os.Stat(state); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("%q created the state directory: %v", args, err)
 		}
+	}
+}
+
+// Two clients of a free state each start an owner; the runtime state lock
+// elects one and the other exits. The client whose contender lost joins the
+// winner's publication instead of failing.
+func TestClientJoinsTheWinnerWhenItsOwnerContenderLoses(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	lost := make(chan struct{})
+	close(lost)
+	won := false
+	checks := 0
+	seams.owned = func(string) (bool, error) {
+		checks++
+		// Free when this client looks; held by the winner once its own
+		// contender has exited.
+		return checks > 1, nil
+	}
+	seams.startOwner = func(context.Context, app.Launch) (<-chan struct{}, func() error, error) {
+		return lost, func() error { won = true; return errors.New("exit status 1") }, nil
+	}
+	reads := 0
+	seams.waitDescriptor = func(context.Context, string) (rendezvous.Descriptor, error) {
+		reads++
+		if !won {
+			return rendezvous.Descriptor{}, os.ErrNotExist
+		}
+		return owner.descriptor, nil
+	}
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{}); err != nil {
+		t.Fatalf("client failed when its contender lost the owner election: %v", err)
+	}
+	if owner.joined != 1 || owner.lastJoin.Owner.Node != owner.descriptor.Node {
+		t.Fatalf("joined %d times, owner %q", owner.joined, owner.lastJoin.Owner.Node)
+	}
+}
+
+// A descriptor left by an owner that is gone is not this start's publication.
+func TestClientWaitsForAFreshPublicationAfterStartingAnOwner(t *testing.T) {
+	stale := fakeDescriptor(t)
+	fresh := stale
+	fresh.Transport = "127.0.0.1:9200"
+	published := false
+	read := func(context.Context, string) (rendezvous.Descriptor, error) {
+		if published {
+			return fresh, nil
+		}
+		published = true
+		return stale, nil
+	}
+	got, err := waitDescriptorOrExit(context.Background(), read, "x", stale, nil, nil, nil)
+	if err != nil || got != fresh {
+		t.Fatalf("publication = %#v, %v; want the fresh descriptor", got, err)
 	}
 }

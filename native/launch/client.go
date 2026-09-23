@@ -147,13 +147,18 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		}
 	}
 	if !owned {
+		previous, err := seams.waitDescriptor(ctx, directory)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 		done, wait, err := seams.startOwner(ctx, launch)
 		if err != nil {
 			return err
 		}
 		startup, cancel := context.WithTimeout(ctx, waitOwnerTimeout)
 		defer cancel()
-		if _, err := waitDescriptorOrExit(startup, seams.waitDescriptor, directory, done, wait); err != nil {
+		held := func() (bool, error) { return seams.owned(launch.State) }
+		if _, err := waitDescriptorOrExit(startup, seams.waitDescriptor, directory, previous, done, wait, held); err != nil {
 			return fmt.Errorf("Bee owner startup: %w", err)
 		}
 	}
@@ -188,30 +193,47 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	return seams.join(ctx, join)
 }
 
-// waitDescriptorOrExit waits for the descriptor a freshly started owner
-// publishes, and fails as soon as the child exits without publishing.
+// waitDescriptorOrExit waits for a publication that differs from previous,
+// the descriptor present before this client started an owner. The runtime
+// state lock elects one owner among concurrent contenders: when the started
+// child exits while owned reports the state held, the winner publishes and
+// the wait continues; when the child exits and nothing holds the state, the
+// start failed.
 func waitDescriptorOrExit(ctx context.Context, read func(context.Context, string) (rendezvous.Descriptor, error),
-	directory string, done <-chan struct{}, wait func() error) (rendezvous.Descriptor, error) {
+	directory string, previous rendezvous.Descriptor, done <-chan struct{}, wait func() error, owned func() (bool, error)) (rendezvous.Descriptor, error) {
 	tick := time.NewTicker(waitPollInterval)
 	defer tick.Stop()
+	finished := false
 	for {
 		if err := ctx.Err(); err != nil {
 			return rendezvous.Descriptor{}, err
 		}
-		if descriptor, err := read(ctx, directory); err == nil {
+		if descriptor, err := read(ctx, directory); err == nil && descriptor != previous {
 			return descriptor, nil
-		} else if !errors.Is(err, os.ErrNotExist) {
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return rendezvous.Descriptor{}, err
 		}
-		if done != nil {
+		if done != nil && !finished {
 			select {
 			case <-done:
+				finished = true
+				var childErr error
 				if wait != nil {
-					if childErr := wait(); childErr != nil {
-						return rendezvous.Descriptor{}, childErr
+					childErr = wait()
+				}
+				held := false
+				if owned != nil {
+					var err error
+					if held, err = owned(); err != nil {
+						return rendezvous.Descriptor{}, errors.Join(childErr, err)
 					}
 				}
-				return rendezvous.Descriptor{}, errors.New("Bee owner exited before publishing its rendezvous")
+				if !held {
+					if childErr != nil {
+						return rendezvous.Descriptor{}, childErr
+					}
+					return rendezvous.Descriptor{}, errors.New("Bee owner exited before publishing its rendezvous")
+				}
 			default:
 			}
 		}

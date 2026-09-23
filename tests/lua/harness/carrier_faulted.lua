@@ -6,7 +6,8 @@ local carrier = require("carrier_process")
 local machine = require("machine")
 -- crash_after ends the process at a step; pause_after holds it there until
 -- the controller sends bee.carrier.continue, so a second carrier can act
--- in between.
+-- in between. The controller hears bee.carrier.paused with the step name
+-- once the process holds there.
 local function main(request: unknown, mode: string, controller: string?, crash_after: string?, batch: number?, pause_after: string?): {[string]: unknown}
     local chosen: "open" | "resume" = "open"
     if mode == "resume" then chosen = "resume" end
@@ -16,6 +17,7 @@ local function main(request: unknown, mode: string, controller: string?, crash_a
         if crash_after and step == crash_after then error("crash after " .. step) end
         if pause_after and step == pause_after then
             pause_after = nil
+            if controller then process.send(controller, "bee.carrier.paused", step) end
             continues:receive()
         end
     end

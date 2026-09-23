@@ -563,7 +563,7 @@ func (d *desktop) waitFor(text string, timeout time.Duration) error {
 		}
 		select {
 		case err := <-d.wait:
-			return fmt.Errorf("Bee exited while waiting for %q: %v\n%s", text, err, string(log))
+			return fmt.Errorf("Bee exited while waiting for %q: %v\n%s", text, err, d.exitOutput())
 		case <-deadline.C:
 			return fmt.Errorf("timed out waiting for %q\n%s", text, string(log))
 		case <-tick.C:
@@ -583,7 +583,7 @@ func (d *desktop) waitAbsent(text string, previous uint64, timeout time.Duration
 		}
 		select {
 		case err := <-d.wait:
-			return fmt.Errorf("Bee exited while waiting for picker close: %v\n%s", err, string(log))
+			return fmt.Errorf("Bee exited while waiting for picker close: %v\n%s", err, d.exitOutput())
 		case <-deadline.C:
 			return fmt.Errorf("picker remained visible after Escape\n%s", string(log))
 		case <-tick.C:
@@ -597,13 +597,12 @@ func (d *desktop) waitForAfter(text string, previous uint64, timeout time.Durati
 	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		_, _, log := d.snapshot()
 		if d.observed(text, previous) {
 			return nil
 		}
 		select {
 		case err := <-d.wait:
-			return fmt.Errorf("Bee exited while waiting for refreshed %q: %v\n%s", text, err, string(log))
+			return fmt.Errorf("Bee exited while waiting for refreshed %q: %v\n%s", text, err, d.exitOutput())
 		case <-deadline.C:
 			latest, current, _ := d.snapshot()
 			return fmt.Errorf("timed out waiting for refreshed %q (after %d, current %d)\n%s", text, previous, current, latest)
@@ -624,12 +623,26 @@ func (d *desktop) quit() error {
 	select {
 	case err := <-d.wait:
 		if err != nil {
-			return fmt.Errorf("Bee quit: %w", err)
+			return fmt.Errorf("Bee quit: %w\n%s", err, d.exitOutput())
 		}
 		return nil
 	case <-time.After(2 * time.Second):
 		return errors.New("Bee quit exceeded 2 seconds")
 	}
+}
+
+// exitOutput is what an exited Bee printed after it left the alternate
+// screen, read once the PTY has delivered every byte the process wrote.
+func (d *desktop) exitOutput() string {
+	select {
+	case <-d.readDone:
+	case <-time.After(2 * time.Second):
+	}
+	_, _, log := d.snapshot()
+	if index := bytes.LastIndex(log, []byte("\x1b[?1049l")); index >= 0 {
+		log = log[index+len("\x1b[?1049l"):]
+	}
+	return string(log)
 }
 
 func (d *desktop) close() {

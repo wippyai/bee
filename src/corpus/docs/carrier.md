@@ -97,7 +97,9 @@ the write `uncertain`.
 `claim` commits a new carrier epoch. `commit`, `request_turn`, `end_turn` and
 `receipt` require that epoch and expected thread revision; stale epochs or
 revisions return `CONFLICT`. A replacement first fences the old carrier at the
-thread owner, then attaches to placement with the new generation. Placement
+thread owner and continues from the checkpoint as the claim left it, since the
+old carrier commits until it is fenced; then it attaches to placement with the
+new generation. Placement
 updates the runner and waits for its acknowledgement. Until that attach, output
 may still be routed to the old address but the old carrier cannot commit or
 acknowledge it. After attach, the runner rejects input and acknowledgements

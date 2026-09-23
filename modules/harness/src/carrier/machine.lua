@@ -662,10 +662,22 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     if point.binding_digest ~= plan.binding.binding_digest.entry or point.profile_digest ~= plan.binding.profile_digest.entry then return nil, "pinned measurements changed since the checkpoint" end
     if view.placement_binding ~= plan.placement_binding.binding_id then return nil, "placement binding changed since the checkpoint" end
     if view.placement_binding_digest ~= plan.placement_binding.binding_digest then return nil, "placement binding digest missing or changed since the checkpoint" end
-
+    step(io, "checkpoint_read")
     local claimed, claim_error = must(io, M.CARRIER_OPS .. ":claim", {thread_id = request.thread_id, idempotency_key = io.key(), attempt_id = request.attempt_id})
     if claim_error then return nil, claim_error end
     local epoch = (claimed :: {carrier_epoch: integer}).carrier_epoch
+    -- A live carrier commits until the claim fences it, so the replacement
+    -- continues from the checkpoint as the claim left it, not as first read.
+    local fenced, fenced_error = must(io, M.CARRIER_OPS .. ":checkpoint", {thread_id = request.thread_id, attempt_id = request.attempt_id})
+    if fenced_error then return nil, fenced_error end
+    view = fenced :: {carrier_epoch: integer, checkpoint_revision: integer, checkpoint: unknown, attempt_state: string, open_turn_id: string?, placement_binding: string?, placement_binding_digest: string?}
+    if view.carrier_epoch ~= epoch then return nil, "carrier epoch " .. tostring(epoch) .. " was superseded by " .. tostring(view.carrier_epoch) end
+    if view.attempt_state == "ended" then return nil, "attempt has ended" end
+    local fenced_point, fenced_point_error = checkpoint.decode(view.checkpoint)
+    if not fenced_point then return nil, "stored checkpoint: " .. tostring(fenced_point_error) end
+    local moved = checkpoint.continues(point, fenced_point)
+    if moved then return nil, "stored checkpoint: " .. moved end
+    point = fenced_point
     local session = new_session(plan, "turn:" .. request.attempt_id .. ":1", epoch, view.checkpoint_revision, checkpoint.rebind(point, epoch))
     session.recovered = true
     local status_target = M.placement_target(plan, "status")

@@ -1,4 +1,4 @@
--- MIT. The short-lived Agent continuation surface shown while admission runs.
+-- MIT. The short-lived Agent surface shown while a launch or continuation is admitted.
 -- It has no process or workspace authority; it only renders bounded status.
 local tty = require("tty")
 local appearance = require("appearance")

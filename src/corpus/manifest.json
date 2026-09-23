@@ -851,9 +851,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 7592,
+      "bytes": 7696,
       "id": "docs/system_map",
-      "sha256": "3a7ee4b29ecbe0e5d1e56add4155ffe09257d18bac6662366ddc42a4e9a37a69",
+      "sha256": "46ca2c896894cfd4c84e2a8ad4af7030860e1bebe43c33a75f152712c6fc9480",
       "source": "docs/development/ownership.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
@@ -875,9 +875,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 7336,
+      "bytes": 7463,
       "id": "docs/desktop",
-      "sha256": "3fb2589a8d6bf62e265dc4f9e9bb1acc237b3202e38d514a94c8cf9f135ab781",
+      "sha256": "5aa396d29260e39de594c20b6f5a83567af1c621c13f8a35816b375026fcea4e",
       "source": "docs/guides/desktop.md",
       "title": "Desktop",
       "topic": "ui"
@@ -923,17 +923,17 @@
       "topic": "gateway"
     },
     {
-      "bytes": 15660,
+      "bytes": 16195,
       "id": "docs/application_contracts",
-      "sha256": "6d1c34aa302223201914e95ca2b1ec5e4c7e6d6c547269653d93524c5e52579c",
+      "sha256": "5d4b06c575dd92ec18942b6788563430ce222060d58ea5df3098377aab7494b9",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
     },
     {
-      "bytes": 9616,
+      "bytes": 10399,
       "id": "docs/approvals",
-      "sha256": "847b0305f9255f070173c66e4fd58c19efe77e26335e6acdd3df921b6e32675a",
+      "sha256": "7c3c58f467a18aff5599120790ddf37fc458daa4688146506a566cac39ad3e76",
       "source": "docs/reference/approvals.md",
       "title": "Durable approval requests",
       "topic": "approvals"
@@ -955,9 +955,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 13485,
+      "bytes": 14262,
       "id": "docs/threads",
-      "sha256": "cfc7b275f3a9b3fd860ba9cb9b245f4599f08c0fafb76b0eb159887677ff975e",
+      "sha256": "c2354d0170d7728e9d0106d536034bae84481433640d3d30c9248df33334b9df",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -987,9 +987,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3238,
+      "bytes": 3967,
       "id": "component/approvals",
-      "sha256": "3d1eb61bb8691733e8c298ce678869e060d10de44b72b3fce8c77beb402e7d9b",
+      "sha256": "943da0d08df1486d803d8e81db8ffabc9a379f07659a91c65c14ae440b29fa58",
       "source": "modules/approvals/src/README.md",
       "title": "Bee approvals",
       "topic": "component"
@@ -1083,9 +1083,9 @@
       "topic": "component"
     },
     {
-      "bytes": 4316,
+      "bytes": 8274,
       "id": "component/hive",
-      "sha256": "bb8458e4601133e48ecd6c149a78ec53989f44c75c8e654e804ced38015085a5",
+      "sha256": "d5d92f6762e2ec5c13a53b997f508971ee2f7869701ab97305eac681152e7983",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"
@@ -1166,7 +1166,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 1231496,
+    "bytes": 1238509,
     "documents": 145
   }
 }

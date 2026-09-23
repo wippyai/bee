@@ -23,8 +23,8 @@ READS = '''
 
 def run():
     with fixture_workspace(unit_tests=False) as project:
-        (project / "src/hub/facade.lua").write_text(FACADE.replace('    elseif raw.operation == "details" then', READS + '    elseif raw.operation == "details" then'))
-        pack = project / "contents-test.wapp"
+        (project / "modules/hub/src/binding/facade.lua").write_text(FACADE.replace('    elseif raw.operation == "details" then', READS + '    elseif raw.operation == "details" then'))
+        pack = project / "contents-deployment"
         pack_fixture(project, pack)
         for packed in (False, True):
             with tempfile.TemporaryDirectory(prefix="bee-contents-ui-") as directory:

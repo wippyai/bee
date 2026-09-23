@@ -29,6 +29,7 @@ def run():
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         presenter = project / "src/core/terminal/main.lua"
         code = presenter.read_text()
         anchor = 'local action = bindings.action('
@@ -398,6 +399,7 @@ def public_migration():
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         # The removed combined actor is historical test data, never production.

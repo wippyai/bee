@@ -38,6 +38,7 @@ def exercise(packed):
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
         for name in ("wippy.lock", ".wippy.yaml", "wippy.yaml"):
+        shutil.copytree(ROOT / "modules", project / "modules")
             shutil.copy2(ROOT / name, project / name)
         index = project / "src/apps/console/_index.yaml"
         document = yaml.safe_load(index.read_text())

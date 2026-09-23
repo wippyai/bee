@@ -87,6 +87,7 @@ def run(packed):
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
         for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
+        shutil.copytree(ROOT / "modules", project / "modules")
             shutil.copy2(ROOT / name, project / name)
         fixture = project / "src/probe"
         fixture.mkdir()

@@ -60,6 +60,7 @@ def run():
     with tempfile.TemporaryDirectory(prefix="bee-lifecycle-") as temporary:
         project = Path(temporary) / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         for name in ["wippy.lock", ".wippy.yaml", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         fixture = project / "src/probe"
@@ -155,6 +156,7 @@ def detached():
             folder = Path(directory)
             project = folder / "project"
             shutil.copytree(ROOT / "src", project / "src")
+            shutil.copytree(ROOT / "modules", project / "modules")
             shutil.copytree(ROOT / "tests/fixtures/attachments", project / "src/probe")
             broker = project / "src/core/applications/broker.lua"
             code = broker.read_text()

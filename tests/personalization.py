@@ -68,6 +68,7 @@ def unauthorized_application():
     with tempfile.TemporaryDirectory(prefix="bee-title-denial-") as directory:
         project = Path(directory) / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         source = project / "src/apps/settings/app.lua"
@@ -121,6 +122,7 @@ def acknowledged_layout():
         root = Path(directory)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         session = project / "src/core/session/main.lua"

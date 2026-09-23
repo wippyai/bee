@@ -56,6 +56,7 @@ def exercise(packed):
     with tempfile.TemporaryDirectory(prefix="bee-inbox-decide-") as directory:
         folder = Path(directory)
         project = folder / "project"
+        shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/inbox_decide", project / "src/probe")
         for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:

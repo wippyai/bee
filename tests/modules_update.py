@@ -130,8 +130,8 @@ def exercise(project, packed, pack):
 
 def main():
     with fixture_workspace(unit_tests=False) as project:
-        (project / "src/hub/facade.lua").write_text(FACADE)
-        manifest = project / "src/hub/_index.yaml"
+        (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
+        manifest = project / "modules/hub/src/binding/_index.yaml"
         manifest.write_text(manifest.read_text().replace("modules: [security, funcs]", "modules: [security, funcs, time]", 1))
         pack = project / "modules-update-test.wapp"
         pack_fixture(project, pack)

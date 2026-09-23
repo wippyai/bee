@@ -385,8 +385,8 @@ return {handle = handle}
 
 def main():
     with fixture_workspace(unit_tests=False) as project:
-        (project / "src/hub/facade.lua").write_text(FACADE)
-        pack = project / "modules-test.wapp"
+        (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
+        pack = project / "modules-deployment"
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)
@@ -416,7 +416,7 @@ def main():
         exercise_real_facade(project, False, pack)
         exercise_real_facade(project, True, pack)
     with fixture_workspace(unit_tests=False) as project:
-        (project / "src/hub/facade.lua").write_text(FACADE)
+        (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
         (project / "modules/gov/src/binding/publication_method.lua").write_text(PUBLICATION_METHOD)
         pack = project / "modules-authored-test.wapp"
         pack_fixture(project, pack)

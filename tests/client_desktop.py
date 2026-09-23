@@ -24,6 +24,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copytree(ROOT / "tests/fixtures/desktop_client", project / "src/client_probe")
         if _transfer_failure in ("source", "target"):
             client = project / "src/core/client/main.lua"

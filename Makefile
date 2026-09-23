@@ -80,6 +80,12 @@ governance-overlay-composed-base-check:
 # application_open over the real MCP listener in source and packed launches.
 app-journey-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_journey.py
+.PHONY: app-dashboard-check
+# The reference dashboard authored through governance, applied by the person's
+# review and approval, opened from the catalog and read live at 80x24, 120x36
+# and 160x48.
+app-dashboard-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_dashboard.py
 .PHONY: delivery-review-check
 # What a person approves: the destination's own verdict, the diagnostics that
 # block it, the entry set the plan changes, and the approval and activation

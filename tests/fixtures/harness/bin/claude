@@ -17,8 +17,13 @@ for argument in "$@"; do
   previous="$argument"
 done
 if [ -n "${BEE_FIXTURE_READ:-}" ]; then
+  # The line read is reported on stdout, ahead of the replayed stream: the
+  # carrier consumes stdout in order and settles at the result frame, while
+  # stderr is a separate pipe whose chunks may reach it after that frame.
   read -r line
-  printf '%s\n' "read:$line" >&2
+  escaped="${line//\\/\\\\}"
+  escaped="${escaped//\"/\\\"}"
+  printf '{"type":"system","subtype":"informational","level":"info","content":"read:%s"}\n' "$escaped"
 fi
 settings_json=""
 mcp_config_json=""

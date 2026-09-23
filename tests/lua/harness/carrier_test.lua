@@ -235,9 +235,11 @@ local function define_tests()
                 local data = body.data :: {[string]: unknown}
                 if data.type == "text" then texts = texts + 1 end
                 if data.type == "turn.signal" and data.phase == "ended" then ended = ended + 1 end
-                if data.type == "notice" and data.code == "stderr" then
+                -- The fixture reports the line it read as a stdout frame
+                -- ahead of its stream, so the evidence precedes the result.
+                if data.type == "notice" and data.code == "informational" then
                     local content = data.content :: {[string]: unknown}
-                    if tostring(content.text):find("read:", 1, true) then reads = reads + 1 end
+                    if content.text == "read:ping" then reads = reads + 1 end
                 end
             end
             return texts, ended, reads

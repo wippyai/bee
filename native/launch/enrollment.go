@@ -163,30 +163,37 @@ func enrollmentPublisher(state string) (boot.Component, error) {
 	}), nil
 }
 
-// publishSupervisor records the live Hive supervisor address in the rendezvous
-// descriptor. A raft-disabled owner never registers the cluster-wide name, so
-// this direct address is how a local client reaches the supervisor. The
-// supervisor registers its local name at boot; until then the descriptor carries
-// no address and the client keeps waiting.
-func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) {
+// errSupervisorPending defers listing clients until this boot's supervisor has
+// registered and its address is published.
+var errSupervisorPending = errors.New("the owner supervisor is not published yet")
+
+// publishSupervisor records this boot's Hive supervisor address in the
+// rendezvous descriptor, which each boot rewrites without one. A local client
+// addresses the supervisor by this address, so the owner lists no client
+// before it is published: an eventual name can still carry the owner's
+// previous boot on a Hive peer.
+func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) error {
 	pidRegistry := topapi.GetRegistry(ctx)
 	if pidRegistry == nil {
-		return
+		return errors.New("enrollment publisher requires the process names")
 	}
 	supervisor, found := pidRegistry.Lookup("bee.hive.supervisor")
 	if !found || supervisor.Node != p.node || supervisor.Host != "bee.hive:supervisor_host" || supervisor.UniqID == "" {
-		return
+		return errSupervisorPending
 	}
 	store, err := rendezvous.New(filepath.Join(p.state, rendezvous.DirectoryName))
 	if err != nil {
-		return
+		return err
 	}
 	descriptor, err := store.Read(ctx)
-	if err != nil || descriptor.Supervisor == supervisor.String() {
-		return
+	if err != nil {
+		return err
+	}
+	if descriptor.Supervisor == supervisor.String() {
+		return nil
 	}
 	descriptor.Supervisor = supervisor.String()
-	_ = store.Publish(ctx, descriptor)
+	return store.Publish(ctx, descriptor)
 }
 
 type enrollmentPublisherComponent struct {
@@ -266,9 +273,10 @@ func retireDepartedClients(ctx context.Context, trusted string) error {
 }
 
 // publish mirrors one snapshot of the trusted directory. A client waits on the
-// local enrollment and then sends its first request, and the supervisor admits
-// from the host entry, so the entry is written first and the local enrollment
-// lists only the nodes that write named.
+// local enrollment and then sends its first request to the published
+// supervisor, and the supervisor admits from the host entry, so the entry is
+// written first, the supervisor address is published next, and the local
+// enrollment lists only the nodes that write named.
 func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry.Registry, enrollment *rendezvous.Enrollment) error {
 	if err := retireDepartedClients(ctx, p.trusted); err != nil {
 		return err
@@ -284,11 +292,10 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 	if _, err := reg.Apply(ctx, enrollmentChange(keys, peers)); err != nil {
 		return err
 	}
-	if err := p.seedEnrollment(ctx, enrollment, keys); err != nil {
+	if err := p.publishSupervisor(ctx); err != nil {
 		return err
 	}
-	p.publishSupervisor(ctx)
-	return nil
+	return p.seedEnrollment(ctx, enrollment, keys)
 }
 
 // Start arms the publisher and returns. It must not publish yet: the runtime

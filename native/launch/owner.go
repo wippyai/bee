@@ -108,7 +108,7 @@ func prepareLockedOwner(state string) (boot.Config, error) {
 		return nil, err
 	}
 	node := ownerNodeName(state)
-	secretPath, seed, err := prepareMesh(state, time.Now())
+	mesh, err := prepareMesh(state, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -130,10 +130,10 @@ func prepareLockedOwner(state string) (boot.Config, error) {
 		"raft.enabled":                        false,
 		"raft.role":                           "client",
 		"membership.bind_addr":                meshAddress.String(),
-		"membership.bind_port":                0,
+		"membership.bind_port":                mesh.port,
 		"membership.advertise_addr":           meshAddress.String(),
-		"membership.join_addrs":               seed,
-		"membership.secret_file":              secretPath,
+		"membership.join_addrs":               mesh.seeds,
+		"membership.secret_file":              mesh.secret,
 		"membership.secret_key":               "",
 		"internode.bind_addr":                 meshAddress.String(),
 		"internode.bind_port":                 0,

@@ -7,17 +7,23 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/wippyai/bee/native/hive/invite"
 	"github.com/wippyai/bee/native/hive/meshtls"
 	"github.com/wippyai/bee/native/internal/privatefile"
+	clusterapi "github.com/wippyai/runtime/api/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 const (
@@ -32,6 +38,13 @@ const (
 	joinedSecretName     = "joined.secret"
 	joinedCredentialName = "joined.pem"
 	maxJoinedRecordBytes = meshtls.MaxBytes + 1024
+	// gossipPortName keeps the gossip port the node's first boot selected. Later
+	// boots bind it again, so the address the node's hive remembers stays valid
+	// across restarts, clean or not.
+	gossipPortName = "gossip.port"
+	// peerAddressSuffix names a pinned peer's last gossip address, beside its
+	// key in the peers directory; the next boot seeds it.
+	peerAddressSuffix = ".addr"
 )
 
 // meshAddress is where the owner's mesh and join listener bind and what they
@@ -119,51 +132,158 @@ func ensureAuthority(directory string, now time.Time) (meshtls.Authority, error)
 	return meshtls.DecodeAuthority(data, now)
 }
 
+// meshBoot is what one owner boot's mesh uses.
+type meshBoot struct {
+	secret string
+	seeds  string
+	port   int
+}
+
 // prepareMesh writes the credential and authority pool the owner's mesh uses
-// in this boot and returns its secret file and gossip seed. A joined node uses
-// the leaf its hive node certified and trusts that hive's pool beside its own
-// authority; any other node certifies a fresh leaf with its own authority.
-func prepareMesh(state string, now time.Time) (string, string, error) {
+// in this boot and returns its secret file, gossip seeds and gossip port. A
+// joined node uses the leaf its hive node certified and trusts that hive's
+// pool beside its own authority; any other node certifies a fresh leaf with
+// its own authority. The seeds are the joined hive node and every pinned
+// peer's last known address.
+func prepareMesh(state string, now time.Time) (meshBoot, error) {
 	directory := ownerDirectory(state)
 	authority, err := ensureAuthority(directory, now)
 	if err != nil {
-		return "", "", err
+		return meshBoot{}, err
 	}
 	record, joined, err := readJoined(state)
 	if err != nil {
-		return "", "", err
+		return meshBoot{}, err
+	}
+	port, err := readGossipPort(directory)
+	if err != nil {
+		return meshBoot{}, err
+	}
+	seeds, err := peerAddresses(state)
+	if err != nil {
+		return meshBoot{}, err
 	}
 	var credential, pool []byte
-	secret, seed := filepath.Join(directory, membershipSecretName), ""
+	secret := filepath.Join(directory, membershipSecretName)
 	if joined {
 		if credential, err = os.ReadFile(filepath.Join(directory, joinedCredentialName)); err != nil {
-			return "", "", fmt.Errorf("joined hive credential: %w", err)
+			return meshBoot{}, fmt.Errorf("joined hive credential: %w", err)
 		}
 		if pool, err = meshtls.Pool(authority.Certificate(), []byte(record.Authorities)); err != nil {
-			return "", "", err
+			return meshBoot{}, err
 		}
-		secret, seed = filepath.Join(directory, joinedSecretName), record.Gossip
+		secret = filepath.Join(directory, joinedSecretName)
+		if !slices.Contains(seeds, record.Gossip) {
+			seeds = append([]string{record.Gossip}, seeds...)
+		}
 	} else {
 		public, private, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
-			return "", "", err
+			return meshBoot{}, err
 		}
 		leaf, err := authority.Issue(public, []netip.Addr{meshAddress}, now)
 		if err != nil {
-			return "", "", err
+			return meshBoot{}, err
 		}
 		if credential, err = meshtls.Credential(leaf, private); err != nil {
-			return "", "", err
+			return meshBoot{}, err
 		}
 		if pool, err = meshtls.Pool(authority.Certificate()); err != nil {
-			return "", "", err
+			return meshBoot{}, err
 		}
 	}
 	if err := writeOwnerFile(filepath.Join(directory, meshtls.CredentialFile), credential); err != nil {
-		return "", "", err
+		return meshBoot{}, err
 	}
 	if err := writeOwnerFile(filepath.Join(directory, meshtls.AuthoritiesFile), pool); err != nil {
-		return "", "", err
+		return meshBoot{}, err
 	}
-	return secret, seed, nil
+	return meshBoot{secret: secret, seeds: strings.Join(seeds, ","), port: port}, nil
+}
+
+// readGossipPort returns the port a previous boot selected, or zero before
+// the first boot publishes one.
+func readGossipPort(directory string) (int, error) {
+	data, err := os.ReadFile(filepath.Join(directory, gossipPortName))
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || port < 1 || port > 65535 {
+		return 0, errors.New("recorded gossip port is invalid")
+	}
+	return port, nil
+}
+
+// peerAddresses returns the last known gossip address of every pinned peer, in
+// node order.
+func peerAddresses(state string) ([]string, error) {
+	peers, err := trustedKeys(ownerPeersDirectory(state))
+	if err != nil {
+		return nil, err
+	}
+	var result []string
+	for _, peer := range peers {
+		data, err := os.ReadFile(filepath.Join(ownerPeersDirectory(state), peer.node+peerAddressSuffix))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		address, err := netip.ParseAddrPort(strings.TrimSpace(string(data)))
+		if err != nil || address.Port() == 0 {
+			return nil, fmt.Errorf("recorded address of %s is invalid", peer.node)
+		}
+		result = append(result, address.String())
+	}
+	return result, nil
+}
+
+// recordAddresses keeps the hive's addresses stable across owner boots: the
+// node's own gossip port, which the next boot binds again, and the gossip
+// address of each pinned peer that is a member under its pinned key, which the
+// next boot seeds.
+func recordAddresses(state string, membership clusterapi.Membership) error {
+	directory := ownerDirectory(state)
+	local, err := netip.ParseAddrPort(membership.LocalNode().Addr)
+	if err != nil {
+		return fmt.Errorf("local gossip address: %w", err)
+	}
+	if err := writeChanged(filepath.Join(directory, gossipPortName), strconv.Itoa(int(local.Port()))); err != nil {
+		return err
+	}
+	peers, err := trustedKeys(ownerPeersDirectory(state))
+	if err != nil {
+		return err
+	}
+	pinned := make(map[string]ed25519.PublicKey, len(peers))
+	for _, peer := range peers {
+		pinned[peer.node] = peer.key
+	}
+	for _, member := range membership.Nodes() {
+		key, ok := pinned[member.ID]
+		if !ok || member.Meta[internode.MetadataPublicKey] != base64.RawStdEncoding.EncodeToString(key) {
+			continue
+		}
+		address, err := netip.ParseAddrPort(member.Addr)
+		if err != nil || address.Port() == 0 {
+			continue
+		}
+		if err := writeChanged(filepath.Join(ownerPeersDirectory(state), member.ID+peerAddressSuffix), address.String()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeChanged writes value as one line unless the file already holds it.
+func writeChanged(path, value string) error {
+	if existing, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(existing)) == value {
+		return nil
+	}
+	return writeOwnerFile(path, []byte(value+"\n"))
 }

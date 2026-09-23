@@ -185,6 +185,9 @@ func leaveHive(out io.Writer, state, node string) error {
 	}
 	pin := filepath.Join(ownerPeersDirectory(state), node+".pub")
 	removed := os.Remove(pin)
+	if err := os.Remove(filepath.Join(ownerPeersDirectory(state), node+peerAddressSuffix)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	if errors.Is(removed, os.ErrNotExist) {
 		if !joined || record.Node != node {
 			return fmt.Errorf("%s is not a peer of this node", node)

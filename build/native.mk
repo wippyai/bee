@@ -93,6 +93,13 @@ native-upgrade-check:
 native-client-check:
 	python3 tests/native_client.py "$(BEE_BINARY)"
 
+# Two nodes in two state directories on this host join one hive with a
+# one-line invite over the mesh's identity TLS; disposable state lives under
+# .wippy/ and every owner the check starts is stopped.
+.PHONY: hive-join-check
+hive-join-check:
+	python3 tests/hive_join.py "$(BEE_BINARY)"
+
 # Reusable release acceptance: Linux network namespace, disposable state and
 # frame-bearing public desktop/reconnect checks. Restored-install fixtures stay
 # outside the repository target because they require an independently reviewed

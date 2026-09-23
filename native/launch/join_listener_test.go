@@ -19,9 +19,14 @@ import (
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 )
 
-type fakeMembership struct{ local clusterapi.NodeInfo }
+type fakeMembership struct {
+	local  clusterapi.NodeInfo
+	others []clusterapi.NodeInfo
+}
 
-func (m fakeMembership) Nodes() []clusterapi.NodeInfo   { return []clusterapi.NodeInfo{m.local} }
+func (m fakeMembership) Nodes() []clusterapi.NodeInfo {
+	return append([]clusterapi.NodeInfo{m.local}, m.others...)
+}
 func (m fakeMembership) LocalNode() clusterapi.NodeInfo { return m.local }
 func (m fakeMembership) UpdateMeta(map[string]string)   {}
 
@@ -49,7 +54,7 @@ func joinAdmitter(t *testing.T, redeem redeemer) (*admitter, string) {
 		t.Fatal(err)
 	}
 	return &admitter{state: state, node: ownerNodeName(state), authority: authority,
-		membership: fakeMembership{clusterapi.NodeInfo{ID: ownerNodeName(state), Addr: "127.0.0.1:4100"}}, redeem: redeem}, state
+		membership: fakeMembership{local: clusterapi.NodeInfo{ID: ownerNodeName(state), Addr: "127.0.0.1:4100"}}, redeem: redeem}, state
 }
 
 func redeemRequest(t *testing.T) (invite.Request, ed25519.PublicKey) {

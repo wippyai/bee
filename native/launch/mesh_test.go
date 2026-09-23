@@ -21,6 +21,8 @@ import (
 
 	"github.com/wippyai/bee/native/hive/invite"
 	"github.com/wippyai/bee/native/hive/meshtls"
+	clusterapi "github.com/wippyai/runtime/api/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 func prepareCluster(t *testing.T, state string) (map[string]any, func() error) {
@@ -337,4 +339,67 @@ func TestRedeemInviteRecordsTheHiveOnAFreshNode(t *testing.T) {
 	if err := redeemInvite(context.Background(), state, line); err == nil || !strings.Contains(err.Error(), "running") {
 		t.Fatalf("a second join while the owner runs = %v", err)
 	}
+}
+
+// A node keeps its gossip port across boots and seeds every pinned peer's last
+// gossip address beside its hive's, so either side of a hive can restart,
+// cleanly or not, and find the other at a known address.
+func TestPrepareOwnerKeepsItsGossipAddressAndSeedsKnownPeers(t *testing.T) {
+	state := t.TempDir()
+	cluster, release := prepareCluster(t, state)
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	if port, _ := prepareBindPort(t, state); port != 0 {
+		t.Fatalf("a first boot binds port %d", port)
+	}
+	_ = cluster
+	peer, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeOwnerFile(filepath.Join(ownerPeersDirectory(state), "bee-owner-peer.pub"), []byte(base64.RawStdEncoding.EncodeToString(peer)+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	membership := fakeMembership{local: clusterapi.NodeInfo{ID: ownerNodeName(state), Addr: "127.0.0.1:45123"}}
+	membership.others = []clusterapi.NodeInfo{
+		{ID: "bee-owner-peer", Addr: "127.0.0.1:45200", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: base64.RawStdEncoding.EncodeToString(peer)}},
+		{ID: "bee-owner-stranger", Addr: "127.0.0.1:45300"},
+	}
+	if err := recordAddresses(state, membership); err != nil {
+		t.Fatal(err)
+	}
+	port, seeds := prepareBindPort(t, state)
+	if port != 45123 || seeds != "127.0.0.1:45200" {
+		t.Fatalf("second boot binds %d and seeds %q", port, seeds)
+	}
+	// A member whose gossiped key differs from the pin is not recorded.
+	membership.others[0].Meta = clusterapi.NodeMeta{internode.MetadataPublicKey: base64.RawStdEncoding.EncodeToString(make([]byte, ed25519.PublicKeySize))}
+	membership.others[0].Addr = "127.0.0.1:45999"
+	if err := recordAddresses(state, membership); err != nil {
+		t.Fatal(err)
+	}
+	if _, seeds := prepareBindPort(t, state); seeds != "127.0.0.1:45200" {
+		t.Fatalf("an unauthenticated member moved a peer's seed to %q", seeds)
+	}
+	var out bytes.Buffer
+	if err := leaveHive(&out, state, "bee-owner-peer"); err != nil {
+		t.Fatal(err)
+	}
+	if _, seeds := prepareBindPort(t, state); seeds != "" {
+		t.Fatalf("a retired peer is still seeded: %q", seeds)
+	}
+}
+
+func prepareBindPort(t *testing.T, state string) (int, string) {
+	t.Helper()
+	config, release, err := prepareOwner(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = release() }()
+	section := config.Sub("cluster")
+	value, _ := section.Get("membership.bind_port")
+	port, _ := value.(int)
+	return port, section.GetString("membership.join_addrs", "")
 }

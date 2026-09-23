@@ -46,8 +46,9 @@ type joinListenerComponent struct {
 	done   chan struct{}
 }
 
-// joinListener serves invite redemption for the owner of state. It depends on
-// the cluster so its admission can name the live gossip address.
+// joinListener serves invite redemption for the owner of state and records the
+// hive's addresses the next boot binds and seeds. It depends on the cluster so
+// its admission can name the live gossip address.
 func joinListener(state string) (boot.Component, error) {
 	if !filepath.IsAbs(state) {
 		return nil, errors.New("join listener requires an absolute state directory")
@@ -112,12 +113,33 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	l.cancel, l.done = cancel, make(chan struct{})
 	a := &admitter{state: l.state, node: l.node, authority: authority, membership: membership, redeem: redeem}
+	served, recorded := make(chan struct{}), make(chan struct{})
 	go func() {
-		defer close(l.done)
+		defer close(served)
 		defer redeem.Close()
 		if err := invite.Serve(lifetime, listener, identity, a.admit); err != nil {
 			log.Warn("join listener stopped", zap.Error(err))
 		}
+	}()
+	go func() {
+		defer close(recorded)
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			if err := recordAddresses(l.state, membership); err != nil {
+				log.Warn("hive address record failed", zap.Error(err))
+			}
+			select {
+			case <-lifetime.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	go func() {
+		<-served
+		<-recorded
+		close(l.done)
 	}()
 	return nil
 }

@@ -18,8 +18,11 @@ import (
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
 	"github.com/wippyai/runtime/api/boot"
+	"github.com/wippyai/runtime/api/pid"
 	"github.com/wippyai/runtime/api/registry"
+	topapi "github.com/wippyai/runtime/api/topology"
 	bootpkg "github.com/wippyai/runtime/boot"
+	topologysys "github.com/wippyai/runtime/system/topology"
 	"go.uber.org/zap"
 )
 
@@ -306,7 +309,7 @@ func TestEnrollmentPublisherListsClientsOnlyAfterTheEntryNamesThem(t *testing.T)
 	if !ok {
 		t.Fatal("publisher is not a starter")
 	}
-	if err := starter.Start(registry.WithRegistry(base, reg)); err != nil {
+	if err := starter.Start(liveOwner(t, state, registry.WithRegistry(base, reg))); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
@@ -333,6 +336,29 @@ func TestEnrollmentPublisherListsClientsOnlyAfterTheEntryNamesThem(t *testing.T)
 	if reg.early.Load() {
 		t.Fatal("the local enrollment listed the client before the host entry was written")
 	}
+}
+
+// liveOwner publishes the descriptor a booted owner writes and registers its
+// supervisor, the preconditions under which the publisher lists clients.
+func liveOwner(t *testing.T, state string, ctx context.Context) context.Context {
+	t.Helper()
+	execution, err := readExecution(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := rendezvous.New(filepath.Join(state, rendezvous.DirectoryName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Publish(context.Background(), rendezvous.Descriptor{Version: 1, Execution: execution, Node: ownerNodeName(state),
+		Gossip: "127.0.0.1:4100", Transport: "127.0.0.1:4101", PublicKey: base64.RawStdEncoding.EncodeToString(make([]byte, ed25519.PublicKeySize))}); err != nil {
+		t.Fatal(err)
+	}
+	names := topologysys.NewPIDRegistry()
+	if _, err := names.Register("bee.hive.supervisor", pid.PID{Node: ownerNodeName(state), Host: "bee.hive:supervisor_host", UniqID: "0x0000e"}); err != nil {
+		t.Fatal(err)
+	}
+	return topapi.WithRegistry(ctx, names)
 }
 
 // holdClient models a live client: it holds its node's liveness lock.
@@ -377,7 +403,7 @@ func TestEnrollmentPublisherRetiresDepartedClients(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publisher.Start(registry.WithRegistry(base, reg)); err != nil {
+	if err := publisher.Start(liveOwner(t, state, registry.WithRegistry(base, reg))); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = component.(boot.Stopper).Stop(context.Background()) }()
@@ -434,5 +460,72 @@ func TestEnrollmentPublisherPublishesPinnedPeers(t *testing.T) {
 	}
 	if len(reg.lastPeers) != 1 || reg.lastPeers[0] != "bee-owner-peer" {
 		t.Fatalf("published peers = %v", reg.lastPeers)
+	}
+}
+
+// A client waits on the local enrollment and then addresses the supervisor the
+// descriptor publishes. The owner lists a client only once this boot's
+// supervisor address is published, so the client never resolves a supervisor
+// from a name a Hive peer still carries from the owner's previous boot.
+func TestEnrollmentPublisherListsClientsOnlyAfterTheSupervisorIsPublished(t *testing.T) {
+	state := t.TempDir()
+	prepareOwnerState(t, state)
+	_, release := holdClient(t, state, "client-a")
+	defer release()
+	execution, err := readExecution(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := rendezvous.New(filepath.Join(state, rendezvous.DirectoryName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor := rendezvous.Descriptor{Version: 1, Execution: execution, Node: ownerNodeName(state),
+		Gossip: "127.0.0.1:4100", Transport: "127.0.0.1:4101", PublicKey: base64.RawStdEncoding.EncodeToString(make([]byte, ed25519.PublicKeySize))}
+	if err := store.Publish(context.Background(), descriptor); err != nil {
+		t.Fatal(err)
+	}
+	local, err := rendezvous.NewEnrollment(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved := func() bool {
+		_, ok := local.Resolve(context.Background(), execution, "client-a")
+		return ok
+	}
+	names := topologysys.NewPIDRegistry()
+	base, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	component, err := enrollmentPublisher(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := component.(boot.Starter).Start(topapi.WithRegistry(registry.WithRegistry(base, &flakyRegistry{}), names)); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = component.(boot.Stopper).Stop(context.Background()) }()
+	unpublished := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(unpublished) {
+		if resolved() {
+			t.Fatal("a client was listed before this boot's supervisor address was published")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	supervisor := pid.PID{Node: ownerNodeName(state), Host: "bee.hive:supervisor_host", UniqID: "0x0000e"}
+	if _, err := names.Register("bee.hive.supervisor", supervisor); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !resolved() && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !resolved() {
+		t.Fatal("the client was never listed")
+	}
+	published, err := store.Read(context.Background())
+	if err != nil || published.Supervisor != supervisor.String() {
+		t.Fatalf("listed a client before publishing the supervisor: %+v %v", published, err)
 	}
 }

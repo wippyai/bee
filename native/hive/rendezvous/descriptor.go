@@ -42,6 +42,13 @@ type Descriptor struct {
 	Supervisor string `json:"supervisor,omitempty"`
 }
 
+// Endpoint is the owner identity the live membership record authenticates:
+// the descriptor without the supervisor hint, which membership never carries.
+func (d Descriptor) Endpoint() Descriptor {
+	d.Supervisor = ""
+	return d
+}
+
 func (d Descriptor) validate() error {
 	if d.Version != 1 || len(d.Execution) != 32 || len(d.Node) == 0 || len(d.Node) > 128 {
 		return ErrDescriptor

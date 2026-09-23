@@ -249,3 +249,26 @@ func TestDescriptorDecodesPublishedSupervisorAddress(t *testing.T) {
 		}
 	}
 }
+
+// The live membership record authenticates the owner's endpoint; the published
+// supervisor address is a hint the membership never carries.
+func TestEndpointMatchesTheLiveMembershipCapture(t *testing.T) {
+	published := sample()
+	published.Supervisor = "{forge@bee.hive:supervisor_host|0x1}"
+	node := cluster.NodeInfo{ID: published.Node, Addr: published.Gossip, Meta: cluster.NodeMeta{
+		internode.MetadataPublicKey: published.PublicKey,
+		internode.MetadataPort:      "40002",
+	}}
+	captured, err := Capture(node, published.Execution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if captured != published.Endpoint() {
+		t.Fatalf("capture %#v does not match endpoint %#v", captured, published.Endpoint())
+	}
+	moved := node
+	moved.Meta = cluster.NodeMeta{internode.MetadataPublicKey: published.PublicKey, internode.MetadataPort: "40003"}
+	if captured, err := Capture(moved, published.Execution); err != nil || captured == published.Endpoint() {
+		t.Fatalf("a moved listener matched the endpoint: %v", err)
+	}
+}

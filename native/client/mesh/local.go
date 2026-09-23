@@ -207,7 +207,7 @@ func awaitOwner(ctx context.Context, stack *stackpkg.Stack, expected rendezvous.
 				if err != nil {
 					return err
 				}
-				if actual != expected {
+				if actual != expected.Endpoint() {
 					return rendezvous.ErrOwnerChanged
 				}
 				return nil

@@ -39,7 +39,7 @@ and caches are projections that owners can rebuild.
 | Threads and delivery | Durable records, memberships, actions, attempts, subscriptions, obligations, waits, projections and carriers | Local owner implemented; cross-node forwarding remains a proposal |
 | Resources and credentials | Named roots, containment, audience-bound grants and credential materialization | Owner contracts implemented; portable authority transfer remains a proposal |
 | Placement and harnesses | Launch plans, attempts, native placement, carrier, hooks, permissions and cleanup | Local managed launch path implemented; managed Docker/headless launch is a proposal |
-| Hive | Authenticated operation contracts and configured policy routing | Generic policy route implemented; public enrollment, discovery and remote workspace composition are proposals |
+| Hive | Authenticated operation contracts, configured policy routing and invite-based joining | Generic policy route and invite joins between nodes of one host implemented; cross-host addressing, discovery and remote workspace composition are proposals |
 | Operation/interface catalog | Filtered descriptions shared by contracts, tools, traits, UI and remote adapters | Visibility is descriptive; each invocation is authorized at its owner |
 
 An application definition describes capabilities, but the host-selected
@@ -100,8 +100,8 @@ authorize an operation.
 The following remain proposals until their owners, permissions, migration and
 acceptance contracts are implemented:
 
-- public Hive enrollment, named-node discovery, headless launch and remote
-  workspace composition;
+- Hive joins across machines (a host-selected mesh address), named-node
+  discovery, headless launch and remote workspace composition;
 - destination-owned Hub package transfer/install and durable/federated registry
   publication;
 - independent package releases and alternate overlay lifecycles;

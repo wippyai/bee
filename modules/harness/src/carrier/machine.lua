@@ -112,6 +112,9 @@ type Session = {
     decoder: stream_json.Decoder,
     normalizer: unknown,
     terminal: driver_types.Terminal?,
+    -- stream_ended: the terminal came from the end of stdout, not from an
+    -- envelope.
+    stream_ended: boolean,
     exit: settle.Exit?,
     eof: {stdout: boolean, stderr: boolean},
     runner: string?,
@@ -444,7 +447,7 @@ local function new_session(plan: Plan, turn_id: string, epoch: integer, revision
     local output: OutputState = "open"
     if point.output == "complete" then output = "complete" elseif point.output == "truncated" then output = "truncated" end
     return {plan = plan, turn_id = turn_id, turn_open = true, epoch = epoch, revision = revision, checkpoint = point, decoder = decoder, normalizer = point.normalizer_state,
-        terminal = terminal, exit = nil, eof = {stdout = false, stderr = false}, runner = nil, settled = nil, recovered = false, output = output, pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
+        terminal = terminal, stream_ended = point.stream_ended == true, exit = nil, eof = {stdout = false, stderr = false}, runner = nil, settled = nil, recovered = false, output = output, pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
         last_sequence = {stdout = point.consumed.stdout, stderr = point.consumed.stderr}}
 end
 -- The gateway binding of an attempt under a carrier epoch: admitted after
@@ -902,7 +905,10 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
                 records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence,
                     source_last_sequence = message.sequence, envelope_index = session.decoder.index + 1, event_index = event_index - 1}, body = item}
             end
-            if terminal and not session.terminal then session.terminal = terminal end
+            if terminal and not session.terminal then
+                session.terminal = terminal
+                session.stream_ended = true
+            end
         end
     elseif message.stream == "stdout" then
         local envelopes, problems, framing_error = stream_json.feed(session.decoder, message.data or "")
@@ -950,6 +956,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
             session.checkpoint.normalizer_state = snapshot_state(session.normalizer) :: {[string]: unknown}?
             session.checkpoint.event_cursor = nil
             session.checkpoint.terminal = snapshot_state(session.terminal) :: {[string]: unknown}?
+            session.checkpoint.stream_ended = session.stream_ended
         else
             session.checkpoint.carry.stdout = before.carry
             session.checkpoint.envelope_index = before.index
@@ -1244,12 +1251,16 @@ function M.stop_session(io: IO, session: Session): (string, string?)
     if stop_error then return "none", stop_error end
     return "stopping", nil
 end
+local function evidence_of(session: Session, drain_elapsed: boolean): settle.Evidence
+    return {terminal = session.terminal, stream_ended = session.stream_ended, exit = session.exit, drained = M.drained(session) or drain_elapsed,
+        exit_codes_trustworthy = session.plan.exit_codes_trustworthy}
+end
 -- ready_to_settle: the turn's outcome is decidable and no write is still
 -- awaiting its answer, so a declared session end may run before the
 -- settlement records end the attempt.
 function M.ready_to_settle(session: Session, drain_elapsed: boolean): boolean
     if session.settled then return false end
-    local decided = settle.decide({terminal = session.terminal, exit = session.exit, drained = M.drained(session) or drain_elapsed, exit_codes_trustworthy = session.plan.exit_codes_trustworthy})
+    local decided = settle.decide(evidence_of(session, drain_elapsed))
     if not decided then return false end
     if #session.checkpoint.pending_writes > 0 and not drain_elapsed then return false end
     return true
@@ -1456,7 +1467,7 @@ function M.close_exchanges(io: IO, session: Session, drain_elapsed: boolean): (b
 end
 function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Settlement?, string?)
     if session.settled then return session.settled, nil end
-    local decided = settle.decide({terminal = session.terminal, exit = session.exit, drained = M.drained(session) or drain_elapsed, exit_codes_trustworthy = session.plan.exit_codes_trustworthy})
+    local decided = settle.decide(evidence_of(session, drain_elapsed))
     if not decided then return nil, nil end
     -- Settling while the streams are still open, whether the carrier's own
     -- deadline won or a terminal envelope arrived first, is incomplete

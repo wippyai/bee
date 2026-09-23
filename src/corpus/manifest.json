@@ -899,9 +899,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 11038,
+      "bytes": 11236,
       "id": "docs/carrier",
-      "sha256": "3cd3311acc3b6ab2beb12ad8bbd07295fd4d47fb276eaf9e5887b8ccf4efe9dd",
+      "sha256": "5ae17999407e3a9cb85aa2e24aa6ad5e18ab7f0f81e7d4fc2ebb9413aa4ffb69",
       "source": "docs/reference/agents/carrier.md",
       "title": "Carrier contract",
       "topic": "application"
@@ -1166,7 +1166,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 1238509,
+    "bytes": 1238707,
     "documents": 145
   }
 }

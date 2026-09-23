@@ -3,6 +3,7 @@
 The real facade and publication boundary are covered by hub-manage-check.
 This fixture exercises the actual broker, app process, presenter and keyboard.
 """
+import os
 import re
 import tempfile
 import time
@@ -10,7 +11,7 @@ from pathlib import Path
 import yaml
 
 from tui_smoke import Desktop
-from workspace import fixture_workspace, pack_fixture, registry_entries
+from workspace import ROOT, fixture_workspace, pack_fixture, registry_entries
 
 
 FACADE = '''
@@ -227,12 +228,30 @@ def exercise(project, packed, pack):
             ui.close()
 
 
+def release_deployment():
+    """The packed release deployment whose sealed packs Hub publication uploads.
+
+    `make native-pack BEE_VERSION=X` (or `make standalone`) writes it; the
+    packed Hub scenario resolves Bee's own modules against the published set
+    at that release version."""
+    deployment = Path(os.environ.get("BEE_RELEASE_DEPLOYMENT", ROOT / "dist/portable-deployment")).resolve()
+    lock = deployment / "wippy.lock"
+    if not lock.is_file():
+        raise AssertionError(f"No release deployment at {deployment}; build it with make native-pack BEE_VERSION=<release>")
+    modules = yaml.safe_load(lock.read_text())["modules"]
+    versions = {module["version"] for module in modules if module["name"].startswith("bee/")}
+    if len(versions) != 1:
+        raise AssertionError(f"Release deployment {deployment} locks Bee modules at several versions: {sorted(versions)}")
+    return deployment
+
+
 def install_receipt(ui, packed, pack):
     """Wait for the confirmed installation's receipt and explain a refusal.
 
-    A packed deployment carries Bee's own modules only as locked packs, so the
-    installation re-resolves every locked bee/* module online: the Hub must
-    serve each one at the locked version with the locked pack digest."""
+    A packed release deployment carries Bee's own modules only as locked
+    packs, so the installation re-resolves every locked bee/* module online:
+    the Hub must serve each one at the locked version with the locked digest,
+    which holds once `make hub-publish` has uploaded that deployment."""
     end = time.monotonic() + 30
     while time.monotonic() < end:
         ui.pump()
@@ -254,10 +273,11 @@ def install_receipt(ui, packed, pack):
         causes.append(f"{module}@{version} is not on the Hub")
     for module, version in re.findall(r"manifest digest mismatch for (bee/[a-z0-9-]+)@([0-9A-Za-z.+-]+)", reason):
         causes.append(f"{module}@{version} on the Hub is not the pack this deployment locks ({locked.get(module, {}).get('hash')})")
+    release = next(module["version"] for module in locked.values() if module["name"] == "bee/bee")
     raise AssertionError(
-        "Hub installation into the packed deployment needs every locked bee/* module on the Hub at its locked "
-        "version and digest (make hub-publish publishes them; a pack built from this checkout never carries a "
-        f"published digest). {'; '.join(causes) or 'Runtime reason follows.'}\nReason: {reason}")
+        f"Hub installation into the release deployment {pack} needs every locked bee/* module on the Hub at its "
+        f"locked version and digest; publish exactly this deployment with make hub-publish BEE_VERSION={release}. "
+        f"{'; '.join(causes) or 'Runtime reason follows.'}\nReason: {reason}")
 
 
 def exercise_real_facade(project, packed, pack):
@@ -455,10 +475,8 @@ def main():
         lock["modules"] = [module for module in lock.get("modules", [])
                             if module.get("name") not in {"wippy/test", "wippy/terminal"}]
         (project / "wippy.lock").write_text(yaml.safe_dump(lock, sort_keys=False))
-        pack = project / "modules-real-hub-deployment"
-        pack_fixture(project, pack)
-        exercise_real_facade(project, False, pack)
-        exercise_real_facade(project, True, pack)
+        exercise_real_facade(project, False, None)
+    exercise_real_facade(ROOT, True, release_deployment())
     with fixture_workspace(unit_tests=False) as project:
         (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
         (project / "modules/gov/src/binding/publication_method.lua").write_text(PUBLICATION_METHOD)

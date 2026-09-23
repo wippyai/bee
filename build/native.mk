@@ -52,6 +52,13 @@ portable-deployment-check: native-pack
 	tests/portable_deployment.sh "$(abspath $(NATIVE_WIPPY))" "$(dir $(BEE_BUNDLE_MANIFEST))portable-deployment"
 
 standalone: native-pack
+	$(MAKE) standalone-sealed
+
+# Assembles the executable from an already sealed pack set, so every target
+# of one release embeds the same packs the Hub receives.
+.PHONY: standalone-sealed
+standalone-sealed:
+	@test -f "$(BEE_BUNDLE_MANIFEST)" || { echo 'Run make native-pack before assembling Bee.' >&2; exit 1; }
 	$(BUILDER) build "$(BEE_BUNDLE_MANIFEST)" --output "$(BEE_BINARY)"
 
 native-binary-check:
@@ -74,14 +81,19 @@ release: repository-check native-tools
 	$(BUILDER) package "$(BEE_BINARY)" --output "$(BEE_RELEASE_ARCHIVE)"
 
 HUB_VISIBILITY ?= private
-.PHONY: hub-check hub-publish
+BEE_DEPLOYMENT ?= $(dir $(BEE_BUNDLE_MANIFEST))portable-deployment
+.PHONY: hub-check hub-publish hub-publish-script-check
+# Both upload the sealed packs of the release deployment that
+# `make standalone BEE_VERSION=X` (or native-pack) embeds; neither repacks.
 hub-check:
-	@test -n "$(BEE_VERSION)" || { echo 'Set BEE_VERSION to the release version.' >&2; exit 1; }
-	$(MAKE) lint WIPPY="$(abspath $(NATIVE_WIPPY))"
-	WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_VERSION="$(BEE_VERSION)" build/hub-publish.sh check
+	WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_VERSION="$(BEE_VERSION)" BEE_DEPLOYMENT="$(abspath $(BEE_DEPLOYMENT))" build/hub-publish.sh check
 
 hub-publish: hub-check
-	WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_VERSION="$(BEE_VERSION)" HUB_VISIBILITY="$(HUB_VISIBILITY)" build/hub-publish.sh publish
+	WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_VERSION="$(BEE_VERSION)" BEE_DEPLOYMENT="$(abspath $(BEE_DEPLOYMENT))" HUB_VISIBILITY="$(HUB_VISIBILITY)" build/hub-publish.sh publish
+
+check: hub-publish-script-check
+hub-publish-script-check:
+	tests/hub_publish.sh
 
 # Two real executables, one disposable state directory; no --base workaround.
 .PHONY: native-upgrade-check

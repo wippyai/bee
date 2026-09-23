@@ -63,7 +63,9 @@ steps do not retain credentials in Git configuration.
 
 PR and main checks run Linux amd64 with the full foundation suite. Release tags
 and manual runs assemble and exercise Linux and macOS, each on amd64 and arm64.
-Linux amd64 also dry-runs the Hub publication packer without upload credentials.
+A single pack job seals the application packs once; every target assembles its
+executable from those packs, and the pack job dry-runs their Hub publication
+without upload credentials.
 Each Linux target proves the source-free portable deployment and runs executable
 acceptance with networking disabled. Native module checks run on every Bee target,
 with a separate Linux module gate.
@@ -94,21 +96,26 @@ produces a prerelease; a bare version produces a stable release. The native Go
 module is released separately under `native/vMAJOR.MINOR.PATCH` and never moves
 the latest-release pointer.
 
-The `Native Bee` workflow runs four jobs:
+The `Native Bee` workflow runs five jobs:
 
 - `validate` (ubuntu-24.04) checks the tag, the native pin, then selects the
   platform matrix: PRs and main run Linux amd64 only; tags and manual runs add
   Linux arm64, macOS amd64 and macOS arm64.
+- `pack` (ubuntu-24.04) runs `make native-pack` at the selected version, then
+  `make hub-check` against the resulting deployment. It uploads the sealed pack
+  set (`sealed-packs`) for the targets and the portable deployment as
+  `bee-deployment.tar.gz` with its `.sha256`.
 - `build` runs once per target. On every target it builds the pinned toolchain,
-  verifies the runner architecture, runs the native module checks, and assembles
-  the standalone executable with `make standalone`. Linux amd64 additionally
-  dry-runs the Hub publication pack and runs the full foundation suite; each
+  verifies the runner architecture, restores the sealed pack set, runs the
+  native module checks, and assembles the standalone executable from those packs
+  with `make standalone-sealed`, so every target embeds identical pack bytes.
+  Linux amd64 additionally runs the full foundation suite; each
   Linux target proves the source-free portable deployment and boots the
   executable with networking disabled; each macOS target runs the standalone
   desktop check. Targets other than Linux amd64 run `make installer-check`
   directly (Linux amd64 already covers it inside `make check`). Each target then
   packages `dist/bee` into an archive with checksums and uploads it.
-- `required` (`Bee CI`) fails unless every matrix target succeeded, so a single
+- `required` (`Bee CI`) fails unless the pack job and every matrix target succeeded, so a single
   target cannot be silently skipped or excused.
 - `release` runs only for `v*` tags. It downloads every target artifact, verifies
   each archive against its `.sha256`, and creates a **draft** GitHub release with
@@ -118,7 +125,7 @@ The `Native Bee` workflow runs four jobs:
 Artifacts accumulate in two places. During the run each target uploads an Actions
 artifact named `bee-<goos>-<goarch>`; the release job then attaches
 `bee-<goos>-<goarch>.tar.gz` and its `.sha256` to the draft release, together with
-`install.sh`. Each archive contains the executable `bee`, `bee.provenance.json`,
+`install.sh` and the pack job's `bee-deployment.tar.gz` and `.sha256`. Each archive contains the executable `bee`, `bee.provenance.json`,
 `bee.LICENSES.txt`, the effective `bee.go.mod` and `bee.go.sum`, and
 `bee.runtime-patches.tar.gz`. The provenance sidecar records the sealed
 application manifest, including every physical pack hash and the pinned native
@@ -186,35 +193,39 @@ the full `make check` includes it. The installer does not change workspace data.
 
 ```sh
 make native-tools
+make standalone BEE_VERSION=0.1.0-dev
 make hub-check BEE_VERSION=0.1.0-dev
 ```
 
-The preflight runs strict lint, stages the release source and runs Wippy's
-actual publication packer with `--dry-run` for every physical module and then
-for the `bee/bee` root. `build/release-source.sh` stages that source for both
-publication and `make native-pack`: the release lock names `bee/bee` and every
-`bee/*` module at `BEE_VERSION`, each module's `wippy.yaml` carries that
-version, and every `ns.dependency` on a sibling Bee module is pinned to it.
-Development keeps `0.1.0-dev`; only the staged copy changes. Modules publish in
-dependency order (`tsort` over their sibling `ns.dependency` entries), so a
-module is never published before a Bee module it requires. Production source
-selection and test exclusions come from each `wippy.yaml` and the runtime
-publisher. `make hub-publish BEE_VERSION=…` runs that preflight and publishes
-each immutable protected version through the native Wippy CLI with `--create`,
-so a module the Hub does not have yet is registered with `HUB_VISIBILITY`.
+Hub publication uploads the sealed packs of the release deployment, never a
+repack of the source. `build/release-source.sh` stages the source `make
+native-pack` packs: the release lock names `bee/bee` and every `bee/*` module
+at `BEE_VERSION`, each module's `wippy.yaml` carries that version, and every
+`ns.dependency` on a sibling Bee module is pinned to it. Development keeps
+`0.1.0-dev`; only the staged copy changes.
 
-The portable deployment a release embeds therefore locks the same versions the
-Hub receives. The Hub resolver also compares each locked pack hash with the
-digest it serves for that version; the CLI publisher packs its own WAPP, so the
-published bytes differ from the release's sealed packs until the runtime can
-publish a sealed pack as-is. Online resolution of a released deployment at the
-published version (in-app installation, or an update when no newer version
-exists) stops with a manifest digest mismatch until then.
+`build/hub-publish.sh` reads `dist/portable-deployment` (`BEE_DEPLOYMENT`
+selects another). It requires every lock row to be a Bee module at
+`BEE_VERSION`, every Bee module to be locked, and every vendor pack to match
+its lock hash. It then runs `wippy publish --wapp` with each module's own
+`wippy.yaml` for identity and metadata, in dependency order (`tsort` over
+sibling `ns.dependency` entries) with `bee/bee` last. `make hub-check` dry-runs
+each upload, prints the lock hash beside the `Digest:` the publisher reports,
+and fails when any pair differs. `make hub-publish BEE_VERSION=…` runs that
+check and uploads each immutable protected version with `--create`, so a
+module the Hub does not have yet is registered with `HUB_VISIBILITY`. The Hub
+therefore serves exactly the bytes the release executable's deployment lock
+pins, and online resolution of a released deployment finds each locked module
+at its locked digest. `make hub-publish-script-check` exercises the script
+against a mocked publisher.
 
 `.github/workflows/hub.yml` runs when an application GitHub release is published.
 It requires a semantic version tag on main, a published release and a successful
-native tag workflow for the same commit, then runs `make hub-publish` for every
-Bee module at the tag's version. Native-module tags do not trigger it.
+native tag workflow for the same commit. It downloads the release's
+`bee-deployment.tar.gz` and the Linux amd64 archive, verifies both checksums,
+requires the deployment lock to name exactly the packs and hashes the
+executable's `bee.provenance.json` records, then runs `make hub-publish` for
+every Bee module at the tag's version from that deployment. Native-module tags do not trigger it.
 The publication job grants its GitHub token `contents: read` and `actions: read`
 to inspect the release and its completed build run.
 Manual dispatch retries an existing published application release through the

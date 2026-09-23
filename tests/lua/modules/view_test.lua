@@ -201,6 +201,24 @@ local function define_tests()
             test.is_true(table.concat(last.rows, "\n"):find("bee/package25", 1, true) == nil)
             test.is_true(table.concat(last.rows, "\n"):find("bee/package1", 1, true) ~= nil)
         end)
+        test.it("shows a failed operation's whole reason above its receipt state", function()
+            local state = model.new()
+            local reason = "failed to expand changeset: dependency resolution failed: bee/application@0.1.0-dev: module not found"
+            model.apply_result(state, {ok = false, code = "FAILED", message = reason, replayed = false, value = {state = "failed"}})
+            local frame = view.draw(64, 22, appearance.defaults(), state, 0, "")
+            local body = ""
+            for _, row in ipairs(frame.rows) do
+                local plain = row:gsub("\27%[[0-9;]*m", "")
+                body = body .. plain:sub(2, 63)
+            end
+            local status_at = body:find("Not completed: FAILED", 1, true)
+            local reason_at = body:find(reason, 1, true)
+            local receipt_at = body:find("Receipt state: failed", 1, true)
+            test.not_nil(status_at)
+            test.not_nil(reason_at)
+            test.not_nil(receipt_at)
+            test.is_true(status_at < reason_at and reason_at < receipt_at)
+        end)
     end)
 end
 return test.run_cases(define_tests)

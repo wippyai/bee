@@ -53,9 +53,49 @@ jobs:
           targets='[{"goos":"linux","goarch":"amd64","runner":"ubuntu-24.04"},{"goos":"linux","goarch":"arm64","runner":"ubuntu-24.04-arm"},{"goos":"darwin","goarch":"amd64","runner":"macos-26-intel"},{"goos":"darwin","goarch":"arm64","runner":"macos-26"}]'
         fi
         echo "value=$targets" >> "$GITHUB_OUTPUT"
+  pack:
+    name: Bee packs
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - name: Build pinned native development runtime
+      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
+      with:
+        mode: toolchain
+        manifest: wippy.build.json
+        output: .wippy/bin/bee-wippy
+    # Every target embeds these sealed packs, and Hub publication uploads the
+    # same bytes from the release's deployment archive.
+    - name: Seal the application packs once
+      env:
+        REQUESTED_VERSION: ${{ inputs.version || '0.1.0-dev' }}
+      run: |
+        version="$REQUESTED_VERSION"
+        if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
+        make native-pack BEE_VERSION="$version"
+        make hub-check BEE_VERSION="$version"
+        tar -cf sealed-packs.tar dist/bee.bundle.build.json dist/native-packs dist/portable-deployments dist/portable-deployment
+        tar -czf dist/bee-deployment.tar.gz -C dist/portable-deployment/ .
+        (cd dist && sha256sum bee-deployment.tar.gz > bee-deployment.tar.gz.sha256)
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: sealed-packs
+        path: sealed-packs.tar
+        if-no-files-found: error
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: bee-deployment
+        path: |
+          dist/bee-deployment.tar.gz
+          dist/bee-deployment.tar.gz.sha256
+        if-no-files-found: error
   build:
     name: Bee (${{ matrix.goos }}/${{ matrix.goarch }})
-    needs: validate
+    needs: [validate, pack]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -84,14 +124,11 @@ jobs:
       with:
         python-version: '3.12'
     - run: python3 -m pip install -r tests/requirements.txt
-    - name: Validate Hub publication pack
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-      env:
-        REQUESTED_VERSION: ${{ inputs.version || '0.1.0-dev' }}
-      run: |
-        version="$REQUESTED_VERSION"
-        if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
-        make hub-check BEE_VERSION="$version"
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: sealed-packs
+    - name: Restore the sealed packs
+      run: tar -xf sealed-packs.tar && rm sealed-packs.tar
     - name: Full foundation checks
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: make check WIPPY="$PWD/.wippy/bin/bee-wippy"
@@ -109,7 +146,7 @@ jobs:
       run: |
         version="$REQUESTED_VERSION"
         if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
-        make standalone BUILDER="$BUILDER_BINARY" BEE_VERSION="$version"
+        make standalone-sealed BUILDER="$BUILDER_BINARY"
         echo "version=$version" >> "$GITHUB_OUTPUT"
     - name: Verify source-free portable deployment
       if: matrix.goos == 'linux'
@@ -135,13 +172,13 @@ jobs:
   required:
     name: Bee CI
     if: always()
-    needs: [validate, build]
+    needs: [validate, pack, build]
     runs-on: ubuntu-24.04
     steps:
     - name: Require every target
       env:
         RESULTS: ${{ join(needs.*.result, ',') }}
-      run: test "$RESULTS" = success,success
+      run: test "$RESULTS" = success,success,success
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: required

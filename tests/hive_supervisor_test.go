@@ -43,7 +43,7 @@ func stageHiveSupervisorDesktop(t *testing.T, source string) {
 	if manifest.Namespace != "bee.hive.desktop" {
 		t.Fatalf("Hive desktop fixture namespace = %q", manifest.Namespace)
 	}
-	wanted := map[string]bool{"protocol": true, "catalog": true, "owner": true}
+	wanted := map[string]bool{"protocol": true, "catalog": true, "owner": true, "host_policy": true}
 	entries := make([]map[string]interface{}, 0, len(wanted))
 	for _, entry := range manifest.Entries {
 		name, _ := entry["name"].(string)

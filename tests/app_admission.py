@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import tempfile
 
-from workspace import ROOT, RUNTIME, database_environment
+from workspace import ROOT, RUNTIME, database_environment, deployment_copy, pack_deployment
 
 
 def run():
@@ -22,10 +22,12 @@ def run():
             if not packed:
                 subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true",
                                 "--set", "lua.type_system.strict=true"], cwd=project, check=True)
-            package = folder / "admission.wapp"
+            package = project / "admission-deployment"
             if packed:
-                subprocess.run([str(RUNTIME), "pack", str(package)], cwd=project, check=True)
-            args = [str(RUNTIME), "--console", "run"] + ([str(package)] if packed else [])
+                pack_deployment(project, package)
+            if packed:
+                deployment_copy(package, folder)
+            args = [str(RUNTIME), "--console", "run"]
             args += ["app-admission-probe", "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
             try:
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True,

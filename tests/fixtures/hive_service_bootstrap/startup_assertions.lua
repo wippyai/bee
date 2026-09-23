@@ -6,8 +6,12 @@
     assert(security.can("process.registry.register", "bee.hive.supervisor"), "missing own-name authority")
     assert(security.can("funcs.call", "bee.hive.supervisor:execute"), "missing dispatch authority")
     assert(not security.can("process.registry.register", "unrelated.name"), "foreign-name authority")
-    assert(not security.can("process.host", "bee:workers"), "unexpected host authority")
+    -- The supervisor composes the retained desktop bridge, so it holds exactly
+    -- the desktop host authority: the retained launcher on the worker host.
+    assert(security.can("process.host", "bee:workers"), "missing desktop bridge host authority")
+    assert(security.can("process.spawn", "bee.launch:retained"), "missing desktop bridge spawn authority")
+    assert(security.can("security.scope.create", "scope"), "missing desktop bridge scope authority")
+    assert(not security.can("process.host", "bee.hive:supervisor_host"), "unexpected supervisor host authority")
     assert(not security.can("process.spawn", "bee.hive.supervisor:main"), "unexpected spawn authority")
-    assert(not security.can("security.scope.create", "scope"), "unexpected scope authority")
     assert(not security.can("funcs.call", "unrelated:operation"), "unrelated function authority")
     assert(not security.can("db.get", "bee:workspace_db"), "unexpected database authority")

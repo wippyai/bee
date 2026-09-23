@@ -12,13 +12,10 @@ local function main(value: unknown)
     local input = assert(tty.events())
     local events = assert(process.events())
     assert(tty.start())
-    local width, height = tty.screen_size()
     local executor = assert(exec.get("bee.console:executor"))
-    local child, spawn_error = executor:exec(command.encode(launch.arguments), {pty = {term = "xterm-256color", width = width, height = height}})
-    if not child then executor:release(); error(tostring(spawn_error)) end
-    local terminal, attach_error = child:attach_terminal()
-    if not terminal then child:close(true); executor:release(); error(tostring(attach_error)) end
-    -- Attachment creates the native proxy and transfers child ownership to it.
+    -- The PTY takes the current terminal geometry; the returned process owns the child.
+    local terminal, start_error = executor:terminal(command.encode(launch.arguments), {pty = {term = "xterm-256color"}})
+    if not terminal then executor:release(); error(tostring(start_error)) end
     client.ready(launch, {negotiate_close = true})
     if #launch.arguments > 0 then client.title(launch, launch.arguments[1]) end
     local done = terminal:done()

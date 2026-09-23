@@ -51,6 +51,9 @@ func exercise(runtime, root, mode string, packed bool) error {
 	if err := copyTree(filepath.Join(dir, "src"), filepath.Join(root, "src")); err != nil {
 		return err
 	}
+	if err := copyTree(filepath.Join(dir, "modules"), filepath.Join(root, "modules")); err != nil {
+		return err
+	}
 	if err := copyTree(filepath.Join(dir, "src", "tests", "hive_manager_probe"), filepath.Join(root, "tests", "fixtures", "hive_manager_app")); err != nil {
 		return err
 	}
@@ -128,11 +131,14 @@ func exercise(runtime, root, mode string, packed bool) error {
 	if !packed {
 		return run(runtime, dir, marker, "run", "hive-manager-app-probe", mode, "--host", "bee:terminal")
 	}
-	pack := filepath.Join(dir, "hive-manager.wapp")
-	if err := run(runtime, dir, "", "pack", pack); err != nil {
-		return err
+	// A packed Bee is a source-free deployment pinning one pack per module.
+	deployment := filepath.Join(dir, "packed")
+	build := exec.Command("python3", filepath.Join(root, "tests", "pack_deployment.py"), dir, deployment)
+	build.Env = append(os.Environ(), "BEE_RUNTIME="+runtime)
+	if out, err := build.CombinedOutput(); err != nil {
+		return fmt.Errorf("deployment build: %w\n%s", err, out)
 	}
-	return run(runtime, dir, marker, "run", pack, "hive-manager-app-probe", mode, "--host", "bee:terminal")
+	return run(runtime, deployment, marker, "run", "hive-manager-app-probe", mode, "--host", "bee:terminal")
 }
 
 func main() {
@@ -172,6 +178,9 @@ func counterfactual(runtime, root string) error {
 		}
 	}
 	if err := copyTree(filepath.Join(dir, "src"), filepath.Join(root, "src")); err != nil {
+		return err
+	}
+	if err := copyTree(filepath.Join(dir, "modules"), filepath.Join(root, "modules")); err != nil {
 		return err
 	}
 	if err := copyTree(filepath.Join(dir, "src", "tests", "hive_manager_probe"), filepath.Join(root, "tests", "fixtures", "hive_manager_app")); err != nil {

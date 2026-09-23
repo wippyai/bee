@@ -130,7 +130,10 @@ local function parameter_rows(raw: unknown): ({Parameter}?, string?)
     for index = 1, count do
         local parameter = object((raw :: {[number]: unknown})[index])
         local name = parameter.name
-        if type(name) ~= "string" or #name == 0 or #name > 256 or not name:match("^[^:%s]+:[^:%s]+$") or seen[name] then
+        -- Installed roots address requirements the way the native linker does:
+        -- a qualified ns:name or a bare name the dependency owns.
+        if type(name) ~= "string" or #name == 0 or #name > 256 or seen[name]
+            or not (name:match("^[^:%s]+$") or name:match("^[^:%s]+:[^:%s]+$")) then
             return nil, "installed root has an invalid parameter name"
         end
         if parameter.value == nil then return nil, "installed root parameter has no value" end

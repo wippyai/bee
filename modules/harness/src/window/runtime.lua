@@ -1,7 +1,7 @@
 -- MIT. Shared managed-window lifecycle for component-owned process entries.
 --
 -- The process entry supplies a constructor returning a process-local window. The broker grants
--- the terminal to that caller, so attach_terminal remains in the actual app actor.
+-- the terminal to that caller, so executor:terminal() runs in the actual app actor.
 -- Gateway hooks are claimed, committed and acknowledged one future at a time.
 local tty = require("tty")
 local exec = require("exec")
@@ -185,7 +185,7 @@ end
 
 type Window = {
     send: (Window, tty.TTYEvent) -> (boolean, string?),
-    done: (Window) -> exec.TerminalCompletionChannel,
+    done: (Window) -> exec.TerminalResultChannel,
     status: (Window) -> ("running" | "done", string?),
     close: (Window) -> (boolean, string?),
     finish: (Window) -> (boolean, string?),

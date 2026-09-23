@@ -93,7 +93,7 @@ return {handle = handle}
 def exercise(project, packed, pack):
     with tempfile.TemporaryDirectory(prefix="bee-modules-ui-") as directory:
         (Path(directory) / ".wippy").mkdir()
-        ui = Desktop(directory, packed=packed, project=project, pack_file=pack, apps=("bee.modules:app",))
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.modules:app",))
         try:
             ui.wait("MODULES", timeout=20)
             ui.wait("Preview fixture", timeout=10)
@@ -232,8 +232,11 @@ def exercise_real_facade(project, packed, pack):
     are written only to Desktop's disposable local registry. Opening a plan or
     its confirmation screen must leave local inventory unchanged.
     """
+    # Bee's own physical modules are installed packages of the launched
+    # composition; a deployment also pins its bee/bee root.
+    baseline = yaml.safe_load(((pack if packed else project) / "wippy.lock").read_text())["modules"]
     with tempfile.TemporaryDirectory(prefix="bee-modules-real-hub-") as directory:
-        ui = Desktop(directory, packed=packed, project=project, pack_file=pack,
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack,
                      apps=("bee.modules:app",))
         try:
             def click(label):
@@ -262,7 +265,8 @@ def exercise_real_facade(project, packed, pack):
             ui.key(b"\x7f\x7f\x7f\r")
             ui.wait("Keyword: all")
             search_test()
-            click("wippy/test")
+            # The catalog row, not the header that names the current selection.
+            click("wippy/test  ·")
             ui.wait("Test Framework")
             ui.key(b"v")
             ui.wait("0.4.17", timeout=30)
@@ -279,7 +283,7 @@ def exercise_real_facade(project, packed, pack):
             ui.wait("MODULES  CONFIRM")
             assert "Completed:" not in ui.text(), "review applied the local dependency root"
             click("Installed")
-            ui.wait("No installed Hub modules", timeout=20)
+            ui.wait(f"Your installed packages · {len(baseline)}", timeout=20)
 
             # Return through the real catalog, prepare a fresh measured plan,
             # and explicitly confirm it. This publishes only to the isolated
@@ -288,7 +292,8 @@ def exercise_real_facade(project, packed, pack):
             click("Catalog")
             ui.wait("MODULES  CATALOG")
             search_test()
-            click("wippy/test")
+            # The catalog row, not the header that names the current selection.
+            click("wippy/test  ·")
             ui.wait("Test Framework")
             ui.key(b"v")
             ui.wait("0.4.17", timeout=30)
@@ -302,6 +307,10 @@ def exercise_real_facade(project, packed, pack):
             ui.wait("Completed:", timeout=30)
             ui.wait("Receipt state: complete")
             click("Installed")
+            ui.wait("MODULES  INSTALLED", timeout=20)
+            # wippy/test sorts after Bee's own modules and its dependency;
+            # select down to its row before reading the installed version.
+            ui.key(b"\x1b[B" * (len(baseline) + 2))
             ui.wait("wippy/test", timeout=20)
             ui.wait("0.4.17")
             # Authored publication is separate from a selected Hub installation.
@@ -329,7 +338,7 @@ def exercise_real_facade(project, packed, pack):
 def exercise_authored_publication(project, packed, pack):
     """Prove Modules sends explicit prepare then publish requests through Governance."""
     with tempfile.TemporaryDirectory(prefix="bee-modules-authored-") as directory:
-        ui = Desktop(directory, packed=packed, project=project, pack_file=pack,
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack,
                      apps=("bee.modules:app",))
         try:
             ui.wait("MODULES", timeout=20)
@@ -385,8 +394,8 @@ return {handle = handle}
 
 def main():
     with fixture_workspace(unit_tests=False) as project:
-        (project / "src/hub/facade.lua").write_text(FACADE)
-        pack = project / "modules-test.wapp"
+        (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
+        pack = project / "modules-deployment"
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)
@@ -411,14 +420,14 @@ def main():
         lock["modules"] = [module for module in lock.get("modules", [])
                             if module.get("name") not in {"wippy/test", "wippy/terminal"}]
         (project / "wippy.lock").write_text(yaml.safe_dump(lock, sort_keys=False))
-        pack = project / "modules-real-hub-test.wapp"
+        pack = project / "modules-real-hub-deployment"
         pack_fixture(project, pack)
         exercise_real_facade(project, False, pack)
         exercise_real_facade(project, True, pack)
     with fixture_workspace(unit_tests=False) as project:
-        (project / "src/hub/facade.lua").write_text(FACADE)
+        (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
         (project / "modules/gov/src/binding/publication_method.lua").write_text(PUBLICATION_METHOD)
-        pack = project / "modules-authored-test.wapp"
+        pack = project / "modules-authored-deployment"
         pack_fixture(project, pack)
         exercise_authored_publication(project, False, pack)
         exercise_authored_publication(project, True, pack)

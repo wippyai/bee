@@ -31,9 +31,6 @@ const (
 	trustedDirectoryName = "trusted"
 	membershipSecretName = "membership.secret"
 	internodeKeyName     = "internode.key"
-	// desktopApplication is the retained window application the owner admits
-	// through its desktop bridge.
-	desktopApplication = "bee.harness.window:app"
 )
 
 // ownerComponents returns the boot components the owner route adds: the
@@ -116,7 +113,6 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 		"expires_at":    ownerExpiry(),
 		"allowed_nodes": []any{},
 		"local_clients": true,
-		"application":   desktopApplication,
 	}
 	// The supervisor service takes one input object. The override key is
 	// namespace:entry:path, and the entry declares its input as a list, so the

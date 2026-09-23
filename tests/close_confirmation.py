@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from workspace import ROOT, RUNTIME
+from workspace import ROOT, RUNTIME, pack_deployment
 from tui_smoke import Desktop
 
 
@@ -30,6 +30,7 @@ def exercise(packed, responsive=True):
     with tempfile.TemporaryDirectory(prefix="bee-close-confirm-") as directory:
         project = Path(directory) / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         presenter = project / "src/core/terminal/main.lua"
@@ -66,10 +67,10 @@ def exercise(packed, responsive=True):
         code = code[:begin] + handler + code[end:]
         source.write_text(code)
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
-        pack = project / "guarded.wapp"
+        pack = project / "guarded-deployment"
         if packed:
-            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-        ui = Desktop(directory, packed, project=project, pack_file=pack, apps=("bee.console:app",))
+            pack_deployment(project, pack)
+        ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.console:app",))
         prompt = "Close terminal?" if responsive else "Application did not respond"
         try:
             ui.wait("Terminal")
@@ -104,7 +105,7 @@ def exercise(packed, responsive=True):
             assert prompt not in ui.text(), ui.text()
             ui.quit()
             ui.close()
-            ui = Desktop(directory, packed, project=project, pack_file=pack, apps=("bee.console:app", "bee.console:app"))
+            ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.console:app", "bee.console:app"))
             ui.wait("Terminal")
             ui.key(b"\x0e")
             deadline = time.monotonic() + 5

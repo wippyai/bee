@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
-from workspace import ROOT, RUNTIME
+from workspace import ROOT, RUNTIME, pack_deployment
 from tui_smoke import Desktop
 
 
@@ -11,6 +11,7 @@ def exercise(packed):
     with tempfile.TemporaryDirectory(prefix="bee-interactions-") as directory:
         project = Path(directory) / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         source = project / "src/apps/settings/app.lua"
@@ -57,10 +58,10 @@ def exercise(packed):
         broker_source.write_text(broker_code)
 
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
-        pack = project / "queries.wapp"
+        pack = project / "queries-deployment"
         if packed:
-            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-        ui = Desktop(directory, packed, project=project, pack_file=pack, apps=("bee.settings:app",))
+            pack_deployment(project, pack)
+        ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.settings:app",))
         try:
             ui.wait("BEE SETTINGS")
             ui.key(b"!")

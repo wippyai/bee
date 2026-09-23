@@ -2,15 +2,11 @@
 import tempfile
 
 from tui_smoke import Desktop
-from workspace import ROOT
-
-
-PACK = ROOT / "dist/bee.wapp"
 
 
 def exercise(packed):
     with tempfile.TemporaryDirectory(prefix="bee-about-") as directory:
-        ui = Desktop(directory, packed=packed, pack_file=PACK, apps=("bee.settings:app",))
+        ui = Desktop(directory, packed=packed, apps=("bee.settings:app",))
         try:
             ui.wait("BEE SETTINGS", timeout=10)
             ui.key(b"\t\t\t")

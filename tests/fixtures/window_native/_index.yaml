@@ -72,9 +72,10 @@ entries:
   kind: process.lua
   source: file://child.lua
   method: main
-  modules: [process, channel, time]
+  modules: [process, channel, time, funcs]
   imports:
     window: bee.placement.native:window
+    protocol: bee.placement.native:protocol
 - name: migration_test
   kind: function.lua
   source: file://migration_test.lua

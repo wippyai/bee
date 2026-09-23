@@ -96,9 +96,10 @@ func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 		}
 	}
 
-	// The supervisor input override carries the desktop bridge enabled for the
-	// retained window application, admitting local clients without pre-listing
-	// node identities.
+	// The supervisor input override enables the desktop bridge for local
+	// clients without pre-listing node identities. The bridge's application is
+	// the retained desktop's initial application; the owner selects none, so a
+	// client's command (for example "bee agent") opens the only window.
 	input, present := config.Get("override.bee.hive.host:supervisor_service:input")
 	if !present {
 		t.Fatal("supervisor input override is missing")
@@ -121,8 +122,8 @@ func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 	if bridge["local_clients"] != true {
 		t.Fatalf("desktop local_clients = %v", bridge["local_clients"])
 	}
-	if bridge["application"] != "bee.harness.window:app" {
-		t.Fatalf("desktop application = %v", bridge["application"])
+	if application, present := bridge["application"]; present {
+		t.Fatalf("desktop bridge opens initial application %v", application)
 	}
 	if execution, _ := bridge["execution"].(string); len(execution) != 32 {
 		t.Fatalf("desktop execution = %v", bridge["execution"])

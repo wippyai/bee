@@ -10,7 +10,7 @@ import time
 import yaml
 
 from tui_smoke import Desktop
-from workspace import ROOT, RUNTIME
+from workspace import ROOT, RUNTIME, pack_deployment
 from recovery import stored
 
 
@@ -29,6 +29,7 @@ def run():
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         presenter = project / "src/core/terminal/main.lua"
         code = presenter.read_text()
         anchor = 'local action = bindings.action('
@@ -71,14 +72,14 @@ def run():
             "arguments": ["/bin/bash", "-c", 'printf "ARG=<%s>\\n" "$1"; exec /bin/cat', "bee-probe"]})
         index.write_text(yaml.safe_dump(document, sort_keys=False))
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=project, check=True)
-        pack = root / "local.wapp"
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack = root / "local-deployment"
+        pack_deployment(project, pack)
         script = root / "literal ; $HOME.sh"
         script.write_text('printf "EXPLICIT=<%s>\\n" "$1"\nexec /bin/cat\n')
         for packed in (False, True):
             pair_folder = root / ("pair-pack" if packed else "pair-source")
             pair_folder.mkdir()
-            ui = Desktop(pair_folder, packed, project=project, pack_file=pack,
+            ui = Desktop(pair_folder, packed, project=project, deployment=pack,
                          command_name="local-command-probe", apps=("bee.client.db:local", "bee.console:app", "bee.settings:app"))
             try:
                 ui.wait("Terminal", timeout=12)
@@ -111,7 +112,7 @@ def run():
                 ui.close()
             # The custom display choice survives cold boot even though the
             # workspace still holds its original Honey preferences.
-            ui = Desktop(pair_folder, packed, project=project, pack_file=pack,
+            ui = Desktop(pair_folder, packed, project=project, deployment=pack,
                          command_name="local-command-probe", apps=("bee.client.db:local",))
             try:
                 ui.wait("Windows Classic", timeout=12)
@@ -122,7 +123,7 @@ def run():
                 ui.close()
             argument_folder = root / ("arguments-pack" if packed else "arguments-source")
             argument_folder.mkdir()
-            ui = Desktop(argument_folder, packed, project=project, pack_file=pack,
+            ui = Desktop(argument_folder, packed, project=project, deployment=pack,
                          command_name="local-application-probe",
                          apps=("bee.client.db:local", "bee.console:app", "/bin/bash", str(script), "space ; $HOME"))
             try:
@@ -133,7 +134,7 @@ def run():
                 ui.close()
             command_folder = root / ("command-pack" if packed else "command-source")
             command_folder.mkdir()
-            ui = Desktop(command_folder, packed, project=project, pack_file=pack,
+            ui = Desktop(command_folder, packed, project=project, deployment=pack,
                          command_name="local-command-probe", apps=("bee.client.db:local", "local-proof", "space ; $HOME"))
             try:
                 ui.wait("ARG=<space ; $HOME>", timeout=12)
@@ -148,7 +149,7 @@ def run():
                 ui.close()
             folder = root / ("pack" if packed else "source")
             folder.mkdir()
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          command_name="local-client-probe", apps=("bee.client.db:local", "bee.console:app"))
             try:
                 ui.wait("Terminal", timeout=12)
@@ -173,7 +174,7 @@ def run():
             finally:
                 ui.close()
 
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          command_name="local-client-probe", apps=("bee.client.db:local", "bee.console:app"))
             try:
                 ui.wait("Terminal", timeout=12)
@@ -184,7 +185,7 @@ def run():
             finally:
                 ui.close()
 
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          command_name="local-command-probe", apps=("bee.client.db:local",))
             try:
                 ui.wait("Workspace ", timeout=12)
@@ -199,7 +200,7 @@ def run():
             restored_folder.mkdir()
             for initial in (True, False):
                 apps = ("bee.client.db:local", "bee.settings:app") if initial else ("bee.client.db:local",)
-                ui = Desktop(restored_folder, packed, project=project, pack_file=pack,
+                ui = Desktop(restored_folder, packed, project=project, deployment=pack,
                              command_name="local-client-probe", apps=apps)
                 try:
                     ui.wait("Honey", timeout=12)
@@ -248,11 +249,11 @@ def run():
         next(e for e in settings["entries"] if e["name"] == "app")["meta"]["application"]["restart_policy"] = "manual"
         settings_index.write_text(yaml.safe_dump(settings, sort_keys=False))
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=project, check=True)
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack_deployment(project, pack)
         for packed in (False, True):
             folder = root / ("manual-pack" if packed else "manual-source")
             folder.mkdir()
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          command_name="local-client-probe", apps=("bee.client.db:local", "bee.settings:app"))
             try:
                 ui.wait("Replay verified", timeout=12)
@@ -263,7 +264,7 @@ def run():
             finally:
                 ui.close()
             before = stored(folder)["applications"][0]
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          command_name="local-client-probe", apps=("bee.client.db:local",))
             try:
                 ui.wait("Workspace ", timeout=12)
@@ -289,11 +290,11 @@ def run():
         ready_anchor = '    assert(process.send(owner, "bee.workspace.control", {version = 1, op = "ready"}))'
         assert code.count(ready_anchor) == 1
         presenter.write_text(code.replace(ready_anchor, '    time.sleep("1h")\n' + ready_anchor))
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack_deployment(project, pack)
         for packed in (False, True):
             folder = root / ("stalled-pack" if packed else "stalled-source")
             folder.mkdir()
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          command_name="local-client-probe", apps=("bee.client.db:local", "bee.console:app"))
             try:
                 ui.wait("Emergency exit", timeout=8)
@@ -318,11 +319,11 @@ def run():
         assert supervisor_code.count(anchor) == 1
         supervisor.write_text(supervisor_code.replace(anchor, anchor
             + '\n            if next_phase == "rendering" then deadline = time.after("2s") end'))
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack_deployment(project, pack)
         for packed in (False, True):
             folder = root / ("lost-reply-pack" if packed else "lost-reply-source")
             folder.mkdir()
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          command_name="local-client-probe", apps=("bee.client.db:local", "bee.console:app"))
             try:
                 ui.wait("Terminal", timeout=12)
@@ -344,11 +345,11 @@ def run():
         assert supervisor_code.count(anchor) == 1
         supervisor.write_text(supervisor_code.replace(anchor,
             anchor + '        time.sleep("300ms")\n        error("Injected startup failure")\n'))
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack_deployment(project, pack)
         for packed in (False, True):
             folder = root / ("failed-boot-pack" if packed else "failed-boot-source")
             folder.mkdir()
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          command_name="local-client-probe", apps=("bee.client.db:local",))
             try:
                 ui.wait("Starting…", timeout=8)
@@ -364,11 +365,11 @@ def run():
                 ui.close()
 
         supervisor.write_text(supervisor_code.replace(anchor, anchor + '        time.sleep("1h")\n'))
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack_deployment(project, pack)
         for packed in (False, True):
             folder = root / ("stalled-boot-pack" if packed else "stalled-boot-source")
             folder.mkdir()
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
+            ui = Desktop(folder, packed, project=project, deployment=pack,
                          command_name="local-client-probe", apps=("bee.client.db:local",))
             try:
                 ui.wait("Starting…", timeout=8)
@@ -398,6 +399,7 @@ def public_migration():
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         # The removed combined actor is historical test data, never production.
@@ -411,8 +413,8 @@ def public_migration():
                 "actor": {"id": "bee.local"}, "policies": ["bee:desktop_policy", "bee:core_spawn_policy",
                     "bee:workspace_storage_policy"]}}}
         index.write_text(yaml.safe_dump(document, sort_keys=False))
-        pack = root / "migration.wapp"
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack = root / "migration-deployment"
+        pack_deployment(project, pack)
         for packed in (False, True):
             folder = root / ("pack" if packed else "source")
             folder.mkdir()
@@ -441,7 +443,7 @@ def public_migration():
                 migrations = db.execute("SELECT * FROM workspace_schema_migrations ORDER BY id").fetchall()
             receipt = None
             for attempt in range(2):
-                ui = Desktop(folder, packed, project=project, pack_file=pack)
+                ui = Desktop(folder, packed, project=project, deployment=pack)
                 try:
                     ui.wait("BEE SETTINGS")
                     assert frame(ui) == bounds, ("migration/reset lost placement", frame(ui), bounds)

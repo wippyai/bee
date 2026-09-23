@@ -28,6 +28,7 @@ local appearance = require("appearance")
 local admission = require("admission")
 local registry = require("registry")
 local fs = require("fs")
+local placement_store = require("placement_store")
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
@@ -125,6 +126,11 @@ local function run()
         end
     end
     assert(opened.error_code == "", tostring(opened.error))
+    -- A picker open stays threadless, so the thread owner admits the
+    -- host-issued principal of the exact instance the open reported.
+    local head = (call("bee.threads.service:get", {thread_id = thread}).value :: {[string]: unknown}).summary :: {[string]: unknown}
+    call("bee.threads.service:join", {thread_id = thread, idempotency_key = "managed-window-failure-join",
+        member_id = "bee.application:" .. WORKSPACE .. ":" .. tostring(opened.instance_id), role = "participant", expected_revision = head.revision})
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind", op = "bind", workspace_id = WORKSPACE,
         id = opened.id, instance_id = opened.instance_id, recipient = owner}))
     local mounted = ""
@@ -191,9 +197,12 @@ local function run()
     assert(prepared == ((STAGE == "placement" or STAGE == "generation") and 1 or 0), "incorrect attempt preparation count")
     if STAGE == "placement" or STAGE == "generation" then
         local cleaned = false
+        -- The attempt belongs to the window's launch principal, so its
+        -- cleanup is read through the fixture's own store access.
         for _ = 1, 80 do
-            local status = call("bee.placement.native:status", {attempt_id = attempt_id}).value
-            local attempt = (status :: {[string]: unknown}).attempt :: {[string]: unknown}
+            local status_db = assert(placement_store.open())
+            local attempt = assert(placement_store.attempt(status_db, attempt_id), "prepared placement attempt is missing")
+            status_db:release()
             if attempt.execution_state == "exited" and attempt.cleanup_state == "complete" then
                 assert(attempt.runner == nil, "refused window created a runner")
                 cleaned = true; break
@@ -286,6 +295,9 @@ func run() error {
 	if err := copyTree(filepath.Join(dir, "src"), filepath.Join(repo, "src")); err != nil {
 		return err
 	}
+	if err := copyTree(filepath.Join(dir, "modules"), filepath.Join(repo, "modules")); err != nil {
+		return err
+	}
 	fixture := filepath.Join(dir, "src", "tests", "managed_window_app")
 	if err := copyTree(fixture, filepath.Join(repo, "tests", "fixtures", "managed_window_app")); err != nil {
 		return err
@@ -313,13 +325,14 @@ func run() error {
 		}
 		if name == "test" {
 			entry["source"], entry["method"] = "file://failure.lua", "run"
-			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee.managed_window_fixture:failure_evidence_policy")
+			entry["imports"].(map[string]interface{})["placement_store"] = "bee.placement.native:store"
+			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee:placement_store_policy", "bee.managed_window_fixture:failure_evidence_policy")
 		}
 		kept = append(kept, entry)
 	}
 	index.Entries = append(kept,
 		map[string]interface{}{"name": "failure_evidence", "kind": "fs.directory", "directory": "evidence", "auto_init": true},
-		map[string]interface{}{"name": "failure_evidence_policy", "kind": "security.policy", "policy": map[string]interface{}{"actions": []string{"fs.get", "funcs.call"}, "resources": []string{"bee.managed_window_fixture:failure_evidence", "bee.placement.native:status"}, "effect": "allow"}},
+		map[string]interface{}{"name": "failure_evidence_policy", "kind": "security.policy", "policy": map[string]interface{}{"actions": []string{"fs.get"}, "resources": []string{"bee.managed_window_fixture:failure_evidence"}, "effect": "allow"}},
 	)
 	indexData, err = yaml.Marshal(&index)
 	if err != nil {
@@ -349,7 +362,7 @@ func run() error {
 	if err := os.WriteFile(hostPath, []byte(rootIndex), 0600); err != nil {
 		return err
 	}
-	receiptPath := filepath.Join(dir, "src", "threads", "service", "receipt_method.lua")
+	receiptPath := filepath.Join(dir, "modules", "threads", "src", "service", "receipt_method.lua")
 	receipt, err := os.ReadFile(receiptPath)
 	if err != nil {
 		return err
@@ -363,7 +376,7 @@ func run() error {
 	if err := os.WriteFile(receiptPath, []byte(receiptText), 0600); err != nil {
 		return err
 	}
-	receiptIndexPath := filepath.Join(dir, "src", "threads", "service", "_index.yaml")
+	receiptIndexPath := filepath.Join(dir, "modules", "threads", "src", "service", "_index.yaml")
 	receiptIndex, err := os.ReadFile(receiptIndexPath)
 	if err != nil {
 		return err
@@ -449,8 +462,25 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	lockText := strings.TrimRight(string(lock), "\n") + "\n" + strings.TrimLeft(string(dependencies), "\n")
-	if err := os.WriteFile(filepath.Join(dir, "wippy.lock"), []byte(lockText), 0600); err != nil {
+	// The root lock already selects Bee's physical modules; the test framework
+	// modules join that same list.
+	var lockDocument map[string]interface{}
+	if err := yaml.Unmarshal(lock, &lockDocument); err != nil {
+		return fmt.Errorf("decode wippy.lock: %w", err)
+	}
+	var dependencyDocument struct {
+		Modules []interface{} `yaml:"modules"`
+	}
+	if err := yaml.Unmarshal(dependencies, &dependencyDocument); err != nil {
+		return fmt.Errorf("decode tests/dependencies.yaml: %w", err)
+	}
+	selected, _ := lockDocument["modules"].([]interface{})
+	lockDocument["modules"] = append(selected, dependencyDocument.Modules...)
+	lockText, err := yaml.Marshal(lockDocument)
+	if err != nil {
+		return fmt.Errorf("encode wippy.lock: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "wippy.lock"), lockText, 0600); err != nil {
 		return err
 	}
 	for _, name := range []string{"home", "config", "data", "state"} {

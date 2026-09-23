@@ -1,10 +1,10 @@
-"""Fresh-pack local desktop acceptance: the packed application in dist/bee.wapp
+"""Fresh-pack local desktop acceptance: this checkout's source-free deployment
 on the pinned runtime, as a user would launch it while the global bee is
 stale. The exact quoted launch command boots; the Start menu carries the
 current applications and no Test Status; Terminal takes input and survives a
 resize and F12; the desktop exits cleanly; a Settings theme persists across a
-relaunch. Runs `run` on the pack (no `wippy lint`), so the supervisor lane's
-pinned lint failure does not block it."""
+relaunch. Runs `run` in the deployment (no `wippy lint`), so the supervisor
+lane's pinned lint failure does not block it."""
 import codecs
 import fcntl
 import os
@@ -18,15 +18,15 @@ import time
 from pathlib import Path
 import pyte
 from tui_smoke import Desktop
-from workspace import ROOT, RUNTIME, database_environment
+from workspace import RUNTIME, database_environment, deployment_copy, product_deployment
 
-PACK = ROOT / "dist/bee.wapp"
-LAUNCH = [str(RUNTIME), "run", str(PACK), "bee"]
+LAUNCH = [str(RUNTIME), "run", "bee"]
 
 
 class Literal(Desktop):
-    """The quoted launch command, verbatim, in a disposable working directory."""
+    """The quoted launch command, verbatim, in a disposable copy of the deployment."""
     def __init__(self, directory):
+        deployment_copy(product_deployment(), directory)
         self.master, slave = pty.openpty()
         self.width, self.height = 100, 30
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
@@ -54,7 +54,7 @@ def literal_boot():
 
 
 def desktop(directory, **kwargs):
-    return Desktop(directory, packed=True, pack_file=PACK, **kwargs)
+    return Desktop(directory, packed=True, **kwargs)
 
 
 def menu_and_terminal(directory):
@@ -119,7 +119,6 @@ def settings_persist(directory):
 
 
 def main():
-    assert PACK.exists(), f"missing {PACK}; run `make pack` or `{RUNTIME} pack dist/bee.wapp` first"
     literal = literal_boot()
     with tempfile.TemporaryDirectory(prefix="bee-fresh-pack-") as directory:
         session = menu_and_terminal(directory)

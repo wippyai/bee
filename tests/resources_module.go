@@ -99,6 +99,7 @@ local function main()
     assert(tostring(defined.destination) == "ANTHROPIC_API_KEY", "unexpected destination")
     local projection = ok(call(nil, "issue_projection", {workspace_id = WORKSPACE, name = "anthropic", audience = ACTOR, attempt_id = "attempt-1",
         profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = "issue-1"}), "issue_projection")
+    assert(tostring(projection.materializer) == "bee:module_materializer", "projection did not record the host-selected materializer")
     local projection_id = tostring(projection.projection_id)
     local materialized = ok(call(nil, "materialize", {projection_id = projection_id, subject = ACTOR, audience = ACTOR, attempt_id = "attempt-1", generation_key = "g1"}), "materialize")
     assert(tostring(materialized.value) == SENTINEL, "materializer did not receive the secret")
@@ -310,9 +311,14 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 		}
 		hostEntries = append(hostEntries, entry)
 	}
+	// The host selects the placement binding recorded on projection receipts
+	// without admitting placement execution into this closure.
 	hostEntries = append(hostEntries,
 		map[string]interface{}{"name": "module_storage", "kind": "env.storage.memory"},
 		map[string]interface{}{"name": "module_secret", "kind": "env.variable", "storage": "bee:module_storage", "variable": "BEE_MODULE_SECRET", "default": "module-secret-9c2e"},
+		map[string]interface{}{"name": "module_materializer", "kind": "registry.entry", "meta": map[string]interface{}{"comment": "Placement binding recorded on this closure's projections"}},
+		map[string]interface{}{"name": "dependency_credentials", "kind": "ns.dependency", "component": "bee/credentials", "version": "0.1.0-dev",
+			"parameters": []map[string]interface{}{{"name": "target_materializer", "value": "bee:module_materializer"}}},
 	)
 	sources, err := resourcesModuleNamed(root, "credentials/host", "credential_sources")
 	if err != nil {

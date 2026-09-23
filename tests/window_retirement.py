@@ -24,10 +24,10 @@ def exercise(packed):
         anchor = 'if reply and decode.belongs(reply, workspace_id) then'
         assert source.count(anchor) == 1
         presenter.write_text(source.replace(anchor, 'if reply and reply.op ~= "closed" and reply.op ~= "close" and decode.belongs(reply, workspace_id) then', 1))
-        pack = Path(directory) / "bee.wapp"
+        pack = project / "deployment"
         if packed:
             pack_fixture(project, pack)
-        ui = Desktop(directory, packed=packed, project=project, pack_file=pack)
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack)
         try:
             ui.wait("No applications open")
             ui.open_start(); ui.choose("Settings"); ui.wait("BEE SETTINGS")

@@ -1,5 +1,5 @@
 """Workspace storage migration and generation-CAS acceptance checks."""
-from workspace import database_environment
+from workspace import database_environment, deployment_copy, pack_deployment
 from pathlib import Path
 import hashlib
 import re
@@ -485,7 +485,7 @@ def main():
         folder = Path(temporary)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
-        shutil.copytree(ROOT / "modules" / "persist", project / "modules" / "persist")
+        shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copy2(ROOT / ".wippy.yaml", project / ".wippy.yaml")
         shutil.copy2(ROOT / "wippy.lock", project / "wippy.lock")
 
@@ -702,7 +702,7 @@ def client_storage():
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
-        shutil.copytree(ROOT / "modules" / "persist", project / "modules" / "persist")
+        shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copytree(ROOT / "tests/fixtures/client_storage", project / "src/client_storage_probe")
         host = project / "src/environment/_index.yaml"
         configuration = yaml.safe_load(host.read_text())
@@ -715,12 +715,14 @@ def client_storage():
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
-        pack = root / "client-storage.wapp"
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        pack = root / "client-storage-deployment"
+        pack_deployment(project, pack)
 
         def probe(folder, mode, packed=False, failure=None, command="client-storage-probe"):
             folder.mkdir(exist_ok=True)
-            args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else [])
+            if packed:
+                deployment_copy(pack, folder)
+            args = [str(RUNTIME), "--console", "run"]
             args += [command, mode, "--set", f"registry.history_path={folder / 'registry.db'}"]
             result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=30,
                                     env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db")))

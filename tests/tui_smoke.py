@@ -1,7 +1,8 @@
 """Live PTY acceptance for source and portable pack; never uses workspace DBs.
 
-Requires pyte (terminal emulator). Run `make pack` first. All processes and state
-are owned by this harness and cleaned in finally blocks.
+Requires pyte (terminal emulator). A packed launch runs a source-free deployment
+copied into its working directory. All processes and state are owned by this
+harness and cleaned in finally blocks.
 """
 from workspace import database_environment
 import codecs
@@ -20,14 +21,14 @@ import termios
 import time
 
 import pyte
-from workspace import fixture_workspace, pack_fixture
+from workspace import deployment_copy, fixture_workspace, pack_fixture, product_deployment
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 
 class Desktop:
-    def __init__(self, directory, packed=False, project=ROOT, pack_file=None, apps=(), launcher=False, command_name="bee"):
+    def __init__(self, directory, packed=False, project=ROOT, deployment=None, apps=(), launcher=False, command_name="bee"):
         self.master, slave = pty.openpty()
         self.width, self.height = 100, 30
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
@@ -37,11 +38,9 @@ class Desktop:
         self.raw = bytearray()
         self.pending_output = ""
         cwd = directory if packed else project
-        args = [str(RUNTIME), "run"]
         if packed:
-            args += [str(pack_file or ROOT / "dist/bee.wapp"), command_name]
-        else:
-            args += [command_name]
+            deployment_copy(deployment or product_deployment(), directory)
+        args = [str(RUNTIME), "run", command_name]
         args += list(apps) + ["--host", "bee:terminal", "--set", f"registry.history_path={directory}/registry.db"]
         if launcher:
             args = [str(ROOT / "run.sh"), "--set", f"registry.history_path={directory}/registry.db"]
@@ -268,9 +267,9 @@ class Desktop:
         self.mouse(0, x, line + 1, True)
 
 
-def exercise(packed, project, pack_file):
+def exercise(packed, project, deployment):
     with tempfile.TemporaryDirectory(prefix="bee-acceptance-") as directory:
-        ui = Desktop(directory, packed, project=project, pack_file=pack_file, apps=("bee.apps:welcome", "bee.apps:palette"))
+        ui = Desktop(directory, packed, project=project, deployment=deployment, apps=("bee.apps:welcome", "bee.apps:palette"))
         try:
             ui.wait("Small shell. Independent applications.")
             ui.assert_local_only()
@@ -585,7 +584,6 @@ if __name__ == "__main__":
     process_manager(False)
     process_manager(True)
     with fixture_workspace(presenter_probe=True, unit_tests=False) as project:
-        pack = project / "fixtures.wapp"
-        pack_fixture(project, pack)
+        pack = pack_fixture(project, project / "fixtures-deployment")
         exercise(False, project, pack)
         exercise(True, project, pack)

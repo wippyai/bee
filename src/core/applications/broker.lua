@@ -753,7 +753,9 @@ local function main(owner: string, initial_preferences: unknown)
         item.announced_title, item.title_dirty, item.negotiate_close = nil, nil, nil
         item.close_request_id, item.attempts = nil, 0
         item.state = lifecycle.start(now())
-        local grant, generation = item.view:renew(item.producer_generation)
+        -- The retired producer re-arms the viewport's one-shot grant; a
+        -- rejected spawn restores it, so a failed start leaves nothing to cancel.
+        local grant = item.view:grant()
         if not grant then
             item.replacement = nil
             item.state = {phase = "stopped", deadline = 0, failure = "replacement_grant_failed"}
@@ -775,14 +777,12 @@ local function main(owner: string, initial_preferences: unknown)
             resume_schema = item.descriptor.resume_schema, resume_state = item.resume_state,
             arguments = item.arguments})
         if not started.pid then
-            local _, cancel_error = item.view:cancel_grant(grant)
             item.replacement = nil
-            item.state = {phase = "stopped", deadline = 0,
-                failure = cancel_error and "replacement_grant_cancel_failed" or "replacement_" .. started.error_code}
+            item.state = {phase = "stopped", deadline = 0, failure = "replacement_" .. started.error_code}
             finish(item, true)
             return
         end
-        item.execution_pid, item.launch_token, item.producer_generation = started.pid, token, assert(generation)
+        item.execution_pid, item.launch_token, item.producer_generation = started.pid, token, execution_generation
         item.replacement = nil
         if previous_catalog_reader or item.binding.catalog_read then publish_catalog_readers() end
     end

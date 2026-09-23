@@ -503,7 +503,7 @@ local function main(owner: string, database_resource: string?)
                     if type(data) == "table" and data.version == 1 and data.workspace_id == workspace_id
                         and contract.text(data.request_id, 80) and record then
                         local committed, err = replace_record(record)
-                        process.send(broker, "bee.application.persisted", {version = 1, request_id = data.request_id,
+                        send("bee.application.persisted", {version = 1, request_id = data.request_id,
                             error_code = committed and "" or "persistence_failed", error = err or ""})
                         if committed then deliver("bee.host.checkpoint", {version = 1, workspace_id = workspace_id, record = record}) end
                     end

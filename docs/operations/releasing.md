@@ -189,11 +189,27 @@ make native-tools
 make hub-check BEE_VERSION=0.1.0-dev
 ```
 
-The preflight runs strict lint and Wippy's actual publication packer with
-`--dry-run`. It validates the `bee/bee` application module without uploading.
-Production source selection and test exclusions come from `wippy.yaml` and
-the runtime publisher. `make hub-publish BEE_VERSION=…` runs that preflight and
-publishes an immutable protected version through the native Wippy CLI.
+The preflight runs strict lint, stages the release source and runs Wippy's
+actual publication packer with `--dry-run` for every physical module and then
+for the `bee/bee` root. `build/release-source.sh` stages that source for both
+publication and `make native-pack`: the release lock names `bee/bee` and every
+`bee/*` module at `BEE_VERSION`, each module's `wippy.yaml` carries that
+version, and every `ns.dependency` on a sibling Bee module is pinned to it.
+Development keeps `0.1.0-dev`; only the staged copy changes. Modules publish in
+dependency order (`tsort` over their sibling `ns.dependency` entries), so a
+module is never published before a Bee module it requires. Production source
+selection and test exclusions come from each `wippy.yaml` and the runtime
+publisher. `make hub-publish BEE_VERSION=…` runs that preflight and publishes
+each immutable protected version through the native Wippy CLI with `--create`,
+so a module the Hub does not have yet is registered with `HUB_VISIBILITY`.
+
+The portable deployment a release embeds therefore locks the same versions the
+Hub receives. The Hub resolver also compares each locked pack hash with the
+digest it serves for that version; the CLI publisher packs its own WAPP, so the
+published bytes differ from the release's sealed packs until the runtime can
+publish a sealed pack as-is. Online resolution of a released deployment at the
+published version (in-app installation, or an update when no newer version
+exists) stops with a manifest digest mismatch until then.
 
 `.github/workflows/hub.yml` runs when an application GitHub release is published.
 It requires a semantic version tag on main, a published release and a successful
@@ -205,13 +221,11 @@ same checks. Failure stays visible; the workflow never substitutes a mutable lab
 or increments the version automatically.
 
 Configure `WIPPY_HUB_TOKEN` in the GitHub `hub` environment with permission to
-publish `bee/bee`. Limit that environment to the `main` branch and `v*` tags;
+create and publish modules in the Hub `bee` organization. Limit that environment to the `main` branch and `v*` tags;
 release-tag creation is restricted to administrators. Keep the token out of
 repository-wide secrets, which same-repository PR workflows can access.
 After replacing the token, run the **Hub credential check** workflow on main.
 It validates authentication and publish authorization without creating an upload.
-Pre-create the module in the Hub `bee` organization, or grant module-creation
-permission for its first publication.
 The runtime receives it as `WIPPY_TOKEN` only for publication. Set repository
 variable `BEE_HUB_VISIBILITY` to
 `public` or `private` for first-time module creation; the default is private.

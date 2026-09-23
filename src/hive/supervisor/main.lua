@@ -107,7 +107,6 @@ local function main(configuration: unknown)
     local caller_routes: {[string]: integer} = {}
     local retries: {[string]: Retry} = {}
     local route_count, execution_count = 0, 0
-    local last_discovery = -5000
     local distributed_name = types.SUPERVISOR_NAME .. "/" .. node
     local advertised = false
     local advertising: funcs.Future? = nil
@@ -464,7 +463,9 @@ local function main(configuration: unknown)
                     end
                 end
                 reconcile_enrollment(now_ms)
-                if now_ms - last_discovery >= 5000 then discover(now_ms); last_discovery = now_ms end
+                -- Discovery reads only this node's name view, so it runs on every
+                -- tick: a peer that restarted is greeted as soon as its name arrives.
+                discover(now_ms)
                 if now_ms - last_advertisement >= 5000 then advertise(now_ms) end
             elseif advertising_response and selected.channel == advertising_response and advertising then
                 local value, result_error = advertising:result()

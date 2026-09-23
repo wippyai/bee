@@ -330,10 +330,12 @@ local function main(configuration: unknown)
         local desktop_launches = desktop and desktop.launches
         local desktop_catalogs = desktop and desktop.catalogs
         local desktop_activations = desktop and desktop.activations
+        local desktop_observers = desktop and desktop.observers
         while true do
             local cases = {requests:case_receive(), replies:case_receive(), hellos:case_receive(), events:case_receive(), ticks:case_receive()}
             if desktop_catalogs then cases[#cases + 1] = desktop_catalogs:case_receive() end
             if desktop_activations then cases[#cases + 1] = desktop_activations:case_receive() end
+            if desktop_observers then cases[#cases + 1] = desktop_observers:case_receive() end
             if desktop_copies then cases[#cases + 1] = desktop_copies:case_receive() end
             if desktop_launches then cases[#cases + 1] = desktop_launches:case_receive() end
             if desktop_ready and desktop_results then
@@ -387,6 +389,8 @@ local function main(configuration: unknown)
                 desktop_owner.activated(desktop, selected.value, now_ms)
             elseif desktop_ready and selected.channel == desktop_ready and desktop then
                 desktop_owner.ready(desktop, selected.value)
+            elseif desktop_observers and selected.channel == desktop_observers and desktop then
+                desktop_owner.observe(desktop, selected.value)
             elseif desktop_results and selected.channel == desktop_results and desktop then
                 desktop_owner.result(desktop, selected.value, now_ms)
             elseif desktop_launches and selected.channel == desktop_launches and desktop then

@@ -18,7 +18,8 @@ type Receipt = {session_id: string?, digest: string, reply: types.Reply, expires
 type State = {
     config: protocol.Configuration, node: string, supervisor: string,
     ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
-    catalogs: Channel<process.Message>, activations: Channel<process.Message>, reader_updates: Channel<process.Message>, catalog: catalog.State,
+    catalogs: Channel<process.Message>, activations: Channel<process.Message>, reader_updates: Channel<process.Message>,
+    observers: Channel<process.Message>, catalog: catalog.State,
     workspace_id: string, desktop_id: string, allowed: {[string]: boolean}, catalog_readers: {[string]: boolean}, pending_catalog_readers: retained.CatalogReaders?,
     clients: {[string]: Client}, receipts: {[string]: Receipt}, client_count: integer, receipt_count: integer,
     expires_at: time.Time, stopped: boolean,
@@ -54,20 +55,33 @@ function M.start(config: protocol.Configuration, node: string): State
     local catalogs = listen("bee.retained.desktops_result")
     local activations = listen("bee.retained.activated")
     local reader_updates = listen("bee.retained.catalog_readers")
+    local observers = listen(retained.TOPIC_OBSERVE)
+    local named = false
+    local function abandon(cause: unknown)
+        for _, topic in ipairs({ready, results, copies, launches, catalogs, activations, reader_updates, observers}) do process.unlisten(topic) end
+        if named then process.registry.unregister(retained.BRIDGE_NAME) end
+        error(tostring(cause))
+    end
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy"}) do
         local policy, err = security.policy(name)
-        if not policy then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); process.unlisten(launches); process.unlisten(catalogs); process.unlisten(activations); process.unlisten(reader_updates); error(tostring(err)) end
+        if not policy then abandon(err) end
         policies[#policies + 1] = policy
     end
+    -- The owner route authenticates forwarded readiness by this name, so it is
+    -- registered before the retained supervisor can announce anything.
+    local registered, name_error = process.registry.register(retained.BRIDGE_NAME)
+    if not registered then abandon(name_error) end
+    named = true
     local self = tostring(process.pid())
     local owner, err = process.with_options({}):with_context({["bee.retained_owner"] = self})
         :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, config.application)
-    if not owner then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); process.unlisten(launches); process.unlisten(catalogs); process.unlisten(activations); process.unlisten(reader_updates); error(tostring(err)) end
+    if not owner then abandon(err) end
     local clients: {[string]: Client} = {}
     local receipts: {[string]: Receipt} = {}
     return {config = config, node = node, supervisor = tostring(owner), ready = ready, results = results, copies = copies, launches = launches,
-        workspace_id = "", desktop_id = "", allowed = allowed, catalogs = catalogs, activations = activations, reader_updates = reader_updates, catalog = catalog.new(),
+        workspace_id = "", desktop_id = "", allowed = allowed, catalogs = catalogs, activations = activations, reader_updates = reader_updates,
+        observers = observers, catalog = catalog.new(),
         catalog_readers = {}, pending_catalog_readers = nil, clients = clients, receipts = receipts,
         client_count = 0, receipt_count = 0, expires_at = expiry, stopped = false}
 end
@@ -140,6 +154,19 @@ local function install_catalog_readers(state: State, snapshot: retained.CatalogR
     state.catalog_readers = readers
     state.pending_catalog_readers = nil
 end
+-- announce forwards the retained workspace readiness to the owner route
+-- registered under retained.OWNER_NAME. With a recipient, it answers only when
+-- that recipient is the registered owner route. Either side may register
+-- first: the bridge announces when readiness arrives and the owner route
+-- observes once its name exists, so one of the two always finds the other.
+local function announce(state: State, recipient: string?)
+    if state.stopped or state.workspace_id == "" then return end
+    local route = process.registry.lookup(retained.OWNER_NAME)
+    if not route then return end
+    local owner_route = tostring(route)
+    if recipient and recipient ~= owner_route then return end
+    send(owner_route, "bee.retained.ready", {version = 1, workspace_id = state.workspace_id, desktop_id = state.desktop_id})
+end
 function M.ready(state: State, message: process.Message)
     if tostring(message:from()) ~= state.supervisor or state.stopped then return end
     local value = retained.ready(message:payload():data())
@@ -149,6 +176,11 @@ function M.ready(state: State, message: process.Message)
     end
     state.workspace_id, state.desktop_id = value.workspace_id, value.desktop_id
     if state.pending_catalog_readers then install_catalog_readers(state, state.pending_catalog_readers) end
+    announce(state, nil)
+end
+-- observe answers an owner route that registered after readiness arrived.
+function M.observe(state: State, message: process.Message)
+    announce(state, tostring(message:from()))
 end
 -- This query is for the separate catalog-read bridge only. It deliberately does
 -- not widen the native desktop-client admission route below.
@@ -485,7 +517,8 @@ end
 function M.close(state: State)
     state.stopped = true
     process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
-    process.unlisten(state.catalogs); process.unlisten(state.activations); process.unlisten(state.reader_updates)
+    process.unlisten(state.catalogs); process.unlisten(state.activations); process.unlisten(state.reader_updates); process.unlisten(state.observers)
+    process.registry.unregister(retained.BRIDGE_NAME)
     state.catalog_readers = {}; state.pending_catalog_readers = nil
     for recipient in pairs(state.clients) do process.unmonitor(recipient) end
     process.terminate(state.supervisor)

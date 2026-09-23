@@ -32,7 +32,7 @@ const (
 	// peersDirectoryName holds the pinned identity keys of this node's Hive
 	// peers. A pin stays until the peer is retired. internode.peer_key_source
 	// reads this directory and the trusted one.
-	peersDirectoryName = "peers"
+	peersDirectoryName   = "peers"
 	membershipSecretName = "membership.secret"
 	internodeKeyName     = "internode.key"
 )

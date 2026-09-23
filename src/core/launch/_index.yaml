@@ -1,6 +1,9 @@
 version: '1.0'
 namespace: bee.launch
 entries:
+- name: ownership
+  kind: library.lua
+  source: file://ownership.lua
 - name: desktop_lifecycle
   kind: library.lua
   source: file://desktop_lifecycle.lua
@@ -81,9 +84,10 @@ entries:
   kind: process.lua
   source: file://owner.lua
   method: main
-  modules: [process, channel, security, time, logger, io, system]
+  modules: [process, channel, security, time, logger, io, system, registry]
   imports:
     retained: bee.launch:retained_protocol
+    ownership: bee.launch:ownership
     decode: bee.protocol:decode
   meta:
     comment: Retained workspace owner selected by the native launch host under the runtime state lock
@@ -93,4 +97,4 @@ entries:
       short: Run the retained Bee workspace owner
       security:
         actor: {id: bee.local}
-        policies: [bee:desktop_policy, bee:retained_owner_spawn_policy, bee:retained_owner_node_policy]
+        policies: [bee:desktop_policy, bee:retained_owner_spawn_policy, bee:retained_owner_name_policy, bee:retained_owner_node_policy]

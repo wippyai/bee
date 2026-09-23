@@ -7,13 +7,17 @@ local logger = require("logger")
 local io = require("io")
 local system = require("system")
 local retained = require("retained")
+local ownership = require("ownership")
+local registry = require("registry")
 local decode = require("decode")
 
 local function main()
     local supervisor = ""
+    local registered = false
     local ready, ready_error = process.listen("bee.retained.ready", {message = true})
     if not ready then error(tostring(ready_error)) end
     local function run()
+        local bridged = false
         local events, events_error = process.events()
         if not events then error(tostring(events_error)) end
         local policies: {security.Policy} = {}
@@ -24,10 +28,30 @@ local function main()
             policies[#policies + 1] = policy
         end
         local self = tostring(process.pid())
-        local started, start_error = process.with_options({}):with_context({["bee.retained_owner"] = self})
-            :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self)
-        if not started then error(tostring(start_error)) end
-        supervisor = tostring(started)
+        -- Exactly one composition owns the retained workspace supervisor: its
+        -- workspace host registers bee.workspace.host/<workspace_id>, so a second
+        -- spawn dies with "name already registered". When the host configured
+        -- desktop admission, the desktop bridge composes it and forwards its
+        -- readiness here.
+        local service = registry.get("bee.hive.host:supervisor_service")
+        bridged = ownership.desktop_bridge(service and service.data)
+        if ownership.spawn_retained(bridged) then
+            local started, start_error = process.with_options({}):with_context({["bee.retained_owner"] = self})
+                :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self)
+            if not started then error(tostring(start_error)) end
+            supervisor = tostring(started)
+        else
+            local named, name_error = process.registry.register(retained.OWNER_NAME)
+            if not named then error("Register retained owner route: " .. tostring(name_error)) end
+            registered = true
+            -- A bridge registered before this name may already hold readiness;
+            -- one that registers later announces to this name when it is ready.
+            local bridge = process.registry.lookup(retained.BRIDGE_NAME)
+            if bridge then
+                local sent, send_error = process.send(tostring(bridge), retained.TOPIC_OBSERVE, {version = 1})
+                if not sent then error("Observe retained workspace bridge: " .. tostring(send_error)) end
+            end
+        end
         local announced = false
         local deadline = time.after("10s")
         while true do
@@ -45,7 +69,13 @@ local function main()
                 end
             else
                 local message = selected.value
-                if tostring(message:from()) == supervisor and not announced then
+                local sender = tostring(message:from())
+                local announcer = supervisor
+                if bridged then
+                    local bridge = process.registry.lookup(retained.BRIDGE_NAME)
+                    announcer = bridge and tostring(bridge) or ""
+                end
+                if announcer ~= "" and sender == announcer and not announced then
                     local value = retained.ready(message:payload():data())
                     if not value then error("Invalid retained workspace readiness") end
                     announced = true
@@ -62,6 +92,7 @@ local function main()
     end
     local ok, err = pcall(run)
     if supervisor ~= "" then process.terminate(supervisor) end
+    if registered then process.registry.unregister(retained.OWNER_NAME) end
     process.unlisten(ready)
     if not ok then error(err) end
 end

@@ -58,6 +58,32 @@ local function define_tests()
             test.is_nil(state.pending)
             process.unlisten(replies)
         end)
+        test.it("answers concurrent listings from one catalog read and keeps allocation exclusive", function()
+            local replies = listen()
+            local self = tostring(process.pid())
+            local state = catalog.new()
+            catalog.request(state, self, WORKSPACE, self, request("first-list"), nil, 10)
+            local pending = state.pending
+            if not pending then error("listing did not start") end
+            catalog.request(state, self, WORKSPACE, self, request("second-list"), nil, 20)
+            test.eq(state.pending and state.pending.id, pending.id, "a second listing started another catalog read")
+            catalog.request(state, self, WORKSPACE, self, request("create-during-list"), DESKTOP, 20)
+            local busy = receive(replies)
+            test.eq(busy.request_id, "create-during-list")
+            test.eq(busy.error and busy.error.code, "BUSY")
+            catalog.result(state, {version = 1, workspace_id = WORKSPACE, request_id = pending.id,
+                desktop_id = "", code = "OK", message = "", desktops = {{desktop_id = DESKTOP, is_default = true}}}, WORKSPACE, WORKSPACE, 5)
+            local answered: {[string]: boolean} = {}
+            for _ = 1, 2 do
+                local reply = receive(replies)
+                test.is_true(reply.ok)
+                answered[reply.request_id] = true
+            end
+            test.is_true(answered["first-list"] == true)
+            test.is_true(answered["second-list"] == true)
+            test.is_nil(state.pending)
+            process.unlisten(replies)
+        end)
         test.it("does not accept a substituted committed allocation identity", function()
             local replies = listen()
             local self = tostring(process.pid())

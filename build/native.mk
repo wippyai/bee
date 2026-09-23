@@ -4,6 +4,19 @@ NATIVE_WIPPY ?= .wippy/bin/bee-wippy
 BEE_BINARY ?= dist/bee
 BEE_BUILD_MANIFEST ?= wippy.build.json
 BEE_BUNDLE_MANIFEST ?= dist/bee.bundle.build.json
+# BEE_NATIVE_LOCAL=1 compiles the checked-out native sources instead of the
+# native module version pinned in wippy.build.json (development only).
+BEE_NATIVE_LOCAL ?=
+# A development build compiles the checked-out native sources. Export the local
+# file proxy and disable direct VCS for the pinned builder so both the pack and
+# build recipes resolve the worktree pseudo-version; the release path sets none.
+ifneq ($(BEE_NATIVE_LOCAL),)
+export GOPRIVATE := none
+export GONOPROXY := none
+export GONOSUMDB := github.com/wippyai/bee/*
+export GONOSUMCHECK := 1
+export GOPROXY := file://$(abspath .wippy/local-native/proxy),https://proxy.golang.org
+endif
 AGY_MODEL ?= gemini-3.8-flash
 .PHONY: native-tools native-check native-bootstrap-check portable-pack-atomic-check native-pack portable-deployment-check standalone native-binary-check native-portable-check native-pin-check
 NATIVE_PIN_COMMIT ?= HEAD
@@ -26,7 +39,14 @@ portable-pack-atomic-check:
 
 native-pack:
 	@test -x "$(NATIVE_WIPPY)" || { echo 'Run make native-tools before packing Bee.' >&2; exit 1; }
-	WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_BUILD_MANIFEST="$(BEE_BUILD_MANIFEST)" BEE_BUNDLE_MANIFEST="$(BEE_BUNDLE_MANIFEST)" $(if $(BEE_VERSION),BEE_VERSION="$(BEE_VERSION)",) build/portable-pack.sh
+	@if [ -n "$(BEE_NATIVE_LOCAL)" ]; then \
+		version=$$(build/local_native.sh "$(BEE_BUILD_MANIFEST)"); \
+		BEE_BUILD_MANIFEST=".wippy/local-native/bee.build.json" \
+			WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_BUNDLE_MANIFEST="$(BEE_BUNDLE_MANIFEST)" \
+			$(if $(BEE_VERSION),BEE_VERSION="$(BEE_VERSION)",) build/portable-pack.sh; \
+	else \
+		WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_BUILD_MANIFEST="$(BEE_BUILD_MANIFEST)" BEE_BUNDLE_MANIFEST="$(BEE_BUNDLE_MANIFEST)" $(if $(BEE_VERSION),BEE_VERSION="$(BEE_VERSION)",) build/portable-pack.sh; \
+	fi
 
 portable-deployment-check: native-pack
 	tests/portable_deployment.sh "$(abspath $(NATIVE_WIPPY))" "$(dir $(BEE_BUNDLE_MANIFEST))portable-deployment"

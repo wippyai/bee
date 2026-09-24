@@ -171,7 +171,11 @@ func TestPhysicalClientSubprocess(t *testing.T) {
 				mounted.Close()
 				return errors.New("missing native checked viewport")
 			}
-			return physical.Run(frame, view, ttyapi.MountRights{Observe: true, Input: true, Resize: true}, os.Stdin, os.Stdout)
+			// The test ends the client with a local detach (Ctrl+]).
+			if err := physical.Run(frame, view, ttyapi.MountRights{Observe: true, Input: true, Resize: true}, os.Stdin, os.Stdout); !errors.Is(err, physical.ErrDetached) {
+				return err
+			}
+			return nil
 		})
 	})
 	if err != nil {

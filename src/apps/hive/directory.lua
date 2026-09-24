@@ -100,33 +100,41 @@ local function identity(value: unknown): string?
     if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
     return value
 end
+-- The owner lists the node's displays and one page of its workspaces; a
+-- workspace is offered on the node's default display.
 function M.decode_desktops(value: unknown): Catalog
     local invalid = "Display catalog reply is malformed"
     local object = bounds.object(value)
-    if not object or bounds.fields(object, {"owner_execution", "workspaces"}) then return unavailable(invalid) end
+    if not object or bounds.fields(object, {"owner_execution", "desktops", "workspaces", "next_after", "default_workspace"}) then return unavailable(invalid) end
     local execution = identity(object.owner_execution)
+    local displays = dense(object.desktops, 33)
     local workspaces = dense(object.workspaces, M.MAX_DESKTOPS)
-    if not execution or not workspaces then return unavailable(invalid) end
+    if not execution then return unavailable(invalid) end
+    local generation: string = execution
+    if not displays or #displays == 0 or not workspaces then return unavailable(invalid) end
+    local default_display: string? = nil
+    local seen_displays: {[string]: boolean} = {}
+    for index, raw in ipairs(displays) do
+        local item = bounds.object(raw)
+        if not item or bounds.fields(item, {"desktop_id", "is_default"}) then return unavailable(invalid) end
+        local display = identity(item.desktop_id)
+        if not display or seen_displays[display] or item.is_default ~= (index == 1) then return unavailable(invalid) end
+        seen_displays[display] = true
+        if index == 1 then default_display = display end
+    end
+    if not default_display then return unavailable(invalid) end
     local desktops: {Desktop} = {}
     local seen: {[string]: boolean} = {}
-    for _, value in ipairs(workspaces) do
-        local workspace = bounds.object(value)
-        if not workspace or bounds.fields(workspace, {"workspace_id", "desktops"}) then return unavailable(invalid) end
+    for _, raw in ipairs(workspaces) do
+        local workspace = bounds.object(raw)
+        if not workspace or bounds.fields(workspace, {"workspace_id", "label", "served"}) then return unavailable(invalid) end
         local id = identity(workspace.workspace_id)
-        local items = dense(workspace.desktops, 33)
-        if not id or seen[id] or not items or #items == 0 then return unavailable(invalid) end
+        local label = bounds.line(workspace.label, M.MAX_LABEL_BYTES)
+        if not id or seen[id] or not label or type(workspace.served) ~= "boolean" then return unavailable(invalid) end
         seen[id] = true
-        local selected: {[string]: boolean} = {}
-        for index, raw in ipairs(items) do
-            local item = bounds.object(raw)
-            if not item or bounds.fields(item, {"desktop_id", "is_default"}) then return unavailable(invalid) end
-            local display = identity(item.desktop_id)
-            if not display or selected[display] or item.is_default ~= (index == 1) or #desktops >= M.MAX_DESKTOPS then return unavailable(invalid) end
-            selected[display] = true
-            desktops[#desktops + 1] = {workspace_id = id, desktop_id = display, label = ""}
-        end
+        desktops[#desktops + 1] = {workspace_id = id, desktop_id = default_display, label = label}
     end
-    return {available = true, reason = "", owner_generation = execution, desktops = desktops}
+    return {available = true, reason = "", owner_generation = generation, desktops = desktops}
 end
 function M.live(live: Live): Directory
     local function supervisor(_: Directory): Supervisor

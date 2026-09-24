@@ -30,18 +30,44 @@ type DesktopSelection struct {
 	Workspace string `json:"workspace_id"`
 	Desktop   string `json:"desktop_id"`
 }
+
+// DesktopDescription is one of the node's durable display identities. Displays
+// belong to the node; each shows whichever workspace it attaches to.
 type DesktopDescription struct {
 	ID        string `json:"desktop_id"`
-	IsDefault bool   `json:"is_default,omitempty"`
+	IsDefault bool   `json:"is_default"`
 }
-type WorkspaceDesktops struct {
-	ID       string               `json:"workspace_id"`
-	Desktops []DesktopDescription `json:"desktops"`
+
+// WorkspaceSummary is one row of the node's workspace catalog as the owner
+// lists it. Served says whether the owner holds a desktop supervisor for it now.
+type WorkspaceSummary struct {
+	ID     string `json:"workspace_id"`
+	Label  string `json:"label"`
+	Served bool   `json:"served"`
 }
+
+// DesktopCatalog is one page of the node's workspaces and the node's displays.
+// Next continues the page; Default names the workspace the owner composes as
+// its folder workspace, if any.
 type DesktopCatalog struct {
-	Execution  string              `json:"owner_execution"`
-	Workspaces []WorkspaceDesktops `json:"workspaces"`
+	Execution  string
+	Desktops   []DesktopDescription
+	Workspaces []WorkspaceSummary
+	Next       string
+	Default    string
 }
+
+// CatalogQuery selects one catalog page: a label prefix and a cursor.
+type CatalogQuery struct {
+	Label string
+	After string
+}
+
+// MaxCatalogPage bounds the workspaces one page carries.
+const MaxCatalogPage = 50
+const maxLabelBytes = 240
+const maxCursorBytes = 2200
+const maxDesktops = 33
 
 // DesktopMount is a validated owner reply, not a substitute for the runtime's
 // recipient-bound mount check. Its lifetime may close immediately after decode.
@@ -84,62 +110,66 @@ func DecodeDesktopCatalog(reply Reply, execution string) (DesktopCatalog, error)
 	if !durableID(execution) || !desktopValue(reply) {
 		return DesktopCatalog{}, ErrDesktopReply
 	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(reply.Value, &fields) != nil {
+		return DesktopCatalog{}, ErrDesktopReply
+	}
+	names := []string{"owner_execution", "desktops", "workspaces"}
+	for _, optional := range []string{"next_after", "default_workspace"} {
+		if _, ok := fields[optional]; ok {
+			names = append(names, optional)
+		}
+	}
 	var wire struct {
 		Execution  string          `json:"owner_execution"`
+		Desktops   json.RawMessage `json:"desktops"`
 		Workspaces json.RawMessage `json:"workspaces"`
+		Next       *string         `json:"next_after"`
+		Default    *string         `json:"default_workspace"`
 	}
-	if !exactDesktopFields(reply.Value, "owner_execution", "workspaces") || strict(reply.Value, &wire) != nil || wire.Execution != execution {
+	if !exactDesktopFields(reply.Value, names...) || strict(reply.Value, &wire) != nil || wire.Execution != execution {
 		return DesktopCatalog{}, ErrDesktopReply
 	}
-	var workspaces []json.RawMessage
-	if !desktopList(wire.Workspaces, &workspaces) || len(workspaces) > 64 {
+	result := DesktopCatalog{Execution: execution}
+	if wire.Next != nil {
+		if *wire.Next == "" || len(*wire.Next) > maxCursorBytes || !printable(*wire.Next) {
+			return DesktopCatalog{}, ErrDesktopReply
+		}
+		result.Next = *wire.Next
+	}
+	if wire.Default != nil {
+		if !durableID(*wire.Default) {
+			return DesktopCatalog{}, ErrDesktopReply
+		}
+		result.Default = *wire.Default
+	}
+	var rawDesktops []json.RawMessage
+	if !desktopList(wire.Desktops, &rawDesktops) || len(rawDesktops) == 0 || len(rawDesktops) > maxDesktops {
 		return DesktopCatalog{}, ErrDesktopReply
 	}
-	result := DesktopCatalog{Execution: execution, Workspaces: make([]WorkspaceDesktops, 0, len(workspaces))}
+	ids := map[string]bool{}
+	for index, raw := range rawDesktops {
+		var desktop DesktopDescription
+		if !exactDesktopFields(raw, "desktop_id", "is_default") || strict(raw, &desktop) != nil ||
+			!durableID(desktop.ID) || ids[desktop.ID] || desktop.IsDefault != (index == 0) {
+			return DesktopCatalog{}, ErrDesktopReply
+		}
+		ids[desktop.ID] = true
+		result.Desktops = append(result.Desktops, desktop)
+	}
+	var rawWorkspaces []json.RawMessage
+	if !desktopList(wire.Workspaces, &rawWorkspaces) || len(rawWorkspaces) > MaxCatalogPage {
+		return DesktopCatalog{}, ErrDesktopReply
+	}
 	seen := map[string]bool{}
-	for _, rawWorkspace := range workspaces {
-		var workspace struct {
-			ID       string          `json:"workspace_id"`
-			Desktops json.RawMessage `json:"desktops"`
-		}
-		if !exactDesktopFields(rawWorkspace, "workspace_id", "desktops") || strict(rawWorkspace, &workspace) != nil {
-			return DesktopCatalog{}, ErrDesktopReply
-		}
-		var rawDesktops []json.RawMessage
-		if !desktopList(workspace.Desktops, &rawDesktops) {
-			return DesktopCatalog{}, ErrDesktopReply
-		}
-		marked := 0
-		for _, rawDesktop := range rawDesktops {
-			if exactDesktopFields(rawDesktop, "desktop_id", "is_default") {
-				marked++
-			} else if !exactDesktopFields(rawDesktop, "desktop_id") {
-				return DesktopCatalog{}, ErrDesktopReply
-			}
-		}
-		var desktops []DesktopDescription
-		if !durableID(workspace.ID) || seen[workspace.ID] || !desktopList(workspace.Desktops, &desktops) || len(desktops) > 64 {
-			return DesktopCatalog{}, ErrDesktopReply
-		}
-		if marked != 0 && marked != len(desktops) {
+	for _, raw := range rawWorkspaces {
+		var workspace WorkspaceSummary
+		if !exactDesktopFields(raw, "workspace_id", "label", "served") || strict(raw, &workspace) != nil ||
+			!durableID(workspace.ID) || seen[workspace.ID] || len(workspace.Label) > maxLabelBytes || !printable(workspace.Label) {
 			return DesktopCatalog{}, ErrDesktopReply
 		}
 		seen[workspace.ID] = true
-		defaults := 0
-		ids := map[string]bool{}
-		for _, desktop := range desktops {
-			if !durableID(desktop.ID) || ids[desktop.ID] {
-				return DesktopCatalog{}, ErrDesktopReply
-			}
-			ids[desktop.ID] = true
-			if desktop.IsDefault {
-				defaults++
-			}
-		}
-		if marked > 0 && defaults != 1 {
-			return DesktopCatalog{}, ErrDesktopReply
-		}
-		result.Workspaces = append(result.Workspaces, WorkspaceDesktops{ID: workspace.ID, Desktops: desktops})
+		result.Workspaces = append(result.Workspaces, workspace)
 	}
 	if !live(reply.lifetime) {
 		return DesktopCatalog{}, ErrDesktopReply
@@ -147,15 +177,29 @@ func DecodeDesktopCatalog(reply Reply, execution string) (DesktopCatalog, error)
 	return result, nil
 }
 
+// printable refuses control characters in owner text a terminal will show.
+func printable(s string) bool {
+	for _, c := range s {
+		if c < 32 || c == 127 {
+			return false
+		}
+	}
+	return true
+}
+
 // DecodeDesktopCreated validates allocation independently of attachment.
-// Allocation retains an identity but grants no viewport or controller rights.
-func DecodeDesktopCreated(reply Reply, selected DesktopSelection) error {
-	if !selected.valid() || !desktopValue(reply) {
+// Allocation retains a node display identity but grants no viewport or
+// controller rights.
+func DecodeDesktopCreated(reply Reply, execution, desktop string) error {
+	if !durableID(execution) || !durableID(desktop) || !desktopValue(reply) {
 		return ErrDesktopReply
 	}
-	var wire DesktopSelection
-	if !exactDesktopFields(reply.Value, "owner_execution", "workspace_id", "desktop_id") ||
-		strict(reply.Value, &wire) != nil || wire != selected || !live(reply.lifetime) {
+	var wire struct {
+		Execution string `json:"owner_execution"`
+		Desktop   string `json:"desktop_id"`
+	}
+	if !exactDesktopFields(reply.Value, "owner_execution", "desktop_id") ||
+		strict(reply.Value, &wire) != nil || wire.Execution != execution || wire.Desktop != desktop || !live(reply.lifetime) {
 		return ErrDesktopReply
 	}
 	return nil

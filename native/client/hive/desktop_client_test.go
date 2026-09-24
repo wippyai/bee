@@ -78,24 +78,49 @@ func TestDesktopBindingCreatesExactDurableIdentityBeforeAttachment(t *testing.T)
 	go func() {
 		calls <- answerDesktop(s, map[string]any{
 			"owner_execution": selection.Execution,
-			"workspace_id":    selection.Workspace,
 			"desktop_id":      selection.Desktop,
 		}, nil)
 	}()
-	created, err := d.Create(context.Background(), selection.Workspace, selection.Desktop)
-	if err != nil || created != selection {
+	created, err := d.Create(context.Background(), selection.Desktop)
+	if err != nil || created != selection.Desktop {
 		t.Fatalf("creation=%+v error=%v", created, err)
 	}
 	call := <-calls
 	if call.Key != selection.Desktop || call.Target.Ref != DesktopCreate || call.Owner.Node != "owner" || call.Owner.Service != DesktopService {
 		t.Fatalf("wrong creation operation: %+v", call)
 	}
-	var input DesktopSelection
-	if json.Unmarshal(call.Input, &input) != nil || input != selection {
+	var input map[string]string
+	if json.Unmarshal(call.Input, &input) != nil || len(input) != 2 || input["owner_execution"] != selection.Execution || input["desktop_id"] != selection.Desktop {
 		t.Fatalf("wrong creation input: %s", call.Input)
 	}
-	if _, err := d.Create(context.Background(), "foreign", selection.Desktop); err == nil || s.sent.Load() != 1 {
+	if _, err := d.Create(context.Background(), "foreign"); err == nil || s.sent.Load() != 1 {
 		t.Fatal("invalid creation was sent")
+	}
+}
+
+func TestDesktopBindingListsOnePageByLabelAndCursor(t *testing.T) {
+	d, s := desktopBinding(t)
+	calls := make(chan wireCall, 1)
+	go func() {
+		calls <- answerDesktop(s, map[string]any{
+			"owner_execution": selection.Execution,
+			"desktops":        []any{map[string]any{"desktop_id": selection.Desktop, "is_default": true}},
+			"workspaces":      []any{map[string]any{"workspace_id": selection.Workspace, "label": "Alpha", "served": true}},
+			"next_after":      "cursor-2",
+		}, nil)
+	}()
+	catalog, err := d.List(context.Background(), "list-key", CatalogQuery{Label: "al", After: "cursor-1"})
+	if err != nil || len(catalog.Workspaces) != 1 || catalog.Next != "cursor-2" || catalog.Workspaces[0].Label != "Alpha" {
+		t.Fatalf("catalog=%+v error=%v", catalog, err)
+	}
+	call := <-calls
+	var input map[string]string
+	if call.Target.Ref != DesktopList || json.Unmarshal(call.Input, &input) != nil || len(input) != 3 ||
+		input["label"] != "al" || input["after"] != "cursor-1" || input["owner_execution"] != selection.Execution {
+		t.Fatalf("wrong list input: %s", call.Input)
+	}
+	if _, err := d.List(context.Background(), "bad", CatalogQuery{Label: "bad\x1b"}); err == nil || s.sent.Load() != 1 {
+		t.Fatal("control text sent as a query")
 	}
 }
 

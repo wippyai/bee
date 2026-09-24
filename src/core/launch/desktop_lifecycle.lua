@@ -15,7 +15,9 @@ type Phase = "boot" | "admit" | "running" | "render" | "save" | "exit" | "stoppi
 type Renderer = {pid: string, connection: string}
 type Child = {id: string, resource: desktops.Desktop, phase: Phase, connection: string, pending: string,
     ready: boolean, activation: string?, deadline: Channel<time.Time>?, renderer: Renderer?}
-type State = {owner: string, host: string, workspace_id: string, default_id: string,
+-- host: the workspace host desktops talk to; route: the host's owner-side
+-- address for desktop admission, the host itself or the node host manager.
+type State = {owner: string, host: string, route: string, workspace_id: string, default_id: string,
     resources: desktops.State, children: {[string]: Child}, scope: security.Scope}
 local M = {}
 local function send(recipient: string, topic: string, value: unknown): boolean
@@ -50,7 +52,7 @@ end
 local function depart(state: State, child: Child)
     child.phase, child.deadline, child.ready, child.renderer = "departing", nil, false, nil
     child.pending = uuid.v7()
-    if not send(state.host, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
+    if not send(state.route, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
         request_id = child.pending, op = "detach", recipient = child.resource.pid}) then
         child.pending = ""
     end
@@ -73,7 +75,7 @@ local function render(state: State, child: Child)
     child.renderer = nil
     if renderer.connection ~= child.connection then return end
     child.pending, child.phase, child.deadline = uuid.v7(), "render", time.after("10s")
-    if not send(state.host, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
+    if not send(state.route, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
         request_id = child.pending, op = "render", recipient = child.resource.pid, renderer = renderer.pid}) then
         render_failed(state, child, "Desktop renderer request was not accepted")
     end
@@ -82,12 +84,12 @@ local function queue_renderer(state: State, child: Child, renderer: Renderer)
     child.renderer = renderer
     render(state, child)
 end
-function M.new(owner: string, host: string, workspace_id: string, default_id: string, resources: desktops.State): State
+function M.new(owner: string, host: string, route: string, workspace_id: string, default_id: string, resources: desktops.State): State
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
-    return {owner = owner, host = host, workspace_id = workspace_id, default_id = default_id,
+    return {owner = owner, host = host, route = route, workspace_id = workspace_id, default_id = default_id,
         resources = resources, children = {}, scope = security.new_scope(policies)}
 end
 -- The initial display discovers the default store identity during bootstrap.
@@ -165,7 +167,7 @@ end
 -- it started for the same client without one. Either completion frees the
 -- display identity; a refusal keeps it held under the departed child.
 local function departed(state: State, topic: string, sender: string, data: unknown): boolean
-    if topic ~= "result" or sender ~= state.host then return false end
+    if topic ~= "result" or sender ~= state.route then return false end
     local result = protocol.client_result(data, state.workspace_id)
     if not result or result.op ~= "detach" then return false end
     for id, child in pairs(state.children) do
@@ -181,7 +183,7 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
     local selected: Child? = nil
     for _, child in pairs(state.children) do
         if sender == child.resource.pid then selected = child; break end
-        if sender == state.host and topic == "result" and protocol.request(data, state.workspace_id) == child.pending
+        if sender == state.route and topic == "result" and protocol.request(data, state.workspace_id) == child.pending
             and child.pending ~= "" then selected = child; break end
     end
     local child = selected
@@ -191,7 +193,7 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
         local ready = protocol.ready(data, state.workspace_id, false)
         if not ready or ready.client_id ~= child.id then fail(state, child, "Desktop acknowledged another identity"); return true end
         child.phase, child.pending, child.deadline = "admit", uuid.v7(), time.after("10s")
-        if not send(state.host, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
+        if not send(state.route, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
             request_id = child.pending, op = "admit", recipient = child.resource.pid,
             permissions = {open = true, close = true, control = true, appearance = true}, display_id = child.id}) then
             fail(state, child, "Desktop admission request was not accepted")
@@ -199,7 +201,7 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
     elseif topic == "renderer" then
         local renderer = renderer_value(data, state.workspace_id)
         if renderer then queue_renderer(state, child, renderer) end
-    elseif topic == "result" and sender == state.host then
+    elseif topic == "result" and sender == state.route then
         if child.phase ~= "admit" and child.phase ~= "render" then return true end
         local connection = host_connection(data)
         if not connection then

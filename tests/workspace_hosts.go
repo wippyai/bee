@@ -2,7 +2,8 @@
 // Acceptance test proving two actual bee.host:main actors inside ONE runtime
 // without cross-routing: with independent workspace database resources, and
 // (--logical) as two logical workspaces keyed in one node database, and
-// (--lazy) as hosts a node manager starts on a lease and stops when idle.
+// (--lazy) as hosts a node manager starts on a lease and stops when idle, and
+// (--attach) as a desktop supervisor that leases its workspace's host.
 // Explicit Linux acceptance; relies on process group isolation and POSIX signals.
 package main
 
@@ -101,6 +102,11 @@ func run() error {
 		// Lazily started hosts under a fixture-owned manager with a small cap
 		// and idle period; the node's own manager service stays stopped.
 		command, budget = "workspace-hosts-lazy-supervisor", 90*time.Second
+		overrides = []string{"-o", "bee:workspace_hosts:lifecycle.auto_start=false"}
+	case "--attach":
+		// A desktop supervisor selected by workspace identity leases its host
+		// through a fixture-owned manager; the node's own manager stays stopped.
+		command, budget = "workspace-hosts-attach-supervisor", 90*time.Second
 		overrides = []string{"-o", "bee:workspace_hosts:lifecycle.auto_start=false"}
 	default:
 		return fmt.Errorf("unknown mode %q", mode)

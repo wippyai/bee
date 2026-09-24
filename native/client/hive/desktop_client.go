@@ -67,34 +67,46 @@ func (d *Desktop) call(ctx context.Context, operation, key string, input any) (R
 	}
 	return reply, nil
 }
-func (d *Desktop) List(ctx context.Context, key string) (DesktopCatalog, error) {
+
+// List reads one page of the node's workspace catalog and its displays.
+func (d *Desktop) List(ctx context.Context, key string, query CatalogQuery) (DesktopCatalog, error) {
 	if d == nil {
 		return DesktopCatalog{}, errors.New("desktop client unavailable")
 	}
+	if len(query.Label) > maxLabelBytes || !printable(query.Label) || len(query.After) > maxCursorBytes || !printable(query.After) {
+		return DesktopCatalog{}, errors.New("invalid desktop catalog query")
+	}
 	reply, err := d.call(ctx, DesktopList, key, struct {
 		Execution string `json:"owner_execution"`
-	}{d.execution})
+		Label     string `json:"label,omitempty"`
+		After     string `json:"after,omitempty"`
+	}{d.execution, query.Label, query.After})
 	if err != nil {
 		return DesktopCatalog{}, err
 	}
 	return DecodeDesktopCatalog(reply, d.execution)
 }
-func (d *Desktop) Create(ctx context.Context, workspace, desktop string) (DesktopSelection, error) {
+
+// Create allocates one node display identity; the identity is its own
+// idempotency key, so a retry names the same display.
+func (d *Desktop) Create(ctx context.Context, desktop string) (string, error) {
 	if d == nil {
-		return DesktopSelection{}, errors.New("desktop client unavailable")
+		return "", errors.New("desktop client unavailable")
 	}
-	selected := DesktopSelection{Execution: d.execution, Workspace: workspace, Desktop: desktop}
-	if !selected.valid() {
-		return DesktopSelection{}, errors.New("invalid desktop allocation")
+	if !durableID(desktop) {
+		return "", errors.New("invalid desktop allocation")
 	}
-	reply, err := d.call(ctx, DesktopCreate, desktop, selected)
+	reply, err := d.call(ctx, DesktopCreate, desktop, struct {
+		Execution string `json:"owner_execution"`
+		Desktop   string `json:"desktop_id"`
+	}{d.execution, desktop})
 	if err != nil {
-		return DesktopSelection{}, err
+		return "", err
 	}
-	if err := DecodeDesktopCreated(reply, selected); err != nil {
-		return DesktopSelection{}, &UnknownOutcome{Operation: DesktopCreate, Key: desktop, Cause: err}
+	if err := DecodeDesktopCreated(reply, d.execution, desktop); err != nil {
+		return "", &UnknownOutcome{Operation: DesktopCreate, Key: desktop, Cause: err}
 	}
-	return selected, nil
+	return desktop, nil
 }
 func (d *Desktop) Attach(ctx context.Context, key, workspace, desktop string, mode DesktopMode) (DesktopMount, error) {
 	if d == nil {

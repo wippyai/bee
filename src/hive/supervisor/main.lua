@@ -420,12 +420,19 @@ local function main(configuration: unknown)
         local desktop_results = desktop and desktop.results
         local desktop_copies = desktop and desktop.copies
         local desktop_launches = desktop and desktop.launches
-        local desktop_catalogs = desktop and desktop.catalogs
+        local desktop_readers = desktop and desktop.reader_updates
         local desktop_activations = desktop and desktop.activations
         local desktop_observers = desktop and desktop.observers
         while true do
             local cases = {requests:case_receive(), replies:case_receive(), hellos:case_receive(), events:case_receive(), ticks:case_receive()}
-            if desktop_catalogs then cases[#cases + 1] = desktop_catalogs:case_receive() end
+            if desktop_readers then cases[#cases + 1] = desktop_readers:case_receive() end
+            local catalog_work = 0
+            if desktop then
+                for _, response in ipairs(desktop_owner.catalog_channels(desktop)) do
+                    catalog_work = catalog_work + 1
+                    cases[#cases + 1] = response:case_receive()
+                end
+            end
             if desktop_activations then cases[#cases + 1] = desktop_activations:case_receive() end
             if desktop_observers then cases[#cases + 1] = desktop_observers:case_receive() end
             if desktop_copies then cases[#cases + 1] = desktop_copies:case_receive() end
@@ -477,12 +484,14 @@ local function main(configuration: unknown)
                 end
                 advertising = nil
                 advertising_response = nil
-            elseif desktop_catalogs and selected.channel == desktop_catalogs and desktop then
-                desktop_owner.catalog_result(desktop, selected.value, now_ms)
+            elseif desktop and catalog_work > 0 and desktop_owner.catalog_result(desktop, selected.channel, now_ms) then
+                -- A pending desktop catalog read or allocation completed.
+            elseif desktop_readers and selected.channel == desktop_readers and desktop then
+                desktop_owner.catalog_readers(desktop, selected.value)
             elseif desktop_activations and selected.channel == desktop_activations and desktop then
                 desktop_owner.activated(desktop, selected.value, now_ms)
             elseif desktop_ready and selected.channel == desktop_ready and desktop then
-                desktop_owner.ready(desktop, selected.value)
+                desktop_owner.ready(desktop, selected.value, now_ms)
             elseif desktop_observers and selected.channel == desktop_observers and desktop then
                 desktop_owner.observe(desktop, selected.value)
             elseif desktop_results and selected.channel == desktop_results and desktop then

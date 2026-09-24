@@ -121,20 +121,40 @@ func joinOwner(ctx context.Context, join joinRequest) error {
 	return session.JoinEnrolled(ctx, config, join.Node, join.Key, os.Stdin, os.Stdout)
 }
 
-// printDesktops writes one line per durable display of the running Bee.
+// printDesktops writes the running Bee's displays, then the first page of its
+// workspaces. Displays belong to the node; any of them attaches to any
+// workspace.
 func printDesktops(out io.Writer, catalog hive.DesktopCatalog) error {
-	if _, err := fmt.Fprintln(out, "WORKSPACE                         DISPLAY                           DEFAULT"); err != nil {
+	if _, err := fmt.Fprintln(out, "DISPLAY                           DEFAULT"); err != nil {
+		return err
+	}
+	for _, desktop := range catalog.Desktops {
+		marker := ""
+		if desktop.IsDefault {
+			marker = "yes"
+		}
+		if _, err := fmt.Fprintf(out, "%s  %s\n", desktop.ID, marker); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(out, "\nWORKSPACE                         SERVED  FOLDER  LABEL"); err != nil {
 		return err
 	}
 	for _, workspace := range catalog.Workspaces {
-		for _, desktop := range workspace.Desktops {
-			marker := ""
-			if desktop.IsDefault {
-				marker = "yes"
-			}
-			if _, err := fmt.Fprintf(out, "%s  %s  %s\n", workspace.ID, desktop.ID, marker); err != nil {
-				return err
-			}
+		served, folder := "no", ""
+		if workspace.Served {
+			served = "yes"
+		}
+		if workspace.ID == catalog.Default {
+			folder = "yes"
+		}
+		if _, err := fmt.Fprintf(out, "%s  %-6s  %-6s  %s\n", workspace.ID, served, folder, workspace.Label); err != nil {
+			return err
+		}
+	}
+	if catalog.Next != "" {
+		if _, err := fmt.Fprintln(out, "(more workspaces follow; run bee without arguments to pick and search)"); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -187,7 +187,7 @@ entries:
   source: file://desktop_catalog_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [process, channel, time]
+  modules: [process, channel, time, funcs, security, uuid, registry]
   imports:
     test: wippy.test:test
     types: bee.hive:types
@@ -219,7 +219,7 @@ entries:
   source: file://desktop_reader_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [process, channel, time]
+  modules: [process, channel, time, security, funcs]
   security:
     policies: [bee.hive:desktop_reader_test_policy]
   imports:
@@ -233,10 +233,43 @@ entries:
   source: file://desktop_enrollment_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [process, channel, time]
+  modules: [process, channel, time, security, funcs]
   imports:
     test: wippy.test:test
     owner: bee.hive.desktop:owner
     catalog: bee.hive.desktop:catalog
     protocol: bee.hive.desktop:protocol
     enrollment: bee.hive.supervisor:enrollment
+- name: display_standin
+  kind: process.lua
+  source: file://display_standin.lua
+  method: main
+  modules: [process, channel]
+  meta: {type: test_support}
+- name: retained_standin
+  kind: process.lua
+  source: file://retained_standin.lua
+  method: main
+  modules: [process, channel]
+  meta: {type: test_support}
+- name: desktop_workspaces_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.terminate, process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow
+- name: desktop_workspaces_test
+  kind: function.lua
+  source: file://desktop_workspaces_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time, security, funcs]
+  security:
+    policies: [bee.hive:desktop_workspaces_test_policy]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    owner: bee.hive.desktop:owner
+    catalog: bee.hive.desktop:catalog
+    protocol: bee.hive.desktop:protocol

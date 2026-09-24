@@ -3,7 +3,9 @@
 -- and its shutdown checkpointed the workspace, and keeps at most a capped
 -- number of hosts live, stopping the least recently used idle host first. A
 -- workspace some other composition already serves (classic folder mode) is
--- reported as served and never managed here.
+-- reported as served and never managed here. As every managed host's owner it
+-- admits desktops for the lease holders attached to it: it relays their
+-- desktop admission requests to the host and the host's answers back.
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
@@ -14,6 +16,7 @@ local hosts = require("hosts")
 local leases = require("leases")
 local protocol = require("protocol")
 local decode = require("decode")
+local contract = require("contract")
 
 type Config = {cap: integer, idle: number, database: string?}
 type Channel = channel.Channel
@@ -24,8 +27,7 @@ local DEFAULT_CAP = 64
 local DEFAULT_IDLE_MS = 900000
 -- Topics a host delivers to its owner. The manager drains those it does not
 -- act on, so no message waits in its queue for a listener that never comes.
-local DRAINED = {"bee.application.catalog", "bee.host.checkpoint", "bee.host.restore_result", "bee.interaction.state",
-    "bee.launch.catalog_readers", "bee.host.client_result"}
+local DRAINED = {"bee.application.catalog", "bee.host.checkpoint", "bee.host.restore_result", "bee.interaction.state"}
 
 local function config(value: unknown): Config?
     if value == nil then return {cap = DEFAULT_CAP, idle = DEFAULT_IDLE_MS / 1000, database = nil} end
@@ -56,6 +58,10 @@ local function main(value: unknown)
     local releases = assert(process.listen(leases.RELEASE, {message = true}))
     local ready = assert(process.listen("bee.host.ready", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
+    local attaches = assert(process.listen(leases.ATTACH, {message = true}))
+    local client_requests = assert(process.listen("bee.host.client", {message = true}))
+    local client_results = assert(process.listen("bee.host.client_result", {message = true}))
+    local reader_updates = assert(process.listen("bee.launch.catalog_readers", {message = true}))
     local drained: {Channel<process.Message>} = {}
     for _, topic in ipairs(DRAINED) do drained[#drained + 1] = assert(process.listen(topic, {message = true})) end
     local events = assert(process.events())
@@ -73,6 +79,10 @@ local function main(value: unknown)
     local queued: {Waiter} = {}
     local stops: {[string]: string} = {}
     local monitored: {[string]: boolean} = {}
+    -- Each ready host's announcement and latest catalog readers, as the host
+    -- sent them, for the holders that attach to it.
+    local announcements: {[string]: unknown} = {}
+    local readers: {[string]: unknown} = {}
 
     local function answer(waiter: Waiter, host: string, managed: boolean, code: string, message: string)
         process.send(waiter.sender, leases.RESULT, {version = 1, request_id = waiter.request.request_id,
@@ -149,6 +159,7 @@ local function main(value: unknown)
         end
         pids[pid] = nil
         stops[workspace_id] = nil
+        announcements[workspace_id], readers[workspace_id] = nil, nil
         local host = hosts.host(state, workspace_id)
         local failure = decode.exit_error(result)
         if host and host.phase == "starting" then
@@ -171,7 +182,8 @@ local function main(value: unknown)
 
     local function run()
         while true do
-            local cases = {acquires:case_receive(), releases:case_receive(), ready:case_receive(), replies:case_receive(), events:case_receive()}
+            local cases = {acquires:case_receive(), releases:case_receive(), ready:case_receive(), replies:case_receive(), events:case_receive(),
+                attaches:case_receive(), client_requests:case_receive(), client_results:case_receive(), reader_updates:case_receive()}
             for _, subscription in ipairs(drained) do cases[#cases + 1] = subscription:case_receive() end
             local timer: time.Timer? = nil
             local deadline = hosts.next_deadline(state)
@@ -216,10 +228,67 @@ local function main(value: unknown)
                 local workspace_id = pids[pid]
                 local announced = protocol.host(message:payload():data())
                 if workspace_id and announced and announced.workspace_id == workspace_id then
+                    announcements[workspace_id] = message:payload():data()
                     hosts.ready(state, workspace_id, now())
                     local list: {Waiter} = waiters[workspace_id] or {}
                     waiters[workspace_id] = nil
                     for _, waiter in ipairs(list) do answer(waiter, pid, true, "", "") end
+                end
+            elseif selected.channel == attaches then
+                local message = selected.value
+                local sender = tostring(message:from())
+                local request = leases.attach_request(message:payload():data())
+                local workspace_id = request and hosts.held(state, request.lease)
+                if request and workspace_id and hosts.holder(state, request.lease) == sender then
+                    local announcement = announcements[workspace_id]
+                    if announcement ~= nil and hosts.attach(state, workspace_id, sender) then
+                        process.send(sender, leases.ATTACHED, {version = 1, request_id = request.request_id, workspace_id = workspace_id,
+                            error_code = "", error = "", ready = announcement})
+                        local snapshot = readers[workspace_id]
+                        if snapshot ~= nil then process.send(sender, "bee.launch.catalog_readers", snapshot) end
+                    else
+                        process.send(sender, leases.ATTACHED, {version = 1, request_id = request.request_id, workspace_id = workspace_id,
+                            error_code = "unavailable", error = "the workspace host is not ready"})
+                    end
+                end
+            elseif selected.channel == client_requests then
+                -- A desktop admission request from an attached holder, in the
+                -- host's own format; the host answers its owner, this manager.
+                local message = selected.value
+                local sender = tostring(message:from())
+                local data = message:payload():data()
+                local workspace_id = type(data) == "table" and contract.workspace_id(data.workspace_id) or nil
+                local request_id = type(data) == "table" and contract.text(data.request_id, 80) or nil
+                local op = type(data) == "table" and contract.text(data.op, 40) or nil
+                local recipient = type(data) == "table" and contract.text(data.recipient, 160) or nil
+                local host = workspace_id and request_id and op and recipient
+                    and hosts.relay(state, workspace_id, sender, request_id, op, recipient) or nil
+                if host then
+                    process.send(host, "bee.host.client", data)
+                elseif workspace_id and request_id and op and recipient then
+                    process.send(sender, "bee.host.client_result", {version = 1, workspace_id = workspace_id, request_id = request_id,
+                        op = op, recipient = recipient, connection_id = "", error_code = "permission_denied",
+                        error = "the sender is not attached to this workspace's host"})
+                end
+            elseif selected.channel == client_results then
+                local message = selected.value
+                local workspace_id = pids[tostring(message:from())]
+                local data = message:payload():data()
+                local result = workspace_id and protocol.client_result(data, workspace_id) or nil
+                if workspace_id and result then
+                    local released = result.error_code == "" or result.error_code == "not_found"
+                    local holder = hosts.route(state, workspace_id, result.request_id, result.op, result.recipient, released)
+                    if holder then process.send(holder, "bee.host.client_result", data) end
+                end
+            elseif selected.channel == reader_updates then
+                local message = selected.value
+                local workspace_id = pids[tostring(message:from())]
+                if workspace_id then
+                    local data = message:payload():data()
+                    readers[workspace_id] = data
+                    for _, holder in ipairs(hosts.attached(state, workspace_id)) do
+                        process.send(holder, "bee.launch.catalog_readers", data)
+                    end
                 end
             elseif selected.channel == replies then
                 local message = selected.value
@@ -240,7 +309,9 @@ local function main(value: unknown)
     local ok, err = pcall(run)
     -- Each host monitors this manager and runs its own shutdown when it exits.
     process.registry.unregister(leases.MANAGER)
-    for _, subscription in ipairs({acquires, releases, ready, replies}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({acquires, releases, ready, replies, attaches, client_requests, client_results, reader_updates}) do
+        process.unlisten(subscription)
+    end
     for _, subscription in ipairs(drained) do process.unlisten(subscription) end
     if not ok then error(err) end
 end

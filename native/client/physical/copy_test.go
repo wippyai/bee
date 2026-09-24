@@ -120,7 +120,7 @@ func TestPhysicalCopyAndOrdinaryInterruptRemainDistinct(t *testing.T) {
 				}
 				select {
 				case err := <-done:
-					if err != nil {
+					if !errors.Is(err, ErrDetached) {
 						t.Fatal(err)
 					}
 				case <-ctx.Done():
@@ -229,7 +229,7 @@ func TestDefiniteCopyRefusalKeepsClientAndApplicationRunning(t *testing.T) {
 	}
 	select {
 	case err := <-done:
-		if err != nil {
+		if !errors.Is(err, ErrDetached) {
 			t.Fatal(err)
 		}
 	case <-ctx.Done():

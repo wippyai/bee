@@ -5,6 +5,8 @@ local test = require("test")
 local time = require("time")
 local process = require("process")
 local channel = require("channel")
+local security = require("security")
+local funcs = require("funcs")
 local owner = require("owner")
 local catalog = require("catalog")
 local enrollment = require("enrollment")
@@ -22,11 +24,12 @@ end
 local function bridge(local_clients: boolean, topic: string): owner.State
     local unused = listen("bee.test.desktop_enrollment." .. topic)
     local state: owner.State = {
-        supervisor = "", bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, workspace_id = WORKSPACE, desktop_id = "", node = "owner-node",
+        bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = "owner-node",
         allowed = {}, enrolled = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = local_clients},
-        ready = unused, results = unused, copies = unused, launches = unused, catalogs = unused,
-        activations = unused, reader_updates = unused, observers = unused, catalog_readers = {}, pending_catalog_readers = nil,
-        catalog = catalog.new(), clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = time.now(),
+        ready = unused, results = unused, copies = unused, launches = unused,
+        activations = unused, reader_updates = unused, observers = unused, catalog = catalog.new(),
+        spawn_scope = security.new_scope({}), executor = funcs.new(), folder = nil, served = {}, workspaces = {}, served_count = 0,
+        clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = time.now(),
     }
     return state
 end
@@ -53,8 +56,8 @@ local function define_tests()
             local state = bridge(true, "revokes")
             owner.enroll(state, {["client-1"] = true, ["client-2"] = true}, 0)
             local leaving, staying = client("client-1", "a"), client("client-2", "b")
-            state.clients[leaving] = {recipient = leaving, desktop_id = "", closing = false, dirty = false}
-            state.clients[staying] = {recipient = staying, desktop_id = "", closing = false, dirty = false}
+            state.clients[leaving] = {recipient = leaving, workspace_id = WORKSPACE, desktop_id = "", closing = false, dirty = false}
+            state.clients[staying] = {recipient = staying, workspace_id = WORKSPACE, desktop_id = "", closing = false, dirty = false}
             state.client_count = 2
             owner.enroll(state, {["client-2"] = true}, 0)
             test.is_nil(state.clients[leaving], "retired node kept its attachment")

@@ -27,9 +27,10 @@ import (
 	"github.com/wippyai/runtime/cluster/internode"
 )
 
-// Selection pins an existing durable display. Empty lets an ordinary local Bee
-// reuse the first uncontrolled display or allocate a new one in its sole
-// project workspace. Discovery order never chooses among workspaces.
+// Selection pins an existing durable display in one workspace. Empty attaches
+// the owner's folder workspace, or lets the person pick one of the node's
+// workspaces when the owner composes none. Discovery order never chooses among
+// workspaces.
 type Selection struct{ Workspace, Desktop string }
 
 // Physical detach must not wait for the normal operation deadline. If the
@@ -53,33 +54,22 @@ func (cfg Config) join(node string, private ed25519.PrivateKey) mesh.JoinConfig 
 	return mesh.JoinConfig{Directory: cfg.Directory, EnrollmentDirectory: cfg.EnrollmentDir, Node: node, Key: private, TLS: cfg.TLS}
 }
 
+// selectDesktop checks an explicit selection against the node's displays. The
+// workspace is the owner's to admit; the attach names it exactly.
 func selectDesktop(catalog hive.DesktopCatalog, selection Selection) (Selection, error) {
 	if (selection.Workspace == "") != (selection.Desktop == "") {
 		return Selection{}, errors.New("workspace and desktop must be selected together")
 	}
-	var found Selection
-	count := 0
-	for _, workspace := range catalog.Workspaces {
-		for _, desktop := range workspace.Desktops {
-			candidate := Selection{Workspace: workspace.ID, Desktop: desktop.ID}
-			if selection.Workspace != "" && candidate != selection {
-				continue
-			}
-			found = candidate
-			count++
+	for _, desktop := range catalog.Desktops {
+		if desktop.ID == selection.Desktop {
+			return selection, nil
 		}
 	}
-	if count == 0 {
-		return Selection{}, errors.New("selected owner has no matching desktop")
-	}
-	if count != 1 {
-		return Selection{}, errors.New("multiple desktops available; select a workspace and desktop")
-	}
-	return found, nil
+	return Selection{}, errors.New("selected owner has no matching desktop")
 }
 
 type desktopOperations interface {
-	Create(context.Context, string, string) (hive.DesktopSelection, error)
+	Create(context.Context, string) (string, error)
 	Attach(context.Context, string, string, string, hive.DesktopMode) (hive.DesktopMount, error)
 }
 
@@ -95,7 +85,7 @@ func randomDesktopID() (string, error) {
 // only retries after the owner definitively says an existing display already
 // has another controller. Unknown outcomes and every other refusal return
 // immediately. Explicit selections remain exact and never allocate.
-func attachDesktop(ctx context.Context, client desktopOperations, catalog hive.DesktopCatalog, selection Selection, mode hive.DesktopMode) (hive.DesktopMount, error) {
+func attachDesktop(ctx context.Context, client desktopOperations, catalog hive.DesktopCatalog, workspace string, selection Selection, mode hive.DesktopMode) (hive.DesktopMount, error) {
 	if selection.Workspace != "" || selection.Desktop != "" {
 		selected, err := selectDesktop(catalog, selection)
 		if err != nil {
@@ -103,12 +93,11 @@ func attachDesktop(ctx context.Context, client desktopOperations, catalog hive.D
 		}
 		return client.Attach(ctx, "session-attach", selected.Workspace, selected.Desktop, mode)
 	}
-	if len(catalog.Workspaces) != 1 {
-		return hive.DesktopMount{}, errors.New("multiple workspaces available; select a workspace and desktop")
+	if workspace == "" {
+		return hive.DesktopMount{}, errors.New("no workspace selected; select a workspace and desktop")
 	}
-	workspace := catalog.Workspaces[0]
-	for index, desktop := range workspace.Desktops {
-		mounted, err := client.Attach(ctx, fmt.Sprintf("session-attach-%d", index), workspace.ID, desktop.ID, mode)
+	for index, desktop := range catalog.Desktops {
+		mounted, err := client.Attach(ctx, fmt.Sprintf("session-attach-%s-%d", workspace[:8], index), workspace, desktop.ID, mode)
 		if err == nil {
 			return mounted, nil
 		}
@@ -124,11 +113,11 @@ func attachDesktop(ctx context.Context, client desktopOperations, catalog hive.D
 	if err != nil {
 		return hive.DesktopMount{}, err
 	}
-	created, err := client.Create(ctx, workspace.ID, desktop)
+	created, err := client.Create(ctx, desktop)
 	if err != nil {
 		return hive.DesktopMount{}, err
 	}
-	return client.Attach(ctx, "session-attach-created", created.Workspace, created.Desktop, mode)
+	return client.Attach(ctx, "session-attach-created-"+created, workspace, created, mode)
 }
 
 // JoinEnrolled joins an owner whose local enrollment already lists node with the
@@ -239,7 +228,10 @@ func pinSupervisor(actor *mesh.Actor, owner rendezvous.Descriptor) {
 	}
 }
 
-func present(ctx context.Context, foreground context.Context, actor *mesh.Actor, owner rendezvous.Descriptor, cfg Config, stdin *os.File, stdout io.Writer) (result error) {
+// present attaches the selected workspace, the owner's folder workspace, or,
+// when the owner composes none, the workspaces the person picks: each local
+// detach (Ctrl+]) returns to the picker and Ctrl+Q leaves.
+func present(ctx context.Context, foreground context.Context, actor *mesh.Actor, owner rendezvous.Descriptor, cfg Config, stdin *os.File, stdout io.Writer) error {
 	operations, cancelOperations := context.WithCancel(ctx)
 	stopForeground := context.AfterFunc(foreground, cancelOperations)
 	defer stopForeground()
@@ -251,7 +243,51 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 	if err != nil {
 		return err
 	}
-	mounted, err := attachDesktop(operations, client, catalog, cfg.Selection, cfg.Mode)
+	settled := func(err error) error {
+		if errors.Is(err, physical.ErrDetached) {
+			return nil
+		}
+		return err
+	}
+	if cfg.Selection.Workspace != "" {
+		return settled(presentWorkspace(ctx, operations, client, catalog, cfg.Selection.Workspace, cfg.Selection, cfg, cfg.Command, stdin, stdout))
+	}
+	if catalog.Default != "" {
+		return settled(presentWorkspace(ctx, operations, client, catalog, catalog.Default, Selection{}, cfg, cfg.Command, stdin, stdout))
+	}
+	reads := 0
+	list := func(ctx context.Context, query hive.CatalogQuery) (hive.DesktopCatalog, error) {
+		reads++
+		return client.List(ctx, fmt.Sprintf("session-picker-%d", reads), query)
+	}
+	command := cfg.Command
+	for {
+		workspace, err := pick(operations, list, stdin, stdout)
+		if errors.Is(err, ErrPickerClosed) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// Displays belong to the node; reread them, since an earlier
+		// workspace may have allocated one.
+		current, err := list(operations, hive.CatalogQuery{})
+		if err != nil {
+			return err
+		}
+		err = presentWorkspace(ctx, operations, client, current, workspace, Selection{}, cfg, command, stdin, stdout)
+		command = nil
+		if !errors.Is(err, physical.ErrDetached) {
+			return err
+		}
+	}
+}
+
+// presentWorkspace attaches one display of one workspace, presents it until it
+// ends and detaches it.
+func presentWorkspace(ctx context.Context, operations context.Context, client *hive.Desktop, catalog hive.DesktopCatalog, workspace string,
+	selection Selection, cfg Config, command *hive.DesktopCommand, stdin *os.File, stdout io.Writer) (result error) {
+	mounted, err := attachDesktop(operations, client, catalog, workspace, selection, cfg.Mode)
 	if err != nil {
 		return err
 	}
@@ -263,12 +299,12 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 		}
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachTimeout)
 		defer cancel()
-		if err := client.Detach(cleanup, "session-detach", mounted); err != nil {
+		if err := client.Detach(cleanup, "session-detach-"+mounted.Session, mounted); err != nil {
 			result = errors.Join(result, fmt.Errorf("detach desktop: %w", err))
 		}
 	}()
-	if cfg.Command != nil {
-		if _, err := client.Launch(operations, "session-launch", mounted, *cfg.Command); err != nil {
+	if command != nil {
+		if _, err := client.Launch(operations, "session-launch", mounted, *command); err != nil {
 			return err
 		}
 	}
@@ -293,7 +329,7 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 		copySequence++
 		request, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
-		selected, err := client.Copy(request, fmt.Sprintf("session-copy-%d", copySequence), mounted)
+		selected, err := client.Copy(request, fmt.Sprintf("session-copy-%s-%d", mounted.Session, copySequence), mounted)
 		var rejected *hive.Rejected
 		if errors.As(err, &rejected) && rejected.Fault.Code == "INVALID_STATE" {
 			return "", false, physical.ErrCopyRefused
@@ -301,6 +337,9 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 		return selected.Text, selected.Selected, err
 	}
 	if err := physical.RunWithCopy(display, remote, rights, stdin, stdout, copySelection); err != nil {
+		if errors.Is(err, physical.ErrDetached) {
+			return err
+		}
 		return fmt.Errorf("present desktop: %w", err)
 	}
 	return nil
@@ -309,12 +348,12 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 // waitCatalog tolerates an owner still starting, within the caller's discovery
 // deadline. Each read gets a fresh key so a cached refusal cannot pin readiness.
 // It never retries authorization, protocol, transport or uncertain failures.
-func waitCatalog(ctx context.Context, list func(context.Context, string) (hive.DesktopCatalog, error)) (hive.DesktopCatalog, error) {
+func waitCatalog(ctx context.Context, list func(context.Context, string, hive.CatalogQuery) (hive.DesktopCatalog, error)) (hive.DesktopCatalog, error) {
 	for attempt := 0; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return hive.DesktopCatalog{}, err
 		}
-		catalog, err := list(ctx, fmt.Sprintf("session-catalog-%d", attempt))
+		catalog, err := list(ctx, fmt.Sprintf("session-catalog-%d", attempt), hive.CatalogQuery{})
 		if err == nil {
 			return catalog, nil
 		}

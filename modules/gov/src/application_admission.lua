@@ -59,16 +59,15 @@ local function thread_access(raw: unknown): ThreadAccess?
     return nil
 end
 
-local function binding(raw: unknown): (Binding?, string?)
-    local value = bounds.object(raw)
-    if not value then return nil, "application binding must be an object" end
-    local extra = bounds.fields(value, {"definition_id", "policies", "thread_access"})
-    if extra then return nil, "application binding: " .. extra end
-    local definition_id = registry_id(value.definition_id)
-    local access = thread_access(value.thread_access)
-    local rows, count, rows_error = dense(value.policies, "application policies", M.MAX_POLICIES)
-    if not definition_id or not access or not rows or count == nil then
-        return nil, rows_error or "application binding is invalid"
+type Grant = {policies: {string}, thread_access: ThreadAccess}
+
+-- The admission a binding grants its definition: sorted distinct external
+-- policy identities and the thread access.
+function M.grant(policies_raw: unknown, thread_access_raw: unknown): (Grant?, string?)
+    local access = thread_access(thread_access_raw)
+    local rows, count, rows_error = dense(policies_raw, "application policies", M.MAX_POLICIES)
+    if not access or not rows or count == nil then
+        return nil, rows_error or "application admission grant is invalid"
     end
     -- Preallocate an array slot even for zero rows so canonical JSON retains
     -- the empty-list shape rather than turning it into an object.
@@ -83,7 +82,19 @@ local function binding(raw: unknown): (Binding?, string?)
         policies[index] = policy
     end
     table.sort(policies)
-    return {definition_id = definition_id, policies = policies, thread_access = access}, nil
+    return {policies = policies, thread_access = access}, nil
+end
+
+local function binding(raw: unknown): (Binding?, string?)
+    local value = bounds.object(raw)
+    if not value then return nil, "application binding must be an object" end
+    local extra = bounds.fields(value, {"definition_id", "policies", "thread_access"})
+    if extra then return nil, "application binding: " .. extra end
+    local definition_id = registry_id(value.definition_id)
+    if not definition_id then return nil, "application binding is invalid" end
+    local granted, grant_error = M.grant(value.policies, value.thread_access)
+    if not granted then return nil, grant_error end
+    return {definition_id = definition_id, policies = granted.policies, thread_access = granted.thread_access}, nil
 end
 
 function M.bindings(raw: unknown): ({Binding}?, string?)

@@ -16,6 +16,9 @@ local M = {}
 M.MAX_AGENT_LAUNCH = 16
 M.SCHEMA = "bee.launch-policy@2"
 M.TYPE = placement_types.LAUNCH_POLICY_TYPE
+-- The launch overrides a host policy may admit. A request override takes
+-- effect only when the definition allows it and its policy admits it too.
+M.OVERRIDES = {"workdir", "thread", "placement"}
 -- The host enables a permission exchange by naming the adapter, the
 -- acceptance record and the proven fixture digest here; a production
 -- policy may only name the adapter the profile itself pins.
@@ -58,6 +61,7 @@ type Policy = {
     fixture: boolean,
     placement_binding: string?,
     placement_options: {[string]: unknown}?,
+    allowed_overrides: {string},
 }
 local function decode_map(value: unknown, name: string): ({[string]: string}?, string?)
     local result: {[string]: string} = {}
@@ -135,7 +139,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_launch", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_launch", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -309,6 +313,11 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         gateway_surface = bounds.object(copied)
         if not gateway_surface or copy_error then return nil, ref .. ": cannot copy gateway_surface" end
     end
+    local allowed_overrides, overrides_error = bounds.ids(data.allowed_overrides == nil and {} or data.allowed_overrides, true)
+    if not allowed_overrides then return nil, ref .. ": allowed_overrides: " .. tostring(overrides_error) end
+    for _, override in ipairs(allowed_overrides) do
+        if not bounds.member(override, M.OVERRIDES) then return nil, ref .. ": allowed_overrides names " .. override .. ", which a launch policy does not admit" end
+    end
     local gateway_ttl_ms = 3600000
     if data.gateway_ttl_ms ~= nil then
         local declared = bounds.integer(data.gateway_ttl_ms)
@@ -316,7 +325,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         gateway_ttl_ms = declared
     end
     local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
-        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_launch = agent_launch, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options}
+        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_launch = agent_launch, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end
 type SurfaceValue = {[string]: unknown}

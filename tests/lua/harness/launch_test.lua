@@ -182,6 +182,27 @@ local function associations(workspace: string): {{[string]: unknown}}
     local listed = value(call("bee.resources.binding:list", {workspace_id = workspace}))
     return listed.associations :: {{[string]: unknown}}
 end
+-- Temporarily sets the fixture definition's and its policy's allowed
+-- overrides, restoring both whatever the body does.
+local function with_overrides(definition_overrides: {string}, policy_overrides: {string}, body: () -> ())
+    local definition_entry = assert(registry.get(DEFINITION))
+    local policy_entry = assert(registry.get(POLICY))
+    local definition_data, policy_data = definition_entry.data :: {[string]: unknown}, policy_entry.data :: {[string]: unknown}
+    local changed_definition: {[string]: unknown} = {}
+    for key, item in pairs(definition_data) do changed_definition[key] = item end
+    changed_definition.allowed_overrides = definition_overrides
+    local changed_policy: {[string]: unknown} = {}
+    for key, item in pairs(policy_data) do changed_policy[key] = item end
+    changed_policy.allowed_overrides = policy_overrides
+    definition_entry.data, policy_entry.data = changed_definition, changed_policy
+    apply(definition_entry)
+    apply(policy_entry)
+    local ok, failure = pcall(body)
+    definition_entry.data, policy_entry.data = definition_data, policy_data
+    apply(definition_entry)
+    apply(policy_entry)
+    if not ok then error(tostring(failure)) end
+end
 local function restore_host()
     local mode_entry = registry.get("bee.placement.native:resource_mode")
     if not mode_entry then error("resource mode") end
@@ -497,7 +518,8 @@ local function define_tests()
                 test.eq(decoded.default_mode, "batch")
                 test.eq(decoded.thread_policy.kind, "caller")
                 test.eq(decoded.allowed_overrides[1], "thread")
-                test.eq(#decoded.allowed_overrides, 1)
+                test.eq(decoded.allowed_overrides[2], "workdir")
+                test.eq(#decoded.allowed_overrides, 2)
                 if selected.credential then test.eq(decoded.credentials[1], selected.credential)
                 else test.eq(#decoded.credentials, 0) end
                 test.is_false(decoded.presentation.start_menu)
@@ -510,6 +532,7 @@ local function define_tests()
                     end)
                 if not policy then error(tostring(policy_error)) end
                 test.eq(policy.prepare_options[selected.option], selected.expected)
+                test.eq(table.concat(policy.allowed_overrides, ","), "thread,workdir")
                 for option, expected in pairs(selected.additional_options or {}) do
                     test.eq(policy.prepare_options[option], expected)
                 end
@@ -523,6 +546,25 @@ local function define_tests()
                 local has_workspace = false
                 for _, tool in ipairs(policy.gateway_tools) do if tool == "overlay" then has_workspace = true end end
                 test.is_true(has_workspace)
+            end
+        end)
+        test.it("ships every driver route with thread and workdir overrides its host policy admits, and no placement override", function()
+            local shipped = {
+                {"bee.driver.claude:default_window", "bee:launch_policy_claude_window"}, {"bee.driver.claude:research_batch", "bee:launch_policy_claude_batch"},
+                {"bee.driver.codex:default_window", "bee:launch_policy_codex_window"}, {"bee.driver.codex:research_batch", "bee:launch_policy_codex_batch"},
+                {"bee.driver.codex:named_batch", "bee:launch_policy_codex_named_batch"},
+                {"bee.driver.muse:default_window", "bee:launch_policy_muse_window"}, {"bee.driver.muse:research_batch", "bee:launch_policy_muse_batch"},
+                {"bee.driver.agy:default_window", "bee:launch_policy_agy_window"}, {"bee.driver.agy:research_batch", "bee:launch_policy_agy_batch"},
+                {"bee.driver.grok:default_window", "bee:launch_policy_grok_window"},
+            }
+            for _, pair in ipairs(shipped) do
+                local decoded, definition_error = definitions.decode(pair[1], assert(registry.get(pair[1])))
+                if not decoded then error(tostring(definition_error)) end
+                test.is_true(definitions.allows(decoded, "workdir"), pair[1] .. " allows no workdir override")
+                test.is_true(definitions.allows(decoded, "thread"), pair[1] .. " allows no thread override")
+                test.is_false(definitions.allows(decoded, "placement"), pair[1] .. " allows a placement override")
+                local data = assert(registry.get(pair[2])).data :: {[string]: unknown}
+                test.eq(table.concat(data.allowed_overrides :: {string}, ","), "thread,workdir", pair[2] .. " admits other overrides")
             end
         end)
         test.it("admits a shared caller thread only after checking membership and before acquiring launch resources", function()
@@ -976,6 +1018,111 @@ local function define_tests()
             local denied, err = outsider:call("bee.harness.launch:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
             if err then error(tostring(err)) end
             test.eq(code(denied :: admission.Reply), "FORBIDDEN")
+        end)
+        test.it("admits workdir, thread and placement overrides only where the definition and its policy both allow them", function()
+            value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "alternate", root_ref = ROOT, subpath = "", allowed_access = "write"}))
+            local refused_request = fresh("override-refused")
+            test.eq(code(call("bee.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                brief = "ping", workdir = "alternate"})), "FORBIDDEN")
+            test.eq(code(call("bee.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                brief = "ping", thread_title = "Chosen title"})), "FORBIDDEN")
+            test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. refused_request})), "NOT_FOUND")
+            -- The definition alone allowing an override is not enough: the
+            -- host policy must admit it as well.
+            with_overrides({"brief", "workdir", "thread", "placement"}, {}, function()
+                local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+                test.eq(#(plan.overrides :: {string}), 1)
+                test.eq((plan.overrides :: {string})[1], "brief")
+                test.eq(plan.placement_kind, "native")
+                test.eq(code(call("bee.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                    brief = "ping", workdir = "alternate"})), "FORBIDDEN")
+                test.eq(code(call("bee.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                    brief = "ping", thread_title = "Chosen title"})), "FORBIDDEN")
+            end)
+            with_overrides({"brief"}, {"workdir", "thread", "placement"}, function()
+                test.eq(code(call("bee.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                    brief = "ping", workdir = "alternate"})), "FORBIDDEN")
+            end)
+            test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. refused_request})), "NOT_FOUND")
+            with_overrides({"brief", "workdir", "thread"}, {"workdir", "thread"}, function()
+                local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+                test.eq(#(plan.overrides :: {string}), 3)
+                local request_id = fresh("override-workdir")
+                local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace,
+                    brief = "ping", workdir = "alternate", thread_title = "Chosen title"}))
+                local carrier_request = admitted.request :: {[string]: unknown}
+                test.eq(carrier_request.working_directory, "alternate")
+                local resources = carrier_request.resources :: {{[string]: unknown}}
+                test.eq(#resources, 1)
+                test.eq(resources[1].name, "alternate")
+                test.eq(admitted.thread_id, "thread:" .. request_id)
+                local created = value(call("bee.threads.service:get", {thread_id = admitted.thread_id}))
+                test.eq((created.summary :: {[string]: unknown}).title, "Chosen title")
+                -- An existing thread the requester belongs to replaces the new one.
+                local chosen = fresh("override-thread")
+                value(call("bee.threads.service:create", {thread_id = chosen, idempotency_key = fresh("create"), title = "Existing"}))
+                local joined = value(call("bee.harness.launch:admit", {request_id = fresh("override-existing"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_id = chosen}))
+                test.eq(joined.thread_id, chosen)
+                local foreign_owner = fresh("foreign-owner")
+                local foreign_thread = fresh("foreign-thread")
+                value(call_as(foreign_owner, "bee.threads.service:create", {thread_id = foreign_thread,
+                    idempotency_key = fresh("foreign-create"), title = "Foreign"}))
+                test.eq(code(call("bee.harness.launch:admit", {request_id = fresh("override-foreign"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_id = foreign_thread})), "DENIED")
+                test.eq(code(call("bee.harness.launch:admit", {request_id = fresh("override-both"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_id = chosen, thread_title = "Both"})), "INVALID")
+            end)
+        end)
+        test.it("refuses a placement other than the host's before any thread or grant exists", function()
+            local native = value(call("bee.harness.launch:admit", {request_id = fresh("placement-native"), definition_ref = DEFINITION,
+                workspace_id = workspace, brief = "ping", placement = "native"}))
+            test.eq((native.plan :: {[string]: unknown}).placement_kind, "native")
+            local request_id = fresh("placement-docker")
+            test.eq(code(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
+                workspace_id = workspace, brief = "ping", placement = "docker"})), "FORBIDDEN")
+            with_overrides({"brief", "placement"}, {"placement"}, function()
+                local refused = call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", placement = "docker"})
+                test.eq(code(refused), "PLACEMENT_UNAVAILABLE")
+            end)
+            test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
+            test.eq(code(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
+                workspace_id = workspace, brief = "ping", placement = "vm"})), "INVALID")
+        end)
+        test.it("sets up a folder under an admitted root as the working directory only under a workdir override", function()
+            local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+            local refused = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = DEFINITION,
+                expected_plan_digest = plan.plan_digest, workdir = {root_ref = ROOT, path = "chosen"}}) :: unknown as {[string]: unknown}
+            test.eq(refused.ok, false)
+            test.eq(refused.error, "the launch does not allow a workdir override")
+            with_overrides({"brief", "workdir"}, {"workdir"}, function()
+                local allowed = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+                local reply = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = DEFINITION,
+                    expected_plan_digest = allowed.plan_digest, workdir = {root_ref = ROOT, path = "chosen/deeper"}}) :: unknown as {[string]: unknown}
+                if reply.ok ~= true then error(tostring(reply.error)) end
+                local name = tostring(reply.workdir)
+                test.is_true(name:match("^folder%-[0-9a-f]+$") ~= nil)
+                local found: {[string]: unknown}? = nil
+                for _, association in ipairs(associations(workspace)) do
+                    if association.name == name then found = association end
+                end
+                if not found then error("folder association is missing") end
+                test.eq(found.root_ref, ROOT)
+                test.eq(found.subpath, "chosen/deeper")
+                local again = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = DEFINITION,
+                    expected_plan_digest = allowed.plan_digest, workdir = {root_ref = ROOT, path = "chosen/deeper"}}) :: unknown as {[string]: unknown}
+                test.eq(again.workdir, name)
+                local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("folder-workdir"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", workdir = name, expected_plan_digest = allowed.plan_digest}))
+                test.eq((admitted.request :: {[string]: unknown}).working_directory, name)
+                for _, bad in ipairs({{root_ref = ROOT, path = "../escape"}, {root_ref = ROOT, path = "/abs"}, {root_ref = "bee.harness.catalog:not_a_root", path = "x"},
+                    {root_ref = ROOT, path = "x", extra = true}}) do
+                    local denied = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = DEFINITION,
+                        expected_plan_digest = allowed.plan_digest, workdir = bad}) :: unknown as {[string]: unknown}
+                    test.eq(denied.ok, false)
+                end
+            end)
         end)
         test.it("refuses caller-selected session identities and resources before creating work", function()
             for _, field in ipairs({"session_ref", "session_resource"}) do

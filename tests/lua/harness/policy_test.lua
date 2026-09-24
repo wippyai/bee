@@ -218,6 +218,29 @@ local function define_tests()
             test.is_nil(decoded)
             test.eq(decode_error, "test:policy: executable_env.claude overlaps executables")
         end)
+
+        test.it("admits only workdir, thread and placement as launch overrides and measures them", function()
+            local raw = entry({sh = "/bin/sh"})
+            local closed = policy.decode("test:policy", raw)
+            if not closed then error("policy without overrides") end
+            test.eq(#closed.allowed_overrides, 0)
+            local data = raw.data :: Entry
+            data.allowed_overrides = {"workdir", "thread", "placement"}
+            local open, open_error = policy.decode("test:policy", raw)
+            if not open then error(tostring(open_error)) end
+            test.eq(#open.allowed_overrides, 3)
+            test.neq(open.digest, closed.digest)
+            for _, rejected in ipairs({"mode", "brief", "driver"}) do
+                data.allowed_overrides = {rejected}
+                local decoded, decode_error = policy.decode("test:policy", raw)
+                test.is_nil(decoded)
+                test.eq(decode_error, "test:policy: allowed_overrides names " .. rejected .. ", which a launch policy does not admit")
+            end
+            data.allowed_overrides = {"thread", "thread"}
+            test.is_nil(policy.decode("test:policy", raw))
+            data.allowed_overrides = "thread"
+            test.is_nil(policy.decode("test:policy", raw))
+        end)
     end)
 end
 

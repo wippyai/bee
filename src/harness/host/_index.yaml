@@ -86,6 +86,7 @@ entries:
       leaves the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -129,6 +130,7 @@ entries:
     comment: Host-selected one-turn Claude batch policy for bounded research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -153,6 +155,7 @@ entries:
       the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -197,6 +200,7 @@ entries:
     comment: Host-selected read-only Codex batch policy for bounded research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -220,6 +224,7 @@ entries:
     comment: Host-selected structured Codex route that inherits the host Codex home so a saved profile may name one Codex config profile; read-only, one bounded turn on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -244,6 +249,7 @@ entries:
       the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -285,6 +291,7 @@ entries:
     comment: Host-selected non-interactive Muse batch policy for bounded research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -308,6 +315,7 @@ entries:
       leaves the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -348,6 +356,7 @@ entries:
     comment: Host-selected bounded Gemini batch policy with a retained user login and caller-owned thread MCP
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -368,6 +377,7 @@ entries:
       the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000

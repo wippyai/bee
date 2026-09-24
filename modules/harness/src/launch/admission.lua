@@ -28,6 +28,7 @@ M.CARRIER_OPS = "bee.threads.carrier"
 M.RESOURCES = "bee.resources.binding"
 M.CREDENTIALS = "bee.credentials.binding"
 M.MAX_BRIEF_BYTES = 16384
+M.PLACEMENTS = {"native", "docker"}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
@@ -46,6 +47,10 @@ type Plan = {
     placement_binding_ref: string,
     placement_binding_digest: string,
     placement_methods: {[string]: string},
+    placement_kind: string,
+    -- The overrides a request may make: the definition's own, with workdir,
+    -- thread and placement kept only where the launch policy admits them too.
+    overrides: {string},
     catalog_generation: integer,
     mode: string,
     plan_digest: string,
@@ -68,6 +73,8 @@ type Request = {
     mode: string?,
     workdir: string?,
     thread_id: string?,
+    thread_title: string?,
+    placement: string?,
     expected_plan_digest: string?,
     continuation: Continuation?,
     parent_action_id: string?,
@@ -198,6 +205,10 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         if not measured then return nil, fail("INVALID", "provider " .. launch_policy.provider_ref .. ": " .. tostring(provider_error)) end
         provider_digest = measured
     end
+    local overrides: {string} = {}
+    for _, name in ipairs(launch.allowed_overrides) do
+        if not bounds.member(name, policy.OVERRIDES) or bounds.member(name, launch_policy.allowed_overrides) then overrides[#overrides + 1] = name end
+    end
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest, placement_methods = placement.methods,
         provider = provider_digest, mode = chosen, saved_profile = selected})
@@ -205,7 +216,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest,
-        placement_methods = placement.methods,
+        placement_methods = placement.methods, placement_kind = placement.placement_kind, overrides = overrides,
         catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest,
         saved_profile_id = selected and selected.profile_id or nil, saved_profile_revision = selected and selected.revision or nil}, nil
 end
@@ -233,7 +244,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id", "origin_view"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "thread_title", "placement", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id", "origin_view"})
     if unknown_field then return nil, unknown_field end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
@@ -268,6 +279,18 @@ function M.decode_request(value: unknown): (Request?, string?)
         thread_id = bounds.id(object.thread_id)
         if not thread_id then return nil, "thread_id is not an identifier" end
     end
+    -- A new thread under the caller's title, instead of an existing one.
+    local thread_title: string? = nil
+    if object.thread_title ~= nil then
+        thread_title = bounds.line(object.thread_title, bounds.MAX_TITLE_BYTES)
+        if not thread_title then return nil, "thread_title must be one line of bounded text" end
+        if thread_id then return nil, "thread_id and thread_title are exclusive" end
+    end
+    local placement: string? = nil
+    if object.placement ~= nil then
+        placement = bounds.member(object.placement, M.PLACEMENTS)
+        if not placement then return nil, "placement must be native or docker" end
+    end
     local origin_view: OriginView? = nil
     if object.origin_view ~= nil then
         local declared = bounds.object(object.origin_view)
@@ -295,17 +318,20 @@ function M.decode_request(value: unknown): (Request?, string?)
         local thread = bounds.id(source.thread_id)
         if not origin or not attempt or not thread then return nil, "continuation needs bounded origin, attempt and thread identifiers" end
         if brief ~= "" then return nil, "window continuation cannot replay a brief" end
-        if thread_id then return nil, "continuation cannot override its thread" end
+        if thread_id or thread_title then return nil, "continuation cannot override its thread" end
         if not expected_plan_digest then return nil, "continuation needs the saved launch plan digest" end
         if source.reauthorize ~= nil and type(source.reauthorize) ~= "boolean" then return nil, "continuation.reauthorize must be a boolean" end
         previous = {origin_request_id = origin, previous_attempt_id = attempt, thread_id = thread, reauthorize = source.reauthorize == true}
     end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id,
-        saved_profile_id = saved_id, saved_profile_revision = saved_revision,
+        thread_title = thread_title, placement = placement, saved_profile_id = saved_id, saved_profile_revision = saved_revision,
         expected_plan_digest = expected_plan_digest, continuation = previous, parent_action_id = parent_action_id, origin_view = origin_view}, nil
 end
 -- The durable identities of a request: the same request id always names
 -- the same action and attempt.
+function M.overrides(plan: Plan, name: string): boolean
+    return bounds.member(name, plan.overrides) ~= nil
+end
 function M.identities(request_id: string): {action_id: string, attempt_id: string}
     return {action_id = "action:" .. request_id, attempt_id = "attempt:" .. request_id}
 end
@@ -338,21 +364,29 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
     end
     if request.brief == "" and plan.mode ~= "window" then return nil, fail("INVALID", "a structured launch needs a nonempty brief") end
-    if request.workdir and not definition.allows(launch, "workdir") then return nil, fail("FORBIDDEN", "definition does not allow a workdir override") end
-    if request.thread_id and not definition.allows(launch, "thread") then return nil, fail("FORBIDDEN", "definition does not allow a thread override") end
+    if request.workdir and not M.overrides(plan, "workdir") then return nil, fail("FORBIDDEN", "the launch does not allow a workdir override") end
+    -- A caller-thread definition names the caller's thread by design; any
+    -- other thread choice, and a new thread under the caller's title, is an
+    -- override.
+    local thread_override = request.thread_title ~= nil or (request.thread_id ~= nil and launch.thread_policy.kind ~= "caller")
+    if thread_override and not M.overrides(plan, "thread") then return nil, fail("FORBIDDEN", "the launch does not allow a thread override") end
+    if request.placement and request.placement ~= plan.placement_kind then
+        if not M.overrides(plan, "placement") then return nil, fail("FORBIDDEN", "the launch does not allow a placement override") end
+        return nil, fail("PLACEMENT_UNAVAILABLE", "this host admits no " .. request.placement .. " placement for " .. launch.ref .. "; it places it " .. plan.placement_kind)
+    end
     local ids = M.identities(request.request_id)
     local previous = request.continuation
     if previous and plan.mode ~= "window" then return nil, fail("INVALID", "launch continuation requires a window profile") end
     local thread_id = request.thread_id
-    if launch.thread_policy.kind == "named" then thread_id = launch.thread_policy.thread_ref end
+    if launch.thread_policy.kind == "named" and not thread_override then thread_id = launch.thread_policy.thread_ref end
     if previous then
         if thread_id and thread_id ~= previous.thread_id then return nil, fail("CONFLICT", "the saved thread differs from the launch definition") end
         thread_id = previous.thread_id
         ids.action_id = M.identities(previous.origin_request_id).action_id
     end
-    if not thread_id and launch.thread_policy.kind == "caller" then return nil, fail("INVALID", "definition expects the caller's thread") end
+    if not thread_id and not request.thread_title and launch.thread_policy.kind == "caller" then return nil, fail("INVALID", "definition expects the caller's thread") end
     local workdir_name = request.workdir
-    if launch.workdir_policy.kind == "declared_resource" then workdir_name = launch.workdir_policy.resource_ref end
+    if not workdir_name and launch.workdir_policy.kind == "declared_resource" then workdir_name = launch.workdir_policy.resource_ref end
     if launch.workdir_policy.kind == "required" and not workdir_name then return nil, fail("INVALID", "definition requires a working directory resource") end
     local session_resource = launch.session_resource
     if previous and not session_resource then return nil, fail("CONFLICT", "the launch definition has no retained session resource") end
@@ -412,7 +446,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         resources[#resources + 1] = typed
     end
     if not thread_id then
-        local created, create_refused = call(M.THREADS .. ":create", {thread_id = "thread:" .. request.request_id, idempotency_key = "launch:" .. request.request_id .. ":thread", title = launch.title})
+        local created, create_refused = call(M.THREADS .. ":create", {thread_id = "thread:" .. request.request_id, idempotency_key = "launch:" .. request.request_id .. ":thread", title = request.thread_title or launch.title})
         if not created then return nil, create_refused end
         thread_id = tostring(created.thread_id)
     end

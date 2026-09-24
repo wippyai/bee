@@ -167,7 +167,23 @@ local function main()
     -- Cap eviction: with A leased and B idle, C takes B's place.
     local lease_b = assert(leases.acquire(b, "15s"))
     leases.release(lease_b)
-    local lease_c = assert(leases.acquire(c, "15s"))
+    -- Release is queued at the manager. A definite busy answer can arrive
+    -- before it processes that release; retry only busy within the original
+    -- 15-second acquire budget. An unknown outcome is never retried.
+    local started_ms = time.now():unix_nano() / 1000000
+    local lease_c: leases.Lease? = nil
+    while true do
+        local remaining = 15000 - (time.now():unix_nano() / 1000000 - started_ms)
+        if remaining <= 0 then error("C was not admitted after B's release within 15s") end
+        local refusal: string?
+        lease_c, refusal = leases.acquire(c, tostring(math.ceil(remaining)) .. "ms")
+        if lease_c then break end
+        if not refusal or not refusal:find("^busy:") then error("C lease refused: " .. tostring(refusal)) end
+        local tick = time.after("20ms")
+        local deadline = time.after(tostring(math.ceil(remaining)) .. "ms")
+        local selected = channel.select({tick:case_receive(), deadline:case_receive()})
+        if selected.channel == deadline then error("C was not admitted after B's release within 15s") end
+    end
     await_served(b, false, "10s")
     eq(served(c), lease_c.host, "C serves after eviction")
     eq(served(a), again.host, "leased A survives the eviction")
@@ -207,4 +223,10 @@ local function main()
     logger:info("ACCEPTANCE VERIFIED: lazy workspace hosts start on open, stop when idle, restore and evict at the cap")
 end
 
-return {main = main}
+return {main = function()
+    local ok, cause = pcall(main)
+    if not ok then
+        logger:error("Lazy workspace hosts acceptance failed", {cause = tostring(cause)})
+        error(cause)
+    end
+end}

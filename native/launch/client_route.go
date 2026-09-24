@@ -41,6 +41,9 @@ func defaultClientSeams() clientSeams {
 		join:           joinOwner,
 		waitEnrolled:   waitEnrolled,
 		report:         os.Stdout,
+		stop: func(ctx context.Context, state string) error {
+			return stopOwner(ctx, state, io.Discard, defaultStopSeams())
+		},
 	}
 }
 
@@ -124,7 +127,12 @@ func joinOwner(ctx context.Context, join joinRequest) error {
 		}
 		return printDesktops(os.Stdout, catalog)
 	}
-	return session.JoinEnrolled(ctx, config, join.Node, join.Key, os.Stdin, os.Stdout)
+	err := session.JoinEnrolled(ctx, config, join.Node, join.Key, os.Stdin, os.Stdout)
+	var rejected *hive.Rejected
+	if config.Command != nil && errors.As(err, &rejected) && rejected.Fault.Code == "INVALID_ARGUMENT" {
+		return &refusedCommand{cause: err}
+	}
+	return err
 }
 
 // printDesktops writes one line per display a client can attach: every node

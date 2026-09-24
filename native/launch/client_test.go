@@ -485,3 +485,49 @@ func TestWorkspaceCommandsJoinARunningOwnerWithoutARouteLine(t *testing.T) {
 	}
 }
 
+// An owner started only to run a command it then refuses has no desktop to
+// retain: the client that started it stops it. An owner that was already
+// running, or that another client also joined, keeps running.
+func TestClientStopsTheOwnerItStartedForARefusedCommand(t *testing.T) {
+	refused := &refusedCommand{cause: errors.New("INVALID_ARGUMENT: Unknown Bee command: version")}
+	for _, scenario := range []struct {
+		name    string
+		running bool
+		other   bool
+		stops   int
+	}{
+		{name: "started here", stops: 1},
+		{name: "already running", running: true},
+		{name: "joined by another client", other: true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			state := t.TempDir()
+			owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+			if scenario.running {
+				owner.started = 1
+			}
+			seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+			seams.join = func(context.Context, joinRequest) error {
+				if scenario.other {
+					if err := os.WriteFile(filepath.Join(ownerTrustedDirectory(state), "bee-client-other.pub"), []byte("key\n"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return refused
+			}
+			stops := 0
+			seams.stop = func(context.Context, string) error { stops++; return nil }
+			intent, err := parseClientIntent([]string{"version"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: intent})
+			if !errors.Is(err, refused) {
+				t.Fatalf("refusal = %v", err)
+			}
+			if stops != scenario.stops {
+				t.Fatalf("stops = %d, want %d", stops, scenario.stops)
+			}
+		})
+	}
+}

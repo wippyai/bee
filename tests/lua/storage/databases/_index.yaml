@@ -1,0 +1,23 @@
+version: '1.0'
+namespace: bee.workspace.db
+entries:
+- name: node_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/node-workspaces-test.db
+  lifecycle: {auto_start: true}
+- name: legacy_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/legacy-workspace-test.db
+  lifecycle: {auto_start: true}
+- name: corrupt_legacy_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/corrupt-legacy-workspace-test.db
+  lifecycle: {auto_start: true}
+- name: catalog_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/workspace-catalog-test.db
+  lifecycle: {auto_start: true}

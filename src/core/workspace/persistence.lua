@@ -15,8 +15,8 @@ type Persistence = {
 }
 local M = {}
 
-function M.open(resource: string?): (Persistence?, string?)
-    local database, open_error = store.open(resource)
+function M.open(resource: string?, workspace: unknown): (Persistence?, string?)
+    local database, open_error = store.open(resource, workspace)
     if not database then return nil, tostring(open_error) end
     local workspace_id, identity_error = database:identity()
     if not workspace_id then database:close(); return nil, tostring(identity_error) end

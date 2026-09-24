@@ -3,6 +3,7 @@
 -- native open are durable work of unbounded length; the broker's startup
 -- deadline bounds surface readiness only, so readiness never waits for them.
 local test = require("test")
+local principals = require("principals")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -23,7 +24,9 @@ local function define_tests()
             local opening = assert(process.listen("bee.test.window_opening", {message = true}))
             local self = tostring(process.pid())
             local instance_id = "window-ready-" .. uuid.v7()
-            local window, spawn_error = process.with_options({terminal = grant}):spawn_monitored(
+            -- The broker runs an application under a principal bound to its workspace.
+            local principal = principals.actor("bee.application:" .. WORKSPACE .. ":" .. instance_id, WORKSPACE)
+            local window, spawn_error = process.with_options({terminal = grant}):with_actor(principal):spawn_monitored(
                 "bee.harness.catalog:window_ready_probe", "bee:workers", {version = 1,
                     broker_pid = self, workspace_pid = self, workspace_id = WORKSPACE,
                     instance_id = instance_id, view_id = instance_id, definition_id = "bee.harness.window:app",

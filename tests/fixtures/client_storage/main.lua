@@ -14,12 +14,19 @@ local function legacy()
     scene = model.personalize(scene, "view", "Imported", "cyan")
     return {scene = scene, tabs = {"view"}, preferences = appearance.defaults()}
 end
+local function desktops(): store.Desktops
+    local catalog, err = store.desktops()
+    if not catalog then error(tostring(err)) end
+    return catalog
+end
 local function main(mode: string)
-    local left, left_error = store.open()
+    local left, left_error = store.open(nil, workspace_id)
     if not left then error(tostring(left_error)) end
     local identity = left.client_id
+    local node = desktops()
+    assert(node.client_id == identity)
     if mode == "seed" then
-        local right, right_error = store.open()
+        local right, right_error = store.open(nil, workspace_id)
         if not right then error(tostring(right_error)) end
         assert(right.client_id == identity)
         local empty, empty_error = store.read(left)
@@ -55,21 +62,21 @@ local function main(mode: string)
     elseif mode == "desktops" then
         local first_id = string.rep("a", 32)
         local second_id = string.rep("b", 32)
-        local missing, missing_error = store.open(nil, first_id)
+        local missing, missing_error = store.open(nil, workspace_id, first_id)
         assert(not missing and missing_error == "Desktop identity not found")
-        assert(store.allocate(left, first_id))
-        assert(store.allocate(left, first_id))
-        assert(store.allocate(left, second_id))
-        local catalog, catalog_error = store.catalog(left)
+        assert(store.allocate(node, first_id))
+        assert(store.allocate(node, first_id))
+        assert(store.allocate(node, second_id))
+        local catalog, catalog_error = store.catalog(node)
         if not catalog then error(tostring(catalog_error)) end
         assert(#catalog == 3 and catalog[1].desktop_id == identity and catalog[1].is_default)
         assert(catalog[2].desktop_id == first_id and not catalog[2].is_default)
         assert(catalog[3].desktop_id == second_id and not catalog[3].is_default)
-        local first, first_error = store.open(nil, first_id)
+        local first, first_error = store.open(nil, workspace_id, first_id)
         if not first then error(tostring(first_error)) end
-        local stale, stale_error = store.open(nil, first_id)
+        local stale, stale_error = store.open(nil, workspace_id, first_id)
         if not stale then error(tostring(stale_error)) end
-        local second, second_error = store.open(nil, second_id)
+        local second, second_error = store.open(nil, workspace_id, second_id)
         if not second then error(tostring(second_error)) end
         assert(first.client_id == first_id and second.client_id == second_id)
         assert(store.write(first, state.empty(91, 29)))
@@ -79,31 +86,27 @@ local function main(mode: string)
         assert(read(first).scene.width == 91 and read(second).scene.width == 113)
         local imported, import_error = store.import_legacy(first, workspace_id, legacy())
         assert(not imported and import_error)
-        local allocated, allocation_error = store.allocate(first, string.rep("c", 32))
-        assert(not allocated and allocation_error)
-        local catalog, catalog_error = store.catalog(first)
-        assert(not catalog and catalog_error, "Selected desktop listed sibling identities")
         assert(read(left).scene.windows[1].user_title == "Edited after import")
-        for index = 1, 30 do assert(store.allocate(left, string.format("%032x", index))) end
-        local full, full_error = store.allocate(left, string.rep("d", 32))
+        for index = 1, 30 do assert(store.allocate(node, string.format("%032x", index))) end
+        local full, full_error = store.allocate(node, string.rep("d", 32))
         assert(not full and full_error == "Desktop capacity reached")
-        assert(store.allocate(left, first_id), "Capacity rejected an identical allocation")
+        assert(store.allocate(node, first_id), "Capacity rejected an identical allocation")
         assert(store.close(first)); assert(store.close(stale)); assert(store.close(second))
     elseif mode == "verify_desktops" then
-        local catalog, catalog_error = store.catalog(left)
+        local catalog, catalog_error = store.catalog(node)
         if not catalog then error(tostring(catalog_error)) end
         assert(#catalog == 33 and catalog[1].desktop_id == identity and catalog[1].is_default)
         assert(catalog[32].desktop_id == string.rep("a", 32) and not catalog[32].is_default)
         assert(catalog[33].desktop_id == string.rep("b", 32) and not catalog[33].is_default)
-        local first, first_error = store.open(nil, string.rep("a", 32))
+        local first, first_error = store.open(nil, workspace_id, string.rep("a", 32))
         if not first then error(tostring(first_error)) end
-        local second, second_error = store.open(nil, string.rep("b", 32))
+        local second, second_error = store.open(nil, workspace_id, string.rep("b", 32))
         if not second then error(tostring(second_error)) end
         assert(read(first).scene.width == 91 and read(second).scene.width == 113)
         assert(read(left).scene.windows[1].user_title == "Edited after import")
         assert(store.close(first)); assert(store.close(second))
     elseif mode == "catalog" then
-        local catalog, err = store.catalog(left)
+        local catalog, err = store.catalog(node)
         if not catalog then error(tostring(err)) end
     elseif mode == "existing" then
         assert(store.write(left, state.empty(80, 24)))
@@ -115,7 +118,8 @@ local function main(mode: string)
         if err then error(err) end
     else error("Unknown client storage test mode") end
     assert(store.close(left))
-    local catalog, catalog_error = store.catalog(left)
+    assert(store.release(node))
+    local catalog, catalog_error = store.catalog(node)
     assert(not catalog and catalog_error)
     local closed, closed_error = store.read(left)
     assert(not closed and closed_error)

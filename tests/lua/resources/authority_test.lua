@@ -2,6 +2,7 @@
 -- grants bound to the authenticated subject and their exact selection,
 -- and resolve refusing everything that no longer holds.
 local test = require("test")
+local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -28,18 +29,26 @@ local function scope(names: {string}): security.Scope
     end
     return security.new_scope(policies)
 end
-local function caller(id: string, grants: {string})
+type Principal = {id: string, names: {string}}
+local function caller(id: string, grants: {string}): Principal
     local names: {string} = {"bee.resources:client_test_policy"}
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
-    return funcs.new():with_actor(security.new_actor(id)):with_scope(scope(names))
+    return {id = id, names = names}
+end
+-- A principal acts bound to one workspace; by default the one its request names.
+local function bound(client: Principal, workspace_id: unknown): funcs.Executor
+    return funcs.new():with_actor(principals.actor(client.id, workspace_id)):with_scope(scope(client.names))
+end
+local function executor(client: Principal, value: unknown): funcs.Executor
+    return bound(client, principals.workspace(value))
 end
 local manager = caller(MANAGER, {"bee:resource_manage_policy"})
 local user = caller(USER, {"bee:resource_grant_policy"})
 local other = caller(OTHER, {"bee:resource_grant_policy"})
 local placement = caller(PLACEMENT, {"bee:resource_resolve_policy"})
 local outsider = caller("bee.test.outsider", {})
-local function call(client: funcs.Executor, method: string, value: unknown): authority.Reply
-    local reply, err = client:call("bee.resources.binding:" .. method, value)
+local function call(client: Principal, method: string, value: unknown): authority.Reply
+    local reply, err = executor(client, value):call("bee.resources.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: authority.Reply
 end
@@ -103,9 +112,9 @@ local function define_tests()
         end)
         test.it("creates an association once under concurrent zero CAS and preserves it on stale CAS", function()
             local workspace = fresh("cas")
-            local first, first_error = manager:async("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
+            local first, first_error = bound(manager, workspace):async("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
                 subpath = "first", allowed_access = "write", expected_revision = 0})
-            local second, second_error = manager:async("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
+            local second, second_error = bound(manager, workspace):async("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
                 subpath = "second", allowed_access = "write", expected_revision = 0})
             if first_error or not first or second_error or not second then error("start association race: " .. tostring(first_error or second_error)) end
             local replies = {await(first), await(second)}
@@ -150,6 +159,23 @@ local function define_tests()
                 subpath = "", allowed_access = "write", expected_revision = 0})), "INVALID")
             local listed = value(call(manager, "list", {workspace_id = workspace}))
             test.eq(#(listed.associations :: {unknown}), 0)
+        end)
+        test.it("lets a principal take grants only in the workspace it is bound to", function()
+            local home, foreign = fresh("home"), fresh("foreign")
+            for _, workspace in ipairs({home, foreign}) do
+                value(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "src", allowed_access = "write"}))
+            end
+            local request = {workspace_id = foreign, name = "project", access = "read", purpose = "project", audience = USER}
+            local denied, denied_error = bound(user, home):call("bee.resources.binding:grant", request)
+            if denied_error then error(tostring(denied_error)) end
+            test.eq(code(denied :: authority.Reply), "DENIED")
+            local unbound, unbound_error = bound(user, nil):call("bee.resources.binding:grant", request)
+            if unbound_error then error(tostring(unbound_error)) end
+            test.eq(code(unbound :: authority.Reply), "DENIED")
+            local own, own_error = bound(user, home):call("bee.resources.binding:grant",
+                {workspace_id = home, name = "project", access = "read", purpose = "project", audience = USER})
+            if own_error then error(tostring(own_error)) end
+            test.eq((value(own :: authority.Reply)).subject, USER)
         end)
         test.it("grants bind the authenticated subject and resolve only for the admitted placement, subject and audience", function()
             local workspace = fresh("ws")

@@ -9,10 +9,20 @@ type Ready = {workspace_id: string, desktop_id: string}
 type Result = {request_id: string, mount: string, error_code: string, error: string}
 local M = {}
 -- Local names and topic of the readiness handshake between the desktop bridge
--- that composes the retained workspace and the owner route that reports it.
-M.BRIDGE_NAME = "bee.retained.bridge"
-M.OWNER_NAME = "bee.retained.owner"
+-- that composes a retained workspace and the owner route that reports it. The
+-- names are keyed by the workspace selection (bee.storage:binding key), which
+-- both sides know before the host reports the workspace identity.
 M.TOPIC_OBSERVE = "bee.retained.observe"
+local function keyed(prefix: string, key: string): string?
+    if #key ~= 32 or key:find("[^0-9a-f]") then return nil end
+    return prefix .. key
+end
+function M.bridge_name(key: string): string?
+    return keyed("bee.retained.bridge/", key)
+end
+function M.owner_name(key: string): string?
+    return keyed("bee.retained.owner/", key)
+end
 
 -- Decodes an attach/detach request. Sender authentication remains caller responsibility.
 -- A complete, host-selected snapshot of live application executions allowed to

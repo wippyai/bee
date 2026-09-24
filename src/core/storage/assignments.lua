@@ -117,7 +117,7 @@ local function same_prepare(left: Intent, right: {request_id: string, view_id: s
 end
 
 local function query_assignment(store: Store, view_id: string, instance_id: string): (Assignment?, string?)
-    local rows, err = store.workspace.db:query("SELECT view_id, instance_id, display_id, revision FROM workspace_display_assignments WHERE view_id = ? AND instance_id = ? LIMIT 2", {view_id, instance_id})
+    local rows, err = store.workspace.db:query("SELECT view_id, instance_id, display_id, revision FROM workspace_display_assignments WHERE workspace_id = ? AND view_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, view_id, instance_id})
     if err or not rows then return nil, "read display assignment: " .. tostring(err) end
     if #rows == 0 then return nil, nil end
     if #rows ~= 1 then return nil, "display assignment is corrupt" end
@@ -127,7 +127,7 @@ local function query_assignment(store: Store, view_id: string, instance_id: stri
 end
 
 local function query_prepared(store: Store, view_id: string, instance_id: string): (Intent?, string?)
-    local rows, err = store.workspace.db:query("SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error FROM workspace_display_transfer_receipts WHERE view_id = ? AND instance_id = ? AND phase = 'prepared' LIMIT 2", {view_id, instance_id})
+    local rows, err = store.workspace.db:query("SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error FROM workspace_display_transfer_receipts WHERE workspace_id = ? AND view_id = ? AND instance_id = ? AND phase = 'prepared' LIMIT 2", {store.workspace.workspace_id, view_id, instance_id})
     if err or not rows then return nil, "read display transfer intent: " .. tostring(err) end
     if #rows == 0 then return nil, nil end
     if #rows ~= 1 then return nil, "display transfer intent is corrupt" end
@@ -154,13 +154,13 @@ function M.claim(store: Store, value: unknown): (Assignment?, string?)
     if not request then return nil, "invalid display assignment claim" end
     local tx, begin_err = store.workspace.db:begin()
     if not tx then return nil, "begin display assignment claim: " .. tostring(begin_err) end
-    local existing_rows, existing_err = tx:query("SELECT view_id, instance_id, display_id, revision FROM workspace_display_assignments WHERE view_id = ? AND instance_id = ? LIMIT 2", {request.view_id, request.instance_id})
+    local existing_rows, existing_err = tx:query("SELECT view_id, instance_id, display_id, revision FROM workspace_display_assignments WHERE workspace_id = ? AND view_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, request.view_id, request.instance_id})
     if existing_err or not existing_rows then tx:rollback(); return nil, "read display assignment claim: " .. tostring(existing_err) end
     if #existing_rows > 1 then tx:rollback(); return nil, "display assignment is corrupt" end
     if #existing_rows == 1 then
         local existing = assignment(existing_rows[1])
         if not existing then tx:rollback(); return nil, "display assignment is corrupt" end
-        local pending_rows, pending_err = tx:query("SELECT request_id FROM workspace_display_transfer_receipts WHERE view_id = ? AND instance_id = ? AND phase = 'prepared' LIMIT 2", {request.view_id, request.instance_id})
+        local pending_rows, pending_err = tx:query("SELECT request_id FROM workspace_display_transfer_receipts WHERE workspace_id = ? AND view_id = ? AND instance_id = ? AND phase = 'prepared' LIMIT 2", {store.workspace.workspace_id, request.view_id, request.instance_id})
         if pending_err or not pending_rows then tx:rollback(); return nil, "read prepared display transfer: " .. tostring(pending_err) end
         if #pending_rows ~= 0 then tx:rollback(); return nil, "display assignment has a prepared transfer" end
         local _, commit_err = tx:commit()
@@ -168,10 +168,10 @@ function M.claim(store: Store, value: unknown): (Assignment?, string?)
         if existing.display_id ~= request.display_id then return nil, "display assignment belongs to another display" end
         return existing, nil
     end
-    local rows, count_err = tx:query("SELECT COUNT(*) AS count FROM workspace_display_assignments")
+    local rows, count_err = tx:query("SELECT COUNT(*) AS count FROM workspace_display_assignments WHERE workspace_id = ?", {store.workspace.workspace_id})
     if count_err or not rows or #rows ~= 1 or integer(rows[1].count) == nil then tx:rollback(); return nil, "count display assignments" end
     if integer(rows[1].count) >= MAX_ASSIGNMENTS then tx:rollback(); return nil, "workspace live assignment capacity reached" end
-    local _, insert_err = tx:execute("INSERT INTO workspace_display_assignments (view_id, instance_id, display_id, revision) VALUES (?, ?, ?, 1)", {request.view_id, request.instance_id, request.display_id})
+    local _, insert_err = tx:execute("INSERT INTO workspace_display_assignments (workspace_id, view_id, instance_id, display_id, revision) VALUES (?, ?, ?, ?, 1)", {store.workspace.workspace_id, request.view_id, request.instance_id, request.display_id})
     if insert_err then tx:rollback(); return nil, "claim display assignment: " .. tostring(insert_err) end
     local _, commit_err = tx:commit()
     if commit_err then tx:rollback(); return nil, "commit display assignment claim: " .. tostring(commit_err) end
@@ -194,7 +194,7 @@ function M.receipt(store: Store, value: unknown): (Intent?, string?)
     if not request_id then return nil, "invalid display transfer receipt key" end
     local rows, query_err = store.workspace.db:query(
         "SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error " ..
-        "FROM workspace_display_transfer_receipts WHERE request_id = ? LIMIT 2", {request_id})
+        "FROM workspace_display_transfer_receipts WHERE workspace_id = ? AND request_id = ? LIMIT 2", {store.workspace.workspace_id, request_id})
     if query_err or not rows then return nil, "read display transfer receipt: " .. tostring(query_err) end
     if #rows == 0 then return nil, nil end
     if #rows ~= 1 then return nil, "display transfer receipt is corrupt" end
@@ -208,7 +208,7 @@ function M.prepare(store: Store, value: unknown): (Intent?, string?)
     if not request then return nil, "invalid display transfer prepare" end
     local tx, begin_err = store.workspace.db:begin()
     if not tx then return nil, "begin display transfer prepare: " .. tostring(begin_err) end
-    local receipts, receipt_err = tx:query("SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error FROM workspace_display_transfer_receipts WHERE request_id = ? LIMIT 2", {request.request_id})
+    local receipts, receipt_err = tx:query("SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error FROM workspace_display_transfer_receipts WHERE workspace_id = ? AND request_id = ? LIMIT 2", {store.workspace.workspace_id, request.request_id})
     if receipt_err or not receipts then tx:rollback(); return nil, "read display transfer receipt: " .. tostring(receipt_err) end
     if #receipts > 1 then tx:rollback(); return nil, "display transfer receipt is corrupt" end
     if #receipts == 1 then
@@ -219,14 +219,14 @@ function M.prepare(store: Store, value: unknown): (Intent?, string?)
         if same_prepare(existing, request) then return existing, nil end
         return nil, "display transfer request conflicts with its durable receipt"
     end
-    local pending, pending_err = tx:query("SELECT request_id FROM workspace_display_transfer_receipts WHERE view_id = ? AND instance_id = ? AND phase = 'prepared' LIMIT 2", {request.view_id, request.instance_id})
+    local pending, pending_err = tx:query("SELECT request_id FROM workspace_display_transfer_receipts WHERE workspace_id = ? AND view_id = ? AND instance_id = ? AND phase = 'prepared' LIMIT 2", {store.workspace.workspace_id, request.view_id, request.instance_id})
     if pending_err or not pending then tx:rollback(); return nil, "read prepared display transfer: " .. tostring(pending_err) end
     if #pending ~= 0 then tx:rollback(); return nil, "display transfer is already prepared" end
-    local current_rows, assignment_err = tx:query("SELECT display_id, revision FROM workspace_display_assignments WHERE view_id = ? AND instance_id = ? LIMIT 2", {request.view_id, request.instance_id})
+    local current_rows, assignment_err = tx:query("SELECT display_id, revision FROM workspace_display_assignments WHERE workspace_id = ? AND view_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, request.view_id, request.instance_id})
     if assignment_err or not current_rows then tx:rollback(); return nil, "read display assignment before prepare: " .. tostring(assignment_err) end
     if #current_rows ~= 1 or text(current_rows[1].display_id, MAX_DISPLAY_ID) ~= request.source_display_id or revision(current_rows[1].revision) ~= request.expected_revision then tx:rollback(); return nil, "display assignment source or revision changed" end
     if request.expected_revision >= MAX_REVISION then tx:rollback(); return nil, "display assignment revision exhausted" end
-    local _, insert_err = tx:execute("INSERT INTO workspace_display_transfer_receipts (request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'prepared', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {request.request_id, request.view_id, request.instance_id, request.source_display_id, request.target_display_id, request.expected_revision})
+    local _, insert_err = tx:execute("INSERT INTO workspace_display_transfer_receipts (workspace_id, request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'prepared', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.workspace.workspace_id, request.request_id, request.view_id, request.instance_id, request.source_display_id, request.target_display_id, request.expected_revision})
     if insert_err then tx:rollback(); return nil, "prepare display transfer: " .. tostring(insert_err) end
     local _, commit_err = tx:commit()
     if commit_err then tx:rollback(); return nil, "commit display transfer prepare: " .. tostring(commit_err) end
@@ -238,16 +238,16 @@ function M.commit(store: Store, value: unknown): (Result?, string?)
     if not request then return nil, "invalid display transfer commit" end
     local tx, begin_err = store.workspace.db:begin()
     if not tx then return nil, "begin display transfer commit: " .. tostring(begin_err) end
-    local rows, receipt_err = tx:query("SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error FROM workspace_display_transfer_receipts WHERE request_id = ? LIMIT 2", {request.request_id})
+    local rows, receipt_err = tx:query("SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error FROM workspace_display_transfer_receipts WHERE workspace_id = ? AND request_id = ? LIMIT 2", {store.workspace.workspace_id, request.request_id})
     if receipt_err or not rows or #rows ~= 1 then tx:rollback(); return nil, "display transfer receipt is missing" end
     local receipt = intent(rows[1])
     if not receipt or receipt.view_id ~= request.view_id or receipt.instance_id ~= request.instance_id then tx:rollback(); return nil, "display transfer commit conflicts with durable receipt" end
     if receipt.phase == "failed" then tx:rollback(); return nil, "display transfer already failed" end
     local next_revision = receipt.expected_revision + 1
     if receipt.phase == "prepared" then
-        local updated, update_err = tx:execute("UPDATE workspace_display_assignments SET display_id = ?, revision = ? WHERE view_id = ? AND instance_id = ? AND display_id = ? AND revision = ?", {receipt.target_display_id, next_revision, receipt.view_id, receipt.instance_id, receipt.source_display_id, receipt.expected_revision})
+        local updated, update_err = tx:execute("UPDATE workspace_display_assignments SET display_id = ?, revision = ? WHERE workspace_id = ? AND view_id = ? AND instance_id = ? AND display_id = ? AND revision = ?", {receipt.target_display_id, next_revision, store.workspace.workspace_id, receipt.view_id, receipt.instance_id, receipt.source_display_id, receipt.expected_revision})
         if update_err or not updated or integer(updated.rows_affected) ~= 1 then tx:rollback(); return nil, "display assignment changed before commit" end
-        local _, settle_err = tx:execute("UPDATE workspace_display_transfer_receipts SET phase = 'committed', error = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE request_id = ? AND phase = 'prepared'", {receipt.request_id})
+        local _, settle_err = tx:execute("UPDATE workspace_display_transfer_receipts SET phase = 'committed', error = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE workspace_id = ? AND request_id = ? AND phase = 'prepared'", {store.workspace.workspace_id, receipt.request_id})
         if settle_err then tx:rollback(); return nil, "commit display transfer receipt: " .. tostring(settle_err) end
     end
     local _, commit_err = tx:commit()
@@ -260,13 +260,13 @@ function M.fail(store: Store, value: unknown): (Intent?, string?)
     if not request then return nil, "invalid display transfer failure" end
     local tx, begin_err = store.workspace.db:begin()
     if not tx then return nil, "begin display transfer failure: " .. tostring(begin_err) end
-    local rows, receipt_err = tx:query("SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error FROM workspace_display_transfer_receipts WHERE request_id = ? LIMIT 2", {request.request_id})
+    local rows, receipt_err = tx:query("SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error FROM workspace_display_transfer_receipts WHERE workspace_id = ? AND request_id = ? LIMIT 2", {store.workspace.workspace_id, request.request_id})
     if receipt_err or not rows or #rows ~= 1 then tx:rollback(); return nil, "display transfer receipt is missing" end
     local receipt = intent(rows[1])
     if not receipt or receipt.view_id ~= request.view_id or receipt.instance_id ~= request.instance_id then tx:rollback(); return nil, "display transfer failure conflicts with durable receipt" end
     if receipt.phase == "committed" then tx:rollback(); return nil, "display transfer already committed" end
     if receipt.phase == "prepared" then
-        local _, update_err = tx:execute("UPDATE workspace_display_transfer_receipts SET phase = 'failed', error = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE request_id = ? AND phase = 'prepared'", {request.error or "transfer failed", receipt.request_id})
+        local _, update_err = tx:execute("UPDATE workspace_display_transfer_receipts SET phase = 'failed', error = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE workspace_id = ? AND request_id = ? AND phase = 'prepared'", {request.error or "transfer failed", store.workspace.workspace_id, receipt.request_id})
         if update_err then tx:rollback(); return nil, "fail display transfer receipt: " .. tostring(update_err) end
         receipt.phase, receipt.error = "failed", request.error or "transfer failed"
     end
@@ -283,10 +283,10 @@ function M.retire(store: Store, value: unknown): (boolean, string?)
     if not request then return false, "invalid display assignment retirement" end
     local tx, begin_err = store.workspace.db:begin()
     if not tx then return false, "begin display assignment retirement: " .. tostring(begin_err) end
-    local pending, pending_err = tx:query("SELECT request_id FROM workspace_display_transfer_receipts WHERE view_id = ? AND instance_id = ? AND phase = 'prepared' LIMIT 2", {request.view_id, request.instance_id})
+    local pending, pending_err = tx:query("SELECT request_id FROM workspace_display_transfer_receipts WHERE workspace_id = ? AND view_id = ? AND instance_id = ? AND phase = 'prepared' LIMIT 2", {store.workspace.workspace_id, request.view_id, request.instance_id})
     if pending_err or not pending then tx:rollback(); return false, "read prepared display transfer: " .. tostring(pending_err) end
     if #pending ~= 0 then tx:rollback(); return false, "cannot retire display assignment with a prepared transfer" end
-    local deleted, delete_err = tx:execute("DELETE FROM workspace_display_assignments WHERE view_id = ? AND instance_id = ?", {request.view_id, request.instance_id})
+    local deleted, delete_err = tx:execute("DELETE FROM workspace_display_assignments WHERE workspace_id = ? AND view_id = ? AND instance_id = ?", {store.workspace.workspace_id, request.view_id, request.instance_id})
     if delete_err or not deleted then tx:rollback(); return false, "retire display assignment: " .. tostring(delete_err) end
     if integer(deleted.rows_affected) ~= 1 then tx:rollback(); return false, "display assignment is missing" end
     local _, commit_err = tx:commit()
@@ -302,8 +302,9 @@ function M.reconcile(store: Store): ({Result}?, string?)
         "SELECT a.view_id, a.instance_id, a.display_id, a.revision, " ..
         "r.request_id, r.source_display_id, r.target_display_id, r.expected_revision, r.phase, r.error " ..
         "FROM workspace_display_assignments AS a " ..
-        "LEFT JOIN workspace_display_transfer_receipts AS r ON r.view_id = a.view_id AND r.instance_id = a.instance_id AND r.phase = 'prepared' " ..
-        "ORDER BY a.view_id, a.instance_id LIMIT 17")
+        "LEFT JOIN workspace_display_transfer_receipts AS r ON r.workspace_id = a.workspace_id AND r.view_id = a.view_id " ..
+        "AND r.instance_id = a.instance_id AND r.phase = 'prepared' " ..
+        "WHERE a.workspace_id = ? ORDER BY a.view_id, a.instance_id LIMIT 17", {store.workspace.workspace_id})
     if query_err or not rows then return nil, "reconcile display assignments: " .. tostring(query_err) end
     if #rows > MAX_ASSIGNMENTS then return nil, "workspace live assignment capacity exceeded" end
     local results: {Result} = {}

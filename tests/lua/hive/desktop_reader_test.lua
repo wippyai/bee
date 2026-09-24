@@ -45,7 +45,7 @@ local function define_tests()
             -- locality for catalog-reader admission.
             local node = "local"
             local state: owner.State = {
-                supervisor = "", stopped = false, workspace_id = WORKSPACE, desktop_id = "", node = node,
+                supervisor = "", bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, workspace_id = WORKSPACE, desktop_id = "", node = node,
                 allowed = {}, enrolled = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = false},
                 ready = snapshots, results = snapshots, copies = snapshots, launches = snapshots, catalogs = snapshots,
                 activations = snapshots, reader_updates = snapshots, observers = snapshots, catalog_readers = {}, pending_catalog_readers = nil,

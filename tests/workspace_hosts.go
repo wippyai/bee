@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-// Acceptance test proving two actual bee.host:main actors with independent
-// workspace SQLite database resources inside ONE runtime without cross-routing.
+// Acceptance test proving two actual bee.host:main actors inside ONE runtime
+// without cross-routing: with independent workspace database resources, and
+// (--logical) as two logical workspaces keyed in one node database.
 // Explicit Linux acceptance; relies on process group isolation and POSIX signals.
 package main
 
@@ -81,10 +82,21 @@ func run() error {
 		return fmt.Errorf("resolve runtime path: %w", err)
 	}
 
-	delayed := len(os.Args) > 2 && os.Args[2] == "--delayed"
+	mode := ""
+	if len(os.Args) > 2 {
+		mode = os.Args[2]
+	}
+	delayed := mode == "--delayed"
 	command, budget := "workspace-hosts-supervisor", 35*time.Second
-	if delayed {
+	switch mode {
+	case "":
+	case "--delayed":
 		command, budget = "workspace-hosts-delayed-supervisor", 45*time.Second
+	case "--logical":
+		// Two logical workspaces served from one node database.
+		command, budget = "workspace-hosts-logical-supervisor", 60*time.Second
+	default:
+		return fmt.Errorf("unknown mode %q", mode)
 	}
 	root, err := os.MkdirTemp("", "bee-workspace-hosts-")
 	if err != nil {

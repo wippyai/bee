@@ -3,6 +3,7 @@
 -- streams, stop escalation, uncertainty without identity, cleanup only
 -- after a proven exit.
 local test = require("test")
+local principals = require("principals")
 local funcs = require("funcs")
 local sql = require("sql")
 local security = require("security")
@@ -43,18 +44,19 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local function caller(actor: string)
+-- A caller is bound to the workspace it acts in, as host-issued principals are.
+local function caller(actor: string, workspace_id: unknown)
     local policies: {security.Policy} = {}
     for index, name in ipairs({"bee.placement.native:client_test_policy", "bee:resource_manage_policy", "bee:resource_grant_policy", "bee:credential_manage_policy", "bee:credential_issue_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
     end
-    return funcs.new():with_actor(security.new_actor(actor)):with_scope(security.new_scope(policies))
+    return funcs.new():with_actor(principals.actor(actor, workspace_id)):with_scope(security.new_scope(policies))
 end
 local SENTINEL = "placement-sentinel-4e5f6a"
 local function credential_call(method: string, value: unknown): {[string]: unknown}
-    local reply, err = caller(OWNER):call("bee.credentials.binding:" .. method, value)
+    local reply, err = caller(OWNER, principals.workspace(value)):call("bee.credentials.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     local typed = reply :: service.Reply
     if not typed.ok then error(method .. ": " .. tostring(typed.error and typed.error.code) .. ": " .. tostring(typed.error and typed.error.message)) end
@@ -120,14 +122,14 @@ local function resource_mode(mode: string)
     if not applied then error("set resource mode: " .. tostring(err)) end
 end
 local function resource_call(method: string, value: unknown): {[string]: unknown}
-    local reply, err = caller(OWNER):call("bee.resources.binding:" .. method, value)
+    local reply, err = caller(OWNER, principals.workspace(value)):call("bee.resources.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     local typed = reply :: service.Reply
     if not typed.ok then error(method .. ": " .. tostring(typed.error and typed.error.code) .. ": " .. tostring(typed.error and typed.error.message)) end
     return typed.value :: {[string]: unknown}
 end
 local function call(actor: string, method: string, value: unknown): service.Reply
-    local reply, err = caller(actor):call("bee.placement.native:" .. method, value)
+    local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: service.Reply
 end
@@ -996,8 +998,8 @@ local function define_tests()
             local session_ref = fresh("contended-session")
             local first = retained_launch(OWNER, session_ref, "contender-one")
             local second = retained_launch(OWNER, session_ref, "contender-two")
-            local a, a_error = caller(OWNER):async("bee.placement.native:prepare", first)
-            local b, b_error = caller(OWNER):async("bee.placement.native:prepare", second)
+            local a, a_error = caller(OWNER, principals.workspace(first)):async("bee.placement.native:prepare", first)
+            local b, b_error = caller(OWNER, principals.workspace(second)):async("bee.placement.native:prepare", second)
             if a_error or not a or b_error or not b then error("start prepare race: " .. tostring(a_error or b_error)) end
             local first_reply, second_reply = await(a), await(b)
             local replies = {first_reply, second_reply}
@@ -1024,8 +1026,8 @@ local function define_tests()
             -- An overlapping retry is not a second holder: both replies name
             -- the one recorded intent, with no additional receipt.
             local replay = retained_launch(OWNER, fresh("replay-session"), "same-request")
-            local first_retry, first_retry_error = caller(OWNER):async("bee.placement.native:prepare", replay)
-            local second_retry, second_retry_error = caller(OWNER):async("bee.placement.native:prepare", replay)
+            local first_retry, first_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native:prepare", replay)
+            local second_retry, second_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native:prepare", replay)
             if first_retry_error or not first_retry or second_retry_error or not second_retry then error("start replay race: " .. tostring(first_retry_error or second_retry_error)) end
             local replay_a, replay_b = attempt_of(await(first_retry)), attempt_of(await(second_retry))
             test.eq(replay_a.attempt_id, replay.attempt_id)

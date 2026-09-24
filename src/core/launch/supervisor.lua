@@ -18,7 +18,7 @@ local attachments = require("attachments")
 local retained_protocol = require("retained_protocol")
 type Channel = channel.Channel
 type Phase = "booting" | "client_boot" | "admitting" | "running" | "rendering" | "saving" | "stopping" | "finishing"
-local function run_supervisor(client: string, database_resource: string?, retained_owner: string?, initial_application: string?)
+local function run_supervisor(client: string, workspace: unknown, database_resource: string?, retained_owner: string?, initial_application: string?)
     local retained = desktops.new()
     local desktop: desktops.Desktop? = nil
     local desktop_id = ""
@@ -91,7 +91,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
         end
         local self = tostring(process.pid())
         host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
-            :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self, database_resource)))
+            :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self, workspace, database_resource)))
         local connection_id = ""
         local phase: Phase = "booting"
         local pending = ""
@@ -493,12 +493,14 @@ local function run_supervisor(client: string, database_resource: string?, retain
     for _, subscription in ipairs(subscriptions) do process.unlisten(subscription) end
     if not ok then error(err) end
 end
-local function main(client: string, database_resource: string?)
+-- The composition names the workspace; the supervisor forwards that selection
+-- to the host and learns the identity from host readiness.
+local function main(client: string, workspace: unknown, database_resource: string?)
     if client == "" or ctx.get("bee.launch_owner") ~= client then error("Untrusted local supervisor bootstrap") end
-    return run_supervisor(client, database_resource, nil, nil)
+    return run_supervisor(client, workspace, database_resource, nil, nil)
 end
-local function retained(owner: string, initial_application: string?)
+local function retained(owner: string, workspace: unknown, initial_application: string?)
     if owner == "" or ctx.get("bee.retained_owner") ~= owner then error("Untrusted retained supervisor bootstrap") end
-    return run_supervisor("", nil, owner, initial_application)
+    return run_supervisor("", workspace, nil, owner, initial_application)
 end
 return {main = main, retained = retained}

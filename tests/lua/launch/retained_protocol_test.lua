@@ -1,12 +1,31 @@
 -- MIT. Retained supervisor response decoding tests.
 local test = require("test")
 local retained_protocol = require("retained_protocol")
+local workspaces = require("workspaces")
 
 local workspace = "0123456789abcdef0123456789abcdef"
 local desktop = "fedcba9876543210fedcba9876543210"
 local other = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 local function define_tests()
+    test.describe("Retained workspace names", function()
+        test.it("keys the owner route and bridge by the workspace selection", function()
+            local classic = assert(workspaces.key(workspaces.classic()))
+            test.eq(#classic, 32)
+            test.eq(workspaces.key({root_ref = "bee:workspace_root", subpath = ""}), classic)
+            local other_root = assert(workspaces.key({root_ref = "bee:workspace_root", subpath = "projects/one"}))
+            local by_id = assert(workspaces.key({workspace_id = workspace}))
+            test.neq(other_root, classic)
+            test.neq(by_id, classic)
+            test.eq(retained_protocol.owner_name(classic), "bee.retained.owner/" .. classic)
+            test.eq(retained_protocol.bridge_name(by_id), "bee.retained.bridge/" .. by_id)
+            test.neq(retained_protocol.owner_name(classic), retained_protocol.owner_name(other_root))
+            test.is_nil(workspaces.key({workspace_id = "short"}))
+            test.is_nil(workspaces.key({root_ref = "bee:workspace_root"}))
+            test.is_nil(retained_protocol.owner_name("bee.retained.owner"))
+            test.is_nil(retained_protocol.bridge_name(string.rep("G", 32)))
+        end)
+    end)
     test.describe("Retained supervisor protocol", function()
         test.it("keeps literal command arguments and rejects foreign or ambiguous launch envelopes", function()
             local value = {version = 1, workspace_id = workspace, desktop_id = desktop,

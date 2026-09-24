@@ -4,6 +4,7 @@
 -- bound thread. Review findings from an earlier round reach the agent as a
 -- record on that same thread before this attempt starts.
 local funcs = require("funcs")
+local security = require("security")
 local registry = require("registry")
 local process = require("process")
 local channel = require("channel")
@@ -54,8 +55,20 @@ You hold no registry publication, approval or activation capability and create n
 The host lints, reviews, approves and applies your frozen artifact. Report no check you did not run.
 If the same non-pending tool refusal happens twice, stop and report it rather than looping.]]
 
+-- The operator stands in for the Agent window, which the broker runs under a
+-- principal bound to its workspace; launch setup, grants and projections are
+-- authorized only there.
+local executor = funcs.new()
+local function bind(workspace_id: string)
+    local actor, actor_error = security.new_actor("bee.agent_app.operator", {workspace_id = workspace_id})
+    if not actor then error("bind operator: " .. tostring(actor_error)) end
+    local bound, bound_error = funcs.new():with_actor(actor)
+    if not bound then error("bind operator: " .. tostring(bound_error)) end
+    executor = bound
+end
+
 local function reply(target: string, request: unknown): Object
-    local result, err = funcs.call(target, request)
+    local result, err = executor:call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     local answer = bounds.object(result)
     if not answer then error("missing reply from " .. target) end
@@ -356,6 +369,7 @@ local function main()
     local findings = bounds.text(values.findings, 65536) or ""
     local updating = values.update == true
 
+    bind(launch_workspace)
     configure(launch_workspace, policy_ref, definition ~= DEFAULT_DEFINITION)
     listener_ready()
 

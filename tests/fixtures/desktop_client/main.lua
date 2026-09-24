@@ -70,15 +70,17 @@ end
 local function main(mode: string?)
     local shared_store = mode == "shared-store"
     local selected_id = string.rep("b", 32)
+    -- Layouts are per workspace; the host reports the identity before any store opens.
+    local workspace_id = ""
     local function open_store(resource: string): (store.Store?, string?)
-        if shared_store and resource == "bee.client.db:right" then return store.open("bee.client.db:left", selected_id) end
-        return store.open(resource)
+        if shared_store and resource == "bee.client.db:right" then return store.open("bee.client.db:left", workspace_id, selected_id) end
+        return store.open(resource, workspace_id)
     end
     if shared_store then
-        local allocator, allocation_error = store.open("bee.client.db:left")
+        local allocator, allocation_error = store.desktops("bee.client.db:left")
         if not allocator then error(tostring(allocation_error)) end
         assert(store.allocate(allocator, selected_id))
-        assert(store.close(allocator))
+        assert(store.release(allocator))
     end
     local owner = tostring(process.pid())
     local retained_desktops = desktops.new()
@@ -95,12 +97,12 @@ local function main(mode: string?)
     local events, event_error = process.events()
     if not events then error(tostring(event_error)) end
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
-        "bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"})):spawn_monitored("bee.host:main", "bee:workers", owner)))
+        "bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"})):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""})))
     local host_ready = assert(hosts:receive())
     assert(tostring(host_ready:from()) == host)
     local data: unknown = host_ready:payload():data()
     if type(data) ~= "table" or type(data.workspace_id) ~= "string" then error("Invalid host readiness") end
-    local workspace_id = data.workspace_id
+    workspace_id = data.workspace_id
     local host_saved: unknown = data.saved
     if type(host_saved) ~= "table" or type(host_saved.desktop) ~= "table" then error("Missing legacy desktop offer") end
     local legacy_desktop: unknown = host_saved.desktop

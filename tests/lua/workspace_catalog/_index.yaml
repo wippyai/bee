@@ -1,0 +1,44 @@
+version: '1.0'
+namespace: bee.workspace.catalog
+entries:
+- name: projects_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/catalog-projects
+  auto_init: true
+- name: readonly_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/catalog-archive
+  auto_init: true
+- name: unadmitted_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/catalog-unadmitted
+  auto_init: true
+- name: call_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.workspace.catalog:create, bee.workspace.catalog:read, bee.workspace.catalog:list, bee.workspace.catalog:search,
+      bee.workspace.catalog:rename, bee.workspace.catalog:archive, bee.workspace.catalog:restore, bee.workspace.catalog:backend]
+    effect: allow
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [sql]
+  imports:
+    test: wippy.test:test
+    store: bee.storage:store
+    catalog: bee.storage:catalog
+- name: operations_test
+  kind: function.lua
+  source: file://operations_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry, process, time, fs]
+  imports:
+    test: wippy.test:test

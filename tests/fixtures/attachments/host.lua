@@ -31,7 +31,7 @@ function M.main()
     local scope = security.new_scope(policies)
     local function start(expected_records: integer): (string, string)
         local host = tostring(assert(process.with_options({}):with_scope(scope):with_context({["bee.host_owner"] = owner})
-            :spawn_monitored("bee.host:main", "bee:workers", owner)))
+            :spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""})))
         local message = assert(ready:receive())
         assert(message:from() == host)
         local data: unknown = message:payload():data()
@@ -127,7 +127,7 @@ function M.manual()
     local host_scope = security.new_scope(policies)
     local function start(expected_records: integer): (string, string)
         local host = tostring(assert(process.with_options({}):with_scope(host_scope):with_context({["bee.host_owner"] = owner})
-            :spawn_monitored("bee.host:main", "bee:workers", owner)))
+            :spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""})))
         local message = assert(ready:receive())
         assert(message:from() == host)
         local data: unknown = message:payload():data()
@@ -168,7 +168,7 @@ function M.manual()
     if not record or record.id ~= opened.id or record.instance_id ~= opened.instance_id then error("Manual checkpoint identity changed") end
     stop("manual-stop-first")
 
-    local database = assert(persistence.open())
+    local database = assert(persistence.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
     local manual_record: recovery.Record = {id = record.id, instance_id = record.instance_id, definition_id = record.definition_id,
         thread_id = record.thread_id, resume_schema = record.resume_schema, restart_policy = "manual", resume_state = record.resume_state,
         window = record.window}
@@ -181,7 +181,7 @@ function M.manual()
     assert(database:close())
 
     host, workspace_id = start(1)
-    database = assert(persistence.open())
+    database = assert(persistence.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
     local fenced = assert(database.assignments:get({view_id = opened.id, instance_id = opened.instance_id}))
     assert(fenced.intent and fenced.intent.request_id == "manual-recovered-transfer", "Manual checkpoint settled before restore")
     assert(database.assignments:get({view_id = "lost-view", instance_id = "lost-instance"}) == nil,
@@ -231,7 +231,7 @@ function M.manual()
         or restored_data.view.id ~= opened.id or restored_data.view.instance_id ~= opened.instance_id then
         error("Manual restore did not bind the exact prepared identity on its target display")
     end
-    database = assert(persistence.open())
+    database = assert(persistence.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
     local settled = assert(database.assignments:get({view_id = opened.id, instance_id = opened.instance_id}))
     local receipt = assert(database.assignments:receipt("manual-recovered-transfer"))
     assert(settled.assignment.display_id == string.rep("b", 32) and settled.assignment.revision == 2 and not settled.intent

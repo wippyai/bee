@@ -3,6 +3,7 @@
 -- either is awaited; each real child silently checks its own policy-only
 -- environment and broker projection before replaying the standard JSONL run.
 local test = require("test")
+local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -38,9 +39,8 @@ local function scope(): security.Scope
     return security.new_scope(policies)
 end
 
-local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): {[string]: unknown}
-    local result, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
+    local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     local reply = result :: admission.Reply
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end

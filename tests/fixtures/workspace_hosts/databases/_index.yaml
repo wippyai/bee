@@ -11,3 +11,8 @@ entries:
   file: ${env:bee:workspace_db_path}.second
   lifecycle:
     auto_start: true
+- name: node
+  kind: db.sql.sqlite
+  file: ${env:bee:workspace_db_path}.node
+  lifecycle:
+    auto_start: true

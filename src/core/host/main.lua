@@ -24,7 +24,9 @@ local execution = require("execution")
 -- terminates them; its own stop outlasts that.
 local BROKER_STOP_GRACE = "10s"
 
-local function main(owner: string, database_resource: string?)
+-- The owner selects which catalog workspace this host serves; the host never
+-- infers it from the database it opens.
+local function main(owner: string, workspace: unknown, database_resource: string?)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -47,7 +49,7 @@ local function main(owner: string, database_resource: string?)
     local binding_recovered = assert(process.listen("bee.application.binding.recovered", {message = true}))
     local events = assert(process.events())
     assert(process.monitor(owner))
-    local database, database_error = persistence.open(database_resource)
+    local database, database_error = persistence.open(database_resource, workspace)
     if not database then error(tostring(database_error)) end
     local host_registry_name = ""
     -- Recovery must observe every durable prepared fence before any admission

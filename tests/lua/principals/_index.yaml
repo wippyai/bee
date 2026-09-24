@@ -1,0 +1,8 @@
+version: '1.0'
+namespace: bee.test.principals
+entries:
+- name: bound
+  kind: library.lua
+  source: file://bound.lua
+  meta: {type: test_support}
+  modules: [security]

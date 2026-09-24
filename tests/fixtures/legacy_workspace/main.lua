@@ -39,7 +39,7 @@ local function main(initial_application: string?, secondary_application: string?
     local appearance_requests = assert(process.listen("bee.appearance.request", {message = true}))
     local display = physical.open()
     local width, height = display.width, display.height
-    local database, database_error = persistence.open()
+    local database, database_error = persistence.open(nil, {root_ref = "bee:workspace_root", subpath = ""})
     if not database then error(tostring(database_error)) end
     local workspace_id = database.workspace_id
     local saved = database.saved

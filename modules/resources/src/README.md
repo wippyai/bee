@@ -26,7 +26,8 @@ changed: re-admission, never silent retargeting) or `RESOURCE_NOT_LOCAL`
 
 Actions: `bee.resources.manage` (associate, list, revoke any, revoke_all;
 host policy `bee:resource_manage_policy`), `bee.resources.grant` (take a
-grant as oneself; `bee:resource_grant_policy`), `bee.resources.resolve`
+grant as oneself, only in the workspace the caller's host-issued identity is
+bound to through `actor.meta.workspace_id`; `bee:resource_grant_policy`), `bee.resources.resolve`
 (placement services only; `bee:resource_resolve_policy` is attached to the
 placement service entries). Resource root path interpolation uses the narrow
 `bee:resource_environment_policy` and resolves before the root digest is

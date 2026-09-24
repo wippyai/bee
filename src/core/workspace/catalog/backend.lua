@@ -92,6 +92,64 @@ local function create(request: protocol.Create): protocol.Reply
     end)
 end
 
+-- The roots the host admits, in name order, with the access it admits.
+local function roots(): protocol.Reply
+    local admitted, roots_error = resources.host_roots()
+    if not admitted then return protocol.fail("UNAVAILABLE", roots_error or "host roots are unavailable") end
+    local names: {string} = {}
+    for root_ref in pairs(admitted) do names[#names + 1] = root_ref end
+    table.sort(names)
+    local listed: {{root_ref: string, access: string}} = {}
+    for index, root_ref in ipairs(names) do listed[index] = {root_ref = root_ref, access = admitted[root_ref]} end
+    return protocol.succeed({roots = listed})
+end
+
+-- One page of the folders inside a folder of an admitted root, in name order,
+-- each with the workspace that holds it. Hidden folders (a leading ".") are
+-- left out. The directory is read once and only the page's names are kept.
+local function folders(request: protocol.Folders): protocol.Reply
+    local admitted, roots_error = resources.host_roots()
+    if not admitted then return protocol.fail("UNAVAILABLE", roots_error or "host roots are unavailable") end
+    local access = admitted[request.root_ref]
+    if not access then return protocol.fail("FORBIDDEN", "root " .. request.root_ref .. " is not admitted on this host") end
+    local volume, volume_error = fs.get(request.root_ref)
+    if not volume then return protocol.fail("UNAVAILABLE", "root " .. request.root_ref .. " is unavailable: " .. tostring(volume_error)) end
+    local directory = folder(request.path)
+    if not volume:isdir(directory) then return protocol.fail("NOT_FOUND", "folder " .. directory .. " does not exist") end
+    local fetch = request.limit + 1
+    local names: {string} = {}
+    for entry in volume:readdir(directory) do
+        local name = tostring(entry.name)
+        if entry.type == "directory" and name:sub(1, 1) ~= "." and (not request.after or name > request.after) then
+            local position = #names + 1
+            while position > 1 and names[position - 1] > name do position = position - 1 end
+            if position <= fetch then
+                table.insert(names, position, name)
+                if #names > fetch then table.remove(names) end
+            end
+        end
+    end
+    local next_after: string? = nil
+    if #names > request.limit then
+        table.remove(names)
+        next_after = names[#names]
+    end
+    local function child(name: string): string
+        if request.path == "" then return name end
+        return request.path .. "/" .. name
+    end
+    local subpaths: {string} = {request.path}
+    for _, name in ipairs(names) do subpaths[#subpaths + 1] = child(name) end
+    return transact(function(tx: sql.Transaction): (unknown, catalog.Fault?)
+        local held, failure = catalog.holders(tx, request.root_ref, subpaths)
+        if not held then return nil, failure end
+        local listed: {{name: string, workspace_id: string?}} = {}
+        for index, name in ipairs(names) do listed[index] = {name = name, workspace_id = held[child(name)]} end
+        return {root_ref = request.root_ref, path = request.path, access = access, workspace_id = held[request.path],
+            folders = listed, next_after = next_after}, nil
+    end)
+end
+
 local function read(workspace_id: string): protocol.Reply
     return transact(function(tx: sql.Transaction): (unknown, catalog.Fault?)
         local found, failure = catalog.get(tx, workspace_id)
@@ -168,6 +226,12 @@ local function handle(value: unknown): protocol.Reply
         local definition = request.create
         if not definition then return protocol.fail("INVALID", "create request is missing") end
         return create(definition)
+    elseif operation == "roots" then
+        return roots()
+    elseif operation == "folders" then
+        local definition = request.folders
+        if not definition then return protocol.fail("INVALID", "folders request is missing") end
+        return folders(definition)
     elseif operation == "read" then
         return read(request.workspace_id or "")
     elseif operation == "inspect" then

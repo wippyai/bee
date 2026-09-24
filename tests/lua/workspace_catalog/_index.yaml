@@ -23,7 +23,8 @@ entries:
     actions: [funcs.call]
     resources: [bee.workspace.catalog:create, bee.workspace.catalog:read, bee.workspace.catalog:list, bee.workspace.catalog:search,
       bee.workspace.catalog:rename, bee.workspace.catalog:archive, bee.workspace.catalog:restore, bee.workspace.catalog:backend,
-      bee.workspace.catalog:inspect, bee.workspace.catalog:search_within]
+      bee.workspace.catalog:inspect, bee.workspace.catalog:search_within, bee.workspace.catalog:roots,
+      bee.workspace.catalog:folders]
     effect: allow
 - name: catalog_test
   kind: function.lua

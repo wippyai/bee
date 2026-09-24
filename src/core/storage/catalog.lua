@@ -200,6 +200,30 @@ function M.get(tx: sql.Transaction, workspace_id: string): (Summary?, Fault?)
     return one(rows)
 end
 
+-- The workspaces, in any state, that hold the given folders of one root, by
+-- subpath. One probe of the (root_ref, subpath) key per folder.
+function M.holders(tx: sql.Transaction, root_ref: string, subpaths: {string}): ({[string]: string}?, Fault?)
+    local held: {[string]: string} = {}
+    if #subpaths == 0 then return held, nil end
+    if #subpaths > M.MAX_PAGE + 1 then return nil, fault("INVALID", "too many folders in one lookup") end
+    local marks: {string} = {}
+    local params: {unknown} = {root_ref}
+    for index, subpath in ipairs(subpaths) do
+        marks[index] = "?"
+        params[#params + 1] = subpath
+    end
+    local rows, err = tx:query("SELECT workspace_id, subpath FROM workspaces WHERE root_ref = ? AND subpath IN (" ..
+        table.concat(marks, ", ") .. ")", params)
+    if err or not rows then return nil, fault("STORAGE", "read workspace catalog") end
+    for _, row in ipairs(rows) do
+        local id = type(row) == "table" and contract.workspace_id(row.workspace_id) or nil
+        local subpath: unknown = type(row) == "table" and row.subpath or nil
+        if not id or type(subpath) ~= "string" then return nil, fault("STORAGE", "workspace catalog row is corrupt") end
+        held[subpath] = id
+    end
+    return held, nil
+end
+
 -- The workspace's durable state envelope as stored, or nil before its first
 -- checkpoint. The workspace protocol decodes it.
 function M.state(tx: sql.Transaction, workspace_id: string): (string?, Fault?)

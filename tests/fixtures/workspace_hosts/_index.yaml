@@ -78,6 +78,7 @@ entries:
   modules: [process, channel, security, funcs, time, uuid, json, logger]
   imports:
     store: bee.storage:store
+    catalog: bee.storage:catalog
     decode: bee.protocol:decode
     recovery: bee.workspace:recovery
   meta:

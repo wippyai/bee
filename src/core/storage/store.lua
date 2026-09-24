@@ -252,6 +252,15 @@ ALTER TABLE workspace_application_thread_bindings_v6 RENAME TO workspace_applica
 DROP TABLE workspace_identity;
 ]]
 
+-- Migration 7 orders the catalog for paging and search. Listing and label
+-- search walk (state, lower(label), workspace_id); path search walks
+-- (state, root_ref, subpath). SQLite's lower() folds ASCII only, and queries
+-- use the same expression, so the index and the comparison always agree.
+local CATALOG_ORDER_SQL = [[
+CREATE INDEX workspaces_by_label ON workspaces (state, lower(label), workspace_id);
+CREATE INDEX workspaces_by_path ON workspaces (state, root_ref, subpath);
+]]
+
 local migrations: {Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
@@ -259,6 +268,7 @@ local migrations: {Migration} = {
     {id = 4, name = "workspace_application_thread_bindings_v1", sql = APPLICATION_THREAD_BINDINGS_TABLE_SQL},
     {id = 5, name = "workspace_application_thread_bindings_v2", sql = APPLICATION_THREAD_BINDINGS_V5_SQL},
     {id = 6, name = "node_workspaces_v1", sql = NODE_WORKSPACES_SQL},
+    {id = 7, name = "workspace_catalog_order_v1", sql = CATALOG_ORDER_SQL},
 }
 
 local function error_text(prefix: string, err: unknown): string
@@ -618,33 +628,10 @@ function M.open(resource: string?, value: unknown): (Store?, string?)
     return store, nil
 end
 
-type Definition = {label: string, root_ref: string, subpath: string}
-
--- Add a workspace row to the node catalog. This is the store primitive a node
--- owner operation builds on; it grants nothing and publishes no operation.
-function M.create(resource: string?, value: unknown): (string?, string?)
-    if type(value) ~= "table" then return nil, "Invalid workspace definition" end
-    for key in pairs(value) do
-        if key ~= "label" and key ~= "root_ref" and key ~= "subpath" then return nil, "Invalid workspace definition" end
-    end
-    local selection = binding.selection({root_ref = value.root_ref, subpath = value.subpath})
-    local label: unknown = value.label
-    if not selection or type(label) ~= "string" or #label > 240 or label:find("%c") then
-        return nil, "Invalid workspace definition"
-    end
-    local definition: Definition = {label = label, root_ref = tostring(selection.root_ref), subpath = tostring(selection.subpath)}
-    local db, acquire_err = acquire(resource)
-    if not db then return nil, acquire_err end
-    local rows, insert_err = db:query(
-        "INSERT INTO workspaces (workspace_id, label, root_ref, subpath, state, created_at, last_used_at) " ..
-        "VALUES (lower(hex(randomblob(16))), ?, ?, ?, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), " ..
-        "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) RETURNING workspace_id",
-        {definition.label, definition.root_ref, definition.subpath})
-    db:release()
-    if insert_err or not rows then return nil, error_text("create workspace", insert_err) end
-    local id = #rows == 1 and contract.workspace_id(rows[1].workspace_id) or nil
-    if not id then return nil, "created workspace identity is invalid" end
-    return id, nil
+-- The migrated node workspace database, for the catalog owner operations.
+-- Callers release the handle.
+function M.database(resource: string?): (sql.DB?, string?)
+    return acquire(resource)
 end
 
 return M

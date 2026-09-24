@@ -15,6 +15,7 @@ entries:
   imports:
     test: wippy.test:test
     store: bee.storage:store
+    catalog: bee.storage:catalog
     binding: bee.storage:binding
     assignments: bee.storage:assignments
     thread_bindings: bee.storage:thread_bindings

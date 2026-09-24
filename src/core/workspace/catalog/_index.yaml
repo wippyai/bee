@@ -1,0 +1,142 @@
+version: '1.0'
+namespace: bee.workspace.catalog
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    contract: bee.protocol:application
+    catalog: bee.storage:catalog
+- name: backend
+  kind: function.lua
+  source: file://backend.lua
+  method: handle
+  modules: [sql, fs, security, process]
+  imports:
+    store: bee.storage:store
+    catalog: bee.storage:catalog
+    protocol: bee.workspace.catalog:protocol
+    resources: bee.resources.registry:resources
+  meta: {type: internal}
+- name: create
+  kind: function.lua
+  source: file://operations.lua
+  method: create
+  modules: &operation_modules [funcs, security]
+  imports: &operation_imports
+    protocol: bee.workspace.catalog:protocol
+  security: &operation_security {policies: [bee:workspace_catalog_facade_policy]}
+- name: read
+  kind: function.lua
+  source: file://operations.lua
+  method: read
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
+- name: list
+  kind: function.lua
+  source: file://operations.lua
+  method: list
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
+- name: search
+  kind: function.lua
+  source: file://operations.lua
+  method: search
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
+- name: rename
+  kind: function.lua
+  source: file://operations.lua
+  method: rename
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
+- name: archive
+  kind: function.lua
+  source: file://operations.lua
+  method: archive
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
+- name: restore
+  kind: function.lua
+  source: file://operations.lua
+  method: restore
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
+- name: contract
+  kind: contract.definition
+  meta:
+    title: Workspace catalog
+    comment: The node's logical workspaces. Reads need bee.workspaces.read, changes bee.workspaces.manage; every reply is {ok, error {code, message}, value}
+  methods:
+  - name: create
+    description: Add a workspace for a folder under a host-admitted root, or make a new folder under a write-admitted root with create_directory
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["label", "root_ref"],
+         "properties": {"label": {"type": "string", "minLength": 1, "maxLength": 240}, "root_ref": {"type": "string", "minLength": 1, "maxLength": 160},
+          "subpath": {"type": "string", "maxLength": 512}, "create_directory": {"type": "boolean"}}}
+  - name: read
+    description: One workspace's catalog row and whether a host serves it now
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+  - name: list
+    description: One page of workspaces in one state, ordered by label; next_after continues it
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false,
+         "properties": {"state": {"enum": ["active", "archived"]}, "after": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 100}}}
+  - name: search
+    description: One page of workspaces whose label starts with label, or whose folder is path or lies below it under root_ref
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false,
+         "properties": {"state": {"enum": ["active", "archived"]}, "label": {"type": "string", "minLength": 1, "maxLength": 240},
+          "root_ref": {"type": "string", "minLength": 1, "maxLength": 160}, "path": {"type": "string", "maxLength": 512},
+          "after": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 100}}}
+  - name: rename
+    description: Replace a workspace's label
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id", "label"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "label": {"type": "string", "minLength": 1, "maxLength": 240}}}
+  - name: archive
+    description: Stop serving a workspace whose host is not running; its rows stay
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+  - name: restore
+    description: Serve an archived workspace again
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+- name: local
+  kind: contract.binding
+  contracts:
+  - contract: bee.workspace.catalog:contract
+    default: true
+    methods:
+      create: bee.workspace.catalog:create
+      read: bee.workspace.catalog:read
+      list: bee.workspace.catalog:list
+      search: bee.workspace.catalog:search
+      rename: bee.workspace.catalog:rename
+      archive: bee.workspace.catalog:archive
+      restore: bee.workspace.catalog:restore

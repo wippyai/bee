@@ -25,3 +25,9 @@ entries:
   source: file://thread_bindings.lua
   imports:
     workspace_store: bee.storage:store
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [sql]
+  imports:
+    contract: bee.protocol:application

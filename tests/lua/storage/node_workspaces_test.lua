@@ -2,6 +2,7 @@
 local test = require("test")
 local sql = require("sql")
 local store = require("store")
+local catalog = require("catalog")
 local binding = require("binding")
 local assignments = require("assignments")
 local thread_bindings = require("thread_bindings")
@@ -15,9 +16,26 @@ local function open(resource: string, selection: unknown): store.Store
     return handle
 end
 
+-- Insert one catalog row in its own transaction; a fault returns its code.
+local function insert(label: string, root_ref: string, subpath: string): (string?, string?)
+    local db, open_error = store.database(NODE)
+    if not db then error("open node database: " .. tostring(open_error)) end
+    local tx, begin_error = db:begin()
+    if not tx then db:release(); error("begin: " .. tostring(begin_error)) end
+    local row, failure = catalog.insert(tx, {label = label, root_ref = root_ref, subpath = subpath})
+    if not row then
+        tx:rollback(); db:release()
+        return nil, failure and failure.code or "STORAGE"
+    end
+    local _, commit_error = tx:commit()
+    db:release()
+    if commit_error then error("commit: " .. tostring(commit_error)) end
+    return row.workspace_id, nil
+end
+
 local function created(label: string, root_ref: string, subpath: string): string
-    local id, err = store.create(NODE, {label = label, root_ref = root_ref, subpath = subpath})
-    if not id then error("create workspace: " .. tostring(err)) end
+    local id, code = insert(label, root_ref, subpath)
+    if not id then error("create workspace: " .. tostring(code)) end
     return id
 end
 
@@ -81,13 +99,11 @@ local function define_tests()
 
         test.it("gives one root exactly one workspace", function()
             local first = created("project", "bee.storage.test:projects", "legacy/one")
-            local _, duplicate = store.create(NODE, {label = "again", root_ref = "bee.storage.test:projects", subpath = "legacy/one"})
-            test.not_nil(duplicate)
+            local _, duplicate = insert("again", "bee.storage.test:projects", "legacy/one")
+            test.eq(duplicate, "CONFLICT")
             local handle = open(NODE, {root_ref = "bee.storage.test:projects", subpath = "legacy/one"})
             test.eq(assert(handle:identity()), first)
             assert(handle:close())
-            local _, unknown_field = store.create(NODE, {label = "x", root_ref = "bee.storage.test:projects", subpath = "b", owner = "me"})
-            test.contains(tostring(unknown_field), "Invalid workspace definition")
         end)
 
         test.it("keeps each workspace's state apart in one node database", function()
@@ -189,7 +205,7 @@ local function define_tests()
             assert(classic:write('{"version":1,"probe":"upgraded"}'))
             assert(classic:close())
             local ledger = query(resource, "SELECT id FROM workspace_schema_migrations ORDER BY id")
-            test.eq(#ledger, 6)
+            test.eq(#ledger, 7)
             test.eq(#query(resource, "SELECT name FROM sqlite_master WHERE name = 'workspace_identity'"), 0)
             local reopened = open(resource, {workspace_id = identity})
             test.eq(reopened:read(), '{"version":1,"probe":"upgraded"}')

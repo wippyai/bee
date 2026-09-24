@@ -16,3 +16,8 @@ entries:
   meta: {type: test_support}
   file: .wippy/corrupt-legacy-workspace-test.db
   lifecycle: {auto_start: true}
+- name: catalog_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/workspace-catalog-test.db
+  lifecycle: {auto_start: true}

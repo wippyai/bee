@@ -11,6 +11,7 @@ local time = require("time")
 local uuid = require("uuid")
 local json = require("json")
 local store = require("store")
+local catalog = require("catalog")
 local decode = require("decode")
 local recovery = require("recovery")
 
@@ -145,10 +146,24 @@ local function resource_call(client: funcs.Executor, method: string, value: Obje
     return reply :: Object
 end
 
+-- A catalog row in the node database, as the catalog owner operation inserts it.
+local function created(label: string, subpath: string): string
+    local db = assert(store.database(NODE))
+    local tx = assert(db:begin())
+    local row, failure = catalog.insert(tx, {label = label, root_ref = ROOT, subpath = subpath})
+    if not row then
+        tx:rollback(); db:release()
+        error("create workspace: " .. tostring(failure and failure.message))
+    end
+    assert(tx:commit())
+    db:release()
+    return row.workspace_id
+end
+
 local function main()
     local suffix = uuid.v7()
-    local left = assert(store.create(NODE, {label = "left", root_ref = ROOT, subpath = "left-" .. suffix}))
-    local right = assert(store.create(NODE, {label = "right", root_ref = ROOT, subpath = "right-" .. suffix}))
+    local left = created("left", "left-" .. suffix)
+    local right = created("right", "right-" .. suffix)
     local hosts: Hosts = {ready = assert(process.listen("bee.host.ready", {message = true})),
         replies = assert(process.listen("bee.app.reply", {message = true})),
         checkpoints = assert(process.listen("bee.host.checkpoint", {message = true})),

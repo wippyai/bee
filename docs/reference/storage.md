@@ -63,10 +63,14 @@ The catalog table `workspaces` holds one row per logical workspace:
 lookup by root is an index probe), `state` (`active` or `archived`; `open()`
 serves only active rows), `created_at` and `last_used_at`, which `open()`
 records. The ID names a workspace; it does not grant authority. There is no
-identity-write method. `create(resource, {label, root_ref, subpath})` adds a row
-with a fresh ID; it is the store primitive for node-owner operations and
-publishes no operation of its own. Components attach their own per-workspace
+identity-write method. `bee.storage:catalog` holds the row operations (insert,
+read, ordered pages, rename and state changes) over a transaction from
+`store.database(resource)`; the [catalog operations](workspace-catalog.md) are
+the only callers outside tests. Components attach their own per-workspace
 tables keyed by `workspace_id`; the catalog carries no component columns.
+Migration 7 (`workspace_catalog_order_v1`) adds the indexes
+`(state, lower(label), workspace_id)` and `(state, root_ref, subpath)` that
+listing and search walk.
 
 Migration 6 (`node_workspaces_v1`) turns a single-workspace install into this
 catalog. The ID from the former `workspace_identity` singleton becomes the

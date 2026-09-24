@@ -30,3 +30,56 @@ entries:
     resources:
     - bee:client_db
     effect: allow
+- name: workspace_catalog_read_policy
+  kind: security.policy
+  meta:
+    comment: Read the node workspace catalog, list it and search it
+  policy:
+    actions: [bee.workspaces.read]
+    resources: '*'
+    effect: allow
+- name: workspace_catalog_manage_policy
+  kind: security.policy
+  meta:
+    comment: Create, rename, archive and restore node workspaces under the host's admitted roots
+  policy:
+    actions: [bee.workspaces.manage]
+    resources: '*'
+    effect: allow
+- name: workspace_catalog_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: Attached to the catalog operations only; they enter the execution scope after authorizing the caller
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee:workspace_catalog_scope") || (action == "funcs.call" && resource == "bee.workspace.catalog:backend")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee:workspace_catalog_scope, bee.workspace.catalog:backend]
+    effect: allow
+- name: workspace_catalog_store_policy
+  kind: security.policy
+  groups: [workspace_catalog_scope]
+  meta:
+    comment: The catalog backend's store, the host's admitted roots and its own execution
+  policy:
+    actions: [db.get, registry.get, bee.workspaces.execute]
+    resources: [bee:workspace_db, bee.resources:roots_ref, bee:resource_roots, bee.workspace.catalog:backend]
+    effect: allow
+- name: workspace_catalog_volume_policy
+  kind: security.policy
+  groups: [workspace_catalog_scope]
+  meta:
+    comment: Root volumes; the backend opens only roots listed in the host's admitted roots
+  policy:
+    actions: [fs.get]
+    resources: '*'
+    effect: allow
+- name: workspace_catalog_host_policy
+  kind: security.policy.expr
+  groups: [workspace_catalog_scope]
+  meta:
+    comment: Whether a workspace host is running, before its row is archived
+  policy:
+    expression: 'action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]{32}$"'
+    actions: [process.registry.lookup]
+    resources: '*'
+    effect: allow

@@ -422,6 +422,7 @@ entries:
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:credential_store_policy]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
     catalog: bee.harness.catalog:catalog

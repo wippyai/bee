@@ -7,6 +7,7 @@
 -- waiter wakes with the message; when the sender's turn ends the thread
 -- owner delivers the notice on the waiter's own thread.
 local test = require("test")
+local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
@@ -43,9 +44,8 @@ local function scope(): security.Scope
     end
     return security.new_scope(policies)
 end
-local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): Object
-    local reply, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
+    local reply, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     local value = reply :: Object
     if value.ok ~= true then
@@ -131,7 +131,7 @@ local function session(binding_ref: string, policy_ref: string, thread_id: strin
         environment = environment, working_directory = "project", placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
 end
 local function spawn(request_value: Object): string
-    local pid, err = process.with_context({}):with_actor(actor):with_scope(scope()):spawn_monitored(CARRIER, "bee:workers", request_value, "open", process.pid())
+    local pid, err = process.with_context({}):with_actor(principals.actor(ACTOR, request_value.workspace_id)):with_scope(scope()):spawn_monitored(CARRIER, "bee:workers", request_value, "open", process.pid())
     if not pid then error("spawn carrier: " .. tostring(err)) end
     return tostring(pid)
 end

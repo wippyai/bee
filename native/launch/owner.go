@@ -65,8 +65,10 @@ func ownerComponents(state, execution string) ([]boot.Component, error) {
 // as the host's Plan.Prepare under the real application state lock, so it runs
 // once per owner boot and its release runs after shutdown while that lock is
 // still held. It never mutates an existing credential: a secret or identity
-// already on disk is reused byte-for-byte.
-func prepareOwner(state string) (boot.Config, func() error, error) {
+// already on disk is reused byte-for-byte. folder selects whether the desktop
+// bridge composes the folder's own workspace (bee start) or serves only the
+// node's catalog workspaces (bee daemon).
+func prepareOwner(state string, folder bool) (boot.Config, func() error, error) {
 	if state == "" || !filepath.IsAbs(state) {
 		return nil, nil, errors.New("owner preparation requires an absolute state directory")
 	}
@@ -78,7 +80,7 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	config, err := prepareLockedOwner(state)
+	config, err := prepareLockedOwner(state, folder)
 	if err != nil {
 		return nil, nil, errors.Join(err, unlock())
 	}
@@ -87,7 +89,7 @@ func prepareOwner(state string) (boot.Config, func() error, error) {
 
 // prepareLockedOwner builds the owner's boot configuration while it holds the
 // owner lock.
-func prepareLockedOwner(state string) (boot.Config, error) {
+func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 	directory := ownerDirectory(state)
 	trustedPath := ownerTrustedDirectory(state)
 	if err := privatefile.EnsurePrivateDir(trustedPath); err != nil {
@@ -154,6 +156,7 @@ func prepareLockedOwner(state string) (boot.Config, error) {
 		"expires_at":    ownerExpiry(),
 		"allowed_nodes": []any{},
 		"local_clients": true,
+		"folder":        folder,
 	}
 	// The supervisor service takes one input object. The override key is
 	// namespace:entry:path, and the entry declares its input as a list, so the

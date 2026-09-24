@@ -63,7 +63,7 @@ local function harness(tag: string): Harness
         catalog_readers = {}, pending_catalog_readers = nil}
     local state: owner.State = {
         bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = NODE,
-        allowed = {}, enrolled = {[client_node] = true}, config = {execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {}, local_clients = true},
+        allowed = {}, enrolled = {[client_node] = true}, config = {execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {}, local_clients = true, folder = true},
         ready = ready, results = results, copies = unused, launches = unused, activations = activations, reader_updates = unused, observers = unused,
         catalog = catalog.new(), spawn_scope = security.new_scope({}), executor = funcs.new(), folder = folder_served,
         served = {[folder] = folder_served, [leased] = leased_served}, workspaces = {[FOLDER] = folder_served, [LEASED] = leased_served}, served_count = 1,

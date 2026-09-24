@@ -27,7 +27,7 @@ import (
 
 func prepareCluster(t *testing.T, state string) (map[string]any, func() error) {
 	t.Helper()
-	config, release, err := prepareOwner(state)
+	config, release, err := prepareOwner(state, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func splitCredential(t *testing.T, credential []byte) ([]byte, ed25519.PublicKey
 func TestOwnerLockExcludesASecondOwner(t *testing.T) {
 	state := t.TempDir()
 	_, release := prepareCluster(t, state)
-	if _, _, err := prepareOwner(state); !errors.Is(err, errOwnerRunning) {
+	if _, _, err := prepareOwner(state, true); !errors.Is(err, errOwnerRunning) {
 		t.Fatalf("second owner preparation = %v", err)
 	}
 	if _, err := lockOwner(context.Background(), state); !errors.Is(err, errOwnerRunning) {
@@ -393,7 +393,7 @@ func TestPrepareOwnerKeepsItsGossipAddressAndSeedsKnownPeers(t *testing.T) {
 
 func prepareBindPort(t *testing.T, state string) (int, string) {
 	t.Helper()
-	config, release, err := prepareOwner(state)
+	config, release, err := prepareOwner(state, true)
 	if err != nil {
 		t.Fatal(err)
 	}

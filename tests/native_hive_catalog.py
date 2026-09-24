@@ -45,14 +45,15 @@ def exercise(binary):
             first.window_control('□')
             first.wait('display', timeout=10)
             first.key(b'\r')
-            first.wait('controller unknown', timeout=10)
-            assert 'Desktops unavailable:' not in first.text(), first.text()
-            first.key(b't')  # Details exposes exact identities for comparison.
-            for row in rows:
-                first.wait(row[1], timeout=5)
+            # The local node lists one page of its workspaces through the open
+            # Hive operation, with whether a host serves each.
+            first.wait(' served', timeout=10)
+            assert 'Workspaces unavailable:' not in first.text(), first.text()
+            first.key(b't')  # Details expose exact identities for comparison.
+            first.wait(rows[0][0], timeout=5)
             assert catalog() == before, 'Reading the directory allocated or removed a display'
             first.key(b'\x1b[24~')
-            first.wait('controller unknown', timeout=10)
+            first.wait(' served', timeout=10)
             assert catalog() == before, 'Presenter replacement changed durable display identities'
             first.quit()
             second.quit()
@@ -61,7 +62,7 @@ def exercise(binary):
                 cleanup.callback(stop_owner, owner)
                 for client in clients:
                     cleanup.callback(client.close)
-    print('Live Hive catalog: two retained identities, unknown occupancy, read-only listing and F12 passed')
+    print('Live Hive catalog: the node\'s workspaces paged over the Hive, read-only listing and F12 passed')
 
 
 if __name__ == '__main__':

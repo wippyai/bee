@@ -103,6 +103,22 @@ entries:
       security:
         actor: {id: bee.local}
         policies: [bee:desktop_policy, bee:retained_owner_spawn_policy, bee:retained_owner_name_policy, bee:retained_owner_node_policy]
+- name: daemon
+  kind: process.lua
+  source: file://daemon.lua
+  method: main
+  modules: [process, channel, time, io, system, logger]
+  imports:
+    leases: bee.application:host_leases
+  meta:
+    comment: The node daemon selected by the native launch host under the runtime state lock; it composes no folder workspace
+    command:
+      name: bee-daemon
+      host: bee:terminal
+      short: Run the node's services without a folder workspace
+      security:
+        actor: {id: bee.local}
+        policies: [bee:retained_owner_node_policy]
 - name: hosts
   kind: library.lua
   source: file://hosts.lua

@@ -23,6 +23,8 @@ const (
 	desktopCommand           = "bee"
 	ownerCommand             = "bee-owner"
 	ownerArgument            = "start"
+	daemonCommand            = "bee-daemon"
+	daemonArgument           = "daemon"
 	hookArgument             = "hook-post"
 )
 
@@ -91,13 +93,19 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	if owner && len(launch.Args) != 1 {
 		return app.Plan{}, errors.New("bee start takes no arguments")
 	}
+	// A daemon runs the node from this folder's state without composing the
+	// folder as a workspace; it serves the node's catalog workspaces.
+	daemon := desktop && len(launch.Args) > 0 && launch.Args[0] == daemonArgument
+	if daemon && len(launch.Args) != 1 {
+		return app.Plan{}, errors.New("bee daemon takes no arguments")
+	}
 	// An explicit application ID keeps the runtime's own entry, which is how
 	// recovery and development launches still reach an application directly.
 	application := desktop && len(launch.Args) > 0 && strings.Contains(launch.Args[0], ":")
 	// Every other ordinary launch of this executable is a client of the retained
 	// owner. Its words are decoded before a project is selected, so a malformed
 	// invocation reads no state.
-	client := desktop && !owner && !application
+	client := desktop && !owner && !daemon && !application
 	var intent clientIntent
 	if client {
 		parsed, err := parseClientIntent(launch.Args)
@@ -120,12 +128,15 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	}
 	// The retained owner route keeps the runtime's own application start, so it
 	// prepares the owner's cluster, desktop bridge and enrollment publisher.
-	if owner {
+	if owner || daemon {
 		plan.Command = ownerCommand
+		if daemon {
+			plan.Command = daemonCommand
+		}
 		plan.Args = []string{}
 		host.ownerState = state
 		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
-			return prepareOwner(state)
+			return prepareOwner(state, owner)
 		}
 		return plan, nil
 	}

@@ -148,6 +148,35 @@ func TestPlanMapsOnlyExplicitOwnerStart(t *testing.T) {
 	}
 }
 
+// bee daemon runs the node from the project state like bee start, under its
+// own owner command, and never reads its arguments as a client intent.
+func TestPlanMapsDaemonToTheNodeWithoutAFolderWorkspace(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "config", desktopCommand)
+	project := makeProject(t)
+	host := newHost(systemHostResolver())
+	plan, err := host.Plan(context.Background(), app.Launch{
+		Op: app.OpRun, Command: desktopCommand, Args: []string{daemonArgument}, State: root, Dir: project,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := ProjectStateDir(root, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Command != daemonCommand || plan.Args == nil || len(plan.Args) != 0 || plan.Prepare == nil || plan.Run != nil {
+		t.Fatalf("daemon plan = command %q args %#v prepare %v run %v", plan.Command, plan.Args, plan.Prepare != nil, plan.Run != nil)
+	}
+	if plan.DefaultState != want || host.ownerState != want {
+		t.Fatalf("daemon state = %q, runtime state = %q, want %q", host.ownerState, plan.DefaultState, want)
+	}
+	if _, err := newHost(systemHostResolver()).Plan(context.Background(), app.Launch{
+		Op: app.OpRun, Command: desktopCommand, Args: []string{daemonArgument, "extra"}, State: t.TempDir(), Dir: project, Explicit: true,
+	}); err == nil {
+		t.Fatal("daemon accepted extra arguments")
+	}
+}
+
 func TestPlanRoutesOrdinaryLaunchThroughClientAndOwnerThroughPrepare(t *testing.T) {
 	state := t.TempDir()
 	host := newHost(systemHostResolver())
@@ -224,7 +253,7 @@ func TestHostStartAddsEnrollmentPublisherForOwner(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, release, err := prepareOwner(state)
+	_, release, err := prepareOwner(state, true)
 	if err != nil {
 		t.Fatal(err)
 	}

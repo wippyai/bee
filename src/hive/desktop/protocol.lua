@@ -17,14 +17,15 @@ M.MAX_CURSOR = 2200
 -- separate from the retained owner and ordinary terminal applications. The
 -- owner still checks the caller node against its explicit admission grant.
 M.CLIENT_HOST = "bee.hive.desktop:display_host"
-type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, application: string?, local_clients: boolean?}
+-- folder: whether the bridge composes the owner's folder workspace; a daemon's does not.
+type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, application: string?, local_clients: boolean?, folder: boolean}
 type Query = {label: string?, after: string?, limit: integer}
 type DesktopInput = {execution: string, workspace_id: string?, desktop_id: string?, mode: "control" | "observe", session_id: string?, name: string?,
     arguments: {string}?, query: Query?}
 function M.configuration(value: unknown): (Configuration?, string?)
     local object = bounds.object(value)
     if not object then return nil, "desktop configuration must be an object" end
-    local fields_error = bounds.fields(object, {"execution", "expires_at", "allowed_nodes", "application", "local_clients"})
+    local fields_error = bounds.fields(object, {"execution", "expires_at", "allowed_nodes", "application", "local_clients", "folder"})
     if fields_error then return nil, fields_error end
     local execution = contract.workspace_id(object.execution)
     local expires = bounds.timestamp(object.expires_at)
@@ -33,6 +34,7 @@ function M.configuration(value: unknown): (Configuration?, string?)
     if not expires then return nil, "expires_at must be a canonical UTC timestamp with milliseconds" end
     if not nodes then return nil, "allowed_nodes must be a bounded dense list of node identities" end
     if object.local_clients ~= nil and type(object.local_clients) ~= "boolean" then return nil, "local_clients must be boolean" end
+    if object.folder ~= nil and type(object.folder) ~= "boolean" then return nil, "folder must be boolean" end
     if (#nodes == 0 and object.local_clients ~= true) or #nodes > 64 then return nil, "allowed_nodes must contain 1 to 64 identities" end
     local seen: {[string]: boolean} = {}
     for _, node in ipairs(nodes) do if seen[node] then return nil, "allowed_nodes contains a duplicate identity" end; seen[node] = true end
@@ -41,7 +43,8 @@ function M.configuration(value: unknown): (Configuration?, string?)
         application = bounds.id(object.application)
         if not application then return nil, "application must be a bounded entry identity" end
     end
-    return {execution = execution, expires_at = expires, allowed_nodes = nodes, application = application, local_clients = object.local_clients == true}, nil
+    return {execution = execution, expires_at = expires, allowed_nodes = nodes, application = application, local_clients = object.local_clients == true,
+        folder = object.folder ~= false}, nil
 end
 function M.input(operation: string, value: unknown): DesktopInput?
     local object = bounds.object(value)

@@ -45,7 +45,7 @@ local function define_tests()
             local executor = funcs.new():with_actor(security.new_actor("bee.hive.supervisor")):with_scope(security.new_scope(policies))
             local state: owner.State = {
                 bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = node,
-                allowed = {}, enrolled = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = false},
+                allowed = {}, enrolled = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = false, folder = true},
                 ready = snapshots, results = snapshots, copies = snapshots, launches = snapshots,
                 activations = snapshots, reader_updates = snapshots, observers = snapshots, catalog = catalog.new(),
                 spawn_scope = security.new_scope({}), executor = executor, folder = nil, served = {}, workspaces = {}, served_count = 0,

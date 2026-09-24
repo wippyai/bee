@@ -91,6 +91,20 @@ entries:
   modules: *operation_modules
   imports: *operation_imports
   security: *operation_security
+- name: roots
+  kind: function.lua
+  source: file://operations.lua
+  method: roots
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
+- name: folders
+  kind: function.lua
+  source: file://operations.lua
+  method: folders
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
 - name: contract
   kind: contract.definition
   meta:
@@ -164,6 +178,20 @@ entries:
         {"type": "object", "additionalProperties": false, "required": ["workspace_id", "text"],
          "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "text": {"type": "string", "minLength": 1, "maxLength": 240},
           "limit": {"type": "integer", "minimum": 1, "maximum": 50}}}
+  - name: roots
+    description: The roots the host admits for workspaces, in name order, each with the access it admits (read or write)
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "properties": {}}
+  - name: folders
+    description: One page of the folders inside path under an admitted root, in name order and without hidden folders, each with the workspace that holds it; next_after continues it
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["root_ref"],
+         "properties": {"root_ref": {"type": "string", "minLength": 1, "maxLength": 160}, "path": {"type": "string", "maxLength": 512},
+          "after": {"type": "string", "minLength": 1, "maxLength": 512}, "limit": {"type": "integer", "minimum": 1, "maximum": 100}}}
 - name: extension
   kind: contract.definition
   meta:
@@ -218,3 +246,5 @@ entries:
       restore: bee.workspace.catalog:restore
       inspect: bee.workspace.catalog:inspect
       search_within: bee.workspace.catalog:search_within
+      roots: bee.workspace.catalog:roots
+      folders: bee.workspace.catalog:folders

@@ -816,7 +816,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 pending_count = pending_count + 1
                                 send(host, "bee.app.request", {version = 1, request_id = request.request_id, op = request.op,
                                     workspace_id = workspace_id, connection_id = connection_id, definition_id = request.definition_id,
-                                    thread_id = request.thread_id,
+                                    thread_id = request.thread_id, arguments = request.arguments,
                                     id = target and target.view_id or "", instance_id = target and target.instance_id or ""})
                             end
                         end

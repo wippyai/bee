@@ -204,7 +204,6 @@ local function main(value: unknown)
         local desktop = model.selected_desktop(state)
         local node = model.selected(state)
         if not desktop or not node then status = "Select a desktop first"; dirty = true; return end
-        if mode == "control" and not model.can_control(state) then status = "Desktop is controlled by " .. desktop.controller .. "; choose observe"; dirty = true; return end
         local intent, refused = model.preview_intent(state, mode, uuid.v4())
         if not intent then status = refused or "Desktop unavailable"; dirty = true; return end
         local title = mode == "control" and "Control this workspace here?" or "Observe this workspace here?"

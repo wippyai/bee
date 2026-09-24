@@ -7,15 +7,17 @@ local catalog = require("catalog")
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Create = {label: string, root_ref: string, subpath: string, create_directory: boolean}
+-- folders: one page of the folders inside path under root_ref, after a folder name.
+type Folders = {root_ref: string, path: string, after: string?, limit: integer}
 type Request = {operation: string, create: Create?, workspace_id: string?, label: string?, query: catalog.Query?, text: string?,
-    limit: integer?}
+    limit: integer?, folders: Folders?}
 
 local M = {}
 M.READ = "bee.workspaces.read"
 M.MANAGE = "bee.workspaces.manage"
 M.CATALOG = "catalog"
 M.DEFAULT_PAGE = 50
-M.OPERATIONS = {"create", "read", "list", "search", "rename", "archive", "restore", "inspect", "search_within"}
+M.OPERATIONS = {"create", "read", "list", "search", "rename", "archive", "restore", "inspect", "search_within", "roots", "folders"}
 M.MAX_WITHIN = 50
 
 function M.fail(code: string, message: string): Reply
@@ -82,6 +84,32 @@ function M.decode(operation: unknown, value: unknown): (Request?, string?)
         if create_directory and subpath == "" then return nil, "create_directory needs a subpath to create" end
         return {operation = name, create = {label = title, root_ref = root_ref, subpath = subpath,
             create_directory = create_directory}}, nil
+    elseif selected == "roots" then
+        local extra = bounds.fields(object, {})
+        if extra then return nil, extra end
+        return {operation = name}, nil
+    elseif selected == "folders" then
+        local extra = bounds.fields(object, {"root_ref", "path", "after", "limit"})
+        if extra then return nil, extra end
+        local root_ref = bounds.id(object.root_ref)
+        if not root_ref then return nil, "root_ref must be an identifier" end
+        local path, path_error = bounds.subpath(object.path == nil and "" or object.path)
+        if not path then return nil, path_error or "invalid path" end
+        local after: string? = nil
+        if object.after ~= nil then
+            local segment = bounds.subpath(object.after)
+            if not segment or segment == "" or segment:find("/", 1, true) then return nil, "after must be one folder name" end
+            after = segment
+        end
+        local limit = M.DEFAULT_PAGE
+        if object.limit ~= nil then
+            local number = bounds.integer(object.limit)
+            if not number or number < 1 or number > catalog.MAX_PAGE then
+                return nil, "limit must be between 1 and " .. tostring(catalog.MAX_PAGE)
+            end
+            limit = number
+        end
+        return {operation = name, folders = {root_ref = root_ref, path = path, after = after, limit = limit}}, nil
     elseif selected == "search_within" then
         local extra = bounds.fields(object, {"workspace_id", "text", "limit"})
         if extra then return nil, extra end
@@ -144,12 +172,17 @@ function M.decode(operation: unknown, value: unknown): (Request?, string?)
     return {operation = name, query = query}, nil
 end
 
--- Reads of one workspace are checked against that workspace; listing and
--- search against the catalog; creation against the root it names; every
--- other change against the workspace it changes.
+-- Reads of one workspace are checked against that workspace; listing, search
+-- and the admitted roots against the catalog; creation and browsing a root's
+-- folders for it against the root it names; every other change against the
+-- workspace it changes.
 function M.authority(request: Request): (string, string)
     local operation = request.operation
-    if operation == "list" or operation == "search" then return M.READ, M.CATALOG end
+    if operation == "list" or operation == "search" or operation == "roots" then return M.READ, M.CATALOG end
+    if operation == "folders" then
+        local folders = request.folders
+        return M.MANAGE, folders and folders.root_ref or ""
+    end
     if operation == "read" or operation == "inspect" or operation == "search_within" then return M.READ, request.workspace_id or "" end
     if operation == "create" then
         local create = request.create

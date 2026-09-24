@@ -138,13 +138,14 @@ local function main(owner: string, initial_application: string?, secondary_appli
         local sent, err = process.send(owner, "bee.desktop.command", {version = 1, op = op, id = id, request_id = request_id})
         if not sent then pending_request = nil; adopt_routing(); status = tostring(err) end
     end
-    local function application(op: string, definition_id: string, id: string)
+    local function application(op: string, definition_id: string, id: string, arguments: {string}?)
         if op == "close" and id == "" then return end
         if op == "close" then
             closing[id] = true
             routing_scene = model.remove(routing_scene, id)
         end
-        local sent, err = process.send(owner, "bee.app.request", {version = 1, request_id = uuid.v7(), op = op, workspace_id = workspace_id, definition_id = definition_id, id = id})
+        local sent, err = process.send(owner, "bee.app.request", {version = 1, request_id = uuid.v7(), op = op, workspace_id = workspace_id,
+            definition_id = definition_id, id = id, arguments = arguments})
         if not sent then closing[id] = nil; adopt_routing(); status = tostring(err) end
     end
     local function rectangle(win: model.Window): model.Rect
@@ -734,6 +735,9 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 if current then
                     local response = workspace_menu.respond(current, event, uuid.v7())
                     if response.close then workspaces = nil
+                    elseif response.create then
+                        workspaces = nil
+                        application("open", workspace_menu.CREATE_APPLICATION, "", {workspace_menu.CREATE_ARGUMENT})
                     elseif response.page then ask_workspaces(response.page)
                     elseif response.switch then
                         local switch_request = current.switching

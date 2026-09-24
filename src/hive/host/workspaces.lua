@@ -6,6 +6,7 @@ local funcs = require("funcs")
 local process = require("process")
 local system = require("system")
 local bounds = require("bounds")
+local contract = require("contract")
 local M = {}
 M.MAX_PAGE = 50
 M.MAX_LABEL = 240
@@ -36,11 +37,6 @@ function M.decode(value: unknown): (Query?, string?)
     end
     return query, nil
 end
--- A row's label: one bounded line. The folder workspace's row is unnamed.
-local function row_label(value: unknown): string?
-    if type(value) ~= "string" or #value > M.MAX_LABEL or value:find("%c") then return nil end
-    return value
-end
 local function handle(value: unknown): Object
     local query, invalid = M.decode(value)
     if not query then error("invalid workspace listing: " .. tostring(invalid)) end
@@ -62,7 +58,8 @@ local function handle(value: unknown): Object
     for _, raw_row in ipairs(items :: {unknown}) do
         local row = bounds.object(raw_row)
         local id = row and bounds.id(row.workspace_id)
-        local label = row and row_label(row.label)
+        -- A label is one bounded line; the folder workspace's row is unnamed.
+        local label = row and contract.text(row.label, M.MAX_LABEL)
         if not id or not label or #workspaces >= M.MAX_PAGE then error("the workspace catalog answered a malformed row") end
         workspaces[#workspaces + 1] = {workspace_id = id, label = label,
             served = process.registry.lookup("bee.workspace.host/" .. id) ~= nil}

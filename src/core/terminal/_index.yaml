@@ -53,6 +53,7 @@ entries:
   imports:
     appearance: bee.application:appearance
     names: bee.application:names
+    contract: bee.protocol:application
 - name: render
   kind: library.lua
   source: file://render.lua

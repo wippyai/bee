@@ -138,8 +138,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 local item = desktop.label ~= "" and desktop.label or workspace_label
                 if desktop.desktop_id ~= "" then item = item .. "  display " .. (display_labels[desktop.desktop_id] or names.label(desktop.desktop_id)) end
                 if desktop.served ~= nil then item = item .. (desktop.served and "  served" or "  not served") end
-                if desktop.controller ~= nil and desktop.controller ~= "" then item = item .. "  controlled by " .. desktop.controller end
-                if desktop.observers ~= nil and desktop.observers > 0 then item = item .. "  observers " .. tostring(desktop.observers) end
                 if session then
                     item = item .. "  your " .. session.mode .. " session"
                     if state.technical then item = item .. " " .. session.session_id end

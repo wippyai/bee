@@ -35,6 +35,8 @@ local function archive(value: unknown): protocol.Reply return run("archive", val
 local function restore(value: unknown): protocol.Reply return run("restore", value) end
 local function inspect(value: unknown): protocol.Reply return run("inspect", value) end
 local function search_within(value: unknown): protocol.Reply return run("search_within", value) end
+local function roots(value: unknown): protocol.Reply return run("roots", value) end
+local function folders(value: unknown): protocol.Reply return run("folders", value) end
 
 return {create = create, read = read, list = list, search = search, rename = rename, archive = archive, restore = restore,
-    inspect = inspect, search_within = search_within}
+    inspect = inspect, search_within = search_within, roots = roots, folders = folders}

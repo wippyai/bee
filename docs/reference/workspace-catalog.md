@@ -183,7 +183,7 @@ switches a running desktop to a second workspace and back.
 ### Node modes
 
 - **Folder** (`bee`, `bee start`): the folder is the node's workspace, composed
-  and served by its own launch composition, as before.
+  and served by its own launch composition.
 - **Daemon** (`bee daemon`): the node runs from the folder's state without
   composing the folder as a workspace; it prints `BEE_DAEMON_READY NODE SEED
   PID` and serves catalog workspaces to clients through leases. The folder's

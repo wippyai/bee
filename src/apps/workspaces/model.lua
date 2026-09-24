@@ -276,6 +276,15 @@ function M.apply_change(state: State, reply: caller.Reply)
     state.showing = false
 end
 
+-- A workspace the create flow made: the active list again from its first
+-- page, the new workspace selected when that page holds it.
+function M.created(state: State, created: Summary)
+    state.tab, state.query, state.editing = "active", "", false
+    restart(state)
+    state.selected = created.workspace_id
+    state.status = "Created " .. (created.label ~= "" and created.label or created.workspace_id)
+end
+
 function M.edit(state: State, on: boolean) state.editing = on end
 function M.confirm(state: State, on: boolean) state.confirming = on end
 function M.show(state: State, on: boolean) state.showing = on end

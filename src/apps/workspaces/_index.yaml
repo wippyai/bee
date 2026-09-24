@@ -13,6 +13,7 @@ entries:
     caller: bee.application:caller
     leases: bee.application:host_leases
     model: bee.workspaces:model
+    creation: bee.workspaces:creation
     view: bee.workspaces:view
   meta:
     type: bee.application
@@ -31,6 +32,13 @@ entries:
   imports:
     text: bee.application:text
     caller: bee.application:caller
+- name: creation
+  kind: library.lua
+  source: file://creation.lua
+  imports:
+    text: bee.application:text
+    caller: bee.application:caller
+    model: bee.workspaces:model
 - name: view
   kind: library.lua
   source: file://view.lua
@@ -38,6 +46,7 @@ entries:
     frame: bee.application:frame
     appearance: bee.application:appearance
     model: bee.workspaces:model
+    creation: bee.workspaces:creation
 - name: client_policy
   kind: security.policy
   meta:
@@ -45,5 +54,6 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.workspace.catalog:list, bee.workspace.catalog:search, bee.workspace.catalog:inspect, bee.workspace.catalog:archive,
-      bee.workspace.catalog:restore, bee.threads.service:list_workspace]
+      bee.workspace.catalog:restore, bee.workspace.catalog:create, bee.workspace.catalog:roots, bee.workspace.catalog:folders,
+      bee.threads.service:list_workspace]
     effect: allow

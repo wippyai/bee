@@ -30,6 +30,8 @@ entries:
       - bee:hive_advertise_policy
       - bee:hive_execute_policy
       - bee:hive_invite_policy
+      # Enrolled local clients' bee workspace commands run through their worker.
+      - bee:workspace_command_policy
       # The supervisor composes the retained desktop bridge, so it needs the
       # desktop host policy that authorizes desktop admission, and the bridge
       # reads the node's displays and one page of its workspace catalog.
@@ -47,6 +49,7 @@ entries:
   modules: [funcs, process, system]
   imports:
     bounds: bee.threads.records:bounds
+    contract: bee.protocol:application
   meta:
     comment: Open Hive operation listing one page of this node's workspace catalog and which workspaces a host serves now
     hive: open

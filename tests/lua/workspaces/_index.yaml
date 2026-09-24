@@ -20,6 +20,16 @@ entries:
     test: wippy.test:test
     model: bee.workspaces:model
     view: bee.workspaces:view
+    creation: bee.workspaces:creation
     frame: bee.application:frame
     appearance: bee.application:appearance
+    caller: bee.application:caller
+- name: creation_test
+  kind: function.lua
+  source: file://creation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    creation: bee.workspaces:creation
     caller: bee.application:caller

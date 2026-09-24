@@ -9,7 +9,6 @@ M.TELEMETRY = "bee.hive.telemetry"
 M.PRESENCE = "bee.hive.telemetry:presence"
 M.STATS = "bee.hive.telemetry:stats"
 M.MAX_NODES = 64
-M.MAX_DESKTOPS = 64
 -- One page of a node's workspaces, and its cursor bound.
 M.PAGE = 50
 M.MAX_CURSOR_BYTES = 2200
@@ -18,7 +17,7 @@ M.MAX_ADDRESS_BYTES = 200
 M.MAX_LABEL_BYTES = 120
 type Reply = types.Reply
 type Member = {node_id: string, is_local: boolean, addr: string, client_only: boolean?}
-type Desktop = {workspace_id: string, desktop_id: string, label: string, controller: string?, observers: integer?, served: boolean?}
+type Desktop = {workspace_id: string, desktop_id: string, label: string, served: boolean?}
 -- A catalog carries the owner generation it was read under; an attach names
 -- that generation and its own idempotency identity, so a stale catalog
 -- never attaches to a replacement desktop and an ambiguous outcome is

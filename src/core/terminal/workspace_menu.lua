@@ -1,22 +1,29 @@
 -- SPDX-License-Identifier: MIT
 -- The display's workspace menu: one page of the node's workspace catalog at a
--- time, a label search, and the choice of another workspace to show on this
--- display. It holds only what its owner answered; switching is the owner's
+-- time, a label search, the choice of another workspace to show on this
+-- display, and N for a new workspace, which the Workspaces viewer's create
+-- flow makes. It holds only what its owner answered; switching is the owner's
 -- request to the desktop bridge, and this menu only asks for it.
 local tty = require("tty")
 local appearance = require("appearance")
 local names = require("names")
+local contract = require("contract")
 type Item = {workspace_id: string, label: string}
 type Query = {label: string?, after: string?}
 type Menu = {current: string, items: {Item}, selected: integer, after: string?, next_after: string?,
     back: {string}, query: string, editing: boolean, loading: string?, switching: string?, status: string}
-type Response = {close: boolean, page: Query?, switch: string?}
+-- create: the person asked for a new workspace; the presenter opens the
+-- Workspaces viewer on its create flow.
+type Response = {close: boolean, page: Query?, switch: string?, create: boolean}
 type Panel = {x: integer, y: integer, width: integer, height: integer, capacity: integer}
 local M = {}
 M.MAX_ITEMS = 50
 M.MAX_QUERY = 120
 M.SWITCHED = "Switching this display"
-local NONE: Response = {close = false, page = nil, switch = nil}
+-- A new workspace is made by the Workspaces viewer, opened on its create flow.
+M.CREATE_APPLICATION = "bee.workspaces:app"
+M.CREATE_ARGUMENT = "create"
+local NONE: Response = {close = false, page = nil, switch = nil, create = false}
 function M.new(current: string): Menu
     return {current = current, items = {}, selected = 1, after = nil, next_after = nil, back = {}, query = "",
         editing = false, loading = nil, switching = nil, status = ""}
@@ -26,28 +33,24 @@ function M.request(menu: Menu, request_id: string): Query
     menu.loading = request_id
     return {label = menu.query ~= "" and menu.query or nil, after = menu.after}
 end
-local function line(value: unknown, limit: integer): string?
-    if type(value) ~= "string" or #value > limit or value:find("%c") then return nil end
-    return value
-end
 -- The owner's answer to the pending page request; any other is ignored.
 function M.apply(menu: Menu, value: unknown): boolean
     if type(value) ~= "table" or value.version ~= 1 or not menu.loading or value.request_id ~= menu.loading then return false end
     menu.loading = nil
     if value.error ~= nil then
-        menu.status = "Workspaces unavailable: " .. (line(value.error, 200) or "unknown error")
+        menu.status = "Workspaces unavailable: " .. (contract.text(value.error, 200) or "unknown error")
         return true
     end
     local items: {Item} = {}
     if type(value.items) == "table" then
         for index, raw in ipairs(value.items :: {unknown}) do
             if index > M.MAX_ITEMS or type(raw) ~= "table" then break end
-            local id, label = line(raw.workspace_id, 32), line(raw.label, 240)
-            if id and #id == 32 and label then items[#items + 1] = {workspace_id = id, label = label} end
+            local id, label = contract.workspace_id(raw.workspace_id), contract.text(raw.label, 240)
+            if id and label then items[#items + 1] = {workspace_id = id, label = label} end
         end
     end
     menu.items, menu.selected = items, 1
-    menu.next_after = line(value.next_after, 2200)
+    menu.next_after = contract.text(value.next_after, 2200)
     menu.status = #items == 0 and "No workspaces match" or ""
     return true
 end
@@ -56,7 +59,7 @@ function M.switched(menu: Menu, value: unknown): boolean
     if type(value) ~= "table" or value.version ~= 1 or not menu.switching or value.request_id ~= menu.switching then return false end
     menu.switching = nil
     if value.error_code == "" then menu.status = M.SWITCHED
-    else menu.status = "Switch refused: " .. (line(value.error, 200) or tostring(value.error_code)) end
+    else menu.status = "Switch refused: " .. (contract.text(value.error, 200) or tostring(value.error_code)) end
     return true
 end
 -- The name a person sees: the label, or the identity's name when unnamed.
@@ -75,7 +78,7 @@ function M.respond(menu: Menu, event: unknown, request_id: string): Response
     if menu.editing then
         if kind == "enter" then
             menu.editing, menu.after, menu.back = false, nil, {}
-            return {close = false, page = M.request(menu, request_id), switch = nil}
+            return {close = false, page = M.request(menu, request_id), switch = nil, create = false}
         elseif kind == "esc" or kind == "escape" then menu.editing = false
         elseif kind == "backspace" then menu.query = menu.query:sub(1, math.floor(math.max(0, #menu.query - 1)))
         elseif (kind == "" or kind == "runes") and key ~= "" and not key:find("%c") and event.ctrl ~= true and event.alt ~= true
@@ -84,25 +87,27 @@ function M.respond(menu: Menu, event: unknown, request_id: string): Response
         end
         return NONE
     end
-    if kind == "esc" or kind == "escape" then return {close = true, page = nil, switch = nil} end
+    if kind == "esc" or kind == "escape" then return {close = true, page = nil, switch = nil, create = false} end
     if kind == "up" then move(menu, -1)
     elseif kind == "down" then move(menu, 1)
     elseif kind == "pgdown" and menu.next_after and not menu.loading then
         menu.back[#menu.back + 1] = menu.after or ""
         menu.after = menu.next_after
-        return {close = false, page = M.request(menu, request_id), switch = nil}
+        return {close = false, page = M.request(menu, request_id), switch = nil, create = false}
     elseif kind == "pgup" and #menu.back > 0 and not menu.loading then
         local previous = table.remove(menu.back)
         menu.after = previous ~= "" and previous or nil
-        return {close = false, page = M.request(menu, request_id), switch = nil}
+        return {close = false, page = M.request(menu, request_id), switch = nil, create = false}
     elseif key == "/" then menu.editing = true
+    elseif (key == "n" or key == "N") and event.ctrl ~= true and event.alt ~= true and not menu.switching then
+        return {close = false, page = nil, switch = nil, create = true}
     elseif kind == "enter" then
         local item = menu.items[menu.selected]
         if not item or menu.switching then return NONE end
         if item.workspace_id == menu.current then menu.status = "This display shows that workspace"; return NONE end
         menu.switching = request_id
         menu.status = "Switching to " .. M.label(item)
-        return {close = false, page = nil, switch = item.workspace_id}
+        return {close = false, page = nil, switch = item.workspace_id, create = false}
     end
     return NONE
 end
@@ -110,7 +115,7 @@ function M.panel(width: integer, height: integer): Panel
     local w = math.floor(math.min(56, width - 2))
     local h = math.floor(math.min(18, height - 2))
     local x = math.floor(math.max(1, width - w))
-    return {x = x, y = 2, width = w, height = h, capacity = math.floor(math.max(0, h - 5))}
+    return {x = x, y = 2, width = w, height = h, capacity = math.floor(math.max(0, h - 6))}
 end
 function M.available(width: integer, height: integer): boolean return width >= 24 and height >= 8 end
 function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, menu: Menu)
@@ -147,6 +152,7 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
             put(2 + row, text, index == menu.selected and chosen or normal)
         end
     end
+    put(panel.height - 3, "N  New workspace", muted)
     local footer = menu.loading and "Loading…" or menu.status
     if footer == "" then
         footer = "Enter switch · / search"

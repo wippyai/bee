@@ -5,6 +5,7 @@
 local test = require("test")
 local tty = require("tty")
 local model = require("model")
+local creation = require("creation")
 local view = require("view")
 local frame = require("frame")
 local appearance = require("appearance")
@@ -45,8 +46,8 @@ local function populated(): model.State
     return state
 end
 
-local function check(width: integer, height: integer, state: model.State): {string}
-    local drawn = view.draw(width, height, appearance.defaults(), state, 0)
+local function check(width: integer, height: integer, state: model.State, form: creation.Form?): {string}
+    local drawn = view.draw(width, height, appearance.defaults(), state, 0, form)
     test.eq(#drawn.rows, height)
     for _, row in ipairs(drawn.rows) do
         test.eq(tty.text.width(row), width)
@@ -82,7 +83,8 @@ local function define_tests()
             test.not_nil(selected)
             test.contains(rows[23], "Enter Open")
             test.contains(rows[23], "A Archive")
-            test.contains(rows[24], "↑↓ move · Enter open · / search · R refresh · S serve · A archive · Esc close")
+            test.contains(rows[23], "N New")
+            test.contains(rows[24], "↑↓ move · Enter open · N new · / search · S serve · A archive · Esc close")
             test.is_nil(find(rows, "APPLICATIONS"))
             model.show(state, true)
             local detail = check(80, 24, state)
@@ -137,12 +139,67 @@ local function define_tests()
             test.not_nil(find(rows, "refused"))
         end)
 
+        test.it("draws the create flow's folder step at every size class", function()
+            local form = creation.new()
+            creation.apply_roots(form, ok({roots = {{root_ref = "bee:workspace_root", access = "write"}, {root_ref = "bee:archive", access = "read"}}}))
+            for _, size in ipairs({{40, 12}, {80, 24}, {120, 36}, {160, 48}}) do
+                local rows = check(size[1], size[2], model.new(), form)
+                test.contains(rows[1], "NEW WORKSPACE")
+                test.not_nil(find(rows, "bee:workspace_root"))
+            end
+            local roots = check(80, 24, model.new(), form)
+            test.contains(roots[1], "Choose a root")
+            test.contains(roots[2], "1 Folder")
+            test.not_nil(find(roots, "›bee:workspace_root"))
+            test.contains(roots[23], "Enter Open")
+            test.contains(roots[24], "U use folder")
+            creation.open(form)
+            creation.apply_folders(form, ok({root_ref = "bee:workspace_root", path = "", access = "write",
+                folders = {{name = "alpha"}, {name = "beta", workspace_id = string.rep("b", 32)}}}))
+            local rows = check(80, 24, model.new(), form)
+            test.contains(rows[1], "bee:workspace_root")
+            local beta = find(rows, "beta")
+            if not beta then error("beta row missing") end
+            test.contains(rows[beta], "workspace")
+            local drawn = view.draw(80, 24, appearance.defaults(), model.new(), 0, form)
+            local kinds: {[string]: boolean} = {}
+            for _, hit in ipairs(drawn.hits) do kinds[hit.kind] = true end
+            for _, kind in ipairs({"folder", "create_open", "create_use", "create_up", "create_cancel"}) do test.is_true(kinds[kind] == true) end
+        end)
+
+        test.it("draws the details step with the new folder only under a writable root", function()
+            local form = creation.new()
+            creation.apply_roots(form, ok({roots = {{root_ref = "bee:workspace_root", access = "write"}}}))
+            creation.open(form)
+            creation.apply_folders(form, ok({root_ref = "bee:workspace_root", path = "", access = "write", folders = {{name = "alpha"}}}))
+            creation.open(form)
+            creation.apply_folders(form, ok({root_ref = "bee:workspace_root", path = "alpha", access = "write", folders = {}}))
+            creation.use(form)
+            for _, size in ipairs({{40, 12}, {80, 24}, {120, 36}, {160, 48}}) do check(size[1], size[2], model.new(), form) end
+            local rows = check(80, 24, model.new(), form)
+            test.contains(rows[2], "✓ Folder")
+            test.contains(rows[2], "2 Details")
+            test.not_nil(find(rows, "›Label       alpha"))
+            test.not_nil(find(rows, "New folder"))
+            test.not_nil(find(rows, "Holds       bee:workspace_root/alpha"))
+            test.contains(rows[23], "Enter Create")
+            creation.field(form, 1)
+            creation.type_text(form, "api")
+            test.not_nil(find(check(80, 24, model.new(), form), "Holds       bee:workspace_root/alpha/api"))
+            local fixed = creation.new()
+            creation.apply_roots(fixed, ok({roots = {{root_ref = "bee:archive", access = "read"}}}))
+            creation.open(fixed)
+            creation.apply_folders(fixed, ok({root_ref = "bee:archive", path = "", access = "read", folders = {}}))
+            creation.use(fixed)
+            test.is_nil(find(check(80, 24, model.new(), fixed), "New folder"))
+        end)
+
         test.it("records a target for every row, tab, field and enabled action", function()
             local state = populated()
             local drawn = view.draw(120, 36, appearance.defaults(), state, 0)
             local kinds: {[string]: boolean} = {}
             for _, hit in ipairs(drawn.hits) do kinds[hit.kind] = true end
-            for _, kind in ipairs({"workspace", "active", "archived", "field", "open", "search", "refresh", "serve", "change"}) do
+            for _, kind in ipairs({"workspace", "active", "archived", "field", "open", "new", "search", "refresh", "serve", "change"}) do
                 test.is_true(kinds[kind] == true)
             end
             local row = frame.hit(drawn.hits, 10, 8)

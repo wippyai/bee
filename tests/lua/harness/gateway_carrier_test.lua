@@ -787,8 +787,11 @@ local function define_tests()
                 BEE_FIXTURE_AUTHOR_VERSION = "1.0.0", BEE_FIXTURE_STREAM = stream("plain.jsonl")}
             local thread_id = thread()
             local attempt_id = fresh("author")
-            local outcome = run_carrier(request(thread_id, attempt_id, environment, nil,
-                "bee.harness.catalog:gateway_author_policy"), "open", nil)
+            -- The gateway takes the delivery destination from the binding, so
+            -- the authoring session is bound to the destination workspace.
+            local authoring = request(thread_id, attempt_id, environment, nil, "bee.harness.catalog:gateway_author_policy")
+            authoring.workspace_id = PROFILES_WORKSPACE
+            local outcome = run_carrier(authoring, "open", nil)
             if not outcome.value then error("authoring carrier failed: " .. tostring(outcome.error)) end
             test.eq((outcome.value.settlement :: Object).outcome, "succeeded")
             local seen = report(thread_id)

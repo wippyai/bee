@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Acceptance test proving two actual bee.host:main actors inside ONE runtime
 // without cross-routing: with independent workspace database resources, and
-// (--logical) as two logical workspaces keyed in one node database.
+// (--logical) as two logical workspaces keyed in one node database, and
+// (--lazy) as hosts a node manager starts on a lease and stops when idle.
 // Explicit Linux acceptance; relies on process group isolation and POSIX signals.
 package main
 
@@ -88,6 +89,7 @@ func run() error {
 	}
 	delayed := mode == "--delayed"
 	command, budget := "workspace-hosts-supervisor", 35*time.Second
+	var overrides []string
 	switch mode {
 	case "":
 	case "--delayed":
@@ -95,6 +97,11 @@ func run() error {
 	case "--logical":
 		// Two logical workspaces served from one node database.
 		command, budget = "workspace-hosts-logical-supervisor", 60*time.Second
+	case "--lazy":
+		// Lazily started hosts under a fixture-owned manager with a small cap
+		// and idle period; the node's own manager service stays stopped.
+		command, budget = "workspace-hosts-lazy-supervisor", 90*time.Second
+		overrides = []string{"-o", "bee:workspace_hosts:lifecycle.auto_start=false"}
 	default:
 		return fmt.Errorf("unknown mode %q", mode)
 	}
@@ -168,7 +175,8 @@ func run() error {
 	// Step 2: Source execution of bounded acceptance test
 	fmt.Println("=== Step 2: Dual Workspace Hosts Source Acceptance ===")
 	sourceEnv := databaseEnvironment(root)
-	if err := runSupervisor(runtime, root, sourceEnv, "Source acceptance", budget, "run", "--verbose", "--host", "bee:workers", "--", command); err != nil {
+	runArgs := append(append([]string{"run", "--verbose", "--host", "bee:workers"}, overrides...), "--", command)
+	if err := runSupervisor(runtime, root, sourceEnv, "Source acceptance", budget, runArgs...); err != nil {
 		return err
 	}
 
@@ -187,7 +195,7 @@ func run() error {
 	fmt.Printf("Deployment build succeeded: %s\n", packedDir)
 
 	packEnv := databaseEnvironment(packedDir)
-	if err := runSupervisor(runtime, packedDir, packEnv, "Pack acceptance", budget, "run", "--verbose", "--host", "bee:workers", "--", command); err != nil {
+	if err := runSupervisor(runtime, packedDir, packEnv, "Pack acceptance", budget, runArgs...); err != nil {
 		return err
 	}
 

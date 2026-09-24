@@ -81,8 +81,9 @@ local function get_value(reply: unknown, thread_id: string, allow_closed: boolea
     local input = decoded and decoded.ok and object(decoded.value)
     if not input or not exact(input, {"summary", "membership"}) then return nil end
     local summary, member = object(input.summary), object(input.membership)
-    if not summary or not member or not exact(summary, {"thread_id", "title", "state", "revision", "head_sequence", "owner_id", "created_at"})
+    if not summary or not member or not exact(summary, {"thread_id", "title", "state", "revision", "head_sequence", "owner_id", "created_at", "workspace_id"})
         or not exact(member, {"member_id", "role", "revision", "active"}) then return nil end
+    if summary.workspace_id ~= nil and not workspace(summary.workspace_id) then return nil end
     local valid_state = summary.state == "open" or (allow_closed == true and summary.state == "closed")
     if summary.thread_id ~= thread_id or not bounds.line(summary.title, bounds.MAX_TITLE_BYTES)
         or not valid_state or not revision(summary.revision)

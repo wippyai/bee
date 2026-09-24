@@ -8,6 +8,12 @@ entries:
     bounds: bee.threads.records:bounds
     contract: bee.protocol:application
     catalog: bee.storage:catalog
+- name: extensions
+  kind: library.lua
+  source: file://extensions.lua
+  modules: [contract]
+  imports:
+    bounds: bee.threads.records:bounds
 - name: backend
   kind: function.lua
   source: file://backend.lua
@@ -18,6 +24,8 @@ entries:
     catalog: bee.storage:catalog
     protocol: bee.workspace.catalog:protocol
     resources: bee.resources.registry:resources
+    recovery: bee.workspace:recovery
+    extensions: bee.workspace.catalog:extensions
   meta: {type: internal}
 - name: create
   kind: function.lua
@@ -66,6 +74,20 @@ entries:
   kind: function.lua
   source: file://operations.lua
   method: restore
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
+- name: inspect
+  kind: function.lua
+  source: file://operations.lua
+  method: inspect
+  modules: *operation_modules
+  imports: *operation_imports
+  security: *operation_security
+- name: search_within
+  kind: function.lua
+  source: file://operations.lua
+  method: search_within
   modules: *operation_modules
   imports: *operation_imports
   security: *operation_security
@@ -127,6 +149,60 @@ entries:
       definition: |
         {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
          "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+  - name: inspect
+    description: What one workspace holds - its row, whether a host serves it, the applications its checkpoint keeps open, and what every workspace extension describes
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+  - name: search_within
+    description: Search inside one workspace; every workspace extension answers with its own hits
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id", "text"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "text": {"type": "string", "minLength": 1, "maxLength": 240},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 50}}}
+- name: extension
+  kind: contract.definition
+  meta:
+    title: Workspace extension
+    comment: A component attaches per-workspace data and search to the workspace catalog and its viewer by binding this contract; the catalog finds every binding and calls it under its execution scope. A binding answers only callers holding bee.workspaces.read on the workspace, with the reply envelope {ok, error {code, message}, value}.
+  methods:
+  - name: describe
+    description: What the component holds for one workspace, as a titled list of at most 50 items and the total
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}}
+    output_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "required": ["ok"], "properties": {"ok": {"type": "boolean"},
+          "error": {"type": "object", "properties": {"code": {"type": "string"}, "message": {"type": "string"}}},
+          "value": {"type": "object", "required": ["title", "items", "total"], "properties": {
+            "title": {"type": "string", "maxLength": 240}, "total": {"type": "integer", "minimum": 0},
+            "items": {"type": "array", "maxItems": 50, "items": {"type": "object", "required": ["label"],
+              "properties": {"label": {"type": "string", "maxLength": 240}, "detail": {"type": "string", "maxLength": 512}}}}}}}}
+  - name: search
+    description: The component's items in one workspace that match a text, at most limit
+    input_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "additionalProperties": false, "required": ["workspace_id", "text"],
+         "properties": {"workspace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"}, "text": {"type": "string", "minLength": 1, "maxLength": 240},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 50}}}
+    output_schemas:
+    - format: application/schema+json
+      definition: |
+        {"type": "object", "required": ["ok"], "properties": {"ok": {"type": "boolean"},
+          "error": {"type": "object", "properties": {"code": {"type": "string"}, "message": {"type": "string"}}},
+          "value": {"type": "object", "required": ["title", "hits"], "properties": {
+            "title": {"type": "string", "maxLength": 240},
+            "hits": {"type": "array", "maxItems": 50, "items": {"type": "object", "required": ["label"],
+              "properties": {"label": {"type": "string", "maxLength": 240}, "detail": {"type": "string", "maxLength": 512}}}}}}}}
 - name: local
   kind: contract.binding
   contracts:
@@ -140,3 +216,5 @@ entries:
       rename: bee.workspace.catalog:rename
       archive: bee.workspace.catalog:archive
       restore: bee.workspace.catalog:restore
+      inspect: bee.workspace.catalog:inspect
+      search_within: bee.workspace.catalog:search_within

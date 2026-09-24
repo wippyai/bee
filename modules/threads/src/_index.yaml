@@ -164,6 +164,8 @@ entries:
     description: Read a thread summary and the caller's membership
   - name: list
     description: List threads the caller can read
+  - name: list_workspace
+    description: List the threads a workspace owns, for a caller the host lets read that workspace's threads
   - name: join
     description: Add or reactivate a member at an expected revision
   - name: leave
@@ -188,6 +190,7 @@ entries:
       create: bee.threads.service:create
       get: bee.threads.service:get
       list: bee.threads.service:list
+      list_workspace: bee.threads.service:list_workspace
       join: bee.threads.service:join
       leave: bee.threads.service:leave
       close: bee.threads.service:close

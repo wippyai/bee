@@ -221,3 +221,21 @@ entries:
     - bee.node.read
     resources: '*'
     effect: allow
+- name: workspace_host_manager_policy
+  kind: security.policy.expr
+  meta:
+    comment: The node host manager checks lease names and whether another composition already serves a workspace
+  policy:
+    expression: 'action == "process.registry.lookup" && (resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$" || resource matches "^bee[.]workspace[.]host/[0-9a-f]{32}$")'
+    actions: [process.registry.lookup]
+    resources: '*'
+    effect: allow
+- name: workspace_host_lease_policy
+  kind: security.policy.expr
+  meta:
+    comment: A lease holder names its lease, finds the node host manager and asks it for a workspace host
+  policy:
+    expression: '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$") || (action == "process.registry.lookup" && resource == "bee.workspace.hosts") || action == "process.send"'
+    actions: [process.registry.register, process.registry.unregister, process.registry.lookup, process.send]
+    resources: '*'
+    effect: allow

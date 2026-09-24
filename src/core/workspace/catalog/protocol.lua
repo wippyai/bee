@@ -7,14 +7,16 @@ local catalog = require("catalog")
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Create = {label: string, root_ref: string, subpath: string, create_directory: boolean}
-type Request = {operation: string, create: Create?, workspace_id: string?, label: string?, query: catalog.Query?}
+type Request = {operation: string, create: Create?, workspace_id: string?, label: string?, query: catalog.Query?, text: string?,
+    limit: integer?}
 
 local M = {}
 M.READ = "bee.workspaces.read"
 M.MANAGE = "bee.workspaces.manage"
 M.CATALOG = "catalog"
 M.DEFAULT_PAGE = 50
-M.OPERATIONS = {"create", "read", "list", "search", "rename", "archive", "restore"}
+M.OPERATIONS = {"create", "read", "list", "search", "rename", "archive", "restore", "inspect", "search_within"}
+M.MAX_WITHIN = 50
 
 function M.fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
@@ -80,7 +82,21 @@ function M.decode(operation: unknown, value: unknown): (Request?, string?)
         if create_directory and subpath == "" then return nil, "create_directory needs a subpath to create" end
         return {operation = name, create = {label = title, root_ref = root_ref, subpath = subpath,
             create_directory = create_directory}}, nil
-    elseif selected == "read" or selected == "archive" or selected == "restore" then
+    elseif selected == "search_within" then
+        local extra = bounds.fields(object, {"workspace_id", "text", "limit"})
+        if extra then return nil, extra end
+        local id, id_error = workspace(object)
+        if not id then return nil, id_error end
+        local text = bounds.line(object.text, catalog.MAX_LABEL_BYTES)
+        if not text then return nil, "text must be one nonempty line of at most " .. tostring(catalog.MAX_LABEL_BYTES) .. " bytes" end
+        local limit = 10
+        if object.limit ~= nil then
+            local number = bounds.integer(object.limit)
+            if not number or number < 1 or number > M.MAX_WITHIN then return nil, "limit must be between 1 and " .. tostring(M.MAX_WITHIN) end
+            limit = number
+        end
+        return {operation = name, workspace_id = id, text = text, limit = limit}, nil
+    elseif selected == "read" or selected == "archive" or selected == "restore" or selected == "inspect" then
         local extra = bounds.fields(object, {"workspace_id"})
         if extra then return nil, extra end
         local id, id_error = workspace(object)
@@ -127,7 +143,7 @@ end
 function M.authority(request: Request): (string, string)
     local operation = request.operation
     if operation == "list" or operation == "search" then return M.READ, M.CATALOG end
-    if operation == "read" then return M.READ, request.workspace_id or "" end
+    if operation == "read" or operation == "inspect" or operation == "search_within" then return M.READ, request.workspace_id or "" end
     if operation == "create" then
         local create = request.create
         return M.MANAGE, create and create.root_ref or ""

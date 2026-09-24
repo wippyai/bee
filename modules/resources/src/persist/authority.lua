@@ -443,6 +443,69 @@ function M.list(value: unknown): Reply
     for index, row in ipairs(grants) do grant_views[index] = grant_view(row :: Row) end
     return succeed({workspace_id = workspace_id, associations = association_views, grants = grant_views})
 end
+-- The workspace extension methods: what one workspace holds here and which
+-- of its resources match a name prefix, for a caller the workspace catalog
+-- lets read that workspace.
+M.READ_WORKSPACE = "bee.workspaces.read"
+M.MAX_DESCRIBED = 50
+local function described(row: Row): {[string]: unknown}
+    local subpath = text(row.subpath) or ""
+    local place = tostring(row.root_ref) .. (subpath ~= "" and ("/" .. subpath) or "")
+    return {label = tostring(row.name), detail = place .. " · " .. tostring(row.allowed_access)}
+end
+local function readable(object: {[string]: unknown}): (string?, Reply?)
+    local workspace_id = bounds.id(object.workspace_id)
+    if not workspace_id then return nil, fail("INVALID", "workspace_id is not an identifier") end
+    if not actor() then return nil, fail("UNAUTHENTICATED", "no actor") end
+    if not security.can(M.READ_WORKSPACE, workspace_id) then return nil, fail("DENIED", "caller may not read workspace " .. workspace_id) end
+    return workspace_id, nil
+end
+function M.describe(value: unknown): Reply
+    local object = bounds.object(value)
+    if not object then return fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"workspace_id"})
+    if unknown_field then return fail("INVALID", unknown_field) end
+    local workspace_id, refused = readable(object)
+    if not workspace_id then return refused :: Reply end
+    local db, open_failure = open()
+    if not db then return open_failure :: Reply end
+    local rows, rows_error = db:query("SELECT name, root_ref, subpath, allowed_access FROM bee_resource_associations WHERE workspace_id = ? ORDER BY name LIMIT ?",
+        {workspace_id, M.MAX_DESCRIBED})
+    local counted, count_error = db:query("SELECT COUNT(*) AS total FROM bee_resource_associations WHERE workspace_id = ?", {workspace_id})
+    db:release()
+    if rows_error or not rows or count_error or not counted then return fail("STORAGE", "read workspace resources") end
+    local items: {{[string]: unknown}} = {}
+    for index, row in ipairs(rows) do items[index] = described(row :: Row) end
+    return succeed({title = "Resources", items = items, total = integer((counted[1] :: Row).total) or #items})
+end
+function M.search(value: unknown): Reply
+    local object = bounds.object(value)
+    if not object then return fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"workspace_id", "text", "limit"})
+    if unknown_field then return fail("INVALID", unknown_field) end
+    local prefix = bounds.line(object.text, 240)
+    if not prefix then return fail("INVALID", "text must be one nonempty line") end
+    local limit = M.MAX_DESCRIBED
+    if object.limit ~= nil then
+        local number = bounds.integer(object.limit)
+        if not number or number < 1 or number > M.MAX_DESCRIBED then return fail("INVALID", "limit must be between 1 and " .. tostring(M.MAX_DESCRIBED)) end
+        limit = number
+    end
+    local workspace_id, refused = readable(object)
+    if not workspace_id then return refused :: Reply end
+    local db, open_failure = open()
+    if not db then return open_failure :: Reply end
+    -- Names are identifiers without control bytes, so the successor of the
+    -- prefix's last byte bounds the range of names that start with it.
+    local upper = prefix:sub(1, #prefix - 1) .. string.char(prefix:byte(#prefix) + 1)
+    local rows, rows_error = db:query("SELECT name, root_ref, subpath, allowed_access FROM bee_resource_associations " ..
+        "WHERE workspace_id = ? AND name >= ? AND name < ? ORDER BY name LIMIT ?", {workspace_id, prefix, upper, limit})
+    db:release()
+    if rows_error or not rows then return fail("STORAGE", "search workspace resources") end
+    local hits: {{[string]: unknown}} = {}
+    for index, row in ipairs(rows) do hits[index] = described(row :: Row) end
+    return succeed({title = "Resources", hits = hits})
+end
 function M.capabilities(): Reply
     return succeed({resource_authority = "granted", max_ttl_ms = M.MAX_TTL_MS, default_ttl_ms = M.DEFAULT_TTL_MS, nonlocal = "refused", transfer = false, node = node()})
 end

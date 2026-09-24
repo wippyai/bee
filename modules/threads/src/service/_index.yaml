@@ -103,6 +103,16 @@ entries:
     types: bee.threads.service:types
   security:
     policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: list_workspace
+  kind: function.lua
+  source: file://list_workspace_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
 - name: join
   kind: function.lua
   source: file://join_method.lua

@@ -225,3 +225,29 @@ entries:
     - bee.gateway.security:store_policy
     - bee.gateway.security:database_ref_policy
     - bee.gateway.security:supervisor_policy
+- name: describe
+  kind: function.lua
+  source: file://describe_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
+- name: search
+  kind: function.lua
+  source: file://search_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy

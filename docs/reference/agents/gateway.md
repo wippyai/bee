@@ -88,6 +88,10 @@ has no peer sessions. See [Configurable managed MCP](../../guides/agents/mcp.md#
 definition named in the caller's launch-policy allow-list; its child is
 admitted through the ordinary carrier path with its own policy.
 
+delivery and publish name their destination `workspace_id`; the gateway
+derives a subject's workspace only from its binding, so it refuses a request
+naming any other workspace and refuses both tools for a binding without one.
+
 application_open is available only through the active, approval-granted
 bee.application:runtime trait. It accepts definition_id, literal arguments and
 an idempotency key, then routes only an already applied, admitted definition

@@ -29,7 +29,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.threads.service:create, bee.threads.service:get, bee.threads.service:list, bee.threads.service:join,
+    resources: [bee.threads.service:create, bee.threads.service:get, bee.threads.service:list, bee.threads.service:list_workspace, bee.threads.service:join,
       bee.threads.service:leave, bee.threads.service:close, bee.threads.service:record, bee.threads.service:read_after, bee.threads.service:send, bee.threads.service:send_status, bee.threads.service:notify,
       bee.threads.service:admit_action, bee.threads.service:prepare_attempt, bee.threads.service:start_attempt, bee.threads.service:request_turn,
       bee.threads.service:end_turn, bee.threads.service:receipt,
@@ -214,3 +214,19 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.threads:harness
+- name: workspace_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/threads-workspace-test.db
+  lifecycle: {auto_start: true}
+- name: workspace_test
+  kind: function.lua
+  source: file://workspace_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [sql, funcs, security]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    database: bee.threads.persist:database
+    reader: bee.threads.persist:reader

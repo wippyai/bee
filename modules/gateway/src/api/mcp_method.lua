@@ -302,6 +302,10 @@ local function handle(): nil
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters)
     elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)
     else arguments = bounds.object(parameters.arguments); if not arguments then argument_error = "tool arguments must be an object" end end
+    if arguments and (tool.name == "delivery" or tool.name == "publish") then
+        argument_error = mcp.bound_workspace(arguments, binding.workspace_id)
+        if argument_error then arguments = nil end
+    end
     if not arguments then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, argument_error or "invalid arguments")); return nil end
     local runtime: RuntimeGrant? = nil
     if tool.name == "application_open" then

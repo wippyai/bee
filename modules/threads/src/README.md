@@ -17,7 +17,7 @@ actor.
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (9 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
+| `bee.threads.persist` | The owned store: checked migration ledger (10 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
 
 ## Dependency interface
 
@@ -78,7 +78,9 @@ members, records, commands), 3 `work_lifecycle` (actions, attempts, turns,
 settlements), 4 `delivery` (record table rebuilt for the delivery families,
 owner, obligations, claim batches, deliveries, dispatch intents,
 subscriptions, pages), 5 `projection` (checkpoints), 6 `carrier`, 7
-`approvals`, 8 `owner_authority`, 9 `notices`. Records are stored
+`approvals`, 8 `owner_authority`, 9 `notices`, 10 `workspace_attribution`
+(the owning workspace on each head, attributed from application owners, and
+the index `list_workspace` walks). Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and
 indexes in one transaction; identical retries replay the stored reply and

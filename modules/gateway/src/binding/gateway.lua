@@ -1033,11 +1033,16 @@ end
 -- This lists what runs; whether the caller may see or reach a session is
 -- the thread owner's membership decision, taken as the caller.
 M.MAX_WORKSPACE_BINDINGS = 256
-function M.workspace_sessions(binding: Binding): ({sessions.Candidate}?, Reply?)
-    local workspace_id = binding.workspace_id
-    if not workspace_id then return nil, fail("UNAVAILABLE", "this binding names no workspace, so it has no peer sessions") end
+-- A listener that was never opened has admitted no session, so a workspace
+-- inspection sees none; a peer lookup still needs the live listener.
+local function running_sessions(workspace_id: string, unopened_is_empty: boolean): ({sessions.Candidate}?, Reply?)
     local db, open_failure = open()
     if not db then return nil, open_failure end
+    if unopened_is_empty then
+        local listener, listener_error = listener_of(db)
+        if listener_error then db:release(); return nil, fail("STORAGE", listener_error) end
+        if not listener then db:release(); return {}, nil end
+    end
     local generation, generation_failure = M.generation(db)
     if not generation then db:release(); return nil, generation_failure end
     local rows, err = db:query("SELECT * FROM bee_gateway_bindings WHERE workspace_id = ? AND revoked_at IS NULL AND sealed_at IS NULL AND epoch = ? ORDER BY created_at DESC LIMIT ?",
@@ -1054,6 +1059,56 @@ function M.workspace_sessions(binding: Binding): ({sessions.Candidate}?, Reply?)
         end
     end
     return sessions.latest(candidates), nil
+end
+function M.workspace_sessions(binding: Binding): ({sessions.Candidate}?, Reply?)
+    local workspace_id = binding.workspace_id
+    if not workspace_id then return nil, fail("UNAVAILABLE", "this binding names no workspace, so it has no peer sessions") end
+    return running_sessions(workspace_id, false)
+end
+-- The workspace extension methods: the agent sessions running in one
+-- workspace, for a caller the workspace catalog lets read that workspace.
+M.READ_WORKSPACE = "bee.workspaces.read"
+M.MAX_DESCRIBED = 50
+local function running(value: unknown, fields: {string}): ({sessions.Candidate}?, {[string]: unknown}?, Reply?)
+    local object = bounds.object(value)
+    if not object then return nil, nil, fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, fields)
+    if unknown_field then return nil, nil, fail("INVALID", unknown_field) end
+    local workspace_id = bounds.id(object.workspace_id)
+    if not workspace_id then return nil, nil, fail("INVALID", "workspace_id is not an identifier") end
+    if not actor() then return nil, nil, fail("UNAUTHENTICATED", "no actor") end
+    if not security.can(M.READ_WORKSPACE, workspace_id) then return nil, nil, fail("DENIED", "caller may not read workspace " .. workspace_id) end
+    local listed, refused = running_sessions(workspace_id, true)
+    if not listed then return nil, nil, refused end
+    return listed, object, nil
+end
+local function session_item(candidate: sessions.Candidate): {[string]: unknown}
+    return {label = candidate.subject, detail = "action " .. candidate.action_id .. " · thread " .. candidate.thread_id}
+end
+function M.describe(value: unknown): Reply
+    local listed, _, refused = running(value, {"workspace_id"})
+    if not listed then return refused :: Reply end
+    local items: {{[string]: unknown}} = {}
+    for index = 1, math.min(#listed, M.MAX_DESCRIBED) do items[index] = session_item(listed[index]) end
+    return succeed({title = "Agent sessions", items = items, total = #listed})
+end
+function M.search(value: unknown): Reply
+    local listed, object, refused = running(value, {"workspace_id", "text", "limit"})
+    if not listed or not object then return refused :: Reply end
+    local wanted = bounds.line(object.text, 240)
+    if not wanted then return fail("INVALID", "text must be one nonempty line") end
+    local limit = M.MAX_DESCRIBED
+    if object.limit ~= nil then
+        local number = bounds.integer(object.limit)
+        if not number or number < 1 or number > M.MAX_DESCRIBED then return fail("INVALID", "limit must be between 1 and " .. tostring(M.MAX_DESCRIBED)) end
+        limit = number
+    end
+    local hits: {{[string]: unknown}} = {}
+    for _, candidate in ipairs(listed) do
+        if #hits >= limit then break end
+        if candidate.subject:sub(1, #wanted) == wanted or candidate.action_id:sub(1, #wanted) == wanted then hits[#hits + 1] = session_item(candidate) end
+    end
+    return succeed({title = "Agent sessions", hits = hits})
 end
 -- submit_hook: an observation the attempt reports about itself, queued in
 -- the gateway store under the binding's identity until a carrier commits

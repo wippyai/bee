@@ -430,6 +430,19 @@ CREATE INDEX bee_thread_notices_target
 CREATE INDEX bee_thread_notices_watcher
   ON bee_thread_notices(watcher_thread_id, state);
 ]]
+-- A thread a workspace owns carries that workspace. Threads created before
+-- this migration are attributed from their owner: an application principal
+-- is bee.application:<workspace_id>:<instance_id>. Other threads stay
+-- node-level. The partial index makes a workspace's threads one index range.
+local WORKSPACE_SQL = [[
+ALTER TABLE bee_thread_heads ADD COLUMN workspace_id TEXT
+  CHECK(workspace_id IS NULL OR (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'));
+UPDATE bee_thread_heads SET workspace_id = substr(owner_actor, 17, 32)
+  WHERE substr(owner_actor, 1, 16) = 'bee.application:' AND substr(owner_actor, 49, 1) = ':'
+    AND length(owner_actor) > 49 AND substr(owner_actor, 17, 32) NOT GLOB '*[^0-9a-f]*';
+CREATE INDEX bee_thread_heads_workspace
+  ON bee_thread_heads(workspace_id, thread_id) WHERE workspace_id IS NOT NULL;
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -440,6 +453,7 @@ local list: {Migration} = {
     {id = 7, name = "approvals", sql = APPROVALS_SQL, rebuild = true},
     {id = 8, name = "owner_authority", sql = OWNER_AUTHORITY_SQL, rebuild = false},
     {id = 9, name = "notices", sql = NOTICES_SQL, rebuild = false},
+    {id = 10, name = "workspace_attribution", sql = WORKSPACE_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

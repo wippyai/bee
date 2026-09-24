@@ -74,6 +74,10 @@ entries:
     description: Re-check a grant for the placement that admitted the subject and audience, and return the exact resource scope
   - name: list
     description: A manager's view of associations and live grants
+  - name: describe
+    description: One workspace's associations as a titled list, for a caller that may read the workspace; the shape of a workspace catalog extension
+  - name: search
+    description: One workspace's associations whose name starts with text, for a caller that may read the workspace
 - name: local
   kind: contract.binding
   contracts:
@@ -85,3 +89,5 @@ entries:
       revoke_all: bee.resources.binding:revoke_all
       resolve: bee.resources.binding:resolve
       list: bee.resources.binding:list
+      describe: bee.resources.binding:describe
+      search: bee.resources.binding:search

@@ -30,6 +30,10 @@ entries:
 - name: caller
   kind: library.lua
   source: file://caller.lua
+- name: host_leases
+  kind: library.lua
+  source: file://host_leases.lua
+  modules: [process, channel, time, uuid]
 - name: status_reader
   kind: library.lua
   source: file://status_reader.lua

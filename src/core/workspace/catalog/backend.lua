@@ -189,6 +189,15 @@ local function handle(value: unknown): protocol.Reply
     end
     local query = request.query
     if not query then return protocol.fail("INVALID", "listing request is missing") end
+    if query.order == "roots" then
+        -- A search across roots walks every root the host admits, in name order.
+        local admitted, roots_error = resources.host_roots()
+        if not admitted then return protocol.fail("UNAVAILABLE", roots_error or "host roots are unavailable") end
+        local roots: {string} = {}
+        for root_ref in pairs(admitted) do roots[#roots + 1] = root_ref end
+        table.sort(roots)
+        query.roots = roots
+    end
     return transact(function(tx: sql.Transaction): (unknown, catalog.Fault?)
         return catalog.page(tx, query)
     end)

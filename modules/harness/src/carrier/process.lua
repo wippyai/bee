@@ -8,6 +8,7 @@ local funcs = require("funcs")
 local uuid = require("uuid")
 local machine = require("machine")
 local placement_protocol = require("placement_protocol")
+local lease = require("lease")
 type Mode = "open" | "resume"
 local function io_for(after: ((string) -> ())?): machine.IO
     return {
@@ -32,7 +33,7 @@ end
 local TOPIC_INPUT = "bee.carrier.input"
 -- run drives one attempt; the test harness passes hooks, production none.
 -- controller is the only process whose input requests are honoured.
-local function run(request: machine.Request, mode: Mode, controller: string?, after: ((string) -> ())?): {[string]: unknown}
+local function drive(request: machine.Request, mode: Mode, controller: string?, after: ((string) -> ())?): {[string]: unknown}
     local io = io_for(after)
     -- Subscriptions come first: the runner announces itself and may emit
     -- output the moment placement starts it.
@@ -242,6 +243,15 @@ local function run(request: machine.Request, mode: Mode, controller: string?, af
     process.unlisten(hints)
     local attempt = machine.close(io, session)
     return {settlement = settlement, placement = attempt, epoch = session.epoch, revision = session.revision}
+end
+-- The run keeps its workspace's host serving until it ends, whichever way.
+local function run(request: machine.Request, mode: Mode, controller: string?, after: ((string) -> ())?): {[string]: unknown}
+    local held, refused = lease.hold(request.workspace_id)
+    if refused then error("workspace host lease: " .. refused) end
+    local ok, result = pcall(drive, request, mode, controller, after)
+    if held then lease.release(held) end
+    if not ok then error(result) end
+    return result
 end
 local function main(request: machine.Request, mode: string, controller: string?): {[string]: unknown}
     local chosen: Mode = "open"

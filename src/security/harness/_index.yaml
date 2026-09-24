@@ -100,3 +100,11 @@ entries:
     - process.context
     resources: '*'
     effect: deny
+- name: workspace_launch_policy
+  kind: security.policy
+  meta:
+    comment: Lets a managed agent launch into a workspace other than its binding's; the host attaches it to the launch tool only for agents it trusts to act across workspaces
+  policy:
+    actions: [bee.workspaces.launch]
+    resources: '*'
+    effect: allow

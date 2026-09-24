@@ -1344,3 +1344,15 @@ entries:
     actions: [bee.harness.profiles.read, bee.harness.profiles.write, funcs.call]
     resources: ['*']
     effect: allow
+- name: run_lease_test
+  kind: function.lua
+  source: file://run_lease_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry, process, channel, time, uuid]
+  security:
+    policies: [bee:workspace_host_lease_policy]
+  imports:
+    test: wippy.test:test
+    lease: bee.harness.carrier:lease
+    leases: bee.application:host_leases

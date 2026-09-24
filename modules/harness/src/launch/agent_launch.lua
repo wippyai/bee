@@ -6,14 +6,18 @@ local bounds = require("bounds")
 local M = {}
 M.MAX_BRIEF_BYTES = 16384
 M.MAX_KEY_BYTES = 64
-type Request = {definition_ref: string, brief: string, idempotency_key: string}
+-- workspace_id names the workspace to launch into; absent, it is the caller's own.
+type Request = {definition_ref: string, brief: string, idempotency_key: string, workspace_id: string?}
+-- The action a caller's own scope must grant on a workspace other than its
+-- binding's before it may launch there.
+M.LAUNCH_ACTION = "bee.workspaces.launch"
 local function fields(value: unknown, allowed: {string}): string?
     return bounds.fields(value, allowed)
 end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown = fields(object, {"definition_ref", "brief", "idempotency_key"})
+    local unknown = fields(object, {"definition_ref", "brief", "idempotency_key", "workspace_id"})
     if unknown then return nil, unknown end
     local definition_ref = bounds.id(object.definition_ref)
     if not definition_ref then return nil, "definition_ref is not an identifier" end
@@ -21,11 +25,18 @@ function M.decode_request(value: unknown): (Request?, string?)
     if not brief or brief == "" then return nil, "brief must be nonempty bounded text" end
     local idempotency_key = bounds.id(object.idempotency_key)
     if not idempotency_key or #idempotency_key > M.MAX_KEY_BYTES then return nil, "idempotency_key is not a bounded identifier" end
-    return {definition_ref = definition_ref, brief = brief, idempotency_key = idempotency_key}, nil
+    local workspace_id: string? = nil
+    if object.workspace_id ~= nil then
+        local id = bounds.id(object.workspace_id)
+        if not id or #id ~= 32 or id:find("[^0-9a-f]") then return nil, "workspace_id must be a workspace identity" end
+        workspace_id = id
+    end
+    return {definition_ref = definition_ref, brief = brief, idempotency_key = idempotency_key, workspace_id = workspace_id}, nil
 end
 -- Whether the caller's own launch policy admits starting this definition at
 -- all. A definition absent from the host-owned list is refused by name. The
--- launch runs in the caller's own workspace, never one a tool argument names.
+-- launch runs in the caller's own workspace unless the caller names another
+-- its own scope may launch into.
 function M.permitted(policy: {[string]: unknown}, definition_ref: string): (boolean, string?)
     local object = bounds.object(policy)
     if not object then return false, "launch policy is unavailable" end

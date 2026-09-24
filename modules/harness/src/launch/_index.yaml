@@ -84,7 +84,7 @@ entries:
   kind: function.lua
   source: file://agent_launch_call_method.lua
   method: handle
-  modules: [funcs, security]
+  modules: [ctx, funcs, security]
   imports:
     bounds: bee.threads.records:bounds
     agent_launch: bee.harness.launch:agent_launch
@@ -92,9 +92,9 @@ entries:
     type: tool
     title: Launch a managed agent
     llm_alias: BeeThreadLaunch
-    llm_description: Start one allow-listed managed agent launch in your own workspace, hand it a brief, and get back the child's thread, action and attempt so you can thread_read, thread_message and thread_wait on it. The child receives exactly its own launch policy's gateway tools. It mints no grant, credential, trait or overlay authority.
+    llm_description: Start one allow-listed managed agent launch in your own workspace, or in workspace_id when your host lets you launch there, hand it a brief, and get back the child's thread, action and attempt so you can thread_read, thread_message and thread_wait on it. The child receives exactly its own launch policy's gateway tools and holds its workspace's host while it runs. It mints no grant, credential, trait or overlay authority.
     input_schema: |
-      {"type":"object","additionalProperties":false,"required":["definition_ref","brief","idempotency_key"],"properties":{"definition_ref":{"type":"string","minLength":1,"maxLength":160},"brief":{"type":"string","minLength":1,"maxLength":16384},"idempotency_key":{"type":"string","minLength":1,"maxLength":64}}}
+      {"type":"object","additionalProperties":false,"required":["definition_ref","brief","idempotency_key"],"properties":{"definition_ref":{"type":"string","minLength":1,"maxLength":160},"brief":{"type":"string","minLength":1,"maxLength":16384},"idempotency_key":{"type":"string","minLength":1,"maxLength":64},"workspace_id":{"type":"string","minLength":32,"maxLength":32}}}
   security:
     policies: [bee.harness.launch:agent_launch_facade_policy]
 - name: agent_launch_backend
@@ -114,9 +114,9 @@ entries:
   meta:
     comment: The agent-launch facade runs as the bound subject; it may read the caller's own launch policy and enter the host-named launch scope, and nothing else. The scope below carries the launch pipeline and mints no grant, credential or overlay authority of its own
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:agent_launch_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:agent_launch_backend")'
-    actions: [funcs.security, security.policy_group.get, funcs.call]
-    resources: [security, bee.harness.launch:agent_launch_execution_scope, bee.harness.launch:agent_launch_backend]
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:agent_launch_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:agent_launch_backend") || action == "security.actor.create"'
+    actions: [funcs.security, security.policy_group.get, funcs.call, security.actor.create]
+    resources: [security, bee.harness.launch:agent_launch_execution_scope, bee.harness.launch:agent_launch_backend, '*']
     effect: allow
 - name: agent_launch_execution_call_policy
   kind: security.policy

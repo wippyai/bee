@@ -65,12 +65,13 @@ local TOOLS: {Tool} = {
             session = {type = "string", minLength = 1, maxLength = 160},
             idempotency_key = {type = "string", minLength = 1, maxLength = 160},
         }}},
-    {name = "thread_launch", description = "Start one host-allow-listed managed agent in your own workspace and thread. Returns the admitted definition and title, submitted brief, and child thread, action and attempt IDs for thread_read, thread_message and thread_wait.", operation = "bee.harness.launch:agent_launch_call",
+    {name = "thread_launch", description = "Start one host-allow-listed managed agent in your thread, in your own workspace or in workspace_id when your host lets you launch there. The child holds its workspace's host while it runs. Returns the admitted definition and title, submitted brief, and child thread, action and attempt IDs for thread_read, thread_message and thread_wait.", operation = "bee.harness.launch:agent_launch_call",
         policies = {TOOL_POLICY_REFS.launch}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"definition_ref", "brief", "idempotency_key"}, properties = {
             definition_ref = {type = "string", minLength = 1, maxLength = 160},
             brief = {type = "string", minLength = 1, maxLength = 16384},
             idempotency_key = {type = "string", minLength = 1, maxLength = 64},
+            workspace_id = {type = "string", minLength = 32, maxLength = 32},
         }}},
     {name = "overlay", description = "Learn this destination's governed overlay contract (read-only guide), or create, inspect, edit or freeze a caller-owned overlay", operation = "bee.governance.binding:overlay_call",
         policies = {TOOL_POLICY_REFS.overlay}, annotations = WRITE_ANNOTATIONS,
@@ -298,14 +299,20 @@ end
 function M.launch_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
-    local unknown_field = bounds.fields(arguments, {"definition_ref", "brief", "idempotency_key"})
+    local unknown_field = bounds.fields(arguments, {"definition_ref", "brief", "idempotency_key", "workspace_id"})
     if unknown_field then return nil, unknown_field end
     local definition_ref, idempotency_key = bounds.id(arguments.definition_ref), bounds.id(arguments.idempotency_key)
     if not definition_ref then return nil, "definition_ref is required and must be an identifier" end
     if not idempotency_key then return nil, "idempotency_key is required and must be an identifier" end
     local brief = bounds.text(arguments.brief, M.MAX_BRIEF_BYTES)
     if not brief or brief == "" then return nil, "brief must be nonempty bounded text" end
-    return {definition_ref = definition_ref, brief = brief, idempotency_key = idempotency_key}, nil
+    local launch: Object = {definition_ref = definition_ref, brief = brief, idempotency_key = idempotency_key}
+    if arguments.workspace_id ~= nil then
+        local workspace_id = bounds.id(arguments.workspace_id)
+        if not workspace_id or #workspace_id ~= 32 or workspace_id:find("[^0-9a-f]") then return nil, "workspace_id must be a workspace identity" end
+        launch.workspace_id = workspace_id
+    end
+    return launch, nil
 end
 
 -- Delivery arguments use the governance delivery protocol's own allow-list;

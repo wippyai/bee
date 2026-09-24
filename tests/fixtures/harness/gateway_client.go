@@ -796,8 +796,9 @@ func reportPeer(url, authorization string, report object, role string) {
 		}
 		return nil
 	}
-	// Start from the thread's head, so everything awaited below is later.
-	scan(func(object) bool { return false })
+	// Each awaits from its thread's first record: the peer may address it as
+	// soon as it lists this session, before this fixture reads anything, and
+	// every match names its sender, recipient and text.
 	switch role {
 	case "waiter":
 		notified := call("thread_notify", object{"session": peer, "idempotency_key": "notify-" + peer})

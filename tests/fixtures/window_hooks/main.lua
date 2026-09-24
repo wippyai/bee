@@ -40,6 +40,41 @@ local function endpoint(): string
     return address :: string
 end
 
+-- Nonsecret markers the fixture child prints, in first-seen order. Terminal
+-- content beyond these markers is never reported.
+local function collect_markers(seen: {string}, screen: string)
+    for marker in screen:gmatch("HOOK_[%u_]+:[%w%-]+") do
+        local known = false
+        for _, previous in ipairs(seen) do
+            if previous == marker then known = true; break end
+        end
+        if not known then table.insert(seen, marker) end
+    end
+end
+
+-- Placement attempts and their evidence, the owner's record of how each native
+-- child started and ended. Evidence carries no credential bytes.
+local function placement_report(): string
+    local db, open_error = store.open()
+    if not db then return "placement store unavailable: " .. tostring(open_error) end
+    local lines: {string} = {}
+    local attempts = db:query([[SELECT attempt_id, execution_state, cleanup_state, exit_code, exit_signal,
+        exit_source, session_ref, home_key FROM bee_placement_attempts ORDER BY created_at]]) or {}
+    for _, row in ipairs(attempts :: {{[string]: unknown}}) do
+        table.insert(lines, string.format("attempt %s execution=%s cleanup=%s exit_code=%s exit_signal=%s exit_source=%s session=%s home=%s",
+            tostring(row.attempt_id), tostring(row.execution_state), tostring(row.cleanup_state), tostring(row.exit_code),
+            tostring(row.exit_signal), tostring(row.exit_source), tostring(row.session_ref), tostring(row.home_key)))
+    end
+    local evidence = db:query([[SELECT attempt_id, sequence, kind, detail FROM bee_placement_evidence
+        ORDER BY attempt_id, sequence LIMIT 80]]) or {}
+    for _, row in ipairs(evidence :: {{[string]: unknown}}) do
+        table.insert(lines, string.format("  %s #%s %s: %s", tostring(row.attempt_id), tostring(row.sequence),
+            tostring(row.kind), tostring(row.detail)))
+    end
+    db:release()
+    return table.concat(lines, "\n")
+end
+
 -- Command hooks submit through the host-selected `hook-post` executable, which
 -- reports acceptance by its exit status; direct hooks report the HTTP status.
 local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook: boolean, command_hooks: boolean)
@@ -467,16 +502,23 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     local retained_home = false
     local continued_hook_submitted = false
+    local continued_markers: {string} = {}
+    local continuation_started = time.now():unix_nano()
     for _ = 1, 200 do
         local frame = view_two:snapshot()
         local screen = frame and table.concat(frame.rows) or ""
+        collect_markers(continued_markers, screen)
         if screen:find("HOOK_HOME_SENTINEL:retained", 1, true) then retained_home = true end
         if screen:find("HOOK_TOOL:" .. accepted_result, 1, true) then continued_hook_submitted = true end
         if retained_home and continued_hook_submitted then break end
         time.sleep("50ms")
     end
-    assert(retained_home, "continuation did not retain the session HOME sentinel")
-    assert(continued_hook_submitted, "continuation hook was not accepted by real gateway")
+    if not (retained_home and continued_hook_submitted) then
+        error(string.format("%s after %d ms; continuation markers: [%s]\n%s",
+            retained_home and "continuation hook was not accepted by real gateway (expected HOOK_TOOL:" .. accepted_result .. ")"
+                or "continuation did not retain the session HOME sentinel",
+            (time.now():unix_nano() - continuation_started) // 1000000, table.concat(continued_markers, " "), placement_report()))
+    end
 
     local total_hooks = 0
     local continuation_attempt_id: string? = nil

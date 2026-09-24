@@ -30,6 +30,13 @@ entries:
 - name: caller
   kind: library.lua
   source: file://caller.lua
+- name: folder_picker
+  kind: library.lua
+  source: file://folder_picker.lua
+  imports:
+    text: bee.application:text
+    caller: bee.application:caller
+    frame: bee.application:frame
 - name: agent_protocol
   kind: library.lua
   source: file://agent_protocol.lua

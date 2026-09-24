@@ -194,22 +194,46 @@ pack: lint
 	mkdir -p dist
 	"$(WIPPY)" pack dist/bee.wapp
 
+# Release CI runs make check as these shards in parallel jobs. Each shard
+# lists check members; check-shards-check proves every step make check runs
+# belongs to exactly one shard.
+CHECK_SHARD_TARGETS := check-shard-foundation check-shard-modules check-shard-services check-shard-windows check-shard-window-failure check-shard-desktop-shell check-shard-desktop-terminal check-shard-desktop-client check-shard-desktop-delivery
+.PHONY: $(CHECK_SHARD_TARGETS) check-shards-check
+check-shard-foundation: check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check
+check-shard-modules: hub-migration-service-check modules-app-check modules-update-check modules-contents-check app-admission-check retained-owner-check hive-supervisor-check
+check-shard-services: threads threads-module harness-module resources-module gateway-check gateway-readiness-check governance-workspace-check saved-profiles-check workspace-hosts-check storage-check thread-storage-check resources-check
+check-shard-windows: window-native-check managed-window-app-check window-hooks-check window-recovery-check
+check-shard-window-failure: managed-window-failure-check
+check-shard-desktop-shell: desktop-shell-check
+check-shard-desktop-terminal: desktop-terminal-check
+check-shard-desktop-client: desktop-client-check
+check-shard-desktop-delivery: desktop-delivery-check
+check: check-shards-check
+check-shards-check:
+	python3 tests/check_shards.py
+	python3 build/check_shards.py
+
 # Source-free acceptance boots run in disposable working directories, including
 # cases without .wippy/. Keep their governance store inside that fixture too.
-check desktop-check client-storage-check: export BEE_GOVERNANCE_DB = governance.db
+check desktop-check desktop-shell-check desktop-terminal-check desktop-client-check desktop-delivery-check client-storage-check $(CHECK_SHARD_TARGETS): export BEE_GOVERNANCE_DB = governance.db
 
-check: identity-native-check installer-check agent-corpus-check docs-agent-check lint test window-native-check managed-window-app-check window-hooks-check threads threads-module harness-module resources-module gateway-check governance-workspace-check portable-pack-atomic-check pack about-check headless-check workspace-hosts-check
+check: identity-native-check installer-check agent-corpus-check docs-agent-check lint test window-native-check managed-window-app-check window-hooks-check threads threads-module harness-module resources-module gateway-check governance-workspace-check portable-pack-atomic-check pack about-check headless-check workspace-hosts-check storage-check thread-storage-check resources-check desktop-check
+
+.PHONY: storage-check thread-storage-check resources-check
+storage-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
+thread-storage-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py
+resources-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources.py
-	$(MAKE) desktop-check WIPPY="$(abspath $(WIPPY))"
 
-.PHONY: desktop-check fresh-pack-check about-check
+.PHONY: desktop-check desktop-shell-check desktop-terminal-check desktop-client-check desktop-delivery-check fresh-pack-check about-check
 about-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/about.py
 fresh-pack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fresh_pack.py
-desktop-check:
+desktop-check: desktop-shell-check desktop-terminal-check desktop-client-check desktop-delivery-check
+desktop-shell-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/connection_ui.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/tui_smoke.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fresh_pack.py
@@ -221,14 +245,17 @@ desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/control_delivery.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/drag_failure.py
 	$(MAKE) window-retirement-check WIPPY="$(abspath $(WIPPY))"
+desktop-terminal-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/console.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/terminal_scroll.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/navigation.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/terminal_selection.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/lifecycle.py
+desktop-client-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/client_desktop.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/recovery.py
+desktop-delivery-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_app.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_decide.py
 	$(MAKE) app-journey-check WIPPY="$(abspath $(WIPPY))"
@@ -241,7 +268,7 @@ include build/native.mk
 ACTIONLINT ?= go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 GITLEAKS ?= go run github.com/zricethezav/gitleaks/v8@v8.30.1
 .PHONY: repository-check
-repository-check:
+repository-check: check-shards-check
 	@command -v shellcheck >/dev/null || { echo 'Install ShellCheck to validate workflow scripts.' >&2; exit 1; }
 	env GOWORK=off $(ACTIONLINT)
 	env GOWORK=off $(GITLEAKS) git --log-opts=--all --redact --no-banner

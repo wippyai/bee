@@ -61,11 +61,13 @@ Dependabot groups weekly Actions and native Go dependency updates to limit PR ru
 Actions default to read-only permissions and require full commit pins. Checkout
 steps do not retain credentials in Git configuration.
 
-PR and main checks run Linux amd64 with the full foundation suite. Release tags
-and manual runs assemble and exercise Linux and macOS, each on amd64 and arm64.
-A single pack job seals the application packs once; every target assembles its
-executable from those packs, and the pack job dry-runs their Hub publication
-without upload credentials.
+Every push and pull request runs the repository check, strict lint and the Lua
+unit suite; no acceptance suite, pack or executable check runs there. Release
+tags and manual runs add the heavy checks: the full `make check` split into
+parallel shards, one pack job, and assembly and executable acceptance on Linux
+and macOS, each on amd64 and arm64. The pack job seals the application packs
+once; every target assembles its executable from those packs, and the pack job
+dry-runs their Hub publication without upload credentials.
 Each Linux target proves the source-free portable deployment and runs executable
 acceptance with networking disabled. Native module checks run on every Bee target,
 with a separate Linux module gate.
@@ -93,8 +95,9 @@ A manual Bee workflow run accepts a preview version and uploads artifacts.
 A Bee application release proceeds in this order:
 
 1. An administrator tags the reviewed main commit (`vMAJOR.MINOR.PATCH`).
-2. The `Native Bee` tag workflow runs `make check`, builds every target and
-   creates a **draft** GitHub release carrying `bee-deployment.tar.gz`.
+2. The `Native Bee` tag workflow runs every `make check` shard, builds every
+   target and creates a **draft** GitHub release carrying
+   `bee-deployment.tar.gz`.
 3. The Hub modules are published from that draft release's deployment: the
    **Bee Hub publication** workflow for the tag, or `make hub-publish-release
    TAG=vX` locally (see [Hub publication](#hub-publication)).
@@ -114,27 +117,43 @@ produces a prerelease; a bare version produces a stable release. The native Go
 module is released separately under `native/vMAJOR.MINOR.PATCH` and never moves
 the latest-release pointer.
 
-The `Native Bee` workflow runs five jobs:
+The `Native Bee` workflow has seven jobs. `validate`, `unit` and `required` run
+on every push, pull request, tag and manual run; `pack`, `check` and `build` run
+only for tags and manual runs, and `release` only for `v*` tags.
 
-- `validate` (ubuntu-24.04) checks the tag, the native pin, then selects the
-  platform matrix: PRs and main run Linux amd64 only; tags and manual runs add
-  Linux arm64, macOS amd64 and macOS arm64.
-- `pack` (ubuntu-24.04) runs `make native-pack` at the selected version, then
-  `make hub-check` against the resulting deployment. It uploads the sealed pack
-  set (`sealed-packs`) for the targets and the portable deployment as
-  `bee-deployment.tar.gz` with its `.sha256`.
-- `build` runs once per target. On every target it builds the pinned toolchain,
-  verifies the runner architecture, restores the sealed pack set, runs the
-  native module checks, and assembles the standalone executable from those packs
-  with `make standalone-sealed`, so every target embeds identical pack bytes.
-  Linux amd64 additionally runs the full foundation suite; each
-  Linux target proves the source-free portable deployment and boots the
-  executable with networking disabled; each macOS target runs the standalone
-  desktop check. Targets other than Linux amd64 run `make installer-check`
-  directly (Linux amd64 already covers it inside `make check`). Each target then
-  packages `dist/bee` into an archive with checksums and uploads it.
-- `required` (`Bee CI`) fails unless the pack job and every matrix target succeeded, so a single
-  target cannot be silently skipped or excused.
+- `validate` (ubuntu-24.04) runs `make repository-check`, which includes
+  `make check-shards-check`; on a tag it also checks the version pattern, main
+  ancestry and the native pin. It then lists the `check-shard-*` targets for
+  the `check` job with `build/check_shards.py --names`.
+- `unit` (`Bee lint and unit`, ubuntu-24.04, 20 minutes) builds the pinned
+  toolchain and runs `make lint` and `make test`.
+- `pack` (`Bee packs`, ubuntu-24.04, 30 minutes) runs `make native-pack` at the
+  selected version, then `make hub-check` against the resulting deployment. It
+  uploads the sealed pack set (`sealed-packs`) for the targets and the portable
+  deployment as `bee-deployment.tar.gz` with its `.sha256`.
+- `check` (`Bee check (<shard>)`, ubuntu-24.04, 30 minutes per shard) runs one
+  `make check-shard-<shard>` per matrix entry. The Makefile defines the shards;
+  `make check-shards-check` fails unless every step `make check` runs belongs to
+  exactly one shard, no shard runs a step outside `make check`, and every shard
+  carries the target variables `check` sets. The shards are `foundation`
+  (repository tools, lint, the Lua unit suite, packing and headless boot),
+  `modules`, `services`, `windows`, `window-failure`, and the four desktop
+  acceptance groups `desktop-shell`, `desktop-terminal`, `desktop-client` and
+  `desktop-delivery`.
+- `build` runs once per target (45 minutes). On every target it builds the
+  pinned toolchain, verifies the runner architecture, restores the sealed pack
+  set, runs the native module checks, and assembles the standalone executable
+  from those packs with `make standalone-sealed`, so every target embeds
+  identical pack bytes. Each Linux target proves the source-free portable
+  deployment and boots the executable with networking disabled; each macOS
+  target runs the standalone desktop check. Targets other than Linux amd64 run
+  `make installer-check` directly (the `foundation` shard covers Linux amd64).
+  Each target then packages `dist/bee` into an archive with checksums and
+  uploads it.
+- `required` (`Bee CI`) fails unless `validate` and `unit` succeeded and, on a
+  tag or manual run, `pack`, every check shard and every build target
+  succeeded; on other runs it requires those three jobs to be skipped. A single
+  shard or target cannot be silently skipped or excused.
 - `release` runs only for `v*` tags. It downloads every target artifact, verifies
   each archive against its `.sha256`, and creates a **draft** GitHub release with
   `--verify-tag --draft --generate-notes`. Stable tags are marked `--latest`;

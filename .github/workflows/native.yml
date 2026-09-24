@@ -20,7 +20,7 @@ jobs:
   validate:
     runs-on: ubuntu-24.04
     outputs:
-      targets: ${{ steps.targets.outputs.value }}
+      shards: ${{ steps.shards.outputs.value }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
@@ -43,18 +43,34 @@ jobs:
     - name: Verify the native pin names the tagged tree
       if: github.ref_type == 'tag'
       run: make native-pin-check NATIVE_PIN_COMMIT="$GITHUB_SHA"
-    - name: Select validation platforms
-      id: targets
-      env:
-        FULL_MATRIX: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
-      run: |
-        targets='[{"goos":"linux","goarch":"amd64","runner":"ubuntu-24.04"}]'
-        if [ "$FULL_MATRIX" = true ]; then
-          targets='[{"goos":"linux","goarch":"amd64","runner":"ubuntu-24.04"},{"goos":"linux","goarch":"arm64","runner":"ubuntu-24.04-arm"},{"goos":"darwin","goarch":"amd64","runner":"macos-26-intel"},{"goos":"darwin","goarch":"arm64","runner":"macos-26"}]'
-        fi
-        echo "value=$targets" >> "$GITHUB_OUTPUT"
+    - name: Select check shards
+      id: shards
+      run: echo "value=$(python3 build/check_shards.py --names)" >> "$GITHUB_OUTPUT"
+  unit:
+    name: Bee lint and unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - name: Build pinned native development runtime
+      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
+      with:
+        mode: toolchain
+        manifest: wippy.build.json
+        output: .wippy/bin/bee-wippy
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: '3.12'
+    - run: python3 -m pip install -r tests/requirements.txt
+    - name: Lint
+      run: make lint WIPPY="$PWD/.wippy/bin/bee-wippy"
+    - name: Lua unit suite
+      run: make test WIPPY="$PWD/.wippy/bin/bee-wippy"
   pack:
     name: Bee packs
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -93,15 +109,48 @@ jobs:
           dist/bee-deployment.tar.gz
           dist/bee-deployment.tar.gz.sha256
         if-no-files-found: error
-  build:
-    name: Bee (${{ matrix.goos }}/${{ matrix.goarch }})
-    needs: [validate, pack]
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+  check:
+    name: Bee check (${{ matrix.shard }})
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.validate.outputs.targets) }}
+        shard: ${{ fromJSON(needs.validate.outputs.shards) }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - name: Build pinned native development runtime
+      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
+      with:
+        mode: toolchain
+        manifest: wippy.build.json
+        output: .wippy/bin/bee-wippy
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: '3.12'
+    - run: python3 -m pip install -r tests/requirements.txt
+    - name: Check shard
+      env:
+        SHARD: ${{ matrix.shard }}
+      run: make "check-shard-$SHARD" WIPPY="$PWD/.wippy/bin/bee-wippy"
+  build:
+    name: Bee (${{ matrix.goos }}/${{ matrix.goarch }})
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    needs: [validate, pack]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - {goos: linux, goarch: amd64, runner: ubuntu-24.04}
+        - {goos: linux, goarch: arm64, runner: ubuntu-24.04-arm}
+        - {goos: darwin, goarch: amd64, runner: macos-26-intel}
+        - {goos: darwin, goarch: arm64, runner: macos-26}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
@@ -129,9 +178,6 @@ jobs:
         name: sealed-packs
     - name: Restore the sealed packs
       run: tar -xf sealed-packs.tar && rm sealed-packs.tar
-    - name: Full foundation checks
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-      run: make check WIPPY="$PWD/.wippy/bin/bee-wippy"
     - name: Native module checks
       run: make native-check
     - name: Installer checks
@@ -172,13 +218,17 @@ jobs:
   required:
     name: Bee CI
     if: always()
-    needs: [validate, pack, build]
+    needs: [validate, unit, pack, check, build]
     runs-on: ubuntu-24.04
     steps:
-    - name: Require every target
+    - name: Require every selected job
       env:
-        RESULTS: ${{ join(needs.*.result, ',') }}
-      run: test "$RESULTS" = success,success,success
+        RESULTS: ${{ needs.validate.result }},${{ needs.unit.result }},${{ needs.pack.result }},${{ needs.check.result }},${{ needs.build.result }}
+        RELEASE_RUN: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
+      run: |
+        expected=success,success,skipped,skipped,skipped
+        if [ "$RELEASE_RUN" = true ]; then expected=success,success,success,success,success; fi
+        test "$RESULTS" = "$expected"
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: required

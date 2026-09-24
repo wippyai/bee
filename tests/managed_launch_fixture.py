@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from workspace import RUNTIME, fixture_workspace  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-SUITES = ("placement", "harness", "driver", "credentials", "threads", "gateway", "managed")
+SUITES = ("placement", "harness", "driver", "credentials", "threads", "gateway", "managed", "principals", "workspace_catalog", "storage")
 TERMINAL_PROOF = "opens a real native terminal for the fixture provider and leaves launch evidence on the thread"
 TURN_PROOF = "starts the carrier to settlement and a retried start recovers the same attempt"
 

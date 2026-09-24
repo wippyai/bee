@@ -210,13 +210,14 @@ def run(packed):
             ui.close()
         with sqlite3.connect(folder / "workspace.db") as db:
             migrations = db.execute("SELECT id, name, checksum FROM workspace_schema_migrations ORDER BY id").fetchall()
-            assert [row[0] for row in migrations] == [1, 2, 3, 4, 5, 6, 7], migrations
+            assert [row[0] for row in migrations] == [1, 2, 3, 4, 5, 6, 7, 8], migrations
             assert migrations[2][1] == "workspace_display_assignments_v1", migrations
             assert migrations[3][1] == "workspace_application_thread_bindings_v1", migrations
             assert migrations[4][1] == "workspace_application_thread_bindings_v2", migrations
             assert migrations[5][1] == "node_workspaces_v1", migrations
             assert migrations[6][1] == "workspace_catalog_order_v1", migrations
-        print(f"Recovery {'pack' if packed else 'source'}: stable identity, fresh execution, layout, acknowledged state, crash recovery, minimize, close tombstone, manual restore, incompatible schema, seven migrations")
+            assert migrations[7][1] == "workspace_folder_on_open_v1", migrations
+        print(f"Recovery {'pack' if packed else 'source'}: stable identity, fresh execution, layout, acknowledged state, crash recovery, minimize, close tombstone, manual restore, incompatible schema, eight migrations")
 
 if __name__ == "__main__":
     run(False)

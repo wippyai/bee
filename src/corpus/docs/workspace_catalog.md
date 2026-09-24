@@ -163,9 +163,10 @@ workspace.
   and served by its own launch composition, as before.
 - **Daemon** (`bee daemon`): the node runs from the folder's state without
   composing the folder as a workspace; it prints `BEE_DAEMON_READY NODE SEED
-  PID` and serves catalog workspaces to clients through leases. A fresh node
-  database still carries the folder's catalog row that the store migrations
-  seed; the daemon neither composes nor serves it.
+  PID` and serves catalog workspaces to clients through leases. The folder's
+  catalog row is created by the classic launch path when it first opens the
+  folder, so a daemon started on a new node database lists no folder
+  workspace; a node that ran in folder mode before keeps its row.
 - **Client** (`bee client`, `bee observe`): joins a running node and never
   starts one. When the node composes a folder workspace the client attaches to
   it; otherwise it shows a workspace picker (one catalog page, `/` label

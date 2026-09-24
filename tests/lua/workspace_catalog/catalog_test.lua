@@ -101,9 +101,9 @@ local function define_tests()
         test.it("lists every active workspace once, in label order, across pages", function()
             seed()
             local rows = walk("label", "", nil, 100)
-            -- The seeded rows, the five named ones and the classic row every
-            -- node database starts with.
-            local active = SCALE - SCALE / 10 + 5 + 1
+            -- The seeded rows and the five named ones; a node database holds
+            -- no folder row until the classic launch path opens the folder.
+            local active = SCALE - SCALE / 10 + 5
             test.eq(#rows, active)
             local seen: {[string]: boolean} = {}
             for index, row in ipairs(rows) do

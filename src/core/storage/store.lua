@@ -261,6 +261,27 @@ CREATE INDEX workspaces_by_label ON workspaces (state, lower(label), workspace_i
 CREATE INDEX workspaces_by_path ON workspaces (state, root_ref, subpath);
 ]]
 
+-- Migration 8 moves the creation of the folder workspace's catalog row from
+-- the schema to the classic launch path. Migrations 2 and 6 seed a folder row
+-- whenever they run; on a new database, the run that also applies this
+-- migration, the seed is removed and workspace_folder records that the row is
+-- still to be created, so a daemon that never opens the folder holds no folder
+-- workspace. A database migrated before keeps its folder row and records it as
+-- created: a folder row that later goes missing is never minted again. The
+-- runner states in temp.workspace_migration_run whether this run started from
+-- an empty ledger.
+local FOLDER_ON_OPEN_SQL = [[
+CREATE TABLE workspace_folder (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    created INTEGER NOT NULL CHECK (created IN (0, 1))
+);
+INSERT INTO workspace_folder (singleton, created)
+SELECT 1, 1 - (SELECT fresh FROM temp.workspace_migration_run);
+DELETE FROM workspaces
+WHERE root_ref = 'bee:workspace_root' AND subpath = ''
+    AND (SELECT fresh FROM temp.workspace_migration_run) = 1
+]]
+
 local migrations: {Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
@@ -269,6 +290,7 @@ local migrations: {Migration} = {
     {id = 5, name = "workspace_application_thread_bindings_v2", sql = APPLICATION_THREAD_BINDINGS_V5_SQL},
     {id = 6, name = "node_workspaces_v1", sql = NODE_WORKSPACES_SQL},
     {id = 7, name = "workspace_catalog_order_v1", sql = CATALOG_ORDER_SQL},
+    {id = 8, name = "workspace_folder_on_open_v1", sql = FOLDER_ON_OPEN_SQL},
 }
 
 local function error_text(prefix: string, err: unknown): string
@@ -334,6 +356,16 @@ local function migrate(db: sql.DB): (boolean, string?)
     if query_err or not rows then
         rollback(tx)
         return false, error_text("read workspace migration ledger", query_err)
+    end
+
+    -- Migrations read whether this run starts a new database from a
+    -- connection-local table that never reaches the file.
+    local _, run_err = tx:execute("CREATE TEMP TABLE IF NOT EXISTS workspace_migration_run (fresh INTEGER NOT NULL CHECK (fresh IN (0, 1)))")
+    if not run_err then _, run_err = tx:execute("DELETE FROM temp.workspace_migration_run") end
+    if not run_err then _, run_err = tx:execute("INSERT INTO temp.workspace_migration_run (fresh) VALUES (?)", {#rows == 0 and 1 or 0}) end
+    if run_err then
+        rollback(tx)
+        return false, error_text("record workspace migration run", run_err)
     end
 
     local known: {[integer]: boolean} = {}
@@ -571,17 +603,57 @@ local function acquire(resource: string?): (sql.DB?, string?)
     return db, nil
 end
 
+-- The folder workspace's catalog row: an unnamed, active row at the node's
+-- workspace root, created with a fresh identity the first time the classic
+-- launch path opens the folder, and only while workspace_folder records it as
+-- not yet created.
+local function create_folder(db: sql.DB): string?
+    local tx, begin_err = db:begin()
+    if not tx then return error_text("begin folder workspace creation", begin_err) end
+    local claimed, claim_err = tx:execute("UPDATE workspace_folder SET created = 1 WHERE singleton = 1 AND created = 0")
+    if claim_err or not claimed then
+        rollback(tx)
+        return error_text("claim the folder workspace", claim_err)
+    end
+    if integer(claimed.rows_affected) == 1 then
+        local _, insert_err = tx:execute(
+            "INSERT INTO workspaces (workspace_id, label, root_ref, subpath, state, created_at, last_used_at) " ..
+            "VALUES (lower(hex(randomblob(16))), '', ?, '', 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), " ..
+            "strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+            {binding.CLASSIC_ROOT})
+        if insert_err then
+            rollback(tx)
+            return error_text("create the folder workspace", insert_err)
+        end
+    end
+    local _, commit_err = tx:commit()
+    if commit_err then
+        rollback(tx)
+        return error_text("commit folder workspace creation", commit_err)
+    end
+    return nil
+end
+
 -- Resolve a selection to exactly one active catalog row. Both forms are
--- unique-key probes and record that a host now uses the workspace.
+-- unique-key probes and record that a host now uses the workspace. The folder
+-- selection creates its row on first use.
 local function resolve(db: sql.DB, selection: binding.Selection): (string?, string?)
     local rows: {{[string]: unknown}}?
     local query_err: unknown
-    if selection.workspace_id then
-        rows, query_err = db:query("SELECT workspace_id, state FROM workspaces WHERE workspace_id = ?",
-            {selection.workspace_id})
-    else
-        rows, query_err = db:query("SELECT workspace_id, state FROM workspaces WHERE root_ref = ? AND subpath = ?",
-            {selection.root_ref, selection.subpath})
+    local function probe()
+        if selection.workspace_id then
+            rows, query_err = db:query("SELECT workspace_id, state FROM workspaces WHERE workspace_id = ?",
+                {selection.workspace_id})
+        else
+            rows, query_err = db:query("SELECT workspace_id, state FROM workspaces WHERE root_ref = ? AND subpath = ?",
+                {selection.root_ref, selection.subpath})
+        end
+    end
+    probe()
+    if not query_err and rows and #rows == 0 and binding.is_classic(selection) then
+        local create_err = create_folder(db)
+        if create_err then return nil, create_err end
+        probe()
     end
     if query_err or not rows then return nil, error_text("read workspace catalog", query_err) end
     if #rows == 0 then return nil, "workspace is not in the node catalog" end

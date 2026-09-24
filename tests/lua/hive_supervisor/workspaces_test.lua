@@ -7,6 +7,8 @@ local security = require("security")
 local registry = require("registry")
 local uuid = require("uuid")
 local types = require("types")
+local store = require("store")
+local binding = require("binding")
 type Object = {[string]: unknown}
 local PROJECTS = "bee.workspace.catalog:projects_fixture"
 
@@ -81,6 +83,9 @@ local function define_tests()
             test.is_nil((rest.value :: Object).next_after)
         end)
         test.it("lists the folder workspace's unnamed catalog row", function()
+            -- The classic launch path creates the folder's row when it opens it.
+            local folder = assert(store.open(nil, binding.classic()))
+            assert(folder:close())
             local unnamed = 0
             local after: string? = nil
             repeat

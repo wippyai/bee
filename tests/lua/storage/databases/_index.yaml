@@ -21,3 +21,13 @@ entries:
   meta: {type: test_support}
   file: .wippy/workspace-catalog-test.db
   lifecycle: {auto_start: true}
+- name: fresh_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/fresh-node-workspaces-test.db
+  lifecycle: {auto_start: true}
+- name: catalog_upgrade_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/catalog-upgrade-workspace-test.db
+  lifecycle: {auto_start: true}

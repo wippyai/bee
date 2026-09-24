@@ -76,12 +76,15 @@ local function close(h: Harness)
     for _, subscription in ipairs(h.unused) do process.unlisten(subscription) end
 end
 -- The stand-in sends one call as the native client; the bridge admits it.
-local function request(h: Harness, operation: string, key: string, input: Object)
-    input.owner_execution = EXECUTION
+local function send_call(h: Harness, operation: string, key: string, input: Object)
     process.send(h.standin, "bee.test.standin.call", {protocol_revision = types.REVISION, request_id = key, idempotency_key = key,
         owner_ref = {node_id = NODE, service_id = protocol.SERVICE}, target = {operation_ref = operation}, input = input,
         deadline = time.now():add("20s"):utc():format(FORMAT)})
     owner.request(h.state, next_message(h.requests, "stand-in call"), 1)
+end
+local function request(h: Harness, operation: string, key: string, input: Object)
+    input.owner_execution = EXECUTION
+    send_call(h, operation, key, input)
 end
 local function answer(h: Harness): types.Reply
     local reply = types.decode_reply(next_message(h.replies, "bridge reply"):payload():data())
@@ -168,6 +171,19 @@ local function define_tests()
             local attached = attach_leased(h)
             test.is_true(attached.ok)
             test.eq((attached.value :: Object).workspace_id, LEASED)
+            close(h)
+        end)
+        test.it("lists for a client that learns the owner execution from the listing", function()
+            local h = harness("discover")
+            send_call(h, protocol.LIST, "list-1", {limit = 1})
+            silent(h.replies, "refusal of a listing that names no owner execution")
+            test.not_nil(h.state.catalog.pending, "the listing did not start")
+            send_call(h, protocol.LIST, "list-2", {owner_execution = string.rep("f", 32), limit = 1})
+            local stale = answer(h)
+            test.eq(stale.error and stale.error.code, "DENIED")
+            send_call(h, protocol.ATTACH, "attach-0", {workspace_id = LEASED, desktop_id = DISPLAY, mode = "control"})
+            local unnamed = answer(h)
+            test.eq(unnamed.error and unnamed.error.code, "INVALID_ARGUMENT")
             close(h)
         end)
         test.it("serves no catalog-reader operation and admits no local application sender", function()

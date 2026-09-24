@@ -266,6 +266,11 @@ function M.session(state: State, node_id: string, workspace_id: string, desktop_
     if not catalog or not catalog.available or not remembered or remembered.owner_generation ~= catalog.owner_generation then return nil end
     return remembered.desktops[M.desktop_key(workspace_id, desktop_id)]
 end
+-- A session ends when the view presenting it ends.
+function M.end_session(state: State, node_id: string, workspace_id: string, desktop_id: string)
+    local remembered = state.sessions[node_id]
+    if remembered then remembered.desktops[M.desktop_key(workspace_id, desktop_id)] = nil end
+end
 function M.selected(state: State): Node?
     if not state.selected_node then return nil end
     return state.index[state.selected_node :: string]
@@ -398,7 +403,7 @@ function M.apply_outcome(state: State, intent: Attach, outcome: Outcome)
         local session: Session = {session_id = M.text(outcome.session_id, 80), mode = M.text(outcome.mode or intent.mode, 16)}
         remembered.desktops[key] = session
         state.sessions[intent.node_id] = remembered
-        state.outcome = "Attached " .. session.mode .. " session " .. session.session_id .. " on " .. names.label(intent.desktop_id)
+        state.outcome = "Attached " .. session.mode .. " session " .. session.session_id .. " on " .. names.label(intent.workspace_id)
     else
         state.outcome = M.text(outcome.code .. ": " .. outcome.message)
     end

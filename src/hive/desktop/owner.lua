@@ -328,7 +328,7 @@ function M.request(state: State, message: process.Message, now: integer)
     end
     local input = protocol.input(operation, call.input)
     if not input then failure(sender, call.request_id, "INVALID_ARGUMENT", "Invalid desktop operation input"); return end
-    if input.execution ~= state.config.execution then failure(sender, call.request_id, "DENIED", "Owner execution changed"); return end
+    if input.execution ~= nil and input.execution ~= state.config.execution then failure(sender, call.request_id, "DENIED", "Owner execution changed"); return end
     local deadline = call.deadline and time.parse(FORMAT, call.deadline)
     local wall = time.now()
     local remaining = deadline and math.floor(deadline:sub(wall):milliseconds()) or 0

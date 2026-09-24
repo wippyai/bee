@@ -16,7 +16,6 @@ M.MAX_CURSOR_BYTES = 2200
 M.WORKSPACES = "bee.hive.host:workspaces"
 M.MAX_ADDRESS_BYTES = 200
 M.MAX_LABEL_BYTES = 120
-M.ATTACH_UNAVAILABLE = "Connecting from Hive Manager is not available yet"
 type Reply = types.Reply
 type Member = {node_id: string, is_local: boolean, addr: string, client_only: boolean?}
 type Desktop = {workspace_id: string, desktop_id: string, label: string, controller: string?, observers: integer?, served: boolean?}
@@ -30,7 +29,8 @@ type Catalog = {available: boolean, reason: string, owner_generation: string, de
 type Query = {label: string?, after: string?}
 type Mode = "control" | "observe"
 type Attach = {node_id: string, workspace_id: string, desktop_id: string, owner_generation: string, mode: Mode, idempotency_key: string}
-type Outcome = {ok: boolean, code: string, message: string, session_id: string?, mode: string?}
+-- viewer: the remote view process presenting an attached session.
+type Outcome = {ok: boolean, code: string, message: string, session_id: string?, mode: string?, viewer: string?}
 type Supervisor = {running: boolean, detail: string}
 type Directory = {
     supervisor: (Directory) -> Supervisor,
@@ -43,10 +43,10 @@ type Directory = {
 type Call = (types.OwnerRef, types.Target, {[string]: unknown}, {timeout: string?}) -> Reply
 type Lookup = () -> (string?, string?)
 type Membership = () -> (unknown, unknown)
-type Live = {local_node: string, lookup: Lookup, membership: Membership, call: Call, timeout: string?}
-local function refused(code: string, message: string): Outcome
-    return {ok = false, code = code, message = message}
-end
+-- open_view attaches a confirmed request through the owner node's desktop
+-- bridge in a remote view and answers once the view is attached or refused.
+type OpenView = (Attach) -> Outcome
+type Live = {local_node: string, lookup: Lookup, membership: Membership, call: Call, open_view: OpenView, timeout: string?}
 local function unavailable(reason: string): Catalog
     return {available = false, reason = reason, owner_generation = "", desktops = {}, next_after = nil}
 end
@@ -162,7 +162,7 @@ function M.live(live: Live): Directory
         end
         return M.decode_workspaces(reply.value)
     end
-    local function attach(_: Directory, _request: Attach): Outcome return refused("UNSUPPORTED_CAPABILITY", M.ATTACH_UNAVAILABLE) end
+    local function attach(_: Directory, request: Attach): Outcome return live.open_view(request) end
     return {supervisor = supervisor, members = members, presence = presence, stats = stats, workspaces = workspaces, attach = attach}
 end
 return M

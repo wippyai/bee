@@ -17,10 +17,22 @@ M.MAX_CURSOR = 2200
 -- separate from the retained owner and ordinary terminal applications. The
 -- owner still checks the caller node against its explicit admission grant.
 M.CLIENT_HOST = "bee.hive.desktop:display_host"
+-- A remote view presents another node's workspace in a local application
+-- window. It runs on the display client host; its parent exchanges these
+-- topics with it: one state (attached or failed), then frames one way and
+-- input, resize and close the other.
+M.VIEWER = "bee.hive.desktop:viewer"
+M.VIEW_STATE = "bee.hive.viewer.state"
+M.VIEW_FRAME = "bee.hive.viewer.frame"
+M.VIEW_INPUT = "bee.hive.viewer.input"
+M.VIEW_RESIZE = "bee.hive.viewer.resize"
+M.VIEW_CLOSE = "bee.hive.viewer.close"
 -- folder: whether the bridge composes the owner's folder workspace; a daemon's does not.
 type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, application: string?, local_clients: boolean?, folder: boolean}
 type Query = {label: string?, after: string?, limit: integer}
-type DesktopInput = {execution: string, workspace_id: string?, desktop_id: string?, mode: "control" | "observe", session_id: string?, name: string?,
+-- execution: the owner generation the request names; a listing may name none
+-- to learn it, since its answer carries the execution it was read under.
+type DesktopInput = {execution: string?, workspace_id: string?, desktop_id: string?, mode: "control" | "observe", session_id: string?, name: string?,
     arguments: {string}?, query: Query?}
 function M.configuration(value: unknown): (Configuration?, string?)
     local object = bounds.object(value)
@@ -50,7 +62,7 @@ function M.input(operation: string, value: unknown): DesktopInput?
     local object = bounds.object(value)
     if not object then return nil end
     local execution = contract.workspace_id(object.owner_execution)
-    if not execution then return nil end
+    if not execution and (operation ~= M.LIST or object.owner_execution ~= nil) then return nil end
     if operation == M.LIST then
         -- One page of the node's workspaces: a label prefix, a cursor and a size.
         if bounds.fields(object, {"owner_execution", "label", "after", "limit"}) then return nil end
@@ -74,6 +86,7 @@ function M.input(operation: string, value: unknown): DesktopInput?
         end
         return {execution = execution, workspace_id = nil, desktop_id = nil, session_id = nil, mode = "observe", name = nil, arguments = nil, query = query}
     end
+    if not execution then return nil end
     local desktop = contract.workspace_id(object.desktop_id)
     if operation == M.CREATE then
         -- Displays belong to the node, so allocation names no workspace.

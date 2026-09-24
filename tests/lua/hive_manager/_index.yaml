@@ -35,3 +35,12 @@ entries:
     directory: bee.hive_manager:directory
     types: bee.hive:types
     appearance: bee.application:appearance
+- name: remote_test
+  kind: function.lua
+  source: file://remote_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    remote: bee.hive_manager:remote
+    appearance: bee.application:appearance

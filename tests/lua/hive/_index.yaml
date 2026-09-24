@@ -257,3 +257,22 @@ entries:
     test: wippy.test:test
     owner: bee.hive.desktop:owner
     protocol: bee.hive.desktop:protocol
+- name: desktop_remote_test
+  kind: function.lua
+  source: file://desktop_remote_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    remote: bee.hive.desktop:remote
+    display: bee.hive.desktop:display
+- name: desktop_viewer_test
+  kind: function.lua
+  source: file://desktop_viewer_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time]
+  imports:
+    test: wippy.test:test
+    protocol: bee.hive.desktop:protocol

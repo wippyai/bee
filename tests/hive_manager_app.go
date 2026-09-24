@@ -124,7 +124,9 @@ func exercise(runtime, root, mode string, packed bool) error {
 	if err := os.WriteFile(rootManifest, []byte(strings.Replace(string(data), "hide_logs: true", "hide_logs: false", 1)), 0600); err != nil {
 		return err
 	}
-	if err := run(runtime, dir, "", "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"); err != nil {
+	// The product composition is linted by `make lint`; this proof lints its fixture
+	// and the manager entries it rewrites.
+	if err := run(runtime, dir, "", "lint", "--ns", "bee.hive_manager_probe,bee.hive_manager", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"); err != nil {
 		return err
 	}
 	marker := "BEE_HIVE_MANAGER_APP_PROBE: OK " + mode

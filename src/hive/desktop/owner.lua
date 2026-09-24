@@ -17,7 +17,7 @@ type Pending = {id: string, op: "attach" | "detach" | "copy" | "launch", call: t
 type Client = {recipient: string, desktop_id: string, session: Session?, pending: Pending?, closing: boolean, dirty: boolean}
 type Receipt = {session_id: string?, digest: string, reply: types.Reply, expires: integer}
 type State = {
-    config: protocol.Configuration, node: string, supervisor: string,
+    config: protocol.Configuration, node: string, supervisor: string, bridge_name: string, owner_name: string,
     ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
     catalogs: Channel<process.Message>, activations: Channel<process.Message>, reader_updates: Channel<process.Message>,
     observers: Channel<process.Message>, catalog: catalog.State,
@@ -58,11 +58,17 @@ function M.start(config: protocol.Configuration, node: string): State
     local reader_updates = listen("bee.retained.catalog_readers")
     local observers = listen(retained.TOPIC_OBSERVE)
     local named = false
+    -- The bridge composes the classic folder workspace.
+    local workspace = workspaces.classic()
+    local key = workspaces.key(workspace)
+    local bridge_name = key and retained.bridge_name(key) or ""
+    local owner_name = key and retained.owner_name(key) or ""
     local function abandon(cause: unknown)
         for _, topic in ipairs({ready, results, copies, launches, catalogs, activations, reader_updates, observers}) do process.unlisten(topic) end
-        if named then process.registry.unregister(retained.BRIDGE_NAME) end
+        if named then process.registry.unregister(bridge_name) end
         error(tostring(cause))
     end
+    if bridge_name == "" or owner_name == "" then abandon("Invalid retained workspace selection") end
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy"}) do
         local policy, err = security.policy(name)
@@ -71,16 +77,16 @@ function M.start(config: protocol.Configuration, node: string): State
     end
     -- The owner route authenticates forwarded readiness by this name, so it is
     -- registered before the retained supervisor can announce anything.
-    local registered, name_error = process.registry.register(retained.BRIDGE_NAME)
+    local registered, name_error = process.registry.register(bridge_name)
     if not registered then abandon(name_error) end
     named = true
     local self = tostring(process.pid())
     local owner, err = process.with_options({}):with_context({["bee.retained_owner"] = self})
-        :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, workspaces.classic(), config.application)
+        :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, workspace, config.application)
     if not owner then abandon(err) end
     local clients: {[string]: Client} = {}
     local receipts: {[string]: Receipt} = {}
-    return {config = config, node = node, supervisor = tostring(owner), ready = ready, results = results, copies = copies, launches = launches,
+    return {config = config, node = node, supervisor = tostring(owner), bridge_name = bridge_name, owner_name = owner_name, ready = ready, results = results, copies = copies, launches = launches,
         workspace_id = "", desktop_id = "", allowed = allowed, enrolled = {}, catalogs = catalogs, activations = activations, reader_updates = reader_updates,
         observers = observers, catalog = catalog.new(),
         catalog_readers = {}, pending_catalog_readers = nil, clients = clients, receipts = receipts,
@@ -156,13 +162,13 @@ local function install_catalog_readers(state: State, snapshot: retained.CatalogR
     state.pending_catalog_readers = nil
 end
 -- announce forwards the retained workspace readiness to the owner route
--- registered under retained.OWNER_NAME. With a recipient, it answers only when
+-- registered under the workspace's retained owner name. With a recipient, it answers only when
 -- that recipient is the registered owner route. Either side may register
 -- first: the bridge announces when readiness arrives and the owner route
 -- observes once its name exists, so one of the two always finds the other.
 local function announce(state: State, recipient: string?)
     if state.stopped or state.workspace_id == "" then return end
-    local route = process.registry.lookup(retained.OWNER_NAME)
+    local route = process.registry.lookup(state.owner_name)
     if not route then return end
     local owner_route = tostring(route)
     if recipient and recipient ~= owner_route then return end
@@ -539,7 +545,7 @@ function M.close(state: State)
     state.stopped = true
     process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
     process.unlisten(state.catalogs); process.unlisten(state.activations); process.unlisten(state.reader_updates); process.unlisten(state.observers)
-    process.registry.unregister(retained.BRIDGE_NAME)
+    process.registry.unregister(state.bridge_name)
     state.catalog_readers = {}; state.pending_catalog_readers = nil
     for recipient in pairs(state.clients) do process.unmonitor(recipient) end
     process.terminate(state.supervisor)

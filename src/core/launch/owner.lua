@@ -15,6 +15,12 @@ local workspaces = require("workspaces")
 local function main()
     local supervisor = ""
     local registered = false
+    -- This command composes the classic folder workspace.
+    local workspace = workspaces.classic()
+    local key = workspaces.key(workspace)
+    local owner_name = key and retained.owner_name(key)
+    local bridge_name = key and retained.bridge_name(key)
+    if not owner_name or not bridge_name then error("Invalid retained workspace selection") end
     local ready, ready_error = process.listen("bee.retained.ready", {message = true})
     if not ready then error(tostring(ready_error)) end
     local function run()
@@ -38,16 +44,16 @@ local function main()
         bridged = ownership.desktop_bridge(service and service.data)
         if ownership.spawn_retained(bridged) then
             local started, start_error = process.with_options({}):with_context({["bee.retained_owner"] = self})
-                :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, workspaces.classic())
+                :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, workspace)
             if not started then error(tostring(start_error)) end
             supervisor = tostring(started)
         else
-            local named, name_error = process.registry.register(retained.OWNER_NAME)
+            local named, name_error = process.registry.register(owner_name)
             if not named then error("Register retained owner route: " .. tostring(name_error)) end
             registered = true
             -- A bridge registered before this name may already hold readiness;
             -- one that registers later announces to this name when it is ready.
-            local bridge = process.registry.lookup(retained.BRIDGE_NAME)
+            local bridge = process.registry.lookup(bridge_name)
             if bridge then
                 local sent, send_error = process.send(tostring(bridge), retained.TOPIC_OBSERVE, {version = 1})
                 if not sent then error("Observe retained workspace bridge: " .. tostring(send_error)) end
@@ -73,7 +79,7 @@ local function main()
                 local sender = tostring(message:from())
                 local announcer = supervisor
                 if bridged then
-                    local bridge = process.registry.lookup(retained.BRIDGE_NAME)
+                    local bridge = process.registry.lookup(bridge_name)
                     announcer = bridge and tostring(bridge) or ""
                 end
                 if announcer ~= "" and sender == announcer and not announced then
@@ -93,7 +99,7 @@ local function main()
     end
     local ok, err = pcall(run)
     if supervisor ~= "" then process.terminate(supervisor) end
-    if registered then process.registry.unregister(retained.OWNER_NAME) end
+    if registered then process.registry.unregister(owner_name) end
     process.unlisten(ready)
     if not ok then error(err) end
 end

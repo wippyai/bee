@@ -40,7 +40,10 @@ presenter rejoin. The fixture reads only disposable stores; it uses the source-f
 executable for all application operations. Its harnesses read processes through
 `tests/processes.py` (ps(1)) and `native/tests/processes` (`/proc` on Linux, sysctl
 on macOS) and hold them through pidfds on Linux and kqueue on macOS, so the same
-assertions run on both.
+assertions run on both. On Linux, `make native-binary-offline-check`
+fetches the harness modules with `make native-harness-modules` and then runs the
+check in an unprivileged user and loopback-only network namespace with
+`GOPROXY=off`; release CI runs it on both Linux targets.
 `build/bootstrap.go` runs the pinned Go assembler.
 The assembler compiles the native components at the version pinned in
 `wippy.build.json`; that version comes from the module proxy, not the checkout.

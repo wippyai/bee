@@ -216,6 +216,19 @@ native-project-nodes-check:
 window-command-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/window_hooks.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/window_hooks.go -runtime "$(abspath $(NATIVE_WIPPY))" -bee "$(abspath $(BEE_BINARY))"
+# Downloads, verified against native/go.sum, every module and the toolchain the
+# Go acceptance harnesses of native-binary-check compile against, so the check
+# can run with the network cut and GOPROXY=off.
+.PHONY: native-harness-modules
+native-harness-modules:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native list -deps -test ../tests/native_agent_selector.go ../tests/native_agent_selector_test.go >/dev/null
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go list -deps tests/window_hooks.go >/dev/null
+# Runs native-binary-check as this user in a fresh network namespace whose only
+# interface is loopback. The harness modules are fetched first while online;
+# GOPROXY=off turns any module the fetch missed into a failure.
+.PHONY: native-binary-offline-check
+native-binary-offline-check: native-harness-modules
+	unshare --user --map-root-user --net -- sh -c 'ip link set lo up && exec env GOPROXY=off "$$0" native-binary-check BEE_BINARY="$$1"' "$(MAKE)" "$(BEE_BINARY)"
 .PHONY: native-agent-selector-check
 native-agent-selector-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native test ../tests/native_agent_selector.go ../tests/native_agent_selector_test.go -count=1

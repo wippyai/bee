@@ -108,3 +108,11 @@ entries:
     actions: [bee.workspaces.launch]
     resources: '*'
     effect: allow
+- name: agent_call_policy
+  kind: security.policy
+  meta:
+    comment: Lets an application call the managed-agent facade; which definitions it may launch is a separate host grant of bee.harness.launch on each definition
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.launch:agent_call]
+    effect: allow

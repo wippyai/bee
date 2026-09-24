@@ -6,15 +6,12 @@
 -- underneath keys on the launching agent's own actor and workspace, and the
 -- child receives exactly its own launch policy's gateway tools.
 local ctx = require("ctx")
-local funcs = require("funcs")
 local bounds = require("bounds")
 local agent_launch = require("agent_launch")
 local policy = require("policy")
 local definitions = require("definitions")
+local caller_launch = require("caller_launch")
 local BINDING_KEY = "bee.gateway.binding"
-local START = "bee.harness.launch:start"
-local RESOLVE = "bee.harness.launch:resolve"
-local SETUP = "bee.harness.launch:setup"
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
 type Fault = {code: string, message: string}
 local function fail(code: string, message: string): Reply
@@ -29,17 +26,6 @@ local function attribution(): ({[string]: unknown}?, Fault?)
     local object = bounds.object(values)
     if not object then return nil, {code = "UNAUTHENTICATED", message = "the call is not bound to a gateway attempt"} end
     return object, nil
-end
-local function reply_of(value: unknown): ({[string]: unknown}?, Fault?)
-    local object = bounds.object(value)
-    if not object then return nil, {code = "INTERNAL", message = "the launch did not answer"} end
-    if object.ok ~= true then
-        local fault = bounds.object(object.error)
-        return nil, {code = tostring(fault and fault.code or "REFUSED"), message = tostring(fault and fault.message or "the launch was refused")}
-    end
-    local admitted = bounds.object(object.value)
-    if not admitted then return nil, {code = "INTERNAL", message = "the launch admission returned no value"} end
-    return admitted, nil
 end
 local function request_workspace(raw: unknown): string?
     local object = bounds.object(raw)
@@ -79,52 +65,15 @@ local function handle(raw: unknown): Reply
     if not permitted then return fail("LAUNCH_NOT_PERMITTED", "this agent may not launch " .. request.definition_ref) end
     local definition, definition_error = definitions.load(request.definition_ref)
     if not definition then return fail("NOT_FOUND", definition_error or "the launch definition is unavailable") end
-    if definition.default_mode == "window" then
-        return fail("LAUNCH_MODE_UNSUPPORTED", "a window definition has no agent-launch carrier; launch a session or batch definition")
+    -- The launching agent reaches a child through the thread tools bound to
+    -- its own attempt. Without an explicit thread choice the child joins the
+    -- caller's thread, so only a definition naming the caller's thread is
+    -- launched that way; a chosen thread is an override its launch admits.
+    if not request.thread and definition.default_mode ~= "window" and definition.thread_policy.kind ~= "caller" then
+        return fail("LAUNCH_THREAD_UNSUPPORTED", "a definition that opens its own thread needs an explicit thread choice")
     end
-    -- The launching agent reaches a child only through the thread tools
-    -- bound to its own attempt. A shared-thread definition lets it wait for
-    -- and read the child where it already is; a definition that opens another
-    -- thread would be unreachable with those tools, so it is refused by name
-    -- rather than started and orphaned.
-    if definition.thread_policy.kind ~= "caller" then
-        return fail("LAUNCH_THREAD_UNSUPPORTED", "only a definition naming the caller's thread can be launched by an agent")
-    end
-    local on_caller_thread = thread_id
-    -- Resolve and fence the measured plan once, so the child starts under the
-    -- exact plan the allow-list admitted and not one that changed underneath.
-    local resolved, resolve_error = funcs.call(RESOLVE, {definition_ref = request.definition_ref, mode = definition.default_mode, workspace_id = workspace_id})
-    if resolve_error then return fail("UNAVAILABLE", tostring(resolve_error)) end
-    local plan, resolve_fault = reply_of(resolved)
-    if not plan then return fail(resolve_fault.code, resolve_fault.message) end
-    local plan_digest = bounds.text(plan.plan_digest, 64)
-    if not plan_digest or #plan_digest ~= 64 then return fail("INTERNAL", "the launch plan has no digest") end
-    -- First-use setup associates the definition's resource roots in the
-    -- caller's own workspace, exactly as a human launch does before admission;
-    -- it foresees no wider workspace management and grants nothing by itself.
-    local setup, setup_error = funcs.call(SETUP, {workspace_id = workspace_id, definition_ref = request.definition_ref, expected_plan_digest = plan_digest})
-    if setup_error then return fail("UNAVAILABLE", tostring(setup_error)) end
-    local prepared = bounds.object(setup)
-    if not prepared or prepared.ok ~= true then
-        return fail("UNAVAILABLE", tostring(prepared and prepared.error or "the launch resource setup failed"))
-    end
-    -- The child request identity is the caller's action plus the retry key:
-    -- the same call replays one child action and attempt, and a changed brief
-    -- under the same key conflicts instead of starting a second child.
-    local request_id, identity_error = agent_launch.request_id(action_id, request.idempotency_key)
-    if not request_id then return fail("INVALID", identity_error or "the request identity failed") end
-    local started, start_error = funcs.call(START, {request_id = request_id, definition_ref = request.definition_ref, workspace_id = workspace_id,
-        brief = request.brief, thread_id = on_caller_thread, parent_action_id = action_id, expected_plan_digest = plan_digest, origin_view = origin_view})
-    if start_error then return fail("UNAVAILABLE", tostring(start_error)) end
-    local admitted, start_fault = reply_of(started)
-    if not admitted then return fail(start_fault.code, start_fault.message) end
-    local child_thread, child_action, child_attempt = bounds.id(admitted.thread_id), bounds.id(admitted.action_id), bounds.id(admitted.attempt_id)
-    if not child_thread or not child_action or not child_attempt then return fail("INTERNAL", "the launch admission is incomplete") end
-    -- Return the durable child identities together with the launch definition
-    -- and the exact bounded brief that selected it. Callers can label the
-    -- child without re-resolving a registry entry or guessing from an action
-    -- id; the definition was already loaded and admitted above.
-    return {ok = true, error = nil, value = {thread_id = child_thread, action_id = child_action, attempt_id = child_attempt,
-        definition_ref = definition.ref, title = definition.title, brief = request.brief}}
+    local reply = caller_launch.start({workspace_id = workspace_id, identity = action_id, thread_id = thread_id,
+        parent_action_id = action_id, origin_view = origin_view}, request, definition)
+    return {ok = reply.ok, error = reply.error, value = reply.value}
 end
 return {handle = handle}

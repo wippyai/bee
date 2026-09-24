@@ -852,6 +852,27 @@ entries:
     resources: [bee.harness.launch:resolve, bee.harness.launch:admit, bee.harness.launch:start, bee.resources.binding:associate, bee.resources.binding:grant,
       bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:list, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
     effect: allow
+- name: agents_probe
+  kind: function.lua
+  source: file://agents_probe.lua
+  method: handle
+  meta: {type: test_support}
+  imports:
+    agents: bee.application:agents
+- name: agents_probe_policy
+  kind: security.policy
+  meta: {type: test_support, comment: Lets the suite call the agents library probe as an application}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.catalog:agents_probe]
+    effect: allow
+- name: app_launch_grant_policy
+  kind: security.policy
+  meta: {type: test_support, comment: The host grant that lets an application launch the fixture definition}
+  policy:
+    actions: [bee.harness.launch]
+    resources: [bee.harness.catalog:fixture_definition]
+    effect: allow
 - name: setup_client_policy
   kind: security.policy.expr
   meta: {type: test_support}

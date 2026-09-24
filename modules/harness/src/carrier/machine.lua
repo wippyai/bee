@@ -1242,7 +1242,7 @@ function M.advance_permissions(io: IO, session: Session, poll: boolean): (boolea
 end
 function M.on_exit(io: IO, session: Session, sender: string, message: placement_protocol.Exit)
     if not from_runner(session, sender, message.generation) then return end
-    session.exit = {code = message.code, signal = message.signal, uncertain = message.uncertain}
+    session.exit = {code = message.code, signal = message.signal, uncertain = message.uncertain, stopped = message.stopped == true}
 end
 function M.drained(session: Session): boolean
     return session.eof.stdout and session.eof.stderr

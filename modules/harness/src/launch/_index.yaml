@@ -84,10 +84,11 @@ entries:
   kind: function.lua
   source: file://agent_launch_call_method.lua
   method: handle
-  modules: [ctx, funcs, security]
+  modules: [ctx]
   imports:
     bounds: bee.threads.records:bounds
     agent_launch: bee.harness.launch:agent_launch
+    caller_launch: bee.harness.launch:caller_launch
   meta:
     type: tool
     title: Launch a managed agent
@@ -97,18 +98,62 @@ entries:
       {"type":"object","additionalProperties":false,"required":["definition_ref","brief","idempotency_key"],"properties":{"definition_ref":{"type":"string","minLength":1,"maxLength":160},"brief":{"type":"string","minLength":1,"maxLength":16384},"idempotency_key":{"type":"string","minLength":1,"maxLength":64},"workspace_id":{"type":"string","minLength":32,"maxLength":32}}}
   security:
     policies: [bee.harness.launch:agent_launch_facade_policy]
+- name: caller_launch
+  kind: library.lua
+  source: file://caller_launch.lua
+  modules: [funcs, security]
+  imports:
+    bounds: bee.threads.records:bounds
+    agent_launch: bee.harness.launch:agent_launch
+    definitions: bee.harness.launch:definitions
 - name: agent_launch_backend
   kind: function.lua
   source: file://agent_launch_method.lua
   method: handle
-  modules: [ctx, funcs]
+  modules: [ctx]
   imports:
     bounds: bee.threads.records:bounds
     agent_launch: bee.harness.launch:agent_launch
     policy: bee.harness.carrier:policy
     definitions: bee.harness.launch:definitions
+    caller_launch: bee.harness.launch:caller_launch
   meta:
     type: internal
+- name: agent_call
+  kind: function.lua
+  source: file://agent_call_method.lua
+  method: handle
+  modules: [security]
+  imports:
+    bounds: bee.threads.records:bounds
+    agent_launch: bee.harness.launch:agent_launch
+    caller_launch: bee.harness.launch:caller_launch
+  meta:
+    comment: The application facade for managed agents; a host grants an application bee.harness.launch on the definitions it may start
+  security:
+    policies: [bee.harness.launch:agent_call_facade_policy]
+- name: agent_call_backend
+  kind: function.lua
+  source: file://agent_call_backend.lua
+  method: handle
+  modules: [funcs, security, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    agent_launch: bee.harness.launch:agent_launch
+    definitions: bee.harness.launch:definitions
+    caller_launch: bee.harness.launch:caller_launch
+    placement_resolver: bee.placement.registry:resolver
+  meta:
+    type: internal
+- name: agent_call_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The application facade runs as the calling application; it may enter the host-named launch scope and call its backend, and nothing else
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:agent_launch_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:agent_call_backend") || action == "security.actor.create"'
+    actions: [funcs.security, security.policy_group.get, funcs.call, security.actor.create]
+    resources: [security, bee.harness.launch:agent_launch_execution_scope, bee.harness.launch:agent_call_backend, '*']
+    effect: allow
 - name: agent_launch_facade_policy
   kind: security.policy.expr
   meta:
@@ -127,7 +172,7 @@ entries:
     actions: [funcs.call]
     resources: [bee.harness.launch:start, bee.harness.launch:admit, bee.harness.launch:resolve, bee.harness.launch:setup, bee.harness.profiles:call,
       bee.threads.service:get, bee.threads.service:create, bee.resources.binding:grant, bee.credentials.binding:issue_projection, bee.threads.carrier:checkpoint,
-      bee.resources.binding:associate, bee.credentials.binding:define]
+      bee.resources.binding:associate, bee.credentials.binding:define, bee.threads.delivery:watch, bee.placement.native:stop]
     effect: allow
 - name: agent_launch_execution_action_policy
   kind: security.policy.expr
@@ -135,8 +180,8 @@ entries:
   meta:
     comment: The membership, grant and projection actions the called owner operations check again in this scope, plus the registry and process-host access launch admission and start require; setup, grants and projections stay in the workspace the launching actor is bound to
   policy:
-    expression: 'action == "registry.get" || action == "registry.snapshot" || action == "process.spawn" || action == "process.spawn.monitored" || action == "process.host" || action == "process.context" || action == "process.monitor" || action == "bee.threads.create" || action == "bee.threads.observe" || ((action == "bee.harness.setup" || action == "bee.resources.grant" || action == "bee.credentials.issue") && resource != "" && resource == actor.meta.workspace_id)'
-    actions: [registry.get, registry.snapshot, process.spawn, process.spawn.monitored, process.host, process.context, process.monitor, bee.harness.setup, bee.threads.create, bee.threads.observe, bee.resources.grant, bee.credentials.issue]
+    expression: 'action == "registry.get" || action == "registry.snapshot" || action == "process.spawn" || action == "process.spawn.monitored" || action == "process.host" || action == "process.context" || action == "process.monitor" || action == "bee.threads.create" || action == "bee.threads.observe" || ((action == "bee.harness.setup" || action == "bee.resources.grant" || action == "bee.credentials.issue") && resource != "" && resource == actor.meta.workspace_id) || (action == "bee.harness.profiles.read" && resource != "" && resource == actor.meta.workspace_id && resource == meta.workspace_id)'
+    actions: [registry.get, registry.snapshot, process.spawn, process.spawn.monitored, process.host, process.context, process.monitor, bee.harness.setup, bee.threads.create, bee.threads.observe, bee.resources.grant, bee.credentials.issue, bee.harness.profiles.read]
     resources: '*'
     effect: allow
 - name: setup_execution_policy

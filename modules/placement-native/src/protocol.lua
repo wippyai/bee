@@ -39,7 +39,8 @@ type Ack = {generation: integer, consumed_through: integer}
 -- deadline: forced truncation, not observed end of output.
 type Output = {attempt_id: string, generation: integer, stream: "stdout" | "stderr", sequence: integer, data: string?, eof: boolean, truncated: boolean?}
 type InputAck = {attempt_id: string, generation: integer, write_id: string, accepted: boolean, reason: string?}
-type Exit = {attempt_id: string, generation: integer, code: integer?, signal: integer?, uncertain: boolean}
+-- stopped: the child ended after a stop its placement was asked for.
+type Exit = {attempt_id: string, generation: integer, code: integer?, signal: integer?, uncertain: boolean, stopped: boolean?}
 -- A status reply counts only from the placement-recorded runner, for the
 -- attempt and attachment generation the service holds, answering the
 -- probe it sent; anything else is unauthenticated traffic.

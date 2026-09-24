@@ -1124,6 +1124,97 @@ local function define_tests()
                 end
             end)
         end)
+        test.it("launches, waits on and cancels a managed agent as an application under its host grant", function()
+            local application = "bee.application:" .. workspace .. ":launcher"
+            local sources_entry = assert(registry.get("bee:credential_sources"))
+            local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
+            sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
+            apply(sources_entry)
+            local function app_call(actor_id: string, names: {string}, request: {[string]: unknown}): admission.Reply
+                local policies: {security.Policy} = {}
+                for index, name in ipairs(names) do policies[index] = assert(security.policy(name)) end
+                local reply, err = funcs.new():with_actor(principals.actor(actor_id, workspace)):with_scope(security.new_scope(policies))
+                    :call("bee.harness.launch:agent_call", request)
+                if err then error("agent_call: " .. tostring(err)) end
+                return reply :: admission.Reply
+            end
+            local granted = {"bee:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
+            local ungranted = {"bee:agent_call_policy"}
+            local key = fresh("app-run")
+            test.eq(code(app_call(application, ungranted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key})), "LAUNCH_NOT_PERMITTED")
+            local function settle(run: {[string]: unknown}): {[string]: unknown}
+                local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
+                local state = ""
+                while math.floor(time.now():unix_nano() / 1000000) < deadline_ms do
+                    local current = value(app_call(application, granted, {operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 5000}))
+                    if current.state == "ended" then return current end
+                    state = tostring(current.state)
+                end
+                error("the application's run did not settle; it is " .. state)
+            end
+            local run = value(app_call(application, granted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key}))
+            test.eq(run.definition_ref, DEFINITION)
+            local early = value(app_call(application, granted, {operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id}))
+            test.is_true(early.state == "starting" or early.state == "running" or early.state == "ended")
+            local replay = value(app_call(application, granted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key}))
+            test.eq(replay.attempt_id, run.attempt_id)
+            local settled = settle(run)
+            test.eq(settled.outcome, "succeeded")
+            test.not_nil(settled.answer)
+            local status = value(app_call(application, granted, {operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id}))
+            test.eq(status.state, "ended")
+            -- Another application does not belong to the run's thread.
+            test.eq(code(app_call("bee.application:" .. workspace .. ":other", granted, {operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id})), "DENIED")
+            test.eq(code(app_call(application, granted, {operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60001})), "INVALID")
+            -- The application agents library drives the same facade.
+            local probe_policies = {"bee:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy", "bee.harness.catalog:agents_probe_policy"}
+            local function probe(request: {[string]: unknown}): {[string]: unknown}
+                local policies: {security.Policy} = {}
+                for index, name in ipairs(probe_policies) do policies[index] = assert(security.policy(name)) end
+                local reply, err = funcs.new():with_actor(principals.actor(application, workspace)):with_scope(security.new_scope(policies))
+                    :call("bee.harness.catalog:agents_probe", request)
+                if err then error("agents probe: " .. tostring(err)) end
+                return reply :: {[string]: unknown}
+            end
+            local shared = fresh("app-shared")
+            value(call_as(application, "bee.threads.service:create", {thread_id = shared, idempotency_key = fresh("create"), title = "Application thread"}))
+            local through_library: {[string]: unknown} = {}
+            with_overrides({"brief", "thread"}, {"thread"}, function()
+                through_library = probe({launch = {definition_ref = DEFINITION, brief = "ping", idempotency_key = fresh("library"),
+                    thread = {thread_id = shared}}})
+            end)
+            if through_library.ok ~= true then error(tostring(((through_library.error or {}) :: {[string]: unknown}).message)) end
+            test.eq(((through_library.run :: {[string]: unknown}).thread_id), shared)
+            test.eq(((through_library.status :: {[string]: unknown}).outcome), "succeeded")
+            local unpermitted = probe({launch = {definition_ref = RETAINED_DEFINITION, brief = "ping", idempotency_key = fresh("library")}})
+            test.eq(((unpermitted.error :: {[string]: unknown}).code), "LAUNCH_NOT_PERMITTED")
+            -- A child that keeps reading its input runs until its owner cancels it.
+            local policy_entry = assert(registry.get(POLICY))
+            local policy_data = policy_entry.data :: {[string]: unknown}
+            local environment = policy_data.environment :: {[string]: unknown}
+            environment.BEE_FIXTURE_READ = "1"
+            apply(policy_entry)
+            local ok, failure = pcall(function()
+                local held = value(app_call(application, granted, {operation = "launch", definition_ref = DEFINITION, brief = "hold", idempotency_key = fresh("app-hold")}))
+                local cancelled = false
+                for _ = 1, 50 do
+                    local reply = app_call(application, granted, {operation = "cancel", thread_id = held.thread_id, attempt_id = held.attempt_id})
+                    if reply.ok then cancelled = true break end
+                    test.eq(code(reply), "NOT_STARTED")
+                    time.sleep("100ms")
+                end
+                test.is_true(cancelled)
+                -- Only the attempt's owner stops it.
+                test.eq(code(app_call("bee.application:" .. workspace .. ":other", granted, {operation = "cancel", thread_id = held.thread_id, attempt_id = held.attempt_id})), "DENIED")
+                test.eq(settle(held).outcome, "cancelled")
+                local library_cancel = probe({launch = {definition_ref = DEFINITION, brief = "hold", idempotency_key = fresh("library-hold")}, cancel = true})
+                if library_cancel.ok ~= true then error(tostring(((library_cancel.error or {}) :: {[string]: unknown}).message)) end
+                test.eq(((library_cancel.status :: {[string]: unknown}).outcome), "cancelled")
+            end)
+            environment.BEE_FIXTURE_READ = nil
+            apply(policy_entry)
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("refuses caller-selected session identities and resources before creating work", function()
             for _, field in ipairs({"session_ref", "session_resource"}) do
                 local request_id = fresh("session-injection")

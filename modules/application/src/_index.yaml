@@ -30,6 +30,12 @@ entries:
 - name: caller
   kind: library.lua
   source: file://caller.lua
+- name: agents
+  kind: library.lua
+  source: file://agents.lua
+  modules: [funcs, time]
+  imports:
+    caller: bee.application:caller
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua

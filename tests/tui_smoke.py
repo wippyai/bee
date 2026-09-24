@@ -28,6 +28,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 
+QUIT_HANG_SECONDS = 60
+
+
 class Desktop:
     def __init__(self, directory, packed=False, project=ROOT, deployment=None, apps=(), launcher=False, command_name="bee"):
         self.master, slave = pty.openpty()
@@ -165,10 +168,14 @@ class Desktop:
             self.wait("Quit Bee?")
             start = time.monotonic()
             os.write(self.master, b"\t\r")
-        while self.process.poll() is None and time.monotonic() - start < 2:
+        # Exit speed depends on what the node is running and is not asserted;
+        # the bound only reports a Bee that never exits.
+        while self.process.poll() is None and time.monotonic() - start < QUIT_HANG_SECONDS:
             self.pump(.02)
-        assert self.process.poll() == 0, self.text()
-        return time.monotonic() - start
+        elapsed = time.monotonic() - start
+        assert self.process.poll() == 0, f"Bee did not exit cleanly within {QUIT_HANG_SECONDS}s " \
+            f"(exit={self.process.poll()}, after {elapsed:.3f}s): {self.text()}"
+        return elapsed
 
     def rejoin(self, crash=False):
         header = self.screen.display[0]

@@ -44,15 +44,33 @@ type Descriptor struct {
 	// join this node's hive. It is bound on the mesh advertise address with an
 	// automatically selected port.
 	Join string `json:"join,omitempty"`
+	// Launch is the identity the starting client handed this owner, 32
+	// lowercase hexadecimal characters, or empty for an owner started by hand.
+	// It lets that client prove its own start request won the state election.
+	Launch string `json:"launch,omitempty"`
 }
 
 // Endpoint is the owner identity the live membership record authenticates:
-// the descriptor without the supervisor and join hints, which membership
-// never carries.
+// the descriptor without the supervisor, join and launch hints, which
+// membership never carries.
 func (d Descriptor) Endpoint() Descriptor {
 	d.Supervisor = ""
 	d.Join = ""
+	d.Launch = ""
 	return d
+}
+
+// LaunchIdentity reports whether value is a well-formed launch identity.
+func LaunchIdentity(value string) bool {
+	if len(value) != 32 {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (d Descriptor) validate() error {
@@ -82,6 +100,9 @@ func (d Descriptor) validate() error {
 		if err != nil || address.Port() == 0 || address.Addr().Zone() != "" || !address.Addr().IsGlobalUnicast() && !address.Addr().IsLoopback() {
 			return ErrDescriptor
 		}
+	}
+	if d.Launch != "" && !LaunchIdentity(d.Launch) {
+		return ErrDescriptor
 	}
 	if d.Supervisor != "" {
 		address, err := pid.ParsePID(d.Supervisor)
@@ -188,7 +209,7 @@ func Decode(data []byte) (Descriptor, error) {
 	if err != nil || first != json.Delim('{') {
 		return Descriptor{}, ErrDescriptor
 	}
-	fields := make(map[string]json.RawMessage, 7)
+	fields := make(map[string]json.RawMessage, 9)
 	for dec.More() {
 		token, err := dec.Token()
 		if err != nil {
@@ -199,7 +220,7 @@ func Decode(data []byte) (Descriptor, error) {
 			return Descriptor{}, ErrDescriptor
 		}
 		switch name {
-		case "version", "execution", "node", "gossip", "transport", "public_key", "supervisor", "join":
+		case "version", "execution", "node", "gossip", "transport", "public_key", "supervisor", "join", "launch":
 		default:
 			return Descriptor{}, ErrDescriptor
 		}
@@ -211,9 +232,10 @@ func Decode(data []byte) (Descriptor, error) {
 	}
 	last, err := dec.Token()
 	// Six fields are required; the owner adds its join listener once it
-	// listens and its supervisor address once the supervisor has registered.
+	// listens and its supervisor address once the supervisor has registered,
+	// and names its launch identity when a client started it.
 	required := 6
-	for _, optional := range []string{"supervisor", "join"} {
+	for _, optional := range []string{"supervisor", "join", "launch"} {
 		if fields[optional] != nil {
 			required++
 		}

@@ -224,7 +224,10 @@ node authored whose name `workspace_applications` accepts: component and
 namespace `app.<overlay_id>`, the application `app.<overlay_id>:app`, the
 rule's approval policy, kinds, modules, admission policies and thread access,
 and a private overlay owner per destination workspace. The instance is
-measured into the policy digest exactly like an explicit row. Availability
+measured into the policy digest exactly like an explicit row. The instance
+sets `allow.auto_start: false`, and preflight refuses any entry declaring
+`lifecycle.auto_start` under such a policy (`AUTO_START_DENIED`); an explicit
+row admits auto start unless it sets that field to `false`. Availability
 lists this node's versions the selected profile publishes, boot recovery
 follows every desired slot whose source the host still selects for that owner,
 and the application catalog admits a governed admission record only while its

@@ -127,7 +127,7 @@ func (m membership) UpdateMeta(map[string]string) {}
 func TestPublisherRequiresStartedMembershipAndPreservesDescriptor(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "discovery")
 	d := sample()
-	component, err := Publisher(dir, d.Execution)
+	component, err := Publisher(dir, d.Execution, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,5 +300,30 @@ func TestDescriptorJoinListenerAddress(t *testing.T) {
 	}
 	if _, err := Decode(bytes.Replace(data, []byte(`"127.0.0.1:4410"`), []byte(`null`), 1)); err == nil {
 		t.Fatal("a null join address was accepted")
+	}
+}
+
+// The launch identity names the start request that produced this owner, so
+// the client that started an owner can tell it won the state election.
+func TestDescriptorLaunchIdentity(t *testing.T) {
+	published := sample()
+	published.Launch = strings.Repeat("b", 32)
+	data, err := json.Marshal(published)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := Decode(data)
+	if err != nil || decoded != published {
+		t.Fatalf("launch identity decoded as %#v, %v", decoded, err)
+	}
+	if endpoint := published.Endpoint(); endpoint.Launch != "" {
+		t.Fatalf("endpoint keeps the launch identity: %#v", endpoint)
+	}
+	for _, bad := range []string{"short", strings.Repeat("g", 32), strings.Repeat("A", 32)} {
+		invalid := published
+		invalid.Launch = bad
+		if err := invalid.validate(); err == nil {
+			t.Fatalf("launch identity %q was accepted", bad)
+		}
 	}
 }

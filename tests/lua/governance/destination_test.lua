@@ -66,7 +66,7 @@ local function resolver(): destination.Resolver
             registry_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
             packages = {["sample/app"] = true}, namespaces = {sample = true},
             kinds = {}, databases = {}, grants = {}, modules = {}, entries = {}, installed_entries = nil, applied = {},
-            exact_expansion = true, migration_barrier = false}
+            exact_expansion = true, migration_barrier = false, auto_start = true}
         return candidate, context, nil
     end
     return value :: destination.Resolver

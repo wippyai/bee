@@ -8,130 +8,103 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strconv"
+	"strings"
 	"testing"
-	"time"
 
+	"github.com/wippyai/bee/native/hive/rendezvous"
 	app "github.com/wippyai/runtime/cmd/app"
 )
 
-type fakeStop struct {
-	held      bool
-	releaseOn int
-	probes    int
-	signalled []int
-}
-
-func (f *fakeStop) seams() stopSeams {
-	return stopSeams{
-		owned: func(string) (bool, error) {
-			f.probes++
-			if f.held && f.releaseOn > 0 && len(f.signalled) > 0 && f.probes >= f.releaseOn {
-				f.held = false
-			}
-			return f.held, nil
-		},
-		signal:   func(pid int) error { f.signalled = append(f.signalled, pid); return nil },
-		interval: time.Millisecond,
-		timeout:  200 * time.Millisecond,
-	}
-}
-
-func writePID(t *testing.T, state string, pid int) {
+func stopIntent(t *testing.T) clientIntent {
 	t.Helper()
-	if err := os.MkdirAll(ownerDirectory(state), 0o700); err != nil {
+	intent, err := parseClientIntent([]string{"stop"})
+	if err != nil || !intent.stop || intent.alone {
+		t.Fatalf("stop intent = %+v, %v", intent, err)
+	}
+	if _, err := parseClientIntent([]string{"stop", "now"}); err == nil {
+		t.Fatal("bee stop accepted an argument")
+	}
+	return intent
+}
+
+func TestStopReportsWhenNoOwnerRunsAndStartsNone(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t)}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	var report bytes.Buffer
+	seams.report = &report
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: stopIntent(t)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(ownerDirectory(state), ownerPIDName), []byte(strconv.Itoa(pid)+"\n"), 0o600); err != nil {
-		t.Fatal(err)
+	if report.String() != "Bee is not running for this project\n" || owner.started != 0 || owner.joined != 0 {
+		t.Fatalf("report %q, started %d, joined %d", report.String(), owner.started, owner.joined)
 	}
 }
 
-func TestStopReportsWhenNoOwnerRuns(t *testing.T) {
+// bee stop asks the running owner over its authenticated client channel and
+// reports once the owner released the state.
+func TestStopAsksTheRunningOwnerAndWaitsForItToRelease(t *testing.T) {
 	state := t.TempDir()
-	stop := &fakeStop{}
+	owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
 	var report bytes.Buffer
-	if err := stopOwner(context.Background(), state, &report, stop.seams()); err != nil {
+	seams.report = &report
+	waited := false
+	seams.released = func(context.Context, string) error { waited = true; return nil }
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: stopIntent(t)}); err != nil {
 		t.Fatal(err)
 	}
-	if report.String() != "Bee is not running for this project\n" || len(stop.signalled) != 0 {
-		t.Fatalf("report %q, signals %v", report.String(), stop.signalled)
-	}
-}
-
-func TestStopSignalsTheOwnerAndWaitsForItToRelease(t *testing.T) {
-	state := t.TempDir()
-	writePID(t, state, 4242)
-	stop := &fakeStop{held: true, releaseOn: 3}
-	var report bytes.Buffer
-	if err := stopOwner(context.Background(), state, &report, stop.seams()); err != nil {
-		t.Fatal(err)
-	}
-	if len(stop.signalled) != 1 || stop.signalled[0] != 4242 {
-		t.Fatalf("signals %v", stop.signalled)
+	if owner.joined != 1 || !owner.lastJoin.Intent.stop || owner.lastJoin.Intent.alone || !waited {
+		t.Fatalf("joined %d with %+v, waited %v", owner.joined, owner.lastJoin.Intent, waited)
 	}
 	if report.String() != "Stopping Bee…\nBee stopped\n" {
 		t.Fatalf("report %q", report.String())
 	}
 }
 
-func TestStopFailsWhenTheOwnerDoesNotStop(t *testing.T) {
+func TestStopFailsWhenTheOwnerRefusesOrKeepsTheState(t *testing.T) {
 	state := t.TempDir()
-	writePID(t, state, 4242)
-	stop := &fakeStop{held: true}
-	if err := stopOwner(context.Background(), state, &bytes.Buffer{}, stop.seams()); err == nil {
-		t.Fatal("an owner that keeps the state was reported stopped")
+	owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	denied := errors.New("DENIED: the host did not grant owner stop")
+	seams.join = func(context.Context, joinRequest) error { return denied }
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: stopIntent(t)}); !errors.Is(err, denied) {
+		t.Fatalf("refused stop = %v", err)
+	}
+	seams = owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	held := errors.New("Bee did not stop")
+	seams.released = func(context.Context, string) error { return held }
+	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: stopIntent(t)}); !errors.Is(err, held) {
+		t.Fatalf("held state = %v", err)
 	}
 }
 
-func TestStopRefusesAnOwnerWithoutARecordedProcess(t *testing.T) {
-	state := t.TempDir()
-	stop := &fakeStop{held: true}
-	err := stopOwner(context.Background(), state, &bytes.Buffer{}, stop.seams())
-	if err == nil || len(stop.signalled) != 0 {
-		t.Fatalf("err %v, signals %v", err, stop.signalled)
+func TestReleasedReturnsOnceNoOwnerHoldsTheState(t *testing.T) {
+	if err := waitReleased(context.Background(), t.TempDir()); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestOwnerRecordsItsProcessWhileItHoldsTheState(t *testing.T) {
-	state := t.TempDir()
-	if err := os.MkdirAll(ownerDirectory(state), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	release, err := recordOwnerProcess(state)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pid, err := readOwnerProcess(state)
-	if err != nil || pid != os.Getpid() {
-		t.Fatalf("pid %d, err %v", pid, err)
-	}
-	if err := release(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := readOwnerProcess(state); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("released owner still records a process: %v", err)
-	}
-}
-
-func TestPlanRoutesStopWithoutAClientOrOwner(t *testing.T) {
+// The owner takes the launch identity its starting client handed it and
+// clears it, so its own children never inherit it.
+func TestOwnerTakesItsLaunchIdentity(t *testing.T) {
 	state := t.TempDir()
 	host := newHost(systemHostResolver())
-	project := makeProject(t)
-	plan, err := host.Plan(context.Background(), app.Launch{
-		Op: app.OpRun, Command: desktopCommand, Args: []string{"stop"},
-		State: state, Dir: project, Explicit: true,
-	})
-	if err != nil {
+	launchID := strings.Repeat("d", 32)
+	t.Setenv(ownerLaunchVariable, launchID)
+	if _, err := host.Plan(context.Background(), app.Launch{Op: app.OpRun, Command: desktopCommand,
+		Args: []string{ownerArgument}, State: state, Dir: state, Explicit: true}); err != nil {
 		t.Fatal(err)
 	}
-	if plan.Run == nil || plan.Prepare != nil || plan.Command != "" || host.ownerState != "" {
-		t.Fatalf("stop plan = %#v", plan)
+	if host.ownerLaunch != launchID {
+		t.Fatalf("owner launch = %q", host.ownerLaunch)
 	}
-	if _, err := host.Plan(context.Background(), app.Launch{
-		Op: app.OpRun, Command: desktopCommand, Args: []string{"stop", "now"},
-		State: state, Dir: project, Explicit: true,
-	}); err == nil {
-		t.Fatal("bee stop accepted an argument")
+	if _, set := os.LookupEnv(ownerLaunchVariable); set {
+		t.Fatal("the owner kept its launch identity in its environment")
+	}
+	t.Setenv(ownerLaunchVariable, "not-an-identity")
+	if _, err := newHost(systemHostResolver()).Plan(context.Background(), app.Launch{Op: app.OpRun, Command: desktopCommand,
+		Args: []string{ownerArgument}, State: state, Dir: state, Explicit: true}); err == nil {
+		t.Fatal("a malformed launch identity was accepted")
 	}
 }

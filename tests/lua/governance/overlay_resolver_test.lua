@@ -95,6 +95,10 @@ local function define_tests()
             for _, diagnostic in ipairs(report.diagnostics) do denied[diagnostic.code] = true end
             test.is_true(denied.MODULE_DENIED)
             test.is_true(denied.GRANT_DENIED)
+            -- The fixture policy admits no auto start, so the self-starting
+            -- entry is refused as well.
+            test.is_false(facts.context.auto_start)
+            test.is_true(denied.AUTO_START_DENIED)
         end)
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec = fixture(nil)

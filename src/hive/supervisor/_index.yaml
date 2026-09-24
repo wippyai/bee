@@ -33,7 +33,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash]
+  modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash, system]
   security: {policies: [bee:hive_policy_exposure_policy]}
   imports:
     types: bee.hive:types
@@ -41,6 +41,7 @@ entries:
     peers: bee.hive.supervisor:peers
     enrollment: bee.hive.supervisor:enrollment
     invites: bee.hive.supervisor:invites
+    owner_stop: bee.hive.supervisor:owner_stop
     registration: bee.hive.supervisor:registration
     admission: bee.hive.supervisor:admission
     thread_admission: bee.hive.supervisor:thread_admission
@@ -50,6 +51,12 @@ entries:
     desktop_protocol: bee.hive.desktop:protocol
     catalog: bee.hive.registry:catalog
     workspace_commands: bee.hive.supervisor:workspace_commands
+- name: owner_stop
+  kind: library.lua
+  source: file://owner_stop.lua
+  imports:
+    bounds: bee.hive:bounds
+    types: bee.hive:types
 - name: workspace_commands
   kind: library.lua
   source: file://workspace_commands.lua

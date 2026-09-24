@@ -34,7 +34,7 @@ local function facts(): ({[string]: unknown}, preflight.Candidate, preflight.Con
     local context: preflight.Context = {node_id = "node-a", registry_revision = 4,
         registry_digest = SHA, policy_digest = SHA, packages = {["demo/app"] = true},
         namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {}, grants = {},
-        modules = {}, entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, migration_barrier = false}
+        modules = {}, entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, migration_barrier = false, auto_start = true}
     return plan, candidate, context
 end
 
@@ -111,7 +111,7 @@ local function define_tests()
                 registry_digest = SHA, policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
                 kinds = {["function.lua"] = true}, databases = {["host:db"] = true}, grants = {}, modules = {},
                 entries = {["host:db"] = database}, installed_entries = nil, applied = {}, exact_expansion = true,
-                migration_barrier = true}
+                migration_barrier = true, auto_start = true}
             local result, problem = measure.measure(plan, candidate, context)
             if not result then error(tostring(problem)) end
             test.eq(#((result.report :: preflight.Report).pending_migrations), 1)

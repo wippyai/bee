@@ -20,6 +20,7 @@ type Policy = {node_id: string, policy_digest: string, packages: {[string]: bool
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
     applied_databases: {[string]: unknown}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
+    auto_start: boolean,
     applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?}
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?)}
@@ -222,7 +223,7 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
         kinds = policy.kinds, databases = policy.databases, grants = policy.grants, modules = policy.modules,
         database_bindings = bindings, entries = current, installed_entries = installed, applied = policy.applied,
         applied_databases = policy.applied_databases or {}, exact_expansion = true,
-        migration_barrier = policy.migration_barrier == true}, nil
+        migration_barrier = policy.migration_barrier == true, auto_start = policy.auto_start == true}, nil
 end
 
 function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?, string?)

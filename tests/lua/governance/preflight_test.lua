@@ -17,7 +17,7 @@ local function fixture(): (preflight.Candidate, preflight.Context)
     local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA, policy_digest = SHA,
         packages = {["wolfy-j/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
         entries = entries, installed_entries = nil,
-        applied = {}, grants = {}, modules = {}, exact_expansion = true, migration_barrier = false}
+        applied = {}, grants = {}, modules = {}, exact_expansion = true, migration_barrier = false, auto_start = true}
     return candidate, context
 end
 local function checked(candidate: preflight.Candidate, context: preflight.Context): preflight.Report
@@ -69,6 +69,18 @@ local function define_tests()
             shaped({source = "file://run.lua", method = "handle", modules = {"json"}, imports = {"bee.demo:library"}})
             test.is_true(has(checked(candidate, context), "CONFIG_SHAPE"))
         end)
+        test.it("refuses an entry that starts itself where the host admits no auto start", function()
+            local candidate, context = fixture()
+            context.migration_barrier = true
+            candidate.entries[1].auto_start = true
+            test.is_true(checked(candidate, context).ready)
+            context.auto_start = false
+            local refused = checked(candidate, context)
+            test.is_false(refused.ready)
+            test.is_true(has(refused, "AUTO_START_DENIED"))
+            candidate.entries[1].auto_start = false
+            test.is_true(checked(candidate, context).ready)
+        end)
         test.it("measures an exact destination plan without executing it", function()
             local candidate, context = fixture()
             local report = checked(candidate, context)
@@ -95,7 +107,7 @@ local function define_tests()
                     grants = context.grants, modules = context.modules, database_bindings = bindings,
                     entries = context.entries, installed_entries = context.installed_entries,
                     applied = context.applied, exact_expansion = context.exact_expansion,
-                    migration_barrier = context.migration_barrier}
+                    migration_barrier = context.migration_barrier, auto_start = context.auto_start}
                 return candidate, mapped
             end
             local candidate, context = logical({database_id = "host:db", table_prefix = "demo_"})

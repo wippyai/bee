@@ -189,6 +189,16 @@ entries:
     - bee.hive.supervisor:admit_policy
     - bee.hive.supervisor:advertise
     effect: allow
+- name: hive_owner_stop_policy
+  kind: security.policy
+  meta:
+    comment: Selected by the host for its Hive supervisor to shut its own owner down at the request of an enrolled local client; without it bee stop is refused
+  policy:
+    actions:
+    - hive.owner.stop
+    - system.exit
+    resources: '*'
+    effect: allow
 - name: hive_invite_policy
   kind: security.policy
   meta:

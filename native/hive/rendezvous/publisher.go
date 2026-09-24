@@ -14,7 +14,7 @@ import (
 // Register it only on the path holding the application-state lock. Its Start
 // runs after the native cluster, and failure prevents successful boot. No socket
 // is created, and no cleanup removes the next owner's descriptor.
-func Publisher(directory, execution string) (boot.Component, error) {
+func Publisher(directory, execution, launch string) (boot.Component, error) {
 	store, err := New(directory)
 	if err != nil {
 		return nil, err
@@ -30,6 +30,7 @@ func Publisher(directory, execution string) (boot.Component, error) {
 			if err != nil {
 				return err
 			}
+			descriptor.Launch = launch
 			return store.Publish(ctx, descriptor)
 		},
 	}), nil

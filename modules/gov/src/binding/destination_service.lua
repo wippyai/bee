@@ -39,14 +39,14 @@ type Profile = {workspace_id: string, source_node: string, source_workspace: str
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
-    policy_digest: string}
+    auto_start: boolean, policy_digest: string}
 type Configuration = activation_profiles.Configuration
 type Result = transaction.Result
 type ResolverRoot = {component: string, version: string, parameters: {unknown}}
 type ResolverPolicy = {node_id: string, policy_digest: string, packages: Set,
     namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, applied: {[string]: unknown}, applied_databases: {[string]: unknown},
-    migration_barrier: boolean, applications: {Object}?, workspace_id: string?, overlay_owner: string?,
+    migration_barrier: boolean, auto_start: boolean, applications: {Object}?, workspace_id: string?, overlay_owner: string?,
     source_node: string?, source_workspace: string?}
 type Resolver = {resolve: (Resolver, unknown) -> (unknown?, unknown?, string?)}
 
@@ -141,7 +141,8 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
             applications = profile_value.applications, workspace_id = profile_value.workspace_id,
             overlay_owner = profile_value.overlay_owner, source_node = profile_value.source_node,
             source_workspace = profile_value.source_workspace,
-            applied = applied, applied_databases = applied_databases, migration_barrier = true}, nil
+            applied = applied, applied_databases = applied_databases, migration_barrier = true,
+            auto_start = profile_value.auto_start}, nil
     end
     if profile_value.resolver == "overlay" then
         return overlay_resolver.new({overlay_owner = profile_value.overlay_owner,

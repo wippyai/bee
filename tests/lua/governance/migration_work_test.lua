@@ -42,7 +42,7 @@ local function fixture(existing_database: boolean?): (artifact.Artifact, preflig
         kinds = {["db.sql.sqlite"] = true, ["function.lua"] = true}, databases = {[target_db] = true},
         grants = {}, modules = {}, database_bindings = bindings,
         entries = destination_entries, installed_entries = nil, applied = {}, exact_expansion = true,
-        migration_barrier = false}
+        migration_barrier = false, auto_start = true}
     return exact, candidate, context
 end
 

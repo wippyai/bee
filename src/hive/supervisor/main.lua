@@ -12,6 +12,8 @@ local bounds = require("bounds")
 local peers = require("peers")
 local enrollment = require("enrollment")
 local invites = require("invites")
+local owner_stop = require("owner_stop")
+local system = require("system")
 local security = require("security")
 local crypto = require("crypto")
 local hash = require("hash")
@@ -277,6 +279,28 @@ local function main(configuration: unknown)
             send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {invite_id = redeemed.invite_id, node_id = input.node_id}))
         end
     end
+    -- stop shuts this owner down gracefully at the request of an enrolled
+    -- local client, after answering it; the runtime's shutdown retires the
+    -- desktop exactly as a termination signal does.
+    local function stop(sender: string, call: types.Call, now_ms: integer)
+        local sender_node, sender_host = types.pid_parts(sender)
+        local request, refusal = owner_stop.decode(call, node)
+        if not request then send(sender, types.TOPIC_REPLY, types.reply_error(call.request_id, refusal :: types.Fault)); return end
+        if sender_host == desktop_protocol.CLIENT_HOST and sender_node and not local_clients[sender_node] then reconcile_enrollment(now_ms) end
+        if sender_host ~= desktop_protocol.CLIENT_HOST or not sender_node or not local_clients[sender_node] then
+            failed(sender, call.request_id, "DENIED", "only an enrolled local client stops its owner"); return
+        end
+        if not security.can(owner_stop.ACTION, owner_stop.STOP) then
+            failed(sender, call.request_id, "DENIED", "the host did not grant owner stop"); return
+        end
+        local stopping = owner_stop.stops(request, sender_node :: string, local_clients)
+        send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {stopping = stopping}))
+        if stopping then
+            log:info("Owner stop requested by a local client", {node = sender_node})
+            local exited, exit_error = system.exit(0)
+            if not exited then log:error("Owner stop failed", {cause = tostring(exit_error)}) end
+        end
+    end
     -- command runs one bee workspace command of an enrolled local client on
     -- its worker, as a route: the loop owns its deadline and correlation, and
     -- a command past its deadline is answered as an unknown outcome.
@@ -331,6 +355,10 @@ local function main(configuration: unknown)
         local join_call = types.decode_call(message:payload():data())
         if join_call and join_call.owner_ref.service_id == invites.SERVICE then
             join(tostring(message:from()), join_call, elapsed())
+            return
+        end
+        if join_call and join_call.owner_ref.service_id == owner_stop.SERVICE then
+            stop(tostring(message:from()), join_call, elapsed())
             return
         end
         if join_call and join_call.owner_ref.service_id == workspace_commands.SERVICE then

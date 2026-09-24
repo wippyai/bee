@@ -87,7 +87,7 @@ local function shifting_resolver(entry: {[string]: unknown}, world: {[string]: u
                 registry_digest = world.digest :: string,
                 policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
                 kinds = {[entry_kind] = true}, databases = {}, grants = {}, modules = {},
-                entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, migration_barrier = false}
+                entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, migration_barrier = false, auto_start = true}
         if world.application_admission ~= nil then
             (context :: any).application_admission = world.application_admission
         end
@@ -124,7 +124,7 @@ local function migration_resolver(entry: {[string]: unknown}, state: {[string]: 
                 databases = {["host:db"] = true}, grants = {}, modules = {}, entries = {["host:db"] = database},
                 installed_entries = nil,
                 database_bindings = nil, applied = applied, applied_databases = nil,
-                exact_expansion = true, migration_barrier = true}, nil
+                exact_expansion = true, migration_barrier = true, auto_start = true}, nil
     end
     return value :: owner.Resolver
 end

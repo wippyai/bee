@@ -44,9 +44,9 @@ const (
 // clients, the join listener that redeems Hive invites, and the enrollment
 // publisher that mirrors the trusted client and peer directories into the
 // supervisor's admission entry.
-func ownerComponents(state, execution string) ([]boot.Component, error) {
+func ownerComponents(state, execution, launch string) ([]boot.Component, error) {
 	directory := filepath.Join(state, rendezvous.DirectoryName)
-	rendezvousPublisher, err := rendezvous.Publisher(directory, execution)
+	rendezvousPublisher, err := rendezvous.Publisher(directory, execution, launch)
 	if err != nil {
 		return nil, err
 	}
@@ -84,11 +84,7 @@ func prepareOwner(state string, folder bool) (boot.Config, func() error, error) 
 	if err != nil {
 		return nil, nil, errors.Join(err, unlock())
 	}
-	forget, err := recordOwnerProcess(state)
-	if err != nil {
-		return nil, nil, errors.Join(err, unlock())
-	}
-	return config, func() error { return errors.Join(forget(), unlock()) }, nil
+	return config, unlock, nil
 }
 
 // prepareLockedOwner builds the owner's boot configuration while it holds the

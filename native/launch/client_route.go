@@ -41,9 +41,7 @@ func defaultClientSeams() clientSeams {
 		join:           joinOwner,
 		waitEnrolled:   waitEnrolled,
 		report:         os.Stdout,
-		stop: func(ctx context.Context, state string) error {
-			return stopOwner(ctx, state, io.Discard, defaultStopSeams())
-		},
+		released:       waitReleased,
 	}
 }
 
@@ -105,6 +103,13 @@ func joinOwner(ctx context.Context, join joinRequest) error {
 		command := *join.Intent.hive
 		return session.Operate(ctx, config, join.Node, join.Key, func(ctx context.Context, client *hive.Client, _ rendezvous.Descriptor) error {
 			return runHive(ctx, os.Stdout, hive.JoinOver(client), join.Directory, command)
+		})
+	}
+	if join.Intent.stop {
+		alone := join.Intent.alone
+		return session.Operate(ctx, config, join.Node, join.Key, func(ctx context.Context, client *hive.Client, _ rendezvous.Descriptor) error {
+			_, err := hive.StopOwner(ctx, client, alone)
+			return err
 		})
 	}
 	if join.Intent.catalog != nil {
@@ -174,7 +179,7 @@ func printDesktops(out io.Writer, catalog hive.DesktopCatalog) error {
 
 // startDetachedOwner starts `bee --state <state> start` in its own session so the
 // owner outlives this client.
-func startDetachedOwner(ctx context.Context, launch app.Launch) (<-chan struct{}, func() error, error) {
+func startDetachedOwner(ctx context.Context, launch app.Launch, launchID string) (<-chan struct{}, func() error, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return nil, nil, err
@@ -186,7 +191,9 @@ func startDetachedOwner(ctx context.Context, launch app.Launch) (<-chan struct{}
 	if err != nil {
 		return nil, nil, err
 	}
-	done, wait, err := startDetachedCommand(ctx, execOwnerCommand(executable, launch, log))
+	command := execOwnerCommand(executable, launch, log)
+	command.Env = append(os.Environ(), ownerLaunchVariable+"="+launchID)
+	done, wait, err := startDetachedCommand(ctx, command)
 	if err != nil {
 		_ = log.Close()
 		return nil, nil, err

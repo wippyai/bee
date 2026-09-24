@@ -16,7 +16,8 @@ type PolicyIds = {string}
 type DecodedProfile = {workspace_id: string, source_node: string, source_workspace: string,
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
-    database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?}
+    database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
+    auto_start: boolean}
 -- The host's rule for applications a workspace's own agents deliver to it:
 -- one profile per eligible local overlay, derived by workspace_applications.
 type Template = {approval_policy: string, kinds: {string}, modules: {string}, policies: {string},
@@ -26,7 +27,7 @@ type Profile = {workspace_id: string, source_node: string, source_workspace: str
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
-    policy_digest: string}
+    auto_start: boolean, policy_digest: string}
 type Configuration = {node_id: string, profiles: {Profile}, workspace_applications: Template?}
 
 local function list(raw: unknown, label: string): ({unknown}?, string?)
@@ -129,8 +130,13 @@ local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
         or not parameters or not allow then
         return nil, nil, parameters_error or "activation profile identity is invalid"
     end
-    local allow_extra = bounds.fields(allow, {"packages", "namespaces", "kinds", "databases", "grants", "modules"})
+    local allow_extra = bounds.fields(allow, {"packages", "namespaces", "kinds", "databases", "grants", "modules", "auto_start"})
     if allow_extra then return nil, nil, "activation allowlist: " .. allow_extra end
+    -- A host row admits entries that start themselves unless it withholds it.
+    if allow.auto_start ~= nil and type(allow.auto_start) ~= "boolean" then
+        return nil, nil, "activation allowlist auto_start must be a boolean"
+    end
+    local auto_start = allow.auto_start ~= false
     local packages, packages_error = set(allow.packages or {}, "allowed packages")
     local namespaces, namespaces_error = set(allow.namespaces or {}, "allowed namespaces")
     local kinds, kinds_error = set(allow.kinds or {}, "allowed kinds")
@@ -163,7 +169,7 @@ local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
         parameters = parameters, packages = packages, namespaces = namespaces, kinds = kinds,
         databases = databases, grants = grants, modules = modules,
         database_bindings = bindings, migration_policies = migration_policies,
-        applications = applications}, policy, nil
+        applications = applications, auto_start = auto_start}, policy, nil
 end
 
 local function sorted_set(raw: unknown, label: string): ({string}?, string?)
@@ -209,7 +215,7 @@ local function instantiate(rule: Template, workspace_id: string, source_node: st
         component = identity.component, overlay_owner = identity.overlay_owner,
         approval_policy = rule.approval_policy, resolver = "overlay", parameters = empty_list(),
         allow = {packages = {identity.component}, namespaces = {identity.namespace}, kinds = rule.kinds,
-            databases = empty_list(), grants = empty_list(), modules = rule.modules},
+            databases = empty_list(), grants = empty_list(), modules = rule.modules, auto_start = false},
         applications = {{definition_id = identity.definition_id, policies = policies,
             thread_access = rule.thread_access}}})
 end
@@ -251,7 +257,7 @@ local function measure(decoded_profile: DecodedProfile, policy: Object, node_id:
         databases = decoded_profile.databases, grants = decoded_profile.grants, modules = decoded_profile.modules,
         database_bindings = decoded_profile.database_bindings,
         migration_policies = decoded_profile.migration_policies, applications = decoded_profile.applications,
-        policy_digest = policy_digest}, nil
+        auto_start = decoded_profile.auto_start, policy_digest = policy_digest}, nil
 end
 
 local function missing(workspace_id: string, source_node: string, source_workspace: string): string

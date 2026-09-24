@@ -4,7 +4,7 @@ import sys
 import tempfile
 
 from native_workspace import NativeDesktop
-from native_client import stop_owner, live_owners, owner_pidfd
+from native_client import stop_owner, live_owners, hold_owner
 
 
 binary = Path(sys.argv[1]).resolve()
@@ -39,5 +39,5 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-") as temporary:
     finally:
         ui.close()
         for pid in live_owners(binary, state):
-            stop_owner(owner_pidfd(pid, binary, state))
+            stop_owner(hold_owner(pid, binary, state))
 print("Native Modules: admitted source-free launch, independent filters, F12, resize, real empty operation history and detach pass")

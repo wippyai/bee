@@ -1,76 +1,50 @@
 """Linux source-free public launcher: retained owner, local quit and clipboard."""
 from pathlib import Path
 import os
-import select
 import signal
 import sys
 import tempfile
 import time
 
 from native_workspace import NativeDesktop
+from processes import children, command_line, hold, table
 from terminal_selection import begin, copies
 
 
+def owner_command(binary, state):
+    """The detached owner's command line for this binary and state."""
+    return command_line(binary, '--state', state, 'run', 'start')
+
+
 def owner_handle(ui, binary, state):
-    # Capture only this test client's actual child, then hold its kernel identity
-    # so cleanup cannot signal a recycled PID or an unrelated user's owner.
-    children = set()
-    for task in Path(f'/proc/{ui.process.pid}/task').glob('*/children'):
-        children.update(task.read_text().split())
-    for child in children:
-        handle = os.pidfd_open(int(child))
-        args = Path(f'/proc/{child}/cmdline').read_bytes().split(b'\0')
-        if args[0] == os.fsencode(binary) and os.fsencode(state) in args and b'start' in args:
+    """Hold the retained owner the test client started as its own child."""
+    expected = owner_command(binary, state)
+    for child in children(ui.process.pid):
+        handle = hold(child, lambda process: process.command == expected)
+        if handle is not None:
             return handle
-        os.close(handle)
     raise AssertionError('Automatic launch did not create its retained owner')
 
 
 def live_owners(binary, state):
     """Return the detached Bee start processes still live for this state."""
-    owners = []
-    executable, state_dir = os.fsencode(binary), os.fsencode(state)
-    for process in Path('/proc').iterdir():
-        if not process.name.isdecimal():
-            continue
-        try:
-            args = (process / 'cmdline').read_bytes().split(b'\0')
-        except OSError:
-            continue
-        if (args and args[0] == executable and state_dir in args and
-                b'run' in args and b'start' in args):
-            owners.append(int(process.name))
-    return sorted(owners)
+    expected = owner_command(binary, state)
+    return sorted(process.pid for process in table() if process.command == expected)
 
 
-def owner_pidfd(pid, binary, state):
+def hold_owner(pid, binary, state):
     """Hold a matching owner identity, guarding the scan-to-open race."""
-    handle = None
-    try:
-        handle = os.pidfd_open(pid)
-        args = Path(f'/proc/{pid}/cmdline').read_bytes().split(b'\0')
-    except OSError:
-        if handle is not None:
-            os.close(handle)
-        return None
-    if (args and args[0] == os.fsencode(binary) and os.fsencode(state) in args and
-            b'run' in args and b'start' in args):
-        return handle
-    os.close(handle)
-    return None
+    expected = owner_command(binary, state)
+    return hold(pid, lambda process: process.command == expected)
 
 
 def stop_owner(owner):
     if owner is None:
         return
     try:
-        if not select.select([owner], [], [], 0)[0]:
-            signal.pidfd_send_signal(owner, signal.SIGTERM)
-            if not select.select([owner], [], [], 10)[0]:
-                signal.pidfd_send_signal(owner, signal.SIGKILL)
-                assert select.select([owner], [], [], 5)[0], 'Fixture owner failed to exit'
+        assert owner.stop(), 'Fixture owner failed to exit'
     finally:
-        os.close(owner)
+        owner.close()
 
 
 def run(binary):
@@ -100,7 +74,7 @@ def run(binary):
             assert copies(ui, start) == ['BEE_CLIENT_SELECTED'], ui.text()
             ui.quit()
             ui.close()
-            assert not select.select([owner], [], [], 0)[0], 'Client quit killed the owner'
+            assert not owner.exited(), 'Client quit killed the owner'
             owner_logs = set(state.glob('owner-*.log'))
             rejoin_started = time.monotonic()
             ui = NativeDesktop(binary, folder, state)
@@ -114,7 +88,7 @@ def run(binary):
             ui.wait('BEE_REJOIN_alive')
             assert not copies(ui, 0), 'Rejoin replayed a clipboard request'
             ui.quit()
-            assert not select.select([owner], [], [], 0)[0], 'Second client quit killed the owner'
+            assert not owner.exited(), 'Second client quit killed the owner'
         except AssertionError:
             print(f'Client exit={ui.process.poll()}, output tail={bytes(ui.raw[-1600:])!r}', file=sys.stderr)
             if os.environ.get('BEE_NATIVE_STACK') and ui.process.poll() is None:
@@ -138,7 +112,7 @@ def stalled_detach(binary):
             ui.wait(' BEE ', timeout=15)
             owner = owner_handle(ui, binary, state)
             # Fault injection against this fixture's held process identity only.
-            signal.pidfd_send_signal(owner, signal.SIGSTOP)
+            owner.send_signal(signal.SIGSTOP)
             start = time.monotonic()
             os.write(ui.master, bytes([17]))
             while ui.process.poll() is None and time.monotonic() - start < 2:
@@ -147,10 +121,10 @@ def stalled_detach(binary):
             assert bytes([27]) + b'[?1049l' in ui.raw, 'Physical terminal was not restored'
             assert b'detach desktop:' in ui.raw, 'Unacknowledged detach reported as committed'
             assert b'outcome is unknown' in ui.raw, bytes(ui.raw[-500:])
-            assert not select.select([owner], [], [], 0)[0], 'Detach stopped the owner'
+            assert not owner.exited(), 'Detach stopped the owner'
         finally:
             if owner is not None:
-                signal.pidfd_send_signal(owner, signal.SIGCONT)
+                owner.send_signal(signal.SIGCONT)
             ui.close()
             stop_owner(owner)
     print('Stalled owner: bounded physical exit, uncertainty preserved, owner retained')
@@ -179,7 +153,7 @@ def preparing_owner(binary):
             while time.monotonic() < deadline:
                 owners = live_owners(binary, state)
                 if len(owners) == 1:
-                    owner = owner_pidfd(owners[0], binary, state)
+                    owner = hold_owner(owners[0], binary, state)
                     if owner is not None:
                         owner_pid = owners[0]
                         break
@@ -201,16 +175,16 @@ def preparing_owner(binary):
             first.close()
             first = None
             assert second.process.poll() is None, bytes(second.raw[-1000:])
-            assert not select.select([owner], [], [], 0)[0], 'First client detach killed the owner'
+            assert not owner.exited(), 'First client detach killed the owner'
             assert live_owners(binary, state) == [owner_pid], 'First detach changed the elected owner'
             second.quit()
-            assert not select.select([owner], [], [], 0)[0], 'Second client detach killed the owner'
+            assert not owner.exited(), 'Second client detach killed the owner'
             assert live_owners(binary, state) == [owner_pid], 'Second detach changed the elected owner'
         finally:
             # A first-frame failure can still leave a runtime-elected owner. Hold
             # every fixture-scoped contender before closing its foreground parent.
-            # owner_pidfd rechecks its command after opening the pidfd, so a PID
-            # recycled after the /proc scan cannot target an unrelated process.
+            # hold_owner rechecks the command after opening its handle, so a PID
+            # recycled after the table scan cannot target an unrelated process.
             extra_owners = []
             captured_pids = {owner_pid}
 
@@ -218,7 +192,7 @@ def preparing_owner(binary):
                 for pid in live_owners(binary, state):
                     if pid in captured_pids:
                         continue
-                    contender = owner_pidfd(pid, binary, state)
+                    contender = hold_owner(pid, binary, state)
                     if contender is not None:
                         captured_pids.add(pid)
                         extra_owners.append(contender)
@@ -259,13 +233,13 @@ def crashed_client(binary):
             # Exercise native node-departure delivery, not a synthetic EXIT.
             # Immediate exact-actor completion remains a separate runtime gate.
             time.sleep(40)
-            assert not select.select([owner], [], [], 0)[0], 'Client crash killed the owner'
+            assert not owner.exited(), 'Client crash killed the owner'
             ui = NativeDesktop(binary, folder, state)
             ui.wait('BEE_CRASH_READY', timeout=15)
             ui.key(b"test \"$BEE_CRASH_SHELL\" = \"$$\" && printf 'BEE_CRASH_%s\\n' RETAINED\r")
             ui.wait('BEE_CRASH_RETAINED')
             ui.quit()
-            assert not select.select([owner], [], [], 0)[0], 'Reconnect stopped the owner'
+            assert not owner.exited(), 'Reconnect stopped the owner'
         finally:
             if ui is not None:
                 ui.close()
@@ -295,7 +269,7 @@ def command_launches(binary):
                 'printf "%s\\n" "$1"; exec bash -i',
                 'bee-command', 'WARM_LITERAL ; $(exit 4) words'))
             ui.wait('WARM_LITERAL ; $(exit 4) words', timeout=15)
-            assert not select.select([owner], [], [], 0)[0], 'Alias replaced owner'
+            assert not owner.exited(), 'Alias replaced owner'
             ui.quit()
             ui.close()
             ui = NativeDesktop(binary, folder, state)
@@ -339,7 +313,7 @@ def observers(binary):
             observer.wait('OBSERVER_retained_unset_OK')
             assert observer.quit() < 1, 'Observer detach was not responsive'
             observer.close(); observer = None
-            assert not select.select([owner], [], [], 0)[0], 'Observer exit stopped Bee'
+            assert not owner.exited(), 'Observer exit stopped Bee'
             controller.key(b"printf 'AFTER_OBSERVE_%s_OK\\n' \"$shared_bee\"\r")
             controller.wait('AFTER_OBSERVE_retained_OK')
             controller.quit()
@@ -456,7 +430,7 @@ def independent_desktops(binary):
             third.quit()
             second.quit()
             first.quit()
-            assert not select.select([owner], [], [], 0)[0], 'Last display detach killed its applications'
+            assert not owner.exited(), 'Last display detach killed its applications'
         finally:
             for ui in reversed(clients):
                 ui.close()
@@ -494,7 +468,7 @@ def default_display_reactivation(binary):
             ui.pump(.3)
             ui.close()
             ui = None
-            assert not select.select([owner], [], [], 0)[0], 'Default display close killed workspace'
+            assert not owner.exited(), 'Default display close killed workspace'
             observer = NativeDesktop(binary, folder, state, arguments=('observe',))
             try:
                 observer.process.wait(timeout=5)
@@ -508,7 +482,7 @@ def default_display_reactivation(binary):
             ui.key(b"printf 'DISPLAY_REOPEN_%s_%s_END\\n' \"$BEE_DISPLAY_REOPEN\" \"$$\"\r")
             ui.wait('DISPLAY_REOPEN_retained_' + shell_pid + '_END')
             ui.quit()
-            assert not select.select([owner], [], [], 0)[0], 'Reopened display detach killed workspace'
+            assert not owner.exited(), 'Reopened display detach killed workspace'
         finally:
             if ui is not None:
                 ui.close()

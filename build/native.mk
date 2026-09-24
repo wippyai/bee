@@ -62,6 +62,7 @@ standalone-sealed:
 	$(BUILDER) build "$(BEE_BUNDLE_MANIFEST)" --output "$(BEE_BINARY)"
 
 native-binary-check:
+	python3 tests/processes_check.py
 	python3 tests/native_binary.py "$(BEE_BINARY)"
 	python3 tests/native_modules.py "$(BEE_BINARY)"
 	BEE_ABOUT_SOURCE="$(BEE_ABOUT_SOURCE)" python3 tests/native_about.py "$(BEE_BINARY)"

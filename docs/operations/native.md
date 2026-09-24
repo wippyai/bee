@@ -37,7 +37,10 @@ The source tools and executable use the same compiled component selection.
 `make native-binary-check` launches the source-free executable with literal
 arguments, checks Settings recovery, the terminal, fullscreen aliases and
 presenter rejoin. The fixture reads only disposable stores; it uses the source-free
-executable for all application operations.
+executable for all application operations. Its harnesses read processes through
+`tests/processes.py` (ps(1)) and `native/tests/processes` (`/proc` on Linux, sysctl
+on macOS) and hold them through pidfds on Linux and kqueue on macOS, so the same
+assertions run on both.
 `build/bootstrap.go` runs the pinned Go assembler.
 The assembler compiles the native components at the version pinned in
 `wippy.build.json`; that version comes from the module proxy, not the checkout.

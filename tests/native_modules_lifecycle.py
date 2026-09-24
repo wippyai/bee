@@ -10,7 +10,7 @@ import sys
 import tempfile
 
 from native_workspace import NativeDesktop
-from native_client import live_owners, owner_pidfd, stop_owner
+from native_client import live_owners, hold_owner, stop_owner
 
 
 binary = Path(sys.argv[1]).resolve()
@@ -120,6 +120,6 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-lifecycle-") as temp
     finally:
         ui.close()
         for pid in live_owners(binary, state):
-            stop_owner(owner_pidfd(pid, binary, state))
+            stop_owner(hold_owner(pid, binary, state))
 
 print("Native Modules lifecycle: install, update and uninstall preserve Bee base modules")

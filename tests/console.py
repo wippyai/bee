@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import yaml
+from processes import lookup
 from tui_smoke import Desktop, ROOT, RUNTIME
 from workspace import pack_deployment
 
@@ -140,9 +141,9 @@ def exercise(packed, theme="honey"):
             ui.wait("CANCEL_keep")
             elapsed = ui.quit(confirm=True)
             deadline = time.monotonic() + 1
-            while Path(f"/proc/{native_pid}").exists() and time.monotonic() < deadline:
+            while lookup(native_pid) is not None and time.monotonic() < deadline:
                 time.sleep(.02)
-            assert not Path(f"/proc/{native_pid}").exists(), "Native shell leaked after workspace exit"
+            assert lookup(native_pid) is None, "Native shell leaked after workspace exit"
             print(f"Terminal {'pack' if packed else 'source'} ({theme}): command, wrapped-input resize/erase, interrupt, rejoin, independent PTYs, registry/TTY denial; exit {elapsed:.3f}s")
         finally:
             ui.close()

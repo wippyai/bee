@@ -273,3 +273,14 @@ entries:
     owner: bee.hive.desktop:owner
     catalog: bee.hive.desktop:catalog
     protocol: bee.hive.desktop:protocol
+- name: desktop_daemon_test
+  kind: function.lua
+  source: file://desktop_daemon_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  security:
+    policies: [bee.hive.desktop:host_policy]
+  imports:
+    test: wippy.test:test
+    owner: bee.hive.desktop:owner
+    protocol: bee.hive.desktop:protocol

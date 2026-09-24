@@ -119,19 +119,26 @@ function M.decode(operation: unknown, value: unknown): (Request?, string?)
     end
     local extra = bounds.fields(object, {"state", "label", "root_ref", "path", "after", "limit"})
     if extra then return nil, extra end
-    if (object.label == nil) == (object.root_ref == nil) then return nil, "search takes either label or root_ref" end
+    -- A label prefix, a folder under one root, or, with a path and no
+    -- root_ref, that folder under every admitted root.
+    if object.label ~= nil and (object.root_ref ~= nil or object.path ~= nil) then return nil, "search takes a label or a path, not both" end
+    if object.label == nil and object.root_ref == nil and object.path == nil then return nil, "search takes a label, a root_ref or a path" end
     if object.label ~= nil then
-        if object.path ~= nil then return nil, "path searches under a root_ref" end
         local prefix = label(object.label)
         if not prefix then return nil, "label must be one nonempty line of at most " .. tostring(catalog.MAX_LABEL_BYTES) .. " bytes" end
         local query, query_error = listing(object, "label", prefix, nil)
         if not query then return nil, query_error end
         return {operation = name, query = query}, nil
     end
-    local root_ref = bounds.id(object.root_ref)
-    if not root_ref then return nil, "root_ref must be an identifier" end
     local path, path_error = bounds.subpath(object.path == nil and "" or object.path)
     if not path then return nil, path_error or "invalid path" end
+    if object.root_ref == nil then
+        local across, across_error = listing(object, "roots", path, nil)
+        if not across then return nil, across_error end
+        return {operation = name, query = across}, nil
+    end
+    local root_ref = bounds.id(object.root_ref)
+    if not root_ref then return nil, "root_ref must be an identifier" end
     local query, query_error = listing(object, "path", path, root_ref)
     if not query then return nil, query_error end
     return {operation = name, query = query}, nil

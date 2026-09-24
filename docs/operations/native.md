@@ -205,10 +205,13 @@ bee [--state DIR] [COMMAND [ARGUMENTS...]]
 bee                              open this project's desktop, starting its owner when none runs
 bee NAME [ARGUMENTS...]          open the application command NAME (for example agent or terminal)
 bee observe [WORKSPACE DISPLAY]  watch a running Bee without control
-bee client [WORKSPACE DISPLAY]   join a running Bee with control
+bee client [WORKSPACE DISPLAY]   join a running Bee with control; on a node without a folder
+                                 workspace, pick one of its workspaces (Ctrl+] returns to the picker)
 bee attach WORKSPACE DISPLAY     join one display of a running Bee with control
 bee desktops                     list the displays of a running Bee
 bee start                        run this project's retained owner in the foreground
+bee daemon                       run this folder's node in the foreground without a folder workspace;
+                                 it serves the workspaces of its catalog to clients
 bee MODULE:ENTRY [ARGUMENTS...]  run one application entry directly
 bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT
 bee help | -h | --help

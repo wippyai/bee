@@ -7,8 +7,10 @@ local contract = require("contract")
 type Summary = {workspace_id: string, label: string, root_ref: string, subpath: string, state: string,
     created_at: string, last_used_at: string}
 type Definition = {label: string, root_ref: string, subpath: string}
-type Cursor = {key: string, workspace_id: string}
-type Query = {state: string, order: string, prefix: string, root_ref: string?, after: Cursor?, limit: integer}
+-- root_ref: the root of the last row, for a search across roots.
+type Cursor = {key: string, workspace_id: string, root_ref: string?}
+-- roots: the admitted roots a search across roots walks, in order.
+type Query = {state: string, order: string, prefix: string, root_ref: string?, after: Cursor?, limit: integer, roots: {string}?}
 type Statement = {sql: string, params: {unknown}}
 type Page = {items: {Summary}, next_after: string?}
 type Fault = {code: string, message: string}
@@ -17,6 +19,7 @@ local M = {}
 M.MAX_LABEL_BYTES = 240
 M.MAX_PAGE = 100
 M.MAX_KEY_BYTES = 1024
+M.MAX_ROOT_BYTES = 160
 M.STATES = {"active", "archived"}
 
 local COLUMNS = "workspace_id, label, root_ref, subpath, state, created_at, last_used_at"
@@ -71,17 +74,54 @@ end
 -- A cursor is the exact keyset position of the last row of a page: the
 -- workspace identity and the order key it was listed under.
 function M.encode_cursor(position: Cursor): string
-    return position.workspace_id .. ":" .. hex(position.key)
+    local encoded = position.workspace_id .. ":" .. hex(position.key)
+    if position.root_ref then encoded = encoded .. ":" .. hex(position.root_ref) end
+    return encoded
 end
 
 function M.decode_cursor(value: unknown): Cursor?
-    if type(value) ~= "string" or #value > 33 + 2 * M.MAX_KEY_BYTES then return nil end
-    local id, encoded = value:match("^([0-9a-f]+):([0-9a-f]*)$")
+    if type(value) ~= "string" or #value > 34 + 2 * (M.MAX_KEY_BYTES + M.MAX_ROOT_BYTES) then return nil end
+    local id, encoded, root = value:match("^([0-9a-f]+):([0-9a-f]*):([0-9a-f]+)$")
+    if not id then id, encoded = value:match("^([0-9a-f]+):([0-9a-f]*)$") end
     local workspace_id = contract.workspace_id(id)
     if not workspace_id or not encoded then return nil end
     local key = unhex(encoded)
-    if not key then return nil end
-    return {key = key, workspace_id = workspace_id}
+    if not key or #key > M.MAX_KEY_BYTES then return nil end
+    local root_ref: string? = nil
+    if root then
+        root_ref = unhex(root)
+        if not root_ref or root_ref == "" or #root_ref > M.MAX_ROOT_BYTES then return nil end
+    end
+    return {key = key, workspace_id = workspace_id, root_ref = root_ref}
+end
+
+-- The statements that read one root's folders for a path search: with no
+-- prefix every folder of the root; otherwise the folder the prefix names
+-- first, then every folder below "prefix/". after continues past a subpath.
+local function path_statements(statements: {Statement}, query: Query, root_ref: string, after: string?, fetch: integer)
+    local select = "SELECT " .. COLUMNS .. ", subpath AS sort_key FROM workspaces WHERE state = ? AND root_ref = ?"
+    if query.prefix == "" then
+        local params: {unknown} = {query.state, root_ref}
+        local clauses = ""
+        if after then
+            clauses = " AND subpath > ?"
+            params[#params + 1] = after
+        end
+        params[#params + 1] = fetch
+        statements[#statements + 1] = {sql = select .. clauses .. " ORDER BY subpath LIMIT ?", params = params}
+        return
+    end
+    if not after then
+        statements[#statements + 1] = {sql = select .. " AND subpath = ? LIMIT 1", params = {query.state, root_ref, query.prefix}}
+    end
+    local params: {unknown} = {query.state, root_ref, query.prefix .. "/", query.prefix .. "0"}
+    local clauses = " AND subpath >= ? AND subpath < ?"
+    if after then
+        clauses = clauses .. " AND subpath > ?"
+        params[#params + 1] = after
+    end
+    params[#params + 1] = fetch
+    statements[#statements + 1] = {sql = select .. clauses .. " ORDER BY subpath LIMIT ?", params = params}
 end
 
 -- The statements that read one page, in order. Label order walks
@@ -110,31 +150,21 @@ function M.statements(query: Query): {Statement}
         return {{sql = "SELECT " .. COLUMNS .. ", lower(label) AS sort_key FROM workspaces WHERE " .. clauses ..
             " ORDER BY lower(label), workspace_id LIMIT ?", params = params}}
     end
-    local root_ref = query.root_ref or ""
-    local select = "SELECT " .. COLUMNS .. ", subpath AS sort_key FROM workspaces WHERE state = ? AND root_ref = ?"
     local statements: {Statement} = {}
-    if query.prefix == "" then
-        local params: {unknown} = {query.state, root_ref}
-        local clauses = ""
-        if after then
-            clauses = " AND subpath > ?"
-            params[#params + 1] = after.key
+    if query.order == "roots" then
+        -- One root after another in the order given, each walked as a path
+        -- search; the cursor names the root its last row came from.
+        local after_root = after and after.root_ref or nil
+        for _, root in ipairs(query.roots or {}) do
+            if not after_root or root > after_root then
+                path_statements(statements, query, root, nil, fetch)
+            elseif root == after_root and after then
+                path_statements(statements, query, root, after.key, fetch)
+            end
         end
-        params[#params + 1] = fetch
-        statements[1] = {sql = select .. clauses .. " ORDER BY subpath LIMIT ?", params = params}
         return statements
     end
-    if not after then
-        statements[#statements + 1] = {sql = select .. " AND subpath = ? LIMIT 1", params = {query.state, root_ref, query.prefix}}
-    end
-    local params: {unknown} = {query.state, root_ref, query.prefix .. "/", query.prefix .. "0"}
-    local clauses = " AND subpath >= ? AND subpath < ?"
-    if after then
-        clauses = clauses .. " AND subpath > ?"
-        params[#params + 1] = after.key
-    end
-    params[#params + 1] = fetch
-    statements[#statements + 1] = {sql = select .. clauses .. " ORDER BY subpath LIMIT ?", params = params}
+    path_statements(statements, query, query.root_ref or "", after and after.key or nil, fetch)
     return statements
 end
 
@@ -156,7 +186,11 @@ function M.page(tx: sql.Transaction, query: Query): (Page?, Fault?)
         end
     end
     local next_after: string? = nil
-    if more then next_after = M.encode_cursor({key = keys[#keys], workspace_id = items[#items].workspace_id}) end
+    if more then
+        local last = items[#items]
+        next_after = M.encode_cursor({key = keys[#keys], workspace_id = last.workspace_id,
+            root_ref = query.order == "roots" and last.root_ref or nil})
+    end
     return {items = items, next_after = next_after}, nil
 end
 

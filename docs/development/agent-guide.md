@@ -82,8 +82,10 @@ exist.
 `bee observe` attaches a read-only display to a running local Bee and never
 starts or displaces the controller. `bee recover <name>` selects the embedded
 application pack for a named managed launch while preserving workspace and
-application state. These commands keep the local owner boundary; they do not
-provide remote enrollment or workspace switching.
+application state. These commands keep the local owner boundary and provide
+no remote enrollment. On a node without a folder workspace (`bee daemon`),
+`bee client` picks one of the node's workspaces and Ctrl+] returns to the
+picker to switch; see [the workspace catalog](../reference/workspace-catalog.md).
 
 The local Hub can inspect, plan and apply host-authorized components. Governed
 overlays can stage bounded content, freeze an immutable candidate, obtain an

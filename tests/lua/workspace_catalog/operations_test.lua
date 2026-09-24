@@ -86,8 +86,8 @@ local function folder(root_ref: string, name: string): string
     return name
 end
 
-local function create(label: string, subpath: string): Object
-    return value(call(manager, "create", {label = label, root_ref = PROJECTS, subpath = subpath}))
+local function create(label: string, subpath: string, root_ref: string?): Object
+    return value(call(manager, "create", {label = label, root_ref = root_ref or PROJECTS, subpath = subpath}))
 end
 
 local function define_tests()
@@ -161,6 +161,35 @@ local function define_tests()
             test.eq(code(call(reader, "list", {limit = 101})), "INVALID")
             test.eq(code(call(reader, "search", {label = stem, root_ref = PROJECTS})), "INVALID")
             test.eq(code(call(reader, "search", {})), "INVALID")
+        end)
+
+        test.it("searches one folder path under every admitted root, root by root", function()
+            admit_roots()
+            local base = fresh("across")
+            local projects = create("Across projects", folder(PROJECTS, base))
+            -- The same folder name under a second admitted root.
+            local archive_volume = assert(fs.get(ARCHIVE))
+            if not archive_volume:exists(base) then assert(archive_volume:mkdir(base)) end
+            local archived = create("Across archive", base, ARCHIVE)
+            local found: {Object} = {}
+            local after: unknown = nil
+            repeat
+                local request: Object = {path = base, limit = 1}
+                if after then request.after = after end
+                local page = value(call(reader, "search", request))
+                for _, item in ipairs(page.items :: {Object}) do found[#found + 1] = item end
+                after = page.next_after
+            until after == nil
+            test.eq(#found, 2)
+            local first_root, second_root = PROJECTS, ARCHIVE
+            if ARCHIVE < PROJECTS then first_root, second_root = ARCHIVE, PROJECTS end
+            test.eq(found[1].root_ref, first_root)
+            test.eq(found[2].root_ref, second_root)
+            local wanted = {[tostring(projects.workspace_id)] = true, [tostring(archived.workspace_id)] = true}
+            test.is_true(wanted[tostring(found[1].workspace_id)] == true)
+            test.is_true(wanted[tostring(found[2].workspace_id)] == true)
+            test.is_true(found[1].workspace_id ~= found[2].workspace_id)
+            test.eq(code(call(reader, "search", {path = base, label = "Across"})), "INVALID")
         end)
 
         test.it("renames, archives and restores, replaying a repeated change", function()

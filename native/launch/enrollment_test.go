@@ -58,7 +58,7 @@ func (r *recordingRegistry) Apply(_ context.Context, changes registry.ChangeSet)
 // prepareOwnerState creates the owner files the publisher reads.
 func prepareOwnerState(t *testing.T, state string) {
 	t.Helper()
-	_, release, err := prepareOwner(state)
+	_, release, err := prepareOwner(state, true)
 	if err != nil {
 		t.Fatal(err)
 	}

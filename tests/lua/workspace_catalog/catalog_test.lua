@@ -181,6 +181,42 @@ local function define_tests()
             end
         end)
 
+        test.it("walks one path under several roots in root order with a root-qualified cursor", function()
+            transaction(function(tx: sql.Transaction)
+                for _, definition in ipairs({
+                    {label = "north", root_ref = "bee.catalog.test:north", subpath = "shared"},
+                    {label = "north child", root_ref = "bee.catalog.test:north", subpath = "shared/one"},
+                    {label = "south", root_ref = "bee.catalog.test:south", subpath = "shared"},
+                    {label = "south sibling", root_ref = "bee.catalog.test:south", subpath = "shared-old"},
+                }) do
+                    local row, failure = catalog.insert(tx, definition)
+                    if not row then error("insert: " .. tostring(failure and failure.message)) end
+                end
+            end)
+            local rows: {catalog.Summary} = {}
+            local after: string? = nil
+            repeat
+                local cursor: catalog.Cursor? = nil
+                if after then cursor = catalog.decode_cursor(after) end
+                local current = page({state = "active", order = "roots", prefix = "shared", root_ref = nil, after = cursor, limit = 1,
+                    roots = {"bee.catalog.test:north", "bee.catalog.test:south", "bee.catalog.test:west"}})
+                for _, item in ipairs(current.items) do rows[#rows + 1] = item end
+                after = current.next_after
+            until not after
+            test.eq(#rows, 3)
+            test.eq(rows[1].root_ref .. "/" .. rows[1].subpath, "bee.catalog.test:north/shared")
+            test.eq(rows[2].root_ref .. "/" .. rows[2].subpath, "bee.catalog.test:north/shared/one")
+            test.eq(rows[3].root_ref .. "/" .. rows[3].subpath, "bee.catalog.test:south/shared")
+            local cursor = catalog.encode_cursor({key = "shared", workspace_id = string.rep("a", 32), root_ref = "bee.catalog.test:north"})
+            for _, statement in ipairs(catalog.statements({state = "active", order = "roots", prefix = "shared", root_ref = nil,
+                after = catalog.decode_cursor(cursor), limit = 5, roots = {"bee.catalog.test:north", "bee.catalog.test:south"}})) do
+                local plan = table.concat(plans(statement), " | ")
+                if not plan:find("SEARCH workspaces USING INDEX ", 1, true) or plan:find("TEMP B-TREE", 1, true) then
+                    error("unindexed plan for " .. statement.sql .. ": " .. plan)
+                end
+            end
+        end)
+
         test.it("refuses cursors it did not issue", function()
             test.is_nil(catalog.decode_cursor("not a cursor"))
             test.is_nil(catalog.decode_cursor(string.rep("a", 32) .. ":abc"))
@@ -189,6 +225,10 @@ local function define_tests()
             local cursor = catalog.decode_cursor(catalog.encode_cursor({key = "näme/Ω", workspace_id = string.rep("c", 32)}))
             if not cursor then error("round trip") end
             test.eq(cursor.key, "näme/Ω")
+            test.is_nil(cursor.root_ref)
+            local rooted = catalog.decode_cursor(catalog.encode_cursor({key = "a", workspace_id = string.rep("c", 32), root_ref = "bee:root"}))
+            test.eq(rooted and rooted.root_ref, "bee:root")
+            test.is_nil(catalog.decode_cursor(string.rep("a", 32) .. ":61:" .. string.rep("62", 161)))
         end)
     end)
 end

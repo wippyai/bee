@@ -41,13 +41,19 @@ local function reply_of(value: unknown): ({[string]: unknown}?, Fault?)
     if not admitted then return nil, {code = "INTERNAL", message = "the launch admission returned no value"} end
     return admitted, nil
 end
+local function request_workspace(raw: unknown): string?
+    local object = bounds.object(raw)
+    return object and bounds.id(object.workspace_id) or nil
+end
 local function handle(raw: unknown): Reply
     local bound, binding_error = attribution()
     if not bound then return fail(binding_error.code, binding_error.message) end
     local action_id = bounds.id(bound.action_id)
     local thread_id = bounds.id(bound.thread_id)
     local policy_ref = bounds.id(bound.policy_ref)
-    local workspace_id = bounds.id(bound.workspace_id)
+    -- The facade authorized a workspace other than the binding's before it
+    -- bound this call's actor to it.
+    local workspace_id = request_workspace(raw) or bounds.id(bound.workspace_id)
     if not action_id or not thread_id or not policy_ref or not workspace_id then
         return fail("UNAUTHENTICATED", "the binding does not identify an agent launch context")
     end

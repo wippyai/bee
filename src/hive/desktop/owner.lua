@@ -64,8 +64,6 @@ local function scope_of(names: {string}): (security.Scope?, string?)
 end
 local SPAWN_POLICIES = {"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy",
     "bee:desktop_catalog_resource_policy", "bee:workspace_host_lease_policy"}
-local CATALOG_POLICIES = {"bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy", "bee:workspace_catalog_read_policy",
-    "bee.hive.desktop:catalog_call_policy"}
 local function spawn(state: State, selection: unknown): (string?, string?)
     local self = tostring(process.pid())
     local pid, err = process.with_options({}):with_context({["bee.retained_owner"] = self})
@@ -105,10 +103,8 @@ function M.start(config: protocol.Configuration, node: string): State
     if bridge_name == "" or owner_name == "" then abandon("Invalid retained workspace selection") end
     local spawn_scope, spawn_error = scope_of(SPAWN_POLICIES)
     if not spawn_scope then abandon(spawn_error) end
-    local catalog_scope, catalog_error = scope_of(CATALOG_POLICIES)
-    if not catalog_scope then abandon(catalog_error) end
-    local executor, executor_error = funcs.new():with_scope(catalog_scope)
-    if not executor then abandon(executor_error) end
+    -- The catalog reads run under the supervisor's own host-selected grants.
+    local executor = funcs.new()
     -- The owner route authenticates forwarded readiness by this name, so it is
     -- registered before the retained supervisor can announce anything.
     local registered, name_error = process.registry.register(bridge_name)
@@ -118,6 +114,8 @@ function M.start(config: protocol.Configuration, node: string): State
         copies = copies, launches = launches, activations = activations, reader_updates = reader_updates, observers = observers,
         catalog = catalog.new(), spawn_scope = spawn_scope, executor = executor, folder = nil, served = {}, workspaces = {}, served_count = 0,
         allowed = allowed, enrolled = {}, clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = expiry, stopped = false}
+    -- A daemon's bridge composes no folder workspace; it serves only leased ones.
+    if not config.folder then return state end
     local supervisor, err = spawn(state, folder)
     if not supervisor then abandon(err) end
     local served: Served = {supervisor = supervisor, workspace_id = "", desktop_id = "", folder = true, ready = false, catalog_readers = {}}

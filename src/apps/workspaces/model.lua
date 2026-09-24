@@ -1,6 +1,7 @@
 -- MIT. The Workspaces viewer, pure: one page of the node workspace catalog at
 -- a time (never the whole list), a search that is a label prefix or, after
--- "/", a folder prefix, and the selected workspace as its owners describe it.
+-- "/", a folder prefix under every admitted root, and the selected workspace
+-- as its owners describe it.
 -- Every value from an owner is bounded here before a view draws it.
 local text = require("text")
 local caller = require("caller")
@@ -22,7 +23,6 @@ M.PAGE = 50
 M.THREADS = 10
 M.CATALOG = "bee.workspace.catalog:"
 M.THREAD_LIST = "bee.threads.service:list_workspace"
-M.FOLDER_ROOT = "bee:workspace_root"
 M.LABEL_LIMIT = 240
 M.TEXT_LIMIT = 512
 M.QUERY_LIMIT = 120
@@ -69,8 +69,8 @@ function M.selected(state: State): Summary?
 end
 
 -- The request for the page the state points at: the catalog list, a label
--- search, or, for a query starting with "/", a folder search under the
--- node's own workspace root.
+-- search, or, for a query starting with "/", a folder search under every
+-- root the host admits.
 function M.listing(state: State): Intent
     local request: Object = {state = state.tab, limit = M.PAGE}
     if state.cursor then request.after = state.cursor end
@@ -78,7 +78,6 @@ function M.listing(state: State): Intent
     if query == "" then return {target = M.CATALOG .. "list", request = request} end
     if query:sub(1, 1) == "/" then
         local path = query:sub(2):gsub("/+$", "")
-        request.root_ref = M.FOLDER_ROOT
         request.path = path
         return {target = M.CATALOG .. "search", request = request}
     end

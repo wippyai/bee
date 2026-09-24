@@ -63,7 +63,7 @@ local function harness(tag: string): Harness
         catalog_readers = {}, pending_catalog_readers = nil}
     local state: owner.State = {
         bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = NODE,
-        allowed = {}, enrolled = {[client_node] = true}, config = {execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {}, local_clients = true},
+        allowed = {}, enrolled = {[client_node] = true}, config = {execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {}, local_clients = true, folder = true},
         ready = ready, results = results, copies = unused, launches = unused, activations = activations, reader_updates = unused, observers = unused,
         catalog = catalog.new(), spawn_scope = security.new_scope({}), executor = funcs.new(), folder = folder_served,
         served = {[folder] = folder_served, [leased] = leased_served}, workspaces = {[FOLDER] = folder_served, [LEASED] = leased_served}, served_count = 1,
@@ -156,6 +156,20 @@ local function define_tests()
                 local event = selected.value
                 if event.kind == process.event.EXIT and tostring(event.from) == h.leased then break end
             end
+            close(h)
+        end)
+        test.it("attaches a Hive display client from an admitted node to a workspace by identity", function()
+            local h = harness("remote")
+            -- The client's node is admitted by the host grant, not local enrollment.
+            local node = types.pid_parts(h.standin)
+            if not node then error("stand-in has no node") end
+            h.state.enrolled = {}
+            h.state.config.local_clients = false
+            h.state.config.allowed_nodes = {node}
+            h.state.allowed = {[node] = true}
+            local attached = attach_leased(h)
+            test.is_true(attached.ok)
+            test.eq((attached.value :: Object).workspace_id, LEASED)
             close(h)
         end)
         test.it("refuses to switch workspaces without a detach", function()

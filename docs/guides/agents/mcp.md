@@ -70,10 +70,15 @@ decoders. It cannot apply a package, change registry state, activate an overlay
 or grant package permissions.
 
 `thread_launch` starts a definition from the caller's launch-policy allow-list
-in the caller's workspace and thread. It accepts a definition reference, brief
-and retry key, and returns the child thread, action and attempt identity plus
-the admitted title. The child gets its own launch policy and tool scope. A
-launch that would create a different thread is refused rather than orphaned.
+in the caller's thread, in the caller's workspace or in an optional
+`workspace_id`. It accepts a definition reference, brief and retry key, and
+returns the child thread, action and attempt identity plus the admitted title.
+A workspace other than the binding's needs `bee.workspaces.launch` on it in the
+caller's own scope (the host attaches `bee:workspace_launch_policy` only to
+agents it lets act across workspaces); the launch then runs as the same actor
+bound to that workspace. The child gets its own launch policy and tool scope
+and holds a host lease on its workspace while it runs. A launch that would
+create a different thread is refused rather than orphaned.
 
 ## Coordinating with other sessions
 

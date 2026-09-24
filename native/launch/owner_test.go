@@ -122,8 +122,38 @@ func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 	if application, present := bridge["application"]; present {
 		t.Fatalf("desktop bridge opens initial application %v", application)
 	}
+	if bridge["folder"] != true {
+		t.Fatalf("bee start does not compose its folder workspace: folder = %v", bridge["folder"])
+	}
 	if execution, _ := bridge["execution"].(string); len(execution) != 32 {
 		t.Fatalf("desktop execution = %v", bridge["execution"])
+	}
+}
+
+// A daemon's desktop bridge serves the node's catalog workspaces and composes
+// no folder workspace.
+func TestPrepareDaemonComposesNoFolderWorkspace(t *testing.T) {
+	state := t.TempDir()
+	host := newHost(systemHostResolver())
+	plan, err := host.Plan(context.Background(), app.Launch{Op: app.OpRun, Command: desktopCommand, Args: []string{daemonArgument},
+		State: state, Dir: state, Explicit: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, release, err := plan.Prepare(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = release() }()
+	input, _ := config.Get("override.bee.hive.host:supervisor_service:input")
+	inputs, ok := input.([]any)
+	if !ok || len(inputs) != 1 {
+		t.Fatalf("supervisor input override = %#v", input)
+	}
+	settings, _ := inputs[0].(map[string]any)
+	bridge, ok := settings["desktop"].(map[string]any)
+	if !ok || bridge["folder"] != false || bridge["local_clients"] != true {
+		t.Fatalf("daemon desktop bridge = %#v", settings["desktop"])
 	}
 }
 

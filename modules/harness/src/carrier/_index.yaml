@@ -70,6 +70,11 @@ entries:
     placement_protocol: bee.placement.native:protocol
     launch_request: bee.placement:request
     hook_records: bee.harness.carrier:hook_records
+- name: lease
+  kind: library.lua
+  source: file://lease.lua
+  imports:
+    leases: bee.application:host_leases
 - name: process
   kind: process.lua
   source: file://process.lua
@@ -78,8 +83,9 @@ entries:
   imports:
     machine: bee.harness.carrier:machine
     placement_protocol: bee.placement.native:protocol
+    lease: bee.harness.carrier:lease
   security:
-    policies: [bee:carrier_policy, bee:carrier_environment_policy]
+    policies: [bee:carrier_policy, bee:carrier_environment_policy, bee:workspace_host_lease_policy]
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua

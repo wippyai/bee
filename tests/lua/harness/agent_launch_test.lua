@@ -45,6 +45,19 @@ local function binding(policy_ref: string): {[string]: unknown}
 end
 local function define_tests()
     test.describe("Agent launch owner operation", function()
+        test.it("launches into another workspace only when the caller's own scope grants it", function()
+            local other = string.rep("c", 32)
+            local refused = launch(binding(DENYING_POLICY), {definition_ref = PERMITTED, brief = "work elsewhere", idempotency_key = "elsewhere", workspace_id = other})
+            test.eq(fault(refused), "DENIED")
+            -- With the host's launch grant the facade binds the call to that
+            -- workspace and the backend decides as it does for the caller's own.
+            local granted = funcs.new():with_actor(security.new_actor(AGENT)):with_scope(security.new_scope({
+                assert(security.policy(FACADE_POLICY)), assert(security.policy("bee:workspace_launch_policy"))}))
+            local executor = assert(granted:with_context({[BINDING_KEY] = binding(DENYING_POLICY)}))
+            local reply, err = executor:call(CALL, {definition_ref = PERMITTED, brief = "work elsewhere", idempotency_key = "elsewhere", workspace_id = other})
+            if err then error(tostring(err)) end
+            test.eq(fault(reply :: Object), "LAUNCH_NOT_PERMITTED")
+        end)
         test.it("decodes only a bounded definition, brief and retry key", function()
             local request = agent_launch.decode_request({definition_ref = PERMITTED, brief = "do the work", idempotency_key = "key-1"})
             test.eq(request and request.definition_ref, PERMITTED)
@@ -54,7 +67,11 @@ local function define_tests()
             local _, no_key = agent_launch.decode_request({definition_ref = PERMITTED, brief = "x"})
             test.eq(no_key, "idempotency_key is not a bounded identifier")
             local _, smuggled = agent_launch.decode_request({definition_ref = PERMITTED, brief = "x", idempotency_key = "k", workspace_id = "other"})
-            test.eq(smuggled, "unknown field workspace_id")
+            test.eq(smuggled, "workspace_id must be a workspace identity")
+            local chosen = agent_launch.decode_request({definition_ref = PERMITTED, brief = "x", idempotency_key = "k", workspace_id = string.rep("c", 32)})
+            test.eq(chosen and chosen.workspace_id, string.rep("c", 32))
+            local _, extra = agent_launch.decode_request({definition_ref = PERMITTED, brief = "x", idempotency_key = "k", owner = "me"})
+            test.eq(extra, "unknown field owner")
             local _, oversized = agent_launch.decode_request({definition_ref = PERMITTED, brief = string.rep("x", agent_launch.MAX_BRIEF_BYTES + 1), idempotency_key = "k"})
             test.eq(oversized, "brief must be nonempty bounded text")
             local _, no_definition = agent_launch.decode_request({brief = "x", idempotency_key = "k"})

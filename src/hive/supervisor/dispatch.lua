@@ -9,12 +9,13 @@ local bounds = require("bounds")
 
 local M = {}
 
--- Exact three reviewed telemetry operations only in initial executable allowlist.
+-- Exact reviewed open operations: node telemetry and the node's workspace catalog.
 -- Generic exposing metadata must not make arbitrary funcs callable.
 local ALLOWED_OPERATIONS: {[string]: boolean} = {
     ["bee.hive.telemetry:presence"] = true,
     ["bee.hive.telemetry:stats"] = true,
     ["bee.hive.telemetry:catalog_list"] = true,
+    ["bee.hive.host:workspaces"] = true,
 }
 
 local function operation_namespace(operation_ref: string): string?

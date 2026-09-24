@@ -44,7 +44,7 @@ func (r *fakeRedeemer) Close() {}
 func joinAdmitter(t *testing.T, redeem redeemer) (*admitter, string) {
 	t.Helper()
 	state := t.TempDir()
-	_, release, err := prepareOwner(state)
+	_, release, err := prepareOwner(state, true)
 	if err != nil {
 		t.Fatal(err)
 	}

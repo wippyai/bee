@@ -121,39 +121,37 @@ func joinOwner(ctx context.Context, join joinRequest) error {
 	return session.JoinEnrolled(ctx, config, join.Node, join.Key, os.Stdin, os.Stdout)
 }
 
-// printDesktops writes the running Bee's displays, then the first page of its
-// workspaces. Displays belong to the node; any of them attaches to any
-// workspace.
+// printDesktops writes one line per display a client can attach: every node
+// display in the folder workspace the owner composes, or, on a node without
+// one, the node's default display in each workspace of the catalog's first
+// page. Displays belong to the node; any of them attaches to any workspace.
 func printDesktops(out io.Writer, catalog hive.DesktopCatalog) error {
-	if _, err := fmt.Fprintln(out, "DISPLAY                           DEFAULT"); err != nil {
+	if _, err := fmt.Fprintln(out, "WORKSPACE                         DISPLAY                           DEFAULT"); err != nil {
 		return err
 	}
-	for _, desktop := range catalog.Desktops {
+	row := func(workspace string, desktop hive.DesktopDescription) error {
 		marker := ""
 		if desktop.IsDefault {
 			marker = "yes"
 		}
-		if _, err := fmt.Fprintf(out, "%s  %s\n", desktop.ID, marker); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintln(out, "\nWORKSPACE                         SERVED  FOLDER  LABEL"); err != nil {
+		_, err := fmt.Fprintf(out, "%s  %s  %s\n", workspace, desktop.ID, marker)
 		return err
 	}
+	if catalog.Default != "" {
+		for _, desktop := range catalog.Desktops {
+			if err := row(catalog.Default, desktop); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	for _, workspace := range catalog.Workspaces {
-		served, folder := "no", ""
-		if workspace.Served {
-			served = "yes"
-		}
-		if workspace.ID == catalog.Default {
-			folder = "yes"
-		}
-		if _, err := fmt.Fprintf(out, "%s  %-6s  %-6s  %s\n", workspace.ID, served, folder, workspace.Label); err != nil {
+		if err := row(workspace.ID, catalog.Desktops[0]); err != nil {
 			return err
 		}
 	}
 	if catalog.Next != "" {
-		if _, err := fmt.Fprintln(out, "(more workspaces follow; run bee without arguments to pick and search)"); err != nil {
+		if _, err := fmt.Fprintln(out, "(more workspaces follow; run bee client to pick and search)"); err != nil {
 			return err
 		}
 	}

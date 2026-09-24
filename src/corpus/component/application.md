@@ -11,6 +11,7 @@ application, select a workspace, open a store, or grant access to a thread.
 | `client`, `arguments`, `interaction` | Application launch and broker-facing values used by standalone application processes |
 | `caller`, `text`, `status_reader`, `status_surface` | Typed owner replies and bounded presentation values |
 | `appearance`, `names` | Shared semantic presentation values for applications and desktop consumers |
+| `frame` | The application frame every Bee application draws with: header, tabs, action bar, status and key-hint footer, list window, table and empty state |
 | `thread_protocol` | Exact bounded requests and replies for the authenticated application-to-broker thread facade |
 
 Applications still run as standalone processes. The host admits their exact

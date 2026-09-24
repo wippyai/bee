@@ -696,8 +696,8 @@ def exercise():
             guide_ui.wait("Saved count 1", timeout=20)
 
             increment_row, increment_line = next((index, row) for index, row in enumerate(guide_ui.screen.display, 1)
-                                                  if "[Enter] Add one" in row)
-            increment_x = increment_line.index("[Enter] Add one") + 1
+                                                  if "Enter Add one" in row)
+            increment_x = increment_line.index("Enter Add one") + 1
             guide_ui.mouse(0, increment_x, increment_row)
             guide_ui.mouse(0, increment_x, increment_row, True)
             guide_ui.wait("Count: 2", timeout=20)

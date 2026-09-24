@@ -7,6 +7,7 @@ local uuid = require("uuid")
 local time = require("time")
 local json = require("json")
 local appearance = require("appearance")
+local frame = require("frame")
 local view = require("view")
 local function main(value: unknown)
     local launch = client.launch(value)
@@ -35,7 +36,7 @@ local function main(value: unknown)
             or restored.offset ~= math.floor(restored.offset) then error("Invalid Settings checkpoint") end
         pane = restored.pane; offset = math.floor(restored.offset)
     end
-    local hits: {view.Hit} = {}
+    local hits: {frame.Hit} = {}
     local pending = ""
     local running, dirty = true, true
     local function count(): integer return pane == "taskbar" and 2 or (pane == "theme" and #appearance.themes() or (pane == "background" and #appearance.backgrounds() or (pane == "about" and view.about_count(width) or 0))) end
@@ -95,9 +96,9 @@ local function main(value: unknown)
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
         if dirty then
-            local frame = view.draw(width, height, preferences, pane, offset, status)
-            hits = frame.hits
-            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local drawn = view.draw(width, height, preferences, pane, offset, status)
+            hits = drawn.hits
+            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
             local checkpoint = json.encode({pane = pane, offset = offset})
             if checkpoint ~= last_checkpoint then
@@ -158,7 +159,7 @@ local function main(value: unknown)
                     local step = (data.button == "wheel_up" or data.button == "up") and -grid.columns or grid.columns
                     browse(step)
                 elseif data.action == "press" and data.button == "left" then
-                    local hit = view.hit(hits, x, y)
+                    local hit = frame.hit(hits, x, y)
                     if hit then
                         if hit.kind == "inherit" then inherit()
                         elseif hit.kind == "theme" then switch("theme")

@@ -5,6 +5,7 @@ local channel = require("channel")
 local uuid = require("uuid")
 local client = require("client")
 local appearance = require("appearance")
+local frame = require("frame")
 local view = require("view")
 
 local function main(value: unknown)
@@ -20,7 +21,7 @@ local function main(value: unknown)
     local preferences = appearance.defaults()
     local section: integer = 1
     local selected: integer = 1
-    local hits: {view.Hit} = {}
+    local hits: {frame.Hit} = {}
     local running, dirty, ready = true, true, false
 
     if broker then
@@ -28,9 +29,9 @@ local function main(value: unknown)
     end
     while running do
         if dirty then
-            local frame = view.draw(width, height, preferences, section, selected)
-            hits = frame.hits
-            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local drawn = view.draw(width, height, preferences, section, selected)
+            hits = drawn.hits
+            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not ready then client.ready(launch); ready = true end
             dirty = false
         end
@@ -56,9 +57,10 @@ local function main(value: unknown)
                 elseif key == "down" then if selected < view.item_count(section) then selected = selected + 1 end; dirty = true
                 elseif key == "esc" or key == "escape" then running = false end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                 if hit then
-                    if hit.kind == "section" then section = hit.index; selected = 1
+                    local chosen = view.section_of(hit.kind)
+                    if chosen > 0 then section = chosen; selected = 1
                     elseif hit.kind == "item" then selected = hit.index end
                     dirty = true
                 end

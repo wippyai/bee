@@ -843,9 +843,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 5549,
+      "bytes": 5588,
       "id": "docs/agent_guide",
-      "sha256": "352fb9e0a79afefbfb9e706d617a933361da96fa3945068b68859c0e0bc00cc3",
+      "sha256": "6adcd1cbc77808594777015d0b09f13fb1a14452a9087d2f2de2f25593a39c12",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -891,9 +891,9 @@
       "topic": "application"
     },
     {
-      "bytes": 7100,
+      "bytes": 8183,
       "id": "docs/ui_brand_book",
-      "sha256": "13780e7450391cb3fdc0a4b0797629ad71ba4ba74a844e471d6805336818a23e",
+      "sha256": "c3ad1227e9b038bc3594876f3f43dbefaa318db305ebccc33de0c56fd3351a0d",
       "source": "docs/guides/ui.md",
       "title": "Bee UI brand book",
       "topic": "ui"
@@ -979,9 +979,9 @@
       "topic": "component"
     },
     {
-      "bytes": 1156,
+      "bytes": 1315,
       "id": "component/application",
-      "sha256": "c3ca9029234040ce670483e6c83e21790feb1a61ea8a3b2d768496c1b3bb6606",
+      "sha256": "3e1737364fe6ab2bb820f7d006ab0a9b35e4ddeb5754a8055c5219af87516a91",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -1155,9 +1155,9 @@
       "topic": "component"
     },
     {
-      "bytes": 23186,
+      "bytes": 25107,
       "id": "toolkit",
-      "sha256": "9cd983188a1e9f0b55af14815a20fc9585a6bf25da4e36021c9c53a38ae990cc",
+      "sha256": "26452fa22bf74976862937aae9e77b5bdd80359ec7e8e29546db2276e6f61637",
       "source": "generated: modules/application/src, src/apps, modules/gov/src/traits/guide.lua",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
@@ -1166,7 +1166,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 1238815,
+    "bytes": 1242017,
     "documents": 145
   }
 }

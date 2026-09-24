@@ -29,6 +29,21 @@ local function define_tests()
             test.is_true(enabled)
         end)
 
+        test.it("keeps the whole key help at 80 columns and names an empty pane's next action once", function()
+            local state = model.new("workspace-destination")
+            local drawn = view.draw(80, 24, appearance.defaults(), state, 0)
+            local rows: {string} = {}
+            for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            test.is_true(rows[1]:find("0 available · 0 staged", 1, true) ~= nil)
+            test.is_true(rows[4]:find("No overlay versions are available", 1, true) ~= nil)
+            test.is_true(rows[5]:find("F refresh", 1, true) ~= nil)
+            test.is_true(rows[24]:find("Tab view · ↑↓ choose · Enter next · T details · F refresh · Esc close", 1, true) ~= nil)
+            test.is_nil(rows[24]:find("…", 1, true))
+            test.is_true(rows[23]:find("Details", 1, true) ~= nil)
+            local panes = 0
+            for _, hit in ipairs(drawn.hits) do if view.pane_of(hit.kind) then panes = panes + 1 end end
+            test.eq(panes, 3)
+        end)
         test.it("shows available versions with an explicit local Stage action", function()
             local state = model.new("workspace-destination")
             local digest = string.rep("a", 64)

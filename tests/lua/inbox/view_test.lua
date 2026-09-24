@@ -5,6 +5,7 @@ local test = require("test")
 local tty = require("tty")
 local model = require("model")
 local view = require("view")
+local frames = require("frames")
 local appearance = require("appearance")
 type Object = {[string]: unknown}
 local function request(id: string, state: string, prompt: string): Object
@@ -40,7 +41,7 @@ local function define_tests()
                         test.is_true(hit.x >= 1 and hit.y >= 1)
                         test.is_true(hit.x + hit.width - 1 <= width)
                         test.is_true(hit.y + hit.height - 1 <= height)
-                        test.not_nil(view.hit(frame.hits, hit.x, hit.y))
+                        test.not_nil(frames.hit(frame.hits, hit.x, hit.y))
                     end
                 end
             end
@@ -68,6 +69,36 @@ local function define_tests()
             test.not_nil(model.decision_intent(state, "q1", "approved"))
             test.is_false(offers("approve"))
             test.is_false(offers("refresh"))
+        end)
+        test.it("names the empty inbox's next action and keeps hints beside a status", function()
+            local state = model.new({"ws-1"})
+            local empty = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "Refreshed")
+            local rows: {string} = {}
+            for index, row in ipairs(empty.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            test.is_true(rows[3]:find("No requests", 1, true) ~= nil)
+            test.is_true(rows[4]:find("R refresh", 1, true) ~= nil)
+            test.is_true(rows[20]:find("Refreshed", 1, true) ~= nil)
+            test.is_true(rows[20]:find("↑↓ select · Enter open", 1, true) ~= nil)
+            local idle = view.draw(80, 20, appearance.defaults(), state, model.rows(state), 0, "").rows[20]:gsub("\27%[[0-9;]*m", "")
+            test.is_true(idle:find("W withdraw · R refresh", 1, true) ~= nil)
+            test.is_nil(idle:find("…", 1, true))
+        end)
+        test.it("marks the selected request without color and counts pending requests in the header", function()
+            local state = model.new({"ws-1"})
+            model.apply_inbox(state, "ws-1", {ok = true, error = nil, value = {changes = {
+                {seq = 1, approval_id = "r1", revision = 1, request = request("r1", "pending", "x")},
+                {seq = 2, approval_id = "r2", revision = 1, request = request("r2", "pending", "y")}}, next_seq = 2, more = false}, replayed = false})
+            model.select(state, "r2")
+            local drawn = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "")
+            local rows: {string} = {}
+            for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            test.is_true(rows[1]:find("2 pending · 2 shown", 1, true) ~= nil)
+            test.eq(rows[3]:sub(1, 1), " ")
+            test.eq(rows[4]:sub(1, #"›"), "›")
+            model.apply_read(state, "r2", {ok = true, error = nil, value = request("r2", "pending", "y"), replayed = false})
+            model.toggle_technical(state)
+            local detailed = table.concat(view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "").rows, "\n")
+            test.is_true(detailed:find(" Hide details ", 1, true) ~= nil)
         end)
         test.it("shows keyboard guidance when no operation needs attention", function()
             local state = model.new({"ws-1"})

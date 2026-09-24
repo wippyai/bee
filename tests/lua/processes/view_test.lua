@@ -60,6 +60,38 @@ local function define_tests()
             test.is_nil(services:find("\27[31m", 1, true))
             test.is_nil(services:find("\7", 1, true))
         end)
+        test.it("names the app, its live state and keys, and tells same-source processes apart by PID suffix", function()
+            local sample: probe.Snapshot = {
+                processes = {
+                    {pid = "{node@bee:workers|0x00017}", source = "bee.settings:app", host = "main", state = "idle", steps = 12},
+                    {pid = "{node@bee:workers|0x00018}", source = "bee.settings:app", host = "main", state = "idle", steps = 14},
+                    {pid = "{node@bee:workers|0x00002}", source = "bee.host:main", host = "main", state = "idle", steps = 96}},
+                services = {}, heap = 1048576, heap_objects = 1, reserved = 2097152, gc_cycles = 1, goroutines = 2,
+                queue = 0, executed = 9, host_executed = {main = 9}, error = "",
+            }
+            local history = probe.new_history()
+            probe.append(history, sample, nil, 0)
+            local rows = view.items(sample, false)
+            local drawn = view.draw(80, 24, sample, history, appearance.defaults(), rows[2].pid, 0, false, "", false, false, rows, false)
+            local plain: {string} = {}
+            for index, row in ipairs(drawn.rows) do plain[index] = row:gsub("\27%[[0-9;]*m", "") end
+            local text = table.concat(plain, "\n")
+            test.is_true(plain[1]:find("PROCESS MANAGER", 1, true) ~= nil)
+            test.is_true(plain[1]:find("Live · 1s · 3 processes", 1, true) ~= nil)
+            test.is_true(text:find("bee.settings:app · 0x00017 ", 1, true) ~= nil)
+            test.is_true(text:find("bee.settings:app · 0x00018 ", 1, true) ~= nil)
+            test.is_nil(text:find("0x00017}", 1, true) and text:find("· 0x00017}", 1, true))
+            test.is_true(plain[24]:find("↑↓ select · Tab switch · S sort · P pause · Del stop · Esc close", 1, true) ~= nil)
+            test.is_true(plain[23]:find("Pause", 1, true) ~= nil and plain[23]:find("Stop app", 1, true) ~= nil)
+            local kinds: {[string]: boolean} = {}
+            for _, hit in ipairs(drawn.hits) do kinds[hit.kind] = true end
+            test.is_true(kinds["processes"] and kinds["services"] and kinds["pause"] and kinds["sort"] and kinds["stop"] and kinds["row"])
+            local marked = 0
+            for _, row in ipairs(plain) do if row:sub(1, #"›") == "›" then marked = marked + 1; test.is_true(row:find("0x00018", 1, true) ~= nil) end end
+            test.eq(marked, 1)
+            local confirming = view.draw(80, 24, sample, history, appearance.defaults(), rows[2].pid, 0, false, "", true, false, rows, false)
+            test.is_true(confirming.rows[24]:find("Stop selected app? Enter confirms · Esc cancels", 1, true) ~= nil)
+        end)
     end)
 end
 

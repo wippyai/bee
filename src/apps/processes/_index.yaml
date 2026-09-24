@@ -12,6 +12,7 @@ entries:
   - time
   - uuid
   imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance
     probe: bee.processes:probe
     view: bee.processes:view
@@ -35,9 +36,8 @@ entries:
 - name: view
   kind: library.lua
   source: file://view.lua
-  modules:
-  - tty
   imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance
     probe: bee.processes:probe
     text: bee.application:text

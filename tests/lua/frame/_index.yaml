@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.application.frame_test
+entries:
+- name: frame_test
+  kind: function.lua
+  source: file://frame_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    frame: bee.application:frame
+    appearance: bee.application:appearance

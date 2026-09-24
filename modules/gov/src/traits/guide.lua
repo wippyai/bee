@@ -10,7 +10,7 @@ local preflight = require("preflight")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@4"
+M.REVISION = "bee.governance-component-guide@5"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -59,16 +59,18 @@ end
 local CONFIG_SHAPE_RULE = M.config_shape_rule()
 
 -- The minimal application: one process.lua entry carrying its Lua source
--- inline, which renders a small responsive terminal surface with semantic
--- appearance, keyboard/mouse parity and honest checkpoint feedback.
+-- inline, which renders a small responsive terminal surface through the
+-- shared application frame, with keyboard/mouse parity and honest
+-- checkpoint feedback.
 M.SOURCE = [==[local tty = require("tty")
 local client = require("client")
 local process = require("process")
 local channel = require("channel")
 local json = require("json")
 local appearance = require("appearance")
+local frame = require("frame")
 
-local RESET = "\27[0m"
+local HINTS = frame.hints({{key = "Enter", verb = "add one"}, {key = "Esc", verb = "exit"}})
 
 local function main(value: unknown)
     local launch = client.launch(value)
@@ -96,69 +98,30 @@ local function main(value: unknown)
     local pending_count: integer? = nil
     local status = "Ready"
     local running = true
-    local action_y = 0
-    local increment_x, increment_width = 0, 0
-    local exit_x, exit_width = 0, 0
+    local hits: {frame.Hit} = {}
 
-    local function clip(value: string, room: integer): string
-        if room <= 0 then return "" end
-        return tty.text.truncate(value:gsub("%c", " "), room, "…")
-    end
-
-    local function fit(value: string, room: integer): string
-        local clipped = clip(value, room)
-        return clipped .. string.rep(" ", math.max(0, room - tty.text.width(clipped)))
-    end
-
+    -- One frame: header, work rows, the action bar and the status footer.
+    -- Every row is bounded to the canvas; hits come from what was drawn.
     local function paint()
-        local theme = appearance.theme(preferences.theme)
-        local canvas = tty.canvas(width, height)
-        local function line(y: integer, value: string, foreground: string?, background: string?)
-            if y < 1 or y > height then return end
-            local fg = foreground or theme.text
-            local bg = background or theme.surface
-            canvas:put(1, y, appearance.style(fg, bg) .. fit(value, width) .. RESET, width)
-        end
-        local function put(x: integer, y: integer, value: string, foreground: string, background: string): integer
-            if x < 1 or x > width or y < 1 or y > height then return 0 end
-            local room = width - x + 1
-            local clipped = clip(value, room)
-            canvas:put(x, y, appearance.style(foreground, background) .. clipped .. RESET, room)
-            return tty.text.width(clipped)
-        end
-        canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-        for y = 1, height do line(y, "") end
-
-        local title = height >= 3 and "COUNTER APP" or "COUNTER APP · " .. tostring(count)
-        line(1, title, theme.text)
-        if height >= 5 then
-            line(2, "WORK", theme.muted)
-            line(3, "Count: " .. tostring(count), theme.accent)
-            local saved_text = saved == nil and "Saved: —" or "Saved: " .. tostring(saved)
-            line(4, saved_text, theme.muted)
+        local painter = frame.new(width, height, preferences)
+        local theme = painter.theme
+        frame.header(painter, "COUNTER APP", height < 4 and ("Count: " .. tostring(count)) or nil)
+        if height >= 6 then
+            frame.line(painter, 2, "WORK", theme.muted)
+            frame.line(painter, 3, "Count: " .. tostring(count), theme.text)
+            frame.line(painter, 4, saved == nil and "Saved: —" or ("Saved: " .. tostring(saved)), theme.muted)
         elseif height >= 4 then
-            line(2, "Count: " .. tostring(count), theme.accent)
+            frame.line(painter, 2, "Count: " .. tostring(count), theme.text)
         end
-
-        action_y = height >= 2 and height or 0
-        if height >= 3 then line(height - 1, "Status: " .. status, theme.muted) end
-        increment_x, increment_width, exit_x, exit_width = 0, 0, 0, 0
-        if action_y > 0 then
-            line(action_y, "", theme.text)
-            local increment_label = width >= 24 and " [Enter] Add one " or (width >= 10 and " [Enter] +1 " or " +1 ")
-            local exit_label = width >= 24 and " [Escape] Exit " or (width >= 10 and " [Esc] Exit " or " Esc ")
-            local x = width >= 2 and 2 or 1
-            local increment_size = tty.text.width(increment_label)
-            if x + increment_size - 1 <= width then
-                increment_x, increment_width = x, put(x, action_y, increment_label, appearance.selection_text(theme), theme.accent)
-                x = x + increment_width + 1
-            end
-            local exit_size = tty.text.width(exit_label)
-            if x + exit_size - 1 <= width then
-                exit_x, exit_width = x, put(x, action_y, exit_label, theme.text, theme.surface)
-            end
+        if height >= 3 then
+            frame.actions(painter, height - 1, {
+                {kind = "increment", key = "Enter", label = width >= 30 and "Add one" or "+1", enabled = true, primary = true},
+                {kind = "exit", key = "Esc", label = "Exit", enabled = true},
+            })
         end
-        assert(output:present(canvas:rows()))
+        if height >= 2 then frame.footer(painter, "Status: " .. status, HINTS) end
+        hits = painter.hits
+        assert(output:present(frame.rows(painter)))
     end
 
     local function checkpoint()
@@ -221,9 +184,9 @@ local function main(value: unknown)
                 if data.key_type == "enter" then increment()
                 elseif data.key_type == "escape" or data.key_type == "esc" then running = false end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local x, y = math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0)
-                if y == action_y and x >= increment_x and x < increment_x + increment_width then increment()
-                elseif y == action_y and x >= exit_x and x < exit_x + exit_width then running = false end
+                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
+                if hit and hit.kind == "increment" then increment()
+                elseif hit and hit.kind == "exit" then running = false end
             end
         end
     end
@@ -245,7 +208,8 @@ function M.example(): {{[string]: unknown}}
     return {{id = M.DEFINITION_ID, kind = "process.lua",
         data = {source = M.SOURCE, method = "main",
             modules = {"tty", "process", "channel", "json"},
-            imports = {client = "bee.application:client", appearance = "bee.application:appearance"}},
+            imports = {client = "bee.application:client", appearance = "bee.application:appearance",
+                frame = "bee.application:frame"}},
         meta = {type = "bee.application", application = {api_version = 1, lifetime = "view",
             revision = "1", title = M.TITLE, instance_policy = "multiple",
             resume_schema = "guide-counter.v1", restart_policy = "automatic"}}}}
@@ -294,7 +258,13 @@ function M.document(): string
     lines[#lines + 1] = "The process entry carries its Lua source inline and renders with the terminal"
         .. " toolkit: tty.events, tty.start, tty.surface, tty.screen_size, tty.canvas with one-based"
         .. " canvas:put, output:present, client.launch, client.ready, and client.checkpoint when the"
-        .. " metadata declares a resume_schema. Use semantic appearance roles from"
+        .. " metadata declares a resume_schema. Draw every frame through bee.application:frame, the"
+        .. " toolkit Bee's own applications use: frame.new, then frame.header for the uppercase title"
+        .. " and a muted summary, frame.tabs, frame.table or frame.row for selectable rows (a › marker"
+        .. " shows selection without color), frame.empty for an empty or failed list with its next"
+        .. " action, frame.actions on the penultimate row with one primary button, and frame.footer on"
+        .. " the final row for the status and the frame.hints key help; resolve mouse input with"
+        .. " frame.hit over the hits the frame recorded. Use semantic appearance roles from"
         .. " bee.application:appearance, authenticate appearance messages by their broker sender, and"
         .. " declare exactly the native modules and library imports the source uses."
     lines[#lines + 1] = ""
@@ -339,8 +309,8 @@ function M.platform_documentation(): string
         .. " UI) and the terminal toolkit. For an application that works across every node, search the "
         .. table.concat(M.CROSS_NODE_TOPICS, ", ") .. " topics for hive, subscriptions and placement and read the"
         .. " matches. The authored UI rules are in docs/guides/ui.md, and the canonical runnable"
-        .. " UI Guide source is src/apps/stylebook/ (Tools → Learn); it is reference source, not a widget"
-        .. " framework. For a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
+        .. " UI Guide source is src/apps/stylebook/ (Tools → Learn), built on bee.application:frame. For"
+        .. " a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
         .. " topics for the toolkit, layout, styles and input. Read the guide once, then look every"
         .. " question up in the corpus rather than guessing a signature."
 end

@@ -6,6 +6,7 @@ local time = require("time")
 local uuid = require("uuid")
 local funcs = require("funcs")
 local appearance = require("appearance")
+local frame = require("frame")
 local caller = require("caller")
 local model = require("model")
 local view = require("view")
@@ -41,7 +42,7 @@ local function main(value: unknown)
         model.open(state, requested, nil)
     end
     local offset = 0
-    local hits: {view.Hit} = {}
+    local hits: {frame.Hit} = {}
     local status = ""
     local announced = false
     local last_checkpoint = ""
@@ -128,10 +129,10 @@ local function main(value: unknown)
     if state.thread_id then attach() else list() end
     while running do
         if dirty then
-            local frame = view.draw(width, height, preferences, state, offset, status)
-            hits = frame.hits
-            offset = frame.offset
-            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local drawn = view.draw(width, height, preferences, state, offset, status)
+            hits = drawn.hits
+            offset = drawn.offset
+            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
             local checkpoint = model.checkpoint(state)
             if checkpoint ~= last_checkpoint then
@@ -189,7 +190,7 @@ local function main(value: unknown)
                 elseif letter == "t" then model.toggle_technical(state); dirty = true
                 elseif pressed == "esc" or pressed == "escape" then running = false end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                 if hit then
                     status = ""
                     if hit.kind == "thread" then model.pick(state, hit.key); dirty = true

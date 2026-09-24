@@ -35,6 +35,14 @@ malformed route arguments fail planning, so nothing is selected, read or
 started. Whether a well-formed NAME exists depends on the project's admitted
 applications and managed agents; the owner resolves it after the client joins.
 
+`bee stop` takes no arguments. The owner records its process in
+`hive/owner.pid` while it holds the state; `bee stop` sends it the termination
+signal its runtime answers with a graceful shutdown, then reports `Bee stopped`
+once the state lock is free, or `Bee is not running for this project`. Windows
+has no signal that reaches a detached owner, so `bee stop` refuses there. A
+desktop client that detaches (Ctrl+Q) from a running owner prints
+`Bee is still running; bee stop ends it`.
+
 `bee hive VERB` manages this node's Hive membership and is decoded before
 project selection like every other command:
 

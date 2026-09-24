@@ -57,6 +57,8 @@ func (host *Host) usage(launch app.Launch) string {
 		"",
 		"Processes:",
 		"  bee start                        run this project's retained owner in the foreground",
+		"  bee stop                         stop this project's owner and report when it has stopped; Ctrl+Q",
+		"                                   in a desktop detaches only that client",
 		"  bee daemon                       run this folder's node in the foreground without a folder workspace;",
 		"                                   it serves the workspaces of its catalog to clients",
 		"  bee MODULE:ENTRY [ARGUMENTS...]  run one application entry directly (recovery and development)",

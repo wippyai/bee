@@ -99,13 +99,18 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	if daemon && len(launch.Args) != 1 {
 		return app.Plan{}, errors.New("bee daemon takes no arguments")
 	}
+	// bee stop ends this project's owner; it needs no client, owner or state lock.
+	stop := desktop && len(launch.Args) > 0 && launch.Args[0] == stopArgument
+	if stop && len(launch.Args) != 1 {
+		return app.Plan{}, errors.New("bee stop takes no arguments")
+	}
 	// An explicit application ID keeps the runtime's own entry, which is how
 	// recovery and development launches still reach an application directly.
 	application := desktop && len(launch.Args) > 0 && strings.Contains(launch.Args[0], ":")
 	// Every other ordinary launch of this executable is a client of the retained
 	// owner. Its words are decoded before a project is selected, so a malformed
 	// invocation reads no state.
-	client := desktop && !owner && !daemon && !application
+	client := desktop && !owner && !daemon && !application && !stop
 	var intent clientIntent
 	if client {
 		parsed, err := parseClientIntent(launch.Args)
@@ -125,6 +130,11 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		}
 		plan.DefaultState = selected
 		state = selected
+	}
+	if stop {
+		plan.DefaultState = ""
+		plan.Run = func(ctx context.Context) error { return stopOwner(ctx, state, os.Stdout, defaultStopSeams()) }
+		return plan, nil
 	}
 	// The retained owner route keeps the runtime's own application start, so it
 	// prepares the owner's cluster, desktop bridge and enrollment publisher.

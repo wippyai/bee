@@ -217,8 +217,24 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		}
 	}
 	join.State = launch.State
-	return seams.join(ctx, join)
+	if err := seams.join(ctx, join); err != nil {
+		return err
+	}
+	// A presenting client detaches from a retained owner; say it still runs
+	// and how to end it.
+	if join.Intent.hive != nil || join.Intent.catalog != nil || join.Intent.listing {
+		return nil
+	}
+	running, err := seams.owned(launch.State)
+	if err != nil || !running {
+		return err
+	}
+	_, err = io.WriteString(seams.report, detachedLine)
+	return err
 }
+
+// detachedLine follows a detached desktop client whose owner keeps running.
+const detachedLine = "Bee is still running; bee stop ends it\n"
 
 // waitDescriptorOrExit waits for a publication that differs from previous,
 // the descriptor present before this client started an owner. The runtime

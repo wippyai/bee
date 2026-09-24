@@ -198,8 +198,8 @@ func TestClientReportsItsRoute(t *testing.T) {
 		running bool
 		want    string
 	}{
-		{name: "cold", running: false, want: "Starting Bee…\n"},
-		{name: "warm", running: true, want: "Connecting to Hive…\n"},
+		{name: "cold", running: false, want: "Starting Bee…\n" + detachedLine},
+		{name: "warm", running: true, want: "Connecting to Hive…\n" + detachedLine},
 	} {
 		t.Run(route.name, func(t *testing.T) {
 			state := t.TempDir()
@@ -484,3 +484,4 @@ func TestWorkspaceCommandsJoinARunningOwnerWithoutARouteLine(t *testing.T) {
 		}
 	}
 }
+

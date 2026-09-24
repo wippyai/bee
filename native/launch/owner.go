@@ -84,7 +84,11 @@ func prepareOwner(state string, folder bool) (boot.Config, func() error, error) 
 	if err != nil {
 		return nil, nil, errors.Join(err, unlock())
 	}
-	return config, unlock, nil
+	forget, err := recordOwnerProcess(state)
+	if err != nil {
+		return nil, nil, errors.Join(err, unlock())
+	}
+	return config, func() error { return errors.Join(forget(), unlock()) }, nil
 }
 
 // prepareLockedOwner builds the owner's boot configuration while it holds the

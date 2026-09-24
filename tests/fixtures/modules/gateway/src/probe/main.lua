@@ -601,8 +601,17 @@ local function main()
     assert(listed_status == 200 and #(((listed_hook :: Object).result :: Object).tools :: {Object}) == 1, "the MCP hook endpoint serves one tool")
     local engine_status, engine_reply = hook_rpc(hook_k, "tools/call", {name = "hook", arguments = {event = "PostToolUse", session_id = "s2", turn_id = "t1", tool_use_id = "call_1", tool_name = "mcp__bee__thread_read", tool_response = {content = {}}}, _meta = {threadId = "s2", progressToken = 1}})
     assert(engine_status == 200 and engine_reply and engine_reply.result ~= nil, "a hook-engine shaped call is accepted")
-    local engine_text = tostring((((engine_reply :: Object).result :: Object).content :: {Object})[1].text)
-    assert(engine_text:find("^queued ") ~= nil and not engine_text:find("{", 1, true), "the MCP answer names the queued status as bare text: " .. engine_text)
+    -- Codex joins the tool's text content into hook stdout and reads it with
+    -- command-hook semantics: plain text is invalid Stop output and becomes
+    -- model context for other events. An observer answers no text at all and
+    -- carries its receipt as structured content.
+    local engine_result = (engine_reply :: Object).result :: Object
+    assert(#(engine_result.content :: {Object}) == 0, "the MCP answer carries no hook stdout: " .. tostring(json.encode(engine_result)))
+    local engine_receipt = engine_result.structuredContent :: Object
+    assert(engine_receipt and engine_receipt.status == "queued" and type(engine_receipt.event_id) == "string", "the receipt is structured: " .. tostring(json.encode(engine_result)))
+    local stop_status, stop_reply = hook_rpc(hook_k, "tools/call", {name = "hook", arguments = {event = "Stop", session_id = "s2", turn_id = "t1", last_assistant_message = "done"}, _meta = {threadId = "s2", progressToken = 2}})
+    local stop_result = stop_reply and (stop_reply :: Object).result :: Object or nil
+    assert(stop_status == 200 and stop_result and #(stop_result.content :: {Object}) == 0 and stop_result.isError == false, "a Stop hook answers no stdout: " .. tostring(json.encode(stop_reply)))
     local _, model_reply = hook_rpc(hook_k, "tools/call", {name = "hook", arguments = {event = "PostToolUse", session_id = "s2", turn_id = "t1", tool_use_id = "call_2"}, _meta = {callId = "call_2", ["x-codex-turn-metadata"] = {turn_id = "t1"}}})
     assert(model_reply and model_reply.error ~= nil and tostring(((model_reply :: Object).error :: Object).message):find("(model)", 1, true), "a model shaped call is refused")
     local _, mixed_reply = hook_rpc(hook_k, "tools/call", {name = "hook", arguments = {event = "PostToolUse", session_id = "s2", turn_id = "t1", tool_use_id = "call_3"}, _meta = {threadId = "s2", callId = "call_3"}})

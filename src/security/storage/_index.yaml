@@ -41,9 +41,18 @@ entries:
 - name: workspace_catalog_manage_policy
   kind: security.policy
   meta:
-    comment: Create, rename, archive and restore node workspaces under the host's admitted roots
+    comment: Create, rename, archive and restore node workspaces under the host's admitted roots, and browse those roots' folders
   policy:
-    actions: [bee.workspaces.manage]
+    actions: [bee.workspaces.manage, bee.workspaces.browse]
+    resources: '*'
+    effect: allow
+- name: workspace_folder_browse_policy
+  kind: security.policy.expr
+  meta:
+    comment: List the admitted roots and page their folders, to pick a folder under them; reads no workspace and creates, changes and archives nothing
+  policy:
+    expression: '(action == "bee.workspaces.read" && resource == "catalog") || action == "bee.workspaces.browse"'
+    actions: [bee.workspaces.read, bee.workspaces.browse]
     resources: '*'
     effect: allow
 - name: workspace_catalog_facade_policy

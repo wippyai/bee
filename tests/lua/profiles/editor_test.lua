@@ -45,6 +45,34 @@ local function define_tests()
             test.is_false(result.options.enabled)
         end)
 
+        test.it("keeps a folder and a thread choice only where the launch allows the override", function()
+            local open, open_error = editor.new(profile(), {options = {model = {"small", "large"}, enabled = {false, true}, note = {kind = "text", max_bytes = 16}},
+                mcp_tools = {"thread_read", "thread_wait"}, instructions = true, workdir = true, thread = true})
+            if not open then error(tostring(open_error)) end
+            test.is_true(editor.set_workdir(open, "bee:workspace_root", "legacy/app"))
+            test.is_true(editor.set_thread(open, "thread-1"))
+            local result, result_error = editor.result(open)
+            if not result then error(tostring(result_error)) end
+            test.eq(result.workdir and result.workdir.path, "legacy/app")
+            test.eq(result.thread and result.thread.thread_id, "thread-1")
+            test.is_false(editor.set_workdir(open, "bee:workspace_root", "../escape"))
+            test.eq(open.workdir and open.workdir.path, "legacy/app")
+            test.is_true(editor.set_workdir(open, nil, nil))
+            test.is_nil(open.workdir)
+            local closed = draft()
+            local refused, refusal = editor.set_workdir(closed, "bee:workspace_root", "legacy")
+            test.is_false(refused)
+            test.eq(refusal, "this launch does not allow choosing a folder")
+            test.is_false(editor.set_thread(closed, "thread-1"))
+            -- A saved choice the launch no longer allows is refused, not dropped.
+            local saved = protocol.profile({title = "Original", definition_ref = "bee:codex", options = {}, mcp_tools = {},
+                instructions = "", workdir = {root_ref = "bee:workspace_root", path = "legacy"}})
+            if not saved then error("saved profile with a folder") end
+            test.is_nil(editor.new(saved, {options = {}, mcp_tools = {}, instructions = false}))
+            test.is_nil(protocol.profile({title = "T", definition_ref = "bee:codex", workdir = {root_ref = "r", path = "/abs"}}))
+            test.is_nil(protocol.profile({title = "T", definition_ref = "bee:codex", thread = {thread_id = "t", title = "x"}}))
+        end)
+
         test.it("edits bounded titles and appends multiline guidance", function()
             local value = draft()
             local changed, err = editor.set_title(value, "Edited")

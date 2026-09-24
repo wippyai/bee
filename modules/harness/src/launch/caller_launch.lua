@@ -77,8 +77,9 @@ function M.start(caller: Caller, request: agent_protocol.Launch, definition: def
     if not plan then return fail(resolve_fault.code, resolve_fault.message) end
     local plan_digest = bounds.text(plan.plan_digest, 64)
     if not plan_digest or #plan_digest ~= 64 then return fail("INTERNAL", "the launch plan has no digest") end
-    local overrides = plan.overrides
-    if request.workdir and not (type(overrides) == "table" and bounds.member("workdir", overrides :: {string})) then
+    local overrides = bounds.ids(plan.overrides, true)
+    if not overrides then return fail("INTERNAL", "the launch plan has no overrides") end
+    if request.workdir and not bounds.member("workdir", overrides) then
         return fail("FORBIDDEN", "the launch does not allow a workdir override")
     end
     -- First-use setup associates the definition's resource roots, and a

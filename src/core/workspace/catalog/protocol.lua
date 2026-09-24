@@ -15,6 +15,7 @@ type Request = {operation: string, create: Create?, workspace_id: string?, label
 local M = {}
 M.READ = "bee.workspaces.read"
 M.MANAGE = "bee.workspaces.manage"
+M.BROWSE = "bee.workspaces.browse"
 M.CATALOG = "catalog"
 M.DEFAULT_PAGE = 50
 M.OPERATIONS = {"create", "read", "list", "search", "rename", "archive", "restore", "inspect", "search_within", "roots", "folders"}
@@ -173,15 +174,15 @@ function M.decode(operation: unknown, value: unknown): (Request?, string?)
 end
 
 -- Reads of one workspace are checked against that workspace; listing, search
--- and the admitted roots against the catalog; creation and browsing a root's
--- folders for it against the root it names; every other change against the
--- workspace it changes.
+-- and the admitted roots against the catalog; creation against the root it
+-- names and browsing a root's folders as browsing that root; every other
+-- change against the workspace it changes.
 function M.authority(request: Request): (string, string)
     local operation = request.operation
     if operation == "list" or operation == "search" or operation == "roots" then return M.READ, M.CATALOG end
     if operation == "folders" then
         local folders = request.folders
-        return M.MANAGE, folders and folders.root_ref or ""
+        return M.BROWSE, folders and folders.root_ref or ""
     end
     if operation == "read" or operation == "inspect" or operation == "search_within" then return M.READ, request.workspace_id or "" end
     if operation == "create" then

@@ -12,7 +12,6 @@ local M = {}
 M.FACADE = "bee.harness.launch:agent_call"
 -- The longest one wait call blocks; a longer wait is a series of them.
 M.WAIT_SLICE_MS = 60000
-type Fault = {code: string, message: string}
 -- A launch request is agent_protocol.Launch: workdir {resource = name} or
 -- {root_ref = root, path = folder}; thread {thread_id = id} or {title = text};
 -- placement "native" or "docker".
@@ -29,18 +28,18 @@ local function text(value: unknown): string?
     if type(value) ~= "string" or value == "" then return nil end
     return value
 end
-local function invoke(request: {[string]: unknown}): ({[string]: unknown}?, Fault?)
+local function invoke(request: {[string]: unknown}): ({[string]: unknown}?, caller.Fault?)
     local reply = owner:invoke(M.FACADE, request) or caller.unknown()
     if not reply.ok then return nil, reply.error or {code = "INTERNAL", message = "the agent facade refused without a fault"} end
     if type(reply.value) ~= "table" then return nil, {code = "INTERNAL", message = "the agent facade returned no value"} end
     return reply.value :: {[string]: unknown}, nil
 end
-local function status_of(value: {[string]: unknown}): (Status?, Fault?)
+local function status_of(value: {[string]: unknown}): (Status?, caller.Fault?)
     local thread_id, attempt_id, state = text(value.thread_id), text(value.attempt_id), text(value.state)
     if not thread_id or not attempt_id or not state then return nil, {code = "INTERNAL", message = "the agent facade returned a malformed status"} end
     return {thread_id = thread_id, attempt_id = attempt_id, state = state, outcome = text(value.outcome), answer = text(value.answer)}, nil
 end
-function M.launch(request: agent_protocol.Launch): (Run?, Fault?)
+function M.launch(request: agent_protocol.Launch): (Run?, caller.Fault?)
     local body: {[string]: unknown} = {operation = "launch", definition_ref = request.definition_ref, brief = request.brief,
         idempotency_key = request.idempotency_key, workspace_id = request.workspace_id, saved_profile_id = request.saved_profile_id,
         saved_profile_revision = request.saved_profile_revision, workdir = request.workdir, thread = request.thread, placement = request.placement}
@@ -53,14 +52,14 @@ function M.launch(request: agent_protocol.Launch): (Run?, Fault?)
     end
     return {thread_id = thread_id, action_id = action_id, attempt_id = attempt_id, definition_ref = definition_ref, title = title, brief = brief}, nil
 end
-function M.status(run: Run): (Status?, Fault?)
+function M.status(run: Run): (Status?, caller.Fault?)
     local value, fault = invoke({operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id})
     if not value then return nil, fault end
     return status_of(value)
 end
 -- Waits until the run ends or timeout_ms passes, reading its thread; the
 -- last status says which. A timeout leaves the run as it is.
-function M.wait(run: Run, timeout_ms: integer): (Status?, Fault?)
+function M.wait(run: Run, timeout_ms: integer): (Status?, caller.Fault?)
     local deadline = time.now():unix_nano() / 1000000 + math.max(timeout_ms, 0)
     while true do
         local remaining = math.floor(deadline - time.now():unix_nano() / 1000000)
@@ -74,7 +73,7 @@ function M.wait(run: Run, timeout_ms: integer): (Status?, Fault?)
 end
 -- Asks the run's placement to stop its child; the run then ends cancelled.
 -- A run whose child has not started yet is refused with NOT_STARTED.
-function M.cancel(run: Run): (Status?, Fault?)
+function M.cancel(run: Run): (Status?, caller.Fault?)
     local value, fault = invoke({operation = "cancel", thread_id = run.thread_id, attempt_id = run.attempt_id})
     if not value then return nil, fault end
     return status_of(value)

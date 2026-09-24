@@ -867,9 +867,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 9556,
+      "bytes": 10728,
       "id": "docs/mcp_configuration",
-      "sha256": "8fd99862f27570bafed0b435fbc9d2ae7c7e2663bd6871c6b91fed430037b902",
+      "sha256": "d803d99d9cd4763a5cbee16e2fb2ac9630ca9d732ef605f84b0833a259b6fb8c",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -907,17 +907,17 @@
       "topic": "ui"
     },
     {
-      "bytes": 11344,
+      "bytes": 11699,
       "id": "docs/carrier",
-      "sha256": "64db39222e1a097b36cfb3382c2e5fbca38d14f010e507c33b4e567031f084ce",
+      "sha256": "74377327c4e5ee24826d2c0fdb5a7debcbbba952817c21f730d9cf67b29b9ae9",
       "source": "docs/reference/agents/carrier.md",
       "title": "Carrier contract",
       "topic": "application"
     },
     {
-      "bytes": 6827,
+      "bytes": 7028,
       "id": "docs/gateway",
-      "sha256": "9b4b9b54616e070fcc0dad5136f306839fed80d4f89f192d046e8ce2e937bbba",
+      "sha256": "93eb198b08038ec08ce7fe27f90a2c72d61f25bb2779c604b9573ab77e9818e9",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -931,9 +931,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 16179,
+      "bytes": 18320,
       "id": "docs/application_contracts",
-      "sha256": "0897c46fda9308af99383e314122ea5048a6da3ac78efb40fb7331bfabe8561e",
+      "sha256": "b2506e6fe8cefde50d7449b87e4d55ff8c7abdeced5f3d192b270954e1b6cbd6",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -971,9 +971,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 19924,
+      "bytes": 20312,
       "id": "docs/workspace_catalog",
-      "sha256": "56177562d94385cbc8f484667efa64135176e6fdfa9303297f3346d1d8dec040",
+      "sha256": "ea260371a2eaa91fca6eb11baec21fc4282380028450f6a62991c32660b990f4",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -995,9 +995,9 @@
       "topic": "component"
     },
     {
-      "bytes": 1985,
+      "bytes": 2700,
       "id": "component/application",
-      "sha256": "a11d8d240be4ec3aee89eddc52280c31314b9fd1863b05e907542fcfd9dbae62",
+      "sha256": "fc1e0afd6e0909663089abd3c7058e2d718a8f11a2f36fd8e5aea7475c4d9d86",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -1091,9 +1091,9 @@
       "topic": "component"
     },
     {
-      "bytes": 17421,
+      "bytes": 18249,
       "id": "component/harness",
-      "sha256": "141edf858ff275fb50fba9576f10d8585a9c134b5545315b7b995d8d3a72f4d0",
+      "sha256": "da2a33bc273e52a6a01e2fef38bc1f244d9e43c8a9d4852cf25d809138e4f135",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -1182,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1350729,
+    "bytes": 1356529,
     "documents": 147
   }
 }

@@ -2,13 +2,19 @@ local bounds = require("bounds")
 local M = {}
 M.SCHEMA = "bee.agent-profile@1"
 M.MAX_OPTIONS = 9
-type Profile = {title: string, definition_ref: string, options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string}
+-- workdir and thread are the launch choices the Agent picker makes with the
+-- profile: a folder under an admitted root and an existing thread. Absent,
+-- the definition's own folder and a new thread are used.
+type Workdir = {root_ref: string, path: string}
+type Thread = {thread_id: string}
+type Profile = {title: string, definition_ref: string, options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string,
+    workdir: Workdir?, thread: Thread?}
 type Request = {operation: string, workspace_id: string, profile_id: string, profile: Profile?, expected_revision: integer, idempotency_key: string, after_key: string, expected_cursor: integer?, limit: integer}
 
 function M.profile(value: unknown): (Profile?, string?)
     local object = bounds.object(value)
     if not object then return nil, "profile must be an object" end
-    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions"})
+    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "workdir", "thread"})
     if extra then return nil, extra end
     local title = bounds.line(object.title, 80)
     if not title or title:match("^%s*$") then return nil, "title must contain 1 to 80 printable bytes" end
@@ -41,7 +47,26 @@ function M.profile(value: unknown): (Profile?, string?)
             return nil, "instructions contain unsupported control bytes"
         end
     end
-    return {title = title, definition_ref = definition_ref, options = options, mcp_tools = tools, instructions = instructions}, nil
+    local workdir: Workdir? = nil
+    if object.workdir ~= nil then
+        local declared = bounds.object(object.workdir)
+        if not declared or bounds.fields(declared, {"root_ref", "path"}) then return nil, "workdir must name only root_ref and path" end
+        local root_ref = bounds.id(declared.root_ref)
+        local path, path_error = bounds.subpath(declared.path == nil and "" or declared.path)
+        if not root_ref then return nil, "workdir.root_ref must be an identifier" end
+        if not path then return nil, "workdir.path: " .. tostring(path_error) end
+        workdir = {root_ref = root_ref, path = path}
+    end
+    local thread: Thread? = nil
+    if object.thread ~= nil then
+        local declared = bounds.object(object.thread)
+        if not declared or bounds.fields(declared, {"thread_id"}) then return nil, "thread must name only thread_id" end
+        local thread_id = bounds.id(declared.thread_id)
+        if not thread_id then return nil, "thread.thread_id must be an identifier" end
+        thread = {thread_id = thread_id}
+    end
+    return {title = title, definition_ref = definition_ref, options = options, mcp_tools = tools, instructions = instructions,
+        workdir = workdir, thread = thread}, nil
 end
 
 function M.decode(value: unknown): (Request?, string?)

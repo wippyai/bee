@@ -16,7 +16,7 @@ type Reply = {ok: boolean, error: {code: string, message: string}?, value: unkno
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
 end
-local function handle(raw: unknown): Reply
+local function handle(raw: unknown): {[string]: unknown}
     local object = bounds.object(raw)
     if not object then return fail("INVALID", "request must be an object") end
     local current = security.actor()
@@ -41,6 +41,6 @@ local function handle(raw: unknown): Reply
     if call_error then return fail("UNAVAILABLE", tostring(call_error)) end
     local reply = bounds.object(result)
     if not reply then return fail("INTERNAL", "the agent backend returned a malformed reply") end
-    return reply :: unknown as Reply
+    return reply
 end
 return {handle = handle}

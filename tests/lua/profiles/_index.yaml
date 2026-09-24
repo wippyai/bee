@@ -89,6 +89,7 @@ entries:
     view: bee.harness.window:profile_view
     editor: bee.harness.window:profile_editor
     appearance: bee.application:appearance
+    caller: bee.application:caller
 - name: codex_effort_test
   kind: function.lua
   source: file://codex_effort_test.lua

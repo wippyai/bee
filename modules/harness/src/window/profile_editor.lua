@@ -13,18 +13,16 @@ M.MAX_TITLE_BYTES = 80
 M.MAX_INSTRUCTIONS_BYTES = preferences.MAX_INSTRUCTIONS_BYTES
 
 type Scalar = string | number | boolean
-type Profile = {
-    title: string,
-    definition_ref: string,
-    options: {[string]: Scalar},
-    mcp_tools: {string},
-    instructions: string,
-}
+type Profile = protocol.Profile
 type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer}
+-- workdir and thread: whether the launch admits choosing a folder and a
+-- thread, as its definition and launch policy allow the override.
 type Allowed = {
     options: {[string]: Option},
     mcp_tools: {string},
     instructions: boolean,
+    workdir: boolean,
+    thread: boolean,
 }
 type Draft = {
     title: string,
@@ -32,6 +30,8 @@ type Draft = {
     options: {[string]: Scalar},
     mcp_tools: {string},
     instructions: string,
+    workdir: protocol.Workdir?,
+    thread: protocol.Thread?,
     -- Kept out of the public result. It is copied at construction and is
     -- consulted on every edit and result validation.
     _allowed: Allowed,
@@ -55,13 +55,16 @@ end
 local function decode_allowed(value: unknown): (Allowed?, string?)
     local raw = object(value)
     if not raw then return nil, "editor allowlist must be an object" end
-    local extra = bounds.fields(raw, {"options", "mcp_tools", "instructions"})
+    local extra = bounds.fields(raw, {"options", "mcp_tools", "instructions", "workdir", "thread"})
     if extra then return nil, "editor allowlist: " .. extra end
     if raw.options == nil or raw.mcp_tools == nil then
         return nil, "editor allowlist needs options and mcp_tools"
     end
     if type(raw.instructions) ~= "boolean" then
         return nil, "editor allowlist.instructions must be a boolean"
+    end
+    if (raw.workdir ~= nil and type(raw.workdir) ~= "boolean") or (raw.thread ~= nil and type(raw.thread) ~= "boolean") then
+        return nil, "editor allowlist.workdir and thread must be booleans"
     end
     -- preferences.apply owns the shared option, tool and instruction bounds.
     -- An empty candidate validates the host declaration without applying any
@@ -89,18 +92,21 @@ local function decode_allowed(value: unknown): (Allowed?, string?)
     end
     local tools: {string} = {}
     for index, tool in ipairs(raw.mcp_tools :: {unknown}) do tools[index] = tool :: string end
-    return {options = options, mcp_tools = tools, instructions = raw.instructions :: boolean}, nil
+    return {options = options, mcp_tools = tools, instructions = raw.instructions :: boolean,
+        workdir = raw.workdir == true, thread = raw.thread == true}, nil
 end
 
 local function raw_profile(draft: Draft): {[string]: unknown}
     return {title = draft.title, definition_ref = draft.definition_ref, options = draft.options,
-        mcp_tools = draft.mcp_tools, instructions = draft.instructions}
+        mcp_tools = draft.mcp_tools, instructions = draft.instructions, workdir = draft.workdir, thread = draft.thread}
 end
 
 local function result_for(draft: Draft): (Profile?, string?)
     if not draft._allowed then return nil, "editor allowlist is missing" end
     local profile, profile_error = protocol.profile(raw_profile(draft))
     if not profile then return nil, profile_error or "profile is invalid" end
+    if profile.workdir and not draft._allowed.workdir then return nil, "this launch does not allow choosing a folder" end
+    if profile.thread and not draft._allowed.thread then return nil, "this launch does not allow choosing a thread" end
     local _, preference_error = preferences.apply(policy(draft._allowed), {
         options = profile.options, mcp_tools = profile.mcp_tools, instructions = profile.instructions,
     })
@@ -118,6 +124,8 @@ local function replace(draft: Draft, profile: Profile)
     draft.options = profile.options
     draft.mcp_tools = profile.mcp_tools
     draft.instructions = profile.instructions
+    draft.workdir = profile.workdir
+    draft.thread = profile.thread
 end
 
 function M.new(profile: Profile, raw_allowed: unknown): (Draft?, string?)
@@ -127,7 +135,7 @@ function M.new(profile: Profile, raw_allowed: unknown): (Draft?, string?)
     if not decoded then return nil, profile_error or "profile is invalid" end
     local draft: Draft = {title = decoded.title, definition_ref = decoded.definition_ref,
         options = decoded.options, mcp_tools = decoded.mcp_tools, instructions = decoded.instructions,
-        _allowed = allowed}
+        workdir = decoded.workdir, thread = decoded.thread, _allowed = allowed}
     local _, invalid = result_for(draft)
     if invalid then return nil, invalid end
     return draft, nil
@@ -293,6 +301,39 @@ function M.tools(draft: Draft): ({ToolRow}?, string?)
     end
     table.sort(rows, function(left: ToolRow, right: ToolRow): boolean return left.name < right.name end)
     return rows, nil
+end
+
+-- The folder the launch works in: a path under an admitted root, or nil for
+-- the definition's own folder.
+function M.set_workdir(draft: Draft, root_ref: string?, path: string?): (boolean, string?)
+    local base, base_error = current(draft)
+    if not base then return false, base_error end
+    if root_ref == nil then
+        draft.workdir = nil
+        return true, nil
+    end
+    if not draft._allowed.workdir then return false, "this launch does not allow choosing a folder" end
+    base.workdir = {root_ref = root_ref, path = path or ""}
+    local checked, checked_error = protocol.profile(raw_profile(base))
+    if not checked then return false, checked_error or "folder is invalid" end
+    draft.workdir = checked.workdir
+    return true, nil
+end
+
+-- The thread the launch joins: an existing thread, or nil for a new one.
+function M.set_thread(draft: Draft, thread_id: string?): (boolean, string?)
+    local base, base_error = current(draft)
+    if not base then return false, base_error end
+    if thread_id == nil then
+        draft.thread = nil
+        return true, nil
+    end
+    if not draft._allowed.thread then return false, "this launch does not allow choosing a thread" end
+    base.thread = {thread_id = thread_id}
+    local checked, checked_error = protocol.profile(raw_profile(base))
+    if not checked then return false, checked_error or "thread is invalid" end
+    draft.thread = checked.thread
+    return true, nil
 end
 
 function M.result(draft: Draft): (Profile?, string?)

@@ -36,7 +36,10 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
         '    if request.workspace_id == string.rep("a", 32) then time.sleep("1s") end\n'
         '    return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,\n'))
     environment = workspace.database_environment(folder)
-    subprocess.run([str(workspace.RUNTIME), "lint"], cwd=folder, env=environment, check=True, timeout=60)
+    # The product composition is linted by `make lint`; this proof lints its fixture
+    # and the harness entries it rewrites.
+    subprocess.run([str(workspace.RUNTIME), "lint", "--ns", "bee.managed_window_fixture,bee.harness.profiles,bee.harness.launch"],
+                   cwd=folder, env=environment, check=True, timeout=60)
     subprocess.run([str(workspace.RUNTIME), "test", "--host", "bee:terminal"], cwd=folder, env=environment, check=True, timeout=60)
 
 print("Managed window app: responsive discovery/activation, cancellation cleanup, broker terminal grant, input/resize, detach/rebind and truthful receipts passed")

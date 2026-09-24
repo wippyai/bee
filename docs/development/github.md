@@ -52,6 +52,36 @@ The release workflow creates draft releases only after its required shard and
 platform checks succeed. See [releasing](../operations/releasing.md) for artifact and publication
 procedures.
 
+## Native CI caches
+
+`native.yml` pins `actions/cache` to a full commit SHA. All cache keys include
+the runner OS and architecture:
+
+| Key prefix and inputs | Cached paths | Used by |
+|---|---|---|
+| `toolchain-v2`: hash of the manifest's runtime and native inputs plus the builder pin, then verifier hash | `.wippy/bin` (the built runtime, its provenance and sidecars, and the builder executable) | Unit, pack, check shards and platform builds |
+| `go-v1`: hash of all `go.sum` files, `native/go.mod` and the builder lock, then job name | Go's `GOCACHE` and `GOMODCACHE` | Repository check, unit, pack, check shards and platform builds |
+| `lua-v1`: runtime commit, hash of all `*.lua` files, then job name | `$HOME/.wippy/cache/lua` | Unit, pack, check shards and platform builds |
+
+The toolchain inputs include the runtime commit, repository, Go version, tags
+and patches, plus the exact native components. Application packs and data do
+not enter a toolchain build, so changing them does not force a rebuild. The
+builder lock names its exact source commit. The toolchain cache has no broad
+restore prefix: a changed build input rebuilds it. On an exact hit,
+`build/verify_cached_toolchain.py` checks those inputs, builder commit, Go
+version, mode and every artifact digest before any cached binary runs. A
+failed verification stops the job. On a miss, the pinned builder action builds
+the toolchain and the same check runs before the result is cached. The builder
+executable's digest is recorded and checked with the toolchain.
+
+Go caches use a matching-input prefix and then an OS/architecture prefix, so
+jobs can reuse downloaded modules and compiled packages as dependencies
+change. Lua caches use a matching-source prefix and then a matching-runtime
+prefix; the runtime's own content checks decide which restored entries remain
+valid when Lua sources change. Cache hits only skip setup work. Lint, unit,
+pack, release checks and packaging still run. The warm push CI target is about
+five minutes; actual time depends on runner load and cache transfer.
+
 Use the repository check while changing workflow or security configuration:
 
 ```sh

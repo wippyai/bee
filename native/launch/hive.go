@@ -209,3 +209,9 @@ func leaveHive(out io.Writer, state, node string) error {
 	_, err = fmt.Fprintf(out, "Left %s\n", strings.TrimSpace(node))
 	return err
 }
+
+// inviteHint tells the person how the other node uses an invite. It goes to
+// stderr so the invite stays the only line on stdout.
+func inviteHint(line string) string {
+	return "Single use. On the node that joins, with its Bee stopped, run:\n  bee hive join " + line + "\n"
+}

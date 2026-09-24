@@ -48,7 +48,8 @@ desktop client that detaches (Ctrl+Q) from a running owner prints
 `bee hive VERB` manages this node's Hive membership and is decoded before
 project selection like every other command:
 
-    bee hive invite            mint a single-use invite and print it as one line
+    bee hive invite            mint a single-use invite, print it as the one stdout line
+                               and tell stderr how the other node runs bee hive join
     bee hive invites           list the invites the supervisor recorded
     bee hive revoke INVITE_ID  revoke a pending invite
     bee hive peers             list the Hive peers and their supervisor sessions

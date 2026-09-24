@@ -26,3 +26,12 @@ entries:
     test: wippy.test:test
     retained_protocol: bee.launch:retained_protocol
     workspaces: bee.storage:binding
+- name: hosts_test
+  kind: function.lua
+  source: file://hosts_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    hosts: bee.launch:hosts
+    leases: bee.launch:host_leases

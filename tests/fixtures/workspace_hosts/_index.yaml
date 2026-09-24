@@ -89,3 +89,28 @@ entries:
         actor: {id: workspace_hosts.logical_supervisor}
         policies: [bee:host_policy, bee.workspace_hosts:supervisor_spawn_policy, bee.workspace_hosts:node_storage_policy,
           bee.workspace_hosts:logical_probe_policy, bee.workspace_hosts:resource_call_policy]
+- name: lazy_spawn_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.host:main, bee.launch:host_manager]
+    effect: allow
+- name: lazy_supervisor
+  kind: process.lua
+  source: file://lazy_supervisor.lua
+  method: main
+  modules: [process, channel, security, time, uuid, json, logger]
+  imports:
+    store: bee.storage:store
+    catalog: bee.storage:catalog
+    decode: bee.protocol:decode
+    recovery: bee.workspace:recovery
+    leases: bee.launch:host_leases
+  meta:
+    command:
+      name: workspace-hosts-lazy-supervisor
+      short: Workspace hosts started on the first lease, stopped when idle, restored and evicted at the cap
+      security:
+        actor: {id: workspace_hosts.lazy_supervisor}
+        policies: [bee:host_policy, bee.workspace_hosts:lazy_spawn_policy, bee:workspace_storage_policy,
+          bee:workspace_host_lease_policy, bee:workspace_host_manager_policy]

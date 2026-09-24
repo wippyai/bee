@@ -58,3 +58,38 @@ backend `bee.workspace.catalog:backend` under the execution scope
 `bee:workspace_catalog_scope`, which holds the store, the admitted roots list,
 the root volumes and the host-name lookup. The backend refuses callers outside
 that scope.
+
+## Live hosts
+
+A workspace costs rows until something uses it. The node host manager
+(`bee.launch:host_manager`, run by the service `bee:workspace_hosts` with a cap
+of 64 live hosts and a 15-minute idle period) starts a workspace host when a
+lease first asks for its workspace and stops it when no lease has held it for
+the idle period. Classic folder mode is unchanged: its launch composition
+starts and owns its one workspace host, and the manager reports that host as
+served (`managed = false`) instead of starting a second one.
+
+A lease is a process-registry name `bee.workspace.lease/<id>` its holder
+registers under the host-named policy `bee:workspace_host_lease_policy`.
+`bee.launch:host_leases.acquire(workspace_id, timeout)` registers the name,
+sends `bee.workspace.hosts.acquire` to the registered manager
+`bee.workspace.hosts` and waits for `bee.workspace.hosts.result`
+(`{host, managed}` or `error_code` `busy`, `unavailable`,
+`permission_denied` or `request_conflict`). The manager answers only the
+process that holds the name the request carries. A lease ends on
+`release(lease)` or when its holder exits; an acquire that times out releases
+its lease rather than retrying.
+
+- The first lease starts the host with the explicit selection
+  `{workspace_id}`; the host restores the workspace from its checkpoint.
+  Leases taken while it starts wait for its readiness.
+- A host no lease holds for the idle period receives the owner's `shutdown`
+  request. It stops only through that path, which checkpoints the
+  workspace's applications; a refused shutdown leaves it serving, and it is
+  neither stopped when idle nor evicted again until a later lease on it ends.
+- At the cap a new workspace takes the place of the least recently used host
+  that no lease holds, after that host has stopped. When every live host is
+  leased the request is refused with `busy`; a leased host is never evicted.
+- Applications hold no lease. An application running in an unleased
+  workspace stops with its host and restarts from its checkpoint when its
+  restart policy is `automatic`.

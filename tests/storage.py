@@ -754,7 +754,7 @@ def client_storage():
             probe(folder, "seed", packed)
             database = folder / "client.db"
             with sqlite3.connect(database) as db:
-                original = db.execute("SELECT client_id, import_workspace, import_receipt FROM client_state").fetchone()
+                original = db.execute("SELECT c.client_id, l.workspace_id, l.import_receipt FROM client_state AS c JOIN client_layouts AS l ON l.desktop_id = c.client_id").fetchone()
                 assert all(len(value) == 32 for value in original)
                 assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
             # Stop after the client commit, before any host-side acknowledgement.
@@ -777,8 +777,11 @@ def client_storage():
             probe(folder, "verify_desktops", packed)
             legacy = root / ("v1-packed" if packed else "v1-source")
             legacy.mkdir()
+            # A v1 row carries the layout itself; rebuild it from the keyed layout.
             with sqlite3.connect(database) as current:
-                populated = current.execute("SELECT * FROM client_state").fetchone()
+                populated = current.execute(
+                    "SELECT 1, c.client_id, l.generation, l.value, l.workspace_id, l.import_receipt "
+                    "FROM client_state AS c JOIN client_layouts AS l ON l.desktop_id = c.client_id").fetchone()
             with sqlite3.connect(legacy / "client.db") as old:
                 old.executescript(v1_sql)
                 old.execute("DELETE FROM client_state")
@@ -788,26 +791,28 @@ def client_storage():
             probe(legacy, "verify", packed)
             probe(legacy, "desktops", packed)
             probe(legacy, "verify_desktops", packed)
+            # The workspace the v1 layout names adopts it under the same desktop identity.
             with sqlite3.connect(legacy / "client.db") as upgraded:
-                assert upgraded.execute("SELECT * FROM client_state").fetchone() == populated
+                assert upgraded.execute("SELECT * FROM client_state").fetchone() == (1, populated[1], 0, None, "", "")
+                assert upgraded.execute("SELECT desktop_id, workspace_id, import_receipt FROM client_layouts").fetchone() == (populated[1], populated[4], populated[5])
                 assert upgraded.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0] == v1_checksum
-                assert upgraded.execute("SELECT count(*) FROM client_schema_migrations").fetchone()[0] == 2
+                assert upgraded.execute("SELECT count(*) FROM client_schema_migrations").fetchone()[0] == 3
             with sqlite3.connect(database) as db:
-                assert db.execute("SELECT client_id, import_workspace, import_receipt FROM client_state").fetchone() == original
+                assert db.execute("SELECT c.client_id, l.workspace_id, l.import_receipt FROM client_state AS c JOIN client_layouts AS l ON l.desktop_id = c.client_id").fetchone() == original
                 ledger = db.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0]
                 db.execute("UPDATE client_schema_migrations SET checksum='changed' WHERE id=1")
             probe(folder, "open", packed, "migration ledger")
             with sqlite3.connect(database) as db:
                 db.execute("UPDATE client_schema_migrations SET checksum=? WHERE id=1", (ledger,))
-                db.execute("INSERT INTO client_schema_migrations VALUES (3, 'future', 'future')")
+                db.execute("INSERT INTO client_schema_migrations VALUES (4, 'future', 'future')")
             probe(folder, "open", packed, "newer")
             with sqlite3.connect(database) as db:
-                db.execute("DELETE FROM client_schema_migrations WHERE id=3")
-                saved_value = db.execute("SELECT value FROM client_state").fetchone()[0]
-                db.execute("UPDATE client_state SET value='{\"version\":2}'")
+                db.execute("DELETE FROM client_schema_migrations WHERE id=4")
+                saved_value = db.execute("SELECT value FROM client_layouts WHERE desktop_id=?", (original[0],)).fetchone()[0]
+                db.execute("UPDATE client_layouts SET value='{\"version\":2}' WHERE desktop_id=?", (original[0],))
             probe(folder, "open", packed, "Unsupported or corrupt client layout")
             with sqlite3.connect(database) as db:
-                db.execute("UPDATE client_state SET value=?", (saved_value,))
+                db.execute("UPDATE client_layouts SET value=? WHERE desktop_id=?", (saved_value, original[0]))
                 db.execute("DELETE FROM client_state")
             probe(folder, "open", packed, "identity row is corrupt")
 
@@ -817,10 +822,10 @@ def client_storage():
             interrupted = root / ("interrupted-pack" if packed else "interrupted-source")
             probe(interrupted, "open", packed)
             with sqlite3.connect(interrupted / "client.db") as db:
-                db.execute("CREATE TRIGGER fail_import BEFORE UPDATE ON client_state BEGIN SELECT RAISE(ABORT, 'injected import failure'); END")
+                db.execute("CREATE TRIGGER fail_import BEFORE INSERT ON client_layouts BEGIN SELECT RAISE(ABORT, 'injected import failure'); END")
             probe(interrupted, "seed", packed, "injected import failure")
             with sqlite3.connect(interrupted / "client.db") as db:
-                assert db.execute("SELECT generation, value, import_receipt FROM client_state").fetchone() == (0, None, "")
+                assert db.execute("SELECT count(*) FROM client_layouts").fetchone()[0] == 0
                 db.execute("DROP TRIGGER fail_import")
             probe(interrupted, "seed", packed)
         # A failed first migration must not leave a ledger claiming success or a
@@ -834,7 +839,7 @@ def client_storage():
             assert db.execute("SELECT count(*) FROM sqlite_master WHERE name IN ('client_state', 'client_schema_migrations')").fetchone()[0] == 0
         staged_store.write_text(healthy)
         probe(failed_migration, "seed")
-    print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial; independent desktop catalog/isolation/CAS/capacity/restart, catalog corruption denial and populated-v1 upgrade")
+    print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified per-workspace layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial; independent desktop catalog/isolation/CAS/capacity/restart, catalog corruption denial and populated-v1 upgrade with layout adoption")
 
 
 if __name__ == "__main__":

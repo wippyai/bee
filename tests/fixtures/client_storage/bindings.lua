@@ -4,9 +4,10 @@ local workspace_store = require("workspace_store")
 local state = require("state")
 local sql = require("sql")
 local function main(mode: string)
-    local left, left_error = store.open("bee.client.db:left")
+    local workspace_id = "0123456789abcdef0123456789abcdef"
+    local left, left_error = store.open("bee.client.db:left", workspace_id)
     if not left then error(tostring(left_error)) end
-    local right, right_error = store.open("bee.client.db:right")
+    local right, right_error = store.open("bee.client.db:right", workspace_id)
     if not right then error(tostring(right_error)) end
     assert(left.client_id ~= right.client_id, "Client bindings share an identity")
     if mode == "seed" then
@@ -19,9 +20,9 @@ local function main(mode: string)
     if not second then error(tostring(second_error)) end
     assert(first.scene.width == 91 and second.scene.width == 112, "Client layouts crossed bindings")
     assert(store.close(left)); assert(store.close(right))
-    local a, a_error = workspace_store.open("bee.workspace.db:left")
+    local a, a_error = workspace_store.open("bee.workspace.db:left", {root_ref = "bee:workspace_root", subpath = ""})
     if not a then error(tostring(a_error)) end
-    local b, b_error = workspace_store.open("bee.workspace.db:right")
+    local b, b_error = workspace_store.open("bee.workspace.db:right", {root_ref = "bee:workspace_root", subpath = ""})
     if not b then error(tostring(b_error)) end
     local first_id, second_id = a:identity(), b:identity()
     assert(first_id and second_id and first_id ~= second_id, "Workspace bindings share an identity")
@@ -33,12 +34,12 @@ local function main(mode: string)
     assert(b:read() == '{"version":1,"probe":"right"}', "Right workspace state crossed bindings")
     assert(a:close()); assert(b:close())
     for _, resource in ipairs({"bee:workspace_db", "bee.workspace.db:left", "/tmp/client.db", "bee.client.db:*", "bee.client.db:", "bee.client.db:../left"}) do
-        local rejected, err = store.open(resource)
+        local rejected, err = store.open(resource, workspace_id)
         assert(not rejected and err == "Invalid client database binding", "Client store accepted a foreign binding")
     end
-    local denied, denied_error = store.open("bee.client.db:forbidden")
+    local denied, denied_error = store.open("bee.client.db:forbidden", workspace_id)
     assert(not denied and denied_error, "A valid resource spelling bypassed native permission")
-    local foreign, foreign_error = workspace_store.open("bee.client.db:left")
+    local foreign, foreign_error = workspace_store.open("bee.client.db:left", {root_ref = "bee:workspace_root", subpath = ""})
     assert(not foreign and foreign_error == "Invalid workspace database binding")
 end
 local function denied()

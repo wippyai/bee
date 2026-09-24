@@ -26,8 +26,17 @@ remains separate in `.wippy/registry.db` (or its configured
 `registry.history_path`).
 
 Local desktop layout belongs to `bee:client_db`, at the selected workspace path
-plus `.client`. The desktop client cannot acquire the workspace store. See
-the [desktop contract](../guides/desktop.md) for qualified tab identities and generations
+plus `.client`. The desktop client cannot acquire the workspace store. Desktop
+identities (the default desktop and up to 32 allocated ones) belong to the
+client node and double as the display IDs workspaces record. Each desktop keeps
+one layout per workspace it shows in `client_layouts`, keyed by
+`(desktop_id, workspace_id)` with its own generation and import receipt;
+`bee.client:store.open(resource, workspace_id, desktop_id?)` binds a handle to
+one pair and `bee.client:store.desktops(resource)` lists and allocates
+identities. A layout written before migration 3 stays on its identity row until
+the first workspace that its import receipt and every target name opens it;
+that workspace adopts it in one transaction under the same desktop identity.
+See the [desktop contract](../guides/desktop.md) for qualified tab identities and generations
 checks and the once-only import from older combined desktop state.
 
 The core-only storage API is:

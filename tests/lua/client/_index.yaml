@@ -44,3 +44,15 @@ entries:
     test: wippy.test:test
     assignments: bee.client:assignments
     transfer: bee.host:transfer
+- name: store_test
+  kind: function.lua
+  source: file://store_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [sql, json]
+  imports:
+    test: wippy.test:test
+    store: bee.client:store
+    state: bee.client:state
+    model: bee.desktop:model
+    appearance: bee.application:appearance

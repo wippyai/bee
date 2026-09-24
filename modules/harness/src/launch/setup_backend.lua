@@ -1,4 +1,7 @@
--- MIT. Host-selected roots are associated once, after a selected definition.
+-- MIT. Host-selected roots are associated once, after a selected definition,
+-- and a caller-chosen folder under an admitted root becomes a named workspace
+-- resource when the launch allows a workdir override.
+local hash = require("hash")
 local funcs = require("funcs")
 local registry = require("registry")
 local security = require("security")
@@ -42,6 +45,35 @@ local function ensure(workspace: string, name: string, root: string): (boolean, 
         end
     end
     return false, "association conflict was not readable"
+end
+-- The folder's association name is derived from its root and path, so the
+-- same folder is one resource however often it is chosen.
+local function folder_name(root: string, path: string): string?
+    local digest, hash_error = hash.sha256(root .. "\n" .. path)
+    if hash_error or not digest then return nil end
+    return "folder-" .. digest:sub(1, 32)
+end
+local function associate_folder(workspace: string, value: unknown): (string?, string?)
+    local folder = bounds.object(value)
+    if not folder or bounds.fields(folder, {"root_ref", "path"}) then return nil, "workdir must name only root_ref and path" end
+    local root = bounds.id(folder.root_ref)
+    local path, path_error = bounds.subpath(folder.path == nil and "" or folder.path)
+    if not root then return nil, "workdir.root_ref is not an identifier" end
+    if not path then return nil, "workdir.path: " .. tostring(path_error) end
+    local name = folder_name(root, path)
+    if not name then return nil, "workdir name digest failed" end
+    local reply, call_error = funcs.call("bee.resources.binding:associate", {workspace_id = workspace, name = name, root_ref = root, subpath = path, allowed_access = "write"})
+    local value_reply = bounds.object(reply)
+    if call_error or not value_reply then return nil, tostring(call_error or "associate workdir") end
+    if value_reply.ok ~= true then
+        local fault = bounds.object(value_reply.error)
+        return nil, tostring(fault and fault.message or "associate workdir")
+    end
+    local association = bounds.object(value_reply.value)
+    if not association or association.root_ref ~= root or association.subpath ~= path or association.allowed_access ~= "write" then
+        return nil, "existing association " .. name .. " differs from the chosen folder"
+    end
+    return name, nil
 end
 type Credential = {provider: string, source: {kind: string, ref: string}, projection_kind: string, optional: boolean}
 local function credential(value: unknown): Credential?
@@ -88,7 +120,7 @@ end
 local function handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     if not request then return fail("request must be an object") end
-    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest"}) then return fail("unknown field") end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "workdir"}) then return fail("unknown field") end
     local workspace, ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace or not ref then return fail("workspace_id and definition_ref are required") end
     if not security.can("bee.resources.manage", workspace) then return fail("resource management is not authorized") end
@@ -100,7 +132,14 @@ local function handle(raw: unknown): {[string]: unknown}
     local names: {string} = {}
     if launch.workdir_policy.kind == "declared_resource" and launch.workdir_policy.resource_ref then names[#names + 1] = launch.workdir_policy.resource_ref end
     if launch.session_resource then names[#names + 1] = launch.session_resource end
-    if #names == 0 and #launch.credentials == 0 then return {ok = true, resources = {}, credentials = {}} end
+    local workdir: string? = nil
+    if request.workdir ~= nil then
+        if not definition.allows(launch, "workdir") then return fail("the launch definition does not allow a workdir override") end
+        local chosen, folder_error = associate_folder(workspace, request.workdir)
+        if not chosen then return fail(folder_error or "associate workdir") end
+        workdir = chosen
+    end
+    if #names == 0 and #launch.credentials == 0 then return {ok = true, resources = {}, credentials = {}, workdir = workdir} end
     local entry = registry.get(SETUP)
     local data = entry and bounds.object(entry.data)
     local roots = data and bounds.object(data.roots)
@@ -125,6 +164,6 @@ local function handle(raw: unknown): {[string]: unknown}
         local ok, setup_error = ensure_credential(workspace, name, chosen)
         if not ok then return fail(setup_error or "define credential") end
     end
-    return {ok = true, resources = names, credentials = launch.credentials}
+    return {ok = true, resources = names, credentials = launch.credentials, workdir = workdir}
 end
 return {handle = handle}

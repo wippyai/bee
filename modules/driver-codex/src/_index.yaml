@@ -221,7 +221,7 @@ entries:
     profile_id: window
     policy_ref: ''
     default_mode: window
-    allowed_overrides: []
+    allowed_overrides: [thread, workdir]
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
@@ -241,7 +241,7 @@ entries:
     profile_id: batch
     policy_ref: ''
     default_mode: batch
-    allowed_overrides: [thread]
+    allowed_overrides: [thread, workdir]
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
     session_resource: session
@@ -262,7 +262,7 @@ entries:
     profile_id: named_batch
     policy_ref: ''
     default_mode: batch
-    allowed_overrides: [thread]
+    allowed_overrides: [thread, workdir]
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
     session_resource: session

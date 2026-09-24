@@ -272,7 +272,9 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         if group then detail = detail .. "; delivered to the group" else detail = detail .. "; delivered to the direct process only" end
         evidence(db, attempt_id, kind, detail, {execution = "stopping"})
     end
+    local stop_requested = false
     local function request_stop(mode: string, grace_ms: integer, why: string)
+        stop_requested = true
         if mode == "forced" then
             signal(9, "signal.kill", why)
         else
@@ -331,7 +333,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 drain_armed = true
             end
             if recipient then
-                process.send(recipient, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil})
+                process.send(recipient, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested})
             end
         elseif kill_armed and selected.channel == kill_timer then
             if not exited then signal(9, "signal.kill", "grace elapsed after " .. kill_why) end
@@ -358,7 +360,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                         process.send(recipient :: string, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
                         sent_through = consumed_through
                         flush()
-                        if exited then process.send(recipient :: string, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil}) end
+                        if exited then process.send(recipient :: string, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested}) end
                     end
                     -- The fence answer goes to the service that asked: from here on
                     -- only the named generation writes or acknowledges.

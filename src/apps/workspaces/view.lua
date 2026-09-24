@@ -7,6 +7,7 @@ local appearance = require("appearance")
 local frame = require("frame")
 local model = require("model")
 local creation = require("creation")
+local folder_picker = require("folder_picker")
 type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
 local M = {}
 
@@ -132,45 +133,6 @@ local function list(painter: frame.Painter, rect: frame.Rect, state: model.State
         selected = selected_index, offset = offset, focused = focused, area = rect})
 end
 
--- The folder step: the roots the host admits, then one page of the folders
--- inside the folder shown, each marked when a workspace holds it.
-local function folders(painter: frame.Painter, rect: frame.Rect, form: creation.Form, offset: integer): frame.Window
-    if form.error then
-        frame.empty(painter, rect.y, form.root and "Could not read the folders" or "Could not read the admitted roots", form.error, rect)
-        return {offset = 0, capacity = 0}
-    end
-    local cells: {{string}} = {}
-    local keys: {string} = {}
-    local columns: {frame.Column}
-    if not form.root then
-        if #form.roots == 0 then
-            frame.empty(painter, rect.y, "No roots are admitted for workspaces", "Esc cancel", rect)
-            return {offset = 0, capacity = 0}
-        end
-        for index, root in ipairs(form.roots) do
-            cells[index] = {root.root_ref, root.access == "write" and "write" or "read"}
-            keys[index] = root.root_ref
-        end
-        columns = {{title = "Root", width = 0}, {title = "Access", width = 6}}
-    else
-        if #form.folders == 0 then
-            frame.empty(painter, rect.y, "No folders inside " .. creation.location(form), "U use this folder · ⌫ up", rect)
-            return {offset = 0, capacity = 0}
-        end
-        for index, folder in ipairs(form.folders) do
-            cells[index] = {folder.name, folder.workspace_id and "workspace" or ""}
-            keys[index] = folder.name
-        end
-        columns = {{title = "Folder", width = 0}, {title = "Holds", width = 9}}
-    end
-    if rect.width < 40 then
-        for index, row in ipairs(cells) do cells[index] = {row[1]} end
-        columns = {columns[1]}
-    end
-    return frame.table(painter, rect.y, rect.y + rect.height - 1, {columns = columns, cells = cells, keys = keys, kind = "folder",
-        selected = form.selected, offset = offset, focused = true, area = rect})
-end
-
 -- The details step: the folder the workspace will hold, its label and, under
 -- a root admitted for writing, the new folder made inside the chosen one.
 local function details(painter: frame.Painter, rect: frame.Rect, form: creation.Form)
@@ -194,7 +156,7 @@ local function details(painter: frame.Painter, rect: frame.Rect, form: creation.
     end
     y = y + 1
     if y <= last then
-        local location = creation.location(form)
+        local location = folder_picker.location(form.picker)
         if writable and form.new_folder ~= "" then location = location .. "/" .. form.new_folder end
         frame.put(painter, rect.x, y, frame.pad("Holds", width), width, theme.muted)
         frame.put(painter, rect.x + width + 2, y, location, rect.width - width - 2, theme.text)
@@ -204,18 +166,18 @@ end
 local function draw_create(painter: frame.Painter, form: creation.Form, offset: integer): Frame
     local theme = painter.theme
     local layout = frame.layout(painter, false, true)
-    local location = creation.location(form)
+    local location = folder_picker.location(form.picker)
     frame.header(painter, "NEW WORKSPACE", location ~= "" and location or "Choose a root")
     local work = layout.work
     if work.y > 2 then frame.steps(painter, 2, {"Folder", "Details"}, form.step == "details" and 2 or 1) end
     local window: frame.Window = {offset = 0, capacity = 0}
     if work.height >= 1 then
         frame.put(painter, work.x, work.y, "Folder", 6, theme.muted)
-        local held = form.held and " · a workspace already" or ""
+        local held = form.picker.held and " · a workspace already" or ""
         frame.put(painter, work.x + 8, work.y, (location ~= "" and location or "Choose a root") .. held, work.width - 8, theme.text)
     end
     local body: frame.Rect = {x = work.x, y = work.y + 2, width = work.width, height = math.floor(math.max(0, work.height - 2))}
-    if form.step == "details" then details(painter, body, form) else window = folders(painter, body, form, offset) end
+    if form.step == "details" then details(painter, body, form) else window = folder_picker.draw(painter, body, form.picker, offset, "U use this folder") end
     if layout.actions > 0 then
         if form.step == "details" then
             frame.actions(painter, layout.actions, {
@@ -223,11 +185,12 @@ local function draw_create(painter: frame.Painter, form: creation.Form, offset: 
                 {kind = "create_back", label = "Back", key = "Esc", enabled = true},
             })
         else
-            local count = form.root and #form.folders or #form.roots
+            local picker = form.picker
+            local count = picker.root and #picker.folders or #picker.roots
             frame.actions(painter, layout.actions, {
                 {kind = "create_open", label = "Open", key = "Enter", enabled = count > 0, primary = true},
-                {kind = "create_use", label = "Use folder", key = "U", enabled = form.root ~= nil},
-                {kind = "create_up", label = "Up", key = "⌫", enabled = form.root ~= nil},
+                {kind = "create_use", label = "Use folder", key = "U", enabled = picker.root ~= nil},
+                {kind = "create_up", label = "Up", key = "⌫", enabled = picker.root ~= nil},
                 {kind = "create_cancel", label = "Cancel", key = "Esc", enabled = true},
             })
         end

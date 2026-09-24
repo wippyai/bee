@@ -16,6 +16,7 @@ local caller = require("caller")
 local leases = require("leases")
 local model = require("model")
 local creation = require("creation")
+local folder_picker = require("folder_picker")
 local view = require("view")
 
 local function main(value: unknown)
@@ -116,13 +117,13 @@ local function main(value: unknown)
     -- The create flow: the admitted roots first, then one page of folders.
     local function begin_create()
         local started = creation.new()
-        creation.apply_roots(started, ask(creation.roots_intent()))
+        folder_picker.apply_roots(started.picker, ask(folder_picker.roots_intent()))
         form = started
         dirty = true
     end
     local function load_folders(current: creation.Form)
-        local intent = creation.folders_intent(current)
-        if intent then creation.apply_folders(current, ask(intent)) end
+        local intent = folder_picker.folders_intent(current.picker)
+        if intent then folder_picker.apply_folders(current.picker, ask(intent)) end
         offset = 0
     end
     local function submit(current: creation.Form)
@@ -136,12 +137,12 @@ local function main(value: unknown)
     end
     local function create_act(current: creation.Form, kind: string, index: integer)
         if kind == "folder" then
-            if current.selected == index then
-                if creation.open(current) then load_folders(current) end
-            else creation.select(current, index) end
-        elseif kind == "create_open" then if creation.open(current) then load_folders(current) end
+            if current.picker.selected == index then
+                if folder_picker.open(current.picker) then load_folders(current) end
+            else folder_picker.select(current.picker, index) end
+        elseif kind == "create_open" then if folder_picker.open(current.picker) then load_folders(current) end
         elseif kind == "create_use" then creation.use(current)
-        elseif kind == "create_up" then if creation.up(current) then load_folders(current) end
+        elseif kind == "create_up" then if folder_picker.up(current.picker) then load_folders(current) end
         elseif kind == "create_cancel" then form = nil
         elseif kind == "create_back" then creation.back(current)
         elseif kind == "create_submit" then submit(current)
@@ -160,11 +161,11 @@ local function main(value: unknown)
             return
         end
         if key == "up" or key == "down" then
-            if creation.move(current, key == "up" and -1 or 1) == "page" then load_folders(current) end
-        elseif key == "pgdown" then if creation.forward(current) then load_folders(current) end
-        elseif key == "pgup" then if creation.backward(current) then load_folders(current) end
-        elseif key == "enter" then if creation.open(current) then load_folders(current) end
-        elseif key == "backspace" or key == "left" then if creation.up(current) then load_folders(current) end
+            if folder_picker.move(current.picker, key == "up" and -1 or 1) == "page" then load_folders(current) end
+        elseif key == "pgdown" then if folder_picker.forward(current.picker) then load_folders(current) end
+        elseif key == "pgup" then if folder_picker.backward(current.picker) then load_folders(current) end
+        elseif key == "enter" then if folder_picker.open(current.picker) then load_folders(current) end
+        elseif key == "backspace" or key == "left" then if folder_picker.up(current.picker) then load_folders(current) end
         elseif key == "esc" or key == "escape" then form = nil
         elseif data.key == "u" then creation.use(current) end
     end
@@ -240,7 +241,7 @@ local function main(value: unknown)
                 local step = (data.button == "wheel_up" or data.button == "up") and -1 or 1
                 if data.action == "wheel" then
                     if current then
-                        if creation.move(current, step) == "page" then load_folders(current) end
+                        if current.step == "folder" and folder_picker.move(current.picker, step) == "page" then load_folders(current) end
                         dirty = true
                     else move(step) end
                 elseif data.action == "press" and data.button == "left" then

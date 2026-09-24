@@ -158,6 +158,21 @@ local function define_tests()
             test.is_true(settled.exit_reconciled)
             test.eq(settled.reason, "the stream ended without a result envelope")
         end)
+        test.it("settles a child stopped on request without a result envelope as cancelled", function()
+            local stopped = {code = nil, signal = nil, uncertain = true, stopped = true}
+            local bare = settle.decide({terminal = nil, stream_ended = false, exit = stopped, drained = true, exit_codes_trustworthy = false})
+            test.eq((bare :: settle.Settlement).outcome, "cancelled")
+            test.is_nil(settle.decide({terminal = nil, stream_ended = false, exit = stopped, drained = false, exit_codes_trustworthy = false}))
+            local ended: driver_types.Terminal = {outcome = "uncertain", answer = nil, resume_ref = "s1", usage = nil,
+                error = {code = "stream_ended", message = "the stream ended without a result envelope", retryable = false}}
+            local cut = settle.decide({terminal = ended, stream_ended = true, exit = stopped, drained = true, exit_codes_trustworthy = false})
+            test.eq((cut :: settle.Settlement).outcome, "cancelled")
+            test.eq((cut :: settle.Settlement).resume_ref, "s1")
+            -- A result the driver reported before the stop still decides.
+            local answered: driver_types.Terminal = {outcome = "succeeded", answer = "done", resume_ref = nil, usage = nil, error = nil}
+            local finished = settle.decide({terminal = answered, stream_ended = false, exit = stopped, drained = true, exit_codes_trustworthy = false})
+            test.eq((finished :: settle.Settlement).outcome, "succeeded")
+        end)
         test.it("preserves canonical payload and stable event keys across old and new implementation", function()
             local binding_id = "bind-gateway-123"
             local turn_id = "turn-action-456"

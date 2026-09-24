@@ -1,37 +1,32 @@
--- MIT. The bounded request of an agent-started launch and the host-named
--- allow-list that decides which launch definitions a managed agent may
--- start. It is pure: it reads no store, starts nothing and grants nothing.
+-- MIT. The host-named allow-list that decides which launch definitions a
+-- managed agent may start, the durable identity of a caller's launch, and the
+-- run identities its status, wait and cancel name. It is pure: it reads no
+-- store, starts nothing and grants nothing.
 local hash = require("hash")
 local bounds = require("bounds")
 local M = {}
-M.MAX_BRIEF_BYTES = 16384
-M.MAX_KEY_BYTES = 64
--- workspace_id names the workspace to launch into; absent, it is the caller's own.
-type Request = {definition_ref: string, brief: string, idempotency_key: string, workspace_id: string?}
+M.MAX_WAIT_MS = 60000
+type Run = {thread_id: string, attempt_id: string}
 -- The action a caller's own scope must grant on a workspace other than its
 -- binding's before it may launch there.
 M.LAUNCH_ACTION = "bee.workspaces.launch"
+-- The action a host grants an application on a launch definition before the
+-- application may start it.
+M.APPLICATION_ACTION = "bee.harness.launch"
+M.MAX_ANSWER_BYTES = 16384
 local function fields(value: unknown, allowed: {string}): string?
     return bounds.fields(value, allowed)
 end
-function M.decode_request(value: unknown): (Request?, string?)
+-- A run the caller started: its thread and attempt.
+function M.decode_run(value: unknown, allowed: {string}): (Run?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown = fields(object, {"definition_ref", "brief", "idempotency_key", "workspace_id"})
+    local unknown = fields(object, allowed)
     if unknown then return nil, unknown end
-    local definition_ref = bounds.id(object.definition_ref)
-    if not definition_ref then return nil, "definition_ref is not an identifier" end
-    local brief = bounds.text(object.brief, M.MAX_BRIEF_BYTES)
-    if not brief or brief == "" then return nil, "brief must be nonempty bounded text" end
-    local idempotency_key = bounds.id(object.idempotency_key)
-    if not idempotency_key or #idempotency_key > M.MAX_KEY_BYTES then return nil, "idempotency_key is not a bounded identifier" end
-    local workspace_id: string? = nil
-    if object.workspace_id ~= nil then
-        local id = bounds.id(object.workspace_id)
-        if not id or #id ~= 32 or id:find("[^0-9a-f]") then return nil, "workspace_id must be a workspace identity" end
-        workspace_id = id
-    end
-    return {definition_ref = definition_ref, brief = brief, idempotency_key = idempotency_key, workspace_id = workspace_id}, nil
+    local thread_id, attempt_id = bounds.id(object.thread_id), bounds.id(object.attempt_id)
+    if not thread_id then return nil, "thread_id is not an identifier" end
+    if not attempt_id then return nil, "attempt_id is not an identifier" end
+    return {thread_id = thread_id, attempt_id = attempt_id}, nil
 end
 -- Whether the caller's own launch policy admits starting this definition at
 -- all. A definition absent from the host-owned list is refused by name. The

@@ -212,6 +212,11 @@ bee desktops                     list the displays of a running Bee
 bee start                        run this project's retained owner in the foreground
 bee daemon                       run this folder's node in the foreground without a folder workspace;
                                  it serves the workspaces of its catalog to clients
+bee workspace list [--archived] [--after CURSOR]
+bee workspace roots
+bee workspace create LABEL ROOT[/PATH] [--new-folder]
+bee workspace archive WORKSPACE | restore WORKSPACE
+                                 manage the running node's workspace catalog
 bee MODULE:ENTRY [ARGUMENTS...]  run one application entry directly
 bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT
 bee help | -h | --help

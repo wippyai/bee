@@ -165,7 +165,7 @@ func TestOperateWithoutPublicationCreatesNoOwnerState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = Operate(context.Background(), Config{Directory: directory, EnrollmentDir: directory}, "client", key, func(context.Context, *hive.Join, rendezvous.Descriptor) error {
+	err = Operate(context.Background(), Config{Directory: directory, EnrollmentDir: directory}, "client", key, func(context.Context, *hive.Client, rendezvous.Descriptor) error {
 		t.Error("an unpublished owner reached the operation")
 		return nil
 	})

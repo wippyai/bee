@@ -61,6 +61,9 @@ type clientIntent struct {
 	// hive is a `bee hive` command. Its output is the command's own; the
 	// route line is not printed.
 	hive *hiveCommand
+	// catalog is a `bee workspace` command against a running owner's
+	// workspace catalog.
+	catalog *workspaceCommand
 }
 
 // parseClientIntent maps the invocation's arguments onto the client grammar:
@@ -80,6 +83,12 @@ func parseClientIntent(args []string) (clientIntent, error) {
 			return clientIntent{}, err
 		}
 		return clientIntent{hive: &command}, nil
+	case "workspace":
+		command, err := parseWorkspace(args)
+		if err != nil {
+			return clientIntent{}, err
+		}
+		return clientIntent{catalog: &command, refusal: "No running Bee to manage workspaces; start bee or bee daemon first"}, nil
 	case "desktops":
 		if len(args) != 1 {
 			return clientIntent{}, errors.New("bee desktops takes no arguments")

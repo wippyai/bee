@@ -175,9 +175,9 @@ func ListEnrolled(ctx context.Context, cfg Config, node string, private ed25519.
 }
 
 // Operate joins an owner whose local enrollment lists node with this key and
-// runs one Hive join client over the joined actor. It creates no desktop,
-// viewport grant or controller session.
-func Operate(ctx context.Context, cfg Config, node string, private ed25519.PrivateKey, run func(context.Context, *hive.Join, rendezvous.Descriptor) error) error {
+// runs one Hive client of the owner's supervisor over the joined actor. It
+// creates no desktop, viewport grant or controller session.
+func Operate(ctx context.Context, cfg Config, node string, private ed25519.PrivateKey, run func(context.Context, *hive.Client, rendezvous.Descriptor) error) error {
 	if ctx == nil || run == nil || cfg.Directory == "" || cfg.EnrollmentDir == "" || node == "" || len(private) != ed25519.PrivateKeySize {
 		return errors.New("invalid enrolled Hive operation")
 	}
@@ -189,11 +189,11 @@ func Operate(ctx context.Context, cfg Config, node string, private ed25519.Priva
 			if err := awaitSupervisor(frame, actor); err != nil {
 				return err
 			}
-			join, err := hive.NewJoin(frame, actor, owner.Node)
+			client, err := hive.NewClient(frame, actor, owner.Node)
 			if err != nil {
 				return err
 			}
-			return run(frame, join, owner)
+			return run(frame, client, owner)
 		})
 	})
 }

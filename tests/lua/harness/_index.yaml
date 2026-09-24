@@ -175,6 +175,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "120s"}
   modules: [process, channel, time, tty, uuid]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     recovery: bee.harness.window:recovery
 - name: window_recovery_test
@@ -409,6 +410,7 @@ entries:
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
 - name: cross_session_acceptance_test
@@ -472,6 +474,7 @@ entries:
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
 - name: project_fixture
@@ -872,6 +875,7 @@ entries:
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_store_policy]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     admission: bee.harness.launch:admission
     definitions: bee.harness.launch:definitions
@@ -920,6 +924,7 @@ entries:
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     admission: bee.harness.launch:admission
 - name: permission_test

@@ -3,6 +3,7 @@
 -- materializer receives bytes, and the sentinel never appears anywhere but
 -- in that one reply.
 local test = require("test")
+local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -47,18 +48,26 @@ local function scope(names: {string}): security.Scope
     end
     return security.new_scope(policies)
 end
-local function caller(id: string, grants: {string}): funcs.Executor
+type Principal = {id: string, names: {string}}
+local function caller(id: string, grants: {string}): Principal
     local names: {string} = {"bee.credentials:client_test_policy"}
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
-    return funcs.new():with_actor(security.new_actor(id)):with_scope(scope(names))
+    return {id = id, names = names}
+end
+-- A principal acts bound to one workspace; by default the one its request names.
+local function bound(client: Principal, workspace_id: unknown): funcs.Executor
+    return funcs.new():with_actor(principals.actor(client.id, workspace_id)):with_scope(scope(client.names))
+end
+local function executor(client: Principal, value: unknown): funcs.Executor
+    return bound(client, principals.workspace(value))
 end
 local manager = caller(MANAGER, {"bee:credential_manage_policy"})
 local user = caller(USER, {"bee:credential_issue_policy"})
 local other = caller(OTHER, {"bee:credential_issue_policy"})
 local runner = caller(RUNNER, {"bee:credential_materialize_policy"})
 local outsider = caller("bee.test.cred.outsider", {})
-local function call(client: funcs.Executor, method: string, value: unknown): broker.Reply
-    local reply, err = client:call("bee.credentials.binding:" .. method, value)
+local function call(client: Principal, method: string, value: unknown): broker.Reply
+    local reply, err = executor(client, value):call("bee.credentials.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: broker.Reply
 end
@@ -120,7 +129,7 @@ local function admit_sources(workspace: string)
     local applied, err = changes:apply()
     if not applied then error("admit sources: " .. tostring(err)) end
 end
-local function issue(client: funcs.Executor, workspace: string, name: string, attempt: string, extra: {[string]: unknown}?): {[string]: unknown}
+local function issue(client: Principal, workspace: string, name: string, attempt: string, extra: {[string]: unknown}?): {[string]: unknown}
     local request: {[string]: unknown} = {workspace_id = workspace, name = name, audience = USER, attempt_id = attempt, profile_id = "batch", profile_digest = DIGEST,
         binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")}
     for key, item in pairs(extra or {}) do request[key] = item end
@@ -177,6 +186,26 @@ local function define_tests()
             test.eq(absent.present, false)
             test.is_nil(absent.value)
             test.eq(code(call(manager, "define", {workspace_id = workspace, name = fresh("optional-type"), provider = "claude", source = {kind = "env_variable", ref = SOURCE}, optional = "true"})), "INVALID")
+        end)
+        test.it("issues and materializes projections only in the workspace the principal is bound to", function()
+            local attempt = fresh("attempt")
+            local request = {workspace_id = workspace, name = "anthropic", audience = USER, attempt_id = attempt, profile_id = "batch",
+                profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")}
+            local elsewhere = fresh("elsewhere")
+            for _, bound_to in ipairs({elsewhere, false}) do
+                local reply, err = bound(user, bound_to or nil):call("bee.credentials.binding:issue_projection", request)
+                if err then error(tostring(err)) end
+                test.eq(code(reply :: broker.Reply), "DENIED")
+            end
+            local projection = issue(user, workspace, "anthropic", attempt)
+            local app_runner = caller("bee.test.cred.app_runner", {"bee:credential_materialize_workspace_policy"})
+            local use = {projection_id = projection.projection_id, subject = USER, audience = USER, attempt_id = attempt}
+            local foreign, foreign_error = bound(app_runner, elsewhere):call("bee.credentials.binding:check", use)
+            if foreign_error then error(tostring(foreign_error)) end
+            test.eq(code(foreign :: broker.Reply), "DENIED")
+            local own, own_error = bound(app_runner, workspace):call("bee.credentials.binding:check", use)
+            if own_error then error(tostring(own_error)) end
+            test.eq((value(own :: broker.Reply)).projection_id, projection.projection_id)
         end)
         test.it("issues projections to the authenticated subject and materializes bytes once for the admitted materializer only", function()
             local attempt = fresh("attempt")
@@ -728,12 +757,12 @@ local function define_tests()
             -- Calls reach the probe; the filesystem check itself must deny access.
             -- The positive control proves the same file and probe can read it.
             local admitted = caller(USER, {"bee.credentials:fs_test_policy"})
-            local positive, positive_error = admitted:call("bee.credentials:probe_direct_fs_read", CODEX_LOGIN_SOURCE)
+            local positive, positive_error = bound(admitted, ws):call("bee.credentials:probe_direct_fs_read", CODEX_LOGIN_SOURCE)
             if positive_error or type(positive) ~= "table" then error("direct read control did not execute") end
             test.is_true(positive.ok)
             test.eq(positive.value, CODEX_FILE_SENTINEL)
             for _, ordinary in ipairs({user, manager, outsider}) do
-                local denied, denied_error = ordinary:call("bee.credentials:probe_direct_fs_read", CODEX_LOGIN_SOURCE)
+                local denied, denied_error = bound(ordinary, ws):call("bee.credentials:probe_direct_fs_read", CODEX_LOGIN_SOURCE)
                 if denied_error or type(denied) ~= "table" then error("direct read probe did not execute") end
                 test.is_false(denied.ok)
                 test.eq(denied.stage, "get")

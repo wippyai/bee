@@ -1,0 +1,18 @@
+version: '1.0'
+namespace: bee.client.db
+entries:
+- name: layouts_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/client-layouts-test.db
+  lifecycle: {auto_start: true}
+- name: adoption_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/client-adoption-test.db
+  lifecycle: {auto_start: true}
+- name: foreign_adoption_test
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/client-foreign-adoption-test.db
+  lifecycle: {auto_start: true}

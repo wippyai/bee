@@ -366,6 +366,7 @@ workspace-hosts-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/workspace_hosts.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))" --delayed
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))" --logical
 
 .PHONY: hive-supervisor-check
 hive-supervisor-check:

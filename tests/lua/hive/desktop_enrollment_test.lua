@@ -22,7 +22,7 @@ end
 local function bridge(local_clients: boolean, topic: string): owner.State
     local unused = listen("bee.test.desktop_enrollment." .. topic)
     local state: owner.State = {
-        supervisor = "", stopped = false, workspace_id = WORKSPACE, desktop_id = "", node = "owner-node",
+        supervisor = "", bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, workspace_id = WORKSPACE, desktop_id = "", node = "owner-node",
         allowed = {}, enrolled = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = local_clients},
         ready = unused, results = unused, copies = unused, launches = unused, catalogs = unused,
         activations = unused, reader_updates = unused, observers = unused, catalog_readers = {}, pending_catalog_readers = nil,

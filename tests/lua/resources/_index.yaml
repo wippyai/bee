@@ -52,6 +52,7 @@ entries:
   security:
     policies: [bee.resources:apply_test_policy, bee:resource_store_policy]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     authority: bee.resources.persist:authority
     migrations: bee.resources.migrations:migrations

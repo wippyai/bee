@@ -133,9 +133,9 @@ entries:
   kind: security.policy.expr
   groups: [agent_launch_execution_scope]
   meta:
-    comment: The membership, grant and projection actions the called owner operations check again in this scope, plus the registry and process-host access launch admission and start require
+    comment: The membership, grant and projection actions the called owner operations check again in this scope, plus the registry and process-host access launch admission and start require; setup, grants and projections stay in the workspace the launching actor is bound to
   policy:
-    expression: 'action == "registry.get" || action == "registry.snapshot" || action == "process.spawn" || action == "process.spawn.monitored" || action == "process.host" || action == "process.context" || action == "process.monitor" || action == "bee.harness.setup" || action == "bee.threads.create" || action == "bee.threads.observe" || action == "bee.resources.grant" || action == "bee.credentials.issue"'
+    expression: 'action == "registry.get" || action == "registry.snapshot" || action == "process.spawn" || action == "process.spawn.monitored" || action == "process.host" || action == "process.context" || action == "process.monitor" || action == "bee.threads.create" || action == "bee.threads.observe" || ((action == "bee.harness.setup" || action == "bee.resources.grant" || action == "bee.credentials.issue") && resource != "" && resource == actor.meta.workspace_id)'
     actions: [registry.get, registry.snapshot, process.spawn, process.spawn.monitored, process.host, process.context, process.monitor, bee.harness.setup, bee.threads.create, bee.threads.observe, bee.resources.grant, bee.credentials.issue]
     resources: '*'
     effect: allow
@@ -143,7 +143,7 @@ entries:
   kind: security.policy.expr
   groups: [harness_setup_execution_scope]
   policy:
-    expression: '(action == "funcs.call" && (resource == "bee.resources.binding:associate" || resource == "bee.resources.binding:list" || resource == "bee.credentials.binding:define" || resource == "bee.credentials.binding:list")) || action == "bee.resources.manage" || action == "bee.credentials.manage" || action == "registry.get"'
+    expression: '(action == "funcs.call" && (resource == "bee.resources.binding:associate" || resource == "bee.resources.binding:list" || resource == "bee.credentials.binding:define" || resource == "bee.credentials.binding:list")) || ((action == "bee.resources.manage" || action == "bee.credentials.manage") && resource != "" && resource == actor.meta.workspace_id) || action == "registry.get"'
     actions: [funcs.call, bee.resources.manage, bee.credentials.manage, registry.get]
     resources: '*'
     effect: allow

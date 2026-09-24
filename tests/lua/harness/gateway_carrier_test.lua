@@ -5,6 +5,7 @@
 -- destination, and revocation on child exit, failed startup, carrier
 -- loss, listener change, drain and revocation during use.
 local test = require("test")
+local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
@@ -44,9 +45,8 @@ local function scope(): security.Scope
     end
     return security.new_scope(policies)
 end
-local actor = security.new_actor(ACTOR)
 local function raw_call(target: string, request: unknown): Object
-    local result, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
+    local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     return result :: Object
 end
@@ -128,7 +128,7 @@ local function request(thread_id: string, attempt_id: string, environment: {[str
 end
 type Outcome = {value: Object?, error: string?}
 local function spawn_carrier(request_value: Object, mode: string, crash_after: string?, pause_after: string?): string
-    local spawner = process.with_context({}):with_actor(actor):with_scope(scope())
+    local spawner = process.with_context({}):with_actor(principals.actor(ACTOR, request_value.workspace_id)):with_scope(scope())
     local pid, err = spawner:spawn_monitored(CARRIER, "bee:workers", request_value, mode, process.pid(), crash_after, nil, pause_after)
     if not pid then error("spawn carrier: " .. tostring(err)) end
     return tostring(pid)

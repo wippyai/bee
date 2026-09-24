@@ -8,6 +8,7 @@ local physical = require("physical")
 local input_decode = require("input_decode")
 local contract = require("contract")
 local decode = require("decode")
+local workspaces = require("workspaces")
 type Terminal = {display: physical.Display, input: tty.EventChannel}
 type Started = {supervisor: string, host: string, workspace_id: string, desktop: decode.Desktop, terminal: Terminal}
 local M = {}
@@ -30,7 +31,7 @@ function M.open(): Started?
         end
         local self = tostring(process.pid())
         supervisor = tostring(assert(process.with_options({}):with_context({["bee.launch_owner"] = self})
-            :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:supervisor", "bee:workers", self)))
+            :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:supervisor", "bee:workers", self, workspaces.classic())))
         local deadline = time.after("10s")
         while true do
             local selected = channel.select({boot:case_receive(), events:case_receive(), input:case_receive(), deadline:case_receive()})

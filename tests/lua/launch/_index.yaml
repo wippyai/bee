@@ -25,3 +25,4 @@ entries:
   imports:
     test: wippy.test:test
     retained_protocol: bee.launch:retained_protocol
+    workspaces: bee.storage:binding

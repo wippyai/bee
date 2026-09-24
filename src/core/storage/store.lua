@@ -1,4 +1,4 @@
--- Durable workspace state owned by the workspace/session core.
+-- The node workspace catalog and the durable state of each workspace, keyed by workspace_id.
 --
 -- The host selects a reserved registry resource under an exact database policy.
 -- Registry configuration owns its file and lifecycle. Applications cannot import
@@ -7,11 +7,13 @@ local sql = require("sql")
 local json = require("json")
 local hash = require("hash")
 local binding = require("binding")
+local contract = require("contract")
 
 type Migration = {id: integer, name: string, sql: string}
 type Store = {
     db: sql.DB,
     closed: boolean,
+    workspace_id: string,
     generation: integer?,
     identity: (Store) -> (string?, string?),
     read: (Store) -> (string?, string?),
@@ -144,12 +146,119 @@ DROP TABLE workspace_application_thread_bindings;
 ALTER TABLE workspace_application_thread_bindings_v5 RENAME TO workspace_application_thread_bindings;
 ]]
 
+-- Migration 6 turns the database into the node's workspace catalog. A
+-- workspace is a row: identity moves from the singleton identity table into
+-- `workspaces`, and every workspace-owned table is rebuilt with workspace_id as
+-- its leading key. Existing rows keep their values under the migrated identity.
+-- The identity is read through a scalar subquery, so a missing identity row
+-- violates NOT NULL and fails the migration instead of dropping state.
+local NODE_WORKSPACES_SQL = [[
+CREATE TABLE workspaces (
+    workspace_id TEXT NOT NULL PRIMARY KEY CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    label TEXT NOT NULL CHECK (length(CAST(label AS BLOB)) <= 240),
+    root_ref TEXT NOT NULL CHECK (length(CAST(root_ref AS BLOB)) BETWEEN 1 AND 160),
+    subpath TEXT NOT NULL CHECK (length(CAST(subpath AS BLOB)) <= 1024),
+    state TEXT NOT NULL CHECK (state IN ('active', 'archived')),
+    created_at TEXT NOT NULL,
+    last_used_at TEXT NOT NULL,
+    UNIQUE (root_ref, subpath)
+);
+INSERT INTO workspaces (workspace_id, label, root_ref, subpath, state, created_at, last_used_at)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), '', 'bee:workspace_root', '', 'active',
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
+CREATE TABLE workspace_state_v6 (
+    workspace_id TEXT NOT NULL PRIMARY KEY CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+    generation INTEGER NOT NULL CHECK (generation >= 0),
+    value TEXT NOT NULL CHECK (length(CAST(value AS BLOB)) <= 2097152),
+    updated_at TEXT NOT NULL
+);
+INSERT INTO workspace_state_v6 (workspace_id, schema_version, generation, value, updated_at)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), schema_version, generation, value, updated_at
+FROM workspace_state;
+DROP TABLE workspace_state;
+ALTER TABLE workspace_state_v6 RENAME TO workspace_state;
+CREATE TABLE workspace_display_assignments_v6 (
+    workspace_id TEXT NOT NULL CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    view_id TEXT NOT NULL CHECK (length(CAST(view_id AS BLOB)) BETWEEN 1 AND 80 AND view_id NOT GLOB '*[^ -~]*'),
+    instance_id TEXT NOT NULL CHECK (length(CAST(instance_id AS BLOB)) BETWEEN 1 AND 80 AND instance_id NOT GLOB '*[^ -~]*'),
+    display_id TEXT NOT NULL CHECK (length(CAST(display_id AS BLOB)) BETWEEN 1 AND 160 AND display_id NOT GLOB '*[^ -~]*'),
+    revision INTEGER NOT NULL CHECK (revision >= 1 AND revision <= 9007199254740990),
+    PRIMARY KEY (workspace_id, view_id, instance_id)
+);
+INSERT INTO workspace_display_assignments_v6 (workspace_id, view_id, instance_id, display_id, revision)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), view_id, instance_id, display_id, revision
+FROM workspace_display_assignments;
+DROP TABLE workspace_display_assignments;
+ALTER TABLE workspace_display_assignments_v6 RENAME TO workspace_display_assignments;
+CREATE TABLE workspace_display_transfer_receipts_v6 (
+    workspace_id TEXT NOT NULL CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    request_id TEXT NOT NULL CHECK (length(CAST(request_id AS BLOB)) BETWEEN 1 AND 80 AND request_id NOT GLOB '*[^ -~]*'),
+    view_id TEXT NOT NULL CHECK (length(CAST(view_id AS BLOB)) BETWEEN 1 AND 80 AND view_id NOT GLOB '*[^ -~]*'),
+    instance_id TEXT NOT NULL CHECK (length(CAST(instance_id AS BLOB)) BETWEEN 1 AND 80 AND instance_id NOT GLOB '*[^ -~]*'),
+    source_display_id TEXT NOT NULL CHECK (length(CAST(source_display_id AS BLOB)) BETWEEN 1 AND 160 AND source_display_id NOT GLOB '*[^ -~]*'),
+    target_display_id TEXT NOT NULL CHECK (length(CAST(target_display_id AS BLOB)) BETWEEN 1 AND 160 AND target_display_id NOT GLOB '*[^ -~]*'),
+    expected_revision INTEGER NOT NULL CHECK (expected_revision >= 1 AND expected_revision <= 9007199254740990),
+    phase TEXT NOT NULL CHECK (phase IN ('prepared', 'committed', 'failed')),
+    error TEXT CHECK (error IS NULL OR length(CAST(error AS BLOB)) <= 1024),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (workspace_id, request_id)
+);
+INSERT INTO workspace_display_transfer_receipts_v6
+    (workspace_id, request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error, updated_at)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), request_id, view_id, instance_id,
+    source_display_id, target_display_id, expected_revision, phase, error, updated_at
+FROM workspace_display_transfer_receipts;
+DROP TABLE workspace_display_transfer_receipts;
+ALTER TABLE workspace_display_transfer_receipts_v6 RENAME TO workspace_display_transfer_receipts;
+CREATE UNIQUE INDEX workspace_display_one_prepared_transfer
+ON workspace_display_transfer_receipts (workspace_id, view_id, instance_id)
+WHERE phase = 'prepared';
+CREATE TABLE workspace_application_thread_bindings_v6 (
+    workspace_id TEXT NOT NULL CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+    instance_id TEXT NOT NULL CHECK (length(CAST(instance_id AS BLOB)) BETWEEN 1 AND 80 AND instance_id NOT GLOB '*[^ -~]*'),
+    thread_id TEXT NOT NULL CHECK (length(CAST(thread_id AS BLOB)) BETWEEN 1 AND 160 AND thread_id NOT GLOB '*[^ -~]*'),
+    definition_id TEXT NOT NULL CHECK (length(CAST(definition_id AS BLOB)) BETWEEN 1 AND 160 AND definition_id NOT GLOB '*[^ -~]*'),
+    actor_id TEXT NOT NULL CHECK (length(CAST(actor_id AS BLOB)) BETWEEN 1 AND 160 AND actor_id NOT GLOB '*[^ -~]*'),
+    role TEXT NOT NULL CHECK (role = 'participant'),
+    binding_revision INTEGER NOT NULL CHECK (binding_revision >= 1 AND binding_revision <= 9007199254740990),
+    state TEXT NOT NULL CHECK (state IN ('pending', 'active', 'revoked')),
+    idempotency_key TEXT NOT NULL CHECK (length(CAST(idempotency_key AS BLOB)) BETWEEN 1 AND 160 AND idempotency_key NOT GLOB '*[^ -~]*'),
+    definition_revision TEXT NOT NULL CHECK (length(CAST(definition_revision AS BLOB)) BETWEEN 1 AND 80 AND definition_revision NOT GLOB '*[^ -~]*'),
+    initiating_owner_id TEXT NOT NULL CHECK (length(CAST(initiating_owner_id AS BLOB)) BETWEEN 1 AND 160 AND initiating_owner_id NOT GLOB '*[^ -~]*'),
+    gateway_binding_id TEXT NOT NULL CHECK (length(CAST(gateway_binding_id AS BLOB)) BETWEEN 1 AND 160 AND gateway_binding_id NOT GLOB '*[^ -~]*'),
+    gateway_approval_id TEXT NOT NULL CHECK (length(CAST(gateway_approval_id AS BLOB)) BETWEEN 1 AND 160 AND gateway_approval_id NOT GLOB '*[^ -~]*'),
+    gateway_proposal_digest TEXT NOT NULL CHECK (length(gateway_proposal_digest) = 64 AND gateway_proposal_digest NOT GLOB '*[^0-9a-f]*'),
+    access TEXT NOT NULL CHECK (access = 'observe_post'),
+    join_expected_revision INTEGER NOT NULL CHECK (join_expected_revision >= 1 AND join_expected_revision <= 9007199254740990),
+    membership_revision INTEGER CHECK (membership_revision IS NULL OR (membership_revision >= 1 AND membership_revision <= 9007199254740990)),
+    cleanup_pending INTEGER NOT NULL CHECK (cleanup_pending IN (0, 1)),
+    cleanup_expected_revision INTEGER CHECK (cleanup_expected_revision IS NULL OR (cleanup_expected_revision >= 1 AND cleanup_expected_revision <= 9007199254740990)),
+    PRIMARY KEY (workspace_id, instance_id),
+    UNIQUE (workspace_id, idempotency_key)
+);
+INSERT INTO workspace_application_thread_bindings_v6
+    (workspace_id, instance_id, thread_id, definition_id, actor_id, role, binding_revision, state, idempotency_key,
+     definition_revision, initiating_owner_id, gateway_binding_id, gateway_approval_id,
+     gateway_proposal_digest, access, join_expected_revision, membership_revision,
+     cleanup_pending, cleanup_expected_revision)
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), instance_id, thread_id, definition_id, actor_id,
+    role, binding_revision, state, idempotency_key, definition_revision, initiating_owner_id, gateway_binding_id,
+    gateway_approval_id, gateway_proposal_digest, access, join_expected_revision, membership_revision,
+    cleanup_pending, cleanup_expected_revision
+FROM workspace_application_thread_bindings;
+DROP TABLE workspace_application_thread_bindings;
+ALTER TABLE workspace_application_thread_bindings_v6 RENAME TO workspace_application_thread_bindings;
+DROP TABLE workspace_identity;
+]]
+
 local migrations: {Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
     {id = 3, name = "workspace_display_assignments_v1", sql = DISPLAY_ASSIGNMENTS_TABLE_SQL},
     {id = 4, name = "workspace_application_thread_bindings_v1", sql = APPLICATION_THREAD_BINDINGS_TABLE_SQL},
     {id = 5, name = "workspace_application_thread_bindings_v2", sql = APPLICATION_THREAD_BINDINGS_V5_SQL},
+    {id = 6, name = "node_workspaces_v1", sql = NODE_WORKSPACES_SQL},
 }
 
 local function error_text(prefix: string, err: unknown): string
@@ -297,20 +406,10 @@ local function ensure_open(store: Store): string?
     return nil
 end
 
-local function identity_text(value: unknown): string?
-    if type(value) == "string" and #value == 32 and not value:find("[^0-9a-f]") then return value end
-    return nil
-end
-
 local function read_identity(store: Store): (string?, string?)
     local closed_err = ensure_open(store)
     if closed_err then return nil, closed_err end
-    local rows, err = store.db:query("SELECT singleton, workspace_id FROM workspace_identity")
-    if not rows or err then return nil, error_text("read workspace identity", err) end
-    if #rows ~= 1 or integer(rows[1].singleton) ~= 1 then return nil, "workspace identity row is corrupt" end
-    local id = identity_text(rows[1].workspace_id)
-    if not id then return nil, "workspace identity is invalid" end
-    return id, nil
+    return store.workspace_id, nil
 end
 
 local function read_state(store: Store): (string?, string?)
@@ -318,7 +417,7 @@ local function read_state(store: Store): (string?, string?)
     if closed_err then return nil, closed_err end
 
     local rows, query_err = store.db:query(
-        "SELECT schema_version, generation, value FROM workspace_state WHERE singleton = 1")
+        "SELECT schema_version, generation, value FROM workspace_state WHERE workspace_id = ?", {store.workspace_id})
     if query_err or not rows then
         return nil, error_text("read workspace state", query_err)
     end
@@ -326,7 +425,7 @@ local function read_state(store: Store): (string?, string?)
         store.generation = nil
         return nil, nil
     end
-    if #rows ~= 1 then return nil, "workspace state singleton is corrupt" end
+    if #rows ~= 1 then return nil, "workspace state row is corrupt" end
 
     local row = rows[1]
     local schema_version = integer(row.schema_version)
@@ -355,7 +454,7 @@ local function write_state(store: Store, value: string): (boolean, string?)
     if not tx then return false, error_text("begin workspace write", begin_err) end
 
     local rows, query_err = tx:query(
-        "SELECT schema_version, generation, value FROM workspace_state WHERE singleton = 1")
+        "SELECT schema_version, generation, value FROM workspace_state WHERE workspace_id = ?", {store.workspace_id})
     if query_err or not rows then
         rollback(tx)
         return false, error_text("read workspace state before write", query_err)
@@ -364,7 +463,7 @@ local function write_state(store: Store, value: string): (boolean, string?)
     local next_generation = 1
     if #rows > 1 then
         rollback(tx)
-        return false, "workspace state singleton is corrupt"
+        return false, "workspace state row is corrupt"
     elseif #rows == 1 then
         local row = rows[1]
         local schema_version = integer(row.schema_version)
@@ -388,8 +487,8 @@ local function write_state(store: Store, value: string): (boolean, string?)
         local result, update_err = tx:execute(
             "UPDATE workspace_state SET value = ?, generation = ?, updated_at = " ..
             "strftime('%Y-%m-%dT%H:%M:%fZ', 'now') " ..
-            "WHERE singleton = 1 AND generation = ?",
-            {value, next_generation, generation})
+            "WHERE workspace_id = ? AND generation = ?",
+            {value, next_generation, store.workspace_id, generation})
         if update_err or not result then
             rollback(tx)
             return false, error_text("write workspace state", update_err)
@@ -405,9 +504,9 @@ local function write_state(store: Store, value: string): (boolean, string?)
             return false, "workspace state disappeared since it was read"
         end
         local _, insert_err = tx:execute(
-            "INSERT INTO workspace_state (singleton, schema_version, generation, value, updated_at) " ..
-            "VALUES (1, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
-            {STATE_VERSION, next_generation, value})
+            "INSERT INTO workspace_state (workspace_id, schema_version, generation, value, updated_at) " ..
+            "VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
+            {store.workspace_id, STATE_VERSION, next_generation, value})
         if insert_err then
             rollback(tx)
             return false, error_text("create workspace state", insert_err)
@@ -431,7 +530,9 @@ local function close_store(store: Store): (boolean, string?)
     return ok == true, nil
 end
 
-function M.open(resource: string?): (Store?, string?)
+-- Acquire and migrate the node workspace database. Every open verifies the
+-- ledger, so a handle never runs against an unknown schema.
+local function acquire(resource: string?): (sql.DB?, string?)
     local database_id = binding.database("workspace", resource)
     if not database_id then return nil, "Invalid workspace database binding" end
     local db, acquire_err = sql.get(database_id)
@@ -457,27 +558,93 @@ function M.open(resource: string?): (Store?, string?)
         db:release()
         return nil, migration_err or "workspace migration failed"
     end
+    return db, nil
+end
+
+-- Resolve a selection to exactly one active catalog row. Both forms are
+-- unique-key probes and record that a host now uses the workspace.
+local function resolve(db: sql.DB, selection: binding.Selection): (string?, string?)
+    local rows: {{[string]: unknown}}?
+    local query_err: unknown
+    if selection.workspace_id then
+        rows, query_err = db:query("SELECT workspace_id, state FROM workspaces WHERE workspace_id = ?",
+            {selection.workspace_id})
+    else
+        rows, query_err = db:query("SELECT workspace_id, state FROM workspaces WHERE root_ref = ? AND subpath = ?",
+            {selection.root_ref, selection.subpath})
+    end
+    if query_err or not rows then return nil, error_text("read workspace catalog", query_err) end
+    if #rows == 0 then return nil, "workspace is not in the node catalog" end
+    if #rows ~= 1 then return nil, "workspace catalog row is corrupt" end
+    local id = contract.workspace_id(rows[1].workspace_id)
+    if not id then return nil, "workspace identity is invalid" end
+    if rows[1].state ~= "active" then return nil, "workspace is not active" end
+    local result, update_err = db:execute(
+        "UPDATE workspaces SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE workspace_id = ? AND state = 'active'",
+        {id})
+    if update_err or not result then return nil, error_text("record workspace use", update_err) end
+    if integer(result.rows_affected) ~= 1 then return nil, "workspace changed while opening" end
+    return id, nil
+end
+
+-- Open the workspace a host serves. The handle is bound to one catalog row;
+-- every read and write it issues carries that workspace_id.
+function M.open(resource: string?, value: unknown): (Store?, string?)
+    local selection = binding.selection(value)
+    if not selection then return nil, "Invalid workspace selection" end
+    local db, acquire_err = acquire(resource)
+    if not db then return nil, acquire_err end
+    local workspace_id, resolve_err = resolve(db, selection)
+    if not workspace_id then
+        db:release()
+        return nil, resolve_err
+    end
 
     local store: Store = {
         db = db,
         closed = false,
+        workspace_id = workspace_id,
         generation = nil,
         identity = read_identity,
         read = read_state,
         write = write_state,
         close = close_store,
     }
-    local _, identity_err = read_identity(store)
-    if identity_err then
-        store:close()
-        return nil, identity_err
-    end
     local _, initial_read_err = read_state(store)
     if initial_read_err then
         store:close()
         return nil, initial_read_err
     end
     return store, nil
+end
+
+type Definition = {label: string, root_ref: string, subpath: string}
+
+-- Add a workspace row to the node catalog. This is the store primitive a node
+-- owner operation builds on; it grants nothing and publishes no operation.
+function M.create(resource: string?, value: unknown): (string?, string?)
+    if type(value) ~= "table" then return nil, "Invalid workspace definition" end
+    for key in pairs(value) do
+        if key ~= "label" and key ~= "root_ref" and key ~= "subpath" then return nil, "Invalid workspace definition" end
+    end
+    local selection = binding.selection({root_ref = value.root_ref, subpath = value.subpath})
+    local label: unknown = value.label
+    if not selection or type(label) ~= "string" or #label > 240 or label:find("%c") then
+        return nil, "Invalid workspace definition"
+    end
+    local definition: Definition = {label = label, root_ref = tostring(selection.root_ref), subpath = tostring(selection.subpath)}
+    local db, acquire_err = acquire(resource)
+    if not db then return nil, acquire_err end
+    local rows, insert_err = db:query(
+        "INSERT INTO workspaces (workspace_id, label, root_ref, subpath, state, created_at, last_used_at) " ..
+        "VALUES (lower(hex(randomblob(16))), ?, ?, ?, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), " ..
+        "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) RETURNING workspace_id",
+        {definition.label, definition.root_ref, definition.subpath})
+    db:release()
+    if insert_err or not rows then return nil, error_text("create workspace", insert_err) end
+    local id = #rows == 1 and contract.workspace_id(rows[1].workspace_id) or nil
+    if not id then return nil, "created workspace identity is invalid" end
+    return id, nil
 end
 
 return M

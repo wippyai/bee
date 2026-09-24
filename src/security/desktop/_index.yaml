@@ -172,13 +172,13 @@ entries:
 - name: retained_owner_name_policy
   kind: security.policy
   meta:
-    comment: The local retained-owner command may name only itself, so the desktop bridge can forward workspace readiness to it.
+    comment: The local retained-owner command may name only its retained owner route, keyed by workspace selection, so the desktop bridge can forward workspace readiness to it.
   policy:
     actions:
     - process.registry.register
     - process.registry.unregister
     resources:
-    - bee.retained.owner
+    - bee.retained.owner/*
     effect: allow
 - name: retained_owner_node_policy
   kind: security.policy

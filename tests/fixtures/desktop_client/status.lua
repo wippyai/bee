@@ -78,7 +78,7 @@ local function main()
     end
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
         "bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"})):spawn_monitored(
-            "bee.host:main", "bee:workers", owner)))
+            "bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""})))
     local host_ready = assert(hosts:receive())
     assert(tostring(host_ready:from()) == host)
     local ready: unknown = host_ready:payload():data()
@@ -145,7 +145,7 @@ local function main()
     -- This is the same durable target recovery uses. It deliberately contains
     -- no thread metadata; the client intersects it with host inventory before
     -- sending the authenticated complete binding snapshot to its session.
-    local database = assert(store.open("bee.client.db:status"))
+    local database = assert(store.open("bee.client.db:status", workspace_id))
     -- Leave room for the full test-only renderer marker beside friendly labels.
     local saved = state.empty(120, 32)
     saved.scene = model.add(saved.scene, opened.id, opened.instance_id, opened.title, opened.icon, workspace_id)
@@ -225,7 +225,7 @@ local function main()
     wait_text(screen, "bash-")
     command(screen, "test \"$bee_thread_session\" = retained && printf 'THREAD_%s_RETAINED\\n' RECONNECT")
     wait_frame(screen, "THREAD_RECONNECT_RETAINED", "Waiting on you")
-    local recovered = assert(store.open("bee.client.db:status"))
+    local recovered = assert(store.open("bee.client.db:status", workspace_id))
     local recovered_state = assert(store.read(recovered))
     assert(#recovered_state.targets == 1 and recovered_state.targets[1].view_id == opened.id
         and recovered_state.targets[1].instance_id == opened.instance_id, "Client reconnect did not retain the host-bound view")

@@ -6,6 +6,7 @@ local time = require("time")
 local logger = require("logger")
 local protocol = require("protocol")
 local decode = require("decode")
+local workspaces = require("workspaces")
 
 local function main()
     local host = ""
@@ -18,7 +19,7 @@ local function main()
         end
         local self = tostring(process.pid())
         host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
-            :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self)))
+            :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self, workspaces.classic())))
         local started = false
         local deadline = time.after("10s")
         while true do

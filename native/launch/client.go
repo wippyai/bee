@@ -13,7 +13,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
@@ -36,8 +35,10 @@ const (
 // clientSeams are the side effects joining a client needs. Production supplies
 // the real ones; tests substitute fakes to prove the sequence.
 type clientSeams struct {
-	owned          func(state string) (bool, error)
-	startOwner     func(ctx context.Context, launch app.Launch) (done <-chan struct{}, wait func() error, err error)
+	owned func(state string) (bool, error)
+	// startOwner starts a detached owner that publishes launchID as its launch
+	// identity.
+	startOwner     func(ctx context.Context, launch app.Launch, launchID string) (done <-chan struct{}, wait func() error, err error)
 	waitDescriptor func(ctx context.Context, directory string) (rendezvous.Descriptor, error)
 	join           func(ctx context.Context, join joinRequest) error
 	// waitEnrolled blocks until the owner has registered the client's node in the
@@ -45,8 +46,8 @@ type clientSeams struct {
 	waitEnrolled func(ctx context.Context, state, node string, public ed25519.PublicKey) error
 	// report receives the foreground route line.
 	report io.Writer
-	// stop ends the owner of state gracefully.
-	stop func(ctx context.Context, state string) error
+	// released waits until no owner holds state.
+	released func(ctx context.Context, state string) error
 }
 
 // clientIntent is what one ordinary invocation asks of the retained owner.
@@ -67,6 +68,10 @@ type clientIntent struct {
 	// catalog is a `bee workspace` command against a running owner's
 	// workspace catalog.
 	catalog *workspaceCommand
+	// stop asks the running owner to shut down; with alone set, only when no
+	// other local client is enrolled with it.
+	stop  bool
+	alone bool
 }
 
 // parseClientIntent maps the invocation's arguments onto the client grammar:
@@ -92,6 +97,11 @@ func parseClientIntent(args []string) (clientIntent, error) {
 			return clientIntent{}, err
 		}
 		return clientIntent{catalog: &command, refusal: "No running Bee to manage workspaces; start bee or bee daemon first"}, nil
+	case "stop":
+		if len(args) != 1 {
+			return clientIntent{}, errors.New("bee stop takes no arguments")
+		}
+		return clientIntent{stop: true}, nil
 	case "desktops":
 		if len(args) != 1 {
 			return clientIntent{}, errors.New("bee desktops takes no arguments")
@@ -164,10 +174,19 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	if join.Intent.refusal != "" && !owned {
 		return errors.New(join.Intent.refusal)
 	}
+	if join.Intent.stop {
+		if !owned {
+			_, err := fmt.Fprintln(seams.report, "Bee is not running for this project")
+			return err
+		}
+		if _, err := fmt.Fprintln(seams.report, "Stopping Bee…"); err != nil {
+			return err
+		}
+	}
 	// The route line describes routing only; the owner's publication and the
 	// authenticated join still decide whether startup succeeds. A join to a
 	// running Bee only names no route.
-	if join.Intent.refusal == "" && join.Intent.hive == nil {
+	if join.Intent.refusal == "" && join.Intent.hive == nil && !join.Intent.stop {
 		route := "Starting Bee…"
 		if owned {
 			route = "Connecting to Hive…"
@@ -176,22 +195,31 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 			return err
 		}
 	}
-	started := !owned
+	// Several clients may start an owner at once; the state lock elects one.
+	// This client's own start won only when the owner publishes the launch
+	// identity it handed its child.
+	started := false
 	if !owned {
 		previous, err := seams.waitDescriptor(ctx, directory)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-		done, wait, err := seams.startOwner(ctx, launch)
+		launchID, err := newLaunchIdentity()
+		if err != nil {
+			return err
+		}
+		done, wait, err := seams.startOwner(ctx, launch, launchID)
 		if err != nil {
 			return err
 		}
 		startup, cancel := context.WithTimeout(ctx, waitOwnerTimeout)
 		defer cancel()
 		held := func() (bool, error) { return seams.owned(launch.State) }
-		if _, err := waitDescriptorOrExit(startup, seams.waitDescriptor, directory, previous, done, wait, held); err != nil {
+		published, err := waitDescriptorOrExit(startup, seams.waitDescriptor, directory, previous, done, wait, held)
+		if err != nil {
 			return fmt.Errorf("Bee owner startup: %w", err)
 		}
+		started = published.Launch == launchID
 	}
 	owner, err := seams.waitDescriptor(ctx, directory)
 	if err != nil {
@@ -222,18 +250,21 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	}
 	join.State = launch.State
 	if err := seams.join(ctx, join); err != nil {
-		// An owner started only for a command it refused retains no desktop.
-		// Another client that joined it meanwhile keeps it running.
+		// An owner this client started only for a command it refused retains no
+		// desktop. The owner itself declines when another local client uses it.
 		var refused *refusedCommand
 		if started && errors.As(err, &refused) {
-			shared, sharedErr := otherClients(launch.State, join.Node)
-			if sharedErr != nil {
-				return errors.Join(err, sharedErr)
-			}
-			if !shared {
-				return errors.Join(err, seams.stop(ctx, launch.State))
-			}
+			stop := join
+			stop.Intent = clientIntent{stop: true, alone: true}
+			return errors.Join(err, seams.join(ctx, stop))
 		}
+		return err
+	}
+	if join.Intent.stop {
+		if err := seams.released(ctx, launch.State); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintln(seams.report, "Bee stopped")
 		return err
 	}
 	// A presenting client detaches from a retained owner; say it still runs
@@ -347,21 +378,6 @@ type refusedCommand struct{ cause error }
 
 func (e *refusedCommand) Error() string { return e.cause.Error() }
 func (e *refusedCommand) Unwrap() error { return e.cause }
-
-// otherClients reports whether a client other than node is enrolled.
-func otherClients(state, node string) (bool, error) {
-	entries, err := os.ReadDir(ownerTrustedDirectory(state))
-	if err != nil {
-		return false, err
-	}
-	for _, entry := range entries {
-		name := entry.Name()
-		if strings.HasSuffix(name, ".pub") && name != node+".pub" {
-			return true, nil
-		}
-	}
-	return false, nil
-}
 
 // clientLockName is the liveness lock a joined client holds for its node.
 func clientLockName(node string) string { return node + ".lock" }

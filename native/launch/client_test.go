@@ -37,8 +37,9 @@ type fakeOwner struct {
 func (f *fakeOwner) seams(directory string) clientSeams {
 	return clientSeams{
 		owned: func(string) (bool, error) { return f.started > 0, nil },
-		startOwner: func(context.Context, app.Launch) (<-chan struct{}, func() error, error) {
+		startOwner: func(_ context.Context, _ app.Launch, launchID string) (<-chan struct{}, func() error, error) {
 			f.started++
+			f.descriptor.Launch = launchID
 			return nil, func() error { return nil }, nil
 		},
 		waitDescriptor: func(context.Context, string) (rendezvous.Descriptor, error) {
@@ -54,6 +55,7 @@ func (f *fakeOwner) seams(directory string) clientSeams {
 		},
 		waitEnrolled: func(context.Context, string, string, ed25519.PublicKey) error { return nil },
 		report:       io.Discard,
+		released:     func(context.Context, string) error { return nil },
 	}
 }
 
@@ -162,7 +164,7 @@ func TestClientFailsWhenOwnerExitsBeforePublishing(t *testing.T) {
 	close(done)
 	seams := clientSeams{
 		owned: func(string) (bool, error) { return false, nil },
-		startOwner: func(context.Context, app.Launch) (<-chan struct{}, func() error, error) {
+		startOwner: func(context.Context, app.Launch, string) (<-chan struct{}, func() error, error) {
 			return done, func() error { return errors.New("owner exited") }, nil
 		},
 		waitDescriptor: func(context.Context, string) (rendezvous.Descriptor, error) {
@@ -372,7 +374,7 @@ func TestClientJoinsTheWinnerWhenItsOwnerContenderLoses(t *testing.T) {
 		// contender has exited.
 		return checks > 1, nil
 	}
-	seams.startOwner = func(context.Context, app.Launch) (<-chan struct{}, func() error, error) {
+	seams.startOwner = func(context.Context, app.Launch, string) (<-chan struct{}, func() error, error) {
 		return lost, func() error { won = true; return errors.New("exit status 1") }, nil
 	}
 	reads := 0
@@ -486,19 +488,20 @@ func TestWorkspaceCommandsJoinARunningOwnerWithoutARouteLine(t *testing.T) {
 }
 
 // An owner started only to run a command it then refuses has no desktop to
-// retain: the client that started it stops it. An owner that was already
-// running, or that another client also joined, keeps running.
+// retain: the client whose own start request won the election asks it to stop
+// if it is alone. An owner that was already running, or that another client's
+// start request produced, is left alone.
 func TestClientStopsTheOwnerItStartedForARefusedCommand(t *testing.T) {
 	refused := &refusedCommand{cause: errors.New("INVALID_ARGUMENT: Unknown Bee command: version")}
 	for _, scenario := range []struct {
 		name    string
 		running bool
-		other   bool
+		lost    bool
 		stops   int
 	}{
 		{name: "started here", stops: 1},
 		{name: "already running", running: true},
-		{name: "joined by another client", other: true},
+		{name: "another client's start won", lost: true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			state := t.TempDir()
@@ -507,16 +510,20 @@ func TestClientStopsTheOwnerItStartedForARefusedCommand(t *testing.T) {
 				owner.started = 1
 			}
 			seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
-			seams.join = func(context.Context, joinRequest) error {
-				if scenario.other {
-					if err := os.WriteFile(filepath.Join(ownerTrustedDirectory(state), "bee-client-other.pub"), []byte("key\n"), 0o600); err != nil {
-						t.Fatal(err)
-					}
+			if scenario.lost {
+				start := seams.startOwner
+				seams.startOwner = func(ctx context.Context, launch app.Launch, _ string) (<-chan struct{}, func() error, error) {
+					return start(ctx, launch, strings.Repeat("e", 32))
+				}
+			}
+			var stops []clientIntent
+			seams.join = func(_ context.Context, join joinRequest) error {
+				if join.Intent.stop {
+					stops = append(stops, join.Intent)
+					return nil
 				}
 				return refused
 			}
-			stops := 0
-			seams.stop = func(context.Context, string) error { stops++; return nil }
 			intent, err := parseClientIntent([]string{"version"})
 			if err != nil {
 				t.Fatal(err)
@@ -525,8 +532,8 @@ func TestClientStopsTheOwnerItStartedForARefusedCommand(t *testing.T) {
 			if !errors.Is(err, refused) {
 				t.Fatalf("refusal = %v", err)
 			}
-			if stops != scenario.stops {
-				t.Fatalf("stops = %d, want %d", stops, scenario.stops)
+			if len(stops) != scenario.stops || (len(stops) == 1 && !stops[0].alone) {
+				t.Fatalf("stops = %+v, want %d asked alone", stops, scenario.stops)
 			}
 		})
 	}

@@ -123,3 +123,12 @@ entries:
     test: wippy.test:test
     types: bee.hive:types
     commands: bee.hive.supervisor:workspace_commands
+- name: owner_stop_test
+  kind: function.lua
+  source: file://owner_stop_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    owner_stop: bee.hive.supervisor:owner_stop

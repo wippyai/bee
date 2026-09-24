@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"net"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wippyai/runtime/api/boot"
@@ -61,7 +62,7 @@ func TestPublisherUsesRetainedNativeEndpointUnderOwnerLock(t *testing.T) {
 	ctx := ctxapi.WithAppContext(context.Background(), ctxapi.NewAppContext())
 	ctx = clusterapi.WithMembership(ctx, stack.Membership)
 	dir := filepath.Join(state, "discovery")
-	publisher, err := Publisher(dir, sample().Execution)
+	publisher, err := Publisher(dir, sample().Execution, strings.Repeat("c", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +85,7 @@ func TestPublisherUsesRetainedNativeEndpointUnderOwnerLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Node != "retained-owner" || d.Gossip != stack.Membership.LocalNode().Addr {
+	if d.Node != "retained-owner" || d.Gossip != stack.Membership.LocalNode().Addr || d.Launch != strings.Repeat("c", 32) {
 		t.Fatal("wrong live owner", d)
 	}
 	probe, err := net.Listen("tcp", d.Transport)

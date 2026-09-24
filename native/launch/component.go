@@ -35,8 +35,10 @@ type Host struct {
 	// ownerState is the state directory selected for a retained owner launch. It
 	// is set during planning so Load can add the owner's enrollment publisher.
 	ownerState string
-	components []boot.Component
-	resolver   hostResolver
+	// ownerLaunch is the launch identity the starting client handed this owner.
+	ownerLaunch string
+	components  []boot.Component
+	resolver    hostResolver
 	// clientRoute runs an ordinary launch against the retained owner in the
 	// planned state.
 	clientRoute func(context.Context, app.Launch, clientIntent) error
@@ -99,18 +101,13 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	if daemon && len(launch.Args) != 1 {
 		return app.Plan{}, errors.New("bee daemon takes no arguments")
 	}
-	// bee stop ends this project's owner; it needs no client, owner or state lock.
-	stop := desktop && len(launch.Args) > 0 && launch.Args[0] == stopArgument
-	if stop && len(launch.Args) != 1 {
-		return app.Plan{}, errors.New("bee stop takes no arguments")
-	}
 	// An explicit application ID keeps the runtime's own entry, which is how
 	// recovery and development launches still reach an application directly.
 	application := desktop && len(launch.Args) > 0 && strings.Contains(launch.Args[0], ":")
 	// Every other ordinary launch of this executable is a client of the retained
 	// owner. Its words are decoded before a project is selected, so a malformed
 	// invocation reads no state.
-	client := desktop && !owner && !daemon && !application && !stop
+	client := desktop && !owner && !daemon && !application
 	var intent clientIntent
 	if client {
 		parsed, err := parseClientIntent(launch.Args)
@@ -131,11 +128,6 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		plan.DefaultState = selected
 		state = selected
 	}
-	if stop {
-		plan.DefaultState = ""
-		plan.Run = func(ctx context.Context) error { return stopOwner(ctx, state, os.Stdout, defaultStopSeams()) }
-		return plan, nil
-	}
 	// The retained owner route keeps the runtime's own application start, so it
 	// prepares the owner's cluster, desktop bridge and enrollment publisher.
 	if owner || daemon {
@@ -144,7 +136,11 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			plan.Command = daemonCommand
 		}
 		plan.Args = []string{}
-		host.ownerState = state
+		launched, err := launchIdentity()
+		if err != nil {
+			return app.Plan{}, err
+		}
+		host.ownerState, host.ownerLaunch = state, launched
 		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
 			return prepareOwner(state, owner)
 		}
@@ -205,7 +201,7 @@ func (host *Host) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	components, err := ownerComponents(host.ownerState, execution)
+	components, err := ownerComponents(host.ownerState, execution, host.ownerLaunch)
 	if err != nil {
 		return err
 	}

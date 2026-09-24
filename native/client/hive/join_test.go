@@ -87,3 +87,28 @@ func TestJoinCallsNameTheJoinServiceOfTheOwner(t *testing.T) {
 		t.Fatalf("call = %+v", call)
 	}
 }
+
+func TestOwnerStopNamesTheOwnerServiceAndDecodesItsAnswer(t *testing.T) {
+	join, s := joinFixture(t)
+	done := make(chan wireCall, 1)
+	go func() {
+		call := <-s.body
+		done <- call
+		raw, _ := json.Marshal(map[string]any{"protocol_revision": Revision, "request_id": call.ID, "ok": true, "grants": map[string]any{},
+			"value": map[string]any{"stopping": false}})
+		s.replies <- mesh.Message{From: ownerPID, Topic: replyTopic, Body: raw}
+	}()
+	stopping, err := StopOwner(context.Background(), join.client, true)
+	if err != nil || stopping {
+		t.Fatalf("stop = %v, %v", stopping, err)
+	}
+	call := <-done
+	if call.Owner.Service != OwnerService || call.Owner.Node != "owner" || call.Target.Ref != OwnerStop || string(call.Input) != `{"alone":true}` {
+		t.Fatalf("call = %+v", call)
+	}
+	answer(s, nil, map[string]any{"code": "DENIED", "message": "the host did not grant owner stop", "retryable": false})
+	var rejected *Rejected
+	if _, err := StopOwner(callContext(t), join.client, false); !errors.As(err, &rejected) || rejected.Fault.Code != "DENIED" {
+		t.Fatalf("refused stop = %v", err)
+	}
+}

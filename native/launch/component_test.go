@@ -258,7 +258,7 @@ func TestHostStartAddsEnrollmentPublisherForOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = release() }()
-	components, err := ownerComponents(state, "0123456789abcdef0123456789abcdef")
+	components, err := ownerComponents(state, "0123456789abcdef0123456789abcdef", "")
 	if err != nil {
 		t.Fatal(err)
 	}

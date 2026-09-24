@@ -34,15 +34,19 @@ letter first, then lowercase letters, digits, `_` or `-`, at most 40 bytes) and
 malformed route arguments fail planning, so nothing is selected, read or
 started. Whether a well-formed NAME exists depends on the project's admitted
 applications and managed agents; the owner resolves it after the client joins.
-An owner the client started only for a NAME the owner refuses retains no
-desktop, so that client stops it again unless another client joined it.
+A client that starts an owner hands it a fresh launch identity
+(`BEE_OWNER_LAUNCH`), which the owner publishes in its rendezvous descriptor;
+the client's start won the state election only when the published identity is
+its own. When that owner refuses the NAME it was started for, it retains no
+desktop, so the client asks it to stop unless another local client is
+enrolled.
 
-`bee stop` takes no arguments. The owner records its process in
-`hive/owner.pid` while it holds the state; `bee stop` sends it the termination
-signal its runtime answers with a graceful shutdown, then reports `Bee stopped`
-once the state lock is free, or `Bee is not running for this project`. Windows
-has no signal that reaches a detached owner, so `bee stop` refuses there. A
-desktop client that detaches (Ctrl+Q) from a running owner prints
+`bee stop` takes no arguments. It joins the running owner as an enrolled local
+client and calls the supervisor's `bee.hive.owner:stop` operation, which the
+host grants through `bee:hive_owner_stop_policy`; the supervisor answers and
+shuts the runtime down the way a termination signal does. The client reports
+`Bee stopped` once the state lock is free, or `Bee is not running for this
+project`. A desktop client that detaches (Ctrl+Q) from a running owner prints
 `Bee is still running; bee stop ends it`.
 
 `bee hive VERB` manages this node's Hive membership and is decoded before

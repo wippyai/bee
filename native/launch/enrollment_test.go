@@ -217,7 +217,7 @@ func TestEnrollmentPublisherRetriesUntilTheEntryExists(t *testing.T) {
 func TestOwnerComponentsIncludeEnrollmentPublisher(t *testing.T) {
 	state := t.TempDir()
 	prepareOwnerState(t, state)
-	components, err := ownerComponents(state, "0123456789abcdef0123456789abcdef")
+	components, err := ownerComponents(state, "0123456789abcdef0123456789abcdef", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestOwnerComponentsIncludeEnrollmentPublisher(t *testing.T) {
 		t.Fatalf("owner components = %v", names)
 	}
 	// A relative state directory is refused before any filesystem work.
-	if _, err := ownerComponents("relative", "0123456789abcdef0123456789abcdef"); err == nil {
+	if _, err := ownerComponents("relative", "0123456789abcdef0123456789abcdef", ""); err == nil {
 		t.Fatal("relative state directory was accepted")
 	}
 }

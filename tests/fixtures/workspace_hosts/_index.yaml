@@ -51,3 +51,40 @@ entries:
       security:
         actor: {id: workspace_hosts.delayed_supervisor}
         policies: [bee:host_policy, bee.workspace_hosts:supervisor_spawn_policy, bee.workspace_hosts:first_storage_policy, bee:application_open_facade_policy]
+- name: node_storage_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.workspace.db:node]
+    effect: allow
+- name: logical_probe_policy
+  kind: security.policy
+  meta:
+    comment: The probe stands in for the node owner and for one application principal
+  policy:
+    actions: [funcs.security, security.actor.create, security.scope.create, security.policy.get]
+    resources: '*'
+    effect: allow
+- name: resource_call_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.resources.binding:associate, bee.resources.binding:grant]
+    effect: allow
+- name: logical_supervisor
+  kind: process.lua
+  source: file://logical_supervisor.lua
+  method: main
+  modules: [process, channel, security, funcs, time, uuid, json, logger]
+  imports:
+    store: bee.storage:store
+    decode: bee.protocol:decode
+    recovery: bee.workspace:recovery
+  meta:
+    command:
+      name: workspace-hosts-logical-supervisor
+      short: Two logical workspaces served by two hosts against one node database
+      security:
+        actor: {id: workspace_hosts.logical_supervisor}
+        policies: [bee:host_policy, bee.workspace_hosts:supervisor_spawn_policy, bee.workspace_hosts:node_storage_policy,
+          bee.workspace_hosts:logical_probe_policy, bee.workspace_hosts:resource_call_policy]

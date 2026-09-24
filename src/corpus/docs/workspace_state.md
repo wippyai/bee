@@ -1,17 +1,19 @@
 # Workspace state and application restoration
 
 This describes the implemented version-1 store, not the future resource catalog.
-The workspace host alone opens `bee:workspace_db`. Its source-development default
+Workspace hosts alone open `bee:workspace_db`, the node workspace database that
+keeps every logical workspace as keyed rows. Its source-development default
 is `.wippy/workspace.db`; `BEE_WORKSPACE_DB` selects another file. The standalone
 executable uses its application state directory by default and preserves the
 caller's working directory for native commands. See the [launch instructions](../../README.md).
-Each database has a durable opaque workspace ID in the separate
-`workspace_identity` table. Selecting a project folder does not create an
-authorized filesystem binding.
+Each workspace has a durable opaque ID in the node catalog table `workspaces`;
+classic launch serves the row rooted at `bee:workspace_root`. Selecting a project
+folder does not create an authorized filesystem binding.
 
 ## Persisted values
 
-The store has a checked migration ledger and one versioned JSON envelope, with a
+The store has a checked migration ledger and one versioned JSON envelope per
+workspace, with a
 generation used for compare-and-swap writes. See [storage](storage.md) for SQL
 ownership and integrity checks. The envelope is bounded to 2 MiB.
 

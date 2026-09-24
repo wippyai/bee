@@ -17,6 +17,7 @@ generator when the corpus is intentionally updated.
 | Desktop, workspace host, client attachments, and layout persistence | [Desktop](guides/desktop.md) |
 | Application admission, launch, messages, and recovery | [Application contracts](reference/applications.md) |
 | Workspace storage and application state | [Storage](reference/storage.md), [workspace state](reference/workspace-state.md) |
+| Node workspace catalog, lazy workspace hosts, workspace extensions and the Workspaces viewer | [Workspace catalog](reference/workspace-catalog.md) |
 | Threads, Timeline, subscriptions, and delivery | [Threads](reference/threads.md) |
 | Node metadata, synchronization, and approval inbox | [Sync and inbox](reference/sync-and-inbox.md), [approvals](reference/approvals.md) |
 | Native executable, updates, and I/O events | [Native distribution](operations/native.md) |

@@ -54,13 +54,24 @@ The implementation is split into these Lua namespaces:
 
 ## Authority and records
 
-The authority exposes `create`, `get`, `list`, `join`, `leave`, `close`,
+The authority exposes `create`, `get`, `list`, `list_workspace`, `join`, `leave`, `close`,
 `record` and `read_after`. Every mutation has a thread ID and idempotency key;
 membership and thread state are checked within the transaction. `join` accepts
 `participant` or `observer`, uses an expected revision, and is owner-only;
 `leave` can remove the caller or an owner-selected member, but the owner cannot
 leave its own thread. `close` is owner-only and refuses while lifecycle work is
 unsettled.
+
+A thread a workspace owns carries that workspace. `create` records the
+`workspace_id` of the caller's host-issued identity (an application principal's
+from the broker, a gateway subject's from its binding); a request never names
+it, and a caller bound to no workspace creates a node-level thread. Summaries
+include `workspace_id` when it is set. `list_workspace`
+(`{workspace_id, after_thread_id?, limit?}`) pages the threads one workspace
+owns in thread order as one range of the index
+`bee_thread_heads(workspace_id, thread_id)`; it needs `bee.threads.workspace`
+on that workspace (host policy `bee:thread_workspace_list_policy`) and no
+membership.
 
 Records use schema revision `bee.thread-record@1`. The authority supplies the
 record ID, producer, source, timestamp and sequence; callers submit a typed
@@ -78,6 +89,14 @@ The supported record kinds are:
   `turn.end` and `receipt` for admitted work and its lifecycle;
 - `delivery.mark` and `request.answered` for recipient delivery facts; and
 - `approval.request` and `approval.transition` as approval-store projections.
+
+A message may also name `recipient_action_ids`, the sessions it addresses
+by action, and `sender_action_id`, the sending session. The owner accepts a
+recipient action only when it is an action of the thread the message lands
+on, and a sending action only when an action with that ID was admitted for
+the sender. Sessions that share one member identity, such as agents started on
+one thread by the same subject, use them to tell who is addressed and whom to
+answer; obligations still follow `recipient_ids`.
 
 Decoders reject unknown fields, invalid variants and invalid references.
 Content has one bounded text or artifact reference. Extension payloads are
@@ -156,6 +175,28 @@ an active member can ever claim an obligation, so a recipient who has left is
 still named by the recorded notice but owed nothing: the projection reaches the
 thread, and no obligation outlives the membership that could have settled it.
 
+## One-shot notices
+
+`notify` registers a notice on the caller's own thread: tell me once when an
+action of a thread I may read ends a turn or an attempt. The caller must be an
+owner or participant of its thread and an active member of the target thread;
+a named recipient action must be the caller's own action on its thread. The
+notice starts at the target thread's head. The first later record of the
+target action that is a `turn.end`, a `receipt`, or an observation
+`turn.signal` with phase `ended` or `execution.exit` delivers it: the owner
+commits one `notification` message on the watcher's thread under the
+watcher's identity and the notice's key, addressed to the watcher and its
+action, with the ending record as causation and its outcome when it states
+one. A target action with no live attempt is reported at once from its latest
+settlement.
+
+The owner settles notices after every commit on the target thread and sweeps
+pending notices when it starts and every five seconds, so a notice whose
+ending record committed without a settling pass is still delivered once. A
+watcher that is no longer an active submitting member of its thread, or whose
+thread closed, has its notice cancelled. A thread holds at most 64 pending
+notices. Waiters on the watcher's thread are woken by the delivery.
+
 ## Subscriptions and sessions
 
 A subscription is a durable consumer cursor over the immutable record stream.
@@ -211,8 +252,10 @@ falls back to a local thread with the same name.
 ## Carrier and projections
 
 The carrier claims a fenced epoch for one live attempt. `commit` stores up to
-64 decoded stream or control records, their source provenance and the next
-checkpoint in one transaction. Provenance revision is
+64 decoded stream, hook or control records, their source provenance and the
+next checkpoint in one transaction. Hook-sourced records are typed
+observations, such as the turn signal a `Stop` hook reports; raw hook events
+stay `bee` control records. Provenance revision is
 `bee.carrier.provenance@1`; checkpoint revision is
 `bee.carrier.checkpoint@1` and its encoded state is limited to 64 KiB. Replayed
 stream positions are idempotent and different content at the same position is
@@ -242,7 +285,11 @@ Shared decoder and database limits are:
 | Thread title | 512 bytes |
 
 The checked migration ledger carries the legacy journal, rich authority,
-lifecycle, delivery, projection, carrier, approval and owner-authority schema.
+lifecycle, delivery, projection, carrier, approval, owner-authority, notice
+and workspace-attribution schema. Migration 10 (`workspace_attribution`) adds
+the head column and its index and attributes existing threads whose owner is
+an application principal (`bee.application:<workspace_id>:<instance_id>`) to
+that workspace; every other existing thread stays node-level.
 Applied migrations and their checksums are immutable. The owner keeps all
 table access behind typed contract methods; callers do not query another
 subsystem's tables or reset the database to bypass a migration failure.

@@ -74,8 +74,8 @@ type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
 type Window = {offset: integer, capacity: integer}
 type Column = {title: string, width: integer, align: string?}
-type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?}
 type Rect = {x: integer, y: integer, width: integer, height: integer}
+type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?,
 type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer: integer}
 ```
 
@@ -99,7 +99,7 @@ type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer
 | `frame.hints(hints: {Hint}) -> string` | Canonical key-hint text: "↑↓ select · Enter open · Esc close". |
 | `frame.footer(painter: Painter, status: string, hints: string)` | The final row: the changing status at the left and the stable key hints at the right. A status wins the row when both do not fit; with no status the hints stand alone. |
 | `frame.window(count: integer, capacity: integer, selected: integer, offset: integer) -> Window` | The visible window of a scrolling list of count rows in capacity slots, keeping the selected index (0 for none) visible. |
-| `frame.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)` | A whole-row target. Selection keeps its text, uses the accent pair and marks column 1 with "›" so focus is visible without color. Unfocused selection (another pane owns focus) keeps the marker in accent on the surface. span extends the target over the item's following rows. |
+| `frame.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)` | See the source. |
 | `frame.table(painter: Painter, first: integer, last: integer, value: Table) -> Window` | A table between rows first and last: a muted column caption on row first and rows below it. On a narrow canvas each row becomes its first cell followed by the other nonempty cells joined with " · ". Returns the visible window. |
 | `frame.size(width: integer, height: integer) -> string` | The size class of a canvas: "narrow" below 80x24, "compact" from 80x24, "standard" from 120x36 and "wide" from 160x48. Both dimensions must reach a class; layouts change only at these breakpoints. |
 | `frame.layout(painter: Painter, tabs: boolean, actions: boolean) -> Layout` | The canonical anatomy for this canvas: header on row 1, tabs on row 2 when requested and the canvas has at least 6 rows, one blank row, the work area from column 2 to the column before the last, the action bar on the penultimate row when requested and the canvas has at least 6 rows, and the footer on the final row when the canvas has at least 2 rows. |

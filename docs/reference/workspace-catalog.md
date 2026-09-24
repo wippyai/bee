@@ -23,6 +23,8 @@ unknown; do not retry blindly).
 | `restore` | `{workspace_id}` | `bee.workspaces.manage` on `workspace_id` | the row |
 | `inspect` | `{workspace_id}` | `bee.workspaces.read` on `workspace_id` | `{workspace, live, applications, extensions}` |
 | `search_within` | `{workspace_id, text, limit?}` | `bee.workspaces.read` on `workspace_id` | `{workspace_id, results}` |
+| `roots` | `{}` | `bee.workspaces.read` on `catalog` | `{roots}` |
+| `folders` | `{root_ref, path?, after?, limit?}` | `bee.workspaces.manage` on `root_ref` | `{root_ref, path, access, workspace_id?, folders, next_after?}` |
 
 A row is `{workspace_id, label, root_ref, subpath, state, created_at,
 last_used_at}`. `live` says whether a host serves the workspace now. The
@@ -50,6 +52,18 @@ case-folded over ASCII letters. Path search takes `root_ref` and an optional
 host admits (`bee:resource_roots`), one root after another in name order; its
 cursor names the root of the page's last row. No operation reads rows it does
 not return.
+
+**Roots and folders.** `roots` lists the roots the host admits
+(`bee:resource_roots`) in name order as `{root_ref, access}`, `access` being
+`read` or `write`. `folders` pages the folders inside `path` (a subpath, default
+the root itself) under an admitted root: names in byte order after the folder
+name `after`, `limit` 1-100 (default 50), each `{name, workspace_id?}` naming the
+workspace, in any state, that holds that folder. Files and hidden folders
+(a leading `.`) are left out. The answer also carries the root's `access` and
+the workspace that holds `path` itself. The directory is read once per page and
+only the page's names are kept; a root the host does not admit is `FORBIDDEN`
+and a path that is not a folder `NOT_FOUND`. These are what a folder picker needs
+to offer a `create`; browsing a root is authorized as managing it.
 
 **Inspect and search within.** `inspect` (`{workspace_id}`, read authority on
 that workspace) returns the row, `live`, the applications its checkpoint keeps
@@ -177,8 +191,40 @@ workspace's leased supervisor when no client uses it. It answers
 attach leaves the client on its workspace. Observers of the display stay where
 they are. The native client sees its old mount end, asks `bee.desktop:current`
 and presents the new session on the same terminal; a local detach (Ctrl+]),
-leave (Ctrl+Q) or any other end is final. `make native-workspace-switch-check`
-switches a running desktop to a second workspace and back.
+leave (Ctrl+Q) or any other end is final. N in the workspace menu
+opens the Workspaces viewer on its create flow (below); a viewer already open is
+focused instead, since an open of a running single-instance application only
+focuses it. `make native-workspace-switch-check` creates a second workspace with
+`bee workspace create`, switches a running desktop to it and back.
+
+### Workspace commands
+
+`bee workspace` manages the catalog of the running node from its folder (or
+`--state`); with no running owner it refuses and starts nothing.
+
+```text
+bee workspace list [--archived] [--after CURSOR]      one page of 50; NEXT names the next cursor
+bee workspace roots                                   the admitted roots and their access
+bee workspace create LABEL ROOT[/PATH] [--new-folder] a workspace for PATH under ROOT; --new-folder makes it
+bee workspace archive WORKSPACE
+bee workspace restore WORKSPACE
+```
+
+The command joins the owner as an enrolled local client and calls service
+`bee.workspace` (`bee.workspace:list`, `:roots`, `:create`, `:archive`,
+`:restore`) on the owner's Hive supervisor. The supervisor serves it only to
+an enrolled local client of its own node and only while the host grants it
+`bee.workspaces.command` on the operation (`bee:workspace_command_policy`,
+selected for the supervisor service). It runs the command on its worker
+`bee.hive.supervisor:workspace_command`, which again requires that grant from
+its caller and calls the catalog operation under the policies the host attaches
+to the worker (`bee:workspace_catalog_read_policy`,
+`bee:workspace_catalog_manage_policy`, `bee:workspace_command_catalog_policy`);
+neither the client nor the supervisor holds catalog authority. The catalog still
+decodes and authorizes every request. Catalog refusals come back as Hive faults
+whose message keeps the catalog code (`FORBIDDEN: root ... is not admitted`); a
+catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
+`UNCERTAIN` with its identity.
 
 ### Node modes
 
@@ -244,11 +290,24 @@ section per workspace extension (resources and agent sessions in the default
 composition), each with its count or the reason it could not be read. From
 120x36 the detail sits beside a 40-cell list (48 from 160x48); below that Enter
 opens it as its own page and Esc returns. A (Archive) asks first and archives
-an active workspace; on the Archived tab it restores. S (Serve) holds a host
+an active workspace; on the Archived tab it restores. N (New) opens the create
+flow, and a launch with the argument `create` opens the viewer on it.
+
+The create flow is a two-step wizard. **Folder** lists the roots the host
+admits (`roots`); Enter opens one and then the folder under the selection, one
+page of `folders` at a time (↑↓ past either end and PgUp/PgDn page), ⌫ goes up,
+and a folder that already holds a workspace is marked. U uses the folder shown.
+**Details** asks for the label, which follows the folder's name until it is
+edited, and, under a root admitted for writing, an optional new folder made
+inside the chosen one (`create_directory`). Enter creates; a folder that is a
+workspace already needs a new folder, and the catalog's refusal stays on the
+form. The new workspace is selected on the Active tab's first page when that
+page holds it. S (Serve) holds a host
 lease on the selected workspace while the viewer stays open, so the node host
 manager starts its host; S again, or closing the viewer, releases it.
 
 Its admission binding grants `bee:workspace_catalog_read_policy`,
 `bee:workspace_catalog_manage_policy`, `bee:thread_workspace_list_policy`,
 `bee:workspace_host_lease_policy` and `bee.workspaces:client_policy`, which may
-call only the catalog operations it uses and `list_workspace`.
+call only the catalog operations it uses (`list`, `search`, `inspect`,
+`archive`, `restore`, `create`, `roots`, `folders`) and `list_workspace`.

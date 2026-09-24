@@ -61,10 +61,21 @@ func NewJoin(lifetime context.Context, transport Transport, ownerNode string) (*
 	if err != nil {
 		return nil, err
 	}
-	return &Join{client: client, owner: ownerNode}, nil
+	return JoinOver(client), nil
+}
+
+// JoinOver calls the invite operations over an existing client of the owner.
+func JoinOver(client *Client) *Join {
+	return &Join{client: client, owner: client.owner}
 }
 
 func (j *Join) call(ctx context.Context, operation string, input any, into any) error {
+	return callService(ctx, j.client, Owner{Node: j.owner, Service: JoinService}, operation, input, into)
+}
+
+// callService makes one call of an owner service under a fresh idempotency
+// key and decodes its value strictly into into. A refusal is a *Rejected.
+func callService(ctx context.Context, client *Client, owner Owner, operation string, input any, into any) error {
 	raw, err := json.Marshal(input)
 	if err != nil {
 		return err
@@ -73,7 +84,7 @@ func (j *Join) call(ctx context.Context, operation string, input any, into any) 
 	if _, err := rand.Read(key[:]); err != nil {
 		return err
 	}
-	reply, err := j.client.Call(ctx, Operation{Owner: Owner{Node: j.owner, Service: JoinService}, Ref: operation, Key: hex.EncodeToString(key[:]), Input: raw})
+	reply, err := client.Call(ctx, Operation{Owner: owner, Ref: operation, Key: hex.EncodeToString(key[:]), Input: raw})
 	if err != nil {
 		return err
 	}

@@ -77,9 +77,12 @@ local function main(mode: string?)
         local data: unknown = state:payload():data()
         assert(type(data) == "table" and type(data.items) == "table" and data.items[1] ~= nil, "missing manager confirmation")
         local question = data.items[1] :: {[string]: unknown}
+        -- The selection moves to another workspace while the question stands;
+        -- accepting it must not redirect consent to the new selection.
+        key(view, "down"); wait_text(view, "›replacement")
         assert(process.send(broker, "bee.interaction.response", {version = 1, request_id = question.request_id,
             id = question.id, instance_id = question.instance_id, action = "accept", value = ""}))
-        wait_text(view, "Desktop selection changed")
+        wait_text(view, "Workspace selection changed")
         close()
     end
     view:close(); process.terminate(broker)

@@ -1,5 +1,5 @@
 -- MIT. The Hive Manager application: named Bees as membership and their
--- owners report them, each node's desktops as its owner lists them, and
+-- owners report them, each node's workspaces as its owner lists them, and
 -- explicit control or observe requests confirmed by the viewer. It reads
 -- through one typed live directory. It asks this node's supervisor and grants
 -- nothing. Opening the manager enables no Hive.
@@ -178,7 +178,7 @@ local function main(value: unknown)
         model.apply_catalog(state, selected.node_id, source:workspaces(selected.node_id, model.query(state, selected.node_id)))
         local current = model.selected(state)
         if current and current.node_id == selected.node_id then
-            model.set_pane(state, "desktops")
+            model.set_pane(state, "workspaces")
             model.move(state, 1)
         end
         dirty = true
@@ -201,14 +201,14 @@ local function main(value: unknown)
         if dialog then return end
         local pending = model.pending_intent(state)
         if pending then perform(function() act(pending) end); return end
-        local desktop = model.selected_desktop(state)
+        local workspace = model.selected_workspace(state)
         local node = model.selected(state)
-        if not desktop or not node then status = "Select a desktop first"; dirty = true; return end
+        if not workspace or not node then status = "Select a workspace first"; dirty = true; return end
         local intent, refused = model.preview_intent(state, mode, uuid.v4())
-        if not intent then status = refused or "Desktop unavailable"; dirty = true; return end
+        if not intent then status = refused or "Workspace unavailable"; dirty = true; return end
         local title = mode == "control" and "Control this workspace here?" or "Observe this workspace here?"
-        local workspace_label = desktop.label ~= "" and desktop.label or names.label(desktop.workspace_id)
-        local message = model.text("Workspace " .. workspace_label .. " (" .. desktop.workspace_id .. ") on " .. node.label, 512)
+        local workspace_label = workspace.label ~= "" and workspace.label or names.label(workspace.workspace_id)
+        local message = model.text("Workspace " .. workspace_label .. " (" .. workspace.workspace_id .. ") on " .. node.label, 512)
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = mode == "control" and "Control" or "Observe"})
         if not request_id then status = tostring(err); dirty = true; return end
         dialog = {request_id = request_id, intent = intent}
@@ -244,7 +244,7 @@ local function main(value: unknown)
             elseif happened.kind == process.event.EXIT and view and tostring(happened.from) == view.pid then
                 local result: unknown = happened.result
                 local failure = type(result) == "table" and result.error ~= nil and tostring(result.error) or nil
-                model.end_session(state, view.node_id, view.workspace_id, "")
+                model.end_session(state, view.node_id, view.workspace_id)
                 view = nil
                 status = failure and ("Remote desktop ended: " .. failure) or "Remote desktop closed"
                 dirty = true
@@ -319,10 +319,10 @@ local function main(value: unknown)
                 local key = data.key_type
                 local letter = tostring(data.key or "")
                 status = ""
-                if state.pane == "desktops" and (key == "pgup" or key == "pgdown") then
+                if state.pane == "workspaces" and (key == "pgup" or key == "pgdown") then
                     if model.page(state, key == "pgdown" and 1 or -1) then perform(open_selected) end
                     dirty = true
-                elseif state.pane == "desktops" and letter == "/" then model.edit(state, true); dirty = true
+                elseif state.pane == "workspaces" and letter == "/" then model.edit(state, true); dirty = true
                 elseif key == "up" or letter == "k" then model.move(state, -1); dirty = true
                 elseif key == "down" or letter == "j" then model.move(state, 1); dirty = true
                 elseif key == "pgup" then model.move(state, -8); dirty = true
@@ -340,7 +340,7 @@ local function main(value: unknown)
                 if hit then
                     status = ""
                     if hit.kind == "node" then model.select_node(state, hit.key); model.set_pane(state, "nodes"); dirty = true
-                    elseif hit.kind == "desktop" then model.select_desktop(state, hit.key); model.set_pane(state, "desktops"); dirty = true
+                    elseif hit.kind == "workspace" then model.select_workspace(state, hit.key); model.set_pane(state, "workspaces"); dirty = true
                     elseif hit.kind == "open" then perform(open_selected)
                     elseif hit.kind == "control" then ask("control")
                     elseif hit.kind == "observe" then ask("observe")

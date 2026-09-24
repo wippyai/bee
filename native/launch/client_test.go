@@ -260,6 +260,8 @@ func TestClientIdentityIsPerLaunchAndRetiredOnExit(t *testing.T) {
 	}
 }
 
+const workspaceRefusal = "No running Bee to manage workspaces; start bee or bee daemon first"
+
 func TestClientIntentGrammar(t *testing.T) {
 	workspace, desktop := strings.Repeat("a", 32), strings.Repeat("b", 32)
 	for _, case_ := range []struct {
@@ -276,6 +278,17 @@ func TestClientIntentGrammar(t *testing.T) {
 		{args: []string{"desktops"}, want: clientIntent{listing: true, refusal: "No running Bee to list; start bee first"}},
 		{args: []string{"terminal", "bash", "-c", "printf %s ; $(exit 4)"}, want: clientIntent{command: []string{"terminal", "bash", "-c", "printf %s ; $(exit 4)"}}},
 		{args: []string{"agent"}, want: clientIntent{command: []string{"agent"}}},
+		{args: []string{"workspace", "list"}, want: clientIntent{catalog: &workspaceCommand{verb: "list"}, refusal: workspaceRefusal}},
+		{args: []string{"workspace", "list", "--archived", "--after", workspace + ":6162"}, want: clientIntent{
+			catalog: &workspaceCommand{verb: "list", archived: true, after: workspace + ":6162"}, refusal: workspaceRefusal}},
+		{args: []string{"workspace", "roots"}, want: clientIntent{catalog: &workspaceCommand{verb: "roots"}, refusal: workspaceRefusal}},
+		{args: []string{"workspace", "create", "Second desk", "bee:workspace_root/work/second", "--new-folder"}, want: clientIntent{
+			catalog: &workspaceCommand{verb: "create", label: "Second desk", root: "bee:workspace_root", path: "work/second", newFolder: true},
+			refusal: workspaceRefusal}},
+		{args: []string{"workspace", "create", "Root", "bee:workspace_root"}, want: clientIntent{
+			catalog: &workspaceCommand{verb: "create", label: "Root", root: "bee:workspace_root"}, refusal: workspaceRefusal}},
+		{args: []string{"workspace", "archive", workspace}, want: clientIntent{catalog: &workspaceCommand{verb: "archive", id: workspace}, refusal: workspaceRefusal}},
+		{args: []string{"workspace", "restore", workspace}, want: clientIntent{catalog: &workspaceCommand{verb: "restore", id: workspace}, refusal: workspaceRefusal}},
 	} {
 		got, err := parseClientIntent(case_.args)
 		if err != nil {
@@ -295,6 +308,22 @@ func TestClientIntentGrammar(t *testing.T) {
 		{"-x"},
 		{"Agent"},
 		{"agent", "line\nfeed"},
+		{"workspace"},
+		{"workspace", "rename"},
+		{"workspace", "roots", "extra"},
+		{"workspace", "list", "--after"},
+		{"workspace", "list", "--after", "not a cursor"},
+		{"workspace", "list", "--archived", "--archived"},
+		{"workspace", "archive", strings.ToUpper(workspace)},
+		{"workspace", "restore"},
+		{"workspace", "create", "Label"},
+		{"workspace", "create", "", "bee:workspace_root/x"},
+		{"workspace", "create", "Two\nlines", "bee:workspace_root/x"},
+		{"workspace", "create", strings.Repeat("x", 241), "bee:workspace_root/x"},
+		{"workspace", "create", "Escape", "bee:workspace_root/../outside"},
+		{"workspace", "create", "Empty", "bee:workspace_root//x"},
+		{"workspace", "create", "Rootless", "/x"},
+		{"workspace", "create", "Here", "bee:workspace_root", "--new-folder"},
 	} {
 		if _, err := parseClientIntent(bad); err == nil {
 			t.Fatalf("parseClientIntent(%q) accepted", bad)
@@ -305,7 +334,7 @@ func TestClientIntentGrammar(t *testing.T) {
 // Observing, attaching, selecting and listing act on a running Bee only: with
 // no owner they refuse promptly, start nothing and write nothing.
 func TestClientAttachOnlyIntentsNeverStartAnOwner(t *testing.T) {
-	for _, args := range [][]string{{"observe"}, {"client"}, {"desktops"}} {
+	for _, args := range [][]string{{"observe"}, {"client"}, {"desktops"}, {"workspace", "list"}, {"workspace", "create", "New", "bee:workspace_root/new", "--new-folder"}} {
 		state := filepath.Join(t.TempDir(), "state")
 		owner := &fakeOwner{descriptor: fakeDescriptor(t)}
 		intent, err := parseClientIntent(args)
@@ -431,6 +460,27 @@ func TestHiveOperationsJoinTheOwnerWithoutARouteLine(t *testing.T) {
 		}
 		if report.Len() != 0 || owner.joined != 1 || owner.lastJoin.Intent.hive == nil {
 			t.Fatalf("%v: report %q, joined %d", words, report.String(), owner.joined)
+		}
+	}
+}
+
+// A workspace command joins a running owner and prints only its own answer.
+func TestWorkspaceCommandsJoinARunningOwnerWithoutARouteLine(t *testing.T) {
+	for _, words := range [][]string{{"workspace", "list"}, {"workspace", "roots"}, {"workspace", "archive", strings.Repeat("a", 32)}} {
+		intent, err := parseClientIntent(words)
+		if err != nil || intent.catalog == nil || intent.catalog.verb != words[1] {
+			t.Fatalf("%v intent = %+v, %v", words, intent, err)
+		}
+		state := t.TempDir()
+		owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1}
+		seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+		var report bytes.Buffer
+		seams.report = &report
+		if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: intent}); err != nil {
+			t.Fatal(err)
+		}
+		if report.Len() != 0 || owner.started != 1 || owner.joined != 1 || owner.lastJoin.Intent.catalog == nil {
+			t.Fatalf("%v: report %q, started %d, joined %d", words, report.String(), owner.started, owner.joined)
 		}
 	}
 }

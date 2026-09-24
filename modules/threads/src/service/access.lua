@@ -44,9 +44,6 @@ end
 function M.may_project_approvals(thread_id: string): boolean
     return security.can(M.APPROVAL, thread_id)
 end
-function M.reads(role: string): boolean
-    return role == "owner" or role == "participant" or role == "observer"
-end
 function M.submits(role: string): boolean
     return role == "owner" or role == "participant"
 end

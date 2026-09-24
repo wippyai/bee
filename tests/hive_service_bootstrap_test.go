@@ -80,6 +80,8 @@ func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
 		"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy",
 		"bee:hive_policy_exposure_policy", "bee:hive_dispatch_policy", "bee:hive_names_policy",
 		"bee:hive_advertise_policy", "bee:hive_execute_policy", "bee:hive_invite_policy", "bee.hive.desktop:host_policy",
+		"bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy", "bee:workspace_catalog_read_policy",
+		"bee.hive.desktop:catalog_call_policy",
 	}
 	if len(service.Lifecycle.Security.Policies) != len(wantPolicies) {
 		t.Fatalf("Hive supervisor service policy count = %d", len(service.Lifecycle.Security.Policies))

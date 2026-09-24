@@ -48,6 +48,5 @@ entries:
     context: bee.gateway:context
     sessions: bee.gateway:sessions
     bounds: bee.threads.records:bounds
-    arguments: bee.application:arguments
   security:
     policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy]

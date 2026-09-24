@@ -38,8 +38,6 @@ entries:
     inventory: bee.host:inventory
     questions: bee.interaction:delivery
     interaction: bee.application:interaction
-    persistence: bee.workspace:persistence
-    assignment_store: bee.storage:assignments
     transfer: bee.host:transfer
 - name: recovery
   kind: library.lua

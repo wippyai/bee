@@ -1,4 +1,4 @@
--- MIT. The Hive Manager's one source of nodes and desktops: a typed
+-- MIT. The Hive Manager's one source of nodes and their workspaces: a typed
 -- directory that asks this node's runtime membership and Hive supervisor.
 -- It grants no authority. Every answer is what an owner said or a refusal
 -- naming why the operation is not available to this application.
@@ -17,17 +17,17 @@ M.MAX_ADDRESS_BYTES = 200
 M.MAX_LABEL_BYTES = 120
 type Reply = types.Reply
 type Member = {node_id: string, is_local: boolean, addr: string, client_only: boolean?}
-type Desktop = {workspace_id: string, desktop_id: string, label: string, served: boolean?}
+type Workspace = {workspace_id: string, label: string, served: boolean}
 -- A catalog carries the owner generation it was read under; an attach names
 -- that generation and its own idempotency identity, so a stale catalog
--- never attaches to a replacement desktop and an ambiguous outcome is
+-- never attaches to a replacement owner and an ambiguous outcome is
 -- recovered by replaying the same request, never by a second one.
 -- next_after continues a node's workspace listing.
-type Catalog = {available: boolean, reason: string, owner_generation: string, desktops: {Desktop}, next_after: string?}
+type Catalog = {available: boolean, reason: string, owner_generation: string, workspaces: {Workspace}, next_after: string?}
 -- A page of a node's workspaces: a label prefix and a cursor.
 type Query = {label: string?, after: string?}
 type Mode = "control" | "observe"
-type Attach = {node_id: string, workspace_id: string, desktop_id: string, owner_generation: string, mode: Mode, idempotency_key: string}
+type Attach = {node_id: string, workspace_id: string, owner_generation: string, mode: Mode, idempotency_key: string}
 -- viewer: the remote view process presenting an attached session.
 type Outcome = {ok: boolean, code: string, message: string, session_id: string?, mode: string?, viewer: string?}
 type Supervisor = {running: boolean, detail: string}
@@ -47,7 +47,7 @@ type Membership = () -> (unknown, unknown)
 type OpenView = (Attach) -> Outcome
 type Live = {local_node: string, lookup: Lookup, membership: Membership, call: Call, open_view: OpenView, timeout: string?}
 local function unavailable(reason: string): Catalog
-    return {available = false, reason = reason, owner_generation = "", desktops = {}, next_after = nil}
+    return {available = false, reason = reason, owner_generation = "", workspaces = {}, next_after = nil}
 end
 local function decode_member(value: unknown): Member?
     local object = bounds.object(value)
@@ -122,7 +122,7 @@ function M.decode_workspaces(value: unknown): Catalog
         next_after = bounds.line(object.next_after, M.MAX_CURSOR_BYTES)
         if not next_after or next_after == "" then return unavailable(invalid) end
     end
-    local desktops: {Desktop} = {}
+    local workspaces: {Workspace} = {}
     local seen: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
         local workspace = bounds.object(raw)
@@ -132,9 +132,9 @@ function M.decode_workspaces(value: unknown): Catalog
         local label = workspace.label == "" and "" or bounds.line(workspace.label, M.MAX_LABEL_BYTES)
         if not id or seen[id] or not label or type(workspace.served) ~= "boolean" then return unavailable(invalid) end
         seen[id] = true
-        desktops[#desktops + 1] = {workspace_id = id, desktop_id = "", label = label, served = workspace.served == true}
+        workspaces[#workspaces + 1] = {workspace_id = id, label = label, served = workspace.served == true}
     end
-    return {available = true, reason = "", owner_generation = generation, desktops = desktops, next_after = next_after}
+    return {available = true, reason = "", owner_generation = generation, workspaces = workspaces, next_after = next_after}
 end
 function M.live(live: Live): Directory
     local function supervisor(_: Directory): Supervisor

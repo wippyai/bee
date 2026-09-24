@@ -100,8 +100,14 @@ func joinOwner(ctx context.Context, join joinRequest) error {
 	}
 	if join.Intent.hive != nil {
 		command := *join.Intent.hive
-		return session.Operate(ctx, config, join.Node, join.Key, func(ctx context.Context, client *hive.Join, _ rendezvous.Descriptor) error {
-			return runHive(ctx, os.Stdout, client, join.Directory, command)
+		return session.Operate(ctx, config, join.Node, join.Key, func(ctx context.Context, client *hive.Client, _ rendezvous.Descriptor) error {
+			return runHive(ctx, os.Stdout, hive.JoinOver(client), join.Directory, command)
+		})
+	}
+	if join.Intent.catalog != nil {
+		command := *join.Intent.catalog
+		return session.Operate(ctx, config, join.Node, join.Key, func(ctx context.Context, client *hive.Client, _ rendezvous.Descriptor) error {
+			return runWorkspace(ctx, os.Stdout, hive.WorkspacesOver(client), command)
 		})
 	}
 	if join.Intent.observe {

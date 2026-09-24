@@ -76,6 +76,15 @@ bee observe                   # watch without control
 bee attach WORKSPACE DISPLAY  # take control of one display
 ```
 
+Manage the running node's workspaces:
+
+```sh
+bee workspace roots                                   # roots the host admits
+bee workspace create Api bee:workspace_root/api --new-folder
+bee workspace list
+bee workspace archive WORKSPACE
+```
+
 Join another Bee's Hive:
 
 ```sh

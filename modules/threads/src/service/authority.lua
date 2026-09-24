@@ -71,13 +71,6 @@ function M.membership(tx: sql.Transaction, thread_id: string, actor: string): (r
     if not member or not member.active then return head, nil, failure("DENIED", "caller is not a member of the thread") end
     return head, member, nil
 end
-local function optional_integer(object: {[string]: unknown}, name: string): (integer?, boolean)
-    local raw: unknown = object[name]
-    if raw == nil then return nil, true end
-    local number = bounds.integer(raw)
-    if not number then return nil, false end
-    return number, true
-end
 function M.create(db: sql.DB, actor: string, request: unknown): Result
     local mutation, invalid = M.mutation(request)
     if not mutation then return invalid or failure("INVALID_ARGUMENT", "invalid request") end

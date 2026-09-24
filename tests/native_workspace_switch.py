@@ -1,25 +1,30 @@
 """A running desktop shows another workspace from its workspace menu without detaching."""
 from pathlib import Path
 import os
-import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
-import uuid
 
-from native_workspace import NativeDesktop
+from native_workspace import NativeDesktop, STATE_ENVIRONMENT
 from native_client import owner_handle, stop_owner
 from workspace import classic_workspace
 
 
-def add_workspace(folder, state, label, subpath):
-    """Seed one more catalog workspace under the node's folder, as a catalog create would."""
-    (folder / subpath).mkdir()
-    workspace_id = uuid.uuid4().hex
-    now = time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
-    with sqlite3.connect(state / 'workspace.db') as db:
-        db.execute("INSERT INTO workspaces (workspace_id, label, root_ref, subpath, state, created_at, last_used_at) "
-                   "VALUES (?, ?, 'bee:workspace_root', ?, 'active', ?, ?)", (workspace_id, label, subpath, now, now))
+def add_workspace(binary, folder, state, label, subpath):
+    """Create one more catalog workspace in a new folder under the node's folder with bee workspace create."""
+    env = {key: value for key, value in os.environ.items() if key not in STATE_ENVIRONMENT | {'BEE_RUNTIME', 'USER'}}
+    env.update(HOME=str(folder), PATH=f'{folder}/bin:/usr/bin:/bin', XDG_CONFIG_HOME=str(folder / '.config'))
+    created = subprocess.run([str(binary), '--state', str(state), 'workspace', 'create', label, 'bee:workspace_root/' + subpath,
+                              '--new-folder'], cwd=folder, env=env, capture_output=True, text=True, timeout=120)
+    assert created.returncode == 0, created.stdout + created.stderr
+    line = created.stdout.strip().splitlines()[-1]
+    assert line.startswith('Created '), created.stdout
+    workspace_id = line.split()[1]
+    assert (folder / subpath).is_dir(), 'bee workspace create did not make the folder'
+    listed = subprocess.run([str(binary), '--state', str(state), 'workspace', 'list'], cwd=folder, env=env,
+                            capture_output=True, text=True, timeout=120)
+    assert listed.returncode == 0 and workspace_id in listed.stdout, listed.stdout + listed.stderr
     return workspace_id
 
 
@@ -78,7 +83,7 @@ def exercise(binary):
             ui.wait(' BEE ', timeout=20)
             owner = owner_handle(ui, binary, state)
             folder_id = classic_workspace(state / 'workspace.db')
-            second = add_workspace(folder, state, 'Second', 'second')
+            second = add_workspace(binary, folder, state, 'Second', 'second')
             shows(ui, folder_id)
             before = shown_label(ui)
             switch(ui, 'Second')

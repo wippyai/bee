@@ -30,7 +30,8 @@ manager when a lease asks for them (see
 [workspace catalog](../reference/workspace-catalog.md#live-hosts)); a desktop
 shows one of them through the desktop bridge: `bee client` on a daemon picks
 one, and a running display switches to another from its workspace menu (F9,
-W).
+W). New workspaces come from the Workspaces viewer (Tools → Workspaces, N, or N
+in the workspace menu) or `bee workspace create`.
 
 The workspace host owns the workspace database and application authority. It
 restores supported application checkpoints, routes application requests and

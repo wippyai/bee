@@ -1088,7 +1088,8 @@ func savedProfileLaunch(binary string) error {
 		return err
 	}
 	if err := ui.waitFor("BEE_SAVED_PROFILE_GUIDANCE", 65*time.Second); err != nil {
-		return fmt.Errorf("saved profile launch did not deliver guidance: %w", err)
+		report, _ := os.ReadFile(mcpReport)
+		return fmt.Errorf("saved profile launch did not deliver guidance (MCP report %s): %w", report, err)
 	}
 	data, err := os.ReadFile(marker)
 	if err != nil || string(data) != guidance {
@@ -1103,8 +1104,9 @@ func savedProfileLaunch(binary string) error {
 		mcpResult.InitializeStatus != http.StatusOK || mcpResult.ListStatus != http.StatusOK ||
 		mcpResult.ReadStatus != http.StatusOK || mcpResult.WaitStatus != http.StatusOK || mcpResult.MessageStatus != http.StatusOK ||
 		!mcpResult.ReadOK || !mcpResult.WaitOK || !mcpResult.MessageRefusedOK || !mcpResult.NoAppendOK ||
-		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || mcpResult.MessageWriteOK ||
-		strings.Join(mcpResult.Tools, ",") != "overlay,thread_read,thread_wait" {
+		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || !mcpResult.SessionsAnnotationOK ||
+		!mcpResult.NotifyWriteOK || mcpResult.MessageWriteOK ||
+		strings.Join(mcpResult.Tools, ",") != "overlay,thread_notify,thread_read,thread_sessions,thread_wait" {
 		return fmt.Errorf("saved profile MCP report did not prove gateway access: %q", string(mcpData))
 	}
 	if err := ui.quit(); err != nil {
@@ -1889,22 +1891,24 @@ type mcpReply struct {
 }
 
 type mcpProbeReport struct {
-	Provider         string   `json:"provider"`
-	InitializeStatus int      `json:"initialize_status"`
-	ListStatus       int      `json:"list_status"`
-	ReadStatus       int      `json:"read_status"`
-	WaitStatus       int      `json:"wait_status"`
-	MessageStatus    int      `json:"message_status"`
-	Tools            []string `json:"tools"`
-	ReadOK           bool     `json:"read_ok"`
-	WaitOK           bool     `json:"wait_ok"`
-	MessageOK        bool     `json:"message_ok"`
-	MessageReplayOK  bool     `json:"message_replay_ok"`
-	MessageRefusedOK bool     `json:"message_refused_ok"`
-	NoAppendOK       bool     `json:"no_append_ok"`
-	ReadAnnotationOK bool     `json:"read_annotation_ok"`
-	WaitAnnotationOK bool     `json:"wait_annotation_ok"`
-	MessageWriteOK   bool     `json:"message_write_annotation_ok"`
+	Provider             string   `json:"provider"`
+	InitializeStatus     int      `json:"initialize_status"`
+	ListStatus           int      `json:"list_status"`
+	ReadStatus           int      `json:"read_status"`
+	WaitStatus           int      `json:"wait_status"`
+	MessageStatus        int      `json:"message_status"`
+	Tools                []string `json:"tools"`
+	ReadOK               bool     `json:"read_ok"`
+	WaitOK               bool     `json:"wait_ok"`
+	MessageOK            bool     `json:"message_ok"`
+	MessageReplayOK      bool     `json:"message_replay_ok"`
+	MessageRefusedOK     bool     `json:"message_refused_ok"`
+	NoAppendOK           bool     `json:"no_append_ok"`
+	ReadAnnotationOK     bool     `json:"read_annotation_ok"`
+	WaitAnnotationOK     bool     `json:"wait_annotation_ok"`
+	SessionsAnnotationOK bool     `json:"sessions_annotation_ok"`
+	NotifyWriteOK        bool     `json:"notify_write_annotation_ok"`
+	MessageWriteOK       bool     `json:"message_write_annotation_ok"`
 }
 
 // mcpProbeConfig follows the provider credential syntax. Agy uses literal
@@ -2162,11 +2166,11 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 	// The endpoint always appends the two protocol tools that carry no
 	// annotation. They are not part of the launch policy's admitted ceiling, so
 	// probe them separately and assert the exact admitted policy list below.
-	expected := []string{"thread_read", "thread_wait", "thread_message", "overlay", "delivery", "docs", "components"}
+	expected := []string{"thread_read", "thread_wait", "thread_sessions", "thread_message", "thread_notify", "overlay", "delivery", "docs", "components"}
 	if subset {
 		// The saved-profile form starts from the reviewed default and toggles
 		// components, delivery, docs and thread_message off.
-		expected = []string{"thread_read", "thread_wait", "overlay"}
+		expected = []string{"thread_read", "thread_wait", "thread_sessions", "thread_notify", "overlay"}
 	}
 	if json.Unmarshal(listReply.Result, &listed) != nil {
 		return 1
@@ -2190,8 +2194,12 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 			report.ReadAnnotationOK = *tool.Annotations.ReadOnlyHint
 		case "thread_wait":
 			report.WaitAnnotationOK = *tool.Annotations.ReadOnlyHint
+		case "thread_sessions":
+			report.SessionsAnnotationOK = *tool.Annotations.ReadOnlyHint
 		case "thread_message":
 			report.MessageWriteOK = !*tool.Annotations.ReadOnlyHint
+		case "thread_notify":
+			report.NotifyWriteOK = !*tool.Annotations.ReadOnlyHint
 		case "overlay":
 			if *tool.Annotations.ReadOnlyHint {
 				return 1
@@ -2224,8 +2232,8 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 	}
 	sort.Strings(report.Tools)
 	if subset {
-		if strings.Join(report.Tools, ",") != "overlay,thread_read,thread_wait" ||
-			!report.ReadAnnotationOK || !report.WaitAnnotationOK || report.MessageWriteOK {
+		if strings.Join(report.Tools, ",") != "overlay,thread_notify,thread_read,thread_sessions,thread_wait" ||
+			!report.ReadAnnotationOK || !report.WaitAnnotationOK || !report.SessionsAnnotationOK || !report.NotifyWriteOK || report.MessageWriteOK {
 			return 1
 		}
 		readScanned := func(id int) (int, bool) {
@@ -2318,8 +2326,8 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 		report.WaitOK = true
 		return 0
 	}
-	if strings.Join(report.Tools, ",") != "components,delivery,docs,overlay,thread_message,thread_read,thread_wait" ||
-		!report.ReadAnnotationOK || !report.WaitAnnotationOK || !report.MessageWriteOK {
+	if strings.Join(report.Tools, ",") != "components,delivery,docs,overlay,thread_message,thread_notify,thread_read,thread_sessions,thread_wait" ||
+		!report.ReadAnnotationOK || !report.WaitAnnotationOK || !report.SessionsAnnotationOK || !report.NotifyWriteOK || !report.MessageWriteOK {
 		return 1
 	}
 	var readReply mcpReply
@@ -2883,8 +2891,8 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 		mcpResult.InitializeStatus != http.StatusOK || mcpResult.ListStatus != http.StatusOK ||
 		mcpResult.ReadStatus != http.StatusOK || mcpResult.WaitStatus != http.StatusOK || mcpResult.MessageStatus != http.StatusOK ||
 		!mcpResult.ReadOK || !mcpResult.WaitOK || !mcpResult.MessageOK || !mcpResult.MessageReplayOK ||
-		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || !mcpResult.MessageWriteOK ||
-		strings.Join(mcpResult.Tools, ",") != "components,delivery,docs,overlay,thread_message,thread_read,thread_wait" {
+		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || !mcpResult.SessionsAnnotationOK || !mcpResult.NotifyWriteOK || !mcpResult.MessageWriteOK ||
+		strings.Join(mcpResult.Tools, ",") != "components,delivery,docs,overlay,thread_message,thread_notify,thread_read,thread_sessions,thread_wait" {
 		return fmt.Errorf("managed MCP report did not prove gateway access: %q", string(mcpData))
 	}
 	retained, err = ownerChild(ui.cmd.Process.Pid, binary, state, 10*time.Second)

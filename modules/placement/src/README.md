@@ -33,6 +33,9 @@ native windows require the exact native binding ID.
 - Driver arguments and files are private placement output frozen with the
   intent. The caller cannot supply `delivery`; retries preserve the admitted
   request digest and recorded output.
+- Gateway selections allow at most 16 tool names. Credential projections and
+  hook events remain limited to eight each; the host launch policy still
+  selects which tools a caller may receive.
 - `measure_executable` measures one absolute host path read-only
   (`bee.executable-measurement@1`: content sha256, kind, interpreter line,
   size). A request may carry the plan's `executable` measurement; the runner

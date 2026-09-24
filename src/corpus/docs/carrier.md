@@ -79,7 +79,12 @@ does not launch another child. Settlement observes process exit, drains
 remaining output within the selected bounds, and then decides a missing
 terminal envelope as `uncertain`. Stdout ending without a result envelope is
 such a missing envelope: the driver's end-of-stream terminal waits for the exit
-and the drain, so stderr the child wrote before exiting is still recorded. The attempt receipt is committed once after
+and the drain, so stderr the child wrote before exiting is still recorded. A
+child that ended after its placement was asked to stop it (its owner
+cancelling the run) and left no result envelope settles `cancelled`: the
+placement's exit report carries `stopped`. A carrier that resumes after the
+runner is gone reconstructs the exit from the placement record, which does not
+keep that mark, so such an attempt settles `uncertain`. The attempt receipt is committed once after
 turn settlement. Later cleanup is a placement observation, not a second
 receipt.
 

@@ -24,7 +24,7 @@ unknown; do not retry blindly).
 | `inspect` | `{workspace_id}` | `bee.workspaces.read` on `workspace_id` | `{workspace, live, applications, extensions}` |
 | `search_within` | `{workspace_id, text, limit?}` | `bee.workspaces.read` on `workspace_id` | `{workspace_id, results}` |
 | `roots` | `{}` | `bee.workspaces.read` on `catalog` | `{roots}` |
-| `folders` | `{root_ref, path?, after?, limit?}` | `bee.workspaces.manage` on `root_ref` | `{root_ref, path, access, workspace_id?, folders, next_after?}` |
+| `folders` | `{root_ref, path?, after?, limit?}` | `bee.workspaces.browse` on `root_ref` | `{root_ref, path, access, workspace_id?, folders, next_after?}` |
 
 A row is `{workspace_id, label, root_ref, subpath, state, created_at,
 last_used_at}`. `live` says whether a host serves the workspace now. The
@@ -63,7 +63,12 @@ workspace, in any state, that holds that folder. Files and hidden folders
 the workspace that holds `path` itself. The directory is read once per page and
 only the page's names are kept; a root the host does not admit is `FORBIDDEN`
 and a path that is not a folder `NOT_FOUND`. These are what a folder picker needs
-to offer a `create`; browsing a root is authorized as managing it.
+to offer a `create` or a launch folder. Browsing a root is its own action,
+`bee.workspaces.browse`: `bee:workspace_catalog_manage_policy` grants it with
+management, and `bee:workspace_folder_browse_policy` grants it with the
+catalog read `roots` needs and nothing else, which the Agent window holds for
+its folder choice. `bee.application:folder_picker` is the shared picker model
+and table both the Workspaces create flow and the Agent profile form use.
 
 **Inspect and search within.** `inspect` (`{workspace_id}`, read authority on
 that workspace) returns the row, `live`, the applications its checkpoint keeps

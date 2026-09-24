@@ -100,6 +100,47 @@ the gap as bounded unsaved data rather than marking it seen. It closes only its
 own subscriptions; presenter reload keeps them so they can resume. Viewing
 does not mutate thread obligations or delivery history.
 
+## Starting managed agents
+
+An application starts a managed agent with `bee.application:agents`, which
+calls `bee.harness.launch:agent_call` as the application's own actor. The host
+decides what it may start: it attaches `bee:agent_call_policy` (the call) and a
+policy granting `bee.harness.launch` on each launch definition the application
+may start to its admission binding. The request is
+`bee.application:agent_protocol`'s launch: `definition_ref`, `brief`,
+`idempotency_key` and optional `workspace_id`, `saved_profile_id` with
+`saved_profile_revision`, `thread`, `workdir` and `placement`. `thread`,
+`workdir` and `placement` take effect only where the definition and its launch
+policy allow the override. A window definition is refused with
+`LAUNCH_MODE_UNSUPPORTED`; launch a batch or session definition.
+
+```lua
+local agents = require("agents")   -- imports: agents: bee.application:agents
+
+local run, fault = agents.launch({
+    definition_ref = "bee.driver.codex:research_batch",
+    brief = "Summarize the build scripts in this folder.",
+    idempotency_key = "summarize-build-1",
+    workdir = {root_ref = "bee:workspace_root", path = "legacy/app"},
+    thread = {thread_id = launch.thread_id},
+})
+if not run then return fault.code .. ": " .. fault.message end
+local status = agents.wait(run, 300000)       -- blocks in slices of at most 60 s
+if status and status.state ~= "ended" then
+    agents.cancel(run)                          -- NOT_STARTED until the child runs
+end
+```
+
+`launch` returns `{thread_id, action_id, attempt_id, definition_ref, title,
+brief}`; the same `idempotency_key` replays the same run. `status` and `wait`
+answer `{thread_id, attempt_id, state, outcome?, answer?}` with `state`
+`starting`, `running` or `ended`; they read the child's thread and need the
+application to belong to it, as its creator or a member. `wait` watches the
+thread and returns at the deadline with the last status. `cancel` stops a
+running child through the placement that started it, which accepts only the
+attempt's owner; the attempt then settles `cancelled`. A run whose child has
+not started is refused with `NOT_STARTED`.
+
 ## Launch and lifecycle
 
 The broker supplies one validated launch value containing `version`, broker and

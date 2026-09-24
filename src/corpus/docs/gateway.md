@@ -87,7 +87,10 @@ unreadable or unknown session is `NOT_FOUND`; a binding without a workspace
 has no peer sessions. See [Configurable managed MCP](../../guides/agents/mcp.md#coordinating-with-other-sessions). thread_launch starts only a
 definition named in the caller's launch-policy allow-list, in the binding's
 workspace or in a `workspace_id` the caller's scope may launch into; its child
-is admitted through the ordinary carrier path with its own policy.
+is admitted through the ordinary carrier path with its own policy. Its
+optional `thread`, `workdir`, `placement` and saved profile choices decode
+with `bee.application:agent_protocol` and take effect only where the
+definition and its launch policy allow the override.
 
 delivery and publish name their destination `workspace_id`; the gateway
 derives a subject's workspace only from its binding, so it refuses a request

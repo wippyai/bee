@@ -70,15 +70,31 @@ decoders. It cannot apply a package, change registry state, activate an overlay
 or grant package permissions.
 
 `thread_launch` starts a definition from the caller's launch-policy allow-list
-in the caller's thread, in the caller's workspace or in an optional
-`workspace_id`. It accepts a definition reference, brief and retry key, and
-returns the child thread, action and attempt identity plus the admitted title.
-A workspace other than the binding's needs `bee.workspaces.launch` on it in the
-caller's own scope (the host attaches `bee:workspace_launch_policy` only to
-agents it lets act across workspaces); the launch then runs as the same actor
-bound to that workspace. The child gets its own launch policy and tool scope
-and holds a host lease on its workspace while it runs. A launch that would
-create a different thread is refused rather than orphaned.
+in the caller's workspace or in an optional `workspace_id`. It accepts a
+definition reference, brief and retry key, and returns the child thread,
+action and attempt identity plus the admitted title. A workspace other than
+the binding's needs `bee.workspaces.launch` on it in the caller's own scope
+(the host attaches `bee:workspace_launch_policy` only to agents it lets act
+across workspaces); the launch then runs as the same actor bound to that
+workspace. The child gets its own launch policy and tool scope and holds a
+host lease on its workspace while it runs.
+
+The request may also choose, each only where the definition's
+`allowed_overrides` and its launch policy's `allowed_overrides` both name the
+override (`FORBIDDEN` otherwise):
+
+| Field | Choice | Override |
+|---|---|---|
+| `thread` | `{thread_id}`: an existing thread the caller is an active member of; `{title}`: a new thread with that title | `thread` (a caller-thread definition joining the caller's own thread needs none) |
+| `workdir` | `{resource}`: a resource associated in the workspace; `{root_ref, path}`: a folder under a root the host admits, associated at setup | `workdir` |
+| `placement` | `native` or `docker`; a kind other than the host's placement binding is `PLACEMENT_UNAVAILABLE` | `placement` |
+| `saved_profile_id`, `saved_profile_revision` | a saved profile's preferences for the same definition | none |
+
+Without `thread`, the child joins the caller's thread, so a definition that
+opens its own thread is refused with `LAUNCH_THREAD_UNSUPPORTED` rather than
+orphaned. Shipped driver definitions and their host policies allow the
+`thread` and `workdir` overrides; none allows `placement`, and no Docker
+placement binding is installed.
 
 ## Coordinating with other sessions
 
@@ -110,8 +126,9 @@ member of is neither listed nor addressable, and the owner refuses the write
 if membership changed. Two independently opened Agent windows run as different
 application actors on their own threads, so they reach each other only after
 the thread owner joins one to the other's thread; no gateway tool grants
-membership. Sessions started with `thread_launch` share the caller's thread and
-subject and always reach each other.
+membership. Sessions started with `thread_launch` on the caller's thread share
+it and its subject and always reach each other; a child on another thread is
+reached through `thread_sessions` and `thread_notify` like any other session.
 
 A harness learns of new records only when it calls a thread tool: every
 harness pulls through `thread_read` and `thread_wait`. Nothing types a message

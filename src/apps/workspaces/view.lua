@@ -1,20 +1,25 @@
 -- MIT. The Workspaces frame: the search field, one page of the catalog and,
 -- from the standard size class, the selected workspace's detail beside it.
--- On compact and narrow canvases Enter opens the detail as its own page.
--- Every text arrives bounded by the model.
+-- On compact and narrow canvases Enter opens the detail as its own page. The
+-- create flow is a two-step wizard over the same frame. Every text arrives
+-- bounded by the model.
 local appearance = require("appearance")
 local frame = require("frame")
 local model = require("model")
+local creation = require("creation")
 type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
 local M = {}
 
 -- Every action's key, in bar order; wider canvases also name the tab switch.
-local HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "open"}, {key = "/", verb = "search"},
-    {key = "R", verb = "refresh"}, {key = "S", verb = "serve"}, {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
+local HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "open"}, {key = "N", verb = "new"}, {key = "/", verb = "search"},
+    {key = "S", verb = "serve"}, {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
 local WIDE_HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "PgUp PgDn", verb = "page"}, {key = "Enter", verb = "open"},
-    {key = "/", verb = "search"}, {key = "Tab", verb = "switch"}, {key = "R", verb = "refresh"}, {key = "S", verb = "serve"},
-    {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
+    {key = "N", verb = "new"}, {key = "/", verb = "search"}, {key = "Tab", verb = "switch"}, {key = "R", verb = "refresh"},
+    {key = "S", verb = "serve"}, {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
 local EDIT_HINTS = frame.hints({{key = "Enter", verb = "search"}, {key = "Esc", verb = "stop editing"}})
+local FOLDER_HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "open"}, {key = "U", verb = "use folder"},
+    {key = "⌫", verb = "up"}, {key = "Esc", verb = "cancel"}})
+local DETAIL_HINTS = frame.hints({{key = "↑↓", verb = "field"}, {key = "Enter", verb = "create"}, {key = "Esc", verb = "back"}})
 
 local function summary(state: model.State): string
     local noun = #state.items == 1 and " workspace" or " workspaces"
@@ -127,8 +132,116 @@ local function list(painter: frame.Painter, rect: frame.Rect, state: model.State
         selected = selected_index, offset = offset, focused = focused, area = rect})
 end
 
-function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer): Frame
+-- The folder step: the roots the host admits, then one page of the folders
+-- inside the folder shown, each marked when a workspace holds it.
+local function folders(painter: frame.Painter, rect: frame.Rect, form: creation.Form, offset: integer): frame.Window
+    if form.error then
+        frame.empty(painter, rect.y, form.root and "Could not read the folders" or "Could not read the admitted roots", form.error, rect)
+        return {offset = 0, capacity = 0}
+    end
+    local cells: {{string}} = {}
+    local keys: {string} = {}
+    local columns: {frame.Column}
+    if not form.root then
+        if #form.roots == 0 then
+            frame.empty(painter, rect.y, "No roots are admitted for workspaces", "Esc cancel", rect)
+            return {offset = 0, capacity = 0}
+        end
+        for index, root in ipairs(form.roots) do
+            cells[index] = {root.root_ref, root.access == "write" and "write" or "read"}
+            keys[index] = root.root_ref
+        end
+        columns = {{title = "Root", width = 0}, {title = "Access", width = 6}}
+    else
+        if #form.folders == 0 then
+            frame.empty(painter, rect.y, "No folders inside " .. creation.location(form), "U use this folder · ⌫ up", rect)
+            return {offset = 0, capacity = 0}
+        end
+        for index, folder in ipairs(form.folders) do
+            cells[index] = {folder.name, folder.workspace_id and "workspace" or ""}
+            keys[index] = folder.name
+        end
+        columns = {{title = "Folder", width = 0}, {title = "Holds", width = 9}}
+    end
+    if rect.width < 40 then
+        for index, row in ipairs(cells) do cells[index] = {row[1]} end
+        columns = {columns[1]}
+    end
+    return frame.table(painter, rect.y, rect.y + rect.height - 1, {columns = columns, cells = cells, keys = keys, kind = "folder",
+        selected = form.selected, offset = offset, focused = true, area = rect})
+end
+
+-- The details step: the folder the workspace will hold, its label and, under
+-- a root admitted for writing, the new folder made inside the chosen one.
+local function details(painter: frame.Painter, rect: frame.Rect, form: creation.Form)
+    local theme = painter.theme
+    local writable = creation.writable(form)
+    local width = writable and 10 or 5
+    local y = rect.y
+    local last = rect.y + rect.height - 1
+    if y <= last then
+        frame.field(painter, y, "Label", form.label .. (form.field == 1 and "▏" or ""), width, form.field == 1, 1,
+            form.field == 1 and form.failure or nil)
+        y = y + 1
+    end
+    if writable and y <= last then
+        local shown = form.new_folder .. (form.field == 2 and "▏" or "")
+        frame.field(painter, y, "New folder", shown, width, form.field == 2, 2, form.field == 2 and form.failure or nil)
+        if form.new_folder == "" and form.field ~= 2 then
+            frame.put(painter, 2 + width + 2, y, "optional, made inside the folder", rect.width - width - 2, theme.muted)
+        end
+        y = y + 1
+    end
+    y = y + 1
+    if y <= last then
+        local location = creation.location(form)
+        if writable and form.new_folder ~= "" then location = location .. "/" .. form.new_folder end
+        frame.put(painter, rect.x, y, frame.pad("Holds", width), width, theme.muted)
+        frame.put(painter, rect.x + width + 2, y, location, rect.width - width - 2, theme.text)
+    end
+end
+
+local function draw_create(painter: frame.Painter, form: creation.Form, offset: integer): Frame
+    local theme = painter.theme
+    local layout = frame.layout(painter, false, true)
+    local location = creation.location(form)
+    frame.header(painter, "NEW WORKSPACE", location ~= "" and location or "Choose a root")
+    local work = layout.work
+    if work.y > 2 then frame.steps(painter, 2, {"Folder", "Details"}, form.step == "details" and 2 or 1) end
+    local window: frame.Window = {offset = 0, capacity = 0}
+    if work.height >= 1 then
+        frame.put(painter, work.x, work.y, "Folder", 6, theme.muted)
+        local held = form.held and " · a workspace already" or ""
+        frame.put(painter, work.x + 8, work.y, (location ~= "" and location or "Choose a root") .. held, work.width - 8, theme.text)
+    end
+    local body: frame.Rect = {x = work.x, y = work.y + 2, width = work.width, height = math.floor(math.max(0, work.height - 2))}
+    if form.step == "details" then details(painter, body, form) else window = folders(painter, body, form, offset) end
+    if layout.actions > 0 then
+        if form.step == "details" then
+            frame.actions(painter, layout.actions, {
+                {kind = "create_submit", label = "Create", key = "Enter", enabled = true, primary = true},
+                {kind = "create_back", label = "Back", key = "Esc", enabled = true},
+            })
+        else
+            local count = form.root and #form.folders or #form.roots
+            frame.actions(painter, layout.actions, {
+                {kind = "create_open", label = "Open", key = "Enter", enabled = count > 0, primary = true},
+                {kind = "create_use", label = "Use folder", key = "U", enabled = form.root ~= nil},
+                {kind = "create_up", label = "Up", key = "⌫", enabled = form.root ~= nil},
+                {kind = "create_cancel", label = "Cancel", key = "Esc", enabled = true},
+            })
+        end
+    end
+    local status = form.failure or ""
+    frame.footer(painter, status, form.step == "details" and DETAIL_HINTS or FOLDER_HINTS)
+    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+end
+
+-- form: the create flow while it is open; it replaces the catalog screen.
+function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer,
+    form: creation.Form?): Frame
     local painter = frame.new(width, height, preferences)
+    if form then return draw_create(painter, form, offset) end
     local theme = painter.theme
     local layout = frame.layout(painter, true, true)
     frame.header(painter, "WORKSPACES", summary(state))
@@ -158,6 +271,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local archived = state.tab == "archived"
         frame.actions(painter, layout.actions, {
             {kind = "open", label = state.showing and "Back" or "Open", key = state.showing and "Esc" or "Enter", enabled = selected, primary = not state.confirming},
+            {kind = "new", label = "New", key = "N", enabled = true},
             {kind = "search", label = "Search", key = "/", enabled = true},
             {kind = "refresh", label = "Refresh", key = "R", enabled = true},
             {kind = "serve", label = state.served and "Release" or "Serve", key = "S", enabled = (selected and not archived) or state.served ~= nil,

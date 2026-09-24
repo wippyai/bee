@@ -1,8 +1,9 @@
 -- MIT. The Workspaces viewer: pages and searches the node workspace catalog,
--- shows what the selected workspace holds, archives and restores it, and can
--- serve it (hold a host lease) while the viewer stays open. It reads one page
--- at a time and never the whole catalog. Every owner answers under this
--- process's actor and its host-selected policies.
+-- shows what the selected workspace holds, creates, archives and restores
+-- workspaces, and can serve one (hold a host lease) while the viewer stays
+-- open. It reads one page at a time and never the whole catalog. Launched
+-- with the argument "create" it opens on the create flow. Every owner answers
+-- under this process's actor and its host-selected policies.
 local tty = require("tty")
 local client = require("client")
 local process = require("process")
@@ -14,6 +15,7 @@ local frame = require("frame")
 local caller = require("caller")
 local leases = require("leases")
 local model = require("model")
+local creation = require("creation")
 local view = require("view")
 
 local function main(value: unknown)
@@ -33,6 +35,7 @@ local function main(value: unknown)
         return reply, nil
     end)
     local state: model.State = model.new()
+    local form: creation.Form? = nil
     local lease: leases.Lease? = nil
     local offset, capacity = 0, 0
     local hits: {frame.Hit} = {}
@@ -110,9 +113,65 @@ local function main(value: unknown)
         if state.showing then model.show(state, false); return true end
         return false
     end
+    -- The create flow: the admitted roots first, then one page of folders.
+    local function begin_create()
+        local started = creation.new()
+        creation.apply_roots(started, ask(creation.roots_intent()))
+        form = started
+        dirty = true
+    end
+    local function load_folders(current: creation.Form)
+        local intent = creation.folders_intent(current)
+        if intent then creation.apply_folders(current, ask(intent)) end
+        offset = 0
+    end
+    local function submit(current: creation.Form)
+        local intent = creation.intent(current)
+        if not intent then return end
+        local created = creation.apply_created(current, ask(intent))
+        if not created then return end
+        form = nil
+        model.created(state, created)
+        page()
+    end
+    local function create_act(current: creation.Form, kind: string, index: integer)
+        if kind == "folder" then
+            if current.selected == index then
+                if creation.open(current) then load_folders(current) end
+            else creation.select(current, index) end
+        elseif kind == "create_open" then if creation.open(current) then load_folders(current) end
+        elseif kind == "create_use" then creation.use(current)
+        elseif kind == "create_up" then if creation.up(current) then load_folders(current) end
+        elseif kind == "create_cancel" then form = nil
+        elseif kind == "create_back" then creation.back(current)
+        elseif kind == "create_submit" then submit(current)
+        elseif kind == "field" then creation.field(current, index - current.field) end
+        dirty = true
+    end
+    local function create_key(current: creation.Form, data: {[string]: unknown})
+        local key = data.key_type
+        if current.step == "details" then
+            if key == "enter" then submit(current)
+            elseif key == "esc" or key == "escape" then creation.back(current)
+            elseif key == "up" then creation.field(current, -1)
+            elseif key == "down" or key == "tab" then creation.field(current, 1)
+            elseif key == "backspace" then creation.erase(current)
+            elseif type(data.key) == "string" and data.key ~= "" then creation.type_text(current, data.key :: string) end
+            return
+        end
+        if key == "up" or key == "down" then
+            if creation.move(current, key == "up" and -1 or 1) == "page" then load_folders(current) end
+        elseif key == "pgdown" then if creation.forward(current) then load_folders(current) end
+        elseif key == "pgup" then if creation.backward(current) then load_folders(current) end
+        elseif key == "enter" then if creation.open(current) then load_folders(current) end
+        elseif key == "backspace" or key == "left" then if creation.up(current) then load_folders(current) end
+        elseif key == "esc" or key == "escape" then form = nil
+        elseif data.key == "u" then creation.use(current) end
+    end
     local function act(kind: string, key: string)
         if kind == "open" then if state.showing then back() else open() end
         elseif kind == "search" or kind == "field" then model.edit(state, true)
+        elseif kind == "new" then begin_create()
         elseif kind == "refresh" then page()
         elseif kind == "serve" then serve()
         elseif kind == "change" then change()
@@ -122,10 +181,11 @@ local function main(value: unknown)
     end
 
     page()
+    if creation.requested(launch.arguments) then begin_create() end
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
         if dirty then
-            local drawn = view.draw(width, height, preferences, state, offset)
+            local drawn = view.draw(width, height, preferences, state, offset, form)
             hits, capacity, offset = drawn.hits, drawn.capacity, drawn.offset
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
@@ -148,6 +208,9 @@ local function main(value: unknown)
                 width, height = data.width, data.height
                 if standard() and not state.detail then inspect() end
                 dirty = true
+            elseif data.type == "key" and data.action ~= "release" and form then
+                create_key(form, data)
+                dirty = true
             elseif data.type == "key" and data.action ~= "release" then
                 local key = data.key_type
                 dirty = true
@@ -168,14 +231,22 @@ local function main(value: unknown)
                 elseif key == "esc" or key == "escape" then if not back() then running = false end
                 elseif data.key == "/" then model.edit(state, true)
                 elseif data.key == "r" then page()
+                elseif data.key == "n" then begin_create()
                 elseif data.key == "s" then serve()
                 elseif data.key == "a" then change() end
             elseif data.type == "mouse" then
                 local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
-                if data.action == "wheel" then move((data.button == "wheel_up" or data.button == "up") and -1 or 1)
+                local current = form
+                local step = (data.button == "wheel_up" or data.button == "up") and -1 or 1
+                if data.action == "wheel" then
+                    if current then
+                        if creation.move(current, step) == "page" then load_folders(current) end
+                        dirty = true
+                    else move(step) end
                 elseif data.action == "press" and data.button == "left" then
                     local hit = frame.hit(hits, x, y)
-                    if hit then act(hit.kind, hit.key) end
+                    if hit and current then create_act(current, hit.kind, hit.index)
+                    elseif hit then act(hit.kind, hit.key) end
                 end
             end
         end

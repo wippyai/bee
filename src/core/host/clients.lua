@@ -98,6 +98,10 @@ local function pending(state: State, client: clients.Client): Change?
     for _, change in pairs(state.changes) do if change.connection_id == client.connection_id then return change end end
     return nil
 end
+-- M.exited starts this change without a caller when an admitted renderer exits.
+local function exited_release(value: Change): boolean
+    return value.op == "render" and value.request_id == "" and value.renderer == ""
+end
 local function change(state: State, client: clients.Client, op: ChangeOp, request_id: string, renderer: string)
     local id = uuid.v7()
     state.changes[id] = {op = op, request_id = request_id, renderer = renderer, recipient = client.recipient, connection_id = client.connection_id}
@@ -219,9 +223,15 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
         if client then detach(state, client, control.request_id); return nil end
         code, failure = "not_found", "Client is not admitted"
     elseif control.op == "render" then
+        local previous = client and pending(state, client) or nil
         if not client then code, failure = "not_found", "Client is not admitted"
-        elseif client.detaching or pending(state, client) then code, failure = "busy", "Client grants are changing"
+        elseif client.detaching or (previous and not exited_release(previous)) then code, failure = "busy", "Client grants are changing"
         elseif reserved(state, control.renderer, client.connection_id) then code, failure = "permission_denied", "Renderer belongs to another owner"
+        elseif previous then
+            -- The exited renderer's unbind revokes exactly the grants a replacement
+            -- needs revoked, so the replacement completes that change.
+            previous.request_id, previous.renderer = control.request_id, control.renderer
+            return nil
         else render(state, client, control.renderer, control.request_id); return nil end
     elseif control.permissions then
         if client and control.display_id ~= client.display_id then

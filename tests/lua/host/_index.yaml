@@ -54,3 +54,19 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.host:binding_protocol
+- name: idle_process
+  kind: process.lua
+  source: file://idle_process.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]
+- name: renderer_recovery_test
+  kind: function.lua
+  source: file://renderer_recovery_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [process, channel, time]
+  imports:
+    test: wippy.test:test
+    connections: bee.host:clients
+    contract: bee.protocol:application

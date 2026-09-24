@@ -42,7 +42,8 @@ local function silent(messages: Channel<process.Message>, what: string)
 end
 type Harness = {state: owner.State, standin: string, requests: Channel<process.Message>, replies: Channel<process.Message>,
     received: Channel<process.Message>, ready: Channel<process.Message>, results: Channel<process.Message>,
-    activations: Channel<process.Message>, events: Channel<process.Event>, folder: string, leased: string, unused: {Channel<process.Message>}}
+    activations: Channel<process.Message>, switches: Channel<process.Message>, events: Channel<process.Event>, folder: string, leased: string,
+    unused: {Channel<process.Message>}}
 
 local function harness(tag: string): Harness
     local self = tostring(process.pid())
@@ -50,6 +51,7 @@ local function harness(tag: string): Harness
     local requests, replies = listen("bee.test.standin.request"), listen("bee.test.standin.reply")
     local received = listen("bee.test.retained.received")
     local ready, results, activations = listen("bee.retained.ready"), listen("bee.retained.result"), listen("bee.retained.activated")
+    local switches = listen("bee.retained.switch")
     local unused = listen("bee.test.desktop_workspaces." .. tag)
     -- The bridge monitors its clients itself, so the test does not.
     local standin = tostring(assert(process.spawn("bee.hive:display_standin", "bee.hive.desktop:display_host", self)))
@@ -62,17 +64,17 @@ local function harness(tag: string): Harness
     local state: owner.State = {
         bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = NODE,
         allowed = {}, enrolled = {[client_node] = true}, config = {execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {}, local_clients = true, folder = true},
-        ready = ready, results = results, copies = unused, launches = unused, activations = activations, observers = unused,
+        ready = ready, results = results, copies = unused, launches = unused, activations = activations, observers = unused, switches = switches, retiring = {},
         catalog = catalog.new(), spawn_scope = security.new_scope({}), executor = funcs.new(), folder = folder_served,
         served = {[folder] = folder_served, [leased] = leased_served}, workspaces = {[FOLDER] = folder_served, [LEASED] = leased_served}, served_count = 1,
         clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = time.now():add("1h"),
     }
     return {state = state, standin = standin, requests = requests, replies = replies, received = received, ready = ready, results = results,
-        activations = activations, events = events, folder = folder, leased = leased, unused = {unused}}
+        activations = activations, switches = switches, events = events, folder = folder, leased = leased, unused = {unused}}
 end
 local function close(h: Harness)
     for _, pid in ipairs({h.standin, h.folder, h.leased}) do process.terminate(pid) end
-    for _, subscription in ipairs({h.requests, h.replies, h.received, h.ready, h.results, h.activations}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({h.requests, h.replies, h.received, h.ready, h.results, h.activations, h.switches}) do process.unlisten(subscription) end
     for _, subscription in ipairs(h.unused) do process.unlisten(subscription) end
 end
 -- The stand-in sends one call as the native client; the bridge admits it.
@@ -125,6 +127,44 @@ local function attach_leased(h: Harness): types.Reply
     send_as(h.leased, "bee.retained.result", {version = 1, workspace_id = LEASED, desktop_id = DISPLAY,
         request_id = attach.request_id, mount = "leased-mount", error_code = "", error = ""})
     owner.result(h.state, next_message(h.results, "attach result"), 1)
+    return answer(h)
+end
+-- Attach the stand-in with control to the folder workspace's display.
+local function attach_folder(h: Harness): Object
+    request(h, protocol.ATTACH, "attach-folder", {workspace_id = FOLDER, desktop_id = DISPLAY, mode = "control"})
+    local activation = asked(h, "bee.retained.activate")
+    send_as(h.folder, "bee.retained.activated", {version = 1, workspace_id = FOLDER, desktop_id = DISPLAY,
+        request_id = activation.request_id, error_code = "", error = ""})
+    owner.activated(h.state, next_message(h.activations, "folder activation"), 1)
+    local attach = asked(h, "bee.retained.request")
+    send_as(h.folder, "bee.retained.result", {version = 1, workspace_id = FOLDER, desktop_id = DISPLAY,
+        request_id = attach.request_id, mount = "folder-mount", error_code = "", error = ""})
+    owner.result(h.state, next_message(h.results, "folder attach result"), 1)
+    local attached = answer(h)
+    if not attached.ok then error(tostring(attached.error and attached.error.message)) end
+    return attached.value :: Object
+end
+-- The folder workspace's supervisor asks the bridge to show another workspace
+-- on the display, as its display did.
+local function ask_switch(h: Harness, request_id: string, target: string)
+    send_as(h.folder, "bee.retained.switch", {version = 1, workspace_id = FOLDER, desktop_id = DISPLAY,
+        request_id = request_id, target_workspace_id = target})
+    owner.switch(h.state, next_message(h.switches, "switch request"), 1)
+end
+-- The leased workspace's supervisor becomes ready and admits the display.
+local function admit_leased(h: Harness, activation_error: string?): Object
+    send_as(h.leased, "bee.retained.ready", {version = 1, workspace_id = LEASED, desktop_id = DEFAULT_DISPLAY})
+    owner.ready(h.state, next_message(h.ready, "leased readiness"), 1)
+    local activation = asked(h, "bee.retained.activate")
+    test.eq(activation.workspace_id, LEASED)
+    test.eq(activation.desktop_id, DISPLAY)
+    send_as(h.leased, "bee.retained.activated", {version = 1, workspace_id = LEASED, desktop_id = DISPLAY,
+        request_id = activation.request_id, error_code = activation_error and "UNAVAILABLE" or "", error = activation_error or ""})
+    owner.activated(h.state, next_message(h.activations, "leased activation"), 1)
+    return activation
+end
+local function current(h: Harness): types.Reply
+    request(h, protocol.CURRENT, "current-" .. tostring(time.now():unix_nano()), {})
     return answer(h)
 end
 local function define_tests()
@@ -184,6 +224,81 @@ local function define_tests()
             send_call(h, protocol.ATTACH, "attach-0", {workspace_id = LEASED, desktop_id = DISPLAY, mode = "control"})
             local unnamed = answer(h)
             test.eq(unnamed.error and unnamed.error.code, "INVALID_ARGUMENT")
+            close(h)
+        end)
+        test.it("moves a display's controller to another workspace and releases the folder's grant", function()
+            local h = harness("move")
+            local first = attach_folder(h)
+            ask_switch(h, "switch-1", LEASED)
+            silent(h.received, "a request before the target workspace's supervisor is ready")
+            admit_leased(h, nil)
+            local attach = asked(h, "bee.retained.request")
+            test.eq(attach.op, "attach")
+            test.eq(attach.workspace_id, LEASED)
+            test.eq(attach.mode, "control")
+            test.eq(attach.recipient, h.standin)
+            send_as(h.leased, "bee.retained.result", {version = 1, workspace_id = LEASED, desktop_id = DISPLAY,
+                request_id = attach.request_id, mount = "leased-mount", error_code = "", error = ""})
+            owner.result(h.state, next_message(h.results, "switch attach result"), 1)
+            local switched = asked(h, "bee.retained.switched")
+            test.eq(switched.request_id, "switch-1")
+            test.eq(switched.workspace_id, FOLDER)
+            test.eq(switched.error_code, "")
+            -- The folder workspace keeps serving; only the client's grant there ends.
+            local release = asked(h, "bee.retained.request")
+            test.eq(release.op, "detach")
+            test.eq(release.workspace_id, FOLDER)
+            test.eq(release.recipient, h.standin)
+            silent(h.replies, "a reply to the native client for the switch")
+            send_as(h.folder, "bee.retained.result", {version = 1, workspace_id = FOLDER, desktop_id = DISPLAY,
+                request_id = release.request_id, mount = "", error_code = "", error = ""})
+            owner.result(h.state, next_message(h.results, "folder release result"), 1)
+            silent(h.replies, "a reply to the native client for the release")
+            test.is_nil(next(h.state.retiring))
+            local now = current(h)
+            if not now.ok then error(tostring(now.error and now.error.message)) end
+            local value = now.value :: Object
+            test.eq(value.workspace_id, LEASED)
+            test.eq(value.desktop_id, DISPLAY)
+            test.eq(value.mount_ref, "leased-mount")
+            test.eq(value.mode, "control")
+            test.neq(value.session_id, first.session_id)
+            test.not_nil(h.state.workspaces[FOLDER])
+            request(h, protocol.DETACH, "detach-old", {workspace_id = FOLDER, desktop_id = DISPLAY, session_id = first.session_id})
+            local stale = answer(h)
+            test.is_false(stale.ok)
+            close(h)
+        end)
+        test.it("keeps the display on its workspace when the target refuses it", function()
+            local h = harness("revert")
+            local first = attach_folder(h)
+            ask_switch(h, "switch-2", LEASED)
+            admit_leased(h, "the workspace refused the display")
+            local switched = asked(h, "bee.retained.switched")
+            test.eq(switched.request_id, "switch-2")
+            test.eq(switched.error_code, "UNAVAILABLE")
+            silent(h.received, "a release of the folder's grant after a refused switch")
+            local now = current(h)
+            local value = now.value :: Object
+            test.eq(value.workspace_id, FOLDER)
+            test.eq(value.session_id, first.session_id)
+            test.eq(value.mount_ref, "folder-mount")
+            -- The target workspace had no other client: its supervisor stopped.
+            test.is_nil(h.state.workspaces[LEASED])
+            test.eq(h.state.served_count, 0)
+            close(h)
+        end)
+        test.it("refuses a switch with no controlling client or to the same workspace", function()
+            local h = harness("refuse")
+            ask_switch(h, "switch-3", LEASED)
+            local none = asked(h, "bee.retained.switched")
+            test.eq(none.error_code, "NOT_FOUND")
+            attach_folder(h)
+            ask_switch(h, "switch-4", FOLDER)
+            local same = asked(h, "bee.retained.switched")
+            test.eq(same.error_code, "INVALID_ARGUMENT")
+            -- A refused switch starts no supervisor and stops none.
+            test.eq(h.state.served_count, 1)
             close(h)
         end)
         test.it("serves no catalog-reader operation and admits no local application sender", function()

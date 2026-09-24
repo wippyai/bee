@@ -10,6 +10,9 @@ M.ATTACH = "bee.desktop:attach"
 M.DETACH = "bee.desktop:detach"
 M.COPY = "bee.desktop:copy"
 M.LAUNCH = "bee.desktop:launch"
+-- The client's current session: after a switch its display shows another
+-- workspace under a new session and mount.
+M.CURRENT = "bee.desktop:current"
 -- A catalog page holds at most this many workspaces; a cursor is at most this long.
 M.MAX_PAGE = 50
 M.MAX_CURSOR = 2200
@@ -87,6 +90,10 @@ function M.input(operation: string, value: unknown): DesktopInput?
         return {execution = execution, workspace_id = nil, desktop_id = nil, session_id = nil, mode = "observe", name = nil, arguments = nil, query = query}
     end
     if not execution then return nil end
+    if operation == M.CURRENT then
+        if bounds.fields(object, {"owner_execution"}) then return nil end
+        return {execution = execution, workspace_id = nil, desktop_id = nil, mode = "observe", session_id = nil, name = nil, arguments = nil, query = nil}
+    end
     local desktop = contract.workspace_id(object.desktop_id)
     if operation == M.CREATE then
         -- Displays belong to the node, so allocation names no workspace.

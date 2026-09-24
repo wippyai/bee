@@ -17,10 +17,18 @@ local catalog = require("catalog")
 local workspaces = require("workspaces")
 local M = {}
 type Channel = channel.Channel
-type Session = {id: string, mount: string, mode: "control" | "observe"}
+type Mode = "control" | "observe"
+type Session = {id: string, mount: string, mode: Mode}
+-- A display's request to show another workspace: the supervisor that asked,
+-- its request identity and the workspace the client leaves.
+type Switch = {request_id: string, source: string, previous: string}
 -- waiting: the request waits for its workspace's supervisor to be ready.
+-- mode: the attachment mode a switch requests; a native call names its own.
 type Pending = {id: string, op: "attach" | "detach" | "copy" | "launch", call: types.Call?, cache_key: string?, digest: string?, due: integer,
-    activating: boolean?, waiting: boolean?}
+    activating: boolean?, waiting: boolean?, mode: Mode?, switch: Switch?}
+-- A client grant a workspace still holds after its client moved to another
+-- workspace; the bridge detaches it and retries a refused detach.
+type Retiring = {workspace_id: string, desktop_id: string, recipient: string, due: integer}
 type Client = {recipient: string, workspace_id: string, desktop_id: string, session: Session?, pending: Pending?, closing: boolean, dirty: boolean}
 type Receipt = {session_id: string?, digest: string, reply: types.Reply, expires: integer}
 -- One retained desktop supervisor. The folder workspace learns its identity
@@ -29,12 +37,12 @@ type Served = {supervisor: string, workspace_id: string, desktop_id: string, fol
 type State = {
     config: protocol.Configuration, node: string, bridge_name: string, owner_name: string,
     ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
-    activations: Channel<process.Message>,
+    activations: Channel<process.Message>, switches: Channel<process.Message>,
     observers: Channel<process.Message>, catalog: catalog.State, spawn_scope: security.Scope, executor: funcs.Executor,
     folder: Served?, served: {[string]: Served}, workspaces: {[string]: Served}, served_count: integer,
     allowed: {[string]: boolean}, enrolled: {[string]: boolean},
     clients: {[string]: Client}, receipts: {[string]: Receipt}, client_count: integer, receipt_count: integer,
-    expires_at: time.Time, stopped: boolean,
+    retiring: {[string]: Retiring}, expires_at: time.Time, stopped: boolean,
 }
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 -- Leased workspaces one bridge serves at once, besides the folder workspace.
@@ -85,6 +93,7 @@ function M.start(config: protocol.Configuration, node: string): State
     local copies = listen("bee.retained.copied")
     local launches = listen("bee.retained.launched")
     local activations = listen("bee.retained.activated")
+    local switches = listen(retained.TOPIC_SWITCH)
     local observers = listen(retained.TOPIC_OBSERVE)
     local named = false
     -- The bridge composes the owner's folder workspace.
@@ -93,7 +102,7 @@ function M.start(config: protocol.Configuration, node: string): State
     local bridge_name = key and retained.bridge_name(key) or ""
     local owner_name = key and retained.owner_name(key) or ""
     local function abandon(cause: unknown)
-        for _, topic in ipairs({ready, results, copies, launches, activations, observers}) do process.unlisten(topic) end
+        for _, topic in ipairs({ready, results, copies, launches, activations, switches, observers}) do process.unlisten(topic) end
         if named then process.registry.unregister(bridge_name) end
         error(tostring(cause))
     end
@@ -108,9 +117,10 @@ function M.start(config: protocol.Configuration, node: string): State
     if not registered then abandon(name_error) end
     named = true
     local state: State = {config = config, node = node, bridge_name = bridge_name, owner_name = owner_name, ready = ready, results = results,
-        copies = copies, launches = launches, activations = activations, observers = observers,
+        copies = copies, launches = launches, activations = activations, switches = switches, observers = observers,
         catalog = catalog.new(), spawn_scope = spawn_scope, executor = executor, folder = nil, served = {}, workspaces = {}, served_count = 0,
-        allowed = allowed, enrolled = {}, clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = expiry, stopped = false}
+        allowed = allowed, enrolled = {}, clients = {}, receipts = {}, client_count = 0, receipt_count = 0, retiring = {}, expires_at = expiry,
+        stopped = false}
     -- A daemon's bridge composes no folder workspace; it serves only leased ones.
     if not config.folder then return state end
     local supervisor, err = spawn(state, folder)
@@ -120,23 +130,49 @@ function M.start(config: protocol.Configuration, node: string): State
     state.served[supervisor] = served
     return state
 end
+-- A leased workspace no client uses releases its host lease: its supervisor
+-- stops, ending every grant it still holds. Returns whether it stopped.
+local function release_if_idle(state: State, workspace_id: string): boolean
+    local served = state.workspaces[workspace_id]
+    if not served or served.folder then return false end
+    for _, other in pairs(state.clients) do
+        if other.workspace_id == workspace_id then return false end
+    end
+    state.workspaces[workspace_id] = nil
+    state.served[served.supervisor] = nil
+    state.served_count = state.served_count - 1
+    for id, entry in pairs(state.retiring) do
+        if entry.workspace_id == workspace_id then state.retiring[id] = nil end
+    end
+    -- Its exit event arrives for a supervisor no longer served and is ignored.
+    process.terminate(served.supervisor)
+    return true
+end
+local function switched(switch: Switch, desktop_id: string, code: string, message: string)
+    send(switch.source, retained.TOPIC_SWITCHED, {version = 1, workspace_id = switch.previous, desktop_id = desktop_id,
+        request_id = switch.request_id, error_code = code, error = message:sub(1, 400)})
+end
 local function forget(state: State, recipient: string)
     local client = state.clients[recipient]
     if not client then return end
     process.unmonitor(recipient)
     state.clients[recipient] = nil
     state.client_count = state.client_count - 1
-    -- A leased workspace whose last session ended releases its host lease.
-    local served = state.workspaces[client.workspace_id]
-    if not served or served.folder then return end
-    for _, other in pairs(state.clients) do
-        if other.workspace_id == client.workspace_id then return end
+    local pending = client.pending
+    if pending and pending.switch then
+        switched(pending.switch, client.desktop_id, "UNAVAILABLE", "The display's client left")
+        release_if_idle(state, pending.switch.previous)
     end
-    state.workspaces[client.workspace_id] = nil
-    state.served[served.supervisor] = nil
-    state.served_count = state.served_count - 1
-    -- Its exit event arrives for a supervisor no longer served and is ignored.
-    process.terminate(served.supervisor)
+    release_if_idle(state, client.workspace_id)
+end
+-- Detach a client grant from a workspace the client no longer uses.
+local function retire(state: State, workspace_id: string, desktop_id: string, recipient: string, now: integer)
+    local served = state.workspaces[workspace_id]
+    if not served or release_if_idle(state, workspace_id) then return end
+    local id = uuid.v7()
+    state.retiring[id] = {workspace_id = workspace_id, desktop_id = desktop_id, recipient = recipient, due = now + 1000}
+    send(served.supervisor, "bee.retained.request", {version = 1, workspace_id = workspace_id, desktop_id = desktop_id,
+        request_id = id, recipient = recipient, op = "detach"})
 end
 local function request_core(state: State, client: Client, pending: Pending, mode: string?): boolean
     local served = state.workspaces[client.workspace_id]
@@ -184,6 +220,25 @@ end
 -- for every fresh controller refusal would let a waiting client consume the
 -- bounded receipt cache without acquiring anything. Such a refusal is a
 -- definite no-effect result, so it is deliberately not retained.
+-- A switch took effect: the client's session is on the target workspace now.
+-- The previous workspace releases its grant, or stops when no client uses it.
+local function finish_switch(state: State, client: Client, switch: Switch, now: integer)
+    client.pending = nil
+    switched(switch, client.desktop_id, "", "")
+    retire(state, switch.previous, client.desktop_id, client.recipient, now)
+    if client.closing then revoke(state, client, now) end
+end
+-- A switch did not take effect: the client keeps its session on the previous
+-- workspace. uncertain: the target may hold a grant the attach created.
+local function revert_switch(state: State, client: Client, switch: Switch, code: string, message: string, uncertain: boolean, now: integer)
+    local target = client.workspace_id
+    client.pending = nil
+    client.workspace_id = switch.previous
+    switched(switch, client.desktop_id, code, message)
+    if uncertain then retire(state, target, client.desktop_id, client.recipient, now)
+    else release_if_idle(state, target) end
+    if client.closing then revoke(state, client, now) end
+end
 local function forget_refusal(state: State, pending: Pending)
     if pending.cache_key and state.receipts[pending.cache_key] then
         state.receipts[pending.cache_key] = nil
@@ -349,6 +404,17 @@ function M.request(state: State, message: process.Message, now: integer)
         catalog.allocate(state.catalog, state.executor, sender, call, input.desktop_id, now + remaining)
         return
     end
+    if operation == protocol.CURRENT then
+        -- A read of the sender's session; it holds no receipt and changes nothing.
+        local current = state.clients[sender]
+        local session = current and current.session
+        if not current or not session or current.closing then failure(sender, call.request_id, "NOT_FOUND", "Desktop session not found"); return end
+        if current.pending then failure(sender, call.request_id, "BUSY", "Desktop request already pending"); return end
+        send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {owner_execution = state.config.execution,
+            workspace_id = current.workspace_id, desktop_id = current.desktop_id, session_id = session.id,
+            recipient = sender, mode = session.mode, mount_ref = session.mount, expires_at = state.config.expires_at}))
+        return
+    end
     if not input.workspace_id or not input.desktop_id then failure(sender, call.request_id, "INVALID_ARGUMENT", "Invalid desktop operation input"); return end
     local key = sender .. "\0" .. call.idempotency_key
     local digest = types.digest({operation = operation, input = call.input, deadline = call.deadline})
@@ -488,10 +554,36 @@ end
 function M.result(state: State, message: process.Message, now: integer)
     local served = source(state, message)
     if not served then return end
+    local data: unknown = message:payload():data()
+    -- A grant retired after a switch: released, or retried on the timer.
+    local retired_id: string? = nil
+    if type(data) == "table" and type(data.request_id) == "string" then retired_id = data.request_id end
+    local retiring: Retiring? = nil
+    if retired_id then retiring = state.retiring[retired_id] end
+    if retiring and retiring.workspace_id == served.workspace_id then
+        local released = retained.result(data, served.workspace_id, retiring.desktop_id)
+        if not released then return end
+        if released.error_code == "" or released.error_code == "not_found" then state.retiring[released.request_id] = nil
+        else retiring.due = now + 1000 end
+        return
+    end
     for _, client in pairs(state.clients) do
         local pending = client.pending
         local result = client.workspace_id == served.workspace_id
-            and retained.result(message:payload():data(), served.workspace_id, client.desktop_id) or nil
+            and retained.result(data, served.workspace_id, client.desktop_id) or nil
+        local switch = pending and pending.switch
+        if result and pending and switch and not pending.activating and pending.id == result.request_id then
+            if result.error_code ~= "" then
+                revert_switch(state, client, switch, result.error_code == "busy" and "DESKTOP_CONTROLLED" or "UNAVAILABLE", result.error, false, now)
+                return
+            end
+            if result.mount == "" then error("Retained attach returned no mount") end
+            local session: Session = {id = uuid.v7(), mount = result.mount, mode = pending.mode or "control"}
+            client.session = session
+            client.dirty = true
+            finish_switch(state, client, switch, now)
+            return
+        end
         if result and pending and not pending.activating and pending.id == result.request_id then
             if result.error_code == "" then
                 if pending.op == "attach" then
@@ -555,6 +647,21 @@ function M.activated(state: State, message: process.Message, now: integer)
         local pending = client.pending
         if client.workspace_id == served.workspace_id and pending and pending.activating then
             local result = retained.activation_result(value, served.workspace_id, client.desktop_id)
+            local switch = pending.switch
+            if result and result.request_id == pending.id and switch then
+                if result.error_code ~= "" or now >= pending.due then
+                    revert_switch(state, client, switch, result.error_code == "BUSY" and "BUSY" or "UNAVAILABLE",
+                        result.error ~= "" and result.error or "The workspace did not admit the display", false, now)
+                    return
+                end
+                local attachment: Pending = {id = pending.id, op = "attach", due = pending.due, activating = false,
+                    mode = pending.mode, switch = switch}
+                client.pending = attachment
+                if not request_core(state, client, attachment, pending.mode) then
+                    revert_switch(state, client, switch, "UNAVAILABLE", "The workspace's supervisor did not accept the request", false, now)
+                end
+                return
+            end
             if result and result.request_id == pending.id and pending.call then
                 if result.error_code ~= "" or now >= pending.due or client.closing then
                     local reply = types.reply_error(pending.call.request_id, types.fault(
@@ -588,9 +695,22 @@ function M.tick(state: State, now: integer)
             state.receipts[key] = nil; state.receipt_count = state.receipt_count - 1
         end
     end
+    for id, entry in pairs(state.retiring) do
+        local served = state.workspaces[entry.workspace_id]
+        if not served then state.retiring[id] = nil
+        elseif now >= entry.due then
+            entry.due = now + 1000
+            send(served.supervisor, "bee.retained.request", {version = 1, workspace_id = entry.workspace_id, desktop_id = entry.desktop_id,
+                request_id = id, recipient = entry.recipient, op = "detach"})
+        end
+    end
     for _, client in pairs(state.clients) do
         local pending = client.pending
-        if pending and now >= pending.due then
+        local switch = pending and pending.switch
+        if pending and switch and now >= pending.due then
+            -- The target may have granted the display after all; its grant is retired.
+            revert_switch(state, client, switch, "UNCERTAIN", "The workspace did not answer in time", not pending.activating, now)
+        elseif pending and now >= pending.due then
             if pending.call then
                 if not client.closing then
                     send(client.recipient, types.TOPIC_REPLY, types.reply_error(pending.call.request_id,
@@ -618,7 +738,11 @@ local function served_exited(state: State, served: Served, cause: string, now: i
     state.served_count = state.served_count - 1
     local ended: {string} = {}
     for recipient, client in pairs(state.clients) do
-        if client.workspace_id == served.workspace_id then
+        local switch = client.pending and client.pending.switch
+        if client.workspace_id == served.workspace_id and switch then
+            -- The display stays on the workspace it was switching from.
+            revert_switch(state, client, switch, "UNAVAILABLE", "Workspace desktop ended: " .. cause, false, now)
+        elseif client.workspace_id == served.workspace_id then
             local pending = client.pending
             if pending and pending.call then
                 remember(state, client, pending, types.reply_error(pending.call.request_id,
@@ -655,10 +779,42 @@ function M.event(state: State, event: process.Event, now: integer)
     local client = state.clients[sender]
     if client then revoke(state, client, now) end
 end
+-- A display asks, through its workspace's supervisor, to show another
+-- workspace. The bridge moves the display's controlling client: it attaches
+-- the client to the same display in the target workspace, leasing that
+-- workspace's host, and only then releases the client's grant on the
+-- workspace it leaves. The native client learns its new session from
+-- bee.desktop:current once its old mount ends. Observers stay where they are.
+function M.switch(state: State, message: process.Message, now: integer)
+    local served = source(state, message)
+    if not served then return end
+    local value = retained.switch(message:payload():data(), served.workspace_id)
+    if not value then return end
+    local request: Switch = {request_id = value.request_id, source = served.supervisor, previous = served.workspace_id}
+    if value.target_workspace_id == served.workspace_id then
+        switched(request, value.desktop_id, "INVALID_ARGUMENT", "The display already shows that workspace"); return
+    end
+    local client: Client? = nil
+    for _, candidate in pairs(state.clients) do
+        local session = candidate.session
+        if candidate.workspace_id == served.workspace_id and candidate.desktop_id == value.desktop_id and not candidate.closing
+            and session and session.mode == "control" then client = candidate end
+    end
+    if not client then switched(request, value.desktop_id, "NOT_FOUND", "No client controls this display"); return end
+    if client.pending then switched(request, value.desktop_id, "BUSY", "The display's client has a pending request"); return end
+    local target, code, refusal = serve(state, value.target_workspace_id)
+    if not target then switched(request, value.desktop_id, code or "UNAVAILABLE", refusal or "The workspace is unavailable"); return end
+    local pending: Pending = {id = uuid.v7(), op = "attach", due = now + 30000, activating = true, mode = "control", switch = request}
+    client.workspace_id = value.target_workspace_id
+    client.pending = pending
+    if not request_core(state, client, pending, "control") then
+        revert_switch(state, client, request, "UNAVAILABLE", "The workspace's supervisor did not accept the request", false, now)
+    end
+end
 function M.close(state: State)
     state.stopped = true
     process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
-    process.unlisten(state.activations); process.unlisten(state.observers)
+    process.unlisten(state.activations); process.unlisten(state.switches); process.unlisten(state.observers)
     process.registry.unregister(state.bridge_name)
     catalog.revoke(state.catalog, "Desktop owner stopped")
     for recipient in pairs(state.clients) do process.unmonitor(recipient) end

@@ -3,7 +3,7 @@
 local process = require("process")
 local channel = require("channel")
 local function main(test: string)
-    local topics = {"bee.retained.activate", "bee.retained.request", "bee.retained.launch"}
+    local topics = {"bee.retained.activate", "bee.retained.request", "bee.retained.launch", "bee.retained.switched"}
     local subscriptions = {}
     for _, topic in ipairs(topics) do subscriptions[#subscriptions + 1] = assert(process.listen(topic, {message = true})) end
     local commands = assert(process.listen("bee.test.retained.send", {message = true}))

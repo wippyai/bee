@@ -11,6 +11,9 @@ local M = {}
 -- names are keyed by the workspace selection (bee.storage:binding key), which
 -- both sides know before the host reports the workspace identity.
 M.TOPIC_OBSERVE = "bee.retained.observe"
+-- A display's switch request, supervisor to bridge, and its answer.
+M.TOPIC_SWITCH = "bee.retained.switch"
+M.TOPIC_SWITCHED = "bee.retained.switched"
 local function keyed(prefix: string, key: string): string?
     if #key ~= 32 or key:find("[^0-9a-f]") then return nil end
     return prefix .. key
@@ -125,6 +128,37 @@ function M.launch_result(value: unknown, workspace_id: string, desktop_id: strin
         if id == "" or instance == "" or value.error ~= "" then return nil end
     elseif id ~= "" or instance ~= "" or value.error == "" then return nil end
     return {request_id = request_id, id = id, instance_id = instance, error_code = code, error = value.error}
+end
+
+-- A display asks to show another workspace: its supervisor forwards the
+-- request, naming the display, to the desktop bridge, which moves the
+-- display's controlling client and answers the same request identity.
+type Switch = {desktop_id: string, request_id: string, target_workspace_id: string}
+function M.switch(value: unknown, workspace_id: string): Switch?
+    if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
+    for key in pairs(value) do
+        if key ~= "version" and key ~= "workspace_id" and key ~= "desktop_id" and key ~= "request_id"
+            and key ~= "target_workspace_id" then return nil end
+    end
+    local desktop = contract.workspace_id(value.desktop_id)
+    local target = contract.workspace_id(value.target_workspace_id)
+    local request_id = contract.text(value.request_id, 80)
+    if not desktop or not target or not request_id or request_id == "" then return nil end
+    return {desktop_id = desktop, request_id = request_id, target_workspace_id = target}
+end
+type SwitchResult = {desktop_id: string, request_id: string, error_code: string, error: string}
+function M.switch_result(value: unknown, workspace_id: string): SwitchResult?
+    if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
+    for key in pairs(value) do
+        if key ~= "version" and key ~= "workspace_id" and key ~= "desktop_id" and key ~= "request_id"
+            and key ~= "error_code" and key ~= "error" then return nil end
+    end
+    local desktop = contract.workspace_id(value.desktop_id)
+    local request_id = contract.text(value.request_id, 80)
+    local code = contract.text(value.error_code, 80)
+    if not desktop or not request_id or request_id == "" or not code or type(value.error) ~= "string" or #value.error > 400 then return nil end
+    if (code == "") ~= (value.error == "") then return nil end
+    return {desktop_id = desktop, request_id = request_id, error_code = code, error = value.error}
 end
 
 type CopyResult = {request_id: string, selected: boolean, text: string, error: string}

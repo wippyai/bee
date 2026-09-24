@@ -22,7 +22,8 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.workspace.catalog:create, bee.workspace.catalog:read, bee.workspace.catalog:list, bee.workspace.catalog:search,
-      bee.workspace.catalog:rename, bee.workspace.catalog:archive, bee.workspace.catalog:restore, bee.workspace.catalog:backend]
+      bee.workspace.catalog:rename, bee.workspace.catalog:archive, bee.workspace.catalog:restore, bee.workspace.catalog:backend,
+      bee.workspace.catalog:inspect, bee.workspace.catalog:search_within]
     effect: allow
 - name: catalog_test
   kind: function.lua
@@ -42,3 +43,34 @@ entries:
   modules: [funcs, security, registry, process, time, fs]
   imports:
     test: wippy.test:test
+- name: resources_call_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.resources.binding:associate, bee.resources.binding:describe, bee.resources.binding:search]
+    effect: allow
+- name: broken_extension_method
+  kind: function.lua
+  source: file://broken_extension.lua
+  method: handle
+  meta: {type: test_support}
+- name: broken_extension
+  kind: contract.binding
+  meta: {type: test_support, title: Broken}
+  contracts:
+  - contract: bee.workspace.catalog:extension
+    methods:
+      describe: bee.workspace.catalog:broken_extension_method
+      search: bee.workspace.catalog:broken_extension_method
+- name: extension_test
+  kind: function.lua
+  source: file://extension_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry, time, fs]
+  imports:
+    test: wippy.test:test
+    persistence: bee.workspace:persistence
+    model: bee.desktop:model
+    appearance: bee.application:appearance

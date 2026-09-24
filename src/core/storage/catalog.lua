@@ -166,6 +166,18 @@ function M.get(tx: sql.Transaction, workspace_id: string): (Summary?, Fault?)
     return one(rows)
 end
 
+-- The workspace's durable state envelope as stored, or nil before its first
+-- checkpoint. The workspace protocol decodes it.
+function M.state(tx: sql.Transaction, workspace_id: string): (string?, Fault?)
+    local rows, err = tx:query("SELECT value FROM workspace_state WHERE workspace_id = ?", {workspace_id})
+    if err or not rows then return nil, fault("STORAGE", "read workspace state") end
+    if #rows == 0 then return nil, nil end
+    local row: unknown = rows[1]
+    local value: unknown = type(row) == "table" and row.value or nil
+    if #rows ~= 1 or type(value) ~= "string" then return nil, fault("STORAGE", "workspace state row is corrupt") end
+    return value, nil
+end
+
 -- A new active row with a fresh identity. One folder is one workspace: a
 -- second row for the same root and subpath is a conflict.
 function M.insert(tx: sql.Transaction, definition: Definition): (Summary?, Fault?)

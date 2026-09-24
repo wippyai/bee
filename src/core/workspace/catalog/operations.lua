@@ -33,5 +33,8 @@ local function search(value: unknown): protocol.Reply return run("search", value
 local function rename(value: unknown): protocol.Reply return run("rename", value) end
 local function archive(value: unknown): protocol.Reply return run("archive", value) end
 local function restore(value: unknown): protocol.Reply return run("restore", value) end
+local function inspect(value: unknown): protocol.Reply return run("inspect", value) end
+local function search_within(value: unknown): protocol.Reply return run("search_within", value) end
 
-return {create = create, read = read, list = list, search = search, rename = rename, archive = archive, restore = restore}
+return {create = create, read = read, list = list, search = search, rename = rename, archive = archive, restore = restore,
+    inspect = inspect, search_within = search_within}

@@ -21,6 +21,8 @@ unknown; do not retry blindly).
 | `rename` | `{workspace_id, label}` | `bee.workspaces.manage` on `workspace_id` | the row |
 | `archive` | `{workspace_id}` | `bee.workspaces.manage` on `workspace_id` | the row |
 | `restore` | `{workspace_id}` | `bee.workspaces.manage` on `workspace_id` | the row |
+| `inspect` | `{workspace_id}` | `bee.workspaces.read` on `workspace_id` | `{workspace, live, applications, extensions}` |
+| `search_within` | `{workspace_id, text, limit?}` | `bee.workspaces.read` on `workspace_id` | `{workspace_id, results}` |
 
 A row is `{workspace_id, label, root_ref, subpath, state, created_at,
 last_used_at}`. `live` says whether a host serves the workspace now.
@@ -45,6 +47,28 @@ case-folded over ASCII letters. Path search takes `root_ref` and an optional
 `path` first, then every folder below `path/`, never a sibling such as
 `path-old`. No operation reads rows it does not return.
 
+**Inspect and search within.** `inspect` (`{workspace_id}`, read authority on
+that workspace) returns the row, `live`, the applications its checkpoint keeps
+open (`{view_id, instance_id, definition_id, restart_policy}`) and one entry
+per workspace extension. `search_within` (`{workspace_id, text, limit?}`,
+1-50, default 10) asks every extension for its hits and returns
+`{workspace_id, results}`.
+
+**Extensions.** Components attach per-workspace data and search through
+bindings of `bee.workspace.catalog:extension`, never through catalog columns.
+Its methods are `describe` (`{workspace_id}` to `{title, items, total}`, at
+most 50 items of `{label, detail}`) and `search` (`{workspace_id, text, limit?}`
+to `{title, hits}`), both answering with the reply envelope and only for
+callers holding `bee.workspaces.read` on the workspace. The catalog finds the
+bindings with `contract.find_implementations` (at most 16, in identity
+order), calls each under its execution scope after it has authorized the
+caller, checks every answer against those bounds and reports a failing
+binding as that entry's `error` while the others stay intact. The host binds
+the resources component's `describe` and `search`
+(`bee:resources_workspace_extension`), so a workspace shows its resource
+associations. Semantic search such as embeddings is a future binding of the
+same contract.
+
 **Archive and restore.** An archived workspace is never served. `archive`
 refuses with `BUSY` while a host is registered for the workspace. Repeating
 either change returns the row unchanged.
@@ -56,8 +80,8 @@ node workspace store (their storage boundary denies it), so each operation
 authorizes the caller for the decoded request and then runs the private
 backend `bee.workspace.catalog:backend` under the execution scope
 `bee:workspace_catalog_scope`, which holds the store, the admitted roots list,
-the root volumes and the host-name lookup. The backend refuses callers outside
-that scope.
+the root volumes, the host-name lookup and the extension calls. The backend
+refuses callers outside that scope.
 
 ## Live hosts
 

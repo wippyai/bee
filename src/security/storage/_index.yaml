@@ -83,3 +83,13 @@ entries:
     actions: [process.registry.lookup]
     resources: '*'
     effect: allow
+- name: workspace_catalog_extension_policy
+  kind: security.policy.expr
+  groups: [workspace_catalog_scope]
+  meta:
+    comment: The catalog finds the workspace extension bindings and calls their describe and search methods; each binding answers only for workspaces this scope may read, and the operations authorized the caller for that workspace first
+  policy:
+    expression: '(action == "contract.implementations" && resource == "bee.workspace.catalog:extension") || action == "contract.open" || (action == "contract.call" && (resource == "describe" || resource == "search")) || action == "bee.workspaces.read"'
+    actions: [contract.implementations, contract.open, contract.call, bee.workspaces.read]
+    resources: '*'
+    effect: allow

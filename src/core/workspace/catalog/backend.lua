@@ -10,6 +10,8 @@ local store = require("store")
 local catalog = require("catalog")
 local protocol = require("protocol")
 local resources = require("resources")
+local recovery = require("recovery")
+local extensions = require("extensions")
 
 local EXECUTE = "bee.workspaces.execute"
 local BACKEND = "bee.workspace.catalog:backend"
@@ -99,6 +101,54 @@ local function read(workspace_id: string): protocol.Reply
     end)
 end
 
+-- What a workspace holds: its row, whether a host serves it, the
+-- applications its checkpoint keeps open and what every extension attached
+-- to it describes. The store transaction ends before any extension runs.
+local function inspect(workspace_id: string): protocol.Reply
+    local found: catalog.Summary? = nil
+    local saved: string? = nil
+    local read = transact(function(tx: sql.Transaction): (unknown, catalog.Fault?)
+        local row, failure = catalog.get(tx, workspace_id)
+        if failure then return nil, failure end
+        if not row then return nil, fault("NOT_FOUND", "workspace is not in the node catalog") end
+        local state, state_failure = catalog.state(tx, workspace_id)
+        if state_failure then return nil, state_failure end
+        found, saved = row, state
+        return true, nil
+    end)
+    if not read.ok or not found then return read end
+    local applications: {{[string]: unknown}} = {}
+    if saved then
+        local snapshot = recovery.decode(saved)
+        if not snapshot then return protocol.fail("STORAGE", "workspace state is invalid") end
+        for index, record in ipairs(snapshot.applications) do
+            applications[index] = {view_id = record.id, instance_id = record.instance_id, definition_id = record.definition_id,
+                restart_policy = record.restart_policy}
+        end
+    end
+    local bindings, bindings_error = extensions.bindings()
+    if not bindings then return protocol.fail("UNAVAILABLE", bindings_error or "workspace extensions are unavailable") end
+    local described: {extensions.Described} = {}
+    for index, binding in ipairs(bindings) do described[index] = extensions.describe(binding, workspace_id) end
+    return protocol.succeed({workspace = found, live = live(workspace_id), applications = applications, extensions = described})
+end
+
+-- Search inside one workspace: every extension answers for itself.
+local function search_within(workspace_id: string, text: string, limit: integer): protocol.Reply
+    local present = transact(function(tx: sql.Transaction): (unknown, catalog.Fault?)
+        local row, failure = catalog.get(tx, workspace_id)
+        if failure then return nil, failure end
+        if not row then return nil, fault("NOT_FOUND", "workspace is not in the node catalog") end
+        return true, nil
+    end)
+    if not present.ok then return present end
+    local bindings, bindings_error = extensions.bindings()
+    if not bindings then return protocol.fail("UNAVAILABLE", bindings_error or "workspace extensions are unavailable") end
+    local results: {extensions.Found} = {}
+    for index, binding in ipairs(bindings) do results[index] = extensions.search(binding, workspace_id, text, limit) end
+    return protocol.succeed({workspace_id = workspace_id, results = results})
+end
+
 -- An archived workspace is never served, so a running host is stopped
 -- before its row is archived.
 local function archive(workspace_id: string): protocol.Reply
@@ -120,6 +170,10 @@ local function handle(value: unknown): protocol.Reply
         return create(definition)
     elseif operation == "read" then
         return read(request.workspace_id or "")
+    elseif operation == "inspect" then
+        return inspect(request.workspace_id or "")
+    elseif operation == "search_within" then
+        return search_within(request.workspace_id or "", request.text or "", request.limit or 10)
     elseif operation == "archive" then
         return archive(request.workspace_id or "")
     elseif operation == "restore" then

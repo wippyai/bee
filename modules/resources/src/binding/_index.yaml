@@ -43,3 +43,15 @@ entries:
   method: handle
   imports: {authority: bee.resources.persist:authority}
   security: {policies: [bee:resource_store_policy]}
+- name: describe
+  kind: function.lua
+  source: file://describe_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee:resource_store_policy]}
+- name: search
+  kind: function.lua
+  source: file://search_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee:resource_store_policy]}

@@ -148,10 +148,12 @@ surface.
 
 ## Agent-requested access
 
-A host can declare `access: {workspace_id, policy, traits}` for traits that are
+A host can declare `access: {policy, traits}` for traits that are
 initially unavailable. Such traits cannot also be active, base tools or freely
-selectable traits. The host fixes the approval workspace, approver policy,
-executable targets, tool scopes and fixed application context.
+selectable traits. The host fixes the approver policy, executable targets, tool
+scopes and fixed application context. The approval workspace is the binding's
+workspace, which the launch selects; a binding without a workspace cannot
+request access.
 
 An agent sends `session` `request_access` with an idempotency key, requested
 traits and a bounded reason. The gateway creates a durable request bound to its

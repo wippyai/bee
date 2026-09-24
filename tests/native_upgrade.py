@@ -19,6 +19,7 @@ import pyte
 from native_workspace import NativeDesktop
 from native_client import owner_handle, stop_owner
 from tui_smoke import Desktop
+from workspace import classic_workspace
 
 
 class PreviousDesktop(Desktop):
@@ -41,10 +42,20 @@ class PreviousDesktop(Desktop):
         os.close(slave)
 
 
-def identity(state):
+def migrations(state):
     with sqlite3.connect(f"file:{state / 'workspace.db'}?mode=ro", uri=True) as db:
-        return (db.execute("SELECT * FROM workspace_identity").fetchall(),
-                db.execute("SELECT id,name,checksum FROM workspace_schema_migrations ORDER BY id").fetchall())
+        return db.execute("SELECT id,name,checksum FROM workspace_schema_migrations ORDER BY id").fetchall()
+
+
+def previous_identity(state):
+    """The predecessor may predate the node catalog and keep its identity in the singleton table."""
+    with sqlite3.connect(f"file:{state / 'workspace.db'}?mode=ro", uri=True) as db:
+        catalog = db.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='workspaces'").fetchone()[0]
+        if not catalog:
+            rows = db.execute("SELECT workspace_id FROM workspace_identity").fetchall()
+            assert len(rows) == 1, "Previous binary did not persist a workspace identity"
+            return rows[0][0]
+    return classic_workspace(state / "workspace.db")
 
 
 def run(previous, current, added_application=None):
@@ -66,8 +77,7 @@ def run(previous, current, added_application=None):
             old.quit()
         finally:
             old.close()
-        before = identity(state)
-        assert len(before[0]) == 1, "Previous binary did not persist a workspace identity"
+        before = previous_identity(state), migrations(state)
         assert before[1], "Previous binary did not persist its migration ledger"
         owner = None
         new = NativeDesktop(current, folder, state)
@@ -85,7 +95,7 @@ def run(previous, current, added_application=None):
         finally:
             new.close()
             stop_owner(owner)
-        after = identity(state)
+        after = classic_workspace(state / "workspace.db"), migrations(state)
         assert after[0] == before[0], "Binary upgrade changed workspace identity"
         assert after[1][:len(before[1])] == before[1], "Binary upgrade rewrote applied migrations"
     print("Native upgrade: retained Settings and workspace identity, unchanged applied migrations")

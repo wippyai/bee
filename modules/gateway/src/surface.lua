@@ -5,7 +5,8 @@ local context = require("context")
 local mcp = require("mcp")
 local M = {}
 M.APPLICATION_RUNTIME_TRAIT = mcp.APPLICATION_RUNTIME_TRAIT
-type Access = {policy: string, workspace_id: string, traits: {string}}
+-- The approval workspace is the binding's; a declaration names only policy and traits.
+type Access = {policy: string, traits: {string}}
 type Surface = {catalog: catalog.Catalog, ceiling: {string}, base_tools: {string},
     allowed_traits: {string}, fixed_context: context.Values, dynamic_keys: {string}, access: Access?}
 type Selection = {active: {string}, context: context.Values}
@@ -14,14 +15,14 @@ local function decode_access(raw: unknown): (Access?, string?)
     if raw == nil then return nil, nil end
     local value = bounds.object(raw)
     if not value then return nil, "surface access must be an object" end
-    local extra = bounds.fields(value, {"policy", "workspace_id", "traits"})
+    local extra = bounds.fields(value, {"policy", "traits"})
     if extra then return nil, extra end
-    local policy, workspace_id = bounds.id(value.policy), bounds.id(value.workspace_id)
+    local policy = bounds.id(value.policy)
     local traits, traits_error = bounds.ids(value.traits, true)
-    if not policy or not workspace_id or not traits then
+    if not policy or not traits then
         return nil, traits_error or "invalid surface access"
     end
-    return {policy = policy, workspace_id = workspace_id, traits = traits}, nil
+    return {policy = policy, traits = traits}, nil
 end
 
 -- Built-in descriptions and component descriptions share one validated
@@ -133,7 +134,7 @@ function M.grant(surface: Surface, trait_ids: unknown): (Surface?, string?)
     end
     local _, select_error = catalog.select(surface.catalog, surface.ceiling, surface.base_tools, allowed, requested)
     if select_error then return nil, select_error end
-    local copied_access: Access = {policy = surface.access.policy, workspace_id = surface.access.workspace_id, traits = {}}
+    local copied_access: Access = {policy = surface.access.policy, traits = {}}
     for _, id in ipairs(surface.access.traits) do copied_access.traits[#copied_access.traits + 1] = id end
     return {catalog = surface.catalog, ceiling = surface.ceiling, base_tools = surface.base_tools,
         allowed_traits = allowed, fixed_context = surface.fixed_context, dynamic_keys = surface.dynamic_keys,

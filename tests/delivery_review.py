@@ -14,7 +14,6 @@ activation outcome and receipt read back in the same review surface.
 import json
 import re
 import shutil
-import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -25,7 +24,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tui_smoke import Desktop  # noqa: E402
-from workspace import ROOT, RUNTIME, database_environment  # noqa: E402
+from workspace import ROOT, RUNTIME, classic_workspace, database_environment  # noqa: E402
 
 # The cold first boot of a full composition, the budget the sibling desktop
 # acceptances (tests/inbox_decide.py, tests/app_journey.py) already use.
@@ -39,17 +38,6 @@ READY_WORKSPACE = "delivery-review-ready"
 BLOCKED_WORKSPACE = "delivery-review-blocked"
 CONFIG_WORKSPACE = "delivery-review-config"
 CONFIG_ENTRY = "bee.delivery_review_config:probe"
-
-
-def workspace_identity(folder):
-    """The delivery app reviews its launch workspace, which the first boot names."""
-    connection = sqlite3.connect(folder / "workspace.db")
-    try:
-        rows = connection.execute("SELECT workspace_id FROM workspace_identity").fetchall()
-    finally:
-        connection.close()
-    assert len(rows) == 1 and re.fullmatch(r"[0-9a-f]{32}", rows[0][0]), rows
-    return rows[0][0]
 
 
 def bind_destination(project, workspace_id):
@@ -201,7 +189,7 @@ def exercise():
             first.quit()
         finally:
             first.close()
-        workspace_id = workspace_identity(folder)
+        workspace_id = classic_workspace(folder / "workspace.db")
         bind_destination(project, workspace_id)
         delay_destination(project, "get")
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True, timeout=300)

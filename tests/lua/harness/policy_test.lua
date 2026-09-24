@@ -111,7 +111,7 @@ local function define_tests()
             data.gateway_tools = {"thread_read", "application_open"}
             data.gateway_surface = {tools = {}, traits = {}, base_tools = {"thread_read"}, active_traits = {},
                 fixed_context = {}, dynamic_keys = {},
-                access = {policy = "app-open-runtime", workspace_id = "test-workspace", traits = {"bee.application:runtime"}}}
+                access = {policy = "app-open-runtime", traits = {"bee.application:runtime"}}}
             local host, host_error = policy.decode("test:policy", raw)
             if not host or not host.gateway_surface then error(tostring(host_error)) end
             -- A profile chooses what to offer the child out of what the host
@@ -156,24 +156,27 @@ local function define_tests()
 
         test.it("composes the host-selected workspace into the binding surface fixed context", function()
             local source: Entry = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {project = "one"}, dynamic_keys = {},
-                access = {workspace_id = "policy-placeholder", policy = "research", traits = {"research:read"}}}
+                access = {policy = "research", traits = {"research:read"}}}
             local composed = policy.with_workspace(source, "workspace-one")
             if not composed then error("compose surface") end
             local fixed = composed.fixed_context :: Entry
             test.eq(fixed["bee.workspace_id"], "workspace-one")
             test.eq(fixed.project, "one")
-            test.eq((composed.access :: Entry).workspace_id, "workspace-one")
+            -- The approval workspace is the binding's, so access carries none.
+            test.is_nil((composed.access :: Entry).workspace_id)
             test.eq((composed.access :: Entry).policy, "research")
             -- The helper copies: a launch policy's surface is host-owned and shared.
             test.is_nil((source.fixed_context :: Entry)["bee.workspace_id"])
-            test.eq((source.access :: Entry).workspace_id, "policy-placeholder")
             local absent = policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, dynamic_keys = {}}, "workspace-two")
             if not absent then error("compose surface without context") end
             test.eq((absent.fixed_context :: Entry)["bee.workspace_id"], "workspace-two")
             test.is_nil(policy.with_workspace(nil, "workspace-one"))
             -- A malformed declared context refuses rather than silently dropping it.
             test.is_nil(policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = "broken", dynamic_keys = {}}, "workspace-one"))
-            test.is_nil(policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {}, access = "broken"}, "workspace-one"))
+            -- Access is the gateway's to decode; it passes through untouched and a malformed one is refused at admission.
+            local carried = policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {}, access = "broken"}, "workspace-one")
+            if not carried then error("compose surface with undecoded access") end
+            test.eq(carried.access, "broken")
         end)
         test.it("measures hooks independently from the MCP tool grant", function()
             local raw = entry({claude = "/bin/claude"})

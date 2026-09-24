@@ -3,6 +3,7 @@ local test = require("test")
 local catalog = require("catalog")
 local surface = require("surface")
 local mcp = require("mcp")
+local access = require("access")
 local function sample()
     return {tools = {{name = "measure", operation = "research:measure", description = "Run the admitted benchmark",
         policies = {"research:measure_policy"}, schema = {type = "object"}, annotations = {readOnlyHint = false}}},
@@ -19,7 +20,7 @@ local function requestable_surface()
             {id = "research:benchmark", title = "Benchmark", prompt = "Measure first", tools = {"measure"}},
             {id = "research:export", title = "Export", prompt = "Export after approval", tools = {"export"}}},
         base_tools = {"measure"}, active_traits = {}, dynamic_keys = {}, fixed_context = {app = "fixed"},
-        access = {policy = "research:approval", workspace_id = "workspace-one", traits = {"research:export"}}}
+        access = {policy = "research:approval", traits = {"research:export"}}}
 end
 local function define_tests()
     test.describe("Configurable MCP catalog", function()
@@ -130,9 +131,23 @@ local function define_tests()
             test.eq(#prepared.allowed_traits, 2)
             if not surface.select(prepared, {"research:export"}, {}) then error("plain trait unavailable") end
         end)
+        test.it("takes the approval workspace from the binding, never from the declaration", function()
+            local raw = requestable_surface()
+            raw.access = {policy = "research:approval", workspace_id = "declared-workspace", traits = {"research:export"}}
+            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            local prepared = surface.prepare(requestable_surface(), {}, {"measure", "export"})
+            if not prepared then error("requestable surface refused") end
+            local unbound = {binding_id = "binding-one", subject = "bee.test.gateway", action_id = "action-one",
+                attempt_id = "attempt-one", thread_id = "thread-one"}
+            local reply = access.request(unbound, prepared, string.rep("a", 64),
+                {idempotency_key = "export", traits = {"research:export"}, reason = "Export the report"})
+            test.eq(reply.ok, false)
+            test.eq((reply.error :: {code: string, message: string}).code, "DENIED")
+            test.eq((reply.error :: {code: string, message: string}).message, "this binding names no workspace to request MCP access in")
+        end)
         test.it("gates application_open behind the approved runtime trait", function()
             local raw = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
-                access = {policy = "application:approval", workspace_id = "workspace-one", traits = {"bee.application:runtime"}}}
+                access = {policy = "application:approval", traits = {"bee.application:runtime"}}}
             local prepared, initial = surface.prepare(raw, mcp.TOOLS, {"application_open"})
             if not prepared or not initial then error("runtime surface refused") end
             test.is_nil(surface.select(prepared, {"bee.application:runtime"}, {}))
@@ -148,12 +163,12 @@ local function define_tests()
             if not hidden or #hidden ~= 0 then error("runtime tool remained active after deselection") end
 
             raw = {tools = {}, traits = {}, base_tools = {"application_open"}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
-                access = {policy = "application:approval", workspace_id = "workspace-one", traits = {"bee.application:runtime"}}}
+                access = {policy = "application:approval", traits = {"bee.application:runtime"}}}
             test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
             raw.base_tools = {}
             raw.access = nil
             test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
-            raw.access = {policy = "application:approval", workspace_id = "workspace-one", traits = {"bee.application:runtime"}}
+            raw.access = {policy = "application:approval", traits = {"bee.application:runtime"}}
             raw.traits = {{id = "application:spoof", title = "Spoof", prompt = "Spoof", tools = {"application_open"}}}
             test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
         end)

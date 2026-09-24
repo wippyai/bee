@@ -1,5 +1,4 @@
 """Real public clients persist display choices without changing their sibling."""
-import json
 import sqlite3
 import sys
 import tempfile
@@ -7,6 +6,7 @@ import time
 from pathlib import Path
 from native_workspace import NativeDesktop
 from native_client import owner_handle, stop_owner
+from workspace import classic_workspace, client_layout
 
 binary = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="bee-display-appearance-") as temporary:
@@ -15,9 +15,15 @@ with tempfile.TemporaryDirectory(prefix="bee-display-appearance-") as temporary:
     clients = []
     owner = None
     def read_layouts():
-        with sqlite3.connect(f"file:{state / 'workspace.db.client'}?mode=ro", uri=True) as db:
-            primary = json.loads(db.execute("SELECT value FROM client_state").fetchone()[0])
-            others = [json.loads(row[0]) for row in db.execute("SELECT value FROM client_desktops")]
+        workspace_id = classic_workspace(state / "workspace.db")
+        database = state / "workspace.db.client"
+        connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+        try:
+            desktops = [row[0] for row in connection.execute("SELECT client_id FROM client_desktops ORDER BY client_id")]
+        finally:
+            connection.close()
+        primary = client_layout(database, workspace_id)[1]
+        others = [client_layout(database, workspace_id, desktop)[1] for desktop in desktops]
         return primary, others
     def await_mode(mode, theme):
         until = time.monotonic() + 5

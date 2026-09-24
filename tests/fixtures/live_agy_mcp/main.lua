@@ -36,7 +36,7 @@ local function main()
         {id = "research:read", title = "Research reader", prompt = "Read this research thread.", tools = {"thread_read"}},
         {id = "research:record", title = "Research recorder", prompt = "Record results in the research thread.", tools = {"thread_message"}}},
         base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "live-mcp-probe"}, dynamic_keys = {"experiment"},
-        access = {workspace_id = "research-workspace", policy = "live-research", traits = {"research:record"}}}
+        access = {policy = "live-research", traits = {"research:record"}}}
     local changes = registry.snapshot():changes()
     changes:update(policy)
     local approvers = registry.get("bee:approver_policies")

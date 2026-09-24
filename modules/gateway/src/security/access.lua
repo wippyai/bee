@@ -13,9 +13,10 @@ M.ACCESS_CALL_POLICY = "bee.gateway.security:access_call_policy"
 M.REQUEST_POLICY_REF = "bee.gateway.registry:approval_request_policy_ref"
 M.CONSUME_POLICY_REF = "bee.gateway.registry:approval_consume_policy_ref"
 type Object = {[string]: unknown}
-type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string}
+type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, workspace_id: string?}
 type Reply = {ok: boolean, value: unknown, error: {code: string, message: string}?}
 type Grant = {approval_id: string, proposal_digest: string, traits: {string}}
+local NO_WORKSPACE = "this binding names no workspace to request MCP access in"
 local function fail(code: string, message: string): Reply return {ok = false, error = {code = code, message = message}} end
 local function linked_policy(reference: string, description: string): (string?, string?)
     local entry, entry_error = registry.get(reference)
@@ -63,6 +64,8 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
     if not request or bounds.fields(request, {"idempotency_key", "traits", "reason"}) then return fail("INVALID", "access request needs idempotency_key, traits and reason") end
     local access = configuration.access
     if not access then return fail("DENIED", "this agent has no requestable MCP access") end
+    local workspace_id = binding.workspace_id
+    if not workspace_id then return fail("DENIED", NO_WORKSPACE) end
     local key, reason = bounds.id(request.idempotency_key), bounds.text(request.reason, 1024)
     local traits, traits_error = bounds.ids(request.traits, true)
     if not key or not reason or #reason == 0 or not traits or #traits == 0 then return fail("INVALID", traits_error or "access request fields are invalid") end
@@ -71,14 +74,16 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
     if not granted then return fail("DENIED", grant_error or "traits are not requestable") end
     local request_key, key_error = hash.sha256(binding.binding_id .. ":" .. key)
     if not request_key then return fail("INVALID", tostring(key_error)) end
-    return invoke(binding, "request", {workspace_id = access.workspace_id, idempotency_key = "mcp:" .. request_key,
+    return invoke(binding, "request", {workspace_id = workspace_id, idempotency_key = "mcp:" .. request_key,
         request_kind = "permission", policy = access.policy, proposal = proposal(binding, configuration, digest, traits),
-        prompt = {text = "Agent " .. binding.action_id .. " requests MCP access in " .. access.workspace_id .. ": " .. table.concat(traits, ", ") .. "\n" .. reason}, thread_id = binding.thread_id})
+        prompt = {text = "Agent " .. binding.action_id .. " requests MCP access in " .. workspace_id .. ": " .. table.concat(traits, ", ") .. "\n" .. reason}, thread_id = binding.thread_id})
 end
 -- Re-read the authoritative decision; the agent never supplies a proposal or digest.
 function M.approved(binding: Binding, configuration: surface.Surface, digest: string, approval_id: string): (Grant?, Reply?)
     local access = configuration.access
     if not access then return nil, fail("DENIED", "this agent has no requestable MCP access") end
+    local workspace_id = binding.workspace_id
+    if not workspace_id then return nil, fail("DENIED", NO_WORKSPACE) end
     local reply = invoke(binding, "read", {approval_id = approval_id})
     if not reply.ok then return nil, reply end
     local view = bounds.object(reply.value)
@@ -87,7 +92,7 @@ function M.approved(binding: Binding, configuration: surface.Surface, digest: st
     local traits = payload and bounds.ids(payload.traits, true)
     if not view or not traits or not payload or payload.binding_id ~= binding.binding_id or payload.subject ~= binding.subject
         or payload.configuration_digest ~= digest or view.requester_id ~= binding.subject or view.thread_id ~= binding.thread_id
-        or view.workspace_id ~= access.workspace_id or view.policy ~= access.policy or view.approval_id ~= approval_id then
+        or view.workspace_id ~= workspace_id or view.policy ~= access.policy or view.approval_id ~= approval_id then
         return nil, fail("DENIED", "approval does not belong to this agent and MCP configuration")
     end
     table.sort(traits)

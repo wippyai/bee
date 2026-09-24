@@ -21,9 +21,9 @@ from unittest.mock import patch
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from app_journey import COLD_BOOT, apply_staged_in_ui, open_catalog_app, workspace_identity  # noqa: E402
+from app_journey import COLD_BOOT, apply_staged_in_ui, open_catalog_app  # noqa: E402
 from tui_smoke import Desktop  # noqa: E402
-from workspace import ROOT, RUNTIME, database_environment  # noqa: E402
+from workspace import ROOT, RUNTIME, classic_workspace, database_environment  # noqa: E402
 
 DEFINITION_ID = "bee.monitor_demo:app"
 TITLE = "Delivered Monitor"
@@ -43,7 +43,7 @@ def deliver(project, folder):
     args = [str(RUNTIME), "run", "--verbose", "app-dashboard-deliver", "--host", "bee:workers",
             "--set", f"registry.history_path={folder}/registry.db"]
     result = subprocess.run(args, cwd=project, capture_output=True, text=True, timeout=300,
-                            env=database_environment(folder, BEE_APP_DASHBOARD_WORKSPACE=workspace_identity(folder)))
+                            env=database_environment(folder, BEE_APP_DASHBOARD_WORKSPACE=classic_workspace(folder / "workspace.db")))
     output = result.stdout + result.stderr
     match = re.search(r"APP_DASHBOARD_DELIVERED\s+(\{.*\})", output)
     assert result.returncode == 0 and match, output[-12000:]

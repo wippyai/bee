@@ -18,7 +18,6 @@ import json
 import os
 import re
 import shutil
-import sqlite3
 import subprocess
 import sys
 import time
@@ -28,9 +27,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app_journey import assert_overlay_authority  # noqa: E402
-from delivery_review import back_to_plans, focus, workspace_identity  # noqa: E402
+from delivery_review import back_to_plans, focus  # noqa: E402
 from tui_smoke import Desktop  # noqa: E402
-from workspace import ROOT, RUNTIME, database_environment  # noqa: E402
+from workspace import ROOT, RUNTIME, classic_workspace, database_environment, workspace_checkpoint  # noqa: E402
 
 ROUNDS = 3
 # The cold first boot of a full composition, the budget the sibling desktop
@@ -164,13 +163,7 @@ def capture_frame(folder, evidence, ui, name, boundary, *required):
 
 
 def saved_app_identity(folder):
-    connection = sqlite3.connect(folder / "workspace.db")
-    try:
-        row = connection.execute("SELECT value FROM workspace_state WHERE singleton = 1").fetchone()
-    finally:
-        connection.close()
-    assert row, "workspace has no durable state"
-    applications = json.loads(row[0])["applications"]
+    applications = workspace_checkpoint(folder / "workspace.db")["applications"]
     matches = [item for item in applications if item["definition_id"] == DEFINITION_ID]
     assert len(matches) == 1, matches
     return matches[0]["id"], matches[0]["instance_id"]
@@ -698,7 +691,7 @@ def exercise():
         first.quit()
     finally:
         first.close()
-    workspace_id = workspace_identity(folder)
+    workspace_id = classic_workspace(folder / "workspace.db")
     configure_continuous_source(project, workspace_id)
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") == "1":
         lint(project, "continuous-source")

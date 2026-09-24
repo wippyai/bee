@@ -835,7 +835,14 @@ function M.cleanup(value: unknown): Reply
             proven, why = true, "the runner recorded completion before creating a child"
         end
     end
-    if not proven then return fail("CONFLICT", "cleanup scope " .. attempt.required_cleanup .. " is not proven gone: " .. why) end
+    if not proven then
+        -- A refusal is durable evidence: a continuation that waits on this
+        -- cleanup reads its reason from the previous attempt's ledger.
+        local message = "cleanup scope " .. attempt.required_cleanup .. " is not proven gone: " .. why
+        local noted = transition(attempt.attempt_id, {evidence = {kind = "cleanup.refused", detail = message}})
+        if not noted.ok then return noted end
+        return fail("CONFLICT", message)
+    end
     local home_key = row and row.home_key or nil
     if type(home_key) == "string" and home_key ~= "" then
         local remove_error = homes.remove_attempt(home_key)

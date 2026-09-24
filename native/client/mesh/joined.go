@@ -36,6 +36,14 @@ const startupTimeout = 15 * time.Second
 const loopbackGossipInterval = 100 * time.Millisecond
 const cleanupTimeout = 3 * time.Second
 
+// RoleMetadata is the member metadata key naming a node's Bee role. A joined
+// client advertises ClientRole: it presents another node's workspaces and holds
+// none of its own.
+const (
+	RoleMetadata = "bee.role"
+	ClientRole   = "client"
+)
+
 // JoinConfig is selected by the native launcher, not by remote metadata.
 type JoinConfig struct {
 	// Directory holds the owner's rendezvous descriptor.
@@ -111,7 +119,7 @@ func Joined(ctx context.Context, config JoinConfig, run func(context.Context, *s
 		InternodeTrustedPeerKeys: map[string]string{config.Node: base64.RawStdEncoding.EncodeToString(public), descriptor.Node: descriptor.PublicKey},
 		JoinAddrs:                []string{descriptor.Gossip},
 		MembershipGossipInterval: loopbackGossipInterval,
-		Meta:                     clusterapi.NodeMeta{"raft_eligible": "false", internode.MetadataSurfaceProtocol: "1"},
+		Meta:                     clusterapi.NodeMeta{"raft_eligible": "false", internode.MetadataSurfaceProtocol: "1", RoleMetadata: ClientRole},
 	})
 	if err != nil {
 		return err

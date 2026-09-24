@@ -20,7 +20,9 @@ remains attached to the transport lifetime. The join never starts an owner,
 acquires its application lock, opens application databases or writes the
 enrollment; enrolling and retiring the client belong to the launch route.
 Clients do not enter Raft's voter set, and their loopback gossip cadence keeps
-their departure prompt.
+their departure prompt. A client advertises member metadata `bee.role=client`,
+so the owner's Hive Manager marks it as a display client and replica
+distribution skips it; the metadata describes the node and grants nothing.
 
 TLS failure tests cover invalid, missing and plaintext-owner credentials; they
 prove the callback is not entered and the enrollment is unchanged.

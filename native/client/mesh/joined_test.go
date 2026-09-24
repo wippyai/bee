@@ -8,6 +8,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,11 +25,14 @@ import (
 	"go.uber.org/zap"
 )
 
-// A joined client's departure is part of the physical exit the user waits on:
-// its graceful leave from the loopback mesh must complete promptly.
-func TestJoinedClientLeavesPromptly(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+type joinedFixture struct {
+	owner  *stackpkg.Stack
+	config JoinConfig
+}
+
+// newJoinedFixture starts a loopback owner that enrolled one client node.
+func newJoinedFixture(t *testing.T, ctx context.Context) joinedFixture {
+	t.Helper()
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
 		t.Fatal(err)
@@ -41,7 +46,7 @@ func TestJoinedClientLeavesPromptly(t *testing.T) {
 		t.Fatal(err)
 	}
 	collector := metrics.NewCollector(metricscfg.Config{})
-	defer collector.Close()
+	t.Cleanup(func() { _ = collector.Close() })
 	owner, err := stackpkg.AssembleStack(stackpkg.StackConfig{NodeName: "owner", Logger: zap.NewNop(), Bus: eventbus.NewBus(), Collector: collector,
 		Transcoder: payload.NewTranscoder(), MembershipBindAddr: "127.0.0.1", MembershipAdvertise: "127.0.0.1", InternodeBindAddr: "127.0.0.1",
 		SecretKey: base64.StdEncoding.EncodeToString(secret), InternodeIdentityKey: base64.RawStdEncoding.EncodeToString(ownerKey),
@@ -52,7 +57,7 @@ func TestJoinedClientLeavesPromptly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer owner.Stop()
+	t.Cleanup(func() { _ = owner.Stop() })
 	if err := owner.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -82,8 +87,17 @@ func TestJoinedClientLeavesPromptly(t *testing.T) {
 	if _, err := enrollment.Register(ctx, execution, "client", clientPub); err != nil {
 		t.Fatal(err)
 	}
+	return joinedFixture{owner: owner, config: JoinConfig{Directory: directory, EnrollmentDirectory: directory, Node: "client", Key: clientKey}}
+}
+
+// A joined client's departure is part of the physical exit the user waits on:
+// its graceful leave from the loopback mesh must complete promptly.
+func TestJoinedClientLeavesPromptly(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	fixture := newJoinedFixture(t, ctx)
 	var departed time.Time
-	err = Joined(ctx, JoinConfig{Directory: directory, EnrollmentDirectory: directory, Node: "client", Key: clientKey}, func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error {
+	err := Joined(ctx, fixture.config, func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error {
 		departed = time.Now()
 		return nil
 	})
@@ -92,5 +106,28 @@ func TestJoinedClientLeavesPromptly(t *testing.T) {
 	}
 	if elapsed := time.Since(departed); elapsed > 400*time.Millisecond {
 		t.Fatalf("joined client took %v to leave the mesh", elapsed)
+	}
+}
+
+// The owner's members see a joined client as a display client, never as a
+// node holding workspaces.
+func TestJoinedClientAdvertisesDisplayRole(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	fixture := newJoinedFixture(t, ctx)
+	err := Joined(ctx, fixture.config, func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error {
+		for _, member := range fixture.owner.Membership.Nodes() {
+			if member.ID != "client" {
+				continue
+			}
+			if role := member.Meta[RoleMetadata]; role != ClientRole {
+				return fmt.Errorf("joined client advertises role %q", role)
+			}
+			return nil
+		}
+		return errors.New("owner does not list the joined client")
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

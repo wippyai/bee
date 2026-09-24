@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.storage
+entries:
+- name: legacy_schema
+  kind: library.lua
+  source: file://legacy_schema.lua
+  meta: {type: test_support}
+  modules: [sql, hash]
+- name: node_workspaces_test
+  kind: function.lua
+  source: file://node_workspaces_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [sql]
+  imports:
+    test: wippy.test:test
+    store: bee.storage:store
+    binding: bee.storage:binding
+    assignments: bee.storage:assignments
+    thread_bindings: bee.storage:thread_bindings
+    legacy_schema: bee.storage:legacy_schema

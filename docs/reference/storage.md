@@ -1,15 +1,24 @@
 # Workspace storage
 
-`bee.storage:store` is the persistence boundary for the workspace host.
-`open()` acquires `bee:workspace_db`; protected bootstrap may pass
-`open("bee.workspace.db:<name>")` to isolate additional workspace owners. Names
-contain only letters, digits, underscores and hyphens, with a 160-byte total ID
-limit. The root registry owns each resource's path and lifecycle. Callers cannot
-pass file paths, select client resources or change tables. Native `db.get` must
-grant the selected resource explicitly; the existing default policy grants only
-`bee:workspace_db`. Default applications cannot import this library, and their
-storage boundary denies both default core stores and the reserved client/workspace
-database namespaces even under a broader database grant.
+`bee.storage:store` is the persistence boundary for workspace hosts. The node
+workspace database holds any number of logical workspaces as rows keyed by
+`workspace_id`; a workspace has no database file, process host or runtime of its
+own. `open(resource, selection)` acquires `bee:workspace_db` (or, for protected
+bootstrap, `bee.workspace.db:<name>`) and binds the handle to exactly one catalog
+row. Names contain only letters, digits, underscores and hyphens, with a 160-byte
+total ID limit. The root registry owns each resource's path and lifecycle.
+Callers cannot pass file paths, select client resources or change tables. Native
+`db.get` must grant the selected resource explicitly; the existing default policy
+grants only `bee:workspace_db`. Default applications cannot import this library,
+and their storage boundary denies both default core stores and the reserved
+client/workspace database namespaces even under a broader database grant.
+
+A selection, decoded by `bee.storage:binding`, is either `{workspace_id}` or
+`{root_ref, subpath}`. Classic folder mode passes `binding.classic()`, the
+workspace rooted at `bee:workspace_root` with an empty subpath. The host is
+told its selection by the composition that spawns it
+(`bee.host:main(owner, selection, database_resource)`) and never infers the
+workspace from the database it opens.
 
 The default workspace file is `.wippy/workspace.db`, and `BEE_WORKSPACE_DB`
 can provide an explicit path for an isolated workspace. Wippy registry history
@@ -25,8 +34,9 @@ The core-only storage API is:
 
 ```lua
 local storage = require("store")
-local store, err = storage.open()
-local workspace_id, identity_err = store:identity() -- stable opaque ID
+local binding = require("binding")
+local store, err = storage.open(nil, binding.classic())
+local workspace_id, identity_err = store:identity() -- the bound catalog row
 local state, read_err = store:read() -- nil, nil before the first write
 local ok, write_err = store:write(encoded_json)
 store:close()
@@ -38,18 +48,32 @@ be a JSON object with `version = 1` and is limited to 2 MiB. The storage layer
 checks syntax and the top-level version; the workspace protocol validates
 desktop geometry, preferences, application identities and opaque resume records.
 
-The database uses four workspace-owned tables. Migration 2 adds `workspace_identity`, a
-singleton containing an opaque 32-character lowercase hexadecimal ID. It is
-generated once inside the migration transaction, independently from the state
-envelope. This ID names a workspace; it does not grant authority. There is no
-identity-write method. Reopening, relocating or backing up a
-database retains its ID; a fresh database receives a new ID. Copying a database
-therefore makes a backup with the same identity, not an independent writable
-workspace. Missing or malformed identity after migration causes `open()` to fail;
-Bee never repairs it by silently minting a new ID. Migration 1 remains unchanged.
+The catalog table `workspaces` holds one row per logical workspace:
+`workspace_id` (an opaque 32-character lowercase hexadecimal ID), `label`,
+`root_ref` and `subpath` (unique together, so one root is one workspace and
+lookup by root is an index probe), `state` (`active` or `archived`; `open()`
+serves only active rows), `created_at` and `last_used_at`, which `open()`
+records. The ID names a workspace; it does not grant authority. There is no
+identity-write method. `create(resource, {label, root_ref, subpath})` adds a row
+with a fresh ID; it is the store primitive for node-owner operations and
+publishes no operation of its own. Components attach their own per-workspace
+tables keyed by `workspace_id`; the catalog carries no component columns.
 
-`workspace_state` is a singleton row containing
-the envelope, schema version, monotonic generation and update timestamp.
+Migration 6 (`node_workspaces_v1`) turns a single-workspace install into this
+catalog. The ID from the former `workspace_identity` singleton becomes the
+classic row (root `bee:workspace_root`, empty subpath, empty label), and
+`workspace_state`, `workspace_display_assignments`,
+`workspace_display_transfer_receipts` and `workspace_application_thread_bindings`
+are rebuilt with `workspace_id` as their leading key; every existing row keeps
+its values under that ID. A missing identity row fails the migration instead of
+dropping state. Reopening, relocating or backing up a database retains its IDs;
+a fresh database receives a new classic ID from migration 2. Copying a database
+therefore makes a backup with the same identities, not an independent writable
+node. A selection naming no catalog row causes `open()` to fail; Bee never
+repairs it by silently minting a new ID. Migrations 1-5 remain unchanged.
+
+`workspace_state` has one row per workspace containing the envelope, schema
+version, monotonic generation and update timestamp.
 `workspace_schema_migrations` is an append-only ledger with integer `id`,
 immutable `name`, `checksum` and `applied_at` fields. `open()` enables WAL and
 runs every pending migration in one transaction. On every open it checks that
@@ -63,8 +87,8 @@ commit. The value is validated before the transaction and again before
 replacing an existing row; malformed or oversized state remains an error and
 is never silently discarded.
 
-Migration 4 adds `workspace_application_thread_bindings`, keyed by the logical
-`instance_id`. The core-only `bee.storage:thread_bindings` helper prepares one
+Migration 4 adds `workspace_application_thread_bindings`, keyed (since
+migration 6) by workspace and the logical `instance_id`. The core-only `bee.storage:thread_bindings` helper prepares one
 immutable `{thread_id, definition_id, actor_id, role}` identity with one bounded
 idempotency key, then advances its revision through `pending`, `active` and
 `revoked` with expected revision/state compare-and-swap checks. Exact prepare

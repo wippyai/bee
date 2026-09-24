@@ -35,6 +35,7 @@ entries:
   imports:
     protocol: bee.launch:protocol
     decode: bee.protocol:decode
+    workspaces: bee.storage:binding
   meta:
     command:
       name: bee-host
@@ -52,6 +53,7 @@ entries:
     input_decode: bee.protocol:input
     contract: bee.protocol:application
     decode: bee.protocol:decode
+    workspaces: bee.storage:binding
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
@@ -89,6 +91,7 @@ entries:
     retained: bee.launch:retained_protocol
     ownership: bee.launch:ownership
     decode: bee.protocol:decode
+    workspaces: bee.storage:binding
   meta:
     comment: Retained workspace owner selected by the native launch host under the runtime state lock
     command:

@@ -316,7 +316,7 @@ function M.prepare(store: Store, value: unknown): (Binding?, string?)
     local tx, begin_error = store.workspace.db:begin()
     if not tx then return nil, "begin application thread binding prepare: " .. tostring(begin_error) end
 
-    local rows, query_error = tx:query(select_sql() .. " WHERE instance_id = ? LIMIT 2", {request.instance_id})
+    local rows, query_error = tx:query(select_sql() .. " WHERE workspace_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, request.instance_id})
     if query_error or not rows then
         rollback(tx)
         return nil, "read application thread binding: " .. tostring(query_error)
@@ -340,7 +340,7 @@ function M.prepare(store: Store, value: unknown): (Binding?, string?)
         return nil, "application thread binding conflicts with immutable identity"
     end
 
-    local key_rows, key_error = tx:query(select_sql() .. " WHERE idempotency_key = ? LIMIT 2", {request.idempotency_key})
+    local key_rows, key_error = tx:query(select_sql() .. " WHERE workspace_id = ? AND idempotency_key = ? LIMIT 2", {store.workspace.workspace_id, request.idempotency_key})
     if key_error or not key_rows then
         rollback(tx)
         return nil, "read application thread binding idempotency key: " .. tostring(key_error)
@@ -355,7 +355,8 @@ function M.prepare(store: Store, value: unknown): (Binding?, string?)
     end
 
     local count_rows, count_error = tx:query(
-        "SELECT COUNT(*) AS count FROM workspace_application_thread_bindings WHERE state IN ('pending', 'active')")
+        "SELECT COUNT(*) AS count FROM workspace_application_thread_bindings WHERE workspace_id = ? AND state IN ('pending', 'active')",
+        {store.workspace.workspace_id})
     if count_error or not count_rows or #count_rows ~= 1 or integer(count_rows[1].count) == nil then
         rollback(tx)
         return nil, "count active application thread bindings: " .. tostring(count_error)
@@ -367,11 +368,11 @@ function M.prepare(store: Store, value: unknown): (Binding?, string?)
 
     local _, insert_error = tx:execute(
         "INSERT INTO workspace_application_thread_bindings " ..
-        "(instance_id, thread_id, definition_id, actor_id, role, binding_revision, state, idempotency_key, " ..
+        "(workspace_id, instance_id, thread_id, definition_id, actor_id, role, binding_revision, state, idempotency_key, " ..
         "definition_revision, initiating_owner_id, gateway_binding_id, gateway_approval_id, gateway_proposal_digest, " ..
         "access, join_expected_revision, membership_revision, cleanup_pending, cleanup_expected_revision) " ..
-        "VALUES (?, ?, ?, ?, ?, 1, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL)",
-        {request.instance_id, request.thread_id, request.definition_id, request.actor_id, request.role,
+        "VALUES (?, ?, ?, ?, ?, ?, 1, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL)",
+        {store.workspace.workspace_id, request.instance_id, request.thread_id, request.definition_id, request.actor_id, request.role,
             request.idempotency_key, request.definition_revision, request.initiating_owner_id,
             request.gateway_binding_id, request.gateway_approval_id, request.gateway_proposal_digest,
             request.access, request.join_expected_revision})
@@ -402,7 +403,7 @@ function M.activate(store: Store, value: unknown): (Binding?, string?)
 
     local tx, begin_error = store.workspace.db:begin()
     if not tx then return nil, "begin application thread binding activation: " .. tostring(begin_error) end
-    local rows, query_error = tx:query(select_sql() .. " WHERE instance_id = ? LIMIT 2", {request.instance_id})
+    local rows, query_error = tx:query(select_sql() .. " WHERE workspace_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, request.instance_id})
     if query_error or not rows then
         rollback(tx)
         return nil, "read application thread binding for activation: " .. tostring(query_error)
@@ -423,8 +424,8 @@ function M.activate(store: Store, value: unknown): (Binding?, string?)
 
     local result, update_error = tx:execute(
         "UPDATE workspace_application_thread_bindings SET binding_revision = ?, state = 'active', membership_revision = ? " ..
-        "WHERE instance_id = ? AND binding_revision = ? AND state = ?",
-        {expected_revision + 1, request.membership_revision, request.instance_id, expected_revision, expected_state})
+        "WHERE workspace_id = ? AND instance_id = ? AND binding_revision = ? AND state = ?",
+        {expected_revision + 1, request.membership_revision, store.workspace.workspace_id, request.instance_id, expected_revision, expected_state})
     if update_error or not result or integer(result.rows_affected) ~= 1 then
         rollback(tx)
         return nil, "application thread binding activation was stale"
@@ -451,7 +452,7 @@ function M.refresh_join(store: Store, value: unknown): (Binding?, string?)
 
     local tx, begin_error = store.workspace.db:begin()
     if not tx then return nil, "begin application thread binding join revision refresh: " .. tostring(begin_error) end
-    local rows, query_error = tx:query(select_sql() .. " WHERE instance_id = ? LIMIT 2", {instance_id})
+    local rows, query_error = tx:query(select_sql() .. " WHERE workspace_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, instance_id})
     if query_error or not rows then
         rollback(tx)
         return nil, "read application thread binding for join revision refresh: " .. tostring(query_error)
@@ -472,8 +473,8 @@ function M.refresh_join(store: Store, value: unknown): (Binding?, string?)
 
     local result, update_error = tx:execute(
         "UPDATE workspace_application_thread_bindings SET binding_revision = ?, join_expected_revision = ? " ..
-        "WHERE instance_id = ? AND binding_revision = ? AND state = 'pending'",
-        {expected_revision + 1, refreshed_revision, instance_id, expected_revision})
+        "WHERE workspace_id = ? AND instance_id = ? AND binding_revision = ? AND state = 'pending'",
+        {expected_revision + 1, refreshed_revision, store.workspace.workspace_id, instance_id, expected_revision})
     if update_error or not result or integer(result.rows_affected) ~= 1 then
         rollback(tx)
         return nil, "application thread binding join revision refresh was stale"
@@ -496,7 +497,7 @@ function M.begin_revoke(store: Store, value: unknown): (Binding?, string?)
 
     local tx, begin_error = store.workspace.db:begin()
     if not tx then return nil, "begin application thread binding revocation: " .. tostring(begin_error) end
-    local rows, query_error = tx:query(select_sql() .. " WHERE instance_id = ? LIMIT 2", {request.instance_id})
+    local rows, query_error = tx:query(select_sql() .. " WHERE workspace_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, request.instance_id})
     if query_error or not rows then
         rollback(tx)
         return nil, "read application thread binding for revocation: " .. tostring(query_error)
@@ -517,8 +518,8 @@ function M.begin_revoke(store: Store, value: unknown): (Binding?, string?)
 
     local result, update_error = tx:execute(
         "UPDATE workspace_application_thread_bindings SET binding_revision = ?, state = 'revoked', cleanup_pending = 1, cleanup_expected_revision = ? " ..
-        "WHERE instance_id = ? AND binding_revision = ? AND state = ?",
-        {expected_revision + 1, request.cleanup_expected_revision, request.instance_id, expected_revision, expected_state})
+        "WHERE workspace_id = ? AND instance_id = ? AND binding_revision = ? AND state = ?",
+        {expected_revision + 1, request.cleanup_expected_revision, store.workspace.workspace_id, request.instance_id, expected_revision, expected_state})
     if update_error or not result or integer(result.rows_affected) ~= 1 then
         rollback(tx)
         return nil, "application thread binding revocation was stale"
@@ -545,7 +546,7 @@ function M.refresh_cleanup(store: Store, value: unknown): (Binding?, string?)
 
     local tx, begin_error = store.workspace.db:begin()
     if not tx then return nil, "begin application thread binding cleanup revision refresh: " .. tostring(begin_error) end
-    local rows, query_error = tx:query(select_sql() .. " WHERE instance_id = ? LIMIT 2", {instance_id})
+    local rows, query_error = tx:query(select_sql() .. " WHERE workspace_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, instance_id})
     if query_error or not rows then
         rollback(tx)
         return nil, "read application thread binding for cleanup revision refresh: " .. tostring(query_error)
@@ -567,8 +568,8 @@ function M.refresh_cleanup(store: Store, value: unknown): (Binding?, string?)
 
     local result, update_error = tx:execute(
         "UPDATE workspace_application_thread_bindings SET binding_revision = ?, cleanup_expected_revision = ? " ..
-        "WHERE instance_id = ? AND binding_revision = ? AND state = 'revoked' AND cleanup_pending = 1",
-        {expected_revision + 1, refreshed_revision, instance_id, expected_revision})
+        "WHERE workspace_id = ? AND instance_id = ? AND binding_revision = ? AND state = 'revoked' AND cleanup_pending = 1",
+        {expected_revision + 1, refreshed_revision, store.workspace.workspace_id, instance_id, expected_revision})
     if update_error or not result or integer(result.rows_affected) ~= 1 then
         rollback(tx)
         return nil, "application thread binding cleanup revision refresh was stale"
@@ -593,7 +594,7 @@ function M.finish_revoke(store: Store, value: unknown): (Binding?, string?)
 
     local tx, begin_error = store.workspace.db:begin()
     if not tx then return nil, "begin application thread binding revocation completion: " .. tostring(begin_error) end
-    local rows, query_error = tx:query(select_sql() .. " WHERE instance_id = ? LIMIT 2", {request.instance_id})
+    local rows, query_error = tx:query(select_sql() .. " WHERE workspace_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, request.instance_id})
     if query_error or not rows then
         rollback(tx)
         return nil, "read application thread binding for revocation completion: " .. tostring(query_error)
@@ -618,8 +619,8 @@ function M.finish_revoke(store: Store, value: unknown): (Binding?, string?)
 
     local result, update_error = tx:execute(
         "UPDATE workspace_application_thread_bindings SET binding_revision = ?, cleanup_pending = 0, cleanup_expected_revision = NULL " ..
-        "WHERE instance_id = ? AND binding_revision = ? AND state = 'revoked' AND cleanup_pending = 1",
-        {expected_revision + 1, request.instance_id, expected_revision})
+        "WHERE workspace_id = ? AND instance_id = ? AND binding_revision = ? AND state = 'revoked' AND cleanup_pending = 1",
+        {expected_revision + 1, store.workspace.workspace_id, request.instance_id, expected_revision})
     if update_error or not result or integer(result.rows_affected) ~= 1 then
         rollback(tx)
         return nil, "application thread binding revocation completion was stale"
@@ -636,7 +637,7 @@ end
 function M.get(store: Store, value: unknown): (Binding?, string?)
     local instance_id = instance_key(value)
     if not instance_id then return nil, "invalid application thread binding key" end
-    local rows, query_error = store.workspace.db:query(select_sql() .. " WHERE instance_id = ? LIMIT 2", {instance_id})
+    local rows, query_error = store.workspace.db:query(select_sql() .. " WHERE workspace_id = ? AND instance_id = ? LIMIT 2", {store.workspace.workspace_id, instance_id})
     if query_error or not rows then return nil, "read application thread binding: " .. tostring(query_error) end
     if #rows == 0 then return nil, nil end
     if #rows ~= 1 then return nil, "application thread binding is corrupt" end
@@ -647,8 +648,8 @@ end
 
 function M.list(store: Store): ({Binding}?, string?)
     local rows, query_error = store.workspace.db:query(
-        select_sql() .. " WHERE state IN ('pending', 'active') OR (state = 'revoked' AND cleanup_pending = 1) " ..
-        "ORDER BY instance_id LIMIT " .. tostring(MAX_BINDINGS + 1))
+        select_sql() .. " WHERE workspace_id = ? AND (state IN ('pending', 'active') OR (state = 'revoked' AND cleanup_pending = 1)) " ..
+        "ORDER BY instance_id LIMIT " .. tostring(MAX_BINDINGS + 1), {store.workspace.workspace_id})
     if query_error or not rows then return nil, "list application thread bindings: " .. tostring(query_error) end
     if #rows > MAX_BINDINGS then return nil, "application thread binding capacity exceeded" end
     local result: {Binding} = {}

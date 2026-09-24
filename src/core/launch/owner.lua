@@ -10,6 +10,7 @@ local retained = require("retained")
 local ownership = require("ownership")
 local registry = require("registry")
 local decode = require("decode")
+local workspaces = require("workspaces")
 
 local function main()
     local supervisor = ""
@@ -37,7 +38,7 @@ local function main()
         bridged = ownership.desktop_bridge(service and service.data)
         if ownership.spawn_retained(bridged) then
             local started, start_error = process.with_options({}):with_context({["bee.retained_owner"] = self})
-                :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self)
+                :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, workspaces.classic())
             if not started then error(tostring(start_error)) end
             supervisor = tostring(started)
         else

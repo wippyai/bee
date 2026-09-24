@@ -16,7 +16,7 @@ local function spawn_host(owner: string): string
     local storage_policy = assert(security.policy("bee.workspace_hosts:first_storage_policy"))
     local scope = security.new_scope({host_policy, spawn_policy, storage_policy})
     return tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner})
-        :with_scope(scope):spawn_monitored("bee.host:main", "bee:workers", owner, "bee.workspace.db:first")))
+        :with_scope(scope):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""}, "bee.workspace.db:first")))
 end
 
 local function main()
@@ -52,7 +52,7 @@ local function main()
         end
     end
 
-    local database = assert(persistence.open("bee.workspace.db:first"))
+    local database = assert(persistence.open("bee.workspace.db:first", {root_ref = "bee:workspace_root", subpath = ""}))
     local claimed = assert(database.assignments:claim({view_id = origin_id, instance_id = origin_instance, display_id = "display-late"}))
     assert(claimed.display_id == "display-late")
 

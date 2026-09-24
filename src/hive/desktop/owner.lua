@@ -9,6 +9,7 @@ local types = require("types")
 local protocol = require("protocol")
 local retained = require("retained")
 local catalog = require("catalog")
+local workspaces = require("workspaces")
 local M = {}
 type Channel = channel.Channel
 type Session = {id: string, mount: string, mode: "control" | "observe"}
@@ -75,7 +76,7 @@ function M.start(config: protocol.Configuration, node: string): State
     named = true
     local self = tostring(process.pid())
     local owner, err = process.with_options({}):with_context({["bee.retained_owner"] = self})
-        :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, config.application)
+        :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, workspaces.classic(), config.application)
     if not owner then abandon(err) end
     local clients: {[string]: Client} = {}
     local receipts: {[string]: Receipt} = {}

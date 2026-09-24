@@ -30,6 +30,7 @@ entries:
     types: bee.hive:types
     retained: bee.launch:retained_protocol
     catalog: bee.hive.desktop:catalog
+    workspaces: bee.storage:binding
 - name: display
   kind: library.lua
   source: file://display.lua

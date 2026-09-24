@@ -4,12 +4,17 @@ entries:
 - name: binding
   kind: library.lua
   source: file://binding.lua
+  modules: [hash]
+  imports:
+    contract: bee.protocol:application
+    bounds: bee.threads.records:bounds
 - name: store
   kind: library.lua
   source: file://store.lua
   modules: [sql, json, hash]
   imports:
     binding: bee.storage:binding
+    contract: bee.protocol:application
 - name: assignments
   kind: library.lua
   source: file://assignments.lua

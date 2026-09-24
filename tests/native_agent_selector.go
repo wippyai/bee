@@ -1171,7 +1171,9 @@ func readRecoveryWorkspace(state string) (recoveryWorkspace, error) {
 	}
 	defer db.Close()
 	var encoded string
-	if err := db.QueryRow("SELECT value FROM workspace_state WHERE singleton = 1").Scan(&encoded); err != nil {
+	if err := db.QueryRow(`SELECT state.value FROM workspace_state AS state
+        JOIN workspaces AS catalog ON catalog.workspace_id = state.workspace_id
+        WHERE catalog.root_ref = 'bee:workspace_root' AND catalog.subpath = '' AND catalog.state = 'active'`).Scan(&encoded); err != nil {
 		return recoveryWorkspace{}, err
 	}
 	var snapshot recoveryWorkspace

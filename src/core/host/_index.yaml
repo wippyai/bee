@@ -19,7 +19,6 @@ entries:
     transfer: bee.host:transfer
     open_protocol: bee.applications:open_protocol
     binding_protocol: bee.host:binding_protocol
-    retained: bee.launch:retained_protocol
     execution: bee.applications:execution
 - name: inventory
   kind: library.lua

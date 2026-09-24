@@ -82,7 +82,6 @@ local function run()
     local workspace_id = created("attach", "attach-" .. uuid.v7())
     local ready = assert(process.listen("bee.retained.ready", {message = true}))
     local results = assert(process.listen("bee.retained.result", {message = true}))
-    local readers = assert(process.listen("bee.retained.catalog_readers", {message = true}))
 
     local manager = tostring(assert(process.with_options({}):with_scope(scope({"bee:host_policy", "bee:local_supervisor_spawn_policy",
         "bee:workspace_host_manager_policy"})):spawn_monitored("bee.launch:host_manager", "bee:workers", {cap = 2, idle_ms = IDLE_MS})))
@@ -146,7 +145,7 @@ local function run()
     await_served(workspace_id, false, "10s")
 
     process.terminate(manager)
-    for _, subscription in ipairs({ready, results, readers}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({ready, results}) do process.unlisten(subscription) end
     logger:info("ACCEPTANCE VERIFIED: desktops attach through the host manager: a lease starts the host, admission is relayed, the host stops after release")
 end
 

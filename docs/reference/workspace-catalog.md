@@ -134,8 +134,7 @@ with the host's readiness announcement, or `unavailable` while the host starts.
 From then on the holder sends desktop admission requests (`bee.host.client`,
 the host's own format) to the manager, which forwards them to the host only for
 the workspace the holder leases and only for recipients that holder admitted;
-the host's answers (`bee.host.client_result`) and catalog-reader snapshots come
-back through the manager. A holder whose last lease on the host ends loses its
+the host's answers (`bee.host.client_result`) come back through the manager. A holder whose last lease on the host ends loses its
 attachment and its recipients.
 
 A retained desktop supervisor (`bee.launch:retained`) selected by workspace

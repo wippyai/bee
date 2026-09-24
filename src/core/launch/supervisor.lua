@@ -78,7 +78,6 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         local attachment_requests = listen("bee.retained.request")
         local copy_results = listen("bee.client.copied")
         local launch_requests = listen("bee.retained.launch")
-        local catalog_readers = listen("bee.launch.catalog_readers")
         local launch_results = listen("bee.client.launched")
         local launch_pending: {id: string, desktop_id: string, client: string}? = nil
         local copy_pending: {id: string, recipient: string, mount: string, desktop_id: string, client: string}? = nil
@@ -127,7 +126,6 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         local deferred_renderer: string? = nil
         local deferred_quit: protocol.Quit? = nil
         local question: interaction.Spec? = nil
-        local reader_snapshot: retained_protocol.CatalogReaders? = nil
         local deadline = time.after("10s")
         local function advance(next_phase: Phase)
             phase = next_phase
@@ -150,13 +148,6 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             local detached = attachments.detach(grants, recipient)
             if detached.error_code ~= "" then error("Desktop detach failed: " .. detached.error) end
             publish_attachments(resource, id)
-        end
-        local function forward_catalog_readers()
-            local snapshot = reader_snapshot
-            if retained_owner and workspace_id ~= "" and snapshot then
-                if snapshot.workspace_id ~= workspace_id then error("Catalog reader workspace changed") end
-                send(retained_owner, "bee.retained.catalog_readers", {version = 1, workspace_id = snapshot.workspace_id, readers = snapshot.readers})
-            end
         end
         local function control(op: string)
             pending = uuid.v7()
@@ -201,7 +192,6 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         -- The host is ready: the first display boots against it.
         local function booted(value: protocol.Host)
             workspace_id = value.workspace_id
-            forward_catalog_readers()
             advance("client_boot")
             if retained_owner then
                 local client_policies: {security.Policy} = {}
@@ -231,7 +221,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             local current_storage = storage_pending
             local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
                 answers:case_receive(), questions:case_receive(), replies:case_receive(),
-                saved:case_receive(), exit_ready:case_receive(), events:case_receive(), copy_results:case_receive(), catalog_readers:case_receive(), launch_results:case_receive()}
+                saved:case_receive(), exit_ready:case_receive(), events:case_receive(), copy_results:case_receive(), launch_results:case_receive()}
             if phase == "running" or retained_displays then
                 cases[#cases + 1] = renderers:case_receive()
                 -- A leased workspace outlives its displays: a display quits
@@ -326,11 +316,6 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                     local value = protocol.host(data)
                     if not value then error("Invalid local host readiness") end
                     booted(value)
-                elseif selected.channel == catalog_readers and sender == route then
-                    local snapshot = retained_protocol.catalog_readers(data, workspace_id ~= "" and workspace_id or nil)
-                    if not snapshot then error("Invalid host catalog reader snapshot") end
-                    reader_snapshot = snapshot
-                    forward_catalog_readers()
                 elseif selected.channel == ready and sender == client and phase == "client_boot" then
                     local identity = protocol.ready(data, workspace_id, true)
                     if not identity then error("Client did not acknowledge durable legacy import") end

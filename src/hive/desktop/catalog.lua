@@ -229,17 +229,11 @@ function M.result(state: State, selected: unknown, listing: Listing, now: intege
     else return end
     settle(state, listing, now)
 end
--- The recipient of a pending read started by the given operation.
-function M.reader_recipient(state: State, operation: string): string?
-    local pending = state.pending
-    if pending and pending.call.target.operation_ref == operation then return pending.recipient end
-    return nil
-end
 function M.handles(state: State, selected: unknown): boolean
     local pending = state.pending
     return pending ~= nil and (selected == pending.identities_response or (pending.page_response ~= nil and selected == pending.page_response))
 end
--- The owner may revoke an execution-local reader while its read is pending.
+-- A stopping owner revokes the pending read or allocation.
 -- Clear before replying so a late result cannot expose data.
 function M.revoke(state: State, message: string)
     local pending = state.pending

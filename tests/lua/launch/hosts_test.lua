@@ -161,10 +161,10 @@ local function define_tests()
             hosts.release(state, "lease-1", 1)
             test.is_nil(hosts.relay(state, A, "holder-1", "r5", "detach", "client-1"))
             test.is_nil(hosts.route(state, A, "", "detach", "client-1", true))
-            test.eq(#hosts.attached(state, A), 1)
-            test.eq(hosts.attached(state, A)[1], "holder-2")
+            -- The other holder stays attached until the host is gone.
+            test.eq(hosts.relay(state, A, "holder-2", "r6", "admit", "client-2"), "pid-a")
             hosts.gone(state, A)
-            test.eq(#hosts.attached(state, A), 0)
+            test.is_nil(hosts.relay(state, A, "holder-2", "r7", "admit", "client-3"))
         end)
 
         test.it("decodes lease messages strictly", function()

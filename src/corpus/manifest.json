@@ -931,9 +931,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 16195,
+      "bytes": 16179,
       "id": "docs/application_contracts",
-      "sha256": "5d4b06c575dd92ec18942b6788563430ce222060d58ea5df3098377aab7494b9",
+      "sha256": "0897c46fda9308af99383e314122ea5048a6da3ac78efb40fb7331bfabe8561e",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -971,9 +971,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 12804,
+      "bytes": 12775,
       "id": "docs/workspace_catalog",
-      "sha256": "0edb47fcd79def65cbb02b6415fda75508c518c2d8af743ccb5e077e3b8e613c",
+      "sha256": "8ed3b527edf17a70c0d08eabc4b0cf2d9c1f4dc0a18a44ecb62f7bc9183f875f",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -1182,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1342756,
+    "bytes": 1342711,
     "documents": 147
   }
 }

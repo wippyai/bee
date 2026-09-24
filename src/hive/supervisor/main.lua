@@ -420,12 +420,10 @@ local function main(configuration: unknown)
         local desktop_results = desktop and desktop.results
         local desktop_copies = desktop and desktop.copies
         local desktop_launches = desktop and desktop.launches
-        local desktop_readers = desktop and desktop.reader_updates
         local desktop_activations = desktop and desktop.activations
         local desktop_observers = desktop and desktop.observers
         while true do
             local cases = {requests:case_receive(), replies:case_receive(), hellos:case_receive(), events:case_receive(), ticks:case_receive()}
-            if desktop_readers then cases[#cases + 1] = desktop_readers:case_receive() end
             local catalog_work = 0
             if desktop then
                 for _, response in ipairs(desktop_owner.catalog_channels(desktop)) do
@@ -486,8 +484,6 @@ local function main(configuration: unknown)
                 advertising_response = nil
             elseif desktop and catalog_work > 0 and desktop_owner.catalog_result(desktop, selected.channel, now_ms) then
                 -- A pending desktop catalog read or allocation completed.
-            elseif desktop_readers and selected.channel == desktop_readers and desktop then
-                desktop_owner.catalog_readers(desktop, selected.value)
             elseif desktop_activations and selected.channel == desktop_activations and desktop then
                 desktop_owner.activated(desktop, selected.value, now_ms)
             elseif desktop_ready and selected.channel == desktop_ready and desktop then

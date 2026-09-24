@@ -200,7 +200,7 @@ function M.same(a: Selection, b: Selection): boolean
     for i, left in ipairs(a.bindings) do
         local right = b.bindings[i]
         if left.definition_id ~= right.definition_id or left.appearance_write ~= right.appearance_write
-            or left.application_stop ~= right.application_stop or left.catalog_read ~= right.catalog_read
+            or left.application_stop ~= right.application_stop
             or left.scope_management ~= right.scope_management or left.close_grace_ms ~= right.close_grace_ms
             or left.thread_access ~= right.thread_access
             or #left.policies ~= #right.policies then return false end

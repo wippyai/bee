@@ -25,12 +25,11 @@ type Client = {recipient: string, workspace_id: string, desktop_id: string, sess
 type Receipt = {session_id: string?, digest: string, reply: types.Reply, expires: integer}
 -- One retained desktop supervisor. The folder workspace learns its identity
 -- from readiness; a leased workspace is selected by identity.
-type Served = {supervisor: string, workspace_id: string, desktop_id: string, folder: boolean, ready: boolean,
-    catalog_readers: {[string]: boolean}, pending_catalog_readers: retained.CatalogReaders?}
+type Served = {supervisor: string, workspace_id: string, desktop_id: string, folder: boolean, ready: boolean}
 type State = {
     config: protocol.Configuration, node: string, bridge_name: string, owner_name: string,
     ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
-    activations: Channel<process.Message>, reader_updates: Channel<process.Message>,
+    activations: Channel<process.Message>,
     observers: Channel<process.Message>, catalog: catalog.State, spawn_scope: security.Scope, executor: funcs.Executor,
     folder: Served?, served: {[string]: Served}, workspaces: {[string]: Served}, served_count: integer,
     allowed: {[string]: boolean}, enrolled: {[string]: boolean},
@@ -40,7 +39,6 @@ type State = {
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 -- Leased workspaces one bridge serves at once, besides the folder workspace.
 M.MAX_SERVED = 32
-M.READER_OPERATION = "bee.desktop:catalog"
 local function listen(topic: string): Channel<process.Message>
     local value, err = process.listen(topic, {message = true})
     if not value then error(tostring(err)) end
@@ -87,7 +85,6 @@ function M.start(config: protocol.Configuration, node: string): State
     local copies = listen("bee.retained.copied")
     local launches = listen("bee.retained.launched")
     local activations = listen("bee.retained.activated")
-    local reader_updates = listen("bee.retained.catalog_readers")
     local observers = listen(retained.TOPIC_OBSERVE)
     local named = false
     -- The bridge composes the owner's folder workspace.
@@ -96,7 +93,7 @@ function M.start(config: protocol.Configuration, node: string): State
     local bridge_name = key and retained.bridge_name(key) or ""
     local owner_name = key and retained.owner_name(key) or ""
     local function abandon(cause: unknown)
-        for _, topic in ipairs({ready, results, copies, launches, activations, reader_updates, observers}) do process.unlisten(topic) end
+        for _, topic in ipairs({ready, results, copies, launches, activations, observers}) do process.unlisten(topic) end
         if named then process.registry.unregister(bridge_name) end
         error(tostring(cause))
     end
@@ -111,14 +108,14 @@ function M.start(config: protocol.Configuration, node: string): State
     if not registered then abandon(name_error) end
     named = true
     local state: State = {config = config, node = node, bridge_name = bridge_name, owner_name = owner_name, ready = ready, results = results,
-        copies = copies, launches = launches, activations = activations, reader_updates = reader_updates, observers = observers,
+        copies = copies, launches = launches, activations = activations, observers = observers,
         catalog = catalog.new(), spawn_scope = spawn_scope, executor = executor, folder = nil, served = {}, workspaces = {}, served_count = 0,
         allowed = allowed, enrolled = {}, clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = expiry, stopped = false}
     -- A daemon's bridge composes no folder workspace; it serves only leased ones.
     if not config.folder then return state end
     local supervisor, err = spawn(state, folder)
     if not supervisor then abandon(err) end
-    local served: Served = {supervisor = supervisor, workspace_id = "", desktop_id = "", folder = true, ready = false, catalog_readers = {}}
+    local served: Served = {supervisor = supervisor, workspace_id = "", desktop_id = "", folder = true, ready = false}
     state.folder = served
     state.served[supervisor] = served
     return state
@@ -193,24 +190,6 @@ local function forget_refusal(state: State, pending: Pending)
         state.receipt_count = state.receipt_count - 1
     end
 end
-local function install_catalog_readers(served: Served, snapshot: retained.CatalogReaders)
-    if snapshot.workspace_id ~= served.workspace_id then error("Catalog reader workspace changed") end
-    -- `state.node` is the Hive routing identity. A local-only supervisor maps
-    -- its node-less native PID to "local", so it cannot establish transport
-    -- locality. Compare against the exact retained supervisor's native node;
-    -- this also does not conflate a real native node named "local" with the
-    -- local-only marker.
-    local supervisor_node = types.pid_parts(served.supervisor)
-    if supervisor_node == nil then error("Retained catalog reader supervisor has no native PID") end
-    local readers: {[string]: boolean} = {}
-    for _, reader in ipairs(snapshot.readers) do
-        local reader_node = types.pid_parts(reader)
-        if reader_node ~= supervisor_node then error("Catalog reader is not local to this owner") end
-        readers[reader] = true
-    end
-    served.catalog_readers = readers
-    served.pending_catalog_readers = nil
-end
 -- announce forwards the folder workspace's readiness to the owner route
 -- registered under its retained owner name. With a recipient, it answers only
 -- when that recipient is the registered owner route. Either side may register
@@ -253,7 +232,6 @@ function M.ready(state: State, message: process.Message, now: integer)
         state.workspaces[value.workspace_id] = served
     end
     served.workspace_id, served.desktop_id, served.ready = value.workspace_id, value.desktop_id, true
-    if served.pending_catalog_readers then install_catalog_readers(served, served.pending_catalog_readers) end
     if served.folder then announce(state, nil) end
     -- Requests that waited for this workspace's supervisor proceed now.
     for _, client in pairs(state.clients) do
@@ -278,23 +256,6 @@ end
 -- observe answers an owner route that registered after readiness arrived.
 function M.observe(state: State, message: process.Message)
     announce(state, tostring(message:from()))
-end
--- This query is for the separate catalog-read bridge only. It deliberately does
--- not widen the native desktop-client admission route below.
-function M.catalog_reader(state: State, sender: string): boolean
-    if state.stopped then return false end
-    for _, served in pairs(state.served) do
-        if served.catalog_readers[sender] then return true end
-    end
-    return false
-end
-function M.catalog_readers(state: State, message: process.Message)
-    local served = state.served[tostring(message:from())]
-    if not served or state.stopped then return end
-    local snapshot = retained.catalog_readers(message:payload():data(), served.ready and served.workspace_id or nil)
-    if not snapshot then error("Invalid retained catalog reader snapshot") end
-    if not served.ready then served.pending_catalog_readers = snapshot
-    else install_catalog_readers(served, snapshot) end
 end
 -- Only a native sender from an explicitly admitted client node enters
 -- this route: a node the host grant names, or, when the host selected local
@@ -338,13 +299,6 @@ function M.catalog_channels(state: State): {Channel<unknown>}
 end
 function M.catalog_result(state: State, selected: unknown, now: integer): boolean
     if not catalog.handles(state.catalog, selected) then return false end
-    -- A catalog read started for an authorized local app is rechecked against
-    -- the exact current reader PID before its result can leave this owner.
-    local recipient = catalog.reader_recipient(state.catalog, M.READER_OPERATION)
-    if recipient and not M.catalog_reader(state, recipient) then
-        catalog.revoke(state.catalog, "Catalog reader authorization was revoked")
-        return true
-    end
     catalog.result(state.catalog, selected, M.listing(state), now)
     return true
 end
@@ -355,7 +309,7 @@ local function serve(state: State, workspace_id: string): (Served?, string?, str
     if state.served_count >= M.MAX_SERVED then return nil, "BUSY", "Served workspace capacity reached" end
     local supervisor, err = spawn(state, {workspace_id = workspace_id})
     if not supervisor then return nil, "UNAVAILABLE", "Workspace desktop could not start: " .. tostring(err) end
-    local started: Served = {supervisor = supervisor, workspace_id = workspace_id, desktop_id = "", folder = false, ready = false, catalog_readers = {}}
+    local started: Served = {supervisor = supervisor, workspace_id = workspace_id, desktop_id = "", folder = false, ready = false}
     state.served[supervisor] = started
     state.workspaces[workspace_id] = started
     state.served_count = state.served_count + 1
@@ -691,7 +645,6 @@ function M.event(state: State, event: process.Event, now: integer)
         local cause = type(result) == "table" and result.error ~= nil and tostring(result.error) or "without an error result"
         if served.folder then
             state.stopped = true
-            for _, entry in pairs(state.served) do entry.catalog_readers = {}; entry.pending_catalog_readers = nil end
             error("Retained desktop owner exited: " .. cause)
         end
         served_exited(state, served, cause, now)
@@ -705,13 +658,10 @@ end
 function M.close(state: State)
     state.stopped = true
     process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
-    process.unlisten(state.activations); process.unlisten(state.reader_updates); process.unlisten(state.observers)
+    process.unlisten(state.activations); process.unlisten(state.observers)
     process.registry.unregister(state.bridge_name)
     catalog.revoke(state.catalog, "Desktop owner stopped")
     for recipient in pairs(state.clients) do process.unmonitor(recipient) end
-    for supervisor, served in pairs(state.served) do
-        served.catalog_readers = {}; served.pending_catalog_readers = nil
-        process.terminate(supervisor)
-    end
+    for supervisor in pairs(state.served) do process.terminate(supervisor) end
 end
 return M

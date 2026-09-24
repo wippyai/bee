@@ -57,14 +57,12 @@ local function harness(tag: string): Harness
     local leased = tostring(assert(process.spawn_monitored("bee.hive:retained_standin", "bee:workers", self)))
     local client_node = types.pid_parts(standin)
     if not client_node then error("stand-in has no node") end
-    local folder_served: owner.Served = {supervisor = folder, workspace_id = FOLDER, desktop_id = DEFAULT_DISPLAY, folder = true, ready = true,
-        catalog_readers = {}, pending_catalog_readers = nil}
-    local leased_served: owner.Served = {supervisor = leased, workspace_id = LEASED, desktop_id = "", folder = false, ready = false,
-        catalog_readers = {}, pending_catalog_readers = nil}
+    local folder_served: owner.Served = {supervisor = folder, workspace_id = FOLDER, desktop_id = DEFAULT_DISPLAY, folder = true, ready = true}
+    local leased_served: owner.Served = {supervisor = leased, workspace_id = LEASED, desktop_id = "", folder = false, ready = false}
     local state: owner.State = {
         bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = NODE,
         allowed = {}, enrolled = {[client_node] = true}, config = {execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {}, local_clients = true, folder = true},
-        ready = ready, results = results, copies = unused, launches = unused, activations = activations, reader_updates = unused, observers = unused,
+        ready = ready, results = results, copies = unused, launches = unused, activations = activations, observers = unused,
         catalog = catalog.new(), spawn_scope = security.new_scope({}), executor = funcs.new(), folder = folder_served,
         served = {[folder] = folder_served, [leased] = leased_served}, workspaces = {[FOLDER] = folder_served, [LEASED] = leased_served}, served_count = 1,
         clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = time.now():add("1h"),
@@ -170,6 +168,18 @@ local function define_tests()
             local attached = attach_leased(h)
             test.is_true(attached.ok)
             test.eq((attached.value :: Object).workspace_id, LEASED)
+            close(h)
+        end)
+        test.it("serves no catalog-reader operation and admits no local application sender", function()
+            local h = harness("catalog")
+            request(h, "bee.desktop:catalog", "catalog-1", {})
+            local refused = answer(h)
+            test.eq(refused.error and refused.error.code, "INVALID_ARGUMENT")
+            local self = tostring(process.pid())
+            local own = listen("bee.test.desktop_workspaces.local")
+            process.send(self, "bee.test.desktop_workspaces.local", {})
+            test.is_false(owner.handles(h.state, next_message(own, "local sender")))
+            process.unlisten(own)
             close(h)
         end)
         test.it("refuses to switch workspaces without a detach", function()

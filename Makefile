@@ -110,9 +110,7 @@ fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
 test: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
-.PHONY: hive-reader-check clipboard-contract-check
-hive-reader-check:
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hive_reader.py
+.PHONY: clipboard-contract-check
 clipboard-contract-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/clipboard_contract.py
 .PHONY: client-desktop-check local-launcher-check client-storage-check retained-desktop-check

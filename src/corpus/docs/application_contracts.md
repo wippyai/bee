@@ -25,8 +25,8 @@ they never grant authority. Executable or configuration changes require a new
 revision, and one revision identifies one exact runnable definition.
 
 The protected `bee:application_admission.bindings` selection supplies shipped
-definitions, policy IDs and grants such as `appearance_write`,
-`application_stop` and `catalog_read`. A reviewed governed overlay may add a
+definitions, policy IDs and grants such as `appearance_write` and
+`application_stop`. A reviewed governed overlay may add a
 workspace-local definition through the host's
 `bee.governance:activation_profiles.applications` selection. Activation freezes
 the selected artifact, owner, bindings and external policy definitions in its

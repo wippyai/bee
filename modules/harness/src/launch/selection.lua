@@ -13,7 +13,9 @@ local M = {}
 M.MAX_DEFINITIONS = 64
 M.MAX_PROFILE_PAGES = 64
 local PROFILE_CALL = "bee.harness.profiles:call"
-type Choice = {definition_ref: string, title: string, launch_id: string, plan_digest: string, unavailable: string?, summary: string?, saved_profile_id: string?, saved_profile_revision: integer?}
+-- workdir and thread_id are a saved profile's launch choices.
+type Choice = {definition_ref: string, title: string, launch_id: string, plan_digest: string, unavailable: string?, summary: string?,
+    saved_profile_id: string?, saved_profile_revision: integer?, workdir: profiles.Workdir?, thread_id: string?}
 type Choices = {items: {Choice}, unavailable: integer}
 type Command = {definition_ref: string, fullscreen: boolean}
 
@@ -206,9 +208,13 @@ local function saved_choice(pinned: catalog.Pinned, workspace: string, row: Prof
     local plan, refused = admission.resolve(definition_ref, "window", workspace, row.profile_id, row.revision)
     local digest = plan_digest(plan, definition_ref, row.profile_id, row.revision)
     local detail = M.row_detail(definition.title)
+    local workdir = profile.workdir
+    if workdir then detail = detail .. " · " .. workdir.root_ref .. (workdir.path ~= "" and "/" .. workdir.path or "") end
+    local thread = profile.thread
     if digest then
         return {definition_ref = definition_ref, title = profile.title, launch_id = definition.launch_id, plan_digest = digest,
-            saved_profile_id = row.profile_id, saved_profile_revision = row.revision, summary = detail}, nil
+            saved_profile_id = row.profile_id, saved_profile_revision = row.revision, summary = detail,
+            workdir = workdir, thread_id = thread and thread.thread_id or nil}, nil
     end
     local reason = "Profile is unavailable on this node"
     if refused then

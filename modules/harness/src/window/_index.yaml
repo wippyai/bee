@@ -103,6 +103,7 @@ entries:
     frame: bee.application:frame
     bounds: bee.threads.records:bounds
     client: bee.application:client
+    caller: bee.application:caller
     appearance: bee.application:appearance
     input_event: bee.harness.window:input
     selection: bee.harness.launch:selection
@@ -137,5 +138,7 @@ entries:
     frame: bee.application:frame
     appearance: bee.application:appearance
     text: bee.application:text
+    caller: bee.application:caller
+    folder_picker: bee.application:folder_picker
     editor: bee.harness.window:profile_editor
     forms: bee.harness.window:profile_form

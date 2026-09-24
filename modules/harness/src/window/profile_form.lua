@@ -57,8 +57,14 @@ function M.load(workspace: string, choice: selection.Choice, duplicate: boolean)
         if not fresh then return nil, tostring(fresh_error) end
         id, revision = fresh, 0
     end
+    -- A folder or thread choice is offered only where the definition and its
+    -- launch policy both allow the override; admission checks it again.
+    local admitted = bounds.ids(policy_data.allowed_overrides or {}, true) or {}
+    local function allows(name: string): boolean
+        return definition.allows(decoded, name) and bounds.member(name, admitted) ~= nil
+    end
     local draft, draft_error = editor.new(profile, {options = policy_data.profile_options or {},
-        mcp_tools = tools, instructions = policy_data.profile_instructions == true})
+        mcp_tools = tools, instructions = policy_data.profile_instructions == true, workdir = allows("workdir"), thread = allows("thread")})
     if not draft then return nil, draft_error end
     local save_key, save_error = uuid.v7()
     local remove_key, remove_error = uuid.v7()

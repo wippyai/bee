@@ -7,6 +7,7 @@ local uuid = require("uuid")
 local funcs = require("funcs")
 local bounds = require("bounds")
 local client = require("client")
+local caller = require("caller")
 local appearance = require("appearance")
 local input_event = require("input_event")
 local selection = require("selection")
@@ -17,6 +18,12 @@ local forms = require("forms")
 local profile_view = require("profile_view")
 local M = {}
 type Channel = channel.Channel
+-- The form's owner calls run as this Agent's own actor.
+local function ask(target: string, request: {[string]: unknown}): caller.Reply
+    local raw, err = funcs.call(target, request)
+    if err then return caller.unknown() end
+    return caller.decode(raw) or caller.unknown()
+end
 type Activation = {serial: integer, admitted: admission.Admitted?, refused: admission.Reply?, error: string?, title: string?}
 type Setup = {serial: integer, request_id: string, choice: selection.Choice}
 local function fault(reply: admission.Reply?): string
@@ -197,10 +204,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 elseif running and request.serial == activation_serial then
                     coroutine.spawn(function()
                         local choice = request.choice
+                        -- A saved profile's folder was associated by setup under
+                        -- the name setup returned; its thread replaces this window's.
+                        local workdir: string? = nil
+                        if choice.workdir then workdir = bounds.id(prepared.workdir) end
                         local admitted, refused = admission.admit_request({request_id = request.request_id,
                             definition_ref = choice.definition_ref, saved_profile_id = choice.saved_profile_id,
                             saved_profile_revision = choice.saved_profile_revision, expected_plan_digest = choice.plan_digest,
-                            workspace_id = launch.workspace_id, thread_id = launch.thread_id, brief = "", mode = "window",
+                            workspace_id = launch.workspace_id, thread_id = choice.thread_id or launch.thread_id, workdir = workdir,
+                            brief = "", mode = "window",
                             origin_view = {view_id = launch.view_id, instance_id = launch.instance_id}})
                         activations:send({serial = request.serial, admitted = admitted, refused = refused, title = choice.title})
                     end)
@@ -257,7 +269,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             local choice = listed.items[selected]
             if choice then
                 local opened, open_error = forms.load(launch.workspace_id, choice, duplicate)
-                if opened then editing = profile_view.new(opened)
+                if opened then editing = profile_view.new(opened, ask)
                 else status = open_error or "Profile could not be opened" end
                 dirty = true
             end
@@ -278,7 +290,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 local future, future_error = funcs.async("bee.harness.launch:setup", {
                     workspace_id = launch.workspace_id, definition_ref = choice.definition_ref,
                     saved_profile_id = choice.saved_profile_id, saved_profile_revision = choice.saved_profile_revision,
-                    expected_plan_digest = choice.plan_digest})
+                    expected_plan_digest = choice.plan_digest, workdir = choice.workdir})
                 if not future then
                     activations:send({serial = serial, error = tostring(future_error)})
                 else

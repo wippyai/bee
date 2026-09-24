@@ -44,6 +44,7 @@ end
 local manager = caller("bee.test.catalog_manager", {"bee:workspace_catalog_read_policy", "bee:workspace_catalog_manage_policy"})
 local reader = caller("bee.test.catalog_reader", {"bee:workspace_catalog_read_policy"})
 local outsider = caller("bee.test.catalog_outsider", {})
+local browser = caller("bee.test.catalog_browser", {"bee:workspace_folder_browse_policy"})
 local application = caller("bee.test.catalog_application", {"bee:workspace_storage_boundary", "bee:ordinary_app_subsystem_boundary",
     "bee:workspace_catalog_read_policy", "bee:workspace_catalog_manage_policy"})
 
@@ -244,6 +245,14 @@ local function define_tests()
             test.eq(code(call(manager, "folders", {root_ref = PROJECTS, path = "../outside"})), "INVALID")
             test.eq(code(call(manager, "folders", {root_ref = PROJECTS, after = "a/b"})), "INVALID")
             test.eq(code(call(reader, "folders", {root_ref = PROJECTS, path = base})), "DENIED")
+            -- Browsing folders is its own grant: it pages folders and lists
+            -- the roots, and creates nothing.
+            local browsed = value(call(browser, "folders", {root_ref = PROJECTS, path = base, limit = 2}))
+            test.eq(#(browsed.folders :: {Object}), 2)
+            test.not_nil(value(call(browser, "roots", {})).roots)
+            test.eq(code(call(browser, "create", {label = "Browsed", root_ref = PROJECTS, subpath = base .. "/alpha"})), "DENIED")
+            test.eq(code(call(browser, "archive", {workspace_id = own.workspace_id})), "DENIED")
+            test.eq(code(call(browser, "inspect", {workspace_id = own.workspace_id})), "DENIED")
         end)
 
         test.it("renames, archives and restores, replaying a repeated change", function()

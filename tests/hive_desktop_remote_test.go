@@ -109,7 +109,7 @@ func (r *desktopRemote) command(ctx context.Context) *exec.Cmd {
 	if r.platform == "Darwin" {
 		identity = "LC_ALL=C ps -p $$ -o lstart="
 	}
-	script := "cd " + shellQuote(r.directory) + " && echo $$ > host.pid && " + identity + " > host.starttime && exec env " + strings.Join(assignments, " ") + " " + shellQuote(r.config.remoteRuntimePath) + " run --console hive-desktop-admission-probe -- node-0"
+	script := "cd " + shellQuote(r.directory) + " && echo $$ > host.pid && " + identity + " > host.starttime && exec env " + strings.Join(assignments, " ") + " " + shellQuote(r.config.remoteRuntimePath) + " run --console --override " + shellQuote(desktopSupervisorOverride) + " hive-desktop-admission-probe -- node-0"
 	return exec.CommandContext(ctx, "ssh", "-o", "BatchMode=yes", "--", r.config.sshTarget, script)
 }
 

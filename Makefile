@@ -382,13 +382,13 @@ attachments-check:
 # Enabled retained-desktop owner through native Hive; explicit disposable enrollment.
 .PHONY: hive-desktop-admission-check
 hive-desktop-admission-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hive_remote.go tests/hive_supervisor_test.go tests/hive_desktop_remote_test.go tests/hive_desktop_admission_test.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" go test -race -count=1 -timeout=150s -v tests/hive_remote.go tests/hive_supervisor_test.go tests/hive_desktop_remote_test.go tests/hive_desktop_admission_test.go -run '^TestHiveDesktopAdmission$$'
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_desktop_remote_test.go ../tests/hive_desktop_admission_test.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" go -C native test -race -count=1 -timeout=150s -v ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_desktop_remote_test.go ../tests/hive_desktop_admission_test.go -run '^TestHiveDesktopAdmission$$'
 
 .PHONY: hive-desktop-catalog-check
 hive-desktop-catalog-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hive_remote.go tests/hive_supervisor_test.go tests/hive_desktop_remote_test.go tests/hive_desktop_admission_test.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" go test -race -count=1 -timeout=150s -v tests/hive_remote.go tests/hive_supervisor_test.go tests/hive_desktop_remote_test.go tests/hive_desktop_admission_test.go -run '^TestHiveDesktopCatalog$$'
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_desktop_remote_test.go ../tests/hive_desktop_admission_test.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" go -C native test -race -count=1 -timeout=150s -v ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_desktop_remote_test.go ../tests/hive_desktop_admission_test.go -run '^TestHiveDesktopCatalog$$'
 
 .PHONY: connection-ui-check
 connection-ui-check: pack

@@ -47,6 +47,7 @@ entries:
   modules: [funcs, process, system]
   imports:
     bounds: bee.threads.records:bounds
+    contract: bee.protocol:application
   meta:
     comment: Open Hive operation listing one page of this node's workspace catalog and which workspaces a host serves now
     hive: open

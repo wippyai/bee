@@ -328,16 +328,12 @@ function M.move(state: State, step: integer)
         state.selected_desktop = keys[index]
     end
 end
--- Control is offered only where no controller is known; a controlled
--- desktop offers observation. The owner still decides either request.
+-- Control is offered for a selected workspace of a node that holds
+-- workspaces; the owner decides the request.
 function M.can_control(state: State): boolean
     local node = M.selected(state)
     if not node or node.client_only then return false end
-    local desktop = M.selected_desktop(state)
-    if not desktop then return false end
-    if desktop.controller == nil or desktop.controller == "" then return true end
-    local session = M.session(state, node.node_id, desktop.workspace_id, desktop.desktop_id)
-    return session ~= nil and session.mode == "control"
+    return M.selected_desktop(state) ~= nil
 end
 -- A pending request whose outcome is unknown is replayed with the same
 -- identity; a fresh intent is refused while it stands.
@@ -354,7 +350,6 @@ function M.preview_intent(state: State, mode: Mode, idempotency_key: string): (A
     if not catalog.available then return nil, catalog.reason end
     local desktop = M.selected_desktop(state)
     if not desktop then return nil, "select a desktop first" end
-    if mode == "control" and not M.can_control(state) then return nil, "desktop is controlled by " .. (desktop.controller or "unknown") .. "; choose observe" end
     local intent: Attach = {node_id = node.node_id, workspace_id = desktop.workspace_id, desktop_id = desktop.desktop_id,
         owner_generation = catalog.owner_generation, mode = mode, idempotency_key = idempotency_key}
     return intent, nil

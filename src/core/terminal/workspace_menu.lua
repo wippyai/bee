@@ -6,6 +6,7 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local names = require("names")
+local contract = require("contract")
 type Item = {workspace_id: string, label: string}
 type Query = {label: string?, after: string?}
 type Menu = {current: string, items: {Item}, selected: integer, after: string?, next_after: string?,
@@ -26,28 +27,24 @@ function M.request(menu: Menu, request_id: string): Query
     menu.loading = request_id
     return {label = menu.query ~= "" and menu.query or nil, after = menu.after}
 end
-local function line(value: unknown, limit: integer): string?
-    if type(value) ~= "string" or #value > limit or value:find("%c") then return nil end
-    return value
-end
 -- The owner's answer to the pending page request; any other is ignored.
 function M.apply(menu: Menu, value: unknown): boolean
     if type(value) ~= "table" or value.version ~= 1 or not menu.loading or value.request_id ~= menu.loading then return false end
     menu.loading = nil
     if value.error ~= nil then
-        menu.status = "Workspaces unavailable: " .. (line(value.error, 200) or "unknown error")
+        menu.status = "Workspaces unavailable: " .. (contract.text(value.error, 200) or "unknown error")
         return true
     end
     local items: {Item} = {}
     if type(value.items) == "table" then
         for index, raw in ipairs(value.items :: {unknown}) do
             if index > M.MAX_ITEMS or type(raw) ~= "table" then break end
-            local id, label = line(raw.workspace_id, 32), line(raw.label, 240)
-            if id and #id == 32 and label then items[#items + 1] = {workspace_id = id, label = label} end
+            local id, label = contract.workspace_id(raw.workspace_id), contract.text(raw.label, 240)
+            if id and label then items[#items + 1] = {workspace_id = id, label = label} end
         end
     end
     menu.items, menu.selected = items, 1
-    menu.next_after = line(value.next_after, 2200)
+    menu.next_after = contract.text(value.next_after, 2200)
     menu.status = #items == 0 and "No workspaces match" or ""
     return true
 end
@@ -56,7 +53,7 @@ function M.switched(menu: Menu, value: unknown): boolean
     if type(value) ~= "table" or value.version ~= 1 or not menu.switching or value.request_id ~= menu.switching then return false end
     menu.switching = nil
     if value.error_code == "" then menu.status = M.SWITCHED
-    else menu.status = "Switch refused: " .. (line(value.error, 200) or tostring(value.error_code)) end
+    else menu.status = "Switch refused: " .. (contract.text(value.error, 200) or tostring(value.error_code)) end
     return true
 end
 -- The name a person sees: the label, or the identity's name when unnamed.

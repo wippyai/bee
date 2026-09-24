@@ -153,6 +153,8 @@ entries:
   kind: library.lua
   source: file://workspace_pages.lua
   modules: [funcs, channel]
+  imports:
+    contract: bee.protocol:application
 - name: node_appearance
   kind: library.lua
   source: file://node_appearance.lua

@@ -28,7 +28,9 @@ shutdown. It does not become a second workspace or application owner.
 Other logical workspaces of the node get their hosts from the node host
 manager when a lease asks for them (see
 [workspace catalog](../reference/workspace-catalog.md#live-hosts)); a desktop
-client does not yet attach to those hosts.
+shows one of them through the desktop bridge: `bee client` on a daemon picks
+one, and a running display switches to another from its workspace menu (F9,
+W).
 
 The workspace host owns the workspace database and application authority. It
 restores supported application checkpoints, routes application requests and

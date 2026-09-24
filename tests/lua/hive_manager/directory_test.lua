@@ -153,7 +153,6 @@ local function define_tests()
             test.eq(catalog.owner_generation, "forge")
             test.is_nil(catalog.next_after)
             test.eq(catalog.desktops[1].desktop_id, "")
-            test.is_nil(catalog.desktops[1].controller)
             test.is_true(directory.decode_workspaces(response({})).available)
             -- The folder workspace's catalog row is unnamed; the view names it by identity.
             local unnamed = directory.decode_workspaces(response({{workspace_id = workspace, label = "", served = true}}))

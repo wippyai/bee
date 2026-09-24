@@ -891,9 +891,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 5755,
+      "bytes": 6011,
       "id": "docs/distributed_app_delivery",
-      "sha256": "50727f0d5b8efb5cbaebd3a6d81ded01297c44ba8a7979e8da6d55c45891b11c",
+      "sha256": "4fc94e85a514c457f2a786e02f9c42f623d8b8a6cd163a93e31316b87713e94e",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -1083,9 +1083,9 @@
       "topic": "component"
     },
     {
-      "bytes": 16066,
+      "bytes": 16291,
       "id": "component/gov",
-      "sha256": "003ff5834fb8093943dc7c7b6787b85df1596dcc847eb3129d094383845b4b49",
+      "sha256": "95c7901520b2659f0e8953560c8fdf6f2fd60e5c9f06541686a4c74f6a8383af",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -1182,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1360690,
+    "bytes": 1361171,
     "documents": 147
   }
 }

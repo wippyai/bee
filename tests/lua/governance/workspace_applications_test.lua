@@ -56,6 +56,9 @@ local function define_tests()
             test.is_nil(profile.kinds["security.policy"])
             test.is_true(profile.modules.tty)
             test.is_nil(next(profile.grants))
+            -- An application under the default rule runs only when the app
+            -- broker launches it; nothing in it starts on its own.
+            test.is_false(profile.auto_start)
             test.is_nil(next(profile.databases))
             local applications = profile.applications :: {Object}
             test.eq(#applications, 1)
@@ -89,6 +92,16 @@ local function define_tests()
                     kinds = {"process.lua"}, databases = {}, grants = {}, modules = {}}}}
             local explicit = assert(profiles.select(assert(profiles.configuration(config, NODE)), WORKSPACE, NODE, "tally"))
             test.eq(explicit.component, "vendor/tally")
+            -- An explicit row keeps the host's authority to admit auto start
+            -- and may withhold it.
+            test.is_true(explicit.auto_start)
+            local rows = config.profiles :: {Object}
+            local allow = rows[1].allow :: Object
+            allow.auto_start = false
+            test.is_false(assert(profiles.select(assert(profiles.configuration(config, NODE)), WORKSPACE, NODE, "tally")).auto_start)
+            allow.auto_start = "yes"
+            test.is_nil(profiles.configuration(config, NODE))
+            allow.auto_start = nil
             local decoded = assert(profiles.decode(config))
             local chosen = assert(profiles.select_decoded(decoded, WORKSPACE, NODE, "tally", NODE))
             test.eq(chosen.overlay_owner, "bee.vendor:tally")

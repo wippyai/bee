@@ -86,8 +86,11 @@ The rule applies only to an overlay this node authored whose name is lowercase
 letters, digits and underscores starting with a letter. Overlay `todo` gets
 component and namespace `app.todo`, the application entry `app.todo:app` under
 the ordinary application boundary, and the private overlay owner
-`bee.governance.workspace_applications:<workspace_id>.todo`. An explicit
-profile row for the same source takes precedence. A source the rule does not
+`bee.governance.workspace_applications:<workspace_id>.todo`. Nothing under the
+rule starts itself: an entry that declares `lifecycle.auto_start` is refused at
+preflight with `AUTO_START_DENIED`, so the application runs only while the
+broker has it open. An explicit profile row for the same source takes
+precedence; it admits auto start unless its `allow.auto_start` is `false`. A source the rule does not
 cover is refused with the rule and the profile entries a host adds.
 
 A person reviews the staged plan in Start › Tools › Overlays, selects and

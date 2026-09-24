@@ -19,7 +19,7 @@ type Context = {node_id: string, registry_revision: integer, registry_digest: st
     grants: {[string]: boolean}, modules: {[string]: boolean},
     database_bindings: {[string]: DatabaseBinding}?,
     entries: {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, exact_expansion: boolean,
-    migration_barrier: boolean}
+    migration_barrier: boolean, auto_start: boolean}
 type Diagnostic = {code: string, target: string, message: string, remedy: string}
 type Report = {schema_revision: string, plan_digest: string, destination_node: string,
     base_revision: integer, policy_digest: string, ready: boolean, diagnostics: {Diagnostic}, pending_migrations: {string}}
@@ -423,6 +423,10 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         local existing = context.entries[item.id]
         if existing and (existing.package ~= item.package or existing.kind ~= item.kind) then
             issue("ENTRY_COLLISION", item.id, "entry ownership or kind would change", "choose a nonconflicting destination")
+        end
+        if item.auto_start and not context.auto_start then
+            issue("AUTO_START_DENIED", item.id, "entry starts itself outside the application lifecycle and host policy admits no auto start",
+                "remove lifecycle.auto_start; the application starts its work when it is opened")
         end
         if item.auto_start and #candidate.migrations > 0 and not context.migration_barrier then
             issue("MIGRATION_BARRIER_REQUIRED", item.id, "service can activate before its schema is ready", "declare a supported post-migration activation barrier")

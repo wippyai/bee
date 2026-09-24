@@ -172,7 +172,8 @@ local function restore_host()
     apply(mode_entry)
 end
 local function await_exit(pid: string): {[string]: unknown}
-    assert(process.monitor(pid))
+    local monitored, monitor_err = process.monitor(pid)
+    assert(monitored, tostring(monitor_err))
     local events = assert(process.events())
     local deadline = time.after("30s")
     local outcome: {[string]: unknown}? = nil

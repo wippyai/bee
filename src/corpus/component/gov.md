@@ -216,6 +216,20 @@ overlay and approval policies are removed from the migration call scope.
 grant is still authority over the physical SQL resource and is not table-level
 confinement.
 
+The activation configuration may carry one `workspace_applications` rule
+beside its explicit rows, and the publication configuration a matching
+`workspace_applications: true`. `activation_profiles.select` returns an
+explicit row for a source, or else instantiates the rule for an overlay this
+node authored whose name `workspace_applications` accepts: component and
+namespace `app.<overlay_id>`, the application `app.<overlay_id>:app`, the
+rule's approval policy, kinds, modules, admission policies and thread access,
+and a private overlay owner per destination workspace. The instance is
+measured into the policy digest exactly like an explicit row. Availability
+lists this node's versions the selected profile publishes, boot recovery
+follows every desired slot whose source the host still selects for that owner,
+and the application catalog admits a governed admission record only while its
+source's selected profile names the same owner and bindings.
+
 Host profiles now select `resolver: hub` or `resolver: overlay`; omitted legacy
 values decode as `hub`. The private-overlay resolver consumes exact immutable
 Sync artifact definitions and preserves their registry IDs. It assigns package

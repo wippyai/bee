@@ -52,7 +52,7 @@ entries:
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
-  modules: [registry]
+  modules: [registry, system]
   imports:
     contract: bee.protocol:application
     activation_profiles: bee.governance:activation_profile_decoder

@@ -193,7 +193,9 @@ local function define_tests()
             local delivery_required = delivery_schema.required :: {string}
             local delivery_properties = delivery_schema.properties :: {[string]: unknown}
             local delivery_operation = delivery_properties.operation :: {[string]: unknown}
-            test.eq(#delivery_required, 4)
+            test.eq(#delivery_required, 3)
+            for _, field in ipairs(delivery_required) do test.is_true(field ~= "workspace_id") end
+            test.not_nil(delivery_properties.workspace_id)
             test.not_nil(delivery_properties.source_overlay_id)
             test.is_nil(delivery_properties.source_workspace)
             test.eq(#(delivery_operation.enum :: {string}), 2)
@@ -222,9 +224,22 @@ local function define_tests()
             test.eq(#publish_tools, 1)
             test.eq(mcp.tool("publish") and mcp.tool("publish").operation, "bee.governance.binding:delivery_call")
             local publish_schema = publish_tools[1].inputSchema :: {[string]: unknown}
-            test.eq(#(publish_schema.required :: {string}), 3)
+            test.eq(#(publish_schema.required :: {string}), 2)
             local publish_request = mcp.publish_arguments({arguments = {workspace_id = "ws", source_overlay_id = "src", version = "1.0.1"}})
             test.eq(publish_request and publish_request.operation, "publish")
+            -- An omitted destination is the binding's own workspace; the
+            -- bound-workspace check below still refuses any other.
+            local defaulted_publish = mcp.publish_arguments({arguments = {source_overlay_id = "src", version = "1.0.1"}}, "ws")
+            test.eq(defaulted_publish and defaulted_publish.workspace_id, "ws")
+            local _, unbound_publish = mcp.publish_arguments({arguments = {source_overlay_id = "src", version = "1.0.1"}}, nil)
+            test.not_nil(unbound_publish)
+            local digest = string.rep("0", 64)
+            local defaulted_delivery = mcp.delivery_arguments({arguments = {operation = "request", source_overlay_id = "src",
+                version = "1.0.1", snapshot_digest = digest}}, "ws")
+            test.eq(defaulted_delivery and defaulted_delivery.workspace_id, "ws")
+            local named_delivery = mcp.delivery_arguments({arguments = {operation = "request", workspace_id = "other",
+                source_overlay_id = "src", version = "1.0.1", snapshot_digest = digest}}, "ws")
+            test.eq(named_delivery and named_delivery.workspace_id, "other")
             local _, publish_smuggle = mcp.publish_arguments({arguments = {workspace_id = "ws", source_overlay_id = "src", version = "1.0.1", operation = "request"}})
             test.eq(publish_smuggle, "unknown field operation")
             local _, publish_workspace = mcp.publish_arguments({arguments = {workspace_id = "ws", source_workspace = "src", version = "1.0.1"}})

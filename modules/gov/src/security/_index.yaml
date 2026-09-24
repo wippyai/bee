@@ -68,6 +68,13 @@ entries:
     actions: [registry.get]
     resources: [bee.governance:publication_profiles]
     effect: allow
+- name: delivery_node_read_policy
+  kind: security.policy
+  meta: {comment: The delivery facade reads this node's identity, the source of every version it publishes}
+  policy:
+    actions: [system.read]
+    resources: [node]
+    effect: allow
 - name: delivery_facade_policy
   kind: security.policy
   meta: {comment: Public delivery facade dependencies; profile access is injected as one exact host-selected entry}

@@ -95,6 +95,7 @@ func TestPlanAnswersHelpBeforeProjectSelection(t *testing.T) {
 			"bee NAME [ARGUMENTS...]",
 			"bee MODULE:ENTRY [ARGUMENTS...]",
 			"bee start",
+			"bee stop",
 			"bee daemon",
 			"bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT",
 			"bee workspace list [--archived] [--after CURSOR]",

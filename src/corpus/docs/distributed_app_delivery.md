@@ -59,7 +59,8 @@ not receive direct overlay-store access. `workspace_id` is not an authoring
 alias; public authoring calls use `overlay_id`.
 
 The `delivery` tool can request delivery of a frozen artifact and read a
-staged version's review, selection and activation status. The `publish` tool
+staged version's review, selection and activation status. Its destination is
+the agent's own workspace unless it names that workspace explicitly. The `publish` tool
 can publish only an exact locally reviewed and applied version, and a host may
 place it behind an approved access trait. Neither tool can approve, activate or
 write an overlay. People review in Overlays and decide in Approvals; the
@@ -68,6 +69,32 @@ activation owner performs the apply.
 Delivery requests retain `workspace_id` for the destination runtime target and
 `source_overlay_id` for the authoring identity. Internal services may use other
 storage fields, but those are not public authoring vocabulary.
+
+## Workspace applications
+
+A fresh install delivers an application a workspace's own agent authors to
+that workspace without host configuration, and still only after the person
+approves it. The shipped `bee.governance:publication_profiles` sets
+`workspace_applications: true`, and the shipped
+`bee.governance:activation_profiles` carries a `workspace_applications` rule:
+the approval policy (`workspace-application-delivery`, decided in Approvals by
+the person, as `bee:approver_policies` ships it), the admitted entry kinds and
+native modules, and the admission policies and thread access of the one
+application entry.
+
+The rule applies only to an overlay this node authored whose name is lowercase
+letters, digits and underscores starting with a letter. Overlay `todo` gets
+component and namespace `app.todo`, the application entry `app.todo:app` under
+the ordinary application boundary, and the private overlay owner
+`bee.governance.workspace_applications:<workspace_id>.todo`. An explicit
+profile row for the same source takes precedence. A source the rule does not
+cover is refused with the rule and the profile entries a host adds.
+
+A person reviews the staged plan in Start › Tools › Overlays, selects and
+prepares it there, approves the request in Start › Tools › Approvals, and lets
+Overlays step the activation owner until it settles; the application then
+appears in the Start menu. `make workspace-app-delivery-check` proves this path
+on the unmodified composition.
 
 ## Limits
 

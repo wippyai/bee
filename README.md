@@ -53,7 +53,7 @@ bee
 
 Each project directory gets its own state and owner. Keys: **F1** Start menu,
 **Alt+Tab** switch apps, **F11** maximize, **Ctrl+Q** detach, **F12** replace
-the presenter.
+the presenter. Detaching leaves the project's owner running; `bee stop` ends it.
 
 Managed agents:
 

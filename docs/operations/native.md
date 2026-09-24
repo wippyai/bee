@@ -210,6 +210,7 @@ bee client [WORKSPACE DISPLAY]   join a running Bee with control; on a node with
 bee attach WORKSPACE DISPLAY     join one display of a running Bee with control
 bee desktops                     list the displays of a running Bee
 bee start                        run this project's retained owner in the foreground
+bee stop                         stop this project's owner and report when it has stopped
 bee daemon                       run this folder's node in the foreground without a folder workspace;
                                  it serves the workspaces of its catalog to clients
 bee workspace list [--archived] [--after CURSOR]

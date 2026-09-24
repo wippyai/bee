@@ -91,6 +91,12 @@ app-journey-check: fixture-gateway-client
 # and 160x48.
 app-dashboard-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_dashboard.py
+.PHONY: workspace-app-delivery-check
+# A managed agent builds an application to a written spec on the shipped host
+# profiles: overlay, freeze and delivery request through its gateway tools,
+# review in Overlays, approval in Approvals, apply, open from Start, restore.
+workspace-app-delivery-check: fixture-gateway-client
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/workspace_app_delivery.py
 .PHONY: delivery-review-check
 # What a person approves: the destination's own verdict, the diagnostics that
 # block it, the entry set the plan changes, and the approval and activation
@@ -304,6 +310,7 @@ desktop-delivery-app-journey-check:
 	$(MAKE) app-journey-check WIPPY="$(abspath $(WIPPY))"
 desktop-delivery-review-check:
 	$(MAKE) delivery-review-check WIPPY="$(abspath $(WIPPY))"
+	$(MAKE) workspace-app-delivery-check WIPPY="$(abspath $(WIPPY))"
 desktop-delivery-hive-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" go run tests/hive_manager_app.go
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/timeline_app.py

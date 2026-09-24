@@ -139,7 +139,11 @@ Hive node are not listed or addressable: Hive forwards only the thread owner's
 `send` and `send_status`, and bindings, reads and waits stay node-local.
 
 `delivery` requests delivery of a frozen artifact and reads a staged version's
-review, selection and activation state. `publish` publishes only the exact
+review, selection and activation state; its destination defaults to the
+session's own workspace. An overlay named by the workspace-application rule
+(overlay `todo`, namespace `app.todo`, application `app.todo:app`) is admitted
+by the shipped host profiles, so an installed agent can deliver an application
+to its workspace without host configuration. `publish` publishes only the exact
 locally reviewed and applied version, and can require an approved trait. Neither
 tool writes an overlay or makes an approval decision.
 

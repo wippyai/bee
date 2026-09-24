@@ -5,5 +5,9 @@ entries:
   kind: registry.entry
   meta:
     type: bee.approval_policies
-    comment: Host-owned approver policies; an empty list admits no request
-  policies: []
+    comment: Host-owned approver policies; a request names one, and only its approvers decide it
+  policies:
+  - name: workspace-application-delivery
+    approvers:
+    - definition_id: bee.inbox:app
+    max_ttl_ms: 600000

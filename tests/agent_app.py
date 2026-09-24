@@ -74,7 +74,7 @@ def configure_source_node(project):
 def configure_continuous_source(project, workspace_id):
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") != "1":
         return
-        governance_path = project / "modules/gov/src/_index.yaml"
+    governance_path = project / "src/governance/_index.yaml"
     governance = yaml.safe_load(governance_path.read_text())
     publication = next(item for item in governance["entries"] if item["name"] == "publication_profiles")
     publication["data"] = {"profiles": [{"workspace_id": workspace_id,

@@ -323,8 +323,10 @@ func runGatewayAt(url, authorization string) int {
 	if marker := os.Getenv("BEE_FIXTURE_GATEWAY_WORKER"); marker != "" {
 		reportWorker(client, url, authorization, report, marker)
 	}
-	if os.Getenv("BEE_FIXTURE_GATEWAY_AUTHOR") != "" {
-		reportAuthoring(client, url, authorization, report, os.Getenv("BEE_FIXTURE_GATEWAY_AUTHOR"))
+	if mode := os.Getenv("BEE_FIXTURE_GATEWAY_AUTHOR"); mode == "spec" {
+		reportSpecAuthoring(client, url, authorization, report)
+	} else if mode != "" {
+		reportAuthoring(client, url, authorization, report, mode)
 	}
 	if os.Getenv("BEE_FIXTURE_GATEWAY_APP_OPEN") != "" {
 		reportApplicationOpen(client, url, authorization, report)
@@ -644,6 +646,63 @@ func reportAuthoring(client *httpClient, url, authorization string, report objec
 		"expected_revision": 2, "idempotency_key": "freeze-" + source}, 40)["value"])
 	report["author_snapshot_digest"] = frozen["digest"]
 	reportAuthorDelivery(call, report, destination, source, version, frozen["digest"])
+}
+
+// The scripted agent for a written spec. A model reads the spec and writes
+// entries.json; this client stands in for that model with the answer the
+// acceptance supplies in BEE_FIXTURE_AUTHOR_ENTRIES, and otherwise uses only
+// the admitted MCP tools an installed agent holds: the guide, its own overlay
+// and a delivery request that names no workspace, so the destination is the
+// binding's own. It reports the destination's verdict and the staged status.
+func reportSpecAuthoring(client *httpClient, url, authorization string, report object) {
+	call := func(name string, args object, id int) object {
+		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
+	}
+	names, _ := toolsOf(rpc(client, url, authorization, "tools/list", object{}, 50))
+	report["author_tools"] = names
+	guideValue := mustObject(call("overlay", object{"operation": "guide"}, 51)["value"])
+	document, _ := guideValue["document"].(string)
+	report["guide_revision"] = guideValue["revision"]
+	report["guide_names_rule"] = strings.Contains(document, "app.<overlay_id>:app")
+	source := os.Getenv("BEE_FIXTURE_AUTHOR_SOURCE")
+	version := os.Getenv("BEE_FIXTURE_AUTHOR_VERSION")
+	entries, err := os.ReadFile(os.Getenv("BEE_FIXTURE_AUTHOR_ENTRIES"))
+	if source == "" || version == "" || err != nil {
+		report["authoring_error"] = "spec authoring inputs are missing"
+		return
+	}
+	created := call("overlay", object{"operation": "create", "overlay_id": source,
+		"expected_revision": 0, "idempotency_key": "create-" + source}, 52)
+	report["create_ok"] = created["ok"]
+	put := call("overlay", object{"operation": "put", "overlay_id": source, "expected_revision": 1,
+		"idempotency_key": "put-entries-" + source, "path": "entries.json", "content": string(entries)}, 53)
+	report["put_ok"] = put["ok"]
+	frozen := mustObject(call("overlay", object{"operation": "freeze", "overlay_id": source,
+		"expected_revision": 2, "idempotency_key": "freeze-" + source}, 54)["value"])
+	snapshot := frozen["digest"]
+	report["snapshot_digest"] = snapshot
+	delivered := call("delivery", object{"operation": "request", "source_overlay_id": source,
+		"version": version, "snapshot_digest": snapshot}, 55)
+	report["delivery_ok"] = delivered["ok"]
+	report["delivery_code"] = delivered["code"]
+	report["delivery_message"] = delivered["message"]
+	if value := mustObject(delivered["value"]); value != nil {
+		report["delivery_ready"] = value["ready"]
+		report["delivery_diagnostics"] = value["diagnostics"]
+		report["delivery_plan_digest"] = value["plan_digest"]
+		report["delivery_component"] = value["component"]
+		report["delivery_remedy"] = value["remedy"]
+		if steps, ok := value["human_steps"].([]any); ok {
+			report["delivery_human_steps"] = len(steps)
+		}
+	}
+	status := call("delivery", object{"operation": "status", "source_overlay_id": source, "version": version}, 56)
+	report["status_ok"] = status["ok"]
+	report["status_message"] = status["message"]
+	if value := mustObject(status["value"]); value != nil {
+		report["status_plan_digest"] = value["plan_digest"]
+		report["status_selected"] = value["selected"]
+	}
 }
 
 func reportAuthorDelivery(call func(string, object, int) object, report object, workspace, source, version string, snapshot any) {

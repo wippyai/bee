@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
@@ -44,6 +45,8 @@ type clientSeams struct {
 	waitEnrolled func(ctx context.Context, state, node string, public ed25519.PublicKey) error
 	// report receives the foreground route line.
 	report io.Writer
+	// stop ends the owner of state gracefully.
+	stop func(ctx context.Context, state string) error
 }
 
 // clientIntent is what one ordinary invocation asks of the retained owner.
@@ -173,6 +176,7 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 			return err
 		}
 	}
+	started := !owned
 	if !owned {
 		previous, err := seams.waitDescriptor(ctx, directory)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -217,8 +221,36 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		}
 	}
 	join.State = launch.State
-	return seams.join(ctx, join)
+	if err := seams.join(ctx, join); err != nil {
+		// An owner started only for a command it refused retains no desktop.
+		// Another client that joined it meanwhile keeps it running.
+		var refused *refusedCommand
+		if started && errors.As(err, &refused) {
+			shared, sharedErr := otherClients(launch.State, join.Node)
+			if sharedErr != nil {
+				return errors.Join(err, sharedErr)
+			}
+			if !shared {
+				return errors.Join(err, seams.stop(ctx, launch.State))
+			}
+		}
+		return err
+	}
+	// A presenting client detaches from a retained owner; say it still runs
+	// and how to end it.
+	if join.Intent.hive != nil || join.Intent.catalog != nil || join.Intent.listing {
+		return nil
+	}
+	running, err := seams.owned(launch.State)
+	if err != nil || !running {
+		return err
+	}
+	_, err = io.WriteString(seams.report, detachedLine)
+	return err
 }
+
+// detachedLine follows a detached desktop client whose owner keeps running.
+const detachedLine = "Bee is still running; bee stop ends it\n"
 
 // waitDescriptorOrExit waits for a publication that differs from previous,
 // the descriptor present before this client started an owner. The runtime
@@ -307,6 +339,28 @@ func enrollClient(ctx context.Context, state, node string, public ed25519.Public
 		removed := os.Remove(key)
 		return errors.Join(removed, unlock(), os.Remove(filepath.Join(trusted, clientLockName(node))))
 	}, nil
+}
+
+// refusedCommand is the owner's refusal of the application command a client
+// asked it to launch.
+type refusedCommand struct{ cause error }
+
+func (e *refusedCommand) Error() string { return e.cause.Error() }
+func (e *refusedCommand) Unwrap() error { return e.cause }
+
+// otherClients reports whether a client other than node is enrolled.
+func otherClients(state, node string) (bool, error) {
+	entries, err := os.ReadDir(ownerTrustedDirectory(state))
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasSuffix(name, ".pub") && name != node+".pub" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // clientLockName is the liveness lock a joined client holds for its node.

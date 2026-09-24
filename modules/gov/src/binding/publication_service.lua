@@ -15,12 +15,11 @@ local sync_resources = require("sync_resources")
 local transaction = require("transaction")
 local materializer = require("materializer")
 local application_admission = require("application_admission")
+local publication_profiles = require("publication_profiles")
 
 local M = {}
-local MAX_PROFILES = 64
 type Object = {[string]: unknown}
-type Profile = {workspace_id: string, source_workspace: string, component: string, overlay_owner: string}
-type Configuration = {profiles: {Profile}}
+type Profile = publication_profiles.Profile
 type Result = transaction.Result
 
 local function failure(code: string, message: string): Result
@@ -53,45 +52,10 @@ function M.artifact_refusal(code: string, message: string?): Result
         or "authored entries are not a JSON list"), remedy)
 end
 
-function M.configuration(raw: unknown): (Configuration?, string?)
-    local value = bounds.object(raw)
-    local rows = value and value.profiles
-    if not value or bounds.fields(value, {"profiles"}) or type(rows) ~= "table" then
-        return nil, "publication profiles must be an object with a profile list"
-    end
-    local source = rows :: table
-    local count = 0
-    for key in pairs(source) do
-        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "publication profiles must be a dense list" end
-        count = count + 1
-    end
-    if count > MAX_PROFILES then return nil, "publication profile capacity is exceeded" end
-    local profiles: {Profile} = {}
-    local seen: {[string]: boolean} = {}
-    for index = 1, count do
-        local item = bounds.object(source[index])
-        if not item or bounds.fields(item, {"workspace_id", "source_workspace", "component", "overlay_owner"}) then
-            return nil, "publication profile is malformed"
-        end
-        local workspace_id, source_workspace = bounds.id(item.workspace_id), bounds.id(item.source_workspace)
-        local component = bounds.text(item.component, 160)
-        local overlay_owner = bounds.id(item.overlay_owner)
-        if not workspace_id or not source_workspace or not component or component == "" or not overlay_owner then
-            return nil, "publication profile identity is invalid"
-        end
-        local key = workspace_id .. "\n" .. component
-        if seen[key] then return nil, "publication profile identity is duplicated" end
-        seen[key] = true
-        profiles[#profiles + 1] = {workspace_id = workspace_id, source_workspace = source_workspace,
-            component = component, overlay_owner = overlay_owner}
-    end
-    return {profiles = profiles}, nil
-end
-
-local function load(): (Configuration?, string?)
+local function load(): (publication_profiles.Configuration?, string?)
     local entry, entry_error = resources.publication_profiles()
     if not entry then return nil, tostring(entry_error or "publication profiles are unavailable") end
-    return M.configuration(entry.data)
+    return publication_profiles.decode(entry.data)
 end
 
 -- Returns the measured artifact, or a named refusal code with its reason. The
@@ -112,13 +76,6 @@ function M.snapshot_artifact(raw: unknown): (unknown?, string?, string?)
     local measured, artifact_error = artifact.create(decoded)
     if not measured then return nil, artifact_error or "authored entries are invalid", "INVALID_ARTIFACT" end
     return measured, nil, nil
-end
-
-local function chosen_profile(config: Configuration, workspace_id: string, component: string): Profile?
-    for _, item in ipairs(config.profiles) do
-        if item.workspace_id == workspace_id and item.component == component then return item end
-    end
-    return nil
 end
 
 -- Publication transfers the portable artifact only, after proving that the
@@ -187,8 +144,11 @@ function M.call(raw: unknown): Result
     end
     local config, config_error = load()
     if not config then return failure("UNAVAILABLE", config_error or "publication configuration is unavailable") end
-    local chosen = chosen_profile(config, workspace_id, component)
-    if not chosen then return failure("BLOCKED", "host has no publication profile for this application") end
+    local chosen, refused = publication_profiles.for_component(config, workspace_id, component)
+    if not chosen then
+        local reason = refused or {message = "publication profile is unavailable", remedy = ""}
+        return refusal("BLOCKED", reason.message, reason.remedy)
+    end
 
     local node_id, node_error = system.node.id()
     local governance_resource, governance_error = resources.database()

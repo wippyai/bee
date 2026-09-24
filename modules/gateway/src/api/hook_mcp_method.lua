@@ -51,8 +51,12 @@ local function handle(): nil
         local fault = reply.error or {code = "STORAGE", message = "hook"}
         answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, fault.code .. ": " .. fault.message)); return nil
     end
+    -- Codex reads a hook tool's text content as hook stdout: Stop requires
+    -- JSON there, and other events turn plain text into model context. An
+    -- observer answers no text; the receipt travels as structured content.
     local outcome = reply.value :: Object
-    answer(response, http.STATUS.OK, mcp.result(call.id, {content = {{type = "text", text = tostring(outcome.status) .. " " .. tostring(outcome.event_id)}}, isError = false}))
+    answer(response, http.STATUS.OK, mcp.result(call.id, {content = table.create(1, 0),
+        structuredContent = {status = outcome.status, event_id = outcome.event_id}, isError = false}))
     return nil
 end
 return {handle = handle}

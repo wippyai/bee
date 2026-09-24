@@ -569,6 +569,31 @@ function M.close(store: Store): (boolean, string?)
     if released ~= true or err then return false, "close governance activation database" end
     return true, nil
 end
+local MAX_DESIRED_SLOTS = 1024
+
+-- Every workspace slot on this node that holds an authorized desired intent,
+-- in a stable order. Boot recovery follows exactly these slots.
+function M.desired_slots(resource: string, node_raw: string): Result
+    if type(resource) ~= "string" or resource == "" then return failure("UNAVAILABLE", "governance activation database is not linked") end
+    local node = id(node_raw)
+    if not node then return failure("INVALID", "governance activation node is invalid") end
+    local db, err = database.open({resource = resource, ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
+    if not db then return failure("UNAVAILABLE", tostring(err or "open governance activation database")) end
+    local result = transaction.read(db, "governance activation", function(tx): Result
+        local rows, query_error = tx:query("SELECT workspace_id, overlay_owner FROM bee_governance_activation_slots WHERE owner_node = ? AND desired_intent_id IS NOT NULL ORDER BY workspace_id, overlay_owner LIMIT ?", {node, MAX_DESIRED_SLOTS + 1})
+        if query_error or not rows then return storage(query_error, "list desired activation slots") end
+        if #rows > MAX_DESIRED_SLOTS then return failure("CAPACITY", "desired activation slots exceed their bound") end
+        local slots: {Object} = {}
+        for _, row in ipairs(rows) do
+            local workspace_id, overlay_owner = id(row.workspace_id), id(row.overlay_owner)
+            if not workspace_id or not overlay_owner then return failure("INTERNAL", "desired activation slot is malformed") end
+            slots[#slots + 1] = {workspace_id = workspace_id, overlay_owner = overlay_owner}
+        end
+        return transaction.success({slots = slots}, false)
+    end)
+    db:release()
+    return result
+end
 function M.open(resource: string, node_raw: string, workspace_raw: string): (Store?, string?)
     if type(resource) ~= "string" or resource == "" then return nil, "governance activation database is not linked" end
     local node, workspace = id(node_raw), id(workspace_raw)

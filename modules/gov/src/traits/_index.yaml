@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://guide.lua
   modules: [json]
-  imports: {preflight: bee.governance:preflight}
+  imports: {preflight: bee.governance:preflight, workspace_applications: bee.governance:workspace_applications}
 - name: authoring_trait
   kind: registry.entry
   meta:
@@ -22,7 +22,7 @@ entries:
     title: Application delivery
     comment: Request delivery of a frozen application and read its status; publishing the reviewed version is separately gated and still leaves approval to others
   prompt: |
-    Use the delivery tool to request delivery of an application you froze: pass operation request with the destination `workspace_id`, your source `source_overlay_id`, the version and the frozen `snapshot_digest`. The destination workspace is the runtime target; the source overlay is the caller-owned artifact you froze. It publishes your frozen artifact as immutable content, stages that exact version at this destination and returns the destination's own preflight verdict, with a diagnostic code, target, message and remedy for each finding. Repair a refusal and freeze again. When the verdict is ready the person must review and select the plan in Overlays, prepare the activation there, approve it in Approvals, and the activation owner applies the overlay; opening it is the person's act from the start menu. Read its status operation with the same identities, and with an intent_id once the person has prepared it, to see the review, selection and activation outcome. You cannot review, select, approve or apply, and you never write an overlay. Publishing the exact reviewed and applied version is a separate, host-requested capability; ask for it, and publish only after the person's apply succeeds.
+    Use the delivery tool to request delivery of an application you froze: pass operation request with your source `source_overlay_id`, the version and the frozen `snapshot_digest`; `workspace_id` defaults to your own workspace, the only destination you may name. Name the overlay and its entries by the guide's workspace-application rule (overlay `todo` holds namespace `app.todo` and the application `app.todo:app`) so this workspace's host profile admits it. It publishes your frozen artifact as immutable content, stages that exact version at this destination and returns the destination's own preflight verdict, with a diagnostic code, target, message and remedy for each finding. Repair a refusal and freeze again. When the verdict is ready the person must review and select the plan in Overlays, prepare the activation there, approve it in Approvals, and the activation owner applies the overlay; opening it is the person's act from the start menu. Read its status operation with the same identities, and with an intent_id once the person has prepared it, to see the review, selection and activation outcome. You cannot review, select, approve or apply, and you never write an overlay. Publishing the exact reviewed and applied version is a separate, host-requested capability; ask for it, and publish only after the person's apply succeeds.
   tools: [bee.governance.binding:delivery_call]
 - name: application_publish_trait
   kind: registry.entry

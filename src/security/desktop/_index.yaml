@@ -3,9 +3,12 @@ namespace: bee
 entries:
 - name: broker_policy
   kind: security.policy.expr
+  meta:
+    comment: The broker reads only this node's identity, to select the host profile of a governed application this node authored
   policy:
-    expression: action != "process.host" || resource == "bee:workers"
+    expression: (action != "process.host" || resource == "bee:workers") && (action != "system.read" || resource == "node")
     actions:
+    - system.read
     - tty.mount
     - tty.observe
     - tty.input

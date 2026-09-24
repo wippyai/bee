@@ -1,13 +1,12 @@
 -- Read only protected bindings; app metadata cannot select its own permissions.
 local registry = require("registry")
+local system = require("system")
 local contract = require("contract")
 local activation_profiles = require("activation_profiles")
 local governed_admission = require("governed_admission")
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {id: string, kind: string, meta: Object?, data: Object}
-type Profile = {workspace_id: string, source_node: string, source_workspace: string,
-    overlay_owner: string, applications: {Object}?}
 type Selection = {revision: string, evidence: string, bindings: {contract.Binding}, items: {contract.Descriptor}}
 
 local function static_bindings(entry: Entry?): {contract.Binding}
@@ -68,92 +67,74 @@ local function items(bindings: {contract.Binding}, pinned: registry.Snapshot): {
     return result
 end
 
-local function same_binding(left: Object, right: Object): boolean
+local function same_binding(left: Object, right: governed_admission.Binding): boolean
     if left.definition_id ~= right.definition_id or left.thread_access ~= right.thread_access then return false end
-    local left_policies, right_policies = left.policies, right.policies
-    if type(left_policies) ~= "table" or type(right_policies) ~= "table" or #left_policies ~= #right_policies then return false end
-    for index, policy in ipairs(left_policies) do if policy ~= right_policies[index] then return false end end
+    local left_policies = left.policies
+    if type(left_policies) ~= "table" or #left_policies ~= #right.policies then return false end
+    for index, policy in ipairs(left_policies) do if policy ~= right.policies[index] then return false end end
     return true
 end
 
-local function matching_profile(record: Object, profiles: {Profile}): (Profile?, string?)
-    local selected: Profile? = nil
-    for _, profile in ipairs(profiles) do
-        if profile.workspace_id == record.workspace_id and profile.overlay_owner == record.overlay_owner
-            and profile.source_node == record.source_node and profile.source_workspace == record.source_workspace then
-            if selected then return nil, "application admission profile is ambiguous" end
-            selected = profile
-        end
-    end
-    return selected, nil
-end
-
 type Lookup = (string) -> Entry?
-local function governed(lookup: Lookup, configuration: {profiles: {Profile}}, workspace_id: string): ({contract.Binding}, {string})
-    local by_owner: {[string]: {Profile}} = {}
-    for _, profile in ipairs(configuration.profiles) do
-        if profile.workspace_id == workspace_id and profile.applications and #profile.applications > 0 then
-            local rows = by_owner[profile.overlay_owner]
-            if not rows then rows = {}; by_owner[profile.overlay_owner] = rows end
-            rows[#rows + 1] = profile
-        end
-    end
-    local owners: {string} = {}
-    for owner in pairs(by_owner) do owners[#owners + 1] = owner end
-    table.sort(owners)
-    local result: {contract.Binding} = {}
-    local evidence: {string} = {}
-    for _, owner in ipairs(owners) do
-        local owner_profiles = by_owner[owner]
-        if not owner_profiles then error("Application admission owner disappeared") end
-        local admission_id, id_error = governed_admission.id(owner)
-        if not admission_id then error(tostring(id_error)) end
-        local entry = lookup(admission_id)
-        if entry then
-            if entry.kind ~= "registry.entry" then error("Invalid governed application admission") end
+type Measured = {id: string, bytes: string, digest: string, record: governed_admission.Record}
+
+-- Each governed admission record carried by an applied overlay joins this
+-- workspace's catalog only while the host profile selected for its source
+-- still names that overlay owner and projects the same measured bindings.
+local function governed(pinned: registry.Snapshot, lookup: Lookup,
+    configuration: activation_profiles.DecodedConfiguration, workspace_id: string,
+    node_id: string): ({contract.Binding}, {string})
+    local records: {Measured} = {}
+    for _, entry in ipairs(pinned:find({[".kind"] = "registry.entry", [".ns"] = governed_admission.NAMESPACE})) do
+        if governed_admission.reserved(entry.id) then
             local measured, measured_error = governed_admission.measure(entry.data)
-            if not measured or measured.id ~= admission_id then
+            if not measured or measured.id ~= entry.id then
                 error("Invalid governed application admission: " .. tostring(measured_error))
             end
-            local record: Object = measured.record
-            if record.workspace_id == workspace_id then
-                local profile, profile_error = matching_profile(record, owner_profiles)
-                if profile_error then error(profile_error) end
-                if profile and profile.applications then
-                    local artifacts: {Object} = {}
-                    local policies: {Object} = {}
-                    local policy_ids: {[string]: boolean} = {}
-                    local complete = true
-                    for _, binding in ipairs(profile.applications) do
-                        local definition = lookup(binding.definition_id :: string)
-                        if not definition then complete = false; break end
-                        artifacts[#artifacts + 1] = definition
-                        for _, policy_id in ipairs(binding.policies :: {string}) do policy_ids[policy_id] = true end
-                    end
-                    if complete then
-                        for policy_id in pairs(policy_ids) do
-                            local policy = lookup(policy_id)
-                            if not policy then complete = false; break end
-                            policies[#policies + 1] = policy
-                        end
-                    end
-                    local projected = complete and governed_admission.project({workspace_id = profile.workspace_id,
-                        overlay_owner = profile.overlay_owner, source_node = profile.source_node,
-                        source_workspace = profile.source_workspace, artifact_digest = record.artifact_digest,
-                        bindings = profile.applications, artifact_entries = artifacts,
-                        registry_entries = policies, overlay_ids = {}}) or nil
-                    if projected and projected.bytes == measured.bytes then
-                        for index, raw in ipairs(profile.applications) do
-                            if not same_binding(raw, measured.record.bindings[index] :: Object) then
-                                error("Governed application admission binding order changed")
-                            end
-                            local binding = contract.binding(raw)
-                            if not binding then error("Invalid governed application binding") end
-                            result[#result + 1] = binding
-                        end
-                        evidence[#evidence + 1] = measured.digest
-                    end
+            if measured.record.workspace_id == workspace_id then records[#records + 1] = measured end
+        end
+    end
+    table.sort(records, function(left: Measured, right: Measured): boolean return left.id < right.id end)
+    local result: {contract.Binding} = {}
+    local evidence: {string} = {}
+    for _, item in ipairs(records) do
+        local record = item.record
+        local profile = activation_profiles.select_decoded(configuration,
+            workspace_id, record.source_node, record.source_workspace, node_id)
+        if profile and profile.overlay_owner == record.overlay_owner and profile.applications then
+            local artifacts: {Object} = {}
+            local policies: {Object} = {}
+            local policy_ids: {[string]: boolean} = {}
+            local complete = true
+            for _, binding in ipairs(profile.applications) do
+                local definition = lookup(binding.definition_id :: string)
+                if not definition then complete = false; break end
+                artifacts[#artifacts + 1] = definition
+                for _, policy_id in ipairs(binding.policies :: {string}) do policy_ids[policy_id] = true end
+            end
+            if complete then
+                for policy_id in pairs(policy_ids) do
+                    local policy = lookup(policy_id)
+                    if not policy then complete = false; break end
+                    policies[#policies + 1] = policy
                 end
+            end
+            local projected = complete and governed_admission.project({workspace_id = profile.workspace_id,
+                overlay_owner = profile.overlay_owner, source_node = profile.source_node,
+                source_workspace = profile.source_workspace, artifact_digest = record.artifact_digest,
+                bindings = profile.applications, artifact_entries = artifacts,
+                registry_entries = policies, overlay_ids = {}}) or nil
+            if projected and projected.bytes == item.bytes then
+                for index, raw in ipairs(profile.applications) do
+                    local measured_binding = record.bindings[index]
+                    if not measured_binding or not same_binding(raw, measured_binding) then
+                        error("Governed application admission binding order changed")
+                    end
+                    local binding = contract.binding(raw)
+                    if not binding then error("Invalid governed application binding") end
+                    result[#result + 1] = binding
+                end
+                evidence[#evidence + 1] = item.digest
             end
         end
     end
@@ -175,8 +156,10 @@ function M.read(workspace_id: string): Selection
     if not profile_entry or profile_entry.kind ~= "registry.entry" then error("Invalid activation profiles") end
     local configuration, configuration_error = activation_profiles.decode(profile_entry.data)
     if not configuration then error("Invalid activation profiles: " .. tostring(configuration_error)) end
+    local node_id, node_error = system.node.id()
+    if not node_id or node_error then error("Node identity is unavailable: " .. tostring(node_error)) end
     local bindings = static_bindings(lookup("bee:application_admission"))
-    local dynamic, evidence = governed(lookup, configuration :: {profiles: {Profile}}, workspace_id)
+    local dynamic, evidence = governed(pinned, lookup, configuration, workspace_id, node_id)
     local seen: {[string]: boolean} = {}
     for _, binding in ipairs(bindings) do seen[binding.definition_id] = true end
     for _, binding in ipairs(dynamic) do

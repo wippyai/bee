@@ -286,12 +286,13 @@ def exercise():
             # activation owner's receipt are what the ledger records.
             focus(ui, DELIVERY)
             ui.wait(READY_WORKSPACE, timeout=20)
-            for _ in range(8):
+            # Each Apply performs one durable transition and refuses a press
+            # while its request is in flight, so the next Apply follows the
+            # reply that shows the previous transition.
+            for phase in ("consuming", "authorized", "applying", "settled"):
                 ui.key(b"x")
-                if "settled  applied" in ui.text():
-                    break
-                ui.pump(.5)
-            ui.wait("settled  applied", timeout=COLD_BOOT)
+                ui.wait("Activation " + phase, timeout=20)
+            ui.wait("settled  applied", timeout=20)
             ui.wait("consumed  proposal", timeout=20)
             ui.wait("Receipt  overlay bee.delivery_review_probe:ready_overlay", timeout=20)
             ui.wait("Receipt  artifact " + evidence["ready_artifact_digest"][:12], timeout=20)

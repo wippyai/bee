@@ -355,16 +355,6 @@ local function define_tests()
                 if tostring(message:from()) == pid and message:payload():data() == wanted then return end
             end
         end
-        local function await_write(thread_id: string, wanted: string)
-            for _ = 1, 600 do
-                local _, records = kinds(thread_id)
-                for _, phase in ipairs(writes(records)) do
-                    if phase == wanted then return end
-                end
-                time.sleep("50ms")
-            end
-            error("write " .. wanted .. " never committed on " .. thread_id)
-        end
         -- Placement's record that the runner installed a generation: the old
         -- generation's input and acknowledgements are refused from then on.
         local function await_fenced(attempt_id: string, generation: integer)
@@ -382,22 +372,24 @@ local function define_tests()
             local thread_id = thread()
             local launch = request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_READ = "1", BEE_FIXTURE_PACE = "0.3"})
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
-            local old = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, nil, "write_intended")
+            local old = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, nil, "write_intended,write_settled")
             process.send(old, "bee.carrier.input", {write_id = "w5", data = "ping\n"})
             await_paused(paused, old, "write_intended")
             local replacement_pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil, nil, "checkpoint_read")
             await_paused(paused, replacement_pid, "checkpoint_read")
             -- The old carrier is not fenced yet: its write is accepted and
-            -- committed after the replacement read the checkpoint.
+            -- committed after the replacement read the checkpoint. It then
+            -- holds, so it commits nothing more until the replacement settles.
             process.send(old, "bee.carrier.continue", {go = true})
-            await_write(thread_id, "w5:accepted")
+            await_paused(paused, old, "write_settled")
             process.send(replacement_pid, "bee.carrier.continue", {go = true})
             local replacement = await_carrier(replacement_pid, "replacement")
             process.unlisten(paused)
             if not replacement.value then error("replacement failed: " .. tostring(replacement.error)) end
-            -- The runner stopped delivering to the fenced carrier; once the
-            -- replacement has settled, its next commit is refused.
+            -- Once the replacement has settled, the old carrier's next
+            -- commit is refused because the attempt has ended.
             process.send(old, "bee.carrier.input", {write_id = "late", data = "late\n"})
+            process.send(old, "bee.carrier.continue", {go = true})
             local stale = await_carrier(old, "old carrier")
             test.is_nil(stale.value)
             if not tostring(stale.error):find("INVALID_STATE: attempt has ended", 1, true) then error("old carrier ended with: " .. tostring(stale.error)) end

@@ -120,7 +120,9 @@ make standalone
 ```
 
 `make check` covers typed source, permissions, persistence, source/pack
-behavior and terminal acceptance. Use `make desktop-check` after `make pack`
+behavior and terminal acceptance. Release CI runs it as the Makefile's
+`check-shard-*` targets; a new `check` member joins one shard, and
+`make check-shards-check` fails until it does. Use `make desktop-check` after `make pack`
 when registry entries change and `make attachments-check` for host/client grant
 or revocation changes. Focused tests should exercise the real host wiring,
 negative permissions, retry, restart, cancellation and cleanup for the changed

@@ -283,14 +283,19 @@ func runGateway(mcpLiteral string) int {
 	if waitMS, err := strconv.Atoi(os.Getenv("BEE_FIXTURE_GATEWAY_WAIT")); err == nil && waitMS > 0 {
 		reportWait(client, url, authorization, report, readValue, waitMS)
 	}
-	if hold, err := strconv.ParseFloat(os.Getenv("BEE_FIXTURE_GATEWAY_HOLD"), 64); err == nil && hold > 0 {
-		timer := time.NewTimer(time.Duration(hold * float64(time.Second)))
+	// BEE_FIXTURE_GATEWAY_HOLD holds the child for that many seconds, or with
+	// "stop" until it is stopped, then presents its token once more.
+	holdSetting := os.Getenv("BEE_FIXTURE_GATEWAY_HOLD")
+	if hold, err := strconv.ParseFloat(holdSetting, 64); (err == nil && hold > 0) || holdSetting == "stop" {
+		var elapsed <-chan time.Time
+		if err == nil {
+			timer := time.NewTimer(time.Duration(hold * float64(time.Second)))
+			defer timer.Stop()
+			elapsed = timer.C
+		}
 		select {
-		case <-timer.C:
+		case <-elapsed:
 		case <-stopping:
-			if !timer.Stop() {
-				<-timer.C
-			}
 			report["after_hold"] = rpc(client, url, authorization, "tools/list", object{}, 5).status
 			writeReport("gateway", report)
 			return 143

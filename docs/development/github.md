@@ -43,9 +43,13 @@ bodies.
 
 ## Release boundary
 
+Pull requests and pushes run the short `Bee CI` path: the repository check,
+strict lint and the Lua unit suite. Release tags and manual runs add the sharded
+`make check`, the shared pack job and every platform build under the same
+required check.
 Release tags must be on `main` and use the documented semantic version format.
-The release workflow creates draft releases only after its required platform
-checks succeed. See [releasing](../operations/releasing.md) for artifact and publication
+The release workflow creates draft releases only after its required shard and
+platform checks succeed. See [releasing](../operations/releasing.md) for artifact and publication
 procedures.
 
 Use the repository check while changing workflow or security configuration:

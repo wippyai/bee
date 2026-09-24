@@ -1418,7 +1418,10 @@ local function settle_write(io: IO, session: Session, write_id: string, phase: s
     forget_write(session, write_id)
     local extra: {[string]: unknown} = {}
     if phase == "uncertain" then extra.reason = reason end
-    return M.commit(io, session, {control_record(session, write_id, phase, extra)})
+    local committed, commit_error = M.commit(io, session, {control_record(session, write_id, phase, extra)})
+    if not committed then return false, commit_error end
+    step(io, "write_settled")
+    return true, nil
 end
 function M.on_write_ack(io: IO, session: Session, sender: string, message: placement_protocol.InputAck): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end

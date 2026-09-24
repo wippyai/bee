@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/creack/pty"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/wippyai/bee/native/tests/processes"
 	"golang.org/x/sys/unix"
 )
 
@@ -667,22 +667,8 @@ func (d *desktop) close() {
 	}
 }
 
-type owner struct{ fd int }
-
-func cmdline(pid int) ([]string, error) {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-	if err != nil {
-		return nil, err
-	}
-	parts := bytes.Split(data, []byte{0})
-	args := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if len(part) != 0 {
-			args = append(args, string(part))
-		}
-	}
-	return args, nil
-}
+// owner holds one retained Bee owner for the fixture's cleanup.
+type owner struct{ handle *processes.Handle }
 
 func ownerArgsMatch(args []string, binary, state string) bool {
 	if len(args) == 0 || args[0] != binary {
@@ -700,70 +686,39 @@ func ownerArgsMatch(args []string, binary, state string) bool {
 	return stateMatch && startMatch
 }
 
-func ownerPidfd(pid int, binary, state string) (*owner, error) {
-	if runtime.GOOS != "linux" {
-		return nil, errors.New("native Agent acceptance requires Linux pidfd cleanup")
-	}
-	fd, err := unix.PidfdOpen(pid, 0)
+// holdOwner holds pid only while its arguments and program image still name
+// this fixture's owner.
+func holdOwner(pid int, binary, state string) (*owner, error) {
+	handle, err := processes.Hold(pid, func(args []string) bool { return ownerArgsMatch(args, binary, state) })
 	if err != nil {
 		return nil, err
 	}
-	executable, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
-	args, argsErr := cmdline(pid)
-	if err != nil || argsErr != nil || executable != binary || !ownerArgsMatch(args, binary, state) {
-		_ = unix.Close(fd)
+	executable, err := processes.Executable(pid)
+	if err != nil || executable != binary {
+		_ = handle.Close()
 		if err != nil {
 			return nil, err
 		}
-		if argsErr != nil {
-			return nil, argsErr
-		}
-		if executable != binary {
-			return nil, fmt.Errorf("executable changed to %q", executable)
-		}
-		return nil, errors.New("process identity changed before pidfd capture")
+		return nil, fmt.Errorf("executable changed to %q", executable)
 	}
-	return &owner{fd: fd}, nil
+	return &owner{handle: handle}, nil
 }
 
-func ownerPids(binary, state string) []int {
-	entries, _ := os.ReadDir("/proc")
-	result := make([]int, 0)
-	for _, entry := range entries {
-		var pid int
-		if _, err := fmt.Sscanf(entry.Name(), "%d", &pid); err != nil {
-			continue
-		}
-		args, err := cmdline(pid)
-		if err == nil && ownerArgsMatch(args, binary, state) {
-			result = append(result, pid)
-		}
-	}
-	sort.Ints(result)
-	return result
+func ownerPids(binary, state string) ([]int, error) {
+	return processes.Find(func(args []string) bool { return ownerArgsMatch(args, binary, state) })
 }
 
 func ownerChild(parent int, binary, state string, timeout time.Duration) (*owner, error) {
 	deadline := time.Now().Add(timeout)
 	var last string
 	for time.Now().Before(deadline) {
-		tasks, readErr := filepath.Glob(fmt.Sprintf("/proc/%d/task/*/children", parent))
-		last = fmt.Sprintf("tasks=%v read=%v", tasks, readErr)
-		for _, task := range tasks {
-			children, err := os.ReadFile(task)
-			if err != nil {
-				continue
-			}
-			for _, part := range strings.Fields(string(children)) {
-				var pid int
-				if _, err := fmt.Sscanf(part, "%d", &pid); err != nil {
-					continue
-				}
-				if candidate, err := ownerPidfd(pid, binary, state); err == nil {
-					return candidate, nil
-				} else {
-					last = fmt.Sprintf("pid=%d: %v", pid, err)
-				}
+		children, err := processes.Children(parent)
+		last = fmt.Sprintf("children=%v read=%v", children, err)
+		for _, pid := range children {
+			if candidate, err := holdOwner(pid, binary, state); err == nil {
+				return candidate, nil
+			} else {
+				last = fmt.Sprintf("pid=%d: %v", pid, err)
 			}
 		}
 		time.Sleep(25 * time.Millisecond)
@@ -771,69 +726,35 @@ func ownerChild(parent int, binary, state string, timeout time.Duration) (*owner
 	return nil, fmt.Errorf("retained owner did not appear for state %s (%s)", state, last)
 }
 
-func (o *owner) stop() error {
-	if o == nil {
+// release ends the held owner once; later calls find nothing to release.
+func (o *owner) release(end func(*processes.Handle) error) error {
+	if o == nil || o.handle == nil {
 		return nil
 	}
-	fd := o.fd
-	o.fd = -1
-	if fd < 0 {
-		return nil
-	}
-	defer unix.Close(fd)
-	wait := func(timeout time.Duration) bool {
-		poll := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
-		_, err := unix.Poll(poll, int(timeout/time.Millisecond))
-		return err == nil && poll[0].Revents != 0
-	}
-	if wait(0) {
-		return nil
-	}
-	if err := unix.PidfdSendSignal(fd, unix.SIGTERM, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
-		return err
-	}
-	if wait(10 * time.Second) {
-		return nil
-	}
-	if err := unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
-		return err
-	}
-	if !wait(5 * time.Second) {
-		return errors.New("fixture owner did not exit after SIGKILL")
+	handle := o.handle
+	o.handle = nil
+	defer handle.Close()
+	if err := end(handle); err != nil {
+		return fmt.Errorf("fixture owner: %w", err)
 	}
 	return nil
+}
+
+func (o *owner) stop() error {
+	return o.release(func(handle *processes.Handle) error { return handle.Stop(10 * time.Second) })
 }
 
 func (o *owner) kill() error {
-	if o == nil {
-		return nil
-	}
-	fd := o.fd
-	o.fd = -1
-	if fd < 0 {
-		return nil
-	}
-	defer unix.Close(fd)
-	wait := func(timeout time.Duration) bool {
-		poll := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
-		_, err := unix.Poll(poll, int(timeout/time.Millisecond))
-		return err == nil && poll[0].Revents != 0
-	}
-	if wait(0) {
-		return nil
-	}
-	if err := unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
-		return err
-	}
-	if !wait(5 * time.Second) {
-		return errors.New("fixture owner did not exit after SIGKILL")
-	}
-	return nil
+	return o.release((*processes.Handle).Kill)
 }
 
 func stopFixtureOwners(binary, state string) error {
-	for _, pid := range ownerPids(binary, state) {
-		candidate, err := ownerPidfd(pid, binary, state)
+	pids, err := ownerPids(binary, state)
+	if err != nil {
+		return err
+	}
+	for _, pid := range pids {
+		candidate, err := holdOwner(pid, binary, state)
 		if err != nil {
 			continue
 		}
@@ -885,7 +806,9 @@ func rawManagedAliasRefusal(binary string) error {
 	if err := refuseRawAlias(binary, project, state, home, 25*time.Second); err != nil {
 		return fmt.Errorf("cold owner: %w", err)
 	}
-	if len(ownerPids(binary, state)) == 0 {
+	if owners, err := ownerPids(binary, state); err != nil {
+		return err
+	} else if len(owners) == 0 {
 		return errors.New("the refused launch did not leave its retained owner running")
 	}
 	if err := refuseRawAlias(binary, project, state, home, 5*time.Second); err != nil {
@@ -1330,28 +1253,20 @@ func killRecoveryProcess(item recoveryPlacement) error {
 	if !recoveryIdentityValid(item) {
 		return errors.New("refusing cleanup of native process without a complete identity")
 	}
-	fd, err := unix.PidfdOpen(int(item.PID.Int64), 0)
+	handle, err := processes.Open(int(item.PID.Int64))
 	if err != nil {
 		if errors.Is(err, unix.ESRCH) {
 			return nil
 		}
 		return err
 	}
-	defer unix.Close(fd)
+	defer handle.Close()
 	alive, err := recoveryIdentityAlive(item)
 	if err != nil || !alive {
 		return err
 	}
-	if err := unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
-		return err
-	}
-	poll := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
-	_, err = unix.Poll(poll, 5000)
-	if err != nil {
-		return err
-	}
-	if poll[0].Revents == 0 {
-		return errors.New("identity-proven native process did not exit after cleanup")
+	if err := handle.Kill(); err != nil {
+		return fmt.Errorf("identity-proven native process: %w", err)
 	}
 	return nil
 }

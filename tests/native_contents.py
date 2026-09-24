@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 from native_workspace import NativeDesktop
-from native_client import stop_owner, live_owners, owner_pidfd
+from native_client import stop_owner, live_owners, hold_owner
 
 binary = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="bee-native-contents-") as directory:
@@ -63,5 +63,5 @@ with tempfile.TemporaryDirectory(prefix="bee-native-contents-") as directory:
     finally:
         ui.close()
         for pid in live_owners(binary, state):
-            stop_owner(owner_pidfd(pid, binary, state))
+            stop_owner(hold_owner(pid, binary, state))
 print("Native live Contents: public exact-version entries, definition preview, rejoin/resize, no installation and unchanged base passed")

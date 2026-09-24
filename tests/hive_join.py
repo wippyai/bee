@@ -17,6 +17,8 @@ import sys
 import tempfile
 import time
 
+from native_client import hold_owner, live_owners
+
 INVITE = re.compile(r'^bee-hive://[0-9a-f]{32}:[0-9a-f]{64}@127\.0\.0\.1:(\d+)/(bee-owner-[0-9a-f]{16})\?key=[0-9a-f]{64}$')
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -47,31 +49,22 @@ class Nodes:
         assert lines[0].startswith('NODE ') and lines[1].split() == ['PEER', 'SESSION'], lines
         return lines[0].split()[1], dict(line.split() for line in lines[2:])
 
-    def owners(self, name):
-        state = os.fsencode(str(self.state(name)))
-        found = []
-        for process in Path('/proc').iterdir():
-            if not process.name.isdecimal():
-                continue
-            try:
-                args = (process / 'cmdline').read_bytes().split(b'\0')
-            except OSError:
-                continue
-            if args and args[0] == os.fsencode(self.binary) and state in args and b'start' in args:
-                found.append(int(process.name))
-        return found
-
     def stop(self, name):
-        owners = self.owners(name)
-        for owner in owners:
-            os.kill(owner, signal.SIGTERM)
-        deadline = time.monotonic() + 20
-        while owners and time.monotonic() < deadline:
-            owners = [owner for owner in owners if Path(f'/proc/{owner}').exists()]
-            time.sleep(0.1)
-        for owner in owners:
-            os.kill(owner, signal.SIGKILL)
-        assert not owners, f'owner of {name} ignored SIGTERM'
+        state = self.state(name)
+        owners = [owner for owner in (hold_owner(pid, self.binary, state) for pid in live_owners(self.binary, state))
+                  if owner is not None]
+        try:
+            for owner in owners:
+                owner.send_signal(signal.SIGTERM)
+            deadline = time.monotonic() + 20
+            ignored = [owner for owner in owners if not owner.exited(max(0, deadline - time.monotonic()))]
+            for owner in ignored:
+                owner.send_signal(signal.SIGKILL)
+                owner.exited(5)
+            assert not ignored, f'owner of {name} ignored SIGTERM'
+        finally:
+            for owner in owners:
+                owner.close()
 
     def descriptor(self, name):
         return json.loads((self.state(name) / 'local-mesh' / 'mesh-owner.json').read_text())

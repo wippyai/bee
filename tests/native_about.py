@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 from native_workspace import NativeDesktop
-from native_client import stop_owner, live_owners, owner_pidfd
+from native_client import stop_owner, live_owners, hold_owner
 
 binary = Path(sys.argv[1]).resolve()
 provenance = json.loads(Path(str(binary) + ".provenance.json").read_text())
@@ -39,5 +39,5 @@ with tempfile.TemporaryDirectory(prefix="bee-native-about-") as temporary:
     finally:
         ui.close()
         for pid in live_owners(binary, state):
-            stop_owner(owner_pidfd(pid, binary, state))
+            stop_owner(hold_owner(pid, binary, state))
 print("Native About: embedded build/runtime/native identity, F12 and narrow scrolling pass")

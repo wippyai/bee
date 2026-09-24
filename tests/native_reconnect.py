@@ -7,7 +7,6 @@ stress check, not evidence of complete remote recovery.
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import argparse
-import select
 import shutil
 import signal
 import subprocess
@@ -86,7 +85,7 @@ def run(binary, rounds, keep_fixture=False):
             (folder / f"client-{ui.process.pid}.raw").write_bytes(ui.raw)
         # Establish whether the service still answers BEFORE capturing its
         # stack. Keep surviving clients drained during this read-only probe.
-        if owner is not None and not select.select([owner], [], [], 0)[0]:
+        if owner is not None and not owner.exited():
             started = time.monotonic()
             with subprocess.Popen([str(binary), "--state", str(state), "desktops"],
                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as probe:
@@ -105,9 +104,9 @@ def run(binary, rounds, keep_fixture=False):
                 report = f"elapsed={time.monotonic() - started:.3f} exit={probe.returncode}\n"
                 (folder / "failure-catalog.txt").write_bytes(report.encode() + output)
                 print(f"Post-failure catalog: {report.strip()}", flush=True)
-            if not select.select([owner], [], [], 0)[0]:
-                signal.pidfd_send_signal(owner, signal.SIGQUIT)
-                select.select([owner], [], [], 5)
+            if not owner.exited():
+                owner.send_signal(signal.SIGQUIT)
+                owner.exited(5)
         print(f"Failure evidence preserved in {folder}", flush=True)
         raise
     finally:

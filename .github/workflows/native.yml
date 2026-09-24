@@ -194,19 +194,20 @@ jobs:
         if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
         make standalone-sealed BUILDER="$BUILDER_BINARY"
         echo "version=$version" >> "$GITHUB_OUTPUT"
+    # Ubuntu runners restrict unprivileged user namespaces through AppArmor;
+    # the offline checks isolate the network in one as the runner user.
+    - name: Allow unprivileged user namespaces
+      if: matrix.goos == 'linux'
+      run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
     - name: Verify source-free portable deployment
       if: matrix.goos == 'linux'
-      run: |
-        # Ubuntu runners restrict unprivileged user namespaces through AppArmor;
-        # the check isolates the network in one, so the runner allows them here.
-        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-        tests/portable_deployment.sh "$PWD/.wippy/bin/bee-wippy" "$PWD/dist/portable-deployment"
+      run: tests/portable_deployment.sh "$PWD/.wippy/bin/bee-wippy" "$PWD/dist/portable-deployment"
     - name: Verify standalone desktop
       if: matrix.goos == 'darwin'
       run: make native-binary-check
     - name: Verify offline standalone desktop
       if: matrix.goos == 'linux'
-      run: sudo unshare --net -- env PATH="$PATH" make native-binary-check
+      run: make native-binary-offline-check
     - name: Archive binary and provenance
       env:
         BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}

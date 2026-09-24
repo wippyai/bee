@@ -21,6 +21,7 @@ import termios
 import time
 
 import pyte
+from processes import lookup
 from workspace import deployment_copy, fixture_workspace, pack_fixture, product_deployment
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,11 +89,8 @@ class Desktop:
                 return
             if self.process.poll() is not None:
                 break
-        try:
-            state = next(line for line in Path(f'/proc/{self.process.pid}/status').read_text().splitlines()
-                         if line.startswith('State:'))
-        except (OSError, StopIteration):
-            state = 'unavailable'
+        process = lookup(self.process.pid)
+        state = process.state if process is not None else 'absent'
         raw_tail = bytes(self.raw[-2048:])
         raise AssertionError(
             f"Missing {text!r}; exit={self.process.poll()}; process_state={state}; "

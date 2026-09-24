@@ -34,4 +34,4 @@ entries:
   imports:
     test: wippy.test:test
     hosts: bee.launch:hosts
-    leases: bee.launch:host_leases
+    leases: bee.application:host_leases

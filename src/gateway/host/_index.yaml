@@ -54,3 +54,13 @@ entries:
   method: POST
   path: /hook/:action/mcp
   func: bee.gateway.api:hook_mcp_http
+- name: gateway_workspace_extension
+  kind: contract.binding
+  meta:
+    title: Agent sessions
+    comment: The host attaches each workspace's running agent sessions to the workspace catalog and its viewer
+  contracts:
+  - contract: bee.workspace.catalog:extension
+    methods:
+      describe: bee.gateway.binding:describe
+      search: bee.gateway.binding:search

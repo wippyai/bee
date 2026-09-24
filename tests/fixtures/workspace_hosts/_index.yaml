@@ -105,7 +105,7 @@ entries:
     catalog: bee.storage:catalog
     decode: bee.protocol:decode
     recovery: bee.workspace:recovery
-    leases: bee.launch:host_leases
+    leases: bee.application:host_leases
   meta:
     command:
       name: workspace-hosts-lazy-supervisor

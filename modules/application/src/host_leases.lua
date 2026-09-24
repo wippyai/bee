@@ -7,7 +7,6 @@ local process = require("process")
 local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
-local contract = require("contract")
 
 type Acquire = {request_id: string, workspace_id: string, lease: string}
 type Result = {request_id: string, workspace_id: string, host: string, managed: boolean, error_code: string, error: string}
@@ -19,6 +18,11 @@ M.PREFIX = "bee.workspace.lease/"
 M.ACQUIRE = "bee.workspace.hosts.acquire"
 M.RELEASE = "bee.workspace.hosts.release"
 M.RESULT = "bee.workspace.hosts.result"
+
+local function identity(value: unknown): string?
+    if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
+    return value
+end
 
 local function text(value: unknown, limit: integer): string?
     if type(value) ~= "string" or #value > limit or value:find("%c") then return nil end
@@ -34,7 +38,7 @@ end
 
 function M.acquire_request(value: unknown): Acquire?
     if type(value) ~= "table" or value.version ~= 1 then return nil end
-    local request_id, workspace_id, lease = text(value.request_id, 80), contract.workspace_id(value.workspace_id), M.lease_name(value.lease)
+    local request_id, workspace_id, lease = text(value.request_id, 80), identity(value.workspace_id), M.lease_name(value.lease)
     if not request_id or request_id == "" or not workspace_id or not lease then return nil end
     return {request_id = request_id, workspace_id = workspace_id, lease = lease}
 end
@@ -46,7 +50,7 @@ end
 
 function M.result(value: unknown): Result?
     if type(value) ~= "table" or value.version ~= 1 then return nil end
-    local request_id, workspace_id = text(value.request_id, 80), contract.workspace_id(value.workspace_id)
+    local request_id, workspace_id = text(value.request_id, 80), identity(value.workspace_id)
     local host, code, message = text(value.host, 200), text(value.error_code, 64), text(value.error, 2000)
     if not request_id or not workspace_id or not host or not code or not message or type(value.managed) ~= "boolean" then return nil end
     if (code == "") == (host == "") then return nil end
@@ -59,8 +63,8 @@ end
 
 -- Take a lease on a workspace; the manager starts its host when none is live.
 -- A timeout leaves the outcome unknown, so the lease is released, never retried.
-function M.acquire(workspace_id: string, timeout: string): (Lease?, string?)
-    local id = contract.workspace_id(workspace_id)
+function M.acquire(selected: string, timeout: string): (Lease?, string?)
+    local id = identity(selected)
     if not id then return nil, "invalid workspace identity" end
     local manager = process.registry.lookup(M.MANAGER)
     if not manager then return nil, "the node host manager is not running" end

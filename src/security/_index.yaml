@@ -37,6 +37,14 @@ entries:
     policies:
     - bee:ordinary_app_subsystem_boundary
     - bee.timeline:client_policy
+  - definition_id: bee.workspaces:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee.workspaces:client_policy
+    - bee:workspace_catalog_read_policy
+    - bee:workspace_catalog_manage_policy
+    - bee:thread_workspace_list_policy
+    - bee:workspace_host_lease_policy
   - definition_id: bee.overlays:app
     policies:
     - bee:ordinary_app_subsystem_boundary

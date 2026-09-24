@@ -95,7 +95,7 @@ served (`managed = false`) instead of starting a second one.
 
 A lease is a process-registry name `bee.workspace.lease/<id>` its holder
 registers under the host-named policy `bee:workspace_host_lease_policy`.
-`bee.launch:host_leases.acquire(workspace_id, timeout)` registers the name,
+`bee.application:host_leases.acquire(workspace_id, timeout)` registers the name,
 sends `bee.workspace.hosts.acquire` to the registered manager
 `bee.workspace.hosts` and waits for `bee.workspace.hosts.result`
 (`{host, managed}` or `error_code` `busy`, `unavailable`,
@@ -117,3 +117,29 @@ its lease rather than retrying.
 - Applications hold no lease. An application running in an unleased
   workspace stops with its host and restarts from its checkpoint when its
   restart policy is `automatic`.
+
+## Workspaces viewer
+
+`bee.workspaces:app` (Tools → Workspaces) is the bundled viewer on the shared
+application frame. It holds one catalog page (50 rows) and the cursors back to
+earlier pages, never the whole catalog; ↑↓ past either end of a page and
+PgUp/PgDn load the neighbouring page. The Active and Archived tabs list each
+state. `/` edits the search: text is a label prefix, text starting with `/`
+a folder prefix under the node's workspace root (`bee:workspace_root`), and
+Enter runs it from its first page.
+
+The selected workspace's detail shows its folder, last use, creation and
+identity, whether a host serves it, the applications its checkpoint keeps
+open, up to ten of its threads (`bee.threads.service:list_workspace`) and one
+section per workspace extension (resources and agent sessions in the default
+composition), each with its count or the reason it could not be read. From
+120x36 the detail sits beside a 40-cell list (48 from 160x48); below that Enter
+opens it as its own page and Esc returns. A (Archive) asks first and archives
+an active workspace; on the Archived tab it restores. S (Serve) holds a host
+lease on the selected workspace while the viewer stays open, so the node host
+manager starts its host; S again, or closing the viewer, releases it.
+
+Its admission binding grants `bee:workspace_catalog_read_policy`,
+`bee:workspace_catalog_manage_policy`, `bee:thread_workspace_list_policy`,
+`bee:workspace_host_lease_policy` and `bee.workspaces:client_policy`, which may
+call only the catalog operations it uses and `list_workspace`.

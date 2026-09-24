@@ -104,12 +104,6 @@ entries:
 - name: hosts
   kind: library.lua
   source: file://hosts.lua
-- name: host_leases
-  kind: library.lua
-  source: file://host_leases.lua
-  modules: [process, channel, time, uuid]
-  imports:
-    contract: bee.protocol:application
 - name: host_manager
   kind: process.lua
   source: file://host_manager.lua
@@ -117,6 +111,6 @@ entries:
   modules: [process, channel, security, time, uuid, logger]
   imports:
     hosts: bee.launch:hosts
-    leases: bee.launch:host_leases
+    leases: bee.application:host_leases
     protocol: bee.launch:protocol
     decode: bee.protocol:decode

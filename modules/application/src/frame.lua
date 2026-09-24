@@ -22,9 +22,12 @@ type Hint = {key: string, verb: string}
 type Window = {offset: integer, capacity: integer}
 -- A table column: width 0 is the single flexible column; align "right" for numbers.
 type Column = {title: string, width: integer, align: string?}
-type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?}
 -- A cell rectangle: x and y are one-based, width and height may be zero.
 type Rect = {x: integer, y: integer, width: integer, height: integer}
+-- area confines the table to a region's columns, as the list pane beside a
+-- detail pane; its rows then span only that region and its marker column.
+type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?,
+    area: Rect?}
 -- The rows of the canonical anatomy; tabs and actions are 0 when absent.
 type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer: integer}
 
@@ -222,16 +225,38 @@ end
 -- column 1 with "›" so focus is visible without color. Unfocused selection
 -- (another pane owns focus) keeps the marker in accent on the surface. span
 -- extends the target over the item's following rows.
-function M.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)
+-- One row confined to area's columns, with the marker column before it.
+local function band(painter: Painter, area: Rect, y: integer, value: string, fg: string?, bg: string?)
+    if y < 1 or y > painter.height or area.width <= 0 then return end
+    local theme = painter.theme
+    local x = maximum(1, area.x - 1)
+    local room = minimum(area.x + area.width - x, painter.width - x + 1)
+    if room > 0 then painter.canvas:put(x, y, appearance.style(theme.text, bg or theme.surface) .. string.rep(" ", room) .. RESET, room) end
+    M.put(painter, area.x, y, value, area.width, fg, bg)
+end
+
+local function draw_row(painter: Painter, area: Rect?, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string,
+    fg: string?, focused: boolean?, span: integer?)
     local theme = painter.theme
     local has_focus = focused == nil or focused
     local text_fg = fg or theme.text
     local bg = theme.surface
     if selected and has_focus then text_fg, bg = appearance.selection_text(theme), theme.accent
     elseif selected then text_fg = theme.accent end
+    if area then
+        local x = maximum(1, area.x - 1)
+        band(painter, area, y, value, text_fg, bg)
+        if selected and x < area.x then M.put(painter, x, y, MARKER, 1, text_fg, bg) end
+        M.add_hit(painter, kind, index, key, x, y, area.x + area.width - x, span or 1)
+        return
+    end
     M.line(painter, y, value, text_fg, bg)
     if selected then M.put(painter, 1, y, MARKER, 1, text_fg, bg) end
     M.add_hit(painter, kind, index, key, 1, y, painter.width, span or 1)
+end
+
+function M.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)
+    draw_row(painter, nil, y, value, selected, kind, index, key, fg, focused, span)
 end
 
 -- Column geometry for a table at the canvas width, or nil when the flexible
@@ -271,15 +296,20 @@ end
 function M.table(painter: Painter, first: integer, last: integer, value: Table): Window
     local count = #value.cells
     if last < first then return {offset = 0, capacity = 0} end
-    local widths = layout(painter.width, value.columns)
+    local area = value.area
+    local span = painter.width
+    if area then span = area.width + 2 end
+    local widths = layout(span, value.columns)
     local captions: {string} = {}
     for index, column in ipairs(value.columns) do captions[index] = string.upper(column.title) end
-    if widths then M.line(painter, first, joined(captions, widths, value.columns), painter.theme.muted)
+    local caption = ""
+    if widths then caption = joined(captions, widths, value.columns)
     else
-        local compact = captions[1]
-        for index = 2, #captions do if captions[index] ~= "" then compact = compact .. " · " .. captions[index] end end
-        M.line(painter, first, compact, painter.theme.muted)
+        caption = captions[1]
+        for index = 2, #captions do if captions[index] ~= "" then caption = caption .. " · " .. captions[index] end end
     end
+    if area then band(painter, area, first, caption, painter.theme.muted)
+    else M.line(painter, first, caption, painter.theme.muted) end
     local window = M.window(count, last - first, value.selected, value.offset)
     for slot = 1, window.capacity do
         local index = window.offset + slot
@@ -291,7 +321,7 @@ function M.table(painter: Painter, first: integer, last: integer, value: Table):
             text = cells[1] or ""
             for column = 2, #cells do if cells[column] ~= "" then text = text .. " · " .. cells[column] end end
         end
-        M.row(painter, first + slot, text, index == value.selected, value.kind, index,
+        draw_row(painter, area, first + slot, text, index == value.selected, value.kind, index,
             value.keys and value.keys[index] or "", nil, value.focused)
     end
     return window

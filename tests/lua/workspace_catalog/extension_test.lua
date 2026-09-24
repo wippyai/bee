@@ -14,6 +14,7 @@ local appearance = require("appearance")
 
 local PROJECTS = "bee.workspace.catalog:projects_fixture"
 local RESOURCES = "bee:resources_workspace_extension"
+local AGENTS = "bee:gateway_workspace_extension"
 local BROKEN = "bee.workspace.catalog:broken_extension"
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
@@ -99,6 +100,10 @@ local function define_tests()
             local items = resources.items :: {Object}
             test.eq(items[1].label, "docs")
             test.contains(tostring(items[1].detail), PROJECTS)
+            local agents = extension(inspected, AGENTS)
+            test.eq(agents.title, "Agent sessions")
+            test.is_nil(agents.error)
+            test.eq(agents.total, 0)
         end)
 
         test.it("searches inside one workspace through every extension", function()
@@ -131,6 +136,8 @@ local function define_tests()
             local denied = call(stranger, "bee.resources.binding:describe", {workspace_id = id})
             test.eq(denied.ok, false)
             test.eq(denied.error and denied.error.code, "DENIED")
+            local sessions = call(stranger, "bee.gateway.binding:describe", {workspace_id = id})
+            test.eq(sessions.error and sessions.error.code, "DENIED")
             local unread = call(executor("bee.test.extension_outsider", {"bee.workspace.catalog:call_test_policy"}), "bee.workspace.catalog:inspect", {workspace_id = id})
             test.eq(unread.error and unread.error.code, "DENIED")
         end)

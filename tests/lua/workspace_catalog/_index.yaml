@@ -48,7 +48,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.resources.binding:associate, bee.resources.binding:describe, bee.resources.binding:search]
+    resources: [bee.resources.binding:associate, bee.resources.binding:describe, bee.resources.binding:search, bee.gateway.binding:describe]
     effect: allow
 - name: broken_extension_method
   kind: function.lua

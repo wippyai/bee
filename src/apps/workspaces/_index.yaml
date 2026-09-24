@@ -1,0 +1,49 @@
+version: '1.0'
+namespace: bee.workspaces
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, uuid, funcs]
+  imports:
+    frame: bee.application:frame
+    client: bee.application:client
+    appearance: bee.application:appearance
+    caller: bee.application:caller
+    leases: bee.application:host_leases
+    model: bee.workspaces:model
+    view: bee.workspaces:view
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Workspaces
+      icon: W
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: inspection
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  imports:
+    text: bee.application:text
+    caller: bee.application:caller
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    model: bee.workspaces:model
+- name: client_policy
+  kind: security.policy
+  meta:
+    comment: The viewer calls the workspace catalog operations and lists a workspace's threads; each owner authorizes the call under the process actor and the host's catalog and thread policies
+  policy:
+    actions: [funcs.call]
+    resources: [bee.workspace.catalog:list, bee.workspace.catalog:search, bee.workspace.catalog:inspect, bee.workspace.catalog:archive,
+      bee.workspace.catalog:restore, bee.threads.service:list_workspace]
+    effect: allow

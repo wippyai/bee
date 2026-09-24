@@ -102,3 +102,28 @@ entries:
     actions: [system.read]
     resources: [node, cluster, memory, goroutines]
     effect: allow
+- name: desktop_catalog_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.client:list_desktops, bee.client:allocate_desktop]
+    effect: allow
+- name: desktop_catalog_resource_policy
+  kind: security.policy
+  policy:
+    actions: [bee.client.desktops.read, bee.client.desktops.allocate]
+    resources: [bee:client_db]
+    effect: allow
+- name: workspace_catalog_read_policy
+  kind: security.policy
+  policy:
+    actions: [bee.workspaces.read]
+    resources: '*'
+    effect: allow
+- name: workspace_host_lease_policy
+  kind: security.policy.expr
+  policy:
+    expression: '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$") || (action == "process.registry.lookup" && resource == "bee.workspace.hosts") || action == "process.send"'
+    actions: [process.registry.register, process.registry.unregister, process.registry.lookup, process.send]
+    resources: '*'
+    effect: allow

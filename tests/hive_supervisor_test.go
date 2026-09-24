@@ -43,7 +43,7 @@ func stageHiveSupervisorDesktop(t *testing.T, source string) {
 	if manifest.Namespace != "bee.hive.desktop" {
 		t.Fatalf("Hive desktop fixture namespace = %q", manifest.Namespace)
 	}
-	wanted := map[string]bool{"protocol": true, "catalog": true, "owner": true, "host_policy": true}
+	wanted := map[string]bool{"protocol": true, "catalog": true, "owner": true, "host_policy": true, "catalog_call_policy": true}
 	entries := make([]map[string]interface{}, 0, len(wanted))
 	for _, entry := range manifest.Entries {
 		name, _ := entry["name"].(string)
@@ -95,6 +95,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService
 		{"application_arguments", "modules/application/src/arguments.lua", "version: '1.0'\nnamespace: bee.application\nentries:\n- name: arguments\n  kind: library.lua\n  source: file://source.lua\n"},
 		{"application_protocol", "src/core/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.application:arguments\n"},
 		{"retained_protocol", "src/core/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
+		{"workspace_binding", "src/core/storage/binding.lua", "version: '1.0'\nnamespace: bee.storage\nentries:\n- name: binding\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.threads.records:bounds\n"},
 	} {
 		directory := filepath.Join(sourceSnapshot, dependency.directory)
 		if err := os.MkdirAll(directory, 0700); err != nil {

@@ -80,6 +80,23 @@ local function define_tests()
             test.eq(last[1].workspace_id, third)
             test.is_nil((rest.value :: Object).next_after)
         end)
+        test.it("lists the folder workspace's unnamed catalog row", function()
+            local unnamed = 0
+            local after: string? = nil
+            repeat
+                local input: Object = {limit = 50}
+                if after then input.after = after end
+                local page = dispatch(input)
+                if not page.ok then error(tostring(page.error and page.error.message)) end
+                local value = page.value :: Object
+                for _, row in ipairs(value.workspaces :: {Object}) do
+                    if row.label == "" then unnamed = unnamed + 1 end
+                end
+                local cursor = value.next_after
+                after = type(cursor) == "string" and cursor or nil
+            until not after
+            test.eq(unnamed, 1)
+        end)
         test.it("refuses input outside the declared schema", function()
             local refused = dispatch({limit = 51})
             test.is_false(refused.ok)

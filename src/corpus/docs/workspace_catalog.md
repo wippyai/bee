@@ -25,7 +25,8 @@ unknown; do not retry blindly).
 | `search_within` | `{workspace_id, text, limit?}` | `bee.workspaces.read` on `workspace_id` | `{workspace_id, results}` |
 
 A row is `{workspace_id, label, root_ref, subpath, state, created_at,
-last_used_at}`. `live` says whether a host serves the workspace now.
+last_used_at}`. `live` says whether a host serves the workspace now. The
+folder workspace's row has an empty label; readers name it by identity.
 
 **Create.** A label is one nonempty line of at most 240 bytes. `root_ref` must
 be listed in the host's admitted roots (`bee:resource_roots`, the same ceiling

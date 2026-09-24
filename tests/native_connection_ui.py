@@ -17,6 +17,13 @@ def attachment(ui):
     return rows[0].split('CONTROL', 1)[1].rsplit('│', 1)[0].strip()
 
 
+def connection_display(ui):
+    """The DISPLAY value of the connection panel, apart from the windows beside it."""
+    rows = ui.text().splitlines()
+    index = next(i for i, row in enumerate(rows) if 'DISPLAY' in row)
+    return rows[index + 1].rsplit('│', 2)[1].strip()
+
+
 def wait_attachment(ui, expected, timeout=5):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -68,8 +75,7 @@ def exercise(binary):
             ui.wait('Supervisor ready')
             for label in ('NODE', 'CONTROL', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
-            before = ui.text().splitlines()
-            display = next(before[i + 1].strip() for i, row in enumerate(before) if 'DISPLAY' in row)
+            display = connection_display(ui)
             assert 'Current session' not in display, display
             Path('/tmp/bee-native-connection-ui-frame.txt').write_text(ui.text())
             ui.key(b'\x1b')
@@ -91,7 +97,8 @@ def exercise(binary):
             observer.close()
             observer = None
             wait_attachment(ui, 'Controlled')
-            assert display in ui.text(), ui.text()
+            ui.wait(display, timeout=5)
+            assert connection_display(ui) == display, ui.text()
             ui.key(b'\x1b')
             ui.quit()
         finally:

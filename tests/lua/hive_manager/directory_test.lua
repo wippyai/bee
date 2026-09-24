@@ -140,6 +140,11 @@ local function define_tests()
             test.eq(catalog.desktops[1].desktop_id, "")
             test.is_nil(catalog.desktops[1].controller)
             test.is_true(directory.decode_workspaces(response({})).available)
+            -- The folder workspace's catalog row is unnamed; the view names it by identity.
+            local unnamed = directory.decode_workspaces(response({{workspace_id = workspace, label = "", served = true}}))
+            test.is_true(unnamed.available)
+            test.eq(unnamed.desktops[1].label, "")
+            test.is_false(directory.decode_workspaces(response({{workspace_id = workspace, label = "two\nlines", served = false}})).available)
             test.is_false(directory.decode_workspaces(response({[2] = {workspace_id = workspace, label = "Main", served = false}})).available)
             test.is_false(directory.decode_workspaces(response({{workspace_id = workspace, label = "Main", served = false, mount_ref = "secret"}})).available)
             test.is_false(directory.decode_workspaces(response({{workspace_id = workspace, label = "Main", served = false},

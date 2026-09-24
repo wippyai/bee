@@ -129,7 +129,8 @@ function M.decode_workspaces(value: unknown): Catalog
         local workspace = bounds.object(raw)
         if not workspace or bounds.fields(workspace, {"workspace_id", "label", "served"}) then return unavailable(invalid) end
         local id = identity(workspace.workspace_id)
-        local label = bounds.line(workspace.label, M.MAX_LABEL_BYTES)
+        -- The folder workspace's row is unnamed; the view names it by identity.
+        local label = workspace.label == "" and "" or bounds.line(workspace.label, M.MAX_LABEL_BYTES)
         if not id or seen[id] or not label or type(workspace.served) ~= "boolean" then return unavailable(invalid) end
         seen[id] = true
         desktops[#desktops + 1] = {workspace_id = id, desktop_id = "", label = label, served = workspace.served == true}

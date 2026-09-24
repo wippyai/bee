@@ -36,6 +36,11 @@ function M.decode(value: unknown): (Query?, string?)
     end
     return query, nil
 end
+-- A row's label: one bounded line. The folder workspace's row is unnamed.
+local function row_label(value: unknown): string?
+    if type(value) ~= "string" or #value > M.MAX_LABEL or value:find("%c") then return nil end
+    return value
+end
 local function handle(value: unknown): Object
     local query, invalid = M.decode(value)
     if not query then error("invalid workspace listing: " .. tostring(invalid)) end
@@ -57,7 +62,7 @@ local function handle(value: unknown): Object
     for _, raw_row in ipairs(items :: {unknown}) do
         local row = bounds.object(raw_row)
         local id = row and bounds.id(row.workspace_id)
-        local label = row and bounds.line(row.label, M.MAX_LABEL)
+        local label = row and row_label(row.label)
         if not id or not label or #workspaces >= M.MAX_PAGE then error("the workspace catalog answered a malformed row") end
         workspaces[#workspaces + 1] = {workspace_id = id, label = label,
             served = process.registry.lookup("bee.workspace.host/" .. id) ~= nil}

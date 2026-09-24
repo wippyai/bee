@@ -184,6 +184,10 @@ does not erase a validated session claim, while conflicting claims refuse
 continuation. It retains the session home and obtains fresh admission for the
 replacement attempt. Failure or incomplete
 hook draining refuses replacement; a copied checkpoint grants no authority.
+A saved window whose previous session recorded no provider conversation has
+nothing to resume: admission refuses it as `NOT_RESUMABLE`, and the restored
+window says so in plain words and closes on Enter or Esc instead of offering a
+retry.
 The gateway retains terminal rejection of unclaimed hooks on revocation; accepted
 intake is not a guarantee of thread commitment. Already-claimed rows remain
 recoverable under its existing epoch fences. Whole-runtime crash recovery and

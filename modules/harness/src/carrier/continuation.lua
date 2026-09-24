@@ -109,6 +109,9 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
 
     return {stored = stored, point = point, attempt = attempt, binding = binding, private_home = status.private_home :: boolean}, nil
 end
+-- The previous window's session never began a provider conversation, so there
+-- is nothing to resume; the refusal is permanent for that window.
+M.NO_CONVERSATION = "previous window recorded no provider conversation"
 function M.resolve_window(call: Call, request: Request): (string?, string?, boolean?)
     local previous, inspect_error = M.inspect_window(call, request, true)
     if not previous then return nil, inspect_error end
@@ -173,7 +176,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
         end
         cursor = through
         if not page.has_more then
-            if not conversation_session_id then return nil, "previous window recorded no provider conversation" end
+            if not conversation_session_id then return nil, M.NO_CONVERSATION end
             -- Only an owned, ended attempt with a verified conversation can
             -- request cleanup. Placement still proves group absence and keeps
             -- the retained session home; a refused or uncertain cleanup does

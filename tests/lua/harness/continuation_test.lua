@@ -202,6 +202,15 @@ local function define_tests()
             test.eq(stored.attempt_outcome, "uncertain")
             local saved_private_home = true
             local original_call = call
+            -- A window whose previous session never began a conversation
+            -- names that exact condition, so recovery can end the window
+            -- rather than offer a resume that cannot exist.
+            local saved_rows = rows
+            rows = {}
+            local unresumable, unresumable_error = continuation.resolve_window(call, request)
+            test.is_nil(unresumable)
+            test.eq(unresumable_error, continuation.NO_CONVERSATION)
+            rows = saved_rows
             local function missing_home(target: string, input: unknown): (unknown, string?)
                 if target == PLACEMENT_METHODS.status and saved_private_home then
                     return {ok = true, value = {attempt = attempt}}, nil

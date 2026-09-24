@@ -1091,9 +1091,9 @@
       "topic": "component"
     },
     {
-      "bytes": 18249,
+      "bytes": 18488,
       "id": "component/harness",
-      "sha256": "da2a33bc273e52a6a01e2fef38bc1f244d9e43c8a9d4852cf25d809138e4f135",
+      "sha256": "3db3730d1f5a32026e7540e4c3e147e1e773893d1a743366c38ffe4ad4e5d940",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -1182,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1359741,
+    "bytes": 1359980,
     "documents": 147
   }
 }

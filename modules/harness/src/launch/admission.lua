@@ -29,6 +29,9 @@ M.CARRIER_OPS = "bee.threads.carrier"
 M.RESOURCES = "bee.resources.binding"
 M.CREDENTIALS = "bee.credentials.binding"
 M.MAX_BRIEF_BYTES = 16384
+-- A saved window that can never be resumed; recovery ends it instead of
+-- retrying or asking for review.
+M.NOT_RESUMABLE = "NOT_RESUMABLE"
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
@@ -436,6 +439,9 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
                 profile_id = plan.profile_id, profile_digest = plan.profile_digest,
                 placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest,
                 placement_methods = plan.placement_methods, reauthorize = previous.reauthorize})
+            if not resume and resume_error == continuation.NO_CONVERSATION then
+                return nil, fail(M.NOT_RESUMABLE, "its last session never started a conversation")
+            end
             if not resume then return nil, fail("CONFLICT", "cannot resume saved window: " .. tostring(resume_error)) end
         end
         local granted, grant_refused = call(M.RESOURCES .. ":grant", {workspace_id = request.workspace_id, name = session_resource, access = "write", purpose = "session",

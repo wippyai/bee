@@ -354,7 +354,9 @@ local function main(value: unknown, constructors: {[string]: Open})
         local function render()
             if not dirty then return end
             local frame
-            if reviewed and (phase == "review" or phase == "resolving" or phase == "confirming") then
+            if phase == "unresumable" then
+                frame = restore_view.unresumable(width, height, preferences, status)
+            elseif reviewed and (phase == "review" or phase == "resolving" or phase == "confirming") then
                 frame = restore_view.review(width, height, preferences, reviewed, restored.plan_digest, status)
             else
                 frame = restore_view.draw(width, height, preferences, status)
@@ -461,6 +463,10 @@ local function main(value: unknown, constructors: {[string]: Open})
                     if result.choice then
                         admitted = result.choice
                     elseif result.refused and result.refused.error
+                        and result.refused.error.code == admission.NOT_RESUMABLE then
+                        status = result.refused.error.message
+                        phase = "unresumable"
+                    elseif result.refused and result.refused.error
                         and result.refused.error.code == "CONFLICT" then
                         -- A stale fence after Enter returns to review. Never
                         -- silently retry a plan the user has not re-confirmed.
@@ -483,7 +489,9 @@ local function main(value: unknown, constructors: {[string]: Open})
                         if data.key_type == "escape" or data.key_type == "esc" or (data.ctrl and data.key == "q") then
                             cancel_restore()
                         elseif data.key_type == "enter" or data.key == "enter" then
-                            if phase == "review" and reviewed then
+                            if phase == "unresumable" then
+                                cancel_restore()
+                            elseif phase == "review" and reviewed then
                                 if not restore_view.reviewable(width, height) then
                                     status = "Resize to at least 32 × 13 before continuing"
                                     dirty = true

@@ -80,12 +80,3 @@ entries:
     actions: [funcs.call]
     resources: [bee.workspace.catalog:list, bee.workspace.catalog:search]
     effect: allow
-
-- name: reader
-  kind: library.lua
-  source: file://reader.lua
-  modules: [process, time]
-  imports:
-    types: bee.hive:types
-    owner: bee.hive.desktop:owner
-    catalog: bee.hive.desktop:catalog

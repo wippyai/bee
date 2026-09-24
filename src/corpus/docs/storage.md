@@ -79,11 +79,21 @@ classic row (root `bee:workspace_root`, empty subpath, empty label), and
 `workspace_display_transfer_receipts` and `workspace_application_thread_bindings`
 are rebuilt with `workspace_id` as their leading key; every existing row keeps
 its values under that ID. A missing identity row fails the migration instead of
-dropping state. Reopening, relocating or backing up a database retains its IDs;
-a fresh database receives a new classic ID from migration 2. Copying a database
-therefore makes a backup with the same identities, not an independent writable
-node. A selection naming no catalog row causes `open()` to fail; Bee never
-repairs it by silently minting a new ID. Migrations 1-5 remain unchanged.
+dropping state. Reopening, relocating or backing up a database retains its IDs.
+Copying a database therefore makes a backup with the same identities, not an
+independent writable node. A selection naming no catalog row causes `open()` to
+fail; Bee never repairs it by silently minting a new ID. Migrations 1-5 remain
+unchanged.
+
+Migration 8 (`workspace_folder_on_open_v1`) moves the folder row's creation from
+the schema to the classic launch path. On a new database (the migration run that
+starts from an empty ledger, which the runner records in the connection-local
+`temp.workspace_migration_run`) it removes the classic row that migrations 2 and
+6 seed and records in `workspace_folder` that the folder row is still to be
+created. The first `open()` of the classic selection then creates it with a
+fresh ID, once; a daemon, which never opens the folder, keeps an empty catalog.
+A database migrated before keeps its classic row, recorded as created, so a
+classic row that later goes missing still fails `open()`.
 
 `workspace_state` has one row per workspace containing the envelope, schema
 version, monotonic generation and update timestamp.

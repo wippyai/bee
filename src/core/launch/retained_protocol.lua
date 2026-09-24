@@ -3,8 +3,6 @@ local contract = require("contract")
 local clipboard = require("clipboard")
 local arguments = require("arguments")
 type Request = {op: "attach" | "detach" | "copy", request_id: string, recipient: string, mode: "control" | "observe"}
-type CatalogReaders = {workspace_id: string, readers: {string}}
-local MAX_CATALOG_READERS = 16
 type Ready = {workspace_id: string, desktop_id: string}
 type Result = {request_id: string, mount: string, error_code: string, error: string}
 local M = {}
@@ -25,35 +23,6 @@ function M.owner_name(key: string): string?
 end
 
 -- Decodes an attach/detach request. Sender authentication remains caller responsibility.
--- A complete, host-selected snapshot of live application executions allowed to
--- read the retained desktop catalog. The PID values identify only this current
--- execution: receiver-side sender authentication remains mandatory.
-function M.catalog_readers(value: unknown, expected_workspace_id: string?): CatalogReaders?
-    if type(value) ~= "table" or value.version ~= 1 then return nil end
-    for key in pairs(value) do
-        if key ~= "version" and key ~= "workspace_id" and key ~= "readers" then return nil end
-    end
-    local workspace_id = contract.workspace_id(value.workspace_id)
-    if not workspace_id or (expected_workspace_id and workspace_id ~= expected_workspace_id)
-        or type(value.readers) ~= "table" then return nil end
-    local count = 0
-    for key in pairs(value.readers) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > #value.readers then return nil end
-        count = count + 1
-        if count > MAX_CATALOG_READERS then return nil end
-    end
-    if count ~= #value.readers then return nil end
-    local readers: {string} = {}
-    local seen: {[string]: boolean} = {}
-    for i = 1, count do
-        local reader = contract.text(value.readers[i], 160)
-        if not reader or reader == "" or seen[reader] then return nil end
-        seen[reader] = true
-        readers[#readers + 1] = reader
-    end
-    return {workspace_id = workspace_id, readers = readers}
-end
-
 function M.request(value: unknown, workspace_id: string, desktop_id: string): Request?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id
         or value.desktop_id ~= desktop_id then return nil end

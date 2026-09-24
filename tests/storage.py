@@ -463,7 +463,7 @@ def thread_binding_acceptance(project, probe, folder):
     with sqlite3.connect(database) as db:
         columns = [row[1] for row in db.execute("PRAGMA table_info(workspace_application_thread_bindings)")]
         assert columns == [
-            "instance_id", "thread_id", "definition_id", "actor_id", "role",
+            "workspace_id", "instance_id", "thread_id", "definition_id", "actor_id", "role",
             "binding_revision", "state", "idempotency_key", "definition_revision",
             "initiating_owner_id", "gateway_binding_id", "gateway_approval_id",
             "gateway_proposal_digest", "access", "join_expected_revision",
@@ -517,7 +517,7 @@ def main():
             migration = connection.execute(
                 "SELECT id, name, checksum FROM workspace_schema_migrations"
             ).fetchall()
-            assert len(migration) == 6 and [row[0] for row in migration] == [1, 2, 3, 4, 5, 6]
+            assert [row[0] for row in migration] == [1, 2, 3, 4, 5, 6, 7, 8]
             checksum = migration[0][2]
             state = connection.execute(
                 "SELECT generation, value FROM workspace_state WHERE workspace_id = (SELECT workspace_id FROM workspaces WHERE root_ref = 'bee:workspace_root' AND subpath = '')"
@@ -545,12 +545,12 @@ def main():
         with sqlite3.connect(database) as connection:
             connection.execute(
                 "INSERT INTO workspace_schema_migrations (id, name, checksum, applied_at) "
-                "VALUES (7, 'future_schema', 'future', 'now')"
+                "VALUES (9, 'future_schema', 'future', 'now')"
             )
             connection.commit()
         assert "newer than this Bee build" in run_probe(project, folder, expect_success=False)
         with sqlite3.connect(database) as connection:
-            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 7")
+            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 9")
             connection.commit()
         run_probe(project, folder)
 
@@ -645,7 +645,7 @@ return {main = main}
         (probe / "main.lua").write_text(migration4_probe)
         run_probe(project, migration4)
         with sqlite3.connect(migration4 / "workspace.db") as db:
-            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == [1, 2, 3, 4, 5, 6]
+            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == [1, 2, 3, 4, 5, 6, 7, 8]
             assert db.execute(
                 "SELECT count(*) FROM workspace_application_thread_bindings WHERE state='revoked' AND cleanup_pending=0"
             ).fetchone()[0] == 3
@@ -680,7 +680,7 @@ return {main = main}
         with sqlite3.connect(legacy / "workspace.db") as db:
             assert db.execute("SELECT generation, value FROM workspace_state").fetchone() == (7, '{"version":1,"probe":"legacy"}')
             assert db.execute("SELECT checksum FROM workspace_schema_migrations WHERE id=1").fetchone()[0] == checksum
-            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == [1, 2, 3, 4, 5, 6]
+            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == [1, 2, 3, 4, 5, 6, 7, 8]
         assert len(identity(legacy / "workspace.db")) == 32
 
         # A catalog without the classic row cannot silently mint another ID.

@@ -16,13 +16,10 @@ local function define_tests()
             test.is_nil(contract.binding({definition_id = "test:app", policies = {[1] = "test:one", [3] = "test:three"}}))
         end)
 
-        test.it("defaults catalog-reader admission off and accepts only a boolean host binding", function()
+        test.it("admits no catalog-reader flag in a host binding", function()
             local base = {definition_id = "test:app", policies = {"test:policy"}}
-            local ordinary = assert(contract.binding(base))
-            test.is_false(ordinary.catalog_read)
+            test.not_nil(contract.binding(base))
             base.catalog_read = true
-            test.is_true(assert(contract.binding(base)).catalog_read)
-            base.catalog_read = "true"
             test.is_nil(contract.binding(base))
         end)
 

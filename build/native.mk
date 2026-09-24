@@ -183,6 +183,10 @@ native-reconnect-check:
 native-desktop-selection-check:
 	python3 tests/native_desktop_selection.py "$(BEE_BINARY)"
 
+.PHONY: native-daemon-check
+native-daemon-check:
+	python3 tests/native_daemon.py "$(BEE_BINARY)"
+
 .PHONY: native-connection-ui-check native-independent-desktops-check
 native-connection-ui-check:
 	python3 tests/native_connection_ui.py "$(BEE_BINARY)"

@@ -205,16 +205,6 @@ function M.attach(state: State, workspace_id: string, holder: string): boolean
     return true
 end
 
-function M.attached(state: State, workspace_id: string): {string}
-    local holders: {string} = {}
-    local host = state.hosts[workspace_id]
-    if host then
-        for holder in pairs(host.attached) do holders[#holders + 1] = holder end
-    end
-    table.sort(holders)
-    return holders
-end
-
 -- The host pid to forward one desktop admission request to, or nil when the
 -- holder may not make it: it must be attached to the ready host, and a
 -- recipient another holder admitted stays that holder's.

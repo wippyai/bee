@@ -37,6 +37,10 @@ end
 function M.classic(): Selection
     return {root_ref = M.CLASSIC_ROOT, subpath = ""}
 end
+-- Whether a decoded selection names the node folder.
+function M.is_classic(selection: Selection): boolean
+    return selection.workspace_id == nil and selection.root_ref == M.CLASSIC_ROOT and selection.subpath == ""
+end
 -- A registry-safe key for names that must exist before the host reports the
 -- workspace identity. The host name bee.workspace.host/<workspace_id> remains
 -- the one-host-per-workspace fence.

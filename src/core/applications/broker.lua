@@ -183,16 +183,6 @@ local function main(owner: string, initial_preferences: unknown)
         if not scoped then return nil, tostring(scope_error or "set application thread scope") end
         return scoped:call(target, request)
     end
-    -- The host receives a complete snapshot after every change. A PID is only
-    -- an execution-local reader reference; it is not a durable principal.
-    local function publish_catalog_readers()
-        local readers: {string} = {}
-        for _, item in pairs(instances) do
-            if item.binding.catalog_read then readers[#readers + 1] = item.execution_pid end
-        end
-        table.sort(readers)
-        assert(process.send(owner, "bee.host.catalog_readers", {version = 1, workspace_id = workspace_id, readers = readers}))
-    end
     local dialogs = interactions.new()
     local shutdown_plan: shutdown.State? = nil
     local shutdown_dialog: interaction.Spec? = nil
@@ -522,7 +512,6 @@ local function main(owner: string, initial_preferences: unknown)
             state = lifecycle.start(now()), open_request = open.request.request_id, opened = false, resume_state = open.request.resume_state,
             arguments = open.request.arguments, replacement = nil, waiters = {}, attempts = 0, producer_generation = 1}
         coordinator.open = nil
-        if binding.catalog_read then publish_catalog_readers() end
     end
     local function send_thread_result(pid: string, request: thread_protocol.Request,
         value: unknown, code: string?, message: string?)
@@ -703,7 +692,6 @@ local function main(owner: string, initial_preferences: unknown)
         if interactions.remove(dialogs, item.view_id) then publish_dialogs() end
         item.view:close()
         instances[item.view_id] = nil
-        if item.binding.catalog_read then publish_catalog_readers() end
         for id, waiter in pairs(preference_waiters) do
             if waiter.recipient == item.execution_pid then preference_waiters[id] = nil end
         end
@@ -753,7 +741,6 @@ local function main(owner: string, initial_preferences: unknown)
         for id, waiter in pairs(preference_waiters) do
             if waiter.recipient == item.execution_pid then preference_waiters[id] = nil end
         end
-        local previous_catalog_reader = item.binding.catalog_read
         item.descriptor, item.binding = replacement, replacement_binding
         item.announced_title, item.title_dirty, item.negotiate_close = nil, nil, nil
         item.close_request_id, item.attempts = nil, 0
@@ -789,7 +776,6 @@ local function main(owner: string, initial_preferences: unknown)
         end
         item.execution_pid, item.launch_token, item.producer_generation = started.pid, token, execution_generation
         item.replacement = nil
-        if previous_catalog_reader or item.binding.catalog_read then publish_catalog_readers() end
     end
     local function discard_dialog(item: Instance)
         local pending_dialog = interactions.remove(dialogs, item.view_id)
@@ -933,7 +919,6 @@ local function main(owner: string, initial_preferences: unknown)
         else commit_explicit_close(item, force and "force_stop" or "stop") end
     end
     refresh_admission(true)
-    publish_catalog_readers()
     assert(process.send(owner, "bee.app.ready", {version = 1}))
     local function abort_shutdown()
         local plan = shutdown_plan
@@ -1546,7 +1531,6 @@ local function main(owner: string, initial_preferences: unknown)
                                                 resume_state = req.resume_state, arguments = req.arguments, replacement = nil,
                                                 waiters = {}, attempts = 0, producer_generation = 1}
                                             instances[view_id] = instance
-                                            if selected_binding.catalog_read then publish_catalog_readers() end
                                         end
                                     end
                                 end

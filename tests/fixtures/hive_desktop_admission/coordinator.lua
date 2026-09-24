@@ -5,15 +5,28 @@ local time = require("time")
 local channel = require("channel")
 local io = require("io")
 local system = require("system")
+local registry = require("registry")
 local EXECUTION = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 local function main(node: string)
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
     local supervisor: string? = nil
     if node == "node-0" then
+        -- The supervisor runs under the host service's own grants; the fixture
+        -- adds only the registration of its names.
+        local service = registry.get("bee.hive.host:supervisor_service")
+        local data: unknown = service and service.data
+        local lifecycle: unknown = type(data) == "table" and data.lifecycle or nil
+        local grant: unknown = type(lifecycle) == "table" and lifecycle.security or nil
+        local grants: unknown = type(grant) == "table" and grant.policies or nil
+        if type(grants) ~= "table" then error("the host supervisor service declares no policies") end
+        local names: {string} = {"bee.desktop_admission_probe:names"}
+        for _, name in ipairs(grants :: {unknown}) do
+            if type(name) ~= "string" then error("the host supervisor service declares a malformed policy") end
+            names[#names + 1] = name
+        end
         local policies: {security.Policy} = {}
-        for _, name in ipairs({"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy",
-            "bee:hive_dispatch_policy", "bee.desktop_admission_probe:names", "bee.hive.desktop:host_policy"}) do
+        for _, name in ipairs(names) do
             local policy, err = security.policy(name)
             if not policy then error(tostring(err)) end
             policies[#policies + 1] = policy

@@ -19,6 +19,12 @@ entries:
     actions: [system.read]
     resources: [node]
     effect: allow
+- name: service_grants
+  kind: security.policy
+  policy:
+    actions: [registry.get]
+    resources: [bee.hive.host:supervisor_service]
+    effect: allow
 - name: client_policy
   kind: security.policy
   policy:
@@ -29,13 +35,13 @@ entries:
   kind: process.lua
   source: file://coordinator.lua
   method: main
-  modules: [process, security, time, channel, io, system]
+  modules: [process, security, time, channel, io, system, registry]
   meta:
     command:
       name: hive-desktop-admission-probe
       security:
         actor: {id: bee.desktop.probe}
-        policies: [bee.desktop_admission_probe:policy, bee.desktop_admission_probe:inspect]
+        policies: [bee.desktop_admission_probe:policy, bee.desktop_admission_probe:inspect, bee.desktop_admission_probe:service_grants]
 - name: client
   kind: process.lua
   source: file://client.lua

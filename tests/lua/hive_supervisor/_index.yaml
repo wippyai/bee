@@ -111,3 +111,5 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
+    store: bee.storage:store
+    binding: bee.storage:binding

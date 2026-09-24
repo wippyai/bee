@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestHiveDesktopAdmission(t *testing.T) { runHiveDesktopAdmission(t, false) }
@@ -23,6 +25,33 @@ func TestHiveDesktopAdmission(t *testing.T) { runHiveDesktopAdmission(t, false) 
 // Catalog/explicit-detach acceptance remains independent of the native exact
 // remote actor EXIT gate exercised by TestHiveDesktopAdmission.
 func TestHiveDesktopCatalog(t *testing.T) { runHiveDesktopAdmission(t, true) }
+
+// projectReplacements reads the component modules the project composes from
+// source: its .wippy.yaml workspace replacements.
+func projectReplacements(t *testing.T, repository string) map[string]string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(repository, ".wippy.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var project struct {
+		Workspace struct {
+			Replacements map[string]string `yaml:"replacements"`
+		} `yaml:"workspace"`
+	}
+	if err := yaml.Unmarshal(data, &project); err != nil {
+		t.Fatal(err)
+	}
+	if len(project.Workspace.Replacements) == 0 {
+		t.Fatal("the project composes no component modules")
+	}
+	return project.Workspace.Replacements
+}
+
+// The fixture supplies the desktop supervisor's explicit input and owns its
+// lifecycle, so the composition's default supervisor service stays stopped;
+// that service is tested separately.
+const desktopSupervisorOverride = "bee.hive.host:supervisor_service:lifecycle.auto_start=false"
 
 func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	binary := os.Getenv("BEE_HIVE_SUPERVISOR_RUNTIME")
@@ -51,11 +80,6 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	if err := os.CopyFS(sourceSnapshot, os.DirFS(filepath.Join(repository, "src"))); err != nil {
 		t.Fatal(err)
 	}
-	// This fixture supplies the desktop supervisor's explicit input and owns
-	// its lifecycle; the default offline service is tested separately.
-	if err := os.RemoveAll(filepath.Join(sourceSnapshot, "hive", "host")); err != nil {
-		t.Fatal(err)
-	}
 	if os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_BINARY") != "" {
 		// Mark actual presenter replacement in the disposable source. Identical
 		// retained content need not emit fresh terminal bytes after F12.
@@ -81,6 +105,13 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(rootManifest, []byte(strings.ReplaceAll(string(manifest), "hide_logs: true", "hide_logs: false")), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// The full source composition needs every component module the project
+	// replaces, with the project's own lock.
+	replacements := projectReplacements(t, repository)
+	lock, err := os.ReadFile(filepath.Join(repository, "wippy.lock"))
+	if err != nil {
 		t.Fatal(err)
 	}
 	fixtureSnapshot := filepath.Join(repository, "tests/fixtures/hive_desktop_admission")
@@ -113,8 +144,10 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		if err := os.CopyFS(filepath.Join(folder, "src"), os.DirFS(sourceSnapshot)); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.CopyFS(filepath.Join(folder, "modules", "persist"), os.DirFS(filepath.Join(repository, "modules", "persist"))); err != nil {
-			t.Fatal(err)
+		for _, module := range replacements {
+			if err := os.CopyFS(filepath.Join(folder, module), os.DirFS(filepath.Join(repository, module))); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if err := os.CopyFS(filepath.Join(folder, "src", "hive_probe"), os.DirFS(fixtureSnapshot)); err != nil {
 			t.Fatal(err)
@@ -138,7 +171,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		if err := os.WriteFile(clientFixture, []byte(text), 0600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), lock, 0600); err != nil {
 			t.Fatal(err)
 		}
 		for _, name := range []string{"transport.pem", "transport-key.pem"} {
@@ -164,7 +197,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		}
 		config := map[string]any{
 			"version": "1.0", "shutdown": map[string]any{"timeout": "2s"},
-			"workspace": map[string]any{"replacements": map[string]string{"bee/persist": "./modules/persist"}},
+			"workspace": map[string]any{"replacements": replacements},
 			"relay":     map[string]any{"node_name": fmt.Sprintf("node-%d", i)},
 			"lua":       map[string]any{"type_system": map[string]any{"enabled": true, "strict": true}},
 			"cluster": map[string]any{
@@ -195,7 +228,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	}
 	rejoinDirectory := ""
 	start := func(i int, folder string) *procRunner {
-		cmd := exec.CommandContext(ctx, binary, "run", "--console", "hive-desktop-admission-probe", "--", fmt.Sprintf("node-%d", i))
+		cmd := exec.CommandContext(ctx, binary, "run", "--console", "--override", desktopSupervisorOverride, "hive-desktop-admission-probe", "--", fmt.Sprintf("node-%d", i))
 		if i == 1 && nativeClient != "" {
 			cmd = exec.CommandContext(ctx, nativeClient)
 		}

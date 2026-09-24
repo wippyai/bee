@@ -38,8 +38,10 @@ entries:
     effect: allow
 - name: harness_setup_policy
   kind: security.policy.expr
+  meta:
+    comment: Host setup runs only for the workspace the caller's host-issued identity is bound to
   policy:
-    expression: action == "bee.harness.setup" || (action == "funcs.call" && resource == "bee.harness.launch:setup")
+    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup")
     actions:
     - bee.harness.setup
     - funcs.call

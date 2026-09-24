@@ -1,6 +1,7 @@
 -- MIT. Native placement acceptance for a provider configured through a third
 -- driver binding. The denied paths must leave no durable placement intent.
 local test = require("test")
+local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -31,18 +32,19 @@ local function fresh(prefix: string): string
     return prefix .. "-third-driver-" .. tostring(counter) .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000))
 end
 
-local function caller(actor: string)
+-- A caller is bound to the workspace it acts in, as host-issued principals are.
+local function caller(actor: string, workspace_id: unknown)
     local policies: {security.Policy} = {}
     for index, name in ipairs({"bee.placement.native:client_test_policy", "bee:resource_manage_policy", "bee:resource_grant_policy", "bee:credential_manage_policy", "bee:credential_issue_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
     end
-    return funcs.new():with_actor(security.new_actor(actor)):with_scope(security.new_scope(policies))
+    return funcs.new():with_actor(principals.actor(actor, workspace_id)):with_scope(security.new_scope(policies))
 end
 
 local function call(actor: string, method: string, value: unknown): service.Reply
-    local reply, err = caller(actor):call("bee.placement.native:" .. method, value)
+    local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: service.Reply
 end

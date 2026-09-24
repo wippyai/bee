@@ -50,7 +50,11 @@ end
 local function subject_executor(binding: gateway.Binding, tool: mcp.Tool, values: Object?, runtime: RuntimeGrant?): (funcs.Executor?, Object?)
     local scope, scope_error = scope_for(tool.policies)
     if not scope then return nil, refused("UNAVAILABLE", scope_error or "scope") end
-    local subject, subject_error = security.new_actor(binding.subject)
+    -- The subject acts only in its binding's workspace: workspace-scoped
+    -- policies compare the resource with this host-derived metadata.
+    local subject_meta: {[string]: string} = {}
+    if binding.workspace_id then subject_meta.workspace_id = binding.workspace_id end
+    local subject, subject_error = security.new_actor(binding.subject, subject_meta)
     if not subject then return nil, refused("DENIED", tostring(subject_error)) end
     local executor = funcs.new()
     local attributed, attribution_error = context.bind(values, {binding_id = binding.binding_id,

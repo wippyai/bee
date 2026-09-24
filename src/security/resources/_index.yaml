@@ -28,13 +28,14 @@ entries:
     resources: '*'
     effect: allow
 - name: resource_grant_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta:
-    comment: A principal takes grants for itself
+    comment: A principal takes grants for itself, only in the workspace its host-issued identity is bound to
   policy:
     actions:
     - bee.resources.grant
     resources: '*'
+    expression: resource != "" && resource == actor.meta.workspace_id
     effect: allow
 - name: resource_resolve_policy
   kind: security.policy

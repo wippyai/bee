@@ -4,6 +4,7 @@
 -- start runs the carrier to settlement, and a retried start recovers the
 -- same attempt without a second action, attempt, turn or receipt.
 local test = require("test")
+local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
@@ -46,12 +47,12 @@ local function scope(): security.Scope
 end
 local actor = security.new_actor(REQUESTER)
 local function call(target: string, request: unknown): admission.Reply
-    local result, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
+    local result, err = funcs.new():with_actor(principals.actor(REQUESTER, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     return result :: admission.Reply
 end
 local function call_as(actor_id: string, target: string, request: unknown): admission.Reply
-    local result, err = funcs.new():with_actor(security.new_actor(actor_id)):with_scope(scope()):call(target, request)
+    local result, err = funcs.new():with_actor(principals.actor(actor_id, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     return result :: admission.Reply
 end
@@ -418,7 +419,7 @@ local function define_tests()
             test.is_true(no_setup_error ~= nil or (type(no_setup) == "table" and no_setup.ok == false))
             local call_only = assert(security.policy("bee.harness.catalog:setup_call_only_policy"))
             local denied_workspace = fresh("setup-operation-denied")
-            local denied, denied_error = funcs.new():with_actor(actor):with_scope(security.new_scope({call_only})):call("bee.harness.launch:setup",
+            local denied, denied_error = funcs.new():with_actor(principals.actor(REQUESTER, denied_workspace)):with_scope(security.new_scope({call_only})):call("bee.harness.launch:setup",
                 {workspace_id = denied_workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
             test.is_nil(denied_error)
             test.is_true(type(denied) == "table")
@@ -428,8 +429,9 @@ local function define_tests()
             test.eq(#associations(denied_workspace), 0)
             local policy, policy_error = security.policy("bee.harness.catalog:setup_client_policy")
             if policy_error or not policy then error(tostring(policy_error)) end
-            local private_reply, private_error = funcs.new():with_actor(actor):with_scope(security.new_scope({policy})):call("bee.harness.launch:setup_backend",
-                {workspace_id = fresh("setup-private"), definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
+            local private_workspace = fresh("setup-private")
+            local private_reply, private_error = funcs.new():with_actor(principals.actor(REQUESTER, private_workspace)):with_scope(security.new_scope({policy})):call("bee.harness.launch:setup_backend",
+                {workspace_id = private_workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
             test.is_true(private_error ~= nil or (type(private_reply) == "table" and private_reply.ok == false))
             local unknown = call("bee.harness.launch:setup", {workspace_id = fresh("setup-unknown"), definition_ref = "bee.harness.catalog:missing",
                 expected_plan_digest = plan.plan_digest})
@@ -969,7 +971,8 @@ local function define_tests()
             local replay = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(((replay.request :: {[string]: unknown}).projections :: {string})[1], projections[1])
             test.eq(code(call("bee.harness.launch:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping", thread_id = "t"})), "FORBIDDEN")
-            local outsider = funcs.new():with_actor(security.new_actor("bee.test.other")):with_scope(scope())
+            -- Bound to the same workspace, so the refusal is the launch policy's.
+            local outsider = funcs.new():with_actor(principals.actor("bee.test.other", workspace)):with_scope(scope())
             local denied, err = outsider:call("bee.harness.launch:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
             if err then error(tostring(err)) end
             test.eq(code(denied :: admission.Reply), "FORBIDDEN")
@@ -1032,7 +1035,7 @@ local function define_tests()
             local request_id = fresh("request")
             local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             local carrier_request = admitted.request :: {[string]: unknown}
-            local spawner = process.with_context({}):with_actor(actor):with_scope(scope())
+            local spawner = process.with_context({}):with_actor(principals.actor(REQUESTER, workspace)):with_scope(scope())
             local crashed_pid, spawn_error = spawner:spawn_monitored("bee.harness.catalog:carrier_faulted", "bee:workers", carrier_request, "open", process.pid(), "placement_intent")
             if not crashed_pid then error("spawn faulted carrier: " .. tostring(spawn_error)) end
             local events = assert(process.events())

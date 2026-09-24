@@ -62,13 +62,15 @@ entries:
     - bee.approvals.decide
     - bee.governance.overlay.read
     - bee.governance.overlay.write
+    - funcs.security
+    - security.actor.create
     resources: '*'
     effect: allow
 - name: author
   kind: process.lua
   source: file://author.lua
   method: main
-  modules: [funcs, registry, process, channel, time, json, sql, io, base64]
+  modules: [funcs, security, registry, process, channel, time, json, sql, io, base64]
   imports:
     bounds: bee.threads.records:bounds
     artifact: bee.governance:artifact
@@ -86,7 +88,7 @@ entries:
     - bee:resource_grant_policy
     - bee:resource_resolve_policy
     - bee:credential_issue_policy
-    - bee:credential_materialize_policy
+    - bee:credential_materialize_workspace_policy
     - bee:gateway_materialize_policy
     - bee:gateway_supervision_policy
   meta:
@@ -106,7 +108,7 @@ entries:
         - bee:resource_grant_policy
         - bee:resource_resolve_policy
         - bee:credential_issue_policy
-        - bee:credential_materialize_policy
+        - bee:credential_materialize_workspace_policy
         - bee:gateway_materialize_policy
         - bee:gateway_supervision_policy
 - name: stage_policy

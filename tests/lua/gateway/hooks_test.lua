@@ -145,6 +145,15 @@ local function define_tests()
             local _, unknown_event = hooks.normalize("Notification", cleaned)
             test.eq(unknown_event, "event Notification is not in the hook catalog")
         end)
+        test.it("gives Claude no settings argument when its gateway selects no hook", function()
+            local gateway: configuration.GatewayInput = {endpoint = "127.0.0.1:18790", action_id = "act-1", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}
+            local raw, call_error = funcs.call("bee.driver.claude.binding:configure", {fixture = false, gateway = gateway})
+            if call_error then error(tostring(call_error)) end
+            local claude, claude_error = configuration.decode_reply(raw, nil, gateway)
+            if not claude then error(tostring(claude_error)) end
+            test.eq(claude.arguments[1], "--mcp-config")
+            for _, argument in ipairs(claude.arguments) do test.is_true(argument ~= "--settings") end
+        end)
         test.it("renders driver-owned hook delivery with Codex trust hashes as the pinned executable computes them", function()
             local events = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
             local gateway: configuration.GatewayInput = {endpoint = "127.0.0.1:18790", action_id = "act-1", tools = {"thread_read"}, hooks = events, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN"}

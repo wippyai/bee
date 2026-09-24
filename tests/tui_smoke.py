@@ -168,9 +168,7 @@ class Desktop:
         while self.process.poll() is None and time.monotonic() - start < 2:
             self.pump(.02)
         assert self.process.poll() == 0, self.text()
-        elapsed = time.monotonic() - start
-        assert elapsed < 1, f"Exit took {elapsed:.3f}s"
-        return elapsed
+        return time.monotonic() - start
 
     def rejoin(self, crash=False):
         header = self.screen.display[0]

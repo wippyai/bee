@@ -59,6 +59,23 @@ local function value(reply: admission.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
     return reply.value :: {[string]: unknown}
 end
+-- The host opens the gateway listener; a case whose attempt reaches gateway
+-- admission opens it here as the host would, under the manage authority
+-- only this call holds.
+local function open_gateway()
+    local endpoint = registry.get("bee:gateway_endpoint")
+    if not endpoint then error("gateway endpoint entry") end
+    local policies: {security.Policy} = {}
+    for index, name in ipairs({"bee.harness.catalog:gateway_client_policy", "bee:gateway_manage_policy"}) do
+        local policy, err = security.policy(name)
+        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
+        policies[index] = policy
+    end
+    local reply, err = funcs.new():with_actor(actor):with_scope(security.new_scope(policies)):call("bee.gateway.binding:open",
+        {address = tostring((endpoint.data :: {[string]: unknown}).address)})
+    if err then error("bee.gateway.binding:open: " .. tostring(err)) end
+    value(reply :: admission.Reply)
+end
 local function code(reply: admission.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return reply.error and reply.error.code or ""
@@ -842,6 +859,7 @@ local function define_tests()
                 local carrier_request = admitted.request :: {[string]: unknown}
                 local preferences = carrier_request.preferences :: {[string]: unknown}
                 test.eq((preferences.options :: {[string]: unknown}).config_profile, "ds-flash")
+                open_gateway()
                 local io = carrier_io()
                 local planned, plan_error = machine.plan(io, admitted.request)
                 if not planned then error(tostring(plan_error)) end

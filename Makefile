@@ -1,5 +1,10 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
+# Runtime Lua cache fingerprints include the toolchain, entry source and
+# dependencies. A shared test cache survives each fixture's disposable HOME.
+RUNTIME_CACHE_KEY := $(shell python3 -c 'import json; print(json.load(open("wippy.build.json"))["runtime"]["commit"][:12])')
+WIPPY_CACHE_DIR ?= $(abspath .wippy/test-cache/$(RUNTIME_CACHE_KEY))
+export WIPPY_CACHE_DIR
 .PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check
 setup: native-tools
 
@@ -110,6 +115,9 @@ fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
 test: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
+.PHONY: compile-cache-check
+compile-cache-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py
 .PHONY: clipboard-contract-check
 clipboard-contract-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/clipboard_contract.py

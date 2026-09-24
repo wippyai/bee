@@ -15,6 +15,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
+TEST_CACHE = ROOT / ".wippy/test-cache" / json.loads((ROOT / "wippy.build.json").read_text())["runtime"]["commit"][:12]
 
 
 def registry_entries(folder, names):
@@ -83,8 +84,10 @@ def configure_managed_gateway(folder, address=None):
 def database_environment(directory, **overrides):
     """Keep every booted subsystem store inside the fixture's disposable root."""
     root = Path(directory)
+    cache = Path(os.environ.get("WIPPY_CACHE_DIR") or TEST_CACHE).resolve()
     names = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance", "sync")
-    return {**os.environ, **{f"BEE_{name.upper()}_DB": str(root / f"{name}.db") for name in names}, **overrides}
+    return {**os.environ, "WIPPY_CACHE_DIR": str(cache),
+            **{f"BEE_{name.upper()}_DB": str(root / f"{name}.db") for name in names}, **overrides}
 
 
 CLASSIC_ROOT = "bee:workspace_root"

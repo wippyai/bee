@@ -200,6 +200,32 @@ local function define_tests()
             test.eq(outcome_error, "answered outcome is not an outcome")
             test.is_nil(record.decode(base("recap.checkpoint", {through_sequence = 1})))
         end)
+        test.it("addresses a message to sessions by action and names the sending action", function()
+            local body = text_message()
+            body.recipient_action_ids = {"action-b"}
+            body.sender_action_id = "action-a"
+            local decoded, decode_error = record.decode(base("message", body))
+            if not decoded then error(tostring(decode_error)) end
+            local encoded = record.encode(decoded)
+            if not encoded then error("encode addressed message") end
+            test.is_true(encoded:find('"recipient_action_ids":["action-b"]', 1, true) ~= nil)
+            test.is_true(encoded:find('"sender_action_id":"action-a"', 1, true) ~= nil)
+            local again = record.decode_json(encoded)
+            if not again then error("round trip") end
+            test.eq(record.encode(again), encoded)
+            local addressed = again.body :: types.Message
+            test.eq((addressed.recipient_action_ids :: {string})[1], "action-b")
+            test.eq(addressed.sender_action_id, "action-a")
+            local plain = record.decode(base("message", text_message()))
+            if not plain then error("plain message") end
+            test.is_nil((record.encode(plain) or ""):find("action_id", 1, true))
+            local _, empty_error = message.decode({message_id = "m1", message_kind = "request", sender_id = "alice", recipient_ids = {}, recipient_action_ids = {}, content = {text = "x"}})
+            test.eq(empty_error, "recipient_action_ids names at least one action")
+            local _, repeat_error = message.decode({message_id = "m1", message_kind = "request", sender_id = "alice", recipient_ids = {}, recipient_action_ids = {"a", "a"}, content = {text = "x"}})
+            test.eq(repeat_error, "recipient_action_ids: list item 2 repeats")
+            local _, sender_error = message.decode({message_id = "m1", message_kind = "request", sender_id = "alice", recipient_ids = {}, sender_action_id = "", content = {text = "x"}})
+            test.eq(sender_error, "sender_action_id is not an identifier")
+        end)
     end)
 end
 local cases = test.run_cases(define_tests)

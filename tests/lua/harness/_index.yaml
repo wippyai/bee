@@ -411,6 +411,58 @@ entries:
   imports:
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
+- name: cross_session_acceptance_test
+  kind: function.lua
+  source: file://cross_session_acceptance_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "240s"}
+  modules: [funcs, security, process, registry, env, time, channel, json]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:credential_store_policy]
+  imports:
+    test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
+    catalog: bee.harness.catalog:catalog
+    policy: bee.harness.carrier:policy
+- name: cross_session_claude_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The scripted waiting session's launch policy under the Claude driver; the acceptance binds the fixture executable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, thread_notify]
+- name: cross_session_codex_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The scripted sending session's launch policy under the Codex driver; the acceptance binds the fixture executable, which never calls the provider
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {sandbox: read-only}
+    provider_ref: bee.harness.catalog:codex_fixture_provider
+    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message]
 - name: gateway_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua

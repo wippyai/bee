@@ -42,6 +42,8 @@ type Message = {
     message_kind: MessageKind,
     sender_id: string,
     recipient_ids: {string},
+    recipient_action_ids: {string}?,
+    sender_action_id: string?,
     content: Content,
     in_reply_to: Ref?,
     outcome: Outcome?,

@@ -55,24 +55,28 @@ entries:
 - name: gateway_tool_read_policy
   kind: security.policy
   meta:
-    comment: The scope a bound subject runs thread_read and thread_wait under; membership is still checked by the thread owner
+    comment: The scope a bound subject runs thread_read, thread_wait and thread_sessions under; membership is still checked by the thread owner
   policy:
     actions:
     - funcs.call
     resources:
     - bee.threads.service:read_after
     - bee.threads.delivery:watch
+    - bee.threads.service:get
     effect: allow
 - name: gateway_tool_message_policy
   kind: security.policy
   meta:
-    comment: The bound MCP subject may append only a decoded message through the thread authority; the endpoint
-      supplies thread and action/attempt context
+    comment: The bound MCP subject may append only a decoded message through the thread authority and register a one-shot
+      notice on its own thread; the endpoint supplies thread, action/attempt context and the addressed session, and reads
+      membership through get so an unreadable session is never reached
   policy:
     actions:
     - funcs.call
     resources:
     - bee.threads.service:record
+    - bee.threads.service:notify
+    - bee.threads.service:get
     effect: allow
 - name: gateway_tool_launch_policy
   kind: security.policy

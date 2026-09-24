@@ -13,6 +13,7 @@ local gateway = require("gateway")
 local mcp = require("mcp")
 local catalog = require("catalog")
 local context = require("context")
+local sessions = require("sessions")
 local bounds = require("bounds")
 type Object = {[string]: unknown}
 type RuntimeGrant = {access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
@@ -76,16 +77,85 @@ local function reply_result(reply: unknown, call_error: unknown): Object
     local is_error = type(reply) ~= "table" or (reply :: Object).ok ~= true
     return mcp.tool_result(encoded, is_error)
 end
+-- The running sessions of the caller's workspace that the bound subject may
+-- read, with each thread's title. The thread owner answers get as the
+-- subject, so a session on a thread the caller is not a member of is never
+-- listed or reachable; an owner failure other than a refusal stops the call.
+type Reachable = {sessions: {sessions.Candidate}, titles: {[string]: string}}
+local function reachable(binding: gateway.Binding, executor: funcs.Executor): (Reachable?, Object?)
+    local candidates, refusal = gateway.workspace_sessions(binding)
+    if not candidates then return nil, reply_result(refusal, nil) end
+    local titles: {[string]: string} = {}
+    local hidden: {[string]: boolean} = {}
+    local visible: {sessions.Candidate} = {}
+    for _, item in ipairs(candidates) do
+        if titles[item.thread_id] == nil and not hidden[item.thread_id] then
+            local reply, call_error = executor:call("bee.threads.service:get", {thread_id = item.thread_id})
+            if call_error then return nil, refused("UNAVAILABLE", tostring(call_error)) end
+            local answer = bounds.object(reply)
+            if answer and answer.ok == true then
+                local value = bounds.object(answer.value)
+                local summary = value and bounds.object(value.summary)
+                titles[item.thread_id] = summary and tostring(summary.title) or ""
+            else
+                local fault = answer and bounds.object(answer.error)
+                local code = fault and tostring(fault.code) or ""
+                if code ~= "DENIED" and code ~= "NOT_FOUND" then return nil, reply_result(reply, nil) end
+                hidden[item.thread_id] = true
+            end
+        end
+        if titles[item.thread_id] ~= nil then visible[#visible + 1] = item end
+    end
+    return {sessions = visible, titles = titles}, nil
+end
+local function resolve(binding: gateway.Binding, executor: funcs.Executor, address: string): (sessions.Candidate?, Object?)
+    local found, failure = reachable(binding, executor)
+    if not found then return nil, failure end
+    local target, code, message = sessions.resolve(found.sessions, address)
+    if not target then return nil, refused(code or "NOT_FOUND", message or "no such session") end
+    return target, nil
+end
+local function list_sessions(binding: gateway.Binding, executor: funcs.Executor): Object
+    local found, failure = reachable(binding, executor)
+    if not found then return failure :: Object end
+    local views: {sessions.View} = {}
+    for index, item in ipairs(found.sessions) do
+        if index > sessions.MAX_SESSIONS then break end
+        views[index] = sessions.view(item, found.titles[item.thread_id] or "", binding.action_id)
+    end
+    return reply_result({ok = true, value = {sessions = views, truncated = #found.sessions > sessions.MAX_SESSIONS}}, nil)
+end
 local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?): Object
-    if tool.name == "thread_read" or tool.name == "thread_message" then
-        request.thread_id = binding.thread_id
-    end
-    if tool.name == "thread_message" then
-        request.kind = "message"
-        request.context = {action_id = binding.action_id, attempt_id = binding.attempt_id}
-    end
     local executor, failure = subject_executor(binding, tool, values, runtime)
     if not executor then return failure :: Object end
+    if tool.name == "thread_sessions" then return list_sessions(binding, executor) end
+    if tool.name == "thread_notify" then
+        local target, unreachable = resolve(binding, executor, tostring(request.session))
+        if not target then return unreachable :: Object end
+        local reply, call_error = executor:call(tool.operation, {thread_id = binding.thread_id, idempotency_key = request.idempotency_key,
+            target_thread_id = target.thread_id, target_action_id = target.action_id, watcher_action_id = binding.action_id})
+        return reply_result(reply, call_error)
+    end
+    if tool.name == "thread_read" then request.thread_id = binding.thread_id end
+    if tool.name == "thread_message" then
+        request.kind = "message"
+        request.thread_id = binding.thread_id
+        request.context = {action_id = binding.action_id, attempt_id = binding.attempt_id}
+        local address = request.session
+        request.session = nil
+        if type(address) == "string" then
+            local target, unreachable = resolve(binding, executor, address)
+            if not target then return unreachable :: Object end
+            -- The session is the recipient; the caller's own action names the
+            -- sending session so the recipient can answer it by address.
+            local body = request.body :: Object
+            body.recipient_ids = {target.subject}
+            body.recipient_action_ids = {target.action_id}
+            body.sender_action_id = binding.action_id
+            request.thread_id = target.thread_id
+            if target.thread_id ~= binding.thread_id then request.context = nil end
+        end
+    end
     local reply, call_error = executor:call(tool.operation, request)
     return reply_result(reply, call_error)
 end
@@ -218,6 +288,8 @@ local function handle(): nil
     if tool.name == "thread_read" then arguments, argument_error = mcp.read_arguments(parameters)
     elseif tool.name == "thread_wait" then arguments, argument_error = mcp.wait_arguments(parameters)
     elseif tool.name == "thread_message" then arguments, argument_error = mcp.message_arguments(parameters)
+    elseif tool.name == "thread_sessions" then arguments, argument_error = mcp.sessions_arguments(parameters)
+    elseif tool.name == "thread_notify" then arguments, argument_error = mcp.notify_arguments(parameters)
     elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
     elseif tool.name == "overlay" then arguments, argument_error = mcp.overlay_arguments(parameters)
     elseif tool.name == "docs" then arguments, argument_error = mcp.docs_arguments(parameters)

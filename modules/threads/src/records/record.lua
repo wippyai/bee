@@ -120,6 +120,9 @@ local function encode_message(body: types.Message): string
     field(fields, "message_kind", encode_string(body.message_kind))
     field(fields, "sender_id", encode_string(body.sender_id))
     field(fields, "recipient_ids", encode_strings(body.recipient_ids))
+    local recipient_actions = body.recipient_action_ids
+    if recipient_actions then field(fields, "recipient_action_ids", encode_strings(recipient_actions)) end
+    field(fields, "sender_action_id", optional_string(body.sender_action_id))
     field(fields, "content", encode_content(body.content))
     field(fields, "in_reply_to", encode_ref(body.in_reply_to))
     field(fields, "outcome", optional_string(body.outcome))

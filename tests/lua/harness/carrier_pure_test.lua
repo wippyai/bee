@@ -210,6 +210,24 @@ local function define_tests()
             test.is_nil(err_amb)
             if not batch_amb then error("batch_amb is nil") end
             test.eq(batch_amb.activity, "Stopped")
+            -- A stop reports that the harness ended its turn: beside the hook
+            -- record it carries a hook-sourced turn signal, which is what a
+            -- thread notice watching the session recognizes. A stop failure
+            -- ends the turn as failed. Only the hook is acknowledged.
+            test.eq(#batch_amb.records, 2)
+            test.eq(#batch_amb.event_ids, 1)
+            local signal_record = batch_amb.records[2]
+            test.eq(signal_record.source, "hook")
+            local signal_body = signal_record.body :: Object
+            test.eq(signal_body.type, "turn.signal")
+            test.eq(signal_body.event_key, "hook:evt-002:turn")
+            test.eq((signal_body.data :: Object).phase, "ended")
+            test.is_nil((signal_body.data :: Object).reported_outcome)
+            local failed_stop = hook_records.batch(binding_id, turn_id, {make_valid_item("evt-004", "StopFailure", true)})
+            if not failed_stop then error("failed_stop is nil") end
+            test.eq(#failed_stop.records, 2)
+            test.eq(failed_stop.records[2].turn_id, turn_id)
+            test.eq(((failed_stop.records[2].body :: Object).data :: Object).reported_outcome, "failed")
             -- An activity that describes a specific occurrence cannot be
             -- attributed without that occurrence's identity.
             local untagged_tool = make_valid_item("evt-003", "PreToolUse", true)

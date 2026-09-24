@@ -6,7 +6,9 @@ listener epoch, drain, readiness, and HTTP handlers. The listener itself
 (`http.service`, router, and endpoints) belongs to the host composition. The
 activation binds native loopback port zero and reads the assigned address
 through supervisor state. Agent
-profiles declare `thread_read`, `thread_wait`, `thread_message`, the
+profiles declare `thread_read`, `thread_wait`, `thread_message`,
+`thread_sessions` and `thread_notify` (find, address and be told about other
+running sessions of the workspace whose threads the subject reads), the
 caller-owned Governance `overlay` tool, and `thread_launch`, which starts one
 host-allow-listed managed launch in the caller's own workspace and returns the
 child's thread, action and attempt. The host may admit any subset; no default

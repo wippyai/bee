@@ -323,6 +323,19 @@ function M.commit_record(tx: sql.Transaction, head: reader.Head, kind: record_ty
     head.head_sequence = sequence
     return {record_id = record_id, sequence = sequence}, nil
 end
+-- Whether an action with this identifier, on any thread of the store, was
+-- admitted for the actor. Lifecycle authority records the principal, so a
+-- sender can name only its own work as the session a message comes from.
+function M.admitted_for(tx: sql.Transaction, action_id: string, actor: string): (boolean, Result?)
+    local admissions, admissions_err = reader.admissions(tx, action_id)
+    if not admissions then return false, storage(admissions_err or "read action admissions") end
+    for _, encoded in ipairs(admissions) do
+        local stored, stored_error = record.decode_json(encoded)
+        if not stored then return false, failure("INTERNAL", stored_error or "stored admission is corrupt") end
+        if (stored.body :: record_types.Admitted).principal_id == actor then return true, nil end
+    end
+    return false, nil
+end
 -- A reply settles the sender's own obligation for the request it names.
 -- Returns the request obligation, or the failure that stops the commit.
 local function correlated_request(tx: sql.Transaction, head: reader.Head, caller: reader.Member, decoded: record_types.Message): (reader.Obligation?, Result?)
@@ -351,6 +364,13 @@ end
 -- handed in are obliged, so a notice to a recipient who can no longer be held
 -- to a delivery records without owing one.
 local function commit_message(tx: sql.Transaction, head: reader.Head, decoded: record_types.Message, recipients: {string}, commit: (integer) -> Result): Result
+    -- A recipient action addresses one session of this thread; an action the
+    -- thread does not hold could never read the message here.
+    for _, action_id in ipairs(decoded.recipient_action_ids or {}) do
+        local action, action_err = reader.action(tx, head.thread_id, action_id)
+        if action_err then return storage(action_err) end
+        if not action then return failure("INVALID_ARGUMENT", "recipient action " .. action_id .. " is not an action of the thread") end
+    end
     -- A request owes one answer or abandonment per recipient; other kinds owe
     -- the delivery alone and reserve no record capacity.
     local owed = 0
@@ -379,6 +399,12 @@ function M.submit_message(tx: sql.Transaction, head: reader.Head, caller: reader
     submission.sender_id = caller.actor
     local decoded, decode_error = message.decode(submission)
     if not decoded then return failure("INVALID_ARGUMENT", "message: " .. tostring(decode_error)) end
+    local sender_action = decoded.sender_action_id
+    if sender_action then
+        local own, own_refused = M.admitted_for(tx, sender_action, caller.actor)
+        if own_refused then return own_refused end
+        if not own then return failure("DENIED", "sender_action_id does not name an action admitted for the caller") end
+    end
     local settled: reader.Obligation? = nil
     if decoded.message_kind == "reply" then
         local obligation, refused = correlated_request(tx, head, caller, decoded)

@@ -46,6 +46,7 @@ entries:
     mcp: bee.gateway:mcp
     catalog: bee.gateway:catalog
     context: bee.gateway:context
+    sessions: bee.gateway:sessions
     bounds: bee.threads.records:bounds
     arguments: bee.application:arguments
   security:

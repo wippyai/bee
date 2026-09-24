@@ -15,19 +15,16 @@ local time = require("time")
 local channel = require("channel")
 local json = require("json")
 local placement_fixture = require("placement_fixture")
-local system = require("system")
 local ACTOR = "bee.test.gateway_carrier"
 local POLICY = "bee.harness.catalog:gateway_fixture_policy"
 local EXPIRING_POLICY = "bee.harness.catalog:gateway_expiring_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
 local BINDING = "bee.driver.claude:binding"
 local CARRIER = "bee.harness.catalog:carrier_faulted"
--- The scripted authoring destination's host profiles; the workspace is chosen
--- by the fixture, the source workspace by the plain request the agent is given.
-local PROFILES_WORKSPACE = "author-dest-ws"
-local PROFILES_COMPONENT = "bee.guide_demo/app"
-local PROFILES_OVERLAY = "bee.harness.catalog:author_overlay"
-local PROFILES_NODE = assert(system.node.id())
+-- The scripted author's own workspace. The shipped host profiles admit the
+-- overlay named by the guide's workspace-application rule; nothing here
+-- configures a profile.
+local AUTHOR_WORKSPACE = "author-dest-ws"
 type Object = {[string]: unknown}
 local counter = 0
 local function fresh(prefix: string): string
@@ -318,38 +315,6 @@ end
 local function no_token_in(details: {string})
     for index, item in ipairs(details) do no_secret_in(item, "evidence " .. tostring(index)) end
 end
--- Configure the host publication/activation profiles the delivery tool reads,
--- and an approver policy, the way an installed Bee's host profiles would.
-local function install_author_profiles(source_workspace: string)
-    local function rewrite(name: string, mutate: (Object) -> ())
-        local entry = assert(registry.get(name))
-        local data = entry.data :: Object
-        mutate(data)
-        entry.data = data
-        local changes = registry.snapshot():changes()
-        changes:update(entry)
-        local applied, err = changes:apply()
-        if not applied then error("install " .. name .. ": " .. tostring(err)) end
-    end
-    rewrite("bee.governance:publication_profiles", function(data: Object)
-        local profiles = data.profiles :: {Object}
-        profiles[#profiles + 1] = {workspace_id = PROFILES_WORKSPACE, source_workspace = source_workspace,
-            component = PROFILES_COMPONENT, overlay_owner = PROFILES_OVERLAY}
-    end)
-    rewrite("bee.governance:activation_profiles", function(data: Object)
-        local profiles = data.profiles :: {Object}
-        profiles[#profiles + 1] = {workspace_id = PROFILES_WORKSPACE, source_node = PROFILES_NODE,
-            source_workspace = source_workspace, component = PROFILES_COMPONENT, resolver = "overlay",
-            overlay_owner = PROFILES_OVERLAY, approval_policy = "local-author-app", parameters = {},
-            allow = {packages = {PROFILES_COMPONENT}, namespaces = {"bee.guide_demo"}, kinds = {"process.lua"},
-                databases = {}, grants = {}, modules = {"tty", "process", "channel", "json"}}}
-    end)
-    rewrite("bee:approver_policies", function(data: Object)
-        local policies = data.policies :: {Object}
-        policies[#policies + 1] = {name = "local-author-app", approvers = {ACTOR}, max_ttl_ms = 600000}
-    end)
-end
-
 local function define_tests()
     test.describe("Gateway through the carrier", function()
         install_policy(POLICY)
@@ -780,17 +745,16 @@ local function define_tests()
             -- example in the same overlay and the destination preflight is
             -- ready.
             install_policy("bee.harness.catalog:gateway_author_policy")
-            local source = fresh("author-src")
-            install_author_profiles(source)
+            local source = "counter"
             local environment = {BEE_FIXTURE_GATEWAY_AUTHOR = "repair", BEE_FIXTURE_AUTHOR_WORKSPACE = source,
-                BEE_FIXTURE_AUTHOR_SOURCE = source, BEE_FIXTURE_AUTHOR_DESTINATION = PROFILES_WORKSPACE,
+                BEE_FIXTURE_AUTHOR_SOURCE = source, BEE_FIXTURE_AUTHOR_DESTINATION = AUTHOR_WORKSPACE,
                 BEE_FIXTURE_AUTHOR_VERSION = "1.0.0", BEE_FIXTURE_STREAM = stream("plain.jsonl")}
             local thread_id = thread()
             local attempt_id = fresh("author")
             -- The gateway takes the delivery destination from the binding, so
             -- the authoring session is bound to the destination workspace.
             local authoring = request(thread_id, attempt_id, environment, nil, "bee.harness.catalog:gateway_author_policy")
-            authoring.workspace_id = PROFILES_WORKSPACE
+            authoring.workspace_id = AUTHOR_WORKSPACE
             local outcome = run_carrier(authoring, "open", nil)
             if not outcome.value then error("authoring carrier failed: " .. tostring(outcome.error)) end
             test.eq((outcome.value.settlement :: Object).outcome, "succeeded")

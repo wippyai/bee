@@ -5,7 +5,7 @@ entries:
   kind: function.lua
   source: file://catalog_test.lua
   method: run
-  modules: [registry]
+  modules: [registry, system]
   meta: {type: test, suite: bee}
   imports:
     catalog: bee.applications:catalog

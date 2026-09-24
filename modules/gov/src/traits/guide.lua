@@ -7,10 +7,11 @@
 -- real workspace -> publication -> destination -> preflight chain, so the
 -- guide's example and the proven example cannot drift apart.
 local preflight = require("preflight")
+local workspace_applications = require("workspace_applications")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@6"
+M.REVISION = "bee.governance-component-guide@7"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -198,9 +199,12 @@ return {main = main}
 
 -- The example entries.json value: one application definition, the exact shape
 -- the freeze and publication path measures. Its metadata is the minimum
--- docs/reference/applications.md requires for an admitted, listed application.
-M.NAMESPACE = "bee.guide_demo"
-M.DEFINITION_ID = M.NAMESPACE .. ":app"
+-- docs/reference/applications.md requires for an admitted, listed application,
+-- and its identity follows the workspace-application naming rule, so the
+-- example delivers to the author's own workspace unchanged.
+M.OVERLAY_ID = "counter"
+M.NAMESPACE = workspace_applications.NAMESPACE_ROOT .. "." .. M.OVERLAY_ID
+M.DEFINITION_ID = M.NAMESPACE .. ":" .. workspace_applications.APPLICATION_NAME
 M.TITLE = "Counter App"
 M.VERSION = "1.0.0"
 
@@ -286,11 +290,24 @@ function M.document(): string
         .. " auto-start consumer is present. Governance seals the exact functions and runs them before exposing"
         .. " the complete overlay. New databases, changed applied migrations and schema rollback are refused."
     lines[#lines + 1] = ""
+    lines[#lines + 1] = M.workspace_delivery()
+    lines[#lines + 1] = ""
     lines[#lines + 1] = M.platform_documentation()
     lines[#lines + 1] = ""
-    lines[#lines + 1] = "Minimal example: put the JSON below at path " .. M.ENTRIES_PATH
-        .. " and freeze it. Its entry id is " .. M.DEFINITION_ID .. " and its title " .. M.TITLE .. "."
+    lines[#lines + 1] = "Minimal example: create overlay " .. M.OVERLAY_ID .. ", put the JSON below at path "
+        .. M.ENTRIES_PATH .. " and freeze it. Its entry id is " .. M.DEFINITION_ID .. " and its title " .. M.TITLE .. "."
     return table.concat(lines, "\n")
+end
+
+-- How an application reaches the author's own workspace: the naming rule the
+-- host's workspace-application profile admits and the delivery request.
+function M.workspace_delivery(): string
+    return "To deliver an application to your own workspace, " .. workspace_applications.RULE .. "."
+        .. " This workspace admits exactly that namespace, the entry kinds and native modules its host"
+        .. " profile names and the ordinary application boundary; a candidate outside it is refused at"
+        .. " preflight with the remedy. Freeze, then call the delivery tool with operation request, your"
+        .. " source_overlay_id, a version and the frozen snapshot_digest; workspace_id defaults to your"
+        .. " own workspace. A later version is a new freeze and a new delivery request with a higher version."
 end
 
 -- The application archetypes of docs/guides/app-style.md: the request each

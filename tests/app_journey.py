@@ -29,11 +29,12 @@ from workspace import (ROOT, RUNTIME, classic_workspace, configure_managed_gatew
 
 DEFINITION_ID = "bee.app_journey_demo:app"
 TITLE = "App Journey"
-GUIDE_DEFINITION_ID = "bee.guide_demo:app"
+GUIDE_DEFINITION_ID = "app.counter:app"
 GUIDE_TITLE = "Counter App"
-GUIDE_WORKSPACE = "app-journey-guide"
+GUIDE_WORKSPACE = "counter"
 GUIDE_VERSION = "1.0.0"
-GUIDE_APPROVAL_POLICY = "local-app-journey-guide"
+# The shipped approver policy of the workspace-application host profile.
+GUIDE_APPROVAL_POLICY = "workspace-application-delivery"
 # The cold first boot of a full composition, the budget the sibling desktop
 # acceptances (tests/inbox_decide.py) already use for one.
 COLD_BOOT = 30
@@ -301,19 +302,6 @@ def add_open_admission(project):
         "definition_id": OPEN_SEED,
         "policies": ["bee.app_open_probe:view_policy", "bee.app_open_probe:host_lookup_policy",
                       "bee.app_open_probe:evidence_policy", "bee.app_open_probe:operator_signal_policy"]})
-    index.write_text(yaml.safe_dump(document, sort_keys=False))
-
-
-def add_guide_admission(project):
-    """Admit the exact definition carried by the Governance guide example."""
-    index = project / "src/security/_index.yaml"
-    document = yaml.safe_load(index.read_text())
-    admission = next(entry for entry in document["entries"]
-                     if entry["name"] == "application_admission")
-    admission["bindings"].append({
-        "definition_id": GUIDE_DEFINITION_ID,
-        "policies": ["bee:ordinary_app_subsystem_boundary"],
-    })
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
@@ -633,7 +621,6 @@ def exercise():
         for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         bind_admission(project)
-        add_guide_admission(project)
         add_open_admission(project)
         configure_open_agent(project)
         shutil.copytree(ROOT / "tests/fixtures/modules/gateway/src/managed", project / "src/managed")

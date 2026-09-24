@@ -1,10 +1,9 @@
 -- MIT. Author the guide's own example through the real governed chain and
--- require a ready destination preflight. This is what keeps the guide's
+-- require a ready destination preflight under the shipped host profiles. This is what keeps the guide's
 -- example from rotting: it is the same value a person reads through the MCP
 -- overlay tool, published and staged the same way tests/fixtures/app_journey
 -- authors an application.
 local funcs = require("funcs")
-local registry = require("registry")
 local system = require("system")
 local env = require("env")
 local json = require("json")
@@ -16,10 +15,10 @@ local preflight = require("preflight")
 
 type Object = {[string]: unknown}
 
-local COMPONENT = guide.NAMESPACE .. "/app"
-local SOURCE_WORKSPACE = "app-journey-guide"
-local OVERLAY_OWNER = "bee.app_journey_probe:guide_overlay"
-local APPROVAL_POLICY = "local-app-journey-guide"
+-- The shipped host profiles admit the guide's overlay by the
+-- workspace-application naming rule; this fixture configures no profile.
+local COMPONENT = guide.NAMESPACE
+local SOURCE_WORKSPACE = guide.OVERLAY_ID
 
 local function object(value: unknown): Object
     local decoded = bounds.object(value)
@@ -43,38 +42,6 @@ local function digest_of(value: unknown, label: string): string
     local measured = bounds.id(value)
     if not measured or #measured ~= 64 then error(label .. " is not a digest") end
     return measured
-end
-
-local function configure_host(workspace_id: string, local_node: string)
-    local pub_entry = assert(registry.get("bee.governance:publication_profiles"))
-    local pub_data = object(pub_entry.data)
-    pub_data.profiles = {{workspace_id = workspace_id, source_workspace = SOURCE_WORKSPACE,
-        component = COMPONENT, overlay_owner = OVERLAY_OWNER}}
-    pub_entry.data = pub_data
-
-    local act_entry = assert(registry.get("bee.governance:activation_profiles"))
-    local act_data = object(act_entry.data)
-    act_data.profiles = {{workspace_id = workspace_id, source_node = local_node,
-        source_workspace = SOURCE_WORKSPACE, component = COMPONENT, resolver = "overlay",
-        overlay_owner = OVERLAY_OWNER, approval_policy = APPROVAL_POLICY, parameters = {},
-        allow = {packages = {COMPONENT}, namespaces = {guide.NAMESPACE}, kinds = {"process.lua"},
-            databases = {}, grants = {}, modules = {"tty", "process", "channel", "json"}}}}
-    act_entry.data = act_data
-
-    local policy_entry = assert(registry.get("bee:approver_policies"))
-    local policy_data = object(policy_entry.data)
-    local policies = policy_data.policies :: {unknown}
-    policies[#policies + 1] = {name = APPROVAL_POLICY,
-        approvers = {"bee.app_journey.operator", {definition_id = "bee.inbox:app"}}, max_ttl_ms = 60000}
-    policy_data.policies = policies
-    policy_entry.data = policy_data
-
-    local changes = registry.snapshot():changes()
-    assert(changes:update(pub_entry))
-    assert(changes:update(act_entry))
-    assert(changes:update(policy_entry))
-    local applied, apply_error = changes:apply()
-    if not applied then error("apply guide host profiles: " .. tostring(apply_error)) end
 end
 
 local function main()
@@ -110,7 +77,6 @@ local function main()
     local workspace_id = bounds.id(env.get("bee.app_journey_probe:destination_workspace"))
     if not workspace_id then error("destination workspace identity is unavailable") end
     local local_node = assert(system.node.id())
-    configure_host(workspace_id, local_node)
 
     local prepared = call_api("bee.governance.binding:publication_call", {operation = "prepare",
         workspace_id = workspace_id, component = COMPONENT, version = guide.VERSION,

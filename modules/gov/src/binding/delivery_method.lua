@@ -13,6 +13,8 @@ local preflight = require("preflight")
 local guide = require("guide")
 local transaction = require("transaction")
 local protocol = require("protocol")
+local publication_profiles = require("publication_profiles")
+local system = require("system")
 
 local M = {}
 type Result = transaction.Result
@@ -44,20 +46,20 @@ local function object(value: unknown): Object?
 end
 
 -- The host profile names the component and source workspace for one
--- destination workspace; the agent names only the workspace it authored in.
-local function profile_for(workspace_id: string, source_workspace: string): (Object?, string?)
+-- destination workspace; the agent names only the overlay it authored in. A
+-- refusal carries what the author or the host changes to deliver it.
+local function profile_for(workspace_id: string, source_workspace: string): (Object?, Result?)
     local entry, entry_error = resources.publication_profiles()
-    if not entry then return nil, tostring(entry_error or "publication profiles are unavailable") end
-    local data = object(entry.data)
-    local rows = data and data.profiles
-    if type(rows) ~= "table" then return nil, "publication profiles are unavailable" end
-    for _, raw in ipairs(rows :: {unknown}) do
-        local profile = object(raw)
-        if profile and profile.workspace_id == workspace_id and profile.source_workspace == source_workspace then
-            return profile, nil
-        end
+    if not entry then return nil, failure("UNAVAILABLE", tostring(entry_error or "publication profiles are unavailable")) end
+    local configuration, configuration_error = publication_profiles.decode(entry.data)
+    if not configuration then return nil, failure("UNAVAILABLE", configuration_error or "publication profiles are unavailable") end
+    local profile, refused = publication_profiles.for_source(configuration, workspace_id, source_workspace)
+    if not profile then
+        local reason = refused or {message = "publication profile is unavailable", remedy = ""}
+        return nil, transaction.failure("BLOCKED", reason.message, {remedy = reason.remedy})
     end
-    return nil, "the host has no publication profile for this application"
+    return {workspace_id = profile.workspace_id, source_workspace = profile.source_workspace,
+        component = profile.component, overlay_owner = profile.overlay_owner}, nil
 end
 
 local function forward(target: string, request: unknown): (Object?, Result?)
@@ -98,7 +100,7 @@ end
 local function request_operation(workspace_id: string, source_workspace: string,
     version: string, snapshot_digest: string): Result
     local profile, profile_error = profile_for(workspace_id, source_workspace)
-    if not profile then return failure("BLOCKED", profile_error) end
+    if not profile then return profile_error :: Result end
     local component = bounds.text(profile.component, 160)
     if not component or component == "" then return failure("BLOCKED", "publication profile names no component") end
 
@@ -144,8 +146,8 @@ local function status_operation(workspace_id: string, source_workspace: string, 
     local node = source_node
     if not node then
         local profile, profile_error = profile_for(workspace_id, source_workspace)
-        if not profile then return failure("BLOCKED", profile_error) end
-        node = bounds.id(profile.source_node)
+        if not profile then return profile_error :: Result end
+        node = system.node.id()
     end
     local plan, plan_error = forward(DESTINATION, {operation = "get", workspace_id = workspace_id,
         source_node = node, source_workspace = source_workspace, version = version})
@@ -166,7 +168,7 @@ end
 -- refuses anything else, so the agent cannot publish around the person.
 local function publish_operation(workspace_id: string, source_workspace: string, version: string): Result
     local profile, profile_error = profile_for(workspace_id, source_workspace)
-    if not profile then return failure("BLOCKED", profile_error) end
+    if not profile then return profile_error :: Result end
     local component = bounds.text(profile.component, 160)
     if not component or component == "" then return failure("BLOCKED", "publication profile names no component") end
     local published, publish_error = forward(PUBLICATION, {operation = "publish", workspace_id = workspace_id,

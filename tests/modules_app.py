@@ -365,7 +365,7 @@ def exercise_real_facade(project, packed, pack):
             ui.key(b"s")
             ui.key(b"a" * 64 + b"\r")
             ui.key(b"p")
-            ui.wait("BLOCKED: host has no publication profile", timeout=20)
+            ui.wait("BLOCKED: this workspace has no publication profile", timeout=20)
             ui.quit()
         except Exception:
             Path("/tmp/bee-modules-real-hub-failure.raw").write_bytes(ui.raw)

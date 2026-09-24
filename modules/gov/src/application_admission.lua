@@ -14,7 +14,8 @@ M.MAX_BINDINGS = 64
 M.MAX_POLICIES = 16
 M.MAX_BYTES = 65536
 M.MAX_POLICY_BYTES = 262144
-M.RESERVED_PREFIX = "bee.governance:admission."
+M.NAMESPACE = "bee.governance"
+M.RESERVED_PREFIX = M.NAMESPACE .. ":admission."
 
 type Object = {[string]: unknown}
 type ThreadAccess = "none" | "observe_post"

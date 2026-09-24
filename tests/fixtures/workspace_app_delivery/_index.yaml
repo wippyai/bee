@@ -1,0 +1,146 @@
+version: '1.0'
+namespace: bee.workspace_app_probe
+entries:
+- name: workspace
+  kind: env.variable
+  storage: bee:workspace_environment
+  variable: BEE_WORKSPACE_APP_WORKSPACE
+  readonly: true
+- name: brief
+  kind: env.variable
+  storage: bee:workspace_environment
+  variable: BEE_WORKSPACE_APP_BRIEF
+  readonly: true
+- name: agent_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The shipped Claude batch surface with the scripted protocol executable at its far end; the acceptance fills the
+      executable and the answer file
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment:
+      BEE_FIXTURE_GATEWAY: '1'
+      BEE_FIXTURE_GATEWAY_AUTHOR: spec
+      BEE_FIXTURE_AUTHOR_SOURCE: tally
+      BEE_FIXTURE_AUTHOR_VERSION: 1.0.0
+      BEE_FIXTURE_AUTHOR_ENTRIES: ''
+      BEE_FIXTURE_STREAM: ''
+    prepare_options:
+      permission_mode: dontAsk
+      max_turns: 1
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - thread_sessions
+    - thread_notify
+    - overlay
+    - delivery
+    - docs
+    - components
+- name: agent
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The production Claude driver binding in batch mode; only the executable is the scripted agent
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: workspace-app-author
+    title: Author a workspace application
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.workspace_app_probe:agent_policy
+    default_mode: batch
+    allowed_overrides:
+    - brief
+    - thread
+    thread_policy:
+      kind: caller
+    credentials: []
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
+- name: operator_policy
+  kind: security.policy
+  meta:
+    comment: The host operator starts one managed attempt and reads its thread; it holds no delivery, approval or overlay
+      authority
+  policy:
+    actions:
+    - funcs.call
+    - security.policy.get
+    - registry.get
+    - system.read
+    - process.monitor
+    - process.unmonitor
+    - funcs.security
+    - security.actor.create
+    resources: '*'
+    effect: allow
+- name: author
+  kind: process.lua
+  source: file://author.lua
+  method: main
+  modules:
+  - funcs
+  - security
+  - process
+  - channel
+  - time
+  - json
+  - io
+  - env
+  imports:
+    bounds: bee.threads.records:bounds
+  security:
+    policies:
+    - bee.workspace_app_probe:operator_policy
+    - bee:carrier_policy
+    - bee:carrier_environment_policy
+    - bee:thread_create_policy
+    - bee:thread_observe_policy
+    - bee:harness_setup_policy
+    - bee:placement_store_policy
+    - bee:placement_exec_policy
+    - bee:placement_runner_policy
+    - bee:resource_grant_policy
+    - bee:resource_resolve_policy
+    - bee:credential_issue_policy
+    - bee:credential_materialize_workspace_policy
+    - bee:gateway_materialize_policy
+    - bee:gateway_supervision_policy
+  meta:
+    command:
+      name: workspace-app-author
+      security:
+        actor:
+          id: bee.workspace_app.operator
+        policies:
+        - bee.workspace_app_probe:operator_policy
+        - bee:carrier_policy
+        - bee:carrier_environment_policy
+        - bee:thread_create_policy
+        - bee:thread_observe_policy
+        - bee:harness_setup_policy
+        - bee:placement_store_policy
+        - bee:placement_exec_policy
+        - bee:placement_runner_policy
+        - bee:resource_grant_policy
+        - bee:resource_resolve_policy
+        - bee:credential_issue_policy
+        - bee:credential_materialize_workspace_policy
+        - bee:gateway_materialize_policy
+        - bee:gateway_supervision_policy

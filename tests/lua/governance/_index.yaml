@@ -20,6 +20,7 @@ entries:
     guide: bee.governance.traits:guide
     artifact: bee.governance:artifact
     preflight: bee.governance:preflight
+    workspace_applications: bee.governance:workspace_applications
 - name: destination_public_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -43,6 +44,23 @@ entries:
   imports:
     test: wippy.test:test
     destination_service: bee.governance.binding:destination_service
+- name: publication_profiles_test
+  kind: function.lua
+  source: file://publication_profiles_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    publication_profiles: bee.governance:publication_profile_decoder
+- name: workspace_applications_test
+  kind: function.lua
+  source: file://workspace_applications_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    activation_profiles: bee.governance:activation_profile_decoder
+    workspace_applications: bee.governance:workspace_applications
 - name: publication_service_test
   kind: function.lua
   source: file://publication_service_test.lua

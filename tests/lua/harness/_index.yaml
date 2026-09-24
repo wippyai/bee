@@ -471,7 +471,7 @@ entries:
   source: file://gateway_carrier_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "240s"}
-  modules: [funcs, security, process, registry, env, time, channel, json, system]
+  modules: [funcs, security, process, registry, env, time, channel, json]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
   imports:

@@ -867,9 +867,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 10728,
+      "bytes": 11039,
       "id": "docs/mcp_configuration",
-      "sha256": "d803d99d9cd4763a5cbee16e2fb2ac9630ca9d732ef605f84b0833a259b6fb8c",
+      "sha256": "4726738fbd8ea6cdabb06a2152c93dca7fdbe7c31cefb8dc65b2f482f0493f79",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -891,9 +891,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 4181,
+      "bytes": 5755,
       "id": "docs/distributed_app_delivery",
-      "sha256": "0359e837c36f57f584dbb4d97e8f88ed6f97c1c8935e9de1fdcf7b7f43b19167",
+      "sha256": "50727f0d5b8efb5cbaebd3a6d81ded01297c44ba8a7979e8da6d55c45891b11c",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -915,9 +915,9 @@
       "topic": "application"
     },
     {
-      "bytes": 7028,
+      "bytes": 7042,
       "id": "docs/gateway",
-      "sha256": "93eb198b08038ec08ce7fe27f90a2c72d61f25bb2779c604b9573ab77e9818e9",
+      "sha256": "c779a7a687b4d53139f6311068e40171ae87400daec0ec16fa013b97e98f9b0c",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -1083,9 +1083,9 @@
       "topic": "component"
     },
     {
-      "bytes": 15110,
+      "bytes": 16066,
       "id": "component/gov",
-      "sha256": "9adbdafda3171675a27cb180f12eec702758d11394c8208fe72823f90b2e25e6",
+      "sha256": "003ff5834fb8093943dc7c7b6787b85df1596dcc847eb3129d094383845b4b49",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -1131,9 +1131,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3749,
+      "bytes": 3943,
       "id": "component/placement",
-      "sha256": "987b3fe2c4dc92d334c2bd192f87b43ddb4c265e08c28214d129fc5576fc5f59",
+      "sha256": "d688a2bee2d1719ecb0fa48e3d648a6a04d1a3262ee05a3787d9f49019a2edb7",
       "source": "modules/placement/src/README.md",
       "title": "bee.placement",
       "topic": "component"
@@ -1182,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1356529,
+    "bytes": 1359578,
     "documents": 147
   }
 }

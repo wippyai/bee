@@ -114,9 +114,9 @@ local TOOLS: {Tool} = {
         }}},
     {name = "delivery", description = "Request delivery of your frozen component pack to this destination: publish the frozen artifact, stage it and read the destination's preflight verdict; or read a staged version's review, selection and activation status. It names the human steps it cannot take: review in Overlays, approval in Approvals and apply by the activation owner.", operation = "bee.governance.binding:delivery_call",
         policies = {TOOL_POLICY_REFS.delivery}, annotations = READ_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"operation", "workspace_id", "source_overlay_id", "version"}, properties = {
+        schema = {type = "object", additionalProperties = false, required = {"operation", "source_overlay_id", "version"}, properties = {
             operation = {type = "string", enum = {"request", "status"}},
-            workspace_id = {type = "string", minLength = 1, maxLength = 160, description = "This session's own workspace; any other is refused"},
+            workspace_id = {type = "string", minLength = 1, maxLength = 160, description = "This session's own workspace, the default; any other is refused"},
             source_overlay_id = {type = "string", minLength = 1, maxLength = 160},
             version = {type = "string", minLength = 1, maxLength = 160},
             snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
@@ -125,8 +125,8 @@ local TOOLS: {Tool} = {
         }}},
     {name = "publish", description = "Publish the exact application version a person has already reviewed, selected, approved and had applied at this destination. Use delivery request first and wait for the person; publication refuses any version that is not locally reviewed and applied.", operation = "bee.governance.binding:delivery_call",
         policies = {TOOL_POLICY_REFS.publish}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"workspace_id", "source_overlay_id", "version"}, properties = {
-            workspace_id = {type = "string", minLength = 1, maxLength = 160, description = "This session's own workspace; any other is refused"},
+        schema = {type = "object", additionalProperties = false, required = {"source_overlay_id", "version"}, properties = {
+            workspace_id = {type = "string", minLength = 1, maxLength = 160, description = "This session's own workspace, the default; any other is refused"},
             source_overlay_id = {type = "string", minLength = 1, maxLength = 160},
             version = {type = "string", minLength = 1, maxLength = 160},
         }}},
@@ -318,21 +318,30 @@ end
 
 -- Delivery arguments use the governance delivery protocol's own allow-list;
 -- the publish tool admits only its three identity fields, and the facade
--- supplies the operation so a caller cannot smuggle one through.
-function M.delivery_arguments(params: Object): (Object?, string?)
-    local arguments = bounds.object(params.arguments)
-    if not arguments then return nil, "arguments must be an object" end
+-- supplies the operation so a caller cannot smuggle one through. An omitted
+-- workspace_id is the binding's own workspace, the only one a subject names.
+local function with_workspace(arguments: Object, workspace_id: string?): Object
+    local result: Object = {}
+    for key, value in pairs(arguments) do result[key] = value end
+    if result.workspace_id == nil then result.workspace_id = workspace_id end
+    return result
+end
+function M.delivery_arguments(params: Object, workspace_id: string?): (Object?, string?)
+    local supplied = bounds.object(params.arguments)
+    if not supplied then return nil, "arguments must be an object" end
+    local arguments = with_workspace(supplied, workspace_id)
     local _, decode_error = delivery_protocol.decode(arguments)
     if decode_error then return nil, decode_error end
     -- The public delivery facade owns the public-to-private translation.
     -- Preserve its source_overlay_id payload instead of decoding it twice.
     return arguments, nil
 end
-function M.publish_arguments(params: Object): (Object?, string?)
-    local arguments = bounds.object(params.arguments)
-    if not arguments then return nil, "arguments must be an object" end
-    local unknown_field = bounds.fields(arguments, {"workspace_id", "source_overlay_id", "version"})
+function M.publish_arguments(params: Object, workspace_id: string?): (Object?, string?)
+    local supplied = bounds.object(params.arguments)
+    if not supplied then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(supplied, {"workspace_id", "source_overlay_id", "version"})
     if unknown_field then return nil, unknown_field end
+    local arguments = with_workspace(supplied, workspace_id)
     local request: Object = {operation = "publish", workspace_id = arguments.workspace_id,
         source_overlay_id = arguments.source_overlay_id, version = arguments.version}
     local _, decode_error = delivery_protocol.decode(request)

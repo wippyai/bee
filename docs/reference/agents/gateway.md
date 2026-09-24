@@ -92,9 +92,10 @@ optional `thread`, `workdir`, `placement` and saved profile choices decode
 with `bee.application:agent_protocol` and take effect only where the
 definition and its launch policy allow the override.
 
-delivery and publish name their destination `workspace_id`; the gateway
-derives a subject's workspace only from its binding, so it refuses a request
-naming any other workspace and refuses both tools for a binding without one.
+delivery and publish take their destination `workspace_id` from the binding:
+an omitted `workspace_id` is the binding's own workspace, a request naming any
+other workspace is refused, and a binding without a workspace can use neither
+tool.
 
 application_open is available only through the active, approval-granted
 bee.application:runtime trait. It accepts definition_id, literal arguments and

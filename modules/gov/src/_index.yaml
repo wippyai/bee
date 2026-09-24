@@ -151,6 +151,16 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
     application_admission: bee.governance:governed_application_admission
+    workspace_applications: bee.governance:workspace_applications
+- name: workspace_applications
+  kind: library.lua
+  source: file://workspace_applications.lua
+- name: publication_profile_decoder
+  kind: library.lua
+  source: file://publication_profiles.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    workspace_applications: bee.governance:workspace_applications
 - name: delivery_contract
   kind: contract.definition
   methods:

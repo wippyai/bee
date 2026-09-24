@@ -40,7 +40,7 @@ type Profile = {workspace_id: string, source_node: string, source_workspace: str
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
     policy_digest: string}
-type Configuration = {profiles: {Profile}}
+type Configuration = activation_profiles.Configuration
 type Result = transaction.Result
 type ResolverRoot = {component: string, version: string, parameters: {unknown}}
 type ResolverPolicy = {node_id: string, policy_digest: string, packages: Set,
@@ -70,16 +70,7 @@ end
 
 local function selected(config: Configuration, workspace_id: string, source_node: string,
     source_workspace: string): (Profile?, string?)
-    local found: Profile? = nil
-    for _, item in ipairs(config.profiles) do
-        if item.workspace_id == workspace_id and item.source_node == source_node
-            and item.source_workspace == source_workspace then
-            if found then return nil, "activation profile identity is ambiguous" end
-            found = item
-        end
-    end
-    if not found then return nil, "destination host has no activation profile for this source" end
-    return found, nil
+    return activation_profiles.select(config, workspace_id, source_node, source_workspace)
 end
 
 local function migration_binding(profile_value: Profile, target: string): (DatabaseBinding?, string?)
@@ -356,21 +347,32 @@ function M.call(raw: unknown): Result
             if not config or not replica_store then
                 result = failure("UNAVAILABLE", config_error or resource_error or replica_error or "open replica store")
             else
-                local items: {unknown} = {}
+                -- A version is available here when the host profile selected for
+                -- its source overlay publishes exactly that component.
+                local sources: {string} = {}
+                local listed: Set = {}
                 for _, item in ipairs(config.profiles) do
-                    if item.workspace_id == workspace_id then
-                        local found = replicas.available(replica_store, item.source_node, delivery.FEED, 128)
-                        if not found.ok then result = found; break end
-                        local value = bounds.object(found.value)
-                        local rows = value and value.items
-                        if type(rows) ~= "table" then result = failure("INTERNAL", "available replica list is malformed"); break end
-                        for _, raw_descriptor in ipairs(rows :: {unknown}) do
-                            local descriptor = bounds.object(raw_descriptor)
-                            local manifest = descriptor and bounds.object(descriptor.manifest) or nil
-                            if descriptor and descriptor.object_id == item.component and manifest
-                                and manifest.source_workspace == item.source_workspace then
-                                items[#items + 1] = descriptor
-                            end
+                    if item.workspace_id == workspace_id and not listed[item.source_node] then
+                        listed[item.source_node] = true
+                        sources[#sources + 1] = item.source_node
+                    end
+                end
+                if config.workspace_applications and not listed[node_id] then sources[#sources + 1] = node_id end
+                local items: {unknown} = {}
+                for _, source_node in ipairs(sources) do
+                    local found = replicas.available(replica_store, source_node, delivery.FEED, 128)
+                    if not found.ok then result = found; break end
+                    local value = bounds.object(found.value)
+                    local rows = value and value.items
+                    if type(rows) ~= "table" then result = failure("INTERNAL", "available replica list is malformed"); break end
+                    for _, raw_descriptor in ipairs(rows :: {unknown}) do
+                        local descriptor = bounds.object(raw_descriptor)
+                        local manifest = descriptor and bounds.object(descriptor.manifest) or nil
+                        local source_workspace = manifest and bounds.id(manifest.source_workspace) or nil
+                        local chosen = descriptor and source_workspace
+                            and selected(config, workspace_id, source_node, source_workspace) or nil
+                        if descriptor and chosen and descriptor.object_id == chosen.component then
+                            items[#items + 1] = descriptor
                         end
                     end
                 end
@@ -518,18 +520,28 @@ function M.call(raw: unknown): Result
 end
 
 -- Boot recovery follows only already-authorized desired intents. It never
--- reviews, selects or creates an approval request.
+-- reviews, selects or creates an approval request. A slot whose source the
+-- host no longer selects for that owner stays unrestored.
 function M.recover_all(): (boolean, string?)
     local config, config_error = load()
     if not config then return false, config_error end
-    local node_id, node_error = system.node.id()
-    if not node_id or node_error then return false, "native node identity is unavailable" end
-    for _, item in ipairs(config.profiles) do
-        local workspace_id = item.workspace_id
+    local node_id = config.node_id
+    local resource, resource_error = resources.database()
+    if not resource then return false, resource_error end
+    local listed = activations.desired_slots(resource, node_id)
+    if not listed.ok then return false, listed.message end
+    local value = bounds.object(listed.value)
+    local slots = value and value.slots
+    if type(slots) ~= "table" then return false, "desired activation slots are malformed" end
+    for _, raw_slot in ipairs(slots :: {unknown}) do
+        local slot = bounds.object(raw_slot)
+        local workspace_id = slot and bounds.id(slot.workspace_id) or nil
+        local overlay_owner = slot and bounds.id(slot.overlay_owner) or nil
+        if not workspace_id or not overlay_owner then return false, "desired activation slot is malformed" end
         local plan_store, activation_store, open_error = stores(node_id, workspace_id)
         if not plan_store or not activation_store then return false, open_error or "open destination stores" end
         for attempt = 1, 4 do
-            local desired = activations.desired(activation_store, item.overlay_owner)
+            local desired = activations.desired(activation_store, overlay_owner)
             if not desired.ok then
                 close(plan_store, activation_store)
                 if desired.code == "NOT_FOUND" then break end
@@ -538,17 +550,16 @@ function M.recover_all(): (boolean, string?)
             local intent = bounds.object(desired.value)
             local source_node = intent and bounds.id(intent.source_node) or nil
             local source_workspace = intent and bounds.id(intent.source_workspace) or nil
-            local chosen: Profile? = item
-            local profile_error: string? = nil
-            if source_node ~= item.source_node or source_workspace ~= item.source_workspace then
-                chosen, profile_error = nil, "desired activation does not match its host profile"
-            end
-            local composed: any = nil
-            local compose_error: string? = nil
-            if chosen then composed, compose_error = owner_config(config, chosen, plan_store, activation_store) end
-            if not intent or not chosen or not composed then
+            if not intent or not source_node or not source_workspace then
                 close(plan_store, activation_store)
-                return false, profile_error or compose_error or "desired activation has no host profile"
+                return false, "desired activation intent is malformed"
+            end
+            local chosen = selected(config, workspace_id, source_node, source_workspace)
+            if not chosen or chosen.overlay_owner ~= overlay_owner then break end
+            local composed, compose_error = owner_config(config, chosen, plan_store, activation_store)
+            if not composed then
+                close(plan_store, activation_store)
+                return false, compose_error or "desired activation has no host profile"
             end
             local receipt_bytes = canonical.encode({schema_revision = "bee.governance-recovery@1",
                 workspace_id = workspace_id, intent_id = intent.intent_id, revision = intent.revision, attempt = attempt})
@@ -556,8 +567,8 @@ function M.recover_all(): (boolean, string?)
             if not receipt then close(plan_store, activation_store); return false, "measure activation recovery" end
             local recovered = owner.recover(composed :: owner.Config, receipt)
             if not recovered.ok then close(plan_store, activation_store); return false, recovered.message end
-            local value = bounds.object(recovered.value)
-            if value and value.phase == "settled" then break end
+            local recovered_value = bounds.object(recovered.value)
+            if recovered_value and recovered_value.phase == "settled" then break end
         end
         close(plan_store, activation_store)
     end

@@ -5,15 +5,16 @@ entries:
   kind: function.lua
   source: file://delivery_method.lua
   method: handle
-  modules: [funcs, security, json]
+  modules: [funcs, security, json, system]
   imports:
     bounds: bee.threads.records:bounds
+    publication_profiles: bee.governance:publication_profile_decoder
     transaction: bee.persist:transaction
     preflight: bee.governance:preflight
     guide: bee.governance.traits:guide
     protocol: bee.governance:delivery_protocol
     resources: bee.governance.registry:staging_resources
-  security: {policies: [bee.governance.security:delivery_facade_policy, bee.governance.security:publication_profiles_read_policy]}
+  security: {policies: [bee.governance.security:delivery_facade_policy, bee.governance.security:delivery_node_read_policy, bee.governance.security:publication_profiles_read_policy]}
 - name: publication_call
   kind: function.lua
   source: file://publication_method.lua
@@ -84,6 +85,7 @@ entries:
     artifact: bee.governance:artifact
     materializer: bee.governance.registry:materializer
     application_admission: bee.governance:governed_application_admission
+    publication_profiles: bee.governance:publication_profile_decoder
     publisher: bee.governance.binding:publisher
     staging: bee.governance.persist:staging
     activation_store: bee.governance.persist:activation_store

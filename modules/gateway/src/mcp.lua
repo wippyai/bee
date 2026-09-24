@@ -105,7 +105,7 @@ local TOOLS: {Tool} = {
         policies = {TOOL_POLICY_REFS.delivery}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation", "workspace_id", "source_overlay_id", "version"}, properties = {
             operation = {type = "string", enum = {"request", "status"}},
-            workspace_id = {type = "string", minLength = 1, maxLength = 160},
+            workspace_id = {type = "string", minLength = 1, maxLength = 160, description = "This session's own workspace; any other is refused"},
             source_overlay_id = {type = "string", minLength = 1, maxLength = 160},
             version = {type = "string", minLength = 1, maxLength = 160},
             snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
@@ -115,7 +115,7 @@ local TOOLS: {Tool} = {
     {name = "publish", description = "Publish the exact application version a person has already reviewed, selected, approved and had applied at this destination. Use delivery request first and wait for the person; publication refuses any version that is not locally reviewed and applied.", operation = "bee.governance.binding:delivery_call",
         policies = {TOOL_POLICY_REFS.publish}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"workspace_id", "source_overlay_id", "version"}, properties = {
-            workspace_id = {type = "string", minLength = 1, maxLength = 160},
+            workspace_id = {type = "string", minLength = 1, maxLength = 160, description = "This session's own workspace; any other is refused"},
             source_overlay_id = {type = "string", minLength = 1, maxLength = 160},
             version = {type = "string", minLength = 1, maxLength = 160},
         }}},
@@ -330,6 +330,14 @@ function M.publish_arguments(params: Object): (Object?, string?)
     local _, decode_error = delivery_protocol.decode(request)
     if decode_error then return nil, decode_error end
     return request, nil
+end
+-- Delivery and publication name the destination workspace. The gateway
+-- derives a subject's workspace only from its binding, so a request may name
+-- no workspace other than the binding's, and a binding without one names none.
+function M.bound_workspace(arguments: Object, workspace_id: string?): string?
+    if not workspace_id then return "this binding names no workspace" end
+    if arguments.workspace_id ~= workspace_id then return "workspace_id must be this binding's workspace " .. workspace_id end
+    return nil
 end
 function M.open_arguments(params: Object): (Object?, string?)
     local arguments_value = bounds.object(params.arguments)

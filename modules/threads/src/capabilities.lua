@@ -64,7 +64,7 @@ end
 function M.contracts(): {Contract}
     return {
         contract("bee.threads:journal", {"claim", "append", "read_after"}),
-        contract("bee.threads:authority", {"create", "get", "list", "join", "leave", "close", "record", "read_after", "send", "send_status", "notify"}),
+        contract("bee.threads:authority", {"create", "get", "list", "list_workspace", "join", "leave", "close", "record", "read_after", "send", "send_status", "notify"}),
         contract("bee.threads:lifecycle", {"admit_action", "prepare_attempt", "start_attempt", "request_turn", "end_turn", "receipt"}),
         contract("bee.threads:delivery", {"claim", "dispatch", "ack", "release", "expire", "reconcile", "subscribe", "page", "ack_page", "unsubscribe", "resume", "close_subscription", "forget_subscription", "wait", "watch"}),
         contract("bee.threads:projection", {"recap_read", "recap_update", "recap_rebuild", "status_read", "status_update", "status_rebuild"}),

@@ -54,13 +54,24 @@ The implementation is split into these Lua namespaces:
 
 ## Authority and records
 
-The authority exposes `create`, `get`, `list`, `join`, `leave`, `close`,
+The authority exposes `create`, `get`, `list`, `list_workspace`, `join`, `leave`, `close`,
 `record` and `read_after`. Every mutation has a thread ID and idempotency key;
 membership and thread state are checked within the transaction. `join` accepts
 `participant` or `observer`, uses an expected revision, and is owner-only;
 `leave` can remove the caller or an owner-selected member, but the owner cannot
 leave its own thread. `close` is owner-only and refuses while lifecycle work is
 unsettled.
+
+A thread a workspace owns carries that workspace. `create` records the
+`workspace_id` of the caller's host-issued identity (an application principal's
+from the broker, a gateway subject's from its binding); a request never names
+it, and a caller bound to no workspace creates a node-level thread. Summaries
+include `workspace_id` when it is set. `list_workspace`
+(`{workspace_id, after_thread_id?, limit?}`) pages the threads one workspace
+owns in thread order as one range of the index
+`bee_thread_heads(workspace_id, thread_id)`; it needs `bee.threads.workspace`
+on that workspace (host policy `bee:thread_workspace_list_policy`) and no
+membership.
 
 Records use schema revision `bee.thread-record@1`. The authority supplies the
 record ID, producer, source, timestamp and sequence; callers submit a typed
@@ -274,8 +285,11 @@ Shared decoder and database limits are:
 | Thread title | 512 bytes |
 
 The checked migration ledger carries the legacy journal, rich authority,
-lifecycle, delivery, projection, carrier, approval, owner-authority and notice
-schema.
+lifecycle, delivery, projection, carrier, approval, owner-authority, notice
+and workspace-attribution schema. Migration 10 (`workspace_attribution`) adds
+the head column and its index and attributes existing threads whose owner is
+an application principal (`bee.application:<workspace_id>:<instance_id>`) to
+that workspace; every other existing thread stays node-level.
 Applied migrations and their checksums are immutable. The owner keeps all
 table access behind typed contract methods; callers do not query another
 subsystem's tables or reset the database to bypass a migration failure.

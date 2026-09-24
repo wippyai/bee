@@ -7,7 +7,7 @@ local shared = require("shared")
 local M = {}
 type Result = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}
 type Body = (sql.Transaction) -> Result
-type HeadInsert = {thread_id: string, owner_actor: string, title: string, created_at: string}
+type HeadInsert = {thread_id: string, owner_actor: string, title: string, created_at: string, workspace_id: string?}
 type RecordInsert = {record_id: string, thread_id: string, sequence: integer, kind: string, producer_id: string, source: string,
     event_scope: string?, event_key: string?, action_id: string?, attempt_id: string?, turn_id: string?, record_json: string, committed_at: string}
 -- Commitment instants are authority-generated canonical UTC.
@@ -43,8 +43,8 @@ local function execute(tx: sql.Transaction, statement: string, params: {unknown}
     return nil
 end
 function M.insert_head(tx: sql.Transaction, head: HeadInsert): string?
-    return execute(tx, "INSERT INTO bee_thread_heads (thread_id, owner_actor, title, state, revision, head_sequence, created_at) VALUES (?, ?, ?, 'open', 1, 0, ?)",
-        {head.thread_id, head.owner_actor, head.title, head.created_at}, "create thread head")
+    return execute(tx, "INSERT INTO bee_thread_heads (thread_id, owner_actor, title, state, revision, head_sequence, created_at, workspace_id) VALUES (?, ?, ?, 'open', 1, 0, ?, ?)",
+        {head.thread_id, head.owner_actor, head.title, head.created_at, head.workspace_id or sql.NULL}, "create thread head")
 end
 function M.insert_member(tx: sql.Transaction, thread_id: string, actor: string, role: string, revision: integer): string?
     return execute(tx, "INSERT INTO bee_thread_members (thread_id, actor, role, revision, active) VALUES (?, ?, ?, ?, 1)",

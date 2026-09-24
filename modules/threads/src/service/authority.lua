@@ -27,7 +27,7 @@ local function storage(err: string): Result
 end
 function M.summary(head: reader.Head): types.Summary
     return {thread_id = head.thread_id, title = head.title, state = head.state, revision = head.revision,
-        head_sequence = head.head_sequence, owner_id = head.owner_actor, created_at = head.created_at}
+        head_sequence = head.head_sequence, owner_id = head.owner_actor, created_at = head.created_at, workspace_id = head.workspace_id}
 end
 -- Every mutation names its thread and an idempotency key; the canonical
 -- request is what a retry must repeat exactly.
@@ -88,6 +88,7 @@ function M.create(db: sql.DB, actor: string, request: unknown): Result
     if not title or #title == 0 or title:find("%c") then return failure("INVALID_ARGUMENT", "title must be one line of bounded text") end
     local title_text = tostring(title)
     if not access.may_create(mutation.thread_id) then return failure("DENIED", "caller may not create threads") end
+    local workspace_id = access.workspace()
     return transaction.write(db, function(tx: sql.Transaction): Result
         local head, head_err = reader.head(tx, mutation.thread_id)
         if head_err then return storage(head_err) end
@@ -98,7 +99,8 @@ function M.create(db: sql.DB, actor: string, request: unknown): Result
             return failure("CONFLICT", "thread already exists")
         end
         local now = transaction.now()
-        local insert_err = transaction.insert_head(tx, {thread_id = mutation.thread_id, owner_actor = actor, title = title_text, created_at = now})
+        local insert_err = transaction.insert_head(tx, {thread_id = mutation.thread_id, owner_actor = actor, title = title_text, created_at = now,
+            workspace_id = workspace_id})
         if insert_err then return storage(insert_err) end
         local member_err = transaction.insert_member(tx, mutation.thread_id, actor, "owner", 1)
         if member_err then return storage(member_err) end
@@ -141,6 +143,41 @@ function M.list(db: sql.DB, actor: string, request: unknown): Result
     return transaction.read(db, function(tx: sql.Transaction): Result
         local heads, err = reader.accessible_heads(tx, actor, after, limit)
         if not heads then return storage(err or "read accessible threads") end
+        local summaries: {types.Summary} = {}
+        for index = 1, math.min(#heads, limit) do summaries[index] = M.summary(heads[index]) end
+        local value: {[string]: unknown} = {threads = summaries}
+        if #heads > limit then value.next_after_thread_id = summaries[#summaries].thread_id end
+        return transaction.success(value, false)
+    end)
+end
+-- The threads a workspace owns, for a caller the host lets read that
+-- workspace's threads; membership is not required.
+function M.list_workspace(db: sql.DB, actor: string, request: unknown): Result
+    local object = bounds.object(request)
+    if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"workspace_id", "after_thread_id", "limit"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local requested: unknown = object.workspace_id
+    if type(requested) ~= "string" or #requested ~= 32 or requested:find("[^0-9a-f]") then
+        return failure("INVALID_ARGUMENT", "workspace_id is not a workspace identity")
+    end
+    local workspace_id = tostring(requested)
+    local after = ""
+    if object.after_thread_id ~= nil then
+        local id = bounds.id(object.after_thread_id)
+        if not id then return failure("INVALID_ARGUMENT", "after_thread_id is not an identifier") end
+        after = id
+    end
+    local limit = bounds.MAX_PAGE_RECORDS
+    if object.limit ~= nil then
+        local number = bounds.integer(object.limit)
+        if not number or number < 1 or number > bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
+        limit = number
+    end
+    if not access.may_list_workspace(workspace_id) then return failure("DENIED", "caller may not list the threads of workspace " .. workspace_id) end
+    return transaction.read(db, function(tx: sql.Transaction): Result
+        local heads, err = reader.workspace_heads(tx, workspace_id, after, limit)
+        if not heads then return storage(err or "read workspace threads") end
         local summaries: {types.Summary} = {}
         for index = 1, math.min(#heads, limit) do summaries[index] = M.summary(heads[index]) end
         local value: {[string]: unknown} = {threads = summaries}

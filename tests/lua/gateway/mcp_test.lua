@@ -201,6 +201,13 @@ local function define_tests()
             test.eq(publish_smuggle, "unknown field operation")
             local _, publish_workspace = mcp.publish_arguments({arguments = {workspace_id = "ws", source_workspace = "src", version = "1.0.1"}})
             test.eq(publish_workspace, "unknown field source_workspace")
+            -- The destination is the binding's own workspace: a request may
+            -- restate it, never name another, and an unbound subject names none.
+            local bound_workspace = string.rep("a", 32)
+            test.is_nil(mcp.bound_workspace({workspace_id = bound_workspace}, bound_workspace))
+            test.contains(tostring(mcp.bound_workspace({workspace_id = string.rep("b", 32)}, bound_workspace)), "this binding's workspace")
+            test.contains(tostring(mcp.bound_workspace({}, bound_workspace)), "this binding's workspace")
+            test.eq(mcp.bound_workspace({workspace_id = bound_workspace}, nil), "this binding names no workspace")
             local wait_only = mcp.list({"thread_wait"}).tools :: {{[string]: unknown}}
             test.eq(#wait_only, 1)
             test.eq(wait_only[1].name, "thread_wait")

@@ -179,6 +179,15 @@ entries:
     - bee.threads.create
     resources: '*'
     effect: allow
+- name: thread_workspace_list_policy
+  kind: security.policy
+  meta:
+    comment: List the threads any workspace owns, without membership; for node-level workspace viewers
+  policy:
+    actions:
+    - bee.threads.workspace
+    resources: '*'
+    effect: allow
 - name: thread_observe_policy
   kind: security.policy
   policy:

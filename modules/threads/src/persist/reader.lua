@@ -2,7 +2,8 @@
 -- the caller's transaction so checks and commits see one snapshot.
 local sql = require("sql")
 local M = {}
-type Head = {thread_id: string, owner_actor: string, title: string, state: string, revision: integer, head_sequence: integer, created_at: string}
+type Head = {thread_id: string, owner_actor: string, title: string, state: string, revision: integer, head_sequence: integer, created_at: string,
+    workspace_id: string?}
 type Member = {actor: string, role: string, revision: integer, active: boolean}
 type Command = {operation: string, request_json: string, reply_json: string}
 type Stored = {record_id: string, sequence: integer, kind: string, record_json: string}
@@ -30,14 +31,23 @@ local function single(tx: sql.Transaction, statement: string, params: {unknown},
     if #rows == 0 then return nil, nil end
     return rows[1] :: {[string]: unknown}, nil
 end
-function M.head(tx: sql.Transaction, thread_id: string): (Head?, string?)
-    local row, err = single(tx, "SELECT thread_id, owner_actor, title, state, revision, head_sequence, created_at FROM bee_thread_heads WHERE thread_id = ?", {thread_id}, "thread head")
-    if err then return nil, err end
-    if not row then return nil, nil end
+local HEAD_COLUMNS = "thread_id, owner_actor, title, state, revision, head_sequence, created_at, workspace_id"
+local function head_row(row: {[string]: unknown}): (Head?, string?)
     local id, owner, title, state = text(row.thread_id), text(row.owner_actor), text(row.title), text(row.state)
     local revision, head_sequence, created_at = integer(row.revision), integer(row.head_sequence), text(row.created_at)
-    if not id or not owner or not title or not state or not revision or not head_sequence or not created_at then return nil, "thread head row is corrupt" end
-    return {thread_id = id, owner_actor = owner, title = title, state = state, revision = revision, head_sequence = head_sequence, created_at = created_at}, nil
+    local workspace: unknown = row.workspace_id
+    if not id or not owner or not title or not state or not revision or not head_sequence or not created_at
+        or (workspace ~= nil and type(workspace) ~= "string") then return nil, "thread head row is corrupt" end
+    local workspace_id: string? = nil
+    if type(workspace) == "string" then workspace_id = workspace end
+    return {thread_id = id, owner_actor = owner, title = title, state = state, revision = revision, head_sequence = head_sequence,
+        created_at = created_at, workspace_id = workspace_id}, nil
+end
+function M.head(tx: sql.Transaction, thread_id: string): (Head?, string?)
+    local row, err = single(tx, "SELECT " .. HEAD_COLUMNS .. " FROM bee_thread_heads WHERE thread_id = ?", {thread_id}, "thread head")
+    if err then return nil, err end
+    if not row then return nil, nil end
+    return head_row(row)
 end
 local function member_row(row: {[string]: unknown}): (Member?, string?)
     local actor, role, revision, active = text(row.actor), text(row.role), integer(row.revision), integer(row.active)
@@ -114,18 +124,28 @@ function M.page(tx: sql.Transaction, thread_id: string, cursor: integer, window_
     end
     return result, nil
 end
-function M.accessible_heads(tx: sql.Transaction, actor: string, after: string, limit: integer): ({Head}?, string?)
-    local rows, query_err = tx:query("SELECT h.thread_id, h.owner_actor, h.title, h.state, h.revision, h.head_sequence, h.created_at FROM bee_thread_heads h " ..
-        "JOIN bee_thread_members m ON m.thread_id = h.thread_id WHERE m.actor = ? AND m.active = 1 AND h.thread_id > ? ORDER BY h.thread_id LIMIT ?", {actor, after, limit + 1})
-    if query_err or not rows then return nil, "read accessible threads" end
+local function heads_of(rows: {{[string]: unknown}}): ({Head}?, string?)
     local heads: {Head} = {}
     for index, row in ipairs(rows) do
-        local id, owner, title, state = text(row.thread_id), text(row.owner_actor), text(row.title), text(row.state)
-        local revision, head_sequence, created_at = integer(row.revision), integer(row.head_sequence), text(row.created_at)
-        if not id or not owner or not title or not state or not revision or not head_sequence or not created_at then return nil, "thread head row is corrupt" end
-        heads[index] = {thread_id = id, owner_actor = owner, title = title, state = state, revision = revision, head_sequence = head_sequence, created_at = created_at}
+        local head, err = head_row(row)
+        if not head then return nil, err end
+        heads[index] = head
     end
     return heads, nil
+end
+function M.accessible_heads(tx: sql.Transaction, actor: string, after: string, limit: integer): ({Head}?, string?)
+    local rows, query_err = tx:query("SELECT h.thread_id, h.owner_actor, h.title, h.state, h.revision, h.head_sequence, h.created_at, h.workspace_id FROM bee_thread_heads h " ..
+        "JOIN bee_thread_members m ON m.thread_id = h.thread_id WHERE m.actor = ? AND m.active = 1 AND h.thread_id > ? ORDER BY h.thread_id LIMIT ?", {actor, after, limit + 1})
+    if query_err or not rows then return nil, "read accessible threads" end
+    return heads_of(rows)
+end
+-- The threads one workspace owns, in thread order: one range of the
+-- workspace index.
+M.WORKSPACE_HEADS = "SELECT " .. HEAD_COLUMNS .. " FROM bee_thread_heads WHERE workspace_id = ? AND thread_id > ? ORDER BY thread_id LIMIT ?"
+function M.workspace_heads(tx: sql.Transaction, workspace_id: string, after: string, limit: integer): ({Head}?, string?)
+    local rows, query_err = tx:query(M.WORKSPACE_HEADS, {workspace_id, after, limit + 1})
+    if query_err or not rows then return nil, "read workspace threads" end
+    return heads_of(rows)
 end
 function M.count(tx: sql.Transaction, statement: string, params: {unknown}, what: string): (integer?, string?)
     local rows, query_err = tx:query(statement, params)

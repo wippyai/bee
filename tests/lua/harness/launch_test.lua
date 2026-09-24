@@ -171,23 +171,29 @@ local function restore_host()
     mode_data.mode = "host_configured"
     apply(mode_entry)
 end
-local function await_exit(pid: string): {[string]: unknown}
-    local monitored, monitor_err = process.monitor(pid)
-    assert(monitored, tostring(monitor_err))
-    local events = assert(process.events())
-    local deadline = time.after("30s")
-    local outcome: {[string]: unknown}? = nil
-    while not outcome do
-        local selected = channel.select({events:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then error("carrier did not finish") end
-        local event = selected.value
-        if event.kind == process.event.EXIT and tostring(event.from) == pid then
-            local result = event.result or {}
-            if result.error then error("carrier failed: " .. tostring(result.error)) end
-            outcome = result.value :: {[string]: unknown}
+-- The durable thread is the settlement oracle. launch:start returns the pid
+-- of a carrier it spawned unmonitored, which may have settled and exited
+-- before the caller could monitor it; the receipt and the ended checkpoint
+-- outlive the process.
+local function await_settled(thread_id: string, attempt_id: string): {[string]: unknown}
+    local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
+    local cursor = 0
+    local settled = false
+    while not settled do
+        local page = value(call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64, filter = {kinds = {"receipt"}}}))
+        for _, item in ipairs(page.records :: {{[string]: unknown}}) do
+            if item.attempt_id == attempt_id then settled = true end
+        end
+        cursor = math.floor(tonumber(page.scanned_through) or cursor)
+        if not settled and page.has_more ~= true then
+            local remaining = deadline_ms - math.floor(time.now():unix_nano() / 1000000)
+            if remaining <= 0 then error("attempt " .. attempt_id .. " did not settle") end
+            value(call("bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining}))
         end
     end
-    return outcome :: {[string]: unknown}
+    local stored = value(call("bee.threads.carrier:checkpoint", {thread_id = thread_id, attempt_id = attempt_id}))
+    test.eq(stored.attempt_state, "ended")
+    return (stored.checkpoint :: {[string]: unknown}).terminal :: {[string]: unknown}
 end
 local function kinds(thread_id: string): {string}
     local page = value(call("bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, limit = 64}))
@@ -1029,8 +1035,7 @@ local function define_tests()
             test.eq(count(before, "turn.request"), 0)
             local retried = value(call("bee.harness.launch:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(retried.mode, "open")
-            local outcome = await_exit(tostring(retried.carrier))
-            test.eq((outcome.settlement :: {[string]: unknown}).answer, "pong")
+            test.eq(await_settled("thread:" .. request_id, tostring(retried.attempt_id)).answer, "pong")
             local after = kinds("thread:" .. request_id)
             test.eq(count(after, "action.admitted"), 1)
             test.eq(count(after, "attempt.prepared"), 1)
@@ -1042,9 +1047,8 @@ local function define_tests()
             local request_id = fresh("request")
             local started = value(call("bee.harness.launch:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(started.mode, "open")
-            local outcome = await_exit(tostring(started.carrier))
-            test.eq((outcome.settlement :: {[string]: unknown}).answer, "pong")
             local thread_id = tostring(started.thread_id)
+            test.eq(await_settled(thread_id, tostring(started.attempt_id)).answer, "pong")
             local list = kinds(thread_id)
             test.eq(count(list, "action.admitted"), 1)
             test.eq(count(list, "attempt.prepared"), 1)
@@ -1052,8 +1056,7 @@ local function define_tests()
             test.eq(code(call("bee.harness.launch:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})), "CONFLICT")
             local retried_id = fresh("request")
             local first = value(call("bee.harness.launch:start", {request_id = retried_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
-            local first_outcome = await_exit(tostring(first.carrier))
-            test.eq((first_outcome.settlement :: {[string]: unknown}).answer, "pong")
+            test.eq(await_settled(tostring(first.thread_id), tostring(first.attempt_id)).answer, "pong")
             local retried_list = kinds(tostring(first.thread_id))
             test.eq(count(retried_list, "attempt.started"), 1)
             test.eq(count(retried_list, "turn.request"), 1)
@@ -1079,8 +1082,8 @@ local function define_tests()
                 test.eq(second.thread_id, shared)
                 test.neq(first.action_id, second.action_id)
                 test.neq(first.attempt_id, second.attempt_id)
-                test.eq(((await_exit(tostring(first.carrier))).settlement :: {[string]: unknown}).answer, "pong")
-                test.eq(((await_exit(tostring(second.carrier))).settlement :: {[string]: unknown}).answer, "pong")
+                test.eq(await_settled(shared, tostring(first.attempt_id)).answer, "pong")
+                test.eq(await_settled(shared, tostring(second.attempt_id)).answer, "pong")
                 local records = kinds(shared)
                 test.eq(count(records, "action.admitted"), 2)
                 test.eq(count(records, "attempt.prepared"), 2)

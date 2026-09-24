@@ -6,9 +6,16 @@ focus, sparse texture and information that becomes more detailed only when the
 window has room. The `Honey` appearance is the canonical expression of the
 brand; every other appearance preserves the same semantic roles.
 
-The runnable reference is **UI Guide** under **Tools → Learn**. Its source is
-`src/apps/stylebook/`. Application authors should copy its process/view split,
-resize behavior and interaction shapes rather than its literal sample content.
+Every Bee application, bundled or agent-built, draws through the shared
+application frame, `bee.application:frame`. The exact placement, color, state
+and breakpoint rules, with one layout per application archetype, are in
+[Application visual style](app-style.md); read it before drawing. Two runnable
+references live under **Tools → Learn**: **UI Guide** (`src/apps/stylebook/`)
+demonstrates every frame component, and **System Monitor**
+(`src/apps/monitor/`) is a live dashboard composed from the frame and the
+visualization kit `bee.application:viz` at the three size classes.
+Application authors should copy their process/view split, resize behavior and
+interaction shapes rather than their literal sample content.
 
 ## Semantic palette
 
@@ -24,9 +31,14 @@ Use `bee.application:appearance`; never embed the Honey hex values in an app.
 | `accent` | `#ffc963` | Focus, selection and the primary action |
 | `pattern` | `#1c2937` | Quiet desktop texture |
 | `selection_text(theme)` | derived | Text drawn on `accent` |
+| `ok` | `#7ee787` | A success word; data inside a healthy range |
+| `warn` | `#ffa657` | An attention word; data past a warning threshold |
+| `error` | `#ff7b72` | A failure word; an inline field error; data past a failure threshold |
 
-Color expresses interaction, not business state. Write `Ready`, `Waiting`,
-`Failed` or `Needs review`; do not make red or green the only carrier of meaning.
+Accent expresses interaction. The status roles `ok`, `warn` and `error` repeat
+a meaning that words or numbers in the same row already carry: write `Ready`,
+`Waiting`, `Failed` or `Needs review`, and never make red or green the only
+carrier of meaning.
 One screen should normally have one accent selection and one primary action.
 Instance accents belong to window chrome and do not recolor application content.
 
@@ -36,30 +48,39 @@ The terminal supplies the monospace typeface. Design in cells.
 
 - Keep one blank cell at the left and right edge of content. Start ordinary
   content at column 2.
-- Use a single dense header row. Uppercase the short product or surface name;
-  keep descriptions in sentence case.
+- Use a single dense header row (`frame.header`). Uppercase the short product or
+  surface name; keep descriptions in sentence case. A live summary aligns right
+  in `muted` and gives way to the title when space runs out.
 - Separate major regions with one blank row or a `border` rule. Avoid boxes
   around every value.
 - Prefer 1, 2, 4 and 6-cell gaps. A control label includes its own surrounding
   spaces, such as `" Run "`.
-- Put the changing status on the penultimate row and stable key help on the
-  final row. In short windows, retain the status and the action that lets the
-  user recover.
-- Truncate by display width with `tty.text.truncate(..., "…")`. Byte slicing is
-  only suitable after a bounded, sanitized identifier has been deliberately
-  reduced.
+- Put the action bar on the penultimate row (`frame.actions`) and the footer on
+  the final row (`frame.footer`): the changing status at the left, the stable
+  key hints at the right. In short windows the status wins the row; keep the
+  action that lets the user recover.
+- Write key hints as key then lowercase verb, joined with ` · `
+  (`frame.hints`): `↑↓ select · Enter open · Esc close`.
+- Truncate by display width with an ellipsis; every frame call does this. Byte
+  slicing is only suitable after a bounded, sanitized identifier has been
+  deliberately reduced.
 
 ## Page anatomy
 
 Every application frame follows the same reading order:
 
-1. **Identity:** title at the upper left; a concise live summary may align right.
-2. **Navigation:** selected tabs use accent background plus
+1. **Identity:** title at the upper left; a concise live summary may align right
+   in `muted`.
+2. **Navigation:** `frame.tabs`. Selected tabs use accent background plus
    `appearance.selection_text(theme)`; inactive tabs use `muted` on `surface`.
-3. **Work:** lists, forms, metrics or a focused detail. Selection uses the same
-   accent pair as tabs.
-4. **Feedback:** explicit empty, loading, success or error text in a stable row.
-5. **Actions:** visible keys use the same verbs as mouse controls.
+3. **Work:** lists (`frame.row`), tables (`frame.table`), forms, metrics or a
+   focused detail. Selection uses the same accent pair as tabs and a `›` marker
+   in column 1.
+4. **Actions:** the penultimate row. Visible keys use the same verbs as mouse
+   controls.
+5. **Feedback:** the final row: explicit status text at the left, key hints at
+   the right. Empty, loading and error states in the work area use
+   `frame.empty`.
 
 Use progressive disclosure. A narrow window keeps identity, selection, the main
 value and one action. Wider windows may add metadata, a side rail or detail pane.
@@ -69,14 +90,15 @@ rows. Never horizontal-scroll a primary workflow.
 ## Controls
 
 Tabs and segmented controls are short labels with padded hit areas. Buttons use
-`accent` text on `surface` until focused or selected; selected controls reverse
-to `selection_text` on `accent`. Disabled controls remain visible in `muted` and
-must not have an active hit target.
+`accent` text on `surface`; the one primary action and selected toggles reverse
+to `selection_text` on `accent` (`primary` and `active` on `frame.Button`).
+Disabled controls remain visible in `muted` and must not have an active hit
+target.
 
 List and table rows use the whole visible row as their mouse target. Keep a
-stable identity when rows refresh. On compact widths, turn columns into a
-primary label plus a short `·`-separated summary rather than clipping every
-column independently.
+stable identity when rows refresh. Tables align their columns and right-align
+numbers; on compact widths `frame.table` turns columns into a primary label plus
+a short `·`-separated summary rather than clipping every column independently.
 
 Forms put the label before the value and keep errors next to the affected work.
 Confirmation text names the effect and the two choices, for example
@@ -86,7 +108,8 @@ an explicit confirmation state.
 ## States
 
 - **Loading:** say what is loading. Keep navigation responsive.
-- **Empty:** say what is absent and give the next useful action.
+- **Empty:** say what is absent and give the next useful action on the row
+  below it (`frame.empty`); do not repeat it as a status.
 - **Waiting:** name the owner, such as `Waiting for approval`.
 - **Success:** name the completed effect; do not rely on a transient flash.
 - **Failure:** retain the user's context and describe a recovery action.
@@ -109,8 +132,9 @@ decoder, and then truncate by terminal display width. A rendered row must always
 occupy exactly the current canvas width. Do not place raw ANSI from a remote
 source into a styled run.
 
-Focus must be visible without color perception: selected rows keep their text,
-controls keep their label, and state words remain present. Test Honey plus one
+Focus must be visible without color perception: selected rows keep their text
+and carry the `›` marker, controls keep their label, and state words remain
+present. Test Honey plus one
 light theme and Windows Classic because each stresses a different contrast
 assumption.
 
@@ -126,19 +150,24 @@ continues afterward.
 ## Patterns to avoid
 
 - Raw hex colors or a private theme table inside an application.
+- Private copies of header, button, row, table, footer, sparkline or chart
+  drawing; use the frame and `bee.application:viz`.
+- Accent on text that is neither focus, selection, the primary action nor the
+  primary chart series.
+- A status role on a whole row, a background, a border or a title.
 - A permanent legend that consumes several rows when one footer will do.
 - Borders around every region, decorative gradients or shadow-like glyph noise.
 - A wide table merely clipped on narrow screens.
 - Status conveyed only by color, icon or animation.
 - Remote calls, filesystem work or polling inside `view.draw`.
 - Rendering user, agent, node or package text without bounding and sanitizing it.
-- Creating a generic widget framework before two real applications share the
-  same behavior. Keep views pure and extract only proven common operations.
+- Adding to the frame what only one application needs. Keep views pure and
+  extract only operations several applications share.
 
 ## Authoring checklist
 
-Before delivery, verify that the app uses semantic appearance roles, repaints on
-resize, has bounded external text, supports keyboard and mouse, preserves a
+Before delivery, verify that the app draws through `bee.application:frame`, uses
+semantic appearance roles, repaints on resize, has bounded external text, supports keyboard and mouse, preserves a
 useful compact state, keeps remote work out of rendering, and has focused tests
 for the user-visible behavior. Run `make lint`, the focused view tests, the
 source application journey and `make pack` when the application contract or

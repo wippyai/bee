@@ -34,7 +34,14 @@ Selection rule, stated once and enforced by this table:
   * component READMEs: one page per Bee component, the owner's own statement
     of that package's contract.
   * toolkit: one generated reference to Bee's terminal toolkit (tty plus the
-    appearance and application client libraries Bee's own apps use).
+    appearance, frame, visualization kit and application client libraries
+    Bee's own apps use), with every kit call's example and screen taken from
+    the golden tests that prove them.
+
+`--local` rebuilds every document generated from this repository and keeps
+the committed runtime pages byte for byte (their digests are re-verified), so
+the Bee part of the corpus refreshes without network access; the runtime
+pages refresh only with a full networked build.
 
 `manifest.json` carries, per document, its stable id, topic, source and digest,
 plus the totals and this rule, so the corpus cannot silently rot; `--check`
@@ -113,6 +120,7 @@ BEE_DOCS = {
     "development/ownership.md": ("platform", "system_map"),
     "reference/threads.md": ("threads", "threads"),
     "guides/ui.md": ("ui", "ui_brand_book"),
+    "guides/app-style.md": ("ui", "app_style"),
     "reference/workspace-state.md": ("storage", "workspace_state"),
     "README.md": ("platform", "readme"),
 }
@@ -177,6 +185,117 @@ def fetch_runtime(paths: "list[str]") -> "dict[str, bytes]":
     return fetched
 
 
+def lua_calls(source: str, prefix: str) -> "list[tuple[str, str]]":
+    """One table row per documented `function M.name(...)` in a library."""
+    rows = []
+    for match in re.finditer(r"((?:^--[^\n]*\n)*)^function M\.([a-z_]+)\(([^)]*)\)(?:: ([^\n]+))?$", source, re.M):
+        comment = " ".join(line[2:].strip() for line in match.group(1).splitlines())
+        returns = f" -> {match.group(4)}" if match.group(4) else ""
+        signature = f"{prefix}.{match.group(2)}({match.group(3)}){returns}".replace("|", "\\|")
+        rows.append((match.group(2), f"| `{signature}` | {comment or 'See the source.'} |"))
+    return rows
+
+
+def lua_string(literal: str) -> str:
+    """The value of one double-quoted Lua string literal without escapes beyond \\ and \"."""
+    return re.sub(r'\\(["\\])', r"\1", literal[1:-1])
+
+
+def golden_constants(source: str) -> "dict[str, list[str]]":
+    """Every `local NAME: {string} = {"row", ...}` table of literal rows."""
+    constants = {}
+    for match in re.finditer(r"^local ([A-Z_]+): \{string\} = \{(.*?)\}$", source, re.M | re.S):
+        rows = re.findall(r'"(?:[^"\\]|\\.)*"', match.group(2))
+        constants[match.group(1)] = [lua_string(row) for row in rows]
+    return constants
+
+
+def statements(lines: "list[str]") -> "list[str]":
+    """Group source lines into statements that close every bracket they open."""
+    grouped, current, depth = [], [], 0
+    for line in lines:
+        current.append(line)
+        depth += sum(line.count(c) for c in "({[") - sum(line.count(c) for c in ")}]")
+        if depth <= 0:
+            grouped.append("\n".join(current))
+            current, depth = [], 0
+    if current:
+        grouped.append("\n".join(current))
+    return grouped
+
+
+def split_arguments(call: str) -> "list[str]":
+    """The top-level arguments of `name(a, b)`."""
+    body = call[call.index("(") + 1:call.rindex(")")]
+    parts, current, depth, quote = [], "", 0, False
+    index = 0
+    while index < len(body):
+        char = body[index]
+        if quote:
+            current += char
+            if char == "\\":
+                current += body[index + 1]
+                index += 1
+            elif char == '"':
+                quote = False
+        elif char == '"':
+            quote, current = True, current + char
+        elif char in "({[":
+            depth, current = depth + 1, current + char
+        elif char in ")}]":
+            depth, current = depth - 1, current + char
+        elif char == "," and depth == 0:
+            parts.append(current.strip())
+            current = ""
+        else:
+            current += char
+        index += 1
+    parts.append(current.strip())
+    return parts
+
+
+def proven_examples(path: Path) -> "list[tuple[list[str], str]]":
+    """The `-- example: a, b` blocks of a golden test as (names, markdown).
+
+    A block runs to the next blank line, marker or `end)`. Its code is shown as
+    written, each `test.eq(expr, value)` as `expr --> value` and each
+    `golden(painter, NAME)` as the exact screen the test compares.
+    """
+    source = path.read_text()
+    constants = golden_constants(source)
+    lines = source.splitlines()
+    examples = []
+    index = 0
+    while index < len(lines):
+        marker = re.match(r"\s*-- example: (.+)$", lines[index])
+        index += 1
+        if not marker:
+            continue
+        body = []
+        while index < len(lines) and lines[index].strip() and not lines[index].strip().startswith("-- example:") \
+                and lines[index].strip() != "end)":
+            body.append(lines[index])
+            index += 1
+        indent = min(len(line) - len(line.lstrip()) for line in body)
+        code, screens = [], []
+        for statement in statements([line[indent:] for line in body]):
+            if statement.startswith("golden("):
+                name = split_arguments(statement)[1]
+                if name not in constants:
+                    raise SystemExit(f"{path}: golden {name} is not a literal row table")
+                screens.append(constants[name])
+            elif statement.startswith("test.eq("):
+                expression, expected = split_arguments(statement)
+                code.append(f"{expression} --> {expected}")
+            elif not statement.startswith("test."):
+                code.append(statement)
+        text = ["```lua", *code, "```"]
+        for screen in screens:
+            text += ["", "```text", *screen, "```"]
+        examples.append(([name.strip() for name in marker.group(1).split(",")], "\n".join(text)))
+    return examples
+
+
 def toolkit_reference() -> bytes:
     """Bee's terminal toolkit, composed from the sources that define it."""
     guide = (ROOT / "modules/gov/src/traits/guide.lua").read_text()
@@ -186,11 +305,34 @@ def toolkit_reference() -> bytes:
     guide_source = source_match.group(1).strip()
     client = (ROOT / "modules/application/src/client.lua").read_text()
     appearance = (ROOT / "modules/application/src/appearance.lua").read_text()
+    frame = (ROOT / "modules/application/src/frame.lua").read_text()
+    frame_api = [row for _, row in lua_calls(frame, "frame")]
+    frame_types = re.findall(r"^type ([A-Za-z]+ = [^\n]+)$", frame, re.M)
+    if not frame_api or not frame_types:
+        raise SystemExit("modules/application/src/frame.lua has no documented functions or types")
+    viz = (ROOT / "modules/application/src/viz.lua").read_text()
+    viz_calls = lua_calls(viz, "viz")
+    viz_types = re.findall(r"^type ([A-Za-z]+ = [^\n]+)$", viz, re.M)
+    examples = proven_examples(ROOT / "tests/lua/frame/viz_test.lua")
+    shown = {name for names, _ in examples for name in names}
+    missing = [name for name, _ in viz_calls if name not in shown]
+    if not viz_calls or not viz_types or missing:
+        raise SystemExit(f"modules/application/src/viz.lua calls without a proven example: {missing}")
+    gallery = []
+    for names, text in examples:
+        gallery += ["### " + ", ".join(f"`viz.{name}`" for name in names), "", text, ""]
+    monitor_screens = [text for names, text in proven_examples(ROOT / "tests/lua/monitor/view_test.lua")
+                       if names == ["System Monitor"]]
+    if len(monitor_screens) != 1:
+        raise SystemExit("tests/lua/monitor/view_test.lua has no System Monitor example")
+    monitor_manifest = (ROOT / "src/apps/monitor/_index.yaml").read_text().rstrip()
+    monitor_app = (ROOT / "src/apps/monitor/app.lua").read_text().rstrip()
+    monitor_view = (ROOT / "src/apps/monitor/view.lua").read_text().rstrip()
     stylebook_manifest = (ROOT / "src/apps/stylebook/_index.yaml").read_text().rstrip()
     stylebook_app = (ROOT / "src/apps/stylebook/app.lua").read_text().rstrip()
     stylebook_view = (ROOT / "src/apps/stylebook/view.lua").read_text().rstrip()
     apps = sorted((ROOT / "src/apps").glob("*/view.lua"))
-    calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance + guide_source
+    calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance + frame + viz + guide_source
                                   + "".join(p.read_text() for p in apps))))
     sections = [
         "# Bee terminal toolkit",
@@ -236,11 +378,12 @@ def toolkit_reference() -> bytes:
         "",
         "## Layout, styles and input",
         "",
-        "* A frame is plain rows. Bee's apps read the theme from",
-        "  `require(\"appearance\").theme(preferences.theme)` and wrap styled runs as",
-        "  `appearance.style(fg, bg) .. text .. \"\\27[0m\"`; the view interprets nothing.",
-        "* Layout is arithmetic on `width`/`height`; `tty.text.truncate` bounds each run",
-        "  and every app repaints on `resize` at the new size.",
+        "* A frame is plain rows. Bee's apps draw every frame through",
+        "  `bee.application:frame` (below), which reads the theme from",
+        "  `require(\"appearance\").theme(preferences.theme)` and styles each run with a",
+        "  semantic role; the view interprets nothing.",
+        "* Layout is arithmetic on `width`/`height`; the frame bounds each run by display",
+        "  width with an ellipsis and every app repaints on `resize` at the new size.",
         "* Input arrives as events; a `key` event carries `action` (`press`, `repeat`,",
         "  `release`) and the key identity. Bee's counter application increments on",
         "  every action except `release`, repaints and checkpoints, then leaves on",
@@ -249,6 +392,49 @@ def toolkit_reference() -> bytes:
         "  the application metadata declares a `resume_schema`; a start with a nonempty",
         "  `resume_state` restores from exactly that state.",
         "",
+        "## Application frame",
+        "",
+        "`bee.application:frame` is the shared toolkit every Bee application draws with.",
+        "Import it as `frame = \"bee.application:frame\"` next to `appearance`. One frame",
+        "reads top to bottom: row 1 header (uppercase title, muted summary at the right),",
+        "optional tabs, the work area (tables, rows, empty states), the action bar on the",
+        "penultimate row with one primary button, and the footer on the final row with the",
+        "status at the left and the key hints at the right. Selected rows keep their text,",
+        "use the accent pair and carry a `›` marker in column 1. Hits are recorded as the",
+        "frame draws; resolve mouse input with `frame.hit(hits, x, y)`.",
+        "",
+        "```lua",
+        *[f"type {value}" for value in frame_types],
+        "```",
+        "",
+        "| Call | Meaning |",
+        "|------|---------|",
+        *frame_api,
+        "",
+        "## Visualization kit",
+        "",
+        "`bee.application:viz` draws charts inside a `frame.Rect` of a frame painter,",
+        "from semantic roles, and keeps live series bounded. Import it as",
+        "`viz = \"bee.application:viz\"` next to `frame` and `appearance`. Every function is",
+        "pure: the process owns `viz.series` rings, pushes one sample per tick and",
+        "repaints when `viz.due` says a frame is due; the view reads `viz.values`. Choose",
+        "the function by the question in `docs/app_style` section 12.",
+        "",
+        "```lua",
+        *[f"type {value}" for value in viz_types],
+        "```",
+        "",
+        "| Call | Meaning |",
+        "|------|---------|",
+        *[row for _, row in viz_calls],
+        "",
+        "## Visualization kit examples",
+        "",
+        "Each example below is a block of `tests/lua/frame/viz_test.lua`: the code as",
+        "written, each checked value after `-->`, and the exact screen the golden test",
+        "compares, with the frame's one blank cell at each edge.",
+        "",
+        *gallery,
         "## Application client",
         "",
         "```lua",
@@ -266,8 +452,9 @@ def toolkit_reference() -> bytes:
         "## Minimal authored application",
         "",
         "This is the exact inline source returned by Governance's read-only authoring",
-        "guide in this Bee revision. It demonstrates semantic appearance, bounded",
-        "responsive rows, keyboard/mouse parity and correlated checkpoint receipts.",
+        "guide in this Bee revision. It draws through the application frame and",
+        "demonstrates semantic appearance, bounded responsive rows, keyboard/mouse",
+        "parity and correlated checkpoint receipts.",
         "",
         "```lua",
         guide_source,
@@ -275,7 +462,7 @@ def toolkit_reference() -> bytes:
         "",
         "## Toolkit names in this Bee revision",
         "",
-        "`tty` and `appearance`/`client` members this repository actually calls:",
+        "`tty` members this repository's client, appearance, frame, guide and views call:",
         "",
         "```",
         " ".join(calls),
@@ -288,9 +475,10 @@ def toolkit_reference() -> bytes:
         "## Canonical UI Guide source",
         "",
         "These are the exact files used by Bee's runnable **Tools → Learn → UI Guide**",
-        "in this revision. Copy its process/view split, resize handling, bounded cell",
-        "geometry and keyboard/mouse parity as a starting point. Keep application-specific",
-        "state and actions in the authored app; this reference is not a widget framework.",
+        "in this revision. It demonstrates every frame component: header, tabs, an aligned",
+        "table with a marked selection, button roles and the status and key-hint footer.",
+        "Copy its process/view split, resize handling and keyboard/mouse parity as a",
+        "starting point; keep application-specific state and actions in the authored app.",
         "",
         "### Registry manifest (`src/apps/stylebook/_index.yaml`)",
         "",
@@ -308,6 +496,37 @@ def toolkit_reference() -> bytes:
         "",
         "```lua",
         stylebook_view,
+        "```",
+        "",
+        "",
+        "## Canonical dashboard: System Monitor",
+        "",
+        "**Tools → Learn → System Monitor** is the reference dashboard: stat tiles, then",
+        "a grid of titled panels whose count follows the size class (2x2 from 80x24, 3x2",
+        "from 120x36, 4x2 from 160x48), each panel one kit call over live runtime",
+        "statistics, and a panel whose source fails shows its own empty state. Compose a",
+        "dashboard the same way: `frame.layout`, `viz.tiles`, `frame.grid`, then one",
+        "`frame.panel` and one kit call per cell. These are its exact screens at the",
+        "three size classes from `tests/lua/monitor/view_test.lua`:",
+        "",
+        monitor_screens[0],
+        "",
+        "### Registry manifest (`src/apps/monitor/_index.yaml`)",
+        "",
+        "```yaml",
+        monitor_manifest,
+        "```",
+        "",
+        "### Process (`src/apps/monitor/app.lua`)",
+        "",
+        "```lua",
+        monitor_app,
+        "```",
+        "",
+        "### Pure view (`src/apps/monitor/view.lua`)",
+        "",
+        "```lua",
+        monitor_view,
         "```",
         "",
     ]
@@ -343,9 +562,24 @@ def title_of(payload: bytes, fallback: str) -> str:
     return fallback[:120]
 
 
-def build() -> int:
-    selection = runtime_selection()
-    fetched = fetch_runtime([path for path, _ in selection])
+def committed_runtime() -> "list[tuple[str, str, bytes, str]]":
+    """The runtime pages of the committed corpus, each re-verified against its digest."""
+    if not MANIFEST.is_file():
+        raise SystemExit("src/corpus/manifest.json is missing; run a networked `make agent-corpus` first")
+    pages = []
+    for document in json.loads(MANIFEST.read_text())["documents"]:
+        if not document["id"].startswith("runtime/"):
+            continue
+        payload = (CORPUS / (document["id"] + ".md")).read_bytes()
+        if digest(payload) != document["sha256"]:
+            raise SystemExit(f"committed {document['id']} does not match its digest; run a networked build")
+        pages.append((document["id"], document["topic"], payload, document["source"]))
+    if not pages:
+        raise SystemExit("the committed corpus has no runtime pages; run a networked `make agent-corpus`")
+    return pages
+
+
+def build(local: bool = False) -> int:
     documents: "list[dict]" = []
 
     def record(identity, topic, payload, source):
@@ -353,8 +587,14 @@ def build() -> int:
                           "title": title_of(payload, identity.rsplit("/", 1)[-1]),
                           "bytes": len(payload), "sha256": digest(payload), "content": payload})
 
-    for path, topic in selection:
-        record(f"runtime/{path}", topic, fetched[path], f"{BASE}/path/en/{path}")
+    if local:
+        for identity, topic, payload, source in committed_runtime():
+            record(identity, topic, payload, source)
+    else:
+        selection = runtime_selection()
+        fetched = fetch_runtime([path for path, _ in selection])
+        for path, topic in selection:
+            record(f"runtime/{path}", topic, fetched[path], f"{BASE}/path/en/{path}")
     for name, (topic, stable_name) in sorted(BEE_DOCS.items()):
         origin = ROOT / "docs" / name
         if not origin.is_file():
@@ -362,7 +602,8 @@ def build() -> int:
         record(f"docs/{stable_name}", topic, origin.read_bytes(), f"docs/{name}")
     for identity, topic, payload, source in component_documents():
         record(identity, topic, payload, source)
-    record("toolkit", "terminal", toolkit_reference(), "generated: modules/application/src, src/apps, modules/gov/src/traits/guide.lua")
+    record("toolkit", "terminal", toolkit_reference(),
+           "generated: modules/application/src, src/apps, modules/gov/src/traits/guide.lua, tests/lua/frame, tests/lua/monitor")
 
     total = sum(document["bytes"] for document in documents)
     if total > MAX_CORPUS_BYTES:
@@ -433,7 +674,8 @@ SELECTION_RULE = (
     "(application, threads, placement, gateway, carrier, storage, ui, harness, approvals, "
     "registry, platform), excluding repository process and design pages. "
     "Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from "
-    "modules/application/src, src/apps and modules/gov/src/traits/guide.lua and digest-checked with the rest."
+    "modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and "
+    "screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest."
 )
 
 
@@ -441,8 +683,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true",
                         help="verify the committed corpus against its manifest without network access")
+    parser.add_argument("--local", action="store_true",
+                        help="rebuild the documents generated from this repository and keep the committed runtime pages")
     arguments = parser.parse_args()
-    return check() if arguments.check else build()
+    return check() if arguments.check else build(arguments.local)
 
 
 if __name__ == "__main__":

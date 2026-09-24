@@ -79,6 +79,14 @@ The supported record kinds are:
 - `delivery.mark` and `request.answered` for recipient delivery facts; and
 - `approval.request` and `approval.transition` as approval-store projections.
 
+A message may also name `recipient_action_ids`, the sessions it addresses
+by action, and `sender_action_id`, the sending session. The owner accepts a
+recipient action only when it is an action of the thread the message lands
+on, and a sending action only when an action with that ID was admitted for
+the sender. Sessions that share one member identity, such as agents started on
+one thread by the same subject, use them to tell who is addressed and whom to
+answer; obligations still follow `recipient_ids`.
+
 Decoders reject unknown fields, invalid variants and invalid references.
 Content has one bounded text or artifact reference. Extension payloads are
 validated JSON and carry no authority. Approval transitions are decided by the
@@ -156,6 +164,28 @@ an active member can ever claim an obligation, so a recipient who has left is
 still named by the recorded notice but owed nothing: the projection reaches the
 thread, and no obligation outlives the membership that could have settled it.
 
+## One-shot notices
+
+`notify` registers a notice on the caller's own thread: tell me once when an
+action of a thread I may read ends a turn or an attempt. The caller must be an
+owner or participant of its thread and an active member of the target thread;
+a named recipient action must be the caller's own action on its thread. The
+notice starts at the target thread's head. The first later record of the
+target action that is a `turn.end`, a `receipt`, or an observation
+`turn.signal` with phase `ended` or `execution.exit` delivers it: the owner
+commits one `notification` message on the watcher's thread under the
+watcher's identity and the notice's key, addressed to the watcher and its
+action, with the ending record as causation and its outcome when it states
+one. A target action with no live attempt is reported at once from its latest
+settlement.
+
+The owner settles notices after every commit on the target thread and sweeps
+pending notices when it starts and every five seconds, so a notice whose
+ending record committed without a settling pass is still delivered once. A
+watcher that is no longer an active submitting member of its thread, or whose
+thread closed, has its notice cancelled. A thread holds at most 64 pending
+notices. Waiters on the watcher's thread are woken by the delivery.
+
 ## Subscriptions and sessions
 
 A subscription is a durable consumer cursor over the immutable record stream.
@@ -211,8 +241,10 @@ falls back to a local thread with the same name.
 ## Carrier and projections
 
 The carrier claims a fenced epoch for one live attempt. `commit` stores up to
-64 decoded stream or control records, their source provenance and the next
-checkpoint in one transaction. Provenance revision is
+64 decoded stream, hook or control records, their source provenance and the
+next checkpoint in one transaction. Hook-sourced records are typed
+observations, such as the turn signal a `Stop` hook reports; raw hook events
+stay `bee` control records. Provenance revision is
 `bee.carrier.provenance@1`; checkpoint revision is
 `bee.carrier.checkpoint@1` and its encoded state is limited to 64 KiB. Replayed
 stream positions are idempotent and different content at the same position is
@@ -242,7 +274,8 @@ Shared decoder and database limits are:
 | Thread title | 512 bytes |
 
 The checked migration ledger carries the legacy journal, rich authority,
-lifecycle, delivery, projection, carrier, approval and owner-authority schema.
+lifecycle, delivery, projection, carrier, approval, owner-authority and notice
+schema.
 Applied migrations and their checksums are immutable. The owner keeps all
 table access behind typed contract methods; callers do not query another
 subsystem's tables or reset the database to bypass a migration failure.

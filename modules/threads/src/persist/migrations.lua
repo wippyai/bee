@@ -406,6 +406,30 @@ CREATE INDEX bee_thread_records_action
 local OWNER_AUTHORITY_SQL = [[
 ALTER TABLE bee_thread_owner ADD COLUMN authority_id TEXT;
 ]]
+-- A notice is owed once to a watcher on its own thread when a target action
+-- ends a turn or an attempt; after_sequence is the scan cursor over that
+-- action's records on the target thread.
+local NOTICES_SQL = [[
+CREATE TABLE bee_thread_notices (
+  notice_id TEXT PRIMARY KEY,
+  watcher_actor TEXT NOT NULL,
+  watcher_thread_id TEXT NOT NULL REFERENCES bee_thread_heads(thread_id),
+  watcher_action_id TEXT,
+  target_thread_id TEXT NOT NULL,
+  target_action_id TEXT NOT NULL,
+  after_sequence INTEGER NOT NULL CHECK(after_sequence >= 0),
+  state TEXT NOT NULL CHECK(state IN ('pending','fired','cancelled')),
+  fired_record_id TEXT REFERENCES bee_thread_records(record_id),
+  created_at TEXT NOT NULL,
+  CHECK((state = 'fired') = (fired_record_id IS NOT NULL)),
+  FOREIGN KEY(target_thread_id, target_action_id)
+    REFERENCES bee_thread_actions(thread_id, action_id)
+);
+CREATE INDEX bee_thread_notices_target
+  ON bee_thread_notices(target_thread_id, state);
+CREATE INDEX bee_thread_notices_watcher
+  ON bee_thread_notices(watcher_thread_id, state);
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -415,6 +439,7 @@ local list: {Migration} = {
     {id = 6, name = "carrier", sql = CARRIER_SQL, rebuild = true},
     {id = 7, name = "approvals", sql = APPROVALS_SQL, rebuild = true},
     {id = 8, name = "owner_authority", sql = OWNER_AUTHORITY_SQL, rebuild = false},
+    {id = 9, name = "notices", sql = NOTICES_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

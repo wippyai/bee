@@ -13,6 +13,7 @@ generator when the corpus is intentionally updated.
 | Contributions and community standards | [Contributing](../CONTRIBUTING.md) |
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |
 | Bee visual language and accessible terminal UI | [UI brand book](guides/ui.md) |
+| Exact placement, color and breakpoint rules for application screens | [Application visual style](guides/app-style.md) |
 | Desktop, workspace host, client attachments, and layout persistence | [Desktop](guides/desktop.md) |
 | Application admission, launch, messages, and recovery | [Application contracts](reference/applications.md) |
 | Workspace storage and application state | [Storage](reference/storage.md), [workspace state](reference/workspace-state.md) |

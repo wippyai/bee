@@ -75,6 +75,47 @@ and retry key, and returns the child thread, action and attempt identity plus
 the admitted title. The child gets its own launch policy and tool scope. A
 launch that would create a different thread is refused rather than orphaned.
 
+## Coordinating with other sessions
+
+`thread_sessions`, `thread_message` with `session`, and `thread_notify` let one
+running agent coordinate with another the way two interactive coding sessions
+hand work to each other, for any harness:
+
+- `thread_sessions` lists the running sessions of the caller's workspace whose
+  threads the bound subject may read, the caller included (`self`). A session
+  is the live gateway binding of an action; each entry has its address
+  (`session`, the action ID), attempt, thread and thread title.
+- A session address is an action ID, an attempt ID, or a thread ID that holds
+  exactly one running session. An ambiguous thread is refused and lists the
+  actions to choose from.
+- `thread_message` with `session` and no `recipient_ids` records the message
+  on that session's thread as the caller's subject. It names the session's
+  subject as the recipient, its action in `recipient_action_ids` and the
+  caller's own action in `sender_action_id`, so sessions sharing one subject
+  can tell who is addressed and reply by address. A message to another thread
+  carries no action context there.
+- `thread_notify` with `session` and an idempotency key asks the thread owner
+  to tell the caller once when that session ends its current turn or exits.
+  The notice is a `notification` message on the caller's own thread, addressed
+  to its action and caused by the ending record; a waiting `thread_wait` there
+  wakes on it. A session that has already exited is reported at once.
+
+Reach follows thread membership: a session on a thread the subject is not a
+member of is neither listed nor addressable, and the owner refuses the write
+if membership changed. Two independently opened Agent windows run as different
+application actors on their own threads, so they reach each other only after
+the thread owner joins one to the other's thread; no gateway tool grants
+membership. Sessions started with `thread_launch` share the caller's thread and
+subject and always reach each other.
+
+A harness learns of new records only when it calls a thread tool: every
+harness pulls through `thread_read` and `thread_wait`. Nothing types a message
+into a running window or writes it to a structured session's input. A window
+harness's `Stop` hook is recorded as a hook-sourced turn signal, so notices see
+window agents end turns the way stream agents report them. Sessions on another
+Hive node are not listed or addressable: Hive forwards only the thread owner's
+`send` and `send_status`, and bindings, reads and waits stay node-local.
+
 `delivery` requests delivery of a frozen artifact and reads a staged version's
 review, selection and activation state. `publish` publishes only the exact
 locally reviewed and applied version, and can require an approved trait. Neither

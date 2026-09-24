@@ -3,12 +3,12 @@
 local tty = require("tty")
 local json = require("json")
 local appearance = require("appearance")
+local frame = require("frame")
 local model = require("model")
 local contents = require("contents")
 local M = {}
 local RESET = "\27[0m"
-type Hit = {kind: string, key: string, x: integer, y: integer, width: integer, height: integer}
-type Frame = {rows: {string}, hits: {Hit}, capacity: integer, offset: integer, operation_detail_offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer, operation_detail_offset: integer}
 
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
 local function request_lines(request: {[string]: unknown}): {string}
@@ -25,21 +25,10 @@ local function request_lines(request: {[string]: unknown}): {string}
     end
     return lines
 end
-function M.hit(hits: {Hit}, x: integer, y: integer): Hit?
-    for _, hit in ipairs(hits) do if x >= hit.x and y >= hit.y and x < hit.x + hit.width and y < hit.y + hit.height then return hit end end
-    return nil
-end
 
 local function draw_base(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, content: contents.State?): Frame
-    local theme, canvas = appearance.theme(preferences.theme), tty.canvas(width, height)
-    local hits: {Hit} = {}
-    local function put(x: integer, y: integer, value: string, size: integer, fg: string?, bg: string?)
-        if x >= 1 and y >= 1 and y <= height and size > 0 then canvas:put(x, y, appearance.style(fg or theme.text, bg or theme.surface) .. value .. RESET, size) end
-    end
-    local function line(y: integer, value: string, fg: string?, bg: string?)
-        put(1, y, string.rep(" ", width), width, fg, bg)
-        put(2, y, tty.text.truncate(value, maximum(0, width - 2), "…"), maximum(0, width - 2), fg, bg)
-    end
+    local painter = frame.new(width, height, preferences)
+    local theme = painter.theme
     -- Splits each value into rows that fit the body width.
     local function wrap(values: {string}): {string}
         local wrapped: {string} = {}
@@ -56,28 +45,17 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         end
         return wrapped
     end
+    -- A control is active when it names the current phase, view or choice.
     local function button(x: integer, y: integer, kind: string, label: string, enabled: boolean): integer
-        local size = tty.text.width(label)
-        if x + size > width or y < 1 or y > height then return x end
         local browsing = content ~= nil and content.open
         local active = (kind == "contents" and browsing) or kind == state.phase or (kind == "readme" and reading == true and not state.requirements_open and not browsing)
             or (kind == "versions" and reading ~= true and not state.requirements_open and not browsing)
             or (kind == "requirements" and state.requirements_open) or kind == state.action
             or kind == "policy_" .. state.policy or kind == "confirm" or kind == "review" or kind == "plan"
             or kind == "recover"
-        put(x, y, label, size, enabled and (active and appearance.selection_text(theme) or theme.text) or theme.muted,
-            enabled and active and theme.accent or theme.surface)
-        if enabled then hits[#hits + 1] = {kind = kind, key = "", x = x, y = y, width = size, height = 1} end
-        return x + size + 1
+        return frame.button(painter, x, y, {kind = kind, label = label:match("^%s*(.-)%s*$") or label, enabled = enabled, active = active})
     end
-    canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-    local phase = string.upper(state.phase)
-    line(1, "MODULES  " .. phase, theme.text)
-    if width >= 54 then
-        local selected = state.selected or "Browse the Hub"
-        local span = tty.text.width(selected)
-        put(math.floor(math.max(2, width - span)), 1, selected, span, theme.accent)
-    end
+    frame.header(painter, "MODULES  " .. string.upper(state.phase), state.selected or "Browse the Hub")
     local x = 2
     x = button(x, 2, "catalog", " Catalog ", true)
     x = button(x, 2, "installed", " Installed ", true)
@@ -89,7 +67,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     if state.phase == "catalog" then
         local filters = "Keyword: " .. (state.keyword == "" and "all" or state.keyword) .. "  Search: " .. (state.query == "" and "(none)" or state.query)
         if width < 56 then filters = "Keyword " .. (state.keyword == "" and "all" or state.keyword) end
-        line(3, filters, theme.muted)
+        frame.line(painter, 3, filters, theme.muted)
         local roomy = width >= 48 and height >= 16
         local first = roomy and 6 or 4
         local stride = roomy and 3 or 1
@@ -98,11 +76,11 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         if roomy then
             local search_x = button(2, 4, "search", " Search packages… ", true)
             search_x = button(search_x, 4, "keyword", " Change keyword ", true)
-            put(search_x + 1, 4, tostring(state.total) .. " packages", maximum(0, width - search_x - 2), theme.muted)
+            frame.put(painter, search_x + 1, 4, tostring(state.total) .. " packages", maximum(0, width - search_x - 2), theme.muted)
         end
         if #state.catalog == 0 then
-            line(first, "No packages on this page", theme.text)
-            if roomy then line(first + 1, "Try another search or clear the keyword filter.", theme.muted) end
+            frame.line(painter, first, "No packages on this page", theme.text)
+            if roomy then frame.line(painter, first + 1, "Try another search or clear the keyword filter.", theme.muted) end
         end
         for slot = 1, capacity do
             local item = state.catalog[next_offset + slot]
@@ -111,34 +89,31 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             local label = item.title ~= "" and item.title or item.component
             local foreground = selected and appearance.selection_text(theme) or theme.text
             local background = selected and theme.accent or theme.surface
+            frame.row(painter, y, roomy and (" " .. label) or label, selected, "component", 0, item.component, nil, nil, stride)
             if roomy then
-                line(y, " " .. label, foreground, background)
                 local version_width = tty.text.width(item.latest_version)
                 if version_width > 0 and tty.text.width(label) + version_width + 6 < width then
-                    put(width - version_width - 2, y, item.latest_version, version_width, foreground, background)
+                    frame.put(painter, width - version_width - 2, y, item.latest_version, version_width, foreground, background)
                 end
-                line(y + 1, " " .. item.component .. "  ·  " .. (item.description ~= "" and item.description or "No description provided"), theme.muted)
-                line(y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
-            else
-                line(y, label, foreground, background)
+                frame.line(painter, y + 1, " " .. item.component .. "  ·  " .. (item.description ~= "" and item.description or "No description provided"), theme.muted)
+                frame.line(painter, y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
             end
-            hits[#hits + 1] = {kind = "component", key = item.component, x = 1, y = y, width = width, height = stride}
         end
         local actions = 2
         actions = button(actions, height - 1, "previous", " ‹ Previous ", state.page > 1)
         actions = button(actions, height - 1, "next", " Next › ", #state.catalog > 0 and state.total > state.page * #state.catalog)
-        line(height, status ~= "" and status or "/ search · K keyword · Enter open · ←/→ page", theme.muted)
-        return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+        frame.footer(painter, status, "/ search · K keyword · Enter open · ←/→ page")
+        return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "installed" then
         local roomy = width >= 48 and height >= 16
-        line(3, "Your installed packages · " .. tostring(#state.installed), theme.muted)
+        frame.line(painter, 3, "Your installed packages · " .. tostring(#state.installed), theme.muted)
         local first, stride = roomy and 5 or 4, roomy and 3 or 1
         local capacity = maximum(0, (height - 1 - first) // stride)
         local next_offset = math.floor(math.max(0, math.min(maximum(0, #state.installed - capacity), offset)))
         if #state.installed == 0 then
-            line(first, "No installed Hub modules", theme.text)
-            if roomy then line(first + 1, "Browse the catalog to find your first package.", theme.muted) end
+            frame.line(painter, first, "No installed Hub modules", theme.text)
+            if roomy then frame.line(painter, first + 1, "Browse the catalog to find your first package.", theme.muted) end
         end
         for slot = 1, capacity do
             local item = state.installed[next_offset + slot]
@@ -149,45 +124,44 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             if roomy then
                 local version_width = tty.text.width(item.version)
                 local name_width = maximum(0, width - version_width - 7)
-                line(y, " " .. tty.text.truncate(item.component, name_width, "…"), foreground, background)
-                put(width - version_width - 2, y, item.version, version_width, foreground, background)
+                frame.row(painter, y, " " .. tty.text.truncate(item.component, name_width, "…"), selected, "component", 0, item.component, nil, nil, stride)
+                frame.put(painter, width - version_width - 2, y, item.version, version_width, foreground, background)
                 local description = item.direct and "Direct installation" or "Dependency"
                 if #item.used_by > 0 then description = description .. " · Required by " .. table.concat(item.used_by, ", ") end
-                line(y + 1, " " .. description, theme.muted)
-                line(y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
+                frame.line(painter, y + 1, " " .. description, theme.muted)
+                frame.line(painter, y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
             else
-                line(y, item.component .. "  " .. item.version, foreground, background)
+                frame.row(painter, y, item.component .. "  " .. item.version, selected, "component", 0, item.component)
             end
-            hits[#hits + 1] = {kind = "component", key = item.component, x = 1, y = y, width = width, height = stride}
         end
         local actions = button(2, height - 1, "refresh", " Refresh ", true)
-        line(height, status ~= "" and status or "↑↓ select · Enter details · R refresh · A authored version", theme.muted)
-        return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+        frame.footer(painter, status, "↑↓ select · Enter details · R refresh · A authored version")
+        return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "authoring" then
-        line(3, "Private authored overlay version", theme.muted)
-        line(4, "Component: " .. (state.publication_component ~= "" and state.publication_component or "(set with C)"), theme.text)
-        line(5, "Version: " .. (state.publication_version ~= "" and state.publication_version or "(set with V)"), theme.text)
+        frame.line(painter, 3, "Private authored overlay version", theme.muted)
+        frame.line(painter, 4, "Component: " .. (state.publication_component ~= "" and state.publication_component or "(set with C)"), theme.text)
+        frame.line(painter, 5, "Version: " .. (state.publication_version ~= "" and state.publication_version or "(set with V)"), theme.text)
         local frozen = state.publication_snapshot_digest ~= "" and state.publication_snapshot_digest or "(freeze first; set with S)"
-        line(6, "Frozen snapshot: " .. frozen, theme.text)
-        line(8, "Freeze the actor-owned overlay, then enter its digest.", theme.muted)
-        line(9, "Prepare stores this exact version locally; it does not distribute it.", theme.muted)
-        line(11, "Overlays: Stage → Review → Select → Approvals → Apply.", theme.text)
-        line(12, "Return here to publish only after this exact version is applied.", theme.text)
+        frame.line(painter, 6, "Frozen snapshot: " .. frozen, theme.text)
+        frame.line(painter, 8, "Freeze the actor-owned overlay, then enter its digest.", theme.muted)
+        frame.line(painter, 9, "Prepare stores this exact version locally; it does not distribute it.", theme.muted)
+        frame.line(painter, 11, "Overlays: Stage → Review → Select → Approvals → Apply.", theme.text)
+        frame.line(painter, 12, "Return here to publish only after this exact version is applied.", theme.text)
         if state.publication_prepared then
-            line(14, "Prepared descriptor " .. state.publication_prepared.descriptor_digest, theme.muted)
+            frame.line(painter, 14, "Prepared descriptor " .. state.publication_prepared.descriptor_digest, theme.muted)
         end
         local actions = 2
         actions = button(actions, height - 1, "prepare_publication", " Prepare locally ", true)
         button(actions, height - 1, "publish_publication", " Publish applied version ", model.publication_ready(state))
-        line(height, status ~= "" and status or "C component · V version · S frozen digest · P prepare · U publish", theme.muted)
-        if height >= 4 then hits[#hits + 1] = {kind = "author_component", key = "", x = 1, y = 4, width = width, height = 1} end
-        if height >= 5 then hits[#hits + 1] = {kind = "author_version", key = "", x = 1, y = 5, width = width, height = 1} end
-        if height >= 6 then hits[#hits + 1] = {kind = "author_snapshot", key = "", x = 1, y = 6, width = width, height = 1} end
-        return {rows = canvas:rows(), hits = hits, capacity = 1, offset = 0, operation_detail_offset = 0}
+        frame.footer(painter, status, "C component · V version · S frozen digest · P prepare · U publish")
+        if height >= 4 then frame.add_hit(painter, "author_component", 0, "", 1, 4, width, 1) end
+        if height >= 5 then frame.add_hit(painter, "author_version", 0, "", 1, 5, width, 1) end
+        if height >= 6 then frame.add_hit(painter, "author_snapshot", 0, "", 1, 6, width, 1) end
+        return {rows = frame.rows(painter), hits = painter.hits, capacity = 1, offset = 0, operation_detail_offset = 0}
     end
     if state.phase == "operations" then
-        line(3, "Actor-owned operation history", theme.muted)
+        frame.line(painter, 3, "Actor-owned operation history", theme.muted)
         local selected_operation = state.selected_operation
         local first = 4
         local list_last = selected_operation and math.max(first - 1, height - 12) or height - 2
@@ -197,7 +171,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         local total_pages = math.max(1, math.ceil(state.operation_total / page_size))
         local selected_detail_offset = 0
         if #state.operations == 0 then
-            line(first, "No Hub operations recorded for this actor", theme.muted)
+            frame.line(painter, first, "No Hub operations recorded for this actor", theme.muted)
         end
         for slot = 1, capacity do
             local item = state.operations[next_offset + slot]
@@ -205,8 +179,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             local y, selected = first + slot - 1, selected_operation and selected_operation.digest == item.digest
             local label = item.action .. "  " .. item.component .. "  " .. item.state
             if width >= 72 then label = label .. "  r" .. tostring(item.baseline_revision) end
-            line(y, label, selected and appearance.selection_text(theme) or theme.text, selected and theme.accent or theme.surface)
-            hits[#hits + 1] = {kind = "operation", key = item.digest, x = 1, y = y, width = width, height = 1}
+            frame.row(painter, y, label, selected == true, "operation", 0, item.digest)
         end
         if selected_operation then
             local detail_first = first + capacity + 1
@@ -227,8 +200,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             local detail_capacity = maximum(0, height - 3 - detail_first + 1)
             local detail_offset = math.floor(math.max(0, math.min(math.max(0, #detail - detail_capacity), state.operation_detail_offset)))
             selected_detail_offset = detail_offset
-            for slot = 1, math.min(detail_capacity, #detail - detail_offset) do line(detail_first + slot - 1, detail[detail_offset + slot], theme.text) end
-            if #detail > detail_capacity and detail_capacity > 0 then line(detail_first - 1, "Detail " .. tostring(detail_offset + 1) .. "–" .. tostring(math.min(#detail, detail_offset + detail_capacity)) .. "/" .. tostring(#detail) .. " · PgUp/PgDn scroll detail", theme.muted) end
+            for slot = 1, math.min(detail_capacity, #detail - detail_offset) do frame.line(painter, detail_first + slot - 1, detail[detail_offset + slot], theme.text) end
+            if #detail > detail_capacity and detail_capacity > 0 then frame.line(painter, detail_first - 1, "Detail " .. tostring(detail_offset + 1) .. "–" .. tostring(math.min(#detail, detail_offset + detail_capacity)) .. "/" .. tostring(#detail) .. " · PgUp/PgDn scroll detail", theme.muted) end
         end
         local actions = 2
         actions = button(actions, height - 1, "operations_previous", " Prev ", state.operation_page > 1)
@@ -236,14 +209,14 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         if selected_operation and (selected_operation.state == "published" or selected_operation.state == "recovery_required") and selected_operation.request then
             button(actions, height - 1, "recover", " Review recovery… ", true)
         end
-        line(height, status ~= "" and status or ("Page " .. tostring(state.operation_page) .. "/" .. tostring(total_pages) .. " · select a receipt to inspect its measured result"), theme.muted)
-        return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = selected_detail_offset}
+        frame.footer(painter, status, ("Page " .. tostring(state.operation_page) .. "/" .. tostring(total_pages) .. " · select a receipt to inspect its measured result"))
+        return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = selected_detail_offset}
     end
     local detail = state.detail
     if state.phase == "details" then
-        line(3, detail and (detail.title .. "  " .. detail.component) or "Select a package to read its details", theme.muted)
+        frame.line(painter, 3, detail and (detail.title .. "  " .. detail.component) or "Select a package to read its details", theme.muted)
         if detail then
-            line(4, (state.selected_version and ("Version " .. state.selected_version .. "  ·  ") or "") .. detail.description, theme.text)
+            frame.line(painter, 4, (state.selected_version and ("Version " .. state.selected_version .. "  ·  ") or "") .. detail.description, theme.text)
             local tab_x = 2
             tab_x = button(tab_x, 5, "readme", " README ", true)
             tab_x = button(tab_x, 5, "versions", width < 44 and " Vers " or " Versions ", true)
@@ -251,7 +224,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             tab_x = button(tab_x, 5, "contents", " Contents ", state.selected_version ~= nil)
             if content and content.open then
                 local capacity = maximum(0, height - 10)
-                line(6, content.mode == "entries" and "Read-only package contents" or (content.mode == "entry" and content.path or (content.resource .. " / " .. content.path)), theme.muted)
+                frame.line(painter, 6, content.mode == "entries" and "Read-only package contents" or (content.mode == "entry" and content.path or (content.resource .. " / " .. content.path)), theme.muted)
                 local rows: {string} = {}
                 if #content.rows == 0 then
                     for _, raw in ipairs(content.lines) do
@@ -272,39 +245,37 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                     local item = content.rows[next_offset + slot]
                     if item then
                         local active = next_offset + slot == content.selected
-                        line(y, item.label, active and appearance.selection_text(theme) or theme.text, active and theme.accent or theme.surface)
-                        hits[#hits + 1] = {kind = "content_row", key = item.key, x = 1, y = y, width = width, height = 1}
-                    elseif rows[next_offset + slot] then line(y, rows[next_offset + slot], theme.text) end
+                        frame.row(painter, y, item.label, active, "content_row", 0, item.key)
+                    elseif rows[next_offset + slot] then frame.line(painter, y, rows[next_offset + slot], theme.text) end
                 end
                 local actions = button(2, height - 2, "content_back", " Back ", not content.pending)
                 actions = button(actions, height - 2, "content_previous", " Previous ", not content.pending and content.offset > 0)
                 button(actions, height - 2, "content_next", " Next page ", not content.pending and content.next_offset ~= nil)
-                line(height - 1, content.notice, theme.muted)
-                line(height, status ~= "" and status or "↑↓ browse · Enter open · ⌫ back · N next", theme.muted)
-                return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+                frame.line(painter, height - 1, content.notice, theme.muted)
+                frame.footer(painter, status, "↑↓ browse · Enter open · ⌫ back · N next")
+                return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
             if state.requirements_open then
                 local capacity = maximum(0, math.floor((height - 9) / 3))
                 local selected = state.selected_requirement
                 local first = math.max(1, selected - capacity + 1)
-                if not state.requirements_digest then line(7, state.notice ~= "" and state.notice or "Loading requirements…", theme.muted)
-                elseif #state.requirements == 0 then line(7, "This version declares no requirements.", theme.muted) end
+                if not state.requirements_digest then frame.line(painter, 7, state.notice ~= "" and state.notice or "Loading requirements…", theme.muted)
+                elseif #state.requirements == 0 then frame.line(painter, 7, "This version declares no requirements.", theme.muted) end
                 for slot = 1, capacity do
                     local row = state.requirements[first + slot - 1]
                     if not row then break end
                     local y = 6 + (slot - 1) * 3
                     local active = first + slot - 1 == selected
-                    line(y, row.id .. " · " .. row.origin, active and appearance.selection_text(theme) or theme.text, active and theme.accent or theme.surface)
-                    line(y + 1, row.json == "" and "Choose a JSON value" or row.json, theme.text)
-                    line(y + 2, table.concat(row.targets, " · "), theme.muted)
-                    hits[#hits + 1] = {kind = "requirement", key = row.id, x = 1, y = y, width = width, height = 3}
+                    frame.row(painter, y, row.id .. " · " .. row.origin, active, "requirement", 0, row.id, nil, nil, 3)
+                    frame.line(painter, y + 1, row.json == "" and "Choose a JSON value" or row.json, theme.text)
+                    frame.line(painter, y + 2, table.concat(row.targets, " · "), theme.muted)
                 end
                 local action_x = button(2, height - 2, "plan", " Prepare ", state.requirements_digest ~= nil)
                 local requirement = state.requirements[state.selected_requirement]
                 button(action_x, height - 2, "reset_requirement", " Clear override ", requirement ~= nil and requirement.origin == "Selected")
-                line(height - 1, "Defaults are used unless you choose a value.", theme.muted)
-                line(height, status ~= "" and status or "↑↓ select · Enter edit JSON · V versions · P prepare", theme.muted)
-                return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = 0, operation_detail_offset = 0}
+                frame.line(painter, height - 1, "Defaults are used unless you choose a value.", theme.muted)
+                frame.footer(painter, status, "↑↓ select · Enter edit JSON · V versions · P prepare")
+                return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = 0, operation_detail_offset = 0}
             end
             if reading then
                 local lines: {string} = {}
@@ -348,13 +319,13 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 for slot = 1, capacity do
                     local row = lines[next_offset + slot]
                     if not row then break end
-                    line(6 + slot - 1, row, row:match("^#") and theme.accent or theme.text)
+                    frame.line(painter, 6 + slot - 1, row, row:match("^#") and theme.accent or theme.text)
                 end
                 local action_x = button(2, height - 1, "versions", " Choose version ", true)
                 action_x = button(action_x, height - 1, "requirements", " Configure ", true)
                 action_x = button(action_x, height - 1, "plan", " Review installation ", state.selected_version ~= nil)
-                line(height, status ~= "" and status or "↑↓ scroll · V versions · C contents · Esc catalog", theme.muted)
-                return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+                frame.footer(painter, status, "↑↓ scroll · V versions · C contents · Esc catalog")
+                return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
             local first, last = 6, height - 4
             local capacity = maximum(0, last - first + 1)
@@ -364,8 +335,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 if not item then break end
                 local y, selected = first + slot - 1, item.version == state.selected_version
                 local label = item.version .. (item.yanked and "  yanked" or "")
-                line(y, label, selected and appearance.selection_text(theme) or (item.yanked and theme.muted or theme.text), selected and theme.accent or theme.surface)
-                hits[#hits + 1] = {kind = "version", key = item.version, x = 1, y = y, width = width, height = 1}
+                frame.row(painter, y, label, selected, "version", 0, item.version, item.yanked and theme.muted or nil)
             end
             local actions = 2
             actions = button(actions, height - 2, "install", " Install ", true)
@@ -383,16 +353,16 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 policy_x = button(policy_x, height - 1, "policy_up", " Run migrations ", true)
             end
             local parameters = #state.parameters == 0 and "no parameters" or (tostring(#state.parameters) .. " typed parameters")
-            if width >= 74 then line(height - 3, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
+            if width >= 74 then frame.line(painter, height - 3, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
         end
-        line(height, status ~= "" and status or "↑↓ version · I install · U update · X remove · P review", theme.muted)
-        return {rows = canvas:rows(), hits = hits, capacity = detail and maximum(0, height - 9) or 0, offset = offset, operation_detail_offset = 0}
+        frame.footer(painter, status, "↑↓ version · I install · U update · X remove · P review")
+        return {rows = frame.rows(painter), hits = painter.hits, capacity = detail and maximum(0, height - 9) or 0, offset = offset, operation_detail_offset = 0}
     end
     if state.phase == "confirm" and state.recovery then
         local recovery = state.recovery
         local operation = recovery.operation
-        line(3, "Review recovery · immutable receipt", theme.accent)
-        line(4, operation.action .. "  " .. operation.component .. "  " .. operation.state, theme.text)
+        frame.line(painter, 3, "Review recovery · immutable receipt", theme.accent)
+        frame.line(painter, 4, operation.action .. "  " .. operation.component .. "  " .. operation.state, theme.text)
         local body: {string} = {"The stored request will be sent with this digest; no new plan will be prepared."}
         for _, request_line in ipairs(request_lines(recovery.request)) do body[#body + 1] = request_line end
         body[#body + 1] = "Migration work"
@@ -404,19 +374,19 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         body = wrap(body)
         local body_capacity = maximum(0, height - 8)
         local body_offset = math.floor(math.max(0, math.min(math.max(0, #body - body_capacity), offset)))
-        line(5, "Digest " .. recovery.digest .. (#body > body_capacity and (" · detail " .. tostring(body_offset + 1) .. "–" .. tostring(math.min(#body, body_offset + body_capacity)) .. "/" .. tostring(#body)) or ""), theme.muted)
-        for slot = 1, math.min(body_capacity, #body - body_offset) do line(6 + slot - 1, body[body_offset + slot], theme.text) end
-        line(height - 2, "Confirming recovery reuses the exact stored request and measured digest.", theme.text)
+        frame.line(painter, 5, "Digest " .. recovery.digest .. (#body > body_capacity and (" · detail " .. tostring(body_offset + 1) .. "–" .. tostring(math.min(#body, body_offset + body_capacity)) .. "/" .. tostring(#body)) or ""), theme.muted)
+        for slot = 1, math.min(body_capacity, #body - body_offset) do frame.line(painter, 6 + slot - 1, body[body_offset + slot], theme.text) end
+        frame.line(painter, height - 2, "Confirming recovery reuses the exact stored request and measured digest.", theme.text)
         local actions = 2
         actions = button(actions, height - 1, "confirm", " Confirm recovery ", true)
         button(actions, height - 1, "cancel", " Back ", true)
-        line(height, status ~= "" and status or "Enter confirms · Esc returns to operation history", theme.muted)
-        return {rows = canvas:rows(), hits = hits, capacity = body_capacity, offset = body_offset, operation_detail_offset = 0}
+        frame.footer(painter, status, "Enter confirms · Esc returns to operation history")
+        return {rows = frame.rows(painter), hits = painter.hits, capacity = body_capacity, offset = body_offset, operation_detail_offset = 0}
     end
     local plan = state.plan
     if state.phase == "result" and state.result then
         local result = state.result
-        line(3, (result.ok and "Completed" or "Not completed") .. ": " .. result.code, result.ok and theme.accent or theme.text)
+        frame.line(painter, 3, (result.ok and "Completed" or "Not completed") .. ": " .. result.code, result.ok and theme.accent or theme.text)
         local message = wrap({result.message})
         local message_capacity = maximum(1, height - 8)
         local shown = #message
@@ -424,21 +394,21 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         for slot = 1, shown do
             local value = message[slot]
             if slot == message_capacity and #message > message_capacity then value = tty.text.truncate(value .. " …", maximum(0, width - 2), "…") end
-            line(3 + slot, value, theme.text)
+            frame.line(painter, 3 + slot, value, theme.text)
         end
-        line(5 + shown, "Receipt state: " .. result.state .. (result.replayed and "  replayed" or ""), theme.muted)
+        frame.line(painter, 5 + shown, "Receipt state: " .. result.state .. (result.replayed and "  replayed" or ""), theme.muted)
         button(2, height - 1, "status", " Check status ", state.plan ~= nil or state.selected_operation ~= nil)
         button(18, height - 1, "catalog", " Catalog ", true)
-        line(height, status ~= "" and status or "R checks this measured operation · Esc returns to catalog", theme.muted)
-        return {rows = canvas:rows(), hits = hits, capacity = 0, offset = 0, operation_detail_offset = 0}
+        frame.footer(painter, status, "R checks this measured operation · Esc returns to catalog")
+        return {rows = frame.rows(painter), hits = painter.hits, capacity = 0, offset = 0, operation_detail_offset = 0}
     end
     if not plan then
-        line(3, "No plan prepared", theme.muted)
-        line(height, status ~= "" and status or "P prepares a plan from the selected package", theme.muted)
-        return {rows = canvas:rows(), hits = hits, capacity = 0, offset = 0, operation_detail_offset = 0}
+        frame.line(painter, 3, "No plan prepared", theme.muted)
+        frame.footer(painter, status, "P prepares a plan from the selected package")
+        return {rows = frame.rows(painter), hits = painter.hits, capacity = 0, offset = 0, operation_detail_offset = 0}
     end
-    line(3, "Plan " .. plan.digest:sub(1, 12) .. "  registry revision " .. tostring(plan.base_revision), theme.muted)
-    line(4, plan.ready and "Ready for confirmation" or ("Missing: " .. table.concat(plan.missing, ", ")), plan.ready and theme.accent or theme.text)
+    frame.line(painter, 3, "Plan " .. plan.digest:sub(1, 12) .. "  registry revision " .. tostring(plan.base_revision), theme.muted)
+    frame.line(painter, 4, plan.ready and "Ready for confirmation" or ("Missing: " .. table.concat(plan.missing, ", ")), plan.ready and theme.accent or theme.text)
     local review: {string} = {}
     local required: {[integer]: string} = {}
     local unchanged = 0
@@ -470,34 +440,34 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     if #review == 0 then review = {"No package changes"} end
     local capacity = maximum(0, height - 9)
     local next_offset = math.floor(math.max(0, math.min(maximum(0, #review - capacity), offset)))
-    line(5, "Review " .. tostring(math.min(#review, next_offset + 1)) .. "–" .. tostring(math.min(#review, next_offset + capacity))
+    frame.line(painter, 5, "Review " .. tostring(math.min(#review, next_offset + 1)) .. "–" .. tostring(math.min(#review, next_offset + capacity))
         .. " of " .. tostring(#review) .. " · ↑↓ scroll", theme.muted)
     for slot = 1, capacity do
         local row = review[next_offset + slot]
         if not row then break end
         local missing = required[next_offset + slot]
-        line(5 + slot, row, missing and theme.accent or theme.text)
-        if missing and state.phase == "plan" then hits[#hits + 1] = {kind = "missing", key = missing, x = 1, y = 5 + slot, width = width, height = 1} end
+        frame.line(painter, 5 + slot, row, missing and theme.accent or theme.text)
+        if missing and state.phase == "plan" then frame.add_hit(painter, "missing", 0, missing, 1, 5 + slot, width, 1) end
     end
     local actions = 2
     if state.phase == "confirm" then
-        line(height - 2, "Confirm this exact digest; changing package, version, policy, or JSON clears it.", theme.text)
+        frame.line(painter, height - 2, "Confirm this exact digest; changing package, version, policy, or JSON clears it.", theme.text)
         actions = button(actions, height - 1, "confirm", " Confirm ", plan.ready)
         actions = button(actions, height - 1, "cancel", " Back ", true)
-        line(height, status ~= "" and status or "Enter confirms · Esc returns to the plan", theme.muted)
+        frame.footer(painter, status, "Enter confirms · Esc returns to the plan")
     else
         actions = button(actions, height - 1, "review", " Confirm… ", plan.ready)
         actions = button(actions, height - 1, "refresh_plan", " Replan ", true)
         button(actions, height - 1, "missing", " Configure required ", #plan.missing > 0)
-        line(height, status ~= "" and status or "Enter reviews immutable plan · R replans · edits invalidate it", theme.muted)
+        frame.footer(painter, status, "Enter reviews immutable plan · R replans · edits invalidate it")
     end
-    return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+    return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
 end
 
 type Editor = {field: string, buffer: string, name: string?}
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, editor: Editor?, content: contents.State?): Frame
-    local frame = draw_base(width, height, preferences, state, offset, editor and "" or status, reading, content)
-    if not editor then return frame end
+    local base = draw_base(width, height, preferences, state, offset, editor and "" or status, reading, content)
+    if not editor then return base end
     local theme = appearance.theme(preferences.theme)
     local publication_editor = editor.field == "publication_component" or editor.field == "publication_version"
         or editor.field == "publication_snapshot_digest"
@@ -517,18 +487,18 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         compact_line(1, "EDIT · " .. title, theme.accent)
         compact_line(2, (editor.buffer ~= "" and editor.buffer or "(empty)") .. "▏")
         if height > 2 then compact_line(height, status ~= "" and status or "Enter save · Esc cancel", theme.muted) end
-        local compact_hits: {Hit} = {}
+        local compact_hits: {frame.Hit} = {}
         if width >= 24 and height > 2 then
             compact_hits = {
-                {kind = "save_editor", key = "", x = 1, y = height, width = 10, height = 1},
-                {kind = "cancel_editor", key = "", x = 14, y = height, width = 10, height = 1},
+                {kind = "save_editor", index = 0, key = "", x = 1, y = height, width = 10, height = 1},
+                {kind = "cancel_editor", index = 0, key = "", x = 14, y = height, width = 10, height = 1},
             }
         end
         return {rows = compact:rows(), hits = compact_hits, capacity = 0,
-            offset = frame.offset, operation_detail_offset = frame.operation_detail_offset}
+            offset = base.offset, operation_detail_offset = base.operation_detail_offset}
     end
     local canvas = tty.canvas(width, height)
-    for y, row in ipairs(frame.rows) do canvas:put(1, y, row, width) end
+    for y, row in ipairs(base.rows) do canvas:put(1, y, row, width) end
     local w = math.floor(math.min(76, width - 4))
     local h = math.floor(math.min(13, height - 4))
     local left, top = (width - w) // 2 + 1, (height - h) // 2 + 1
@@ -563,10 +533,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     row(top + h - 3, hint, theme.muted)
     row(top + h - 2, " Enter Save     Esc Cancel", theme.accent)
     canvas:put(left, top + h - 1, appearance.style(theme.accent, theme.surface) .. "╰" .. string.rep("─", w - 2) .. "╯" .. RESET, w)
-    local hits: {Hit} = {
-        {kind = "save_editor", key = "", x = left + 2, y = top + h - 2, width = 12, height = 1},
-        {kind = "cancel_editor", key = "", x = left + 15, y = top + h - 2, width = math.floor(math.min(12, w - 17)), height = 1},
+    local hits: {frame.Hit} = {
+        {kind = "save_editor", index = 0, key = "", x = left + 2, y = top + h - 2, width = 12, height = 1},
+        {kind = "cancel_editor", index = 0, key = "", x = left + 15, y = top + h - 2, width = math.floor(math.min(12, w - 17)), height = 1},
     }
-    return {rows = canvas:rows(), hits = hits, capacity = frame.capacity, offset = frame.offset, operation_detail_offset = frame.operation_detail_offset}
+    return {rows = canvas:rows(), hits = hits, capacity = base.capacity, offset = base.offset, operation_detail_offset = base.operation_detail_offset}
 end
 return M

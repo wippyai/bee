@@ -1,6 +1,7 @@
 -- MIT. Agent profile form rendering and input; persistence belongs to profile_form.
 local tty = require("tty")
 local appearance = require("appearance")
+local frame = require("frame")
 local text = require("text")
 local editor = require("editor")
 local forms = require("forms")
@@ -8,8 +9,7 @@ local M = {}
 type Field = {kind: string, name: string, label: string, option_kind: string?, max_bytes: integer?}
 type State = {form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
     status: string, confirming_remove: boolean}
-type Hit = {action: string, index: integer, x: integer, y: integer, width: integer}
-type Frame = {rows: {string}, hits: {Hit}}
+type Frame = {rows: {string}, hits: {frame.Hit}}
 
 function M.new(form: forms.Form): State
     local option_text: {[string]: string} = {}
@@ -71,15 +71,12 @@ function M.action(state: State, action: string): string?
     end
     return nil
 end
-function M.input(state: State, event: tty.TTYEvent, frame: Frame): string?
+function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     local listed = fields(state)
     if event.type == "mouse" and event.action == "press" and event.button == "left" then
-        for _, hit in ipairs(frame.hits) do
-            if event.y == hit.y and event.x >= hit.x and event.x < hit.x + hit.width then
-                if hit.action == "field" then state.selected = hit.index
-                else return M.action(state, hit.action) end
-            end
-        end
+        local hit = frame.hit(drawn.hits, math.floor(tonumber(event.x) or 0), math.floor(tonumber(event.y) or 0))
+        if hit and hit.kind == "field" then state.selected = hit.index
+        elseif hit then return M.action(state, hit.kind) end
     elseif event.type == "key" and event.action == "press" then
         if event.key_type == "escape" or event.key_type == "esc" then return M.action(state, "cancel") end
         if state.confirming_remove then
@@ -127,54 +124,37 @@ function M.input(state: State, event: tty.TTYEvent, frame: Frame): string?
     return nil
 end
 
+local HINTS = frame.hints({{key = "Tab", verb = "fields"}, {key = "Ctrl+S", verb = "save"}, {key = "Ctrl+D", verb = "remove"}, {key = "Esc", verb = "cancel"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: State): Frame
-    local theme = appearance.theme(preferences.theme)
-    local canvas = tty.canvas(width, height)
-    local reset = "\27[0m"
-    canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. reset)
-    local hits: {Hit} = {}
-    local function line(y: integer, value: string, active: boolean)
-        if y < 1 or y > height or width < 3 then return end
-        local style = appearance.style(active and appearance.selection_text(theme) or theme.text, active and theme.accent or theme.surface)
-        canvas:put(2, y, style .. tty.text.truncate(text.bound(value, 4096), width - 2, "…") .. reset, width - 2)
-    end
-    line(1, state.form.revision > 0 and "EDIT AGENT PROFILE" or "NEW AGENT PROFILE", false)
-    line(2, "Tab fields · Ctrl+S save · Ctrl+D remove · Esc cancel", false)
+    local painter = frame.new(width, height, preferences)
+    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "NEW AGENT PROFILE")
     local listed = fields(state)
     local capacity = math.floor(math.max(0, height - 7))
-    local first = math.floor(math.max(1, state.selected - capacity + 1))
-    for row = 1, capacity do
-        local index = first + row - 1
+    local window = frame.window(#listed, capacity, state.selected, 0)
+    for slot = 1, window.capacity do
+        local index = window.offset + slot
         local field = listed[index]
-        if field then
-            local label = field.label
-            if field.kind == "title" then label = label .. ": " .. state.title
-            elseif field.kind == "option" and field.option_kind == "text" then
-                label = field.name .. ": " .. (state.option_text[field.name] or "Default")
-            elseif field.kind == "guidance" then label = label .. ": " .. state.guidance:gsub("\r?\n", " ↵ ") end
-            line(row + 2, label, index == state.selected)
-            hits[#hits + 1] = {action = "field", index = index, x = 2, y = row + 2, width = math.max(0, width - 2)}
-        end
+        if not field then break end
+        local label = field.label
+        if field.kind == "title" then label = label .. ": " .. state.title
+        elseif field.kind == "option" and field.option_kind == "text" then
+            label = field.name .. ": " .. (state.option_text[field.name] or "Default")
+        elseif field.kind == "guidance" then label = label .. ": " .. state.guidance:gsub("\r?\n", " ↵ ") end
+        frame.row(painter, slot + 2, text.bound(label, 4096), index == state.selected, "field", index, "")
     end
-    line(height - 3, state.confirming_remove and "Remove this profile? Enter confirms; Esc keeps it." or
-        (state.form.pending and "Request submitted. Retry uses the same values." or "Instructions append to the harness. Saving does not launch."), false)
-    local x = 2
-    local save_enabled = not state.confirming_remove and state.form.pending ~= "remove"
-    local remove_enabled = state.form.revision > 0 and state.form.pending ~= "save"
-    local remove_label = state.confirming_remove and " Confirm " or " Remove "
-    for _, button in ipairs({
-        {action = "save", label = " Save ", enabled = save_enabled},
-        {action = "remove", label = remove_label, enabled = remove_enabled},
-        {action = "cancel", label = " Cancel ", enabled = true}
-    }) do
-        if (button.action ~= "remove" or state.form.revision > 0) and height >= 3 and x + #button.label <= width then
-            canvas:put(x, height - 1, appearance.style(button.enabled and appearance.selection_text(theme) or theme.muted,
-                button.enabled and theme.accent or theme.surface) .. button.label .. reset, #button.label)
-            if button.enabled then hits[#hits + 1] = {action = button.action, index = 0, x = x, y = height - 1, width = #button.label} end
-            x = x + #button.label + 1
+    frame.line(painter, height - 3, state.confirming_remove and "Remove this profile? Enter confirms; Esc keeps it." or
+        (state.form.pending and "Request submitted. Retry uses the same values." or "Instructions append to the harness. Saving does not launch."),
+        state.confirming_remove and painter.theme.text or painter.theme.muted)
+    if height >= 3 then
+        local buttons: {frame.Button} = {{kind = "save", label = "Save", enabled = not state.confirming_remove and state.form.pending ~= "remove", primary = true}}
+        if state.form.revision > 0 then
+            buttons[#buttons + 1] = {kind = "remove", label = state.confirming_remove and "Confirm" or "Remove",
+                enabled = state.form.pending ~= "save", primary = state.confirming_remove}
         end
+        buttons[#buttons + 1] = {kind = "cancel", label = "Cancel", enabled = true}
+        frame.actions(painter, height - 1, buttons)
     end
-    line(height, state.status, false)
-    return {rows = canvas:rows(), hits = hits}
+    frame.footer(painter, text.bound(state.status, 4096), HINTS)
+    return {rows = frame.rows(painter), hits = painter.hits}
 end
 return M

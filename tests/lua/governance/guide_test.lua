@@ -42,6 +42,21 @@ local function define_tests()
             test.not_nil(string.find(document, "src/apps/stylebook/", 1, true))
             test.not_nil(string.find(document, "canonical runnable", 1, true))
         end)
+        test.it("routes every application request to its archetype, the style rules and the kit", function()
+            local document = guide.value().document :: string
+            for _, needle in ipairs({"docs/guides/app-style.md", "80x24", "120x36", "160x48", "frame.size", "frame.layout",
+                "bee.application:viz", "viz = \"bee.application:viz\"", "src/apps/monitor/", "System Monitor", "one-shot"}) do
+                test.eq(needle .. (string.find(document, needle, 1, true) and "" or " missing"), needle)
+            end
+            test.eq(#guide.ARCHETYPES, 6)
+            for _, archetype in ipairs(guide.ARCHETYPES) do
+                test.not_nil(string.find(document, archetype.name .. ": " .. archetype.request, 1, true))
+                for _, call in ipairs(archetype.calls) do
+                    test.eq(archetype.name .. " " .. call .. (string.find(document, call, 1, true) and "" or " missing"),
+                        archetype.name .. " " .. call)
+                end
+            end
+        end)
         test.it("derives the CONFIG_SHAPE rule from the enforcing tables", function()
             local rule = guide.config_shape_rule()
             for kind, fields in pairs(preflight.CONFIG_LISTS) do
@@ -77,11 +92,14 @@ local function define_tests()
             test.eq(modules[4], "json")
             test.eq(imports.client, "bee.application:client")
             test.eq(imports.appearance, "bee.application:appearance")
+            test.eq(imports.frame, "bee.application:frame")
             test.is_true(#source < 10000)
             for _, fragment in ipairs({
                 "local appearance = require(\"appearance\")", "appearance.defaults()",
-                "appearance.style", "appearance.selection_text", "tty.text.truncate", "canvas:rows()",
-                "tty.mouse(true)", "COUNTER APP", "WORK", "Status:",
+                "local frame = require(\"frame\")", "frame.new(width, height, preferences)",
+                "frame.header(painter, \"COUNTER APP\"", "frame.actions(painter, height - 1", "primary = true",
+                "frame.footer(painter, \"Status: \" .. status, HINTS)", "frame.hints(", "frame.hit(hits",
+                "frame.rows(painter)", "tty.mouse(true)", "WORK",
                 "message:from() == launch.broker_pid", "data.version == 1",
                 "data.request_id == pending_request_id", "local submitted = pending_count",
                 "data.error_code == \"\"", "saved = submitted", "data.error_code == \"superseded\"",

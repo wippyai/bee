@@ -318,6 +318,37 @@ local function has(list: {string}, wanted: string): boolean
 end
 local function define_tests()
     test.describe("Native placement", function()
+        test.it("decodes Linux execution identity facts", function()
+            local facts = assert(identity.decode("linux_start=55016250\nlinux_boot=2d21bc55-a6c4-441f-9d95-f5bc579c4152\npgid= 2425392\n"))
+            test.eq(facts.start_ticks, 55016250)
+            test.eq(facts.boot_id, "2d21bc55-a6c4-441f-9d95-f5bc579c4152")
+            test.eq(facts.pgid, 2425392)
+            local gone = assert(identity.decode("linux_start=\nlinux_boot=2d21bc55-a6c4-441f-9d95-f5bc579c4152\npgid=\n"))
+            test.is_nil(gone.start_ticks)
+            test.eq(gone.boot_id, "2d21bc55-a6c4-441f-9d95-f5bc579c4152")
+            test.is_nil(gone.pgid)
+        end)
+        test.it("decodes macOS execution identity facts", function()
+            local facts = assert(identity.decode("darwin_start=Thu Sep 24 11:24:20 2026\ndarwin_boot=5D3B9F4E-2C1A-4B8E-9F10-7A6C3E2D1B00\npgid=38997\n"))
+            test.eq(facts.start_ticks, 1790249060)
+            test.eq(facts.boot_id, "5D3B9F4E-2C1A-4B8E-9F10-7A6C3E2D1B00")
+            test.eq(facts.pgid, 38997)
+            test.eq(assert(identity.decode("darwin_start=Tue Feb 29 00:00:00 2028\n")).start_ticks, 1835395200)
+            test.eq(assert(identity.decode("darwin_start=Wed Mar  1 23:59:59 2000\n")).start_ticks, 951955199)
+            -- Missing facts stay unknown; none is read in another's place.
+            local partial = assert(identity.decode("darwin_start=\ndarwin_boot=\npgid=  38997\n"))
+            test.is_nil(partial.start_ticks)
+            test.is_nil(partial.boot_id)
+            test.eq(partial.pgid, 38997)
+        end)
+        test.it("refuses malformed execution identity facts", function()
+            for _, output in ipairs({"38997\n", "darwin_start=Thu Sep 24 2026\n", "darwin_start=Thu Foo 24 11:24:20 2026\n",
+                "linux_start=12x\n", "linux_boot=boot id\n", "pgid=-1\n", "exit_code=0\n"}) do
+                local facts, decode_error = identity.decode(output)
+                test.is_nil(facts)
+                test.is_true(type(decode_error) == "string", output)
+            end
+        end)
         test.it("reports a rejected OS group signal instead of claiming success", function()
             local executor, executor_error = exec.get("bee.placement.native:executor")
             if not executor then error(tostring(executor_error)) end
@@ -2139,6 +2170,33 @@ local function define_tests()
             for _, id in ipairs(ids) do attempt_of(call(OWNER, "stop", {attempt_id = id, mode = "forced"})) end
         end)
         if capability == "process_group" then
+            test.it("records a refused cleanup with its reason", function()
+                local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "true"}, "process_group")))
+                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                if not wait_for(function()
+                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+                end, 8000) then error("grouped attempt did not exit") end
+                -- An identity read that found no process group leaves group
+                -- absence unprovable; a continuation waiting on this cleanup
+                -- must find the refusal and its reason in the ledger.
+                local db = store.open()
+                if not db then error("store") end
+                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET pgid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
+                db:release()
+                if clear_error then error("clear process group: " .. tostring(clear_error)) end
+                local refused = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
+                test.eq(refused.error and refused.error.code, "CONFLICT")
+                local reason = "cleanup scope process_group is not proven gone: no process group recorded"
+                test.eq(refused.error and refused.error.message, reason)
+                local recorded = false
+                local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
+                for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
+                    if item.kind == "cleanup.refused" and item.detail == reason then recorded = true end
+                end
+                test.is_true(recorded, table.concat(kinds(prepared.attempt_id), ","))
+                local after = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt
+                test.eq(after.cleanup_state, "pending")
+            end)
             test.it("proves absence from identity after the runner is lost", function()
                 local request = launch({"sh", "-c", "sleep 8"}, "process_group")
                 local prepared = attempt_of(call(OWNER, "prepare", request))

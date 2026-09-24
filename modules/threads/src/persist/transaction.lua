@@ -175,4 +175,19 @@ end
 function M.drop_projection(tx: sql.Transaction, thread_id: string, kind: string): string?
     return execute(tx, "DELETE FROM bee_thread_projections WHERE thread_id = ? AND kind = ?", {thread_id, kind}, "drop projection")
 end
+function M.insert_notice(tx: sql.Transaction, notice_id: string, watcher_actor: string, watcher_thread_id: string, watcher_action_id: string?,
+    target_thread_id: string, target_action_id: string, after: integer, now: string): string?
+    return execute(tx, "INSERT INTO bee_thread_notices (notice_id, watcher_actor, watcher_thread_id, watcher_action_id, target_thread_id, target_action_id, after_sequence, state, created_at) " ..
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+        {notice_id, watcher_actor, watcher_thread_id, watcher_action_id or sql.NULL, target_thread_id, target_action_id, after, now}, "create thread notice")
+end
+function M.advance_notice(tx: sql.Transaction, notice_id: string, after: integer): string?
+    return execute(tx, "UPDATE bee_thread_notices SET after_sequence = ? WHERE notice_id = ? AND state = 'pending'", {after, notice_id}, "advance thread notice")
+end
+function M.fire_notice(tx: sql.Transaction, notice_id: string, record_id: string): string?
+    return execute(tx, "UPDATE bee_thread_notices SET state = 'fired', fired_record_id = ? WHERE notice_id = ? AND state = 'pending'", {record_id, notice_id}, "fire thread notice")
+end
+function M.cancel_notice(tx: sql.Transaction, notice_id: string): string?
+    return execute(tx, "UPDATE bee_thread_notices SET state = 'cancelled' WHERE notice_id = ? AND state = 'pending'", {notice_id}, "cancel thread notice")
+end
 return M

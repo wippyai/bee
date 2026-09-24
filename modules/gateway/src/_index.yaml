@@ -204,6 +204,9 @@ entries:
 - name: address_value
   kind: library.lua
   source: file://address_value.lua
+- name: sessions
+  kind: library.lua
+  source: file://sessions.lua
 - name: hooks
   kind: library.lua
   source: file://hooks.lua

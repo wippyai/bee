@@ -1,0 +1,14 @@
+#!/bin/bash
+# Codex protocol fixture: replays a captured exec-json-1 stream in place of
+# the Codex executable. This is protocol evidence, not the real harness. It
+# lives outside bin/ so no bare `codex` lookup in the test composition
+# resolves it.
+stream="${BEE_FIXTURE_STREAM:?BEE_FIXTURE_STREAM names the captured stream}"
+if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
+  # Codex reads its gateway from config.toml in its private CODEX_HOME and the
+  # bearer credential from the environment variable that file names; the
+  # gateway client reads the same two, and reports status codes only on stderr.
+  "$(dirname "$0")/../bin/gateway-client" codex "${CODEX_HOME:-$HOME/.codex}/config.toml" >&2
+fi
+cat "$stream"
+exit "${BEE_FIXTURE_EXIT:-0}"

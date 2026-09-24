@@ -10,6 +10,7 @@ entries:
     type: test
     suite: bee
   imports:
+    frames: bee.application:frame
     test: wippy.test:test
     view: bee.stylebook:view
     appearance: bee.application:appearance

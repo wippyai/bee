@@ -8,6 +8,7 @@ local uuid = require("uuid")
 local funcs = require("funcs")
 local client = require("client")
 local appearance = require("appearance")
+local frame = require("frame")
 local model = require("model")
 local view = require("view")
 local contents = require("contents")
@@ -68,7 +69,7 @@ local function main(value: unknown)
     local offset = 0
     local reading_readme = false
     local visible_rows = 1
-    local hits: {view.Hit} = {}
+    local hits: {frame.Hit} = {}
     local pending: {Pending} = {}
     local reading: ReadPending? = nil
     local requested: RequestedRead? = nil
@@ -486,11 +487,11 @@ local function main(value: unknown)
     while running do
         if dirty then
             local display_status = editor and status or (status ~= "" and status or state.notice)
-            local frame = view.draw(width, height, preferences, state, offset, display_status, reading_readme, editor, content)
-            hits, offset = frame.hits, frame.offset
-            model.set_operation_detail_offset(state, frame.operation_detail_offset)
-            visible_rows = math.floor(math.max(1, frame.capacity))
-            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local drawn = view.draw(width, height, preferences, state, offset, display_status, reading_readme, editor, content)
+            hits, offset = drawn.hits, drawn.offset
+            model.set_operation_detail_offset(state, drawn.operation_detail_offset)
+            visible_rows = math.floor(math.max(1, drawn.capacity))
+            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
             dirty = false
         end
@@ -611,7 +612,7 @@ local function main(value: unknown)
                         end
                     end
                 elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                    local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                    local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                     if hit then handle_hit(hit.kind, hit.key) end
                 elseif data.type == "mouse" and data.action == "wheel" then
                     if state.phase == "details" and content.open then

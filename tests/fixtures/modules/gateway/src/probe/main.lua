@@ -218,6 +218,82 @@ local function configurable_surface(token_a: string)
     local revoked_status = rpc("configurable", configurable_token, "tools/call", {name = "measure_context", arguments = {}})
     assert(revoked_status == 401, "revoked configurable binding executed")
 end
+-- Cross-session coordination over the real endpoint: thread_sessions lists
+-- only the running sessions of the caller's workspace whose threads the
+-- subject reads; thread_message with session records on that session's
+-- thread addressed to its action and naming the sender's; thread_notify
+-- tells the caller once, on its own thread, when that session's turn ends.
+local SESSION_TOOLS = {"thread_sessions", "thread_read", "thread_wait", "thread_message", "thread_notify"}
+local function session(action: string, thread_id: string, workspace_id: string?, subject: string?): string
+    local request: Object = {subject = subject or ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = thread_id,
+        owner_incarnation = 1, carrier_epoch = 1, tools = SESSION_TOOLS, ttl_ms = 60000}
+    if workspace_id then request.workspace_id = workspace_id end
+    local value = ok(call("bee.gateway.binding:admit", request), "admit session " .. action)
+    return tostring(ok(materialize(action .. "-attempt", 1, tostring((value.binding :: Object).binding_id)), "materialize session " .. action).token)
+end
+local function running(thread_id: string, action: string)
+    ok(call("bee.threads.service:admit_action", {thread_id = thread_id, idempotency_key = key(), action_id = action,
+        admitted = {request_id = action .. "-request", principal_id = ACTOR, binding_ref = "session-binding", binding_digest = "session-digest", grant_refs = {}, budget_ref = "session-budget", input = {text = action}}}), "admit " .. action)
+    ok(call("bee.threads.service:prepare_attempt", {thread_id = thread_id, idempotency_key = key(), action_id = action, attempt_id = action .. "-attempt",
+        prepared = {binding_ref = "session-binding", binding_digest = "session-digest", profile_id = "session-profile", profile_digest = "session-profile-digest", placement_binding = "session-placement", placement_attempt_id = action .. "-placement", plan_digest = "session-plan"}}), "prepare " .. action)
+    ok(call("bee.threads.service:start_attempt", {thread_id = thread_id, idempotency_key = key(), action_id = action, attempt_id = action .. "-attempt",
+        started = {execution_kind = "process", execution_ref = action .. "-pid", owner_epoch = 1}}), "start " .. action)
+end
+local function prove_sessions()
+    local thread_a, thread_b = "session-a-thread", "session-b-thread"
+    ok(call("bee.threads.service:create", {thread_id = thread_a, idempotency_key = key(), title = "Parser fix"}), "create session a thread")
+    ok(call("bee.threads.service:create", {thread_id = thread_b, idempotency_key = key(), title = "Release notes"}), "create session b thread")
+    running(thread_a, "session-a")
+    running(thread_b, "session-b")
+    local token_a = session("session-a", thread_a, "cross-ws")
+    local token_b = session("session-b", thread_b, "cross-ws")
+    session("session-hidden", "session-hidden-thread", "cross-ws")
+    session("session-elsewhere", thread_b, "other-ws")
+    local token_none = session("session-none", thread_a, nil)
+    local listed = tool("session-a", token_a, "thread_sessions", {})
+    assert(listed.ok == true, "thread_sessions refused: " .. tostring(json.encode(listed)))
+    local views = (listed.value :: Object).sessions :: {Object}
+    assert(#views == 2, "thread_sessions listed other than the two reachable sessions: " .. tostring(json.encode(views)))
+    assert(views[1].session == "session-a" and views[1].self == true and views[1].title == "Parser fix" and views[1].thread_id == thread_a, "the caller's own session")
+    assert(views[2].session == "session-b" and views[2].self == false and views[2].title == "Release notes" and views[2].attempt_id == "session-b-attempt", "the peer session")
+    local unscoped = tool("session-none", token_none, "thread_sessions", {})
+    assert(unscoped.ok == false and (unscoped.error :: Object).code == "UNAVAILABLE", "a binding without a workspace listed sessions")
+    local b_head = tonumber((ok(call("bee.threads.service:get", {thread_id = thread_b}), "b head").summary :: Object).head_sequence)
+    local sent = tool("session-a", token_a, "thread_message", {idempotency_key = "go-ahead", message_id = "go-ahead", message_kind = "notification", session = "session-b", content = {text = "go ahead"}})
+    assert(sent.ok == true, "message to a session refused: " .. tostring(json.encode(sent)))
+    local woke = tool("session-b", token_b, "thread_wait", {after_sequence = b_head, wait_ms = 2000})
+    assert(woke.ok == true and (woke.value :: Object).status == "ready", "the addressed session's wait did not see the message")
+    local on_b = ok(call("bee.threads.service:read_after", {thread_id = thread_b, cursor = b_head, filter = {kinds = {"message"}}}), "read b")
+    local delivered = (on_b.records :: {Object})[1]
+    local body = delivered.body :: Object
+    assert((body.recipient_action_ids :: {string})[1] == "session-b" and body.sender_action_id == "session-a" and (body.recipient_ids :: {string})[1] == ACTOR
+        and delivered.action_id == nil and (body.content :: Object).text == "go ahead", "the message was not addressed to session b from session a: " .. tostring(json.encode(delivered)))
+    for _, address in ipairs({"session-b-attempt", thread_b}) do
+        local by_address = tool("session-a", token_a, "thread_message", {idempotency_key = "by-" .. address, message_id = "by-" .. address, message_kind = "progress", session = address, content = {text = "again"}})
+        assert(by_address.ok == true, "session addressed by " .. address .. " refused")
+    end
+    for _, unreachable in ipairs({"session-hidden", "session-elsewhere", "session-hidden-thread", "no-such-session"}) do
+        local refused_message = tool("session-a", token_a, "thread_message", {idempotency_key = "to-" .. unreachable, message_id = "to-" .. unreachable, message_kind = "notification", session = unreachable, content = {text = "no"}})
+        assert(refused_message.ok == false and (refused_message.error :: Object).code == "NOT_FOUND", "an unreachable session was addressed: " .. unreachable)
+    end
+    local registered = tool("session-a", token_a, "thread_notify", {session = "session-b", idempotency_key = "tell-me-when-b-ends"})
+    assert(registered.ok == true and (registered.value :: Object).state == "pending", "thread_notify refused: " .. tostring(json.encode(registered)))
+    local replayed = tool("session-a", token_a, "thread_notify", {session = "session-b", idempotency_key = "tell-me-when-b-ends"})
+    assert(replayed.ok == true and replayed.replayed == true and (replayed.value :: Object).notice_id == (registered.value :: Object).notice_id, "thread_notify replay changed the notice")
+    local refused_notice = tool("session-a", token_a, "thread_notify", {session = "session-hidden", idempotency_key = "hidden"})
+    assert(refused_notice.ok == false and (refused_notice.error :: Object).code == "NOT_FOUND", "a notice on an unreachable session was registered")
+    local a_head = tonumber((ok(call("bee.threads.service:get", {thread_id = thread_a}), "a head").summary :: Object).head_sequence)
+    local ended = ok(call("bee.threads.service:record", {thread_id = thread_b, idempotency_key = key(), kind = "observation", source = "stream",
+        body = {type = "turn.signal", event_key = "session-b-turn-end", data = {type = "turn.signal", phase = "ended", reported_outcome = "succeeded"}},
+        context = {action_id = "session-b", attempt_id = "session-b-attempt"}}), "end session b's turn")
+    local told = tool("session-a", token_a, "thread_wait", {after_sequence = a_head, wait_ms = 2000})
+    assert(told.ok == true and (told.value :: Object).status == "ready", "the notice did not reach session a's thread")
+    local notices = ok(call("bee.threads.service:read_after", {thread_id = thread_a, cursor = a_head, filter = {kinds = {"message"}}}), "read a")
+    local notice = (notices.records :: {Object})[1]
+    local notice_body = notice.body :: Object
+    assert((notice_body.recipient_action_ids :: {string})[1] == "session-a" and notice_body.outcome == "succeeded" and (notice.causation :: Object).record_id == ended.record_id,
+        "the notice was not addressed to session a with the ending record: " .. tostring(json.encode(notice)))
+end
 local function main()
     prove_endpoint_call_scope()
     ADDRESS = endpoint()
@@ -431,6 +507,7 @@ local function main()
     ok(call("bee.gateway.binding:revoke", {binding_id = mcp_binding}), "revoke MCP message binding")
     assert(select(1, rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = message_arguments})) == 401, "revoked thread_message token was accepted")
     end
+    prove_sessions()
     -- Hooks: a binding that admits hook events gets a second credential of
     -- its own kind; neither credential opens the other endpoint.
     local function header_of(headers: unknown, name: string): string?

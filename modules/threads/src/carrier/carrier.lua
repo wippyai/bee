@@ -146,8 +146,8 @@ local function decode_entries(value: unknown): ({Entry}?, string?)
         if not object then return nil, "records[" .. tostring(index) .. "] must be an object" end
         local unknown_field = bounds.fields(object, {"source", "body", "turn_id", "provenance"})
         if unknown_field then return nil, "records[" .. tostring(index) .. "]: " .. unknown_field end
-        local source = bounds.member(object.source, {"stream", "bee"})
-        if not source then return nil, "records[" .. tostring(index) .. "].source must be stream or bee" end
+        local source = bounds.member(object.source, {"stream", "hook", "bee"})
+        if not source then return nil, "records[" .. tostring(index) .. "].source must be stream, hook or bee" end
         local decoded, decode_error = observation.decode(object.body)
         if not decoded then return nil, "records[" .. tostring(index) .. "]: " .. tostring(decode_error) end
         if decoded.raw_ref ~= nil then return nil, "records[" .. tostring(index) .. "]: raw_ref names retained evidence, which carrier records do not carry" end
@@ -156,6 +156,11 @@ local function decode_entries(value: unknown): ({Entry}?, string?)
             local problem = control_key(decoded)
             if problem then return nil, "records[" .. tostring(index) .. "]: " .. problem end
             if object.provenance ~= nil then return nil, "records[" .. tostring(index) .. "]: control records carry no provenance" end
+        elseif source == "hook" then
+            -- What a harness reported through a hook is a typed observation
+            -- keyed by its occurrence; its raw event stays a bee control record.
+            if decoded.type == "extension" then return nil, "records[" .. tostring(index) .. "]: a hook-sourced carrier record is a typed observation" end
+            if object.provenance ~= nil then return nil, "records[" .. tostring(index) .. "]: hook records carry no stream provenance" end
         else
             local decoded_provenance, provenance_error = decode_provenance(object.provenance)
             if not decoded_provenance then return nil, "records[" .. tostring(index) .. "].provenance: " .. tostring(provenance_error) end

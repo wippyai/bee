@@ -164,10 +164,11 @@ def main():
         with sqlite3.connect(database) as db:
             assert db.execute("SELECT COUNT(*) FROM bee_thread_events").fetchone()[0] == 65
             db.execute("UPDATE bee_thread_schema_migrations SET checksum=? WHERE id=1", (checksum,))
-            db.execute("INSERT INTO bee_thread_schema_migrations VALUES (9, 'future', 'future', 'now')")
+            future = db.execute("SELECT MAX(id) + 1 FROM bee_thread_schema_migrations").fetchone()[0]
+            db.execute("INSERT INTO bee_thread_schema_migrations VALUES (?, 'future', 'future', 'now')", (future,))
         assert "schema is newer" in run(False)
         with sqlite3.connect(database) as db:
-            db.execute("DELETE FROM bee_thread_schema_migrations WHERE id=9")
+            db.execute("DELETE FROM bee_thread_schema_migrations WHERE id=?", (future,))
         run(run_name="parallel")
         with sqlite3.connect(database) as db:
             count, distinct_count, maximum = db.execute("SELECT COUNT(*), COUNT(DISTINCT sequence), MAX(sequence) FROM bee_thread_events").fetchone()

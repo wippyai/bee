@@ -18,7 +18,7 @@ def filled(ui,label):
         ui.pump(.05)
         left,top,right,bottom=bounds(ui)
         status=[i for i,row in enumerate(ui.screen.display) if 'Theme:' in row]
-        if status==[bottom-3]:
+        if status==[bottom-1]:
             print(label, 'frame', (left,top,right,bottom), 'footer',status,flush=True)
             return
     raise AssertionError(label+' footer does not track body\n'+ui.text())

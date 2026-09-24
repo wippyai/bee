@@ -12,6 +12,7 @@ local input_event = require("input_event")
 local selection = require("selection")
 local admission = require("admission")
 local view = require("view")
+local frame = require("frame")
 local forms = require("forms")
 local profile_view = require("profile_view")
 local M = {}
@@ -99,7 +100,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local edit_frame: profile_view.Frame = {rows = {}, hits = {}}
     local announced = false
     local dirty = true
-    local frame: view.Frame = {rows = {}, first = 1, capacity = 0, hits = {}}
+    local drawn: view.Frame = {rows = {}, hits = {}, capacity = 0, offset = 0}
     local function load()
         if loading then reload_pending = true; return end
         load_serial = load_serial + 1
@@ -124,8 +125,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 edit_frame = profile_view.draw(width, height, preferences, editing)
                 rows = edit_frame.rows
             else
-                frame = view.draw(width, height, preferences, listed, selected, status, activating)
-                rows = frame.rows
+                drawn = view.draw(width, height, preferences, listed, selected, status, activating)
+                rows = drawn.rows
             end
             assert(output:present(rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch, {negotiate_close = true}); announced = true end
@@ -238,18 +239,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                             selected = math.floor(math.max(1, math.min(#listed.items, selected + delta))); dirty = true
                         end
                     elseif data.action == "press" and data.button == "left" then
-                        for _, hit in ipairs(frame.hits) do
-                            if data.y == hit.y and data.x >= hit.x and data.x < hit.x + hit.width then
-                                if hit.action == "close" then return finish(nil, nil) end
-                                if hit.action == "open" then activate = true end
-                                if hit.action == "refresh" then refresh = true end
-                                if hit.action == "edit" then edit = true end
-                                if hit.action == "new" then edit = true; duplicate = true end
-                            end
-                        end
-                        if not activating and data.y >= 3 and data.y < 3 + frame.capacity then
-                            local index = frame.first + data.y - 3
-                            if listed.items[index] then selected = index; dirty = true end
+                        local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
+                        local kind = hit and hit.kind or ""
+                        if kind == "close" then return finish(nil, nil)
+                        elseif kind == "open" then activate = true
+                        elseif kind == "refresh" then refresh = true
+                        elseif kind == "edit" then edit = true
+                        elseif kind == "new" then edit = true; duplicate = true
+                        elseif hit and kind == "choice" and not activating and listed.items[hit.index] then
+                            selected = hit.index; dirty = true
                         end
                     end
                 end
@@ -264,7 +262,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 dirty = true
             end
         end
-        if activate and not loading and not activating and frame.capacity > 0 then
+        if activate and not loading and not activating and drawn.capacity > 0 then
             local choice = listed.items[selected]
             if choice and not choice.unavailable then
                 if not request_id or request_definition ~= choice.definition_ref or request_plan ~= choice.plan_digest then

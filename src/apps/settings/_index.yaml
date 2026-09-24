@@ -13,6 +13,7 @@ entries:
   - time
   - json
   imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance
     view: bee.settings:view
     client: bee.application:client
@@ -35,6 +36,7 @@ entries:
   modules:
   - tty
   imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance
     build_info: bee.settings:build_info
 - name: build_info

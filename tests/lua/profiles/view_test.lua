@@ -76,12 +76,24 @@ local function define_tests()
                 end
             end
         end)
+        test.it("keeps form keys in the footer beside the form status", function()
+            local s = state()
+            s.status = "Name is required"
+            local drawn = view.draw(80, 16, appearance.defaults(), s)
+            local rows: {string} = {}
+            for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            test.is_true(rows[1]:find("AGENT PROFILE", 1, true) ~= nil)
+            test.is_nil(rows[2]:find("Ctrl+S", 1, true))
+            test.is_true(rows[16]:find("Name is required", 1, true) ~= nil)
+            test.is_true(rows[16]:find("Tab fields · Ctrl+S save · Ctrl+D remove · Esc cancel", 1, true) ~= nil)
+            test.eq(rows[3]:sub(1, #"›"), "›")
+        end)
         test.it("shows only actions that the current profile state accepts", function()
             local s = state()
             s.form.pending = "save"
             local pending = view.draw(60, 16, appearance.defaults(), s)
             local actions: {[string]: boolean} = {}
-            for _, hit in ipairs(pending.hits) do actions[hit.action] = true end
+            for _, hit in ipairs(pending.hits) do actions[hit.kind] = true end
             test.is_true(actions.save)
             test.is_nil(actions.remove)
             test.is_true(actions.cancel)
@@ -89,7 +101,7 @@ local function define_tests()
             s.confirming_remove = true
             local confirming = view.draw(60, 16, appearance.defaults(), s)
             actions = {}
-            for _, hit in ipairs(confirming.hits) do actions[hit.action] = true end
+            for _, hit in ipairs(confirming.hits) do actions[hit.kind] = true end
             test.is_nil(actions.save)
             test.is_true(actions.remove)
             test.is_true(actions.cancel)

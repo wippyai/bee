@@ -278,6 +278,47 @@ local function define_tests()
             test.is_true(result.isError)
             test.eq(result.content[1].text, "{}")
         end)
+        test.it("advertises session discovery, addressing and one-shot notices over the bound subject", function()
+            local sessions = mcp.tool("thread_sessions")
+            if not sessions then error("thread_sessions is not in the catalog") end
+            test.eq(sessions.operation, "bee.threads.service:get")
+            test.eq(sessions.annotations.readOnlyHint, true)
+            test.eq(sessions.policies[1], mcp.TOOL_POLICY_REFS.read)
+            local notify = mcp.tool("thread_notify")
+            if not notify then error("thread_notify is not in the catalog") end
+            test.eq(notify.operation, "bee.threads.service:notify")
+            test.eq(notify.annotations.readOnlyHint, false)
+            test.eq(notify.policies[1], mcp.TOOL_POLICY_REFS.message)
+            test.eq(#((notify.schema.required :: {string})), 2)
+            local listed = mcp.sessions_arguments({arguments = {}})
+            test.not_nil(listed)
+            test.not_nil(mcp.sessions_arguments({}))
+            local _, sessions_field = mcp.sessions_arguments({arguments = {workspace_id = "other"}})
+            test.eq(sessions_field, "unknown field workspace_id")
+            local notice = mcp.notify_arguments({arguments = {session = "action-b", idempotency_key = "wait-for-b"}})
+            test.eq(notice and notice.session, "action-b")
+            test.eq(notice and notice.idempotency_key, "wait-for-b")
+            local _, notice_thread = mcp.notify_arguments({arguments = {session = "action-b", idempotency_key = "k", thread_id = "other"}})
+            test.eq(notice_thread, "unknown field thread_id")
+            local _, notice_session = mcp.notify_arguments({arguments = {idempotency_key = "k"}})
+            test.eq(notice_session, "session is required and must be an identifier")
+            local addressed = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "go", message_kind = "notification", session = "action-a", content = {text = "go ahead"}}})
+            test.eq(addressed and addressed.session, "action-a")
+            test.eq(#(((addressed :: {[string]: unknown}).body :: {[string]: unknown}).recipient_ids :: {string}), 0)
+            local _, named_recipients = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "go", message_kind = "notification", session = "action-a",
+                recipient_ids = {"someone"}, content = {text = "go ahead"}}})
+            test.eq(named_recipients, "a message to a session names no recipient_ids; the session is the recipient")
+            local _, missing_recipients = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "go", message_kind = "notification", content = {text = "go ahead"}}})
+            test.is_true(tostring(missing_recipients):find("recipient_ids", 1, true) ~= nil)
+            for _, field in ipairs({"recipient_action_ids", "sender_action_id"}) do
+                local arguments: {[string]: unknown} = {idempotency_key = "key", message_id = "go", message_kind = "notification", session = "action-a", content = {text = "go ahead"}}
+                arguments[field] = field == "sender_action_id" and "forged" or {"forged"}
+                local _, refused = mcp.message_arguments({arguments = arguments})
+                test.eq(refused, "unknown field " .. field)
+            end
+            local message_schema = (mcp.tool("thread_message") :: mcp.Tool).schema
+            test.not_nil((message_schema.properties :: {[string]: unknown}).session)
+        end)
         test.it("holds a binding valid only under its epoch, before expiry and until revoked", function()
             local binding: gateway.Binding = {binding_id = "b", subject = "s", action_id = "a", attempt_id = "t", thread_id = "th", owner_incarnation = 1, carrier_epoch = 1, credential_generation = 1,
                 tools = {"thread_read"}, hooks = {}, epoch = 2, expires_at = "2999-01-01T00:00:00.000Z", revoked = false, sealed = false}

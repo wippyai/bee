@@ -161,6 +161,25 @@ local function define_tests()
             test.eq(final.attempt_state, "ended")
             test.eq(final.checkpoint_revision, 1)
         end)
+        test.it("commits a hook-reported turn signal as a typed hook observation and nothing else from that source", function()
+            local thread_id = prepared_attempt()
+            harness.value(carrier:call("carrier_claim", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1"}))
+            local stopped = {source = "hook", body = {type = "turn.signal", event_key = "hook:evt-1:turn", data = {type = "turn.signal", phase = "ended"}}}
+            local committed = harness.value(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1,
+                expected_revision = 0, checkpoint = checkpoint(1), records = {stopped}}))
+            test.eq(#committed.records, 1)
+            local page = harness.value(carrier:call("read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"observation"}}}))
+            local observed = page.records[#page.records]
+            test.eq(observed.source, "hook")
+            test.eq(observed.action_id, "a1")
+            test.eq(observed.body.data.phase, "ended")
+            local raw_hook = {source = "hook", body = (control("w9", "intended").body :: {[string]: unknown})}
+            test.eq(harness.code(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1,
+                expected_revision = 1, checkpoint = checkpoint(2), records = {raw_hook}})), "INVALID_ARGUMENT")
+            local with_provenance = {source = "hook", provenance = provenance(1, 0, 1, 1), body = stopped.body}
+            test.eq(harness.code(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1,
+                expected_revision = 1, checkpoint = checkpoint(2), records = {with_provenance}})), "INVALID_ARGUMENT")
+        end)
     end)
 end
 return test.run_cases(define_tests)

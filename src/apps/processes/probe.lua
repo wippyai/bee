@@ -5,11 +5,11 @@
 -- Process Manager is the only thing that enables host/process inspection.
 
 local system = require("system")
+local viz = require("viz")
 
 local M = {}
 
 M.HISTORY_LIMIT = 60
-M.GAP = -1
 
 type Process = {
     pid: string,
@@ -38,9 +38,9 @@ type Snapshot = {
     error: string,
 }
 type History = {
-    heap: {number},
-    rate: {number},
-    queue: {number},
+    heap: viz.Series,
+    rate: viz.Series,
+    queue: viz.Series,
 }
 
 local function text(value: unknown): string
@@ -57,11 +57,6 @@ end
 local function add_error(errors: {string}, value: unknown)
     local message = text(value)
     if message ~= "" then errors[#errors + 1] = message end
-end
-
-local function append(history: {number}, value: number)
-    history[#history + 1] = value
-    while #history > M.HISTORY_LIMIT do table.remove(history, 1) end
 end
 
 -- sample obtains each source independently.  A failed source is represented by
@@ -154,18 +149,18 @@ function M.sample(): Snapshot
 end
 
 function M.new_history(): History
-    return {heap = {}, rate = {}, queue = {}}
+    return {heap = viz.series(M.HISTORY_LIMIT), rate = viz.series(M.HISTORY_LIMIT), queue = viz.series(M.HISTORY_LIMIT)}
 end
 
--- append records a bounded time series.  GAP is intentionally a visible
--- sentinel rather than zero: unavailable data must never look like an idle
+-- append records a bounded time series.  viz.GAP is intentionally a visible
+-- gap rather than zero: unavailable data must never look like an idle
 -- scheduler or an empty heap.  elapsed is measured in seconds.
 function M.append(history: History, snapshot: Snapshot, previous: Snapshot?, elapsed: number): History
     local heap = nonnegative(snapshot.heap)
-    append(history.heap, heap or M.GAP)
+    viz.push(history.heap, heap or viz.GAP)
 
     local queue = nonnegative(snapshot.queue)
-    append(history.queue, queue or M.GAP)
+    viz.push(history.queue, queue or viz.GAP)
 
     local rate: number? = nil
     local seconds = nonnegative(elapsed) or 0
@@ -197,7 +192,7 @@ function M.append(history: History, snapshot: Snapshot, previous: Snapshot?, ela
             if same_hosts then rate = delta / seconds end
         end
     end
-    append(history.rate, rate or M.GAP)
+    viz.push(history.rate, rate or viz.GAP)
     return history
 end
 

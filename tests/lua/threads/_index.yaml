@@ -30,7 +30,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.threads.service:create, bee.threads.service:get, bee.threads.service:list, bee.threads.service:join,
-      bee.threads.service:leave, bee.threads.service:close, bee.threads.service:record, bee.threads.service:read_after, bee.threads.service:send, bee.threads.service:send_status,
+      bee.threads.service:leave, bee.threads.service:close, bee.threads.service:record, bee.threads.service:read_after, bee.threads.service:send, bee.threads.service:send_status, bee.threads.service:notify,
       bee.threads.service:admit_action, bee.threads.service:prepare_attempt, bee.threads.service:start_attempt, bee.threads.service:request_turn,
       bee.threads.service:end_turn, bee.threads.service:receipt,
       bee.threads.delivery:claim, bee.threads.delivery:dispatch, bee.threads.delivery:ack, bee.threads.delivery:release,
@@ -198,3 +198,19 @@ entries:
   imports:
     test: wippy.test:test
     session: bee.threads.delivery:session
+- name: addressing_test
+  kind: function.lua
+  source: file://addressing_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+- name: notice_test
+  kind: function.lua
+  source: file://notice_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness

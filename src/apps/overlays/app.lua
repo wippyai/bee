@@ -7,6 +7,7 @@ local channel = require("channel")
 local uuid = require("uuid")
 local funcs = require("funcs")
 local appearance = require("appearance")
+local frame = require("frame")
 local caller = require("caller")
 local model = require("model")
 local view = require("view")
@@ -32,7 +33,7 @@ local function main(value: unknown)
     local state: model.State = model.new(launch.workspace_id)
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid Overlays checkpoint") end
     local offset = 0
-    local hits: {view.Hit} = {}
+    local hits: {frame.Hit} = {}
     local dirty, running, announced = true, true, false
     local last_checkpoint = ""
     -- Destination calls are serialized in one worker so a delayed owner never
@@ -78,7 +79,6 @@ local function main(value: unknown)
         if not available_ok and not plans_ok then state.notice = available_notice .. "; " .. plans_notice
         elseif not available_ok then state.notice = available_notice
         elseif not plans_ok then state.notice = plans_notice
-        elseif #state.available == 0 and #state.plans == 0 then state.notice = "No versions available or staged in this workspace"
         else state.notice = "" end
     end
     local function stage_available_now()
@@ -227,10 +227,10 @@ local function main(value: unknown)
     if launch.broker_pid then process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
         if dirty then
-            local frame = view.draw(width, height, preferences, state, offset)
-            hits = frame.hits
-            offset = frame.offset
-            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local drawn = view.draw(width, height, preferences, state, offset)
+            hits = drawn.hits
+            offset = drawn.offset
+            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
             checkpoint()
             dirty = false
@@ -295,13 +295,12 @@ local function main(value: unknown)
                 elseif text == "t" then take("details")
                 elseif key == "esc" or key == "escape" then running = false end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                 if hit then
-                    if hit.kind == "pane" then
+                    local pane = view.pane_of(hit.kind)
+                    if pane then
                         if not selection_locked() then
-                            if hit.key == "available" then model.show_pane(state, "available")
-                            elseif hit.key == "plans" then model.show_pane(state, "plans")
-                            elseif hit.key == "review" then model.show_pane(state, "review") end
+                            model.show_pane(state, pane)
                             offset = 0; dirty = true
                         end
                     elseif hit.kind == "available" then

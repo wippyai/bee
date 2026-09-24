@@ -103,6 +103,8 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
+    - thread_sessions
+    - thread_notify
     - overlay
     - delivery
     - docs
@@ -138,7 +140,7 @@ entries:
     environment: {}
     environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, overlay, delivery, docs, components]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
@@ -168,6 +170,8 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
+    - thread_sessions
+    - thread_notify
     - overlay
     - delivery
     - docs
@@ -204,7 +208,7 @@ entries:
     environment: {}
     environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, overlay, delivery, docs, components]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_instructions: true
     profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
@@ -227,7 +231,7 @@ entries:
     environment: {}
     environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, overlay, delivery, docs, components]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_instructions: true
     profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
@@ -255,6 +259,8 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
+    - thread_sessions
+    - thread_notify
     - overlay
     - delivery
     - docs
@@ -289,7 +295,7 @@ entries:
     executable_env: {muse: bee.driver.muse:executable}
     environment: {}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, overlay, delivery, docs, components]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     hook_command_ref: bee.gateway:hook_executable
     profile_options: {effort: [low, medium, high]}
@@ -317,6 +323,8 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
+    - thread_sessions
+    - thread_notify
     - overlay
     - delivery
     - docs
@@ -350,7 +358,7 @@ entries:
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, overlay, delivery, docs, components]
     prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m}
 - name: launch_policy_grok_window
   kind: registry.entry
@@ -374,6 +382,8 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
+    - thread_sessions
+    - thread_notify
     - overlay
     - delivery
     - docs

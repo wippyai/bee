@@ -1,26 +1,29 @@
 -- Semantic desktop colors and validated presentation preferences.
+-- ok, warn and error are status roles: they color a state word or a data mark
+-- past a declared threshold, always beside text that carries the same meaning.
 type Theme = {id: string, title: string, ground: string, surface: string, text: string,
-    muted: string, border: string, accent: string, pattern: string, on_accent: string?, terminal_text: string?, terminal_surface: string?}
+    muted: string, border: string, accent: string, pattern: string, ok: string, warn: string, error: string,
+    on_accent: string?, terminal_text: string?, terminal_surface: string?}
 type Page = {foreground: string, background: string}
 type Preferences = {theme: string, background: string, taskbar: string?}
 local M = {}
 local themes: {Theme} = {
-    {id = "honey", title = "Honey", ground = "#0c1119", surface = "#17202c", text = "#d8e2ef", muted = "#8999ad", border = "#6f89a5", accent = "#ffc963", pattern = "#1c2937"},
-    {id = "ocean", title = "Ocean", ground = "#071720", surface = "#102b39", text = "#d6f0f4", muted = "#88adb9", border = "#4b8599", accent = "#67dce5", pattern = "#1a3542"},
-    {id = "forest", title = "Forest", ground = "#101a16", surface = "#1c2b23", text = "#e0ecdf", muted = "#96af9e", border = "#628773", accent = "#b6d884", pattern = "#283c30"},
-    {id = "plum", title = "Plum", ground = "#19121f", surface = "#2b2034", text = "#eee0f2", muted = "#b2a0bd", border = "#9478a6", accent = "#e4acf1", pattern = "#34243e"},
-    {id = "ember", title = "Ember", ground = "#1c1311", surface = "#30201c", text = "#f4e4d8", muted = "#bda598", border = "#a87964", accent = "#ffa879", pattern = "#3a2820"},
-    {id = "graphite", title = "Graphite", ground = "#111315", surface = "#222629", text = "#e8edef", muted = "#a0a9ae", border = "#76828a", accent = "#c3d8e6", pattern = "#2b3034"},
-    {id = "paper", title = "Paper", ground = "#e9e6dd", surface = "#f5f2ea", text = "#303b3e", muted = "#58666b", border = "#7d8785", accent = "#87560c", pattern = "#cfcec6"},
-    {id = "aurora", title = "Aurora", ground = "#0b1720", surface = "#152b35", text = "#def7ed", muted = "#91b8ad", border = "#578f89", accent = "#82f0ba", pattern = "#203a43"},
-    {id = "rose", title = "Rose", ground = "#21131c", surface = "#38212e", text = "#f8e5ed", muted = "#c9a1b4", border = "#a7748d", accent = "#ffa5c5", pattern = "#422839"},
-    {id = "cobalt", title = "Cobalt", ground = "#0c142b", surface = "#192749", text = "#e0eaff", muted = "#9cadcf", border = "#667fae", accent = "#87b6ff", pattern = "#24365b"},
-    {id = "sand", title = "Sand", ground = "#e8dcc8", surface = "#f4ead9", text = "#493e30", muted = "#72634e", border = "#9e8b6e", accent = "#9e4e28", pattern = "#cec1a9"},
-    {id = "midnight", title = "Midnight", ground = "#07090e", surface = "#141822", text = "#e0e5f0", muted = "#929db5", border = "#5d6c89", accent = "#c1b5ff", pattern = "#202638"},
-    {id = "lavender", title = "Lavender", ground = "#e8e2f0", surface = "#f5effb", text = "#42394f", muted = "#75677f", border = "#9b8eaa", accent = "#75509d", pattern = "#d0c5dc"},
-    {id = "mono", title = "Mono", ground = "#0d0d0d", surface = "#242424", text = "#ededed", muted = "#aaaaaa", border = "#777777", accent = "#ffffff", pattern = "#2b2b2b"},
-    {id = "dos", title = "DOS Blue", ground = "#000080", surface = "#0000aa", text = "#ffffff", muted = "#aaaaaa", border = "#55ffff", accent = "#ffff55", pattern = "#0000aa"},
-    {id = "classic", title = "Windows Classic", ground = "#008080", surface = "#c0c0c0", text = "#000000", muted = "#505050", border = "#606060", accent = "#000080", pattern = "#006b6b", on_accent = "#ffffff", terminal_text = "#cccccc", terminal_surface = "#0c0c0c"},
+    {id = "honey", title = "Honey", ground = "#0c1119", surface = "#17202c", text = "#d8e2ef", muted = "#8999ad", border = "#6f89a5", accent = "#ffc963", pattern = "#1c2937", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "ocean", title = "Ocean", ground = "#071720", surface = "#102b39", text = "#d6f0f4", muted = "#88adb9", border = "#4b8599", accent = "#67dce5", pattern = "#1a3542", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "forest", title = "Forest", ground = "#101a16", surface = "#1c2b23", text = "#e0ecdf", muted = "#96af9e", border = "#628773", accent = "#b6d884", pattern = "#283c30", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "plum", title = "Plum", ground = "#19121f", surface = "#2b2034", text = "#eee0f2", muted = "#b2a0bd", border = "#9478a6", accent = "#e4acf1", pattern = "#34243e", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "ember", title = "Ember", ground = "#1c1311", surface = "#30201c", text = "#f4e4d8", muted = "#bda598", border = "#a87964", accent = "#ffa879", pattern = "#3a2820", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "graphite", title = "Graphite", ground = "#111315", surface = "#222629", text = "#e8edef", muted = "#a0a9ae", border = "#76828a", accent = "#c3d8e6", pattern = "#2b3034", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "paper", title = "Paper", ground = "#e9e6dd", surface = "#f5f2ea", text = "#303b3e", muted = "#58666b", border = "#7d8785", accent = "#87560c", pattern = "#cfcec6", ok = "#1a7f37", warn = "#9a6700", error = "#cf222e"},
+    {id = "aurora", title = "Aurora", ground = "#0b1720", surface = "#152b35", text = "#def7ed", muted = "#91b8ad", border = "#578f89", accent = "#82f0ba", pattern = "#203a43", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "rose", title = "Rose", ground = "#21131c", surface = "#38212e", text = "#f8e5ed", muted = "#c9a1b4", border = "#a7748d", accent = "#ffa5c5", pattern = "#422839", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "cobalt", title = "Cobalt", ground = "#0c142b", surface = "#192749", text = "#e0eaff", muted = "#9cadcf", border = "#667fae", accent = "#87b6ff", pattern = "#24365b", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "sand", title = "Sand", ground = "#e8dcc8", surface = "#f4ead9", text = "#493e30", muted = "#72634e", border = "#9e8b6e", accent = "#9e4e28", pattern = "#cec1a9", ok = "#1a7f37", warn = "#9a6700", error = "#cf222e"},
+    {id = "midnight", title = "Midnight", ground = "#07090e", surface = "#141822", text = "#e0e5f0", muted = "#929db5", border = "#5d6c89", accent = "#c1b5ff", pattern = "#202638", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
+    {id = "lavender", title = "Lavender", ground = "#e8e2f0", surface = "#f5effb", text = "#42394f", muted = "#75677f", border = "#9b8eaa", accent = "#75509d", pattern = "#d0c5dc", ok = "#1a7f37", warn = "#9a6700", error = "#cf222e"},
+    {id = "mono", title = "Mono", ground = "#0d0d0d", surface = "#242424", text = "#ededed", muted = "#aaaaaa", border = "#777777", accent = "#ffffff", pattern = "#2b2b2b", ok = "#cfcfcf", warn = "#e6e6e6", error = "#ffffff"},
+    {id = "dos", title = "DOS Blue", ground = "#000080", surface = "#0000aa", text = "#ffffff", muted = "#aaaaaa", border = "#55ffff", accent = "#ffff55", pattern = "#0000aa", ok = "#55ff55", warn = "#ffaa00", error = "#ff5555"},
+    {id = "classic", title = "Windows Classic", ground = "#008080", surface = "#c0c0c0", text = "#000000", muted = "#505050", border = "#606060", accent = "#000080", pattern = "#006b6b", ok = "#005a00", warn = "#6b4400", error = "#8b0000", on_accent = "#ffffff", terminal_text = "#cccccc", terminal_surface = "#0c0c0c"},
 }
 local backgrounds: {string} = {"dots", "solid", "grid", "horizon", "stars", "weave", "crosshatch", "bricks", "diagonal", "waves", "hex"}
 type Pattern = {period: integer, rows: {string}}
@@ -63,6 +66,30 @@ function M.instance_accent(theme: Theme, name: string?): (string, string)
     return dark, "#000000"
 end
 function M.themes(): {Theme} return themes end
+-- The color of a named semantic role: surface, text, muted, border, accent, ok,
+-- warn or error. Any other name is text.
+function M.role(theme: Theme, name: string?): string
+    if name == "surface" then return theme.surface end
+    if name == "muted" then return theme.muted end
+    if name == "border" then return theme.border end
+    if name == "accent" then return theme.accent end
+    if name == "ok" then return theme.ok end
+    if name == "warn" then return theme.warn end
+    if name == "error" then return theme.error end
+    return theme.text
+end
+-- The color k of the way from a to b (0 is a, 1 is b), for intensity ramps
+-- between the surface and a role.
+function M.mix(a: string, b: string, k: number): string
+    local weight = math.max(0, math.min(1, k))
+    local parts: {string} = {}
+    for _, first in ipairs({2, 4, 6}) do
+        local x = tonumber(a:sub(first, first + 1), 16) or 0
+        local y = tonumber(b:sub(first, first + 1), 16) or 0
+        parts[#parts + 1] = string.format("%02x", math.floor(x + (y - x) * weight + 0.5))
+    end
+    return "#" .. table.concat(parts)
+end
 function M.page(theme: Theme, terminal: boolean): Page
     if terminal then
         return {foreground = theme.terminal_text or theme.text, background = theme.terminal_surface or theme.surface}

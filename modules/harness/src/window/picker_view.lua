@@ -1,66 +1,49 @@
 -- MIT. Agent profile choices use the display's appearance and bounded text.
-local tty = require("tty")
 local appearance = require("appearance")
+local frame = require("frame")
 local text = require("text")
 local selection = require("selection")
 local M = {}
-type Hit = {action: string, x: integer, y: integer, width: integer}
-type Frame = {rows: {string}, first: integer, capacity: integer, hits: {Hit}}
+type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "N", verb = "new"},
+    {key = "E", verb = "edit"}, {key = "R", verb = "refresh"}, {key = "Esc", verb = "close"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
     choices: selection.Choices, selected: integer, status: string, busy: boolean?): Frame
-    local theme = appearance.theme(preferences.theme)
-    local canvas = tty.canvas(width, height)
-    local hits: {Hit} = {}
-    local reset = "\27[0m"
-    canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. reset)
-    local function line(y: integer, value: string, active: boolean, muted: boolean)
-        if y < 1 or y > height then return end
-        local fg = active and appearance.selection_text(theme) or (muted and theme.muted or theme.text)
-        local bg = active and theme.accent or theme.surface
-        local style = appearance.style(fg, bg)
-        canvas:put(1, y, style .. string.rep(" ", width) .. reset, width)
-        if width > 2 then canvas:put(2, y, style .. tty.text.truncate(text.bound(value, 512), width - 2, "…") .. reset, width - 2) end
-    end
-    line(1, "AGENT", false, false)
-    if height >= 5 then
-        line(2, width >= 54 and "Choose a profile · ↑↓ select · Enter open · N new · E edit · R refresh" or "Choose a profile", false, true)
-    end
+    local painter = frame.new(width, height, preferences)
+    local theme = painter.theme
+    frame.header(painter, "AGENT", #choices.items > 0 and (tostring(#choices.items) .. " profiles") or nil)
+    if height >= 5 then frame.line(painter, 2, "Choose a profile", theme.muted) end
     local show_summary = height >= 10
-    local capacity = math.floor(math.max(0, height - (show_summary and 6 or 5)))
+    local last = height - (show_summary and 4 or 3)
+    local capacity = math.floor(math.max(0, last - 2))
     if width <= 2 then capacity = 0 end
-    local first = math.floor(math.max(1, selected - capacity + 1))
-    for row = 1, capacity do
-        local index = first + row - 1
+    local window = frame.window(#choices.items, capacity, selected, 0)
+    for slot = 1, window.capacity do
+        local index = window.offset + slot
         local choice = choices.items[index]
-        if choice then
-            local label = choice.title .. (choice.unavailable and " · Unavailable" or "")
-            line(row + 2, label, index == selected, choice.unavailable ~= nil)
-        end
+        if not choice then break end
+        local label = text.bound(choice.title, 512) .. (choice.unavailable and " · Unavailable" or "")
+        frame.row(painter, slot + 2, label, index == selected, "choice", index, "", choice.unavailable and theme.muted or nil)
     end
     if #choices.items == 0 and status == "" and height >= 5 then
-        line(3, "No agent profiles are configured on this node", false, true)
+        frame.empty(painter, 3, "No agent profiles are configured on this node", height >= 7 and "Install a harness module, then R refresh" or nil)
     end
     local choice = choices.items[selected]
-    if show_summary and choice and choice.summary then line(height - 3, choice.summary, false, true) end
+    if show_summary and choice and choice.summary then frame.line(painter, height - 3, text.bound(choice.summary, 512), theme.muted) end
     if height >= 3 then
-        local x = 2
-        for _, action in ipairs({{name = "open", label = " Open "}, {name = "new", label = " New "}, {name = "edit", label = " Edit "}, {name = "refresh", label = " Refresh "}, {name = "close", label = " Close "}}) do
-            local size = #action.label
-            if x + size - 1 <= width then
-                local selection_action = action.name == "open" or action.name == "new" or action.name == "edit"
-                local enabled = action.name == "close" or (not busy and (not selection_action or
-                    (choice ~= nil and capacity > 0 and (action.name ~= "open" or not choice.unavailable))))
-                canvas:put(x, height - 1, appearance.style(enabled and appearance.selection_text(theme) or theme.muted,
-                    enabled and theme.accent or theme.surface) .. action.label .. reset, size)
-                if enabled then hits[#hits + 1] = {action = action.name, x = x, y = height - 1, width = size} end
-            end
-            x = x + size + 1
-        end
+        local chosen = choice ~= nil and window.capacity > 0
+        frame.actions(painter, height - 1, {
+            {kind = "open", label = "Open", enabled = not busy and chosen and choice ~= nil and not choice.unavailable, primary = true},
+            {kind = "new", label = "New", enabled = not busy and chosen},
+            {kind = "edit", label = "Edit", enabled = not busy and chosen},
+            {kind = "refresh", label = "Refresh", enabled = not busy},
+            {kind = "close", label = "Close", enabled = true},
+        })
     end
     local message = status
     if message == "" and choice and choice.unavailable then message = choice.unavailable end
     if message == "" and choices.unavailable > 0 then message = tostring(choices.unavailable) .. " profiles unavailable" end
-    if height >= 2 then line(height, message, false, true) end
-    return {rows = canvas:rows(), first = first, capacity = capacity, hits = hits}
+    if height >= 2 then frame.footer(painter, text.bound(message, 512), HINTS) end
+    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
 end
 return M

@@ -7,6 +7,7 @@ entries:
   method: main
   modules: [tty, process, channel, time, uuid, json, funcs, registry]
   imports:
+    frame: bee.application:frame
     client: bee.application:client
     appearance: bee.application:appearance
     model: bee.inbox:model
@@ -64,8 +65,8 @@ entries:
 - name: view
   kind: library.lua
   source: file://view.lua
-  modules: [tty]
   imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance
     model: bee.inbox:model
     names: bee.application:names

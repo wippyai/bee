@@ -43,8 +43,8 @@ entries:
 - name: restore_view
   kind: library.lua
   source: file://restore_view.lua
-  modules: [tty]
   imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance
 - name: runtime
   kind: library.lua
@@ -90,8 +90,8 @@ entries:
 - name: picker_view
   kind: library.lua
   source: file://picker_view.lua
-  modules: [tty]
   imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance
     text: bee.application:text
     selection: bee.harness.launch:selection
@@ -100,6 +100,7 @@ entries:
   source: file://picker.lua
   modules: [tty, process, channel, uuid, funcs]
   imports:
+    frame: bee.application:frame
     bounds: bee.threads.records:bounds
     client: bee.application:client
     appearance: bee.application:appearance
@@ -133,6 +134,7 @@ entries:
   source: file://profile_view.lua
   modules: [tty]
   imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance
     text: bee.application:text
     editor: bee.harness.window:profile_editor

@@ -54,6 +54,7 @@ entries:
     subscriptions: bee.threads.delivery:subscriptions
     waits: bee.threads.delivery:waits
     recap: bee.threads.projection:recap
+    notices: bee.threads.service:notices
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua
@@ -177,6 +178,8 @@ entries:
     description: Commit a message forwarded from another node under its caller node and idempotency key with the payload digest the sender computed; the same identity replays, a different payload conflicts
   - name: send_status
     description: What the owner committed under a send identity, for a sender that lost the reply
+  - name: notify
+    description: Register a one-shot notice on the caller's own thread, delivered once when an action of a thread the caller reads ends a turn or an attempt
 - name: authority_local
   kind: contract.binding
   contracts:
@@ -192,6 +195,7 @@ entries:
       read_after: bee.threads.service:read_after
       send: bee.threads.service:send
       send_status: bee.threads.service:send_status
+      notify: bee.threads.service:notify
 - name: delivery
   kind: contract.definition
   methods:
@@ -362,11 +366,13 @@ entries:
   kind: process.lua
   source: file://owner.lua
   method: main
-  modules: [process]
+  modules: [process, time, channel]
   imports:
     resources: bee.threads:resources
     database: bee.threads.persist:database
     owner: bee.threads.persist:owner
+    notices: bee.threads.service:notices
+    boundary: bee.threads.service:boundary
   security:
     policies: [bee:thread_storage_policy, bee:thread_resource_policy]
 - name: owner_service

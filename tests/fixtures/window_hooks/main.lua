@@ -504,9 +504,11 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local continued_hook_submitted = false
     local continued_markers: {string} = {}
     local continuation_started = time.now():unix_nano()
+    local continuation_screen = ""
     for _ = 1, 200 do
         local frame = view_two:snapshot()
         local screen = frame and table.concat(frame.rows) or ""
+        continuation_screen = frame and table.concat(frame.rows, "\n") or ""
         collect_markers(continued_markers, screen)
         if screen:find("HOOK_HOME_SENTINEL:retained", 1, true) then retained_home = true end
         if screen:find("HOOK_TOOL:" .. accepted_result, 1, true) then continued_hook_submitted = true end
@@ -514,10 +516,12 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         time.sleep("50ms")
     end
     if not (retained_home and continued_hook_submitted) then
-        error(string.format("%s after %d ms; continuation markers: [%s]\n%s",
+        local shown = continuation_screen:gsub("[ \t]+\n", "\n")
+        error(string.format("%s after %d ms; continuation markers: [%s]\ncontinuation screen:\n%s\n%s",
             retained_home and "continuation hook was not accepted by real gateway (expected HOOK_TOOL:" .. accepted_result .. ")"
                 or "continuation did not retain the session HOME sentinel",
-            (time.now():unix_nano() - continuation_started) // 1000000, table.concat(continued_markers, " "), placement_report()))
+            (time.now():unix_nano() - continuation_started) // 1000000, table.concat(continued_markers, " "),
+            shown, placement_report()))
     end
 
     local total_hooks = 0

@@ -67,14 +67,24 @@ authority.
 
 ## Agent tools
 
-The host may admit thread_read, thread_wait, thread_message, thread_launch,
-Governance overlay, Hub components, delivery and docs. Each tool receives only
-bounded arguments. The binding supplies thread, subject, action, attempt and
-context.
+The host may admit thread_read, thread_wait, thread_message, thread_sessions,
+thread_notify, thread_launch, Governance overlay, Hub components, delivery and
+docs. Each tool receives only bounded arguments. The binding supplies thread,
+subject, action, attempt and context.
 
-thread_message always writes a message record through the bound thread owner.
-Callers cannot choose sender, thread, record family or context. thread_wait is
-read-only and does not create an obligation. thread_launch starts only a
+thread_message always writes a message record through the thread owner.
+Callers cannot choose sender, thread, record family or context. Without
+`session` it writes to the bound thread; with `session` it writes to that
+running session's thread, addressed to its action and naming the caller's.
+thread_wait is read-only and does not create an obligation.
+
+thread_sessions lists the live, unsealed bindings of the caller's workspace,
+one per action under its newest carrier epoch, and keeps only those whose
+thread the bound subject can read, as answered by the thread owner's `get`
+run as the subject. thread_notify resolves a session the same way and
+registers the thread owner's one-shot notice on the caller's own thread. An
+unreadable or unknown session is `NOT_FOUND`; a binding without a workspace
+has no peer sessions. See [Configurable managed MCP](../../guides/agents/mcp.md#coordinating-with-other-sessions). thread_launch starts only a
 definition named in the caller's launch-policy allow-list; its child is
 admitted through the ordinary carrier path with its own policy.
 
@@ -104,4 +114,5 @@ Run the relevant checks with:
 
     make gateway-check
     make managed-launch-fixture-check
+    make cross-session-check
     make app-journey-check

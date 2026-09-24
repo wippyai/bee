@@ -7,6 +7,27 @@ local view = require("view")
 local contents = require("contents")
 local function define_tests()
     test.describe("Modules frame", function()
+        test.it("keeps the phase title whole when the selected package name is long and marks the selected package", function()
+            local state = model.new()
+            local long = "acme/" .. string.rep("very-long-package-name-", 4)
+            model.apply_installed(state, {ok = true, replayed = false, value = {modules = {
+                {component = "acme/app", version = "1.0.0", source = "hub", direct = true, used_by = {}},
+                {component = long, version = "2.0.0", source = "hub", direct = true, used_by = {}},
+            }, roots = {}}})
+            model.select(state, long)
+            model.show(state, "installed")
+            local drawn = view.draw(60, 18, appearance.defaults(), state, 0, "")
+            local rows: {string} = {}
+            for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
+            test.eq(rows[1]:sub(1, 20), " MODULES  INSTALLED ")
+            test.is_true(rows[1]:find("…", 1, true) ~= nil)
+            local marked = 0
+            for _, row in ipairs(rows) do
+                if row:sub(1, #"›") == "›" then marked = marked + 1; test.is_true(row:find("very-long", 1, true) ~= nil) end
+            end
+            test.eq(marked, 1)
+            test.is_true(rows[18]:find("↑↓ select · Enter details", 1, true) ~= nil)
+        end)
         test.it("keeps Hub installations separate from the explicit authored publication flow", function()
             local state = model.new()
             model.apply_installed(state, {ok = true, replayed = false, value = {modules = {

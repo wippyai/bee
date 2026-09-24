@@ -2,20 +2,11 @@
 -- owner order with the recap as stored, the session state, a detail pane
 -- for the selected record, explicit actions and the status line. Every
 -- text comes through the model's bounding; the view interprets nothing.
-local tty = require("tty")
 local appearance = require("appearance")
+local frame = require("frame")
 local model = require("model")
-type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
-type Frame = {rows: {string}, hits: {Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
 local M = {}
-local RESET = "\27[0m"
-local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
-function M.hit(hits: {Hit}, x: integer, y: integer): Hit?
-    for _, hit in ipairs(hits) do
-        if x >= hit.x and x < hit.x + hit.width and y >= hit.y and y < hit.y + hit.height then return hit end
-    end
-    return nil
-end
 local function session_line(state: model.State): string
     if state.phase == "attaching" then return "Attaching to the thread owner…" end
     if state.phase == "unavailable" then return "Owner unavailable: " .. state.unavailable end
@@ -34,142 +25,126 @@ local function technical_session_line(state: model.State): string
     return "Cursor " .. tostring(current.after_sequence) .. " of " .. tostring(state.head_sequence) .. "  lease " .. tostring(current.lease_generation) ..
         "  owner incarnation " .. tostring(current.owner_incarnation)
 end
-local function compact_thread_label(summary: {thread_id: string, title: string, state: string, head_sequence: integer, owner_id: string}, technical: boolean): string
-    local title = summary.title ~= "" and summary.title or summary.thread_id
-    if technical then
-        return title .. " · " .. summary.state .. " · " .. tostring(summary.head_sequence) .. " records · owner " .. summary.owner_id .. " · " .. summary.thread_id
-    end
-    return title .. " · " .. summary.state .. " · " .. tostring(summary.head_sequence)
-end
 local function row_label(row: model.Row, technical: boolean): string
     if technical then
         return string.format("%6d %s %-18s %-10s %s", row.sequence, row.glyph, row.kind, row.source, row.summary)
     end
     return row.glyph .. " " .. row.state_label .. " · " .. row.activity
 end
+local PICKER_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "M", verb = "more"},
+    {key = "R", verb = "refresh"}, {key = "T", verb = "details"}})
+local THREAD_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "F", verb = "follow"}, {key = "B", verb = "threads"},
+    {key = "R", verb = "refresh"}, {key = "T", verb = "details"}})
+local function picker_columns(technical: boolean): {frame.Column}
+    local columns: {frame.Column} = {{title = "Thread", width = 0}, {title = "State", width = 10}, {title = "Records", width = 7, align = "right"}}
+    if technical then
+        columns[#columns + 1] = {title = "Owner", width = 24}
+        columns[#columns + 1] = {title = "Id", width = 36}
+    end
+    return columns
+end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string): Frame
-    local theme = appearance.theme(preferences.theme)
-    local canvas = tty.canvas(width, height)
-    local hits: {Hit} = {}
-    local function put(x: integer, y: integer, value: string, size: integer, fg: string?, bg: string?)
-        if y >= 1 and y <= height and x >= 1 and size > 0 then
-            canvas:put(x, y, appearance.style(fg or theme.text, bg or theme.surface) .. value .. RESET, size)
-        end
-    end
-    local function line(y: integer, value: string, fg: string?, bg: string?)
-        put(1, y, string.rep(" ", width), width, fg, bg)
-        put(2, y, tty.text.truncate(value, maximum(0, width - 2), "…"), maximum(0, width - 2), fg, bg)
-    end
-    canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-    local actions_y = height - 1
-    local x = 2
-    local function button(kind: string, label: string, enabled: boolean)
-        local size = tty.text.width(label)
-        if x + size > width then return end
-        put(x, actions_y, label, size, enabled and appearance.selection_text(theme) or theme.muted, enabled and theme.accent or theme.surface)
-        if enabled then hits[#hits + 1] = {kind = kind, index = 0, key = "", x = x, y = actions_y, width = size, height = 1} end
-        x = x + size + 1
-    end
+    local painter = frame.new(width, height, preferences)
+    local theme = painter.theme
     if state.phase == "picking" then
-        line(1, "TIMELINE  choose a thread", theme.text)
         local picker = state.picker
-        if picker.unavailable then line(2, "Threads unavailable: " .. picker.unavailable, theme.muted)
-        else line(2, state.technical and "Thread · state · records · owner · id" or "Thread · state · records", theme.muted) end
+        frame.header(painter, "TIMELINE", "Choose a thread")
         local first, last = 3, height - 2
-        local capacity = maximum(0, last - first + 1)
-        local next_offset = math.floor(math.max(0, math.min(maximum(0, #picker.threads - capacity), offset)))
-        for index, summary in ipairs(picker.threads) do
-            if summary.thread_id == picker.selected then
-                if index <= next_offset then next_offset = index - 1 end
-                if index > next_offset + capacity then next_offset = index - capacity end
+        local window: frame.Window = {offset = 0, capacity = 0}
+        if picker.unavailable then
+            frame.empty(painter, first, "Threads unavailable: " .. picker.unavailable, "R retries the thread owner")
+        elseif #picker.threads == 0 then
+            frame.empty(painter, first, "No threads to read", "Threads appear here once an agent or application starts one · R refresh")
+        else
+            local cells: {{string}} = {}
+            local keys: {string} = {}
+            local selected = 0
+            for index, summary in ipairs(picker.threads) do
+                local row = {summary.title ~= "" and summary.title or summary.thread_id, summary.state, tostring(summary.head_sequence)}
+                if state.technical then
+                    row[#row + 1] = summary.owner_id
+                    row[#row + 1] = summary.thread_id
+                end
+                cells[index] = row
+                keys[index] = summary.thread_id
+                if summary.thread_id == picker.selected then selected = index end
             end
-        end
-        if #picker.threads == 0 and not picker.unavailable then line(first, "No threads to read", theme.muted) end
-        for slot = 1, capacity do
-            local summary = picker.threads[next_offset + slot]
-            if not summary then break end
-            local y = first + slot - 1
-            local active = summary.thread_id == picker.selected
-            local label = compact_thread_label(summary, state.technical)
-            line(y, label, active and appearance.selection_text(theme) or theme.text, active and theme.accent or theme.surface)
-            hits[#hits + 1] = {kind = "thread", index = next_offset + slot, key = summary.thread_id, x = 1, y = y, width = width, height = 1}
+            window = frame.table(painter, first - 1, last, {columns = picker_columns(state.technical), cells = cells, keys = keys,
+                kind = "thread", selected = selected, offset = offset})
         end
         if height >= 4 then
             local available = picker.unavailable == nil
-            button("open", " Open ", available and picker.selected ~= nil)
-            button("more", " More ", available and picker.next_after ~= nil)
-            button("refresh", " Refresh ", true)
-            button("technical", state.technical and " Less " or " Details ", true)
+            frame.actions(painter, height - 1, {
+                {kind = "open", label = "Open", enabled = available and picker.selected ~= nil, primary = true},
+                {kind = "more", label = "More", enabled = available and picker.next_after ~= nil},
+                {kind = "refresh", label = "Refresh", enabled = true},
+                {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = true},
+            })
         end
         local message = status
         if message == "" then message = state.notice end
-        if message == "" then message = "↑↓ select · Enter open · M more · R refresh" end
-        line(height, message, theme.muted)
-        return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
+        frame.footer(painter, message, PICKER_HINTS)
+        return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
     end
     local title = "TIMELINE  " .. (state.title ~= "" and state.title or tostring(state.thread_id))
     if state.thread_state ~= "" then title = title .. " · " .. state.thread_state end
-    if state.technical then title = title .. "  " .. tostring(state.thread_id) end
-    line(1, title, theme.text)
+    frame.header(painter, title, state.technical and tostring(state.thread_id) or nil)
     local recap = state.recap
     if recap then
         local head = "Recap"
         if recap.lines[1] then head = head .. ": " .. recap.lines[1] end
         if state.technical then head = head .. " · through " .. tostring(recap.through_sequence) .. (recap.last_turn ~= "" and (" · last turn " .. recap.last_turn) or "") end
-        line(2, head, theme.muted)
-    else line(2, "No recap stored", theme.muted) end
-    line(3, state.technical and technical_session_line(state) or session_line(state), theme.muted)
+        frame.line(painter, 2, head, theme.muted)
+    else frame.line(painter, 2, "No recap stored", theme.muted) end
+    frame.line(painter, 3, state.technical and technical_session_line(state) or session_line(state), theme.muted)
     local selected = model.selected_row(state)
     local detail_rows = 0
     if selected and state.technical and height >= 12 then detail_rows = 4 end
     local list_first = 4
     local list_last = height - 2 - detail_rows
-    local capacity = maximum(0, list_last - list_first + 1)
     local rows = state.rows
-    local last = maximum(0, #rows - capacity)
-    local next_offset = math.floor(math.max(0, math.min(last, offset)))
-    if state.follow then next_offset = last end
+    local selected_index = 0
     if selected then
-        for index, row in ipairs(rows) do
-            if row.sequence == selected.sequence then
-                if index <= next_offset then next_offset = index - 1 end
-                if index > next_offset + capacity then next_offset = index - capacity end
-            end
-        end
+        for index, row in ipairs(rows) do if row.sequence == selected.sequence then selected_index = index end end
     end
-    if #rows == 0 then line(list_first, state.phase == "attached" and "No records yet" or "", theme.muted) end
-    for slot = 1, capacity do
-        local row = rows[next_offset + slot]
+    local capacity = math.floor(math.max(0, list_last - list_first + 1))
+    local start = offset
+    if state.follow then start = #rows end
+    local window = frame.window(#rows, capacity, selected_index, start)
+    if #rows == 0 and state.phase == "attached" and capacity > 0 then
+        frame.empty(painter, list_first, "No records yet", capacity > 1 and "Records appear here as the thread's owner commits them" or nil)
+    end
+    for slot = 1, window.capacity do
+        local index = window.offset + slot
+        local row = rows[index]
         if not row then break end
-        local y = list_first + slot - 1
-        local active = selected ~= nil and row.sequence == selected.sequence
         local label = row_label(row, state.technical)
-        if state.gap_after ~= nil and next_offset + slot > 1 and rows[next_offset + slot - 1].sequence == state.gap_after then
+        if state.gap_after ~= nil and index > 1 and rows[index - 1].sequence == state.gap_after then
             label = "(records between " .. tostring(state.gap_after) .. " and " .. tostring(row.sequence) .. " not shown) " .. label
         end
-        line(y, label, active and appearance.selection_text(theme) or theme.text, active and theme.accent or theme.surface)
-        hits[#hits + 1] = {kind = "row", index = next_offset + slot, key = tostring(row.sequence), x = 1, y = y, width = width, height = 1}
+        frame.row(painter, list_first + slot - 1, label, index == selected_index, "row", index, tostring(row.sequence))
     end
     if selected and detail_rows > 0 then
         local y = list_last + 1
-        put(1, y, string.rep("─", width), width, theme.border)
-        line(y + 1, selected.details[1], theme.text)
-        line(y + 2, selected.details[2], theme.text)
+        frame.rule(painter, y)
+        frame.line(painter, y + 1, selected.details[1], theme.text)
+        frame.line(painter, y + 2, selected.details[2], theme.text)
         local detail = selected.details[3]
         if selected.approval_id then detail = detail .. "  approval " .. selected.approval_id .. " is decided in Approvals" end
-        line(y + 3, detail, theme.text)
+        frame.line(painter, y + 3, detail, theme.text)
     end
     if height >= 4 then
-        button("follow", state.follow and " Following " or " Follow ", true)
-        button("threads", " Threads ", true)
-        button("refresh", " Refresh ", true)
-        button("technical", state.technical and " Less " or " Details ", true)
+        frame.actions(painter, height - 1, {
+            {kind = "follow", label = state.follow and "Following" or "Follow", enabled = true, active = state.follow},
+            {kind = "threads", label = "Threads", enabled = true},
+            {kind = "refresh", label = "Refresh", enabled = true},
+            {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = true},
+        })
     end
     local message = status
     if message == "" then message = state.notice end
     if message == "" and state.unavailable ~= "" and state.phase == "attached" then message = "Owner unavailable: " .. state.unavailable end
-    if message == "" then message = "↑↓ select · F follow · B threads · R refresh · T details" end
-    line(height, message, theme.muted)
-    return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
+    frame.footer(painter, message, THREAD_HINTS)
+    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
 end
 return M

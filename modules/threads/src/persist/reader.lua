@@ -13,6 +13,7 @@ type Subscription = {subscription_id: string, actor: string, consumer_id: string
 type Page = {page_id: string, lease_generation: integer, from_sequence: integer, scanned_through: integer}
 type Obligations = {open_actions: integer, running_attempts: integer, open_turns: integer, open_requests: integer, live_claims: integer}
 type Obligation = {message_id: string, recipient_id: string, message_record_id: string, kind: string, state: string, delivery_id: string?, reply_record_id: string?, created_sequence: integer}
+type Notice = {notice_id: string, watcher_actor: string, watcher_thread_id: string, watcher_action_id: string?, target_thread_id: string, target_action_id: string, after_sequence: integer, state: string}
 type Delivery = {delivery_id: string, message_id: string, recipient_id: string, batch_id: string, consumer_id: string, claimant_actor: string, channel: string, owner_incarnation: integer, state: string, expires_at: string}
 local function integer(value: unknown): integer?
     if type(value) ~= "number" or value ~= math.floor(value) then return nil end
@@ -140,6 +141,20 @@ function M.action(tx: sql.Transaction, thread_id: string, action_id: string): (A
     local id, state, admitted = text(row.action_id), text(row.state), text(row.admitted_record_id)
     if not id or not state or not admitted then return nil, "thread action row is corrupt" end
     return {action_id = id, state = state, admitted_record_id = admitted}, nil
+end
+-- The admission records of every action with this identifier in the store,
+-- whichever thread holds it; the authority reads the admitted principal.
+M.MAX_ADMISSIONS = 16
+function M.admissions(tx: sql.Transaction, action_id: string): ({string}?, string?)
+    local rows, query_err = tx:query("SELECT r.record_json FROM bee_thread_actions a JOIN bee_thread_records r ON r.record_id = a.admitted_record_id WHERE a.action_id = ? LIMIT ?", {action_id, M.MAX_ADMISSIONS})
+    if query_err or not rows then return nil, "read action admissions" end
+    local admissions: {string} = {}
+    for index, row in ipairs(rows) do
+        local encoded = text(row.record_json)
+        if not encoded then return nil, "action admission row is corrupt" end
+        admissions[index] = encoded
+    end
+    return admissions, nil
 end
 function M.attempt(tx: sql.Transaction, thread_id: string, attempt_id: string): (Attempt?, string?)
     local row, err = single(tx, "SELECT attempt_id, action_id, owner_epoch, state FROM bee_thread_attempts WHERE thread_id = ? AND attempt_id = ?", {thread_id, attempt_id}, "thread attempt")
@@ -312,5 +327,57 @@ function M.obligations(tx: sql.Transaction, thread_id: string): (Obligations?, s
     local claims, claims_err = M.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_deliveries WHERE thread_id = ? AND state = 'claimed'", {thread_id}, "live claims")
     if not claims then return nil, claims_err end
     return {open_actions = actions, running_attempts = attempts, open_turns = turns, open_requests = requests, live_claims = claims}, nil
+end
+-- Records of one action after a cursor that can end a turn or an attempt;
+-- messages, deliveries and approvals never do.
+function M.action_records(tx: sql.Transaction, thread_id: string, action_id: string, after: integer, limit: integer): ({Stored}?, string?)
+    local rows, query_err = tx:query("SELECT record_id, sequence, kind, record_json FROM bee_thread_records WHERE thread_id = ? AND action_id = ? AND sequence > ? " ..
+        "AND kind IN ('observation', 'turn.end', 'receipt') ORDER BY sequence LIMIT ?", {thread_id, action_id, after, limit})
+    if query_err or not rows then return nil, "read action records" end
+    local stored: {Stored} = {}
+    for index, row in ipairs(rows) do
+        local item, item_err = stored_row(row :: {[string]: unknown})
+        if not item then return nil, item_err end
+        stored[index] = item
+    end
+    return stored, nil
+end
+-- The action's most recent settlement, attempt or action scope, by sequence.
+function M.latest_settlement(tx: sql.Transaction, thread_id: string, action_id: string): (Stored?, string?)
+    local row, err = single(tx, "SELECT r.record_id, r.sequence, r.kind, r.record_json FROM bee_thread_settlements s JOIN bee_thread_records r ON r.record_id = s.record_id " ..
+        "WHERE s.thread_id = ? AND s.action_id = ? ORDER BY r.sequence DESC LIMIT 1", {thread_id, action_id}, "latest settlement")
+    if err then return nil, err end
+    if not row then return nil, nil end
+    return stored_row(row)
+end
+local function notice_row(row: {[string]: unknown}): (Notice?, string?)
+    local id, watcher, watcher_thread, target_thread, target_action = text(row.notice_id), text(row.watcher_actor), text(row.watcher_thread_id), text(row.target_thread_id), text(row.target_action_id)
+    local after, state = integer(row.after_sequence), text(row.state)
+    if not id or not watcher or not watcher_thread or not target_thread or not target_action or not after or not state then return nil, "thread notice row is corrupt" end
+    return {notice_id = id, watcher_actor = watcher, watcher_thread_id = watcher_thread, watcher_action_id = text(row.watcher_action_id),
+        target_thread_id = target_thread, target_action_id = target_action, after_sequence = after, state = state}, nil
+end
+function M.notice(tx: sql.Transaction, notice_id: string): (Notice?, string?)
+    local row, err = single(tx, "SELECT * FROM bee_thread_notices WHERE notice_id = ?", {notice_id}, "thread notice")
+    if err then return nil, err end
+    if not row then return nil, nil end
+    return notice_row(row)
+end
+-- Pending notices on one target thread, or on every thread when none is named.
+function M.pending_notices(tx: sql.Transaction, target_thread_id: string?, limit: integer): ({Notice}?, string?)
+    local rows: {unknown}?, query_err: string?
+    if target_thread_id then
+        rows, query_err = tx:query("SELECT * FROM bee_thread_notices WHERE target_thread_id = ? AND state = 'pending' ORDER BY created_at, notice_id LIMIT ?", {target_thread_id, limit})
+    else
+        rows, query_err = tx:query("SELECT * FROM bee_thread_notices WHERE state = 'pending' ORDER BY created_at, notice_id LIMIT ?", {limit})
+    end
+    if query_err or not rows then return nil, "read pending notices" end
+    local notices: {Notice} = {}
+    for index, row in ipairs(rows) do
+        local notice, notice_err = notice_row(row :: {[string]: unknown})
+        if not notice then return nil, notice_err end
+        notices[index] = notice
+    end
+    return notices, nil
 end
 return M

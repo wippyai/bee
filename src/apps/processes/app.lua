@@ -8,6 +8,7 @@ local uuid = require("uuid")
 local appearance = require("appearance")
 local probe = require("probe")
 local view = require("view")
+local frame = require("frame")
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
@@ -28,7 +29,8 @@ local function main(value: unknown)
     local last_time = time.now():unix_nano()
     probe.append(history, snapshot, nil, 0)
     local selected = ""
-    local offset, first, capacity = 0, 1, 0
+    local offset, capacity = 0, 0
+    local hits: {frame.Hit} = {}
     local paused, confirming, by_steps, services = false, false, false, false
     local rows: {view.Row} = {}
     local status, pending = "", ""
@@ -85,9 +87,9 @@ local function main(value: unknown)
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
         if dirty then
-            local frame = view.draw(width, height, snapshot, history, preferences, selected, offset, paused, status, confirming, services, rows, by_steps)
-            first, capacity, offset = frame.first, frame.capacity, frame.offset
-            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local drawn = view.draw(width, height, snapshot, history, preferences, selected, offset, paused, status, confirming, services, rows, by_steps)
+            hits, capacity, offset = drawn.hits, drawn.capacity, drawn.offset
+            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
             dirty = false
         end
@@ -144,15 +146,16 @@ local function main(value: unknown)
                 local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
                 if data.action == "wheel" then move((data.button == "wheel_up" or data.button == "up") and -1 or 1)
                 elseif data.action == "press" and data.button == "left" then
-                    if y == 1 and x >= width - 10 and width >= 38 then toggle_pause()
-                    elseif y == 1 and x <= 24 then
-                        if width < 26 then services = not services else services = x >= 14 end
+                    local hit = frame.hit(hits, x, y)
+                    local kind = hit and hit.kind or ""
+                    if kind == "pause" then toggle_pause()
+                    elseif kind == "processes" or kind == "services" then
+                        services = kind == "services"
                         selected = ""; offset = 0; status = ""; confirming = false; order(); dirty = true
-                    elseif y == height and not confirming then
-                        if x < width - 11 then by_steps = not by_steps; order(); reveal(); dirty = true else end_app() end
-                    elseif y >= first and y < first + capacity then
-                        local item = rows[offset + y - first + 1]
-                        if item then selected = item.pid; confirming = false; status = ""; dirty = true end
+                    elseif kind == "sort" and not confirming then by_steps = not by_steps; order(); reveal(); dirty = true
+                    elseif kind == "stop" and not confirming then end_app()
+                    elseif hit and kind == "row" then
+                        selected = hit.key; confirming = false; status = ""; dirty = true
                     end
                 end
             end

@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.app_dashboard_probe
+entries:
+- name: destination_workspace
+  kind: env.variable
+  storage: bee:workspace_environment
+  variable: BEE_APP_DASHBOARD_WORKSPACE
+  readonly: true
+- name: operator_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    - security.policy.get
+    - registry.get
+    - registry.apply
+    - registry.update.registry.entry
+    - system.read
+    - env.get
+    - bee.governance.overlay.read
+    - bee.governance.overlay.write
+    - bee.governance.delivery.read
+    - bee.governance.delivery.manage
+    - bee.governance.delivery.publish
+    resources: '*'
+    effect: allow
+- name: deliver
+  kind: process.lua
+  source: file://deliver.lua
+  method: main
+  modules: [funcs, registry, system, env, json, logger]
+  imports:
+    bounds: bee.threads.records:bounds
+    artifact: bee.governance:artifact
+    preflight: bee.governance:preflight
+  security:
+    policies: [bee.app_dashboard_probe:operator_policy]
+  meta:
+    command:
+      name: app-dashboard-deliver
+      security:
+        actor: {id: bee.app_dashboard.operator}
+        policies: [bee.app_dashboard_probe:operator_policy]

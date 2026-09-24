@@ -24,6 +24,7 @@ entries:
     configuration: bee.gateway.registry:configuration
     hooks: bee.gateway:hooks
     mcp: bee.gateway:mcp
+    sessions: bee.gateway:sessions
     surface: bee.gateway:surface
     surface_store: bee.gateway.persist:surface_store
     access: bee.gateway.security:access

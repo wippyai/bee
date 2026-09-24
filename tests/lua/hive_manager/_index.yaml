@@ -28,6 +28,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [tty]
   imports:
+    frames: bee.application:frame
     test: wippy.test:test
     model: bee.hive_manager:model
     view: bee.hive_manager:view

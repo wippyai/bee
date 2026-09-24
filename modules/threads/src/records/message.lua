@@ -6,7 +6,7 @@ local M = {}
 function M.decode(value: unknown): (types.Message?, string?)
     local object = bounds.object(value)
     if not object then return nil, "message must be an object" end
-    local unknown_field = bounds.fields(object, {"message_id", "message_kind", "sender_id", "recipient_ids", "content", "in_reply_to", "outcome"})
+    local unknown_field = bounds.fields(object, {"message_id", "message_kind", "sender_id", "recipient_ids", "recipient_action_ids", "sender_action_id", "content", "in_reply_to", "outcome"})
     if unknown_field then return nil, unknown_field end
     local message_id, sender_id = bounds.id(object.message_id), bounds.id(object.sender_id)
     local kind = bounds.member(object.message_kind, {"request", "progress", "reply", "notification"})
@@ -23,6 +23,21 @@ function M.decode(value: unknown): (types.Message?, string?)
         local ref, ref_error = values.ref(object.in_reply_to)
         if not ref then return nil, "in_reply_to: " .. tostring(ref_error) end
         message.in_reply_to = ref
+    end
+    -- Actions address sessions that share one member identity, such as
+    -- agents started on one thread by the same subject; the authority checks
+    -- each against the thread the message lands on and the sending action
+    -- against the sender's own admitted work.
+    if object.recipient_action_ids ~= nil then
+        local actions, actions_error = bounds.ids(object.recipient_action_ids, true)
+        if not actions then return nil, "recipient_action_ids: " .. tostring(actions_error) end
+        if #actions == 0 then return nil, "recipient_action_ids names at least one action" end
+        message.recipient_action_ids = actions
+    end
+    if object.sender_action_id ~= nil then
+        local sender_action = bounds.id(object.sender_action_id)
+        if not sender_action then return nil, "sender_action_id is not an identifier" end
+        message.sender_action_id = sender_action
     end
     if object.outcome ~= nil then
         local outcome = values.outcome(object.outcome)

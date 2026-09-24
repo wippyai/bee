@@ -188,3 +188,9 @@ entries:
     policies: [bee.gateway:policy_reference_admin]
   imports:
     test: wippy.test:test
+- name: sessions_test
+  kind: function.lua
+  source: file://sessions_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, sessions: bee.gateway:sessions}

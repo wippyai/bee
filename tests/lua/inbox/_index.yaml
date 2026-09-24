@@ -41,6 +41,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [tty]
   imports:
+    frames: bee.application:frame
     test: wippy.test:test
     model: bee.inbox:model
     view: bee.inbox:view

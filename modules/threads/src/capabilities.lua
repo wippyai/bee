@@ -4,6 +4,7 @@ local claims = require("claims")
 local subscriptions = require("subscriptions")
 local waits = require("waits")
 local recap = require("recap")
+local notices = require("notices")
 local M = {}
 M.REVISION = "bee.threads.capabilities@1"
 type Migration = {id: integer, name: string, rebuild: boolean}
@@ -28,6 +29,7 @@ type Limits = {
     max_waiters: integer,
     recap_summary_lines: integer,
     recap_line_bytes: integer,
+    max_pending_notices_per_thread: integer,
 }
 type Delivery = {
     channels: {string},
@@ -62,7 +64,7 @@ end
 function M.contracts(): {Contract}
     return {
         contract("bee.threads:journal", {"claim", "append", "read_after"}),
-        contract("bee.threads:authority", {"create", "get", "list", "join", "leave", "close", "record", "read_after", "send", "send_status"}),
+        contract("bee.threads:authority", {"create", "get", "list", "join", "leave", "close", "record", "read_after", "send", "send_status", "notify"}),
         contract("bee.threads:lifecycle", {"admit_action", "prepare_attempt", "start_attempt", "request_turn", "end_turn", "receipt"}),
         contract("bee.threads:delivery", {"claim", "dispatch", "ack", "release", "expire", "reconcile", "subscribe", "page", "ack_page", "unsubscribe", "resume", "close_subscription", "forget_subscription", "wait", "watch"}),
         contract("bee.threads:projection", {"recap_read", "recap_update", "recap_rebuild", "status_read", "status_update", "status_rebuild"}),
@@ -104,6 +106,7 @@ function M.describe(): Report
             max_waiters = waits.MAX_WAITERS,
             recap_summary_lines = recap.MAX_SUMMARY_LINES,
             recap_line_bytes = recap.MAX_LINE_BYTES,
+            max_pending_notices_per_thread = notices.MAX_PENDING_PER_WATCHER,
         },
         delivery = {
             channels = copy(claims.CHANNELS),

@@ -128,6 +128,11 @@ or revocation changes. Focused tests should exercise the real host wiring,
 negative permissions, retry, restart, cancellation and cleanup for the changed
 boundary. A constructed completion record does not prove process cleanup.
 
+`make check-parallel CHECK_JOBS=4` runs the same verified release shards in
+parallel on a local machine. Each shard writes its own native pack generation
+and log under `.wippy/check-parallel/`; the command reports wall and CPU time
+and fails if any shard fails.
+
 Fixtures use disposable test workspaces and remain outside `src/`. Inspect
 source and assembled packs for test registrations, fixture data, test-library
 dependencies and embedded filesystem assets. Production loads only the root

@@ -63,14 +63,18 @@ fi
 
 release_url=https://github.com/wippyai/bee/releases
 if [ "$version" = latest ]; then
-    release_url=$release_url/latest/download
-else
-    version=${version#v}
-    number='(0|[1-9][0-9]*)'
-    identifier='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
-    printf '%s\n' "$version" | LC_ALL=C grep -Eq "^$number\.$number\.$number(-$identifier(\.$identifier)*)?$" || fail 'invalid release version'
-    release_url=$release_url/download/v$version
+    # The latest release answers with a redirect to its tag; both assets then
+    # come from that one tagged release.
+    resolved=$(curl --fail --silent --show-error --proto '=https' --connect-timeout 15 --max-time 60 --retry 2 \
+        --output /dev/null --write-out '%{redirect_url}' "$release_url/latest") || fail 'could not resolve the latest release'
+    version=${resolved##*/releases/tag/v}
+    [ "$version" != "$resolved" ] || fail "could not resolve the latest release from $resolved"
 fi
+version=${version#v}
+number='(0|[1-9][0-9]*)'
+identifier='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+printf '%s\n' "$version" | LC_ALL=C grep -Eq "^$number\.$number\.$number(-$identifier(\.$identifier)*)?$" || fail 'invalid release version'
+release_url=$release_url/download/v$version
 
 temporary=$(mktemp -d "${TMPDIR:-/tmp}/bee-install.XXXXXXXX")
 staged=
@@ -99,6 +103,7 @@ else
     actual=$(shasum -a 256 "$temporary/$archive" | awk '{ print $1 }')
 fi
 [ "$expected" = "$actual" ] || fail 'archive checksum mismatch'
+printf 'Verified sha256 %s\n' "$actual"
 
 mkdir -p "$destination"
 [ ! -d "$destination/bee" ] || fail 'destination bee is a directory'
@@ -108,7 +113,7 @@ tar -xOzf "$temporary/$archive" bee > "$staged" || fail 'archive does not contai
 chmod 755 "$staged"
 mv -f "$staged" "$destination/bee"
 staged=
-printf 'Installed %s/bee\n' "$destination"
+printf 'Installed Bee %s to %s/bee\n' "$version" "$destination"
 case ":${PATH:-}:" in
     *":$destination:"*) ;;
     *) printf 'Add %s to PATH to run bee.\n' "$destination" ;;

@@ -21,10 +21,18 @@ cat > "$fixture/bin/curl" <<'EOF'
 #!/bin/sh
 set -eu
 output=
+write_out=
 for argument do
     if [ "${previous:-}" = --output ]; then output=$argument; fi
+    if [ "${previous:-}" = --write-out ]; then write_out=$argument; fi
     previous=$argument
 done
+if [ "$argument" = https://github.com/wippyai/bee/releases/latest ]; then
+    # The latest release redirects to its tag, as GitHub does.
+    [ "$write_out" = '%{redirect_url}' ] || exit 1
+    printf '%s' https://github.com/wippyai/bee/releases/tag/v1.2.3
+    exit 0
+fi
 case "$argument" in
     https://github.com/wippyai/bee/releases/download/v1.2.3/bee-linux-amd64.tar.gz*) ;;
     *) exit 1 ;;
@@ -35,9 +43,17 @@ chmod +x "$fixture/bin/uname" "$fixture/bin/curl"
 export INSTALL_FIXTURE="$fixture"
 export PATH="$fixture/bin:$PATH"
 
-sh "$root/install.sh" --version v1.2.3 --dir "$fixture/install space"
+sh "$root/install.sh" --version v1.2.3 --dir "$fixture/install space" > "$fixture/install.log"
 cmp "$fixture/source/bee" "$fixture/install space/bee"
 test -x "$fixture/install space/bee"
+checksum=$(awk '{ print $1 }' "$fixture/assets/bee-linux-amd64.tar.gz.sha256")
+grep -qx "Verified sha256 $checksum" "$fixture/install.log"
+grep -qx "Installed Bee 1.2.3 to $fixture/install space/bee" "$fixture/install.log"
+
+# The latest release names the version it resolved to.
+sh "$root/install.sh" --dir "$fixture/latest" > "$fixture/latest.log"
+cmp "$fixture/source/bee" "$fixture/latest/bee"
+grep -qx "Installed Bee 1.2.3 to $fixture/latest/bee" "$fixture/latest.log"
 
 printf 'tampered' >> "$fixture/assets/bee-linux-amd64.tar.gz"
 if sh "$root/install.sh" --version 1.2.3 --dir "$fixture/install space" > "$fixture/failure.log" 2>&1; then

@@ -193,11 +193,12 @@ and native module version the archive was assembled from; compare the native
 `install.sh` selects the archive for the running host: `uname -s` maps to
 `linux` or `darwin` and `uname -m` to `amd64` or `arm64`. It downloads
 `bee-<platform>-<arch>.tar.gz` and `.sha256` from
-`releases/latest/download` for the latest stable release, or from
-`releases/download/v<version>` when `--version` names a release (prereleases are
-selected explicitly this way). It verifies the archive against the checksum
-document, extracts the `bee` member, and replaces the destination through a
-temporary file. `make installer-check` covers this selection, checksum and
+`releases/download/v<version>`. Without `--version` it first resolves the tag
+GitHub's `releases/latest` redirects to, so both assets come from that one
+release; `--version` names a release explicitly (prereleases are selected this
+way). It verifies the archive against the checksum document and prints
+`Verified sha256 <digest>`, extracts the `bee` member, replaces the destination
+through a temporary file and prints `Installed Bee <version> to <path>`. `make installer-check` covers this selection, checksum and
 failure-preservation behavior. No PowerShell installer ships in this repository,
 so `install.ps1` is not part of the release assets or checks.
 

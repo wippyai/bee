@@ -187,12 +187,10 @@ local function template(raw: unknown): (Template?, string?)
     local modules, modules_error = sorted_set(value.modules, "workspace application modules")
     if not kinds or not modules then return nil, kinds_error or modules_error end
     if #kinds == 0 then return nil, "workspace applications profile admits no entry kind" end
-    local probe, probe_error = application_admission.bindings({{definition_id = "app.profile:app",
-        policies = value.policies, thread_access = value.thread_access}})
-    local binding = probe and probe[1] or nil
-    if not binding then return nil, "workspace application admission: " .. tostring(probe_error) end
+    local granted, grant_error = application_admission.grant(value.policies, value.thread_access)
+    if not granted then return nil, "workspace application admission: " .. tostring(grant_error) end
     return {approval_policy = approval_policy, kinds = kinds, modules = modules,
-        policies = binding.policies, thread_access = binding.thread_access}, nil
+        policies = granted.policies, thread_access = granted.thread_access}, nil
 end
 
 local function empty_list(): {unknown}

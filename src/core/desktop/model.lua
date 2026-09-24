@@ -118,11 +118,15 @@ local function same_rect(left: Rect, right: Rect): boolean
         and left.width == right.width and left.height == right.height
 end
 
+-- A new window takes three quarters of the display, never less than the
+-- default size the display can hold.
 local function default_bounds(area: Rect, index: integer): Rect
-    local width = area.width
-    if width > DEFAULT_WIDTH then width = DEFAULT_WIDTH end
-    local height = area.height
-    if height > DEFAULT_HEIGHT then height = DEFAULT_HEIGHT end
+    local width = area.width * 3 // 4
+    if width < DEFAULT_WIDTH then width = DEFAULT_WIDTH end
+    if width > area.width then width = area.width end
+    local height = area.height * 3 // 4
+    if height < DEFAULT_HEIGHT then height = DEFAULT_HEIGHT end
+    if height > area.height then height = area.height end
 
     local last_x = area.x + area.width - width
     local last_y = area.y + area.height - height

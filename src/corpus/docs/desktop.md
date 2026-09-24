@@ -20,6 +20,19 @@ filename. A desktop ID is independent of a terminal process or operating
 system display. A PID, connection, mount or renderer value is an execution
 address or capability, never a durable identity.
 
+## Provider homes
+
+A managed agent window that uses the host home runs the provider with the
+operating-system user's `HOME` and the provider's own home variable,
+`CODEX_HOME` for Codex and `CLAUDE_CONFIG_DIR` for Claude. Bee reads those
+variables from the environment of the project's owner, which inherits the
+environment of the `bee` invocation that started it. A later `bee` invocation
+joins the running owner and does not change them: to use another provider home,
+run `bee stop`, then start Bee with the new variable set. Sign in with the
+provider's own CLI in that home before opening the window (for example
+`codex login`); a window whose provider has no login shows the provider's own
+sign-in screen.
+
 ## Composition
 
 The local supervisor starts and owns one workspace host and one or more desktop

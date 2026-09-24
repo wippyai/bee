@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"os"
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
@@ -45,7 +46,10 @@ func runHive(ctx context.Context, out io.Writer, client *hive.Join, directory st
 			return rendezvous.ErrDescriptor
 		}
 		line := invite.Invite{ID: minted.ID, Secret: minted.Secret, Address: address, Node: owner.Node, Fingerprint: invite.Fingerprint(key)}
-		_, err = fmt.Fprintln(out, line.String())
+		if _, err := fmt.Fprintln(out, line.String()); err != nil {
+			return err
+		}
+		_, err = io.WriteString(os.Stderr, inviteHint(line.String()))
 		return err
 	case hiveInvites:
 		records, err := client.Invites(ctx)

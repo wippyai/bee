@@ -10,6 +10,7 @@ local attachments = require("attachments")
 local protocol = require("protocol")
 local decode = require("decode")
 local contract = require("contract")
+local retained_protocol = require("retained_protocol")
 type Channel = channel.Channel
 type Phase = "boot" | "admit" | "running" | "render" | "save" | "exit" | "stopping" | "departing"
 type Renderer = {pid: string, connection: string}
@@ -86,7 +87,8 @@ local function queue_renderer(state: State, child: Child, renderer: Renderer)
 end
 function M.new(owner: string, host: string, route: string, workspace_id: string, default_id: string, resources: desktops.State): State
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy"}) do
+    for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy",
+        "bee:client_workspace_catalog_call_policy", "bee:workspace_catalog_read_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
     return {owner = owner, host = host, route = route, workspace_id = workspace_id, default_id = default_id,
@@ -224,6 +226,30 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
         child.phase, child.deadline = "stopping", time.after("10s")
     end
     return true
+end
+-- A display asks to show another workspace. The request names the display
+-- it came from; the desktop bridge moves the display's controlling client.
+function M.switch(state: State, sender: string, value: unknown): boolean
+    for id, child in pairs(state.children) do
+        if child.resource.pid == sender then
+            local request = retained_protocol.switch(value, state.workspace_id)
+            if request and request.desktop_id == id and child.ready and child.phase == "running" then
+                send(state.owner, retained_protocol.TOPIC_SWITCH, {version = 1, workspace_id = state.workspace_id, desktop_id = id,
+                    request_id = request.request_id, target_workspace_id = request.target_workspace_id})
+            end
+            return true
+        end
+    end
+    return false
+end
+-- The bridge's answer reaches the display that asked.
+function M.switched(state: State, value: unknown)
+    local result = retained_protocol.switch_result(value, state.workspace_id)
+    if not result then return end
+    local child = state.children[result.desktop_id]
+    if not child then return end
+    send(child.resource.pid, retained_protocol.TOPIC_SWITCHED, {version = 1, workspace_id = state.workspace_id, desktop_id = result.desktop_id,
+        request_id = result.request_id, error_code = result.error_code, error = result.error})
 end
 function M.event(state: State, event: process.Event)
     if event.kind ~= process.event.EXIT and event.kind ~= process.event.LINK_DOWN then return end

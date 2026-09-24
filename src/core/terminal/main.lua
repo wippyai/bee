@@ -21,6 +21,7 @@ local appearance = require("appearance")
 local delivery = require("delivery")
 local selection = require("selection")
 local connection = require("connection")
+local workspace_menu = require("workspace_menu")
 local names = require("names")
 local display_transfer = require("display_transfer")
 
@@ -42,6 +43,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local transfer_updates = assert(process.listen("bee.display.transfers", {message = true}))
     local transfer_results = assert(process.listen("bee.display.transfer_result", {message = true}))
     local attachment_updates = assert(process.listen("bee.desktop.attachments", {message = true}))
+    local workspace_pages = assert(process.listen("bee.display.workspaces", {message = true}))
+    local switch_results = assert(process.listen("bee.display.switched", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
     assert(tty.mouse(true))
@@ -66,6 +69,16 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local start: menu.State? = nil
     local connection_open = false
     local connection_info: connection.Info = connection.new(owner, workspace_id, ctx.get("bee.display_id"), ctx.get("bee.hive_supervisor"))
+    -- The workspace menu of a display the desktop bridge serves.
+    local workspaces: workspace_menu.Menu? = nil
+    local function ask_workspaces(query: {label: string?, after: string?})
+        local current = workspaces
+        if not current then return end
+        local request: {[string]: unknown} = {version = 1, op = "workspaces", request_id = current.loading}
+        if query.label then request.label = query.label end
+        if query.after then request.after = query.after end
+        if not process.send(owner, "bee.workspace.control", request) then current.loading = nil; current.status = "Workspace menu unavailable" end
+    end
     local captured_releases: {[string]: boolean} = {}
     local captured_mouse = false
     local active_selection: selection.State? = nil
@@ -167,6 +180,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
         cancel_selection()
         if selected then status = "" end
         connection_open = not connection_open
+        workspaces = nil
         start = nil
         capture, preview = nil, nil
         awaiting_place = false
@@ -379,7 +393,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
         if active_selection and not selection_body(active_selection) then cancel_selection(); status = "Text selection unavailable: view changed" end
         local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. names.label(workspace_id),
             preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection, connection_info, connection_open, hydrated,
-            transfers, display_id)
+            transfers, display_id, workspaces)
         tab_hits = frame.tabs
         output:present(frame.rows, {cursor = frame.cursor})
         dirty = false
@@ -389,7 +403,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
         local selected = channel.select({input:case_receive(), lifecycle:case_receive(),
             replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), clipboard_results:case_receive(),
             transfer_updates:case_receive(), transfer_results:case_receive(), attachment_updates:case_receive(),
-            dialog_states:case_receive(), dialog_results:case_receive(), ticks:case_receive()})
+            dialog_states:case_receive(), dialog_results:case_receive(), ticks:case_receive(),
+            workspace_pages:case_receive(), switch_results:case_receive()})
         if not selected.ok then break end
         if selected.channel == lifecycle then
             local event = selected.value
@@ -452,6 +467,17 @@ local function main(owner: string, initial_application: string?, secondary_appli
         elseif selected.channel == attachment_updates then
             local message = selected.value
             if tostring(message:from()) == owner and connection.observe(connection_info, message:payload():data()) then dirty = true end
+        elseif selected.channel == workspace_pages then
+            local message = selected.value
+            local current = workspaces
+            if current and tostring(message:from()) == owner and workspace_menu.apply(current, message:payload():data()) then dirty = true end
+        elseif selected.channel == switch_results then
+            local message = selected.value
+            local current = workspaces
+            if current and tostring(message:from()) == owner and workspace_menu.switched(current, message:payload():data()) then
+                status = current.status
+                dirty = true
+            end
         elseif selected.channel == transfer_updates then
             local message = selected.value
             if message:from() == owner then
@@ -700,9 +726,36 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 toggle_connection()
                 captured_releases[kind] = true
                 handled = true; dirty = true
+            elseif workspaces and event.type ~= "resize" and event.type ~= "close"
+                and not (event.type == "key" and (kind == "f12" or (event.ctrl == true and event.key == "q"))) then
+                local current = workspaces
+                if current then
+                    local response = workspace_menu.respond(current, event, uuid.v7())
+                    if response.close then workspaces = nil
+                    elseif response.page then ask_workspaces(response.page)
+                    elseif response.switch then
+                        local switch_request = current.switching
+                        if not switch_request or not process.send(owner, "bee.workspace.control", {version = 1, op = "switch",
+                            request_id = switch_request, workspace_id = response.switch}) then
+                            current.switching = nil
+                            current.status = "Workspace switch unavailable"
+                        end
+                    end
+                end
+                if event.type == "key" and event.action ~= "release" then captured_releases[kind] = true end
+                if event.type == "mouse" and event.action == "press" then captured_mouse = true end
+                handled = true; dirty = true
             elseif connection_open and event.type ~= "resize" and event.type ~= "close"
                 and not (event.type == "key" and (kind == "f12" or (event.ctrl == true and event.key == "q"))) then
-                if event.type == "key" and event.action ~= "release" and event.key == "d"
+                if event.type == "key" and event.action ~= "release" and event.key == "w"
+                    and event.alt ~= true and event.ctrl ~= true and connection.switchable(connection_info)
+                    and workspace_menu.available(width, height) then
+                    -- The workspace menu replaces the connection panel.
+                    connection_open = false
+                    local menu_state = workspace_menu.new(workspace_id)
+                    workspaces = menu_state
+                    ask_workspaces(workspace_menu.request(menu_state, uuid.v7()))
+                elseif event.type == "key" and event.action ~= "release" and event.key == "d"
                     and event.alt ~= true and event.ctrl ~= true then
                     connection.toggle_details(connection_info)
                 elseif event.type == "key" and (kind == "esc" or kind == "escape") and event.action ~= "release" then
@@ -750,6 +803,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     width, height = event.width, event.height
                     cancel_selection()
                     if connection_open and not connection.available(width, height) then connection_open = false end
+                    if workspaces and not workspace_menu.available(width, height) then workspaces = nil end
                     if capture then captured_mouse = true end
                     capture, preview = nil, nil; awaiting_place = false
                     dirty = true
@@ -906,6 +960,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     process.unlisten(transfer_updates)
     process.unlisten(transfer_results)
     process.unlisten(attachment_updates)
+    process.unlisten(workspace_pages)
+    process.unlisten(switch_results)
     if not rejoining then process.send(owner, "bee.workspace.control", {version = 1, op = "quit"}) end
     delivery.shutdown()
     output:close()

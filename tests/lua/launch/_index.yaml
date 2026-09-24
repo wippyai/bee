@@ -35,3 +35,19 @@ entries:
     test: wippy.test:test
     hosts: bee.launch:hosts
     leases: bee.application:host_leases
+- name: switch_relay
+  kind: process.lua
+  source: file://switch_relay.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process, channel]
+- name: desktop_lifecycle_test
+  kind: function.lua
+  source: file://desktop_lifecycle_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time]
+  imports:
+    test: wippy.test:test
+    desktops: bee.client:desktops
+    desktop_lifecycle: bee.launch:desktop_lifecycle

@@ -240,6 +240,29 @@ local function define_tests()
             test.eq(#assert(max_res).mount, 4096)
         end)
 
+        test.it("decodes display switch requests and answers strictly", function()
+            local request = retained_protocol.switch({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "switch-1", target_workspace_id = other}, workspace)
+            test.eq(request and request.target_workspace_id, other)
+            test.eq(request and request.desktop_id, desktop)
+            test.is_nil(retained_protocol.switch({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "switch-1", target_workspace_id = other}, other))
+            test.is_nil(retained_protocol.switch({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "switch-1", target_workspace_id = "short"}, workspace))
+            test.is_nil(retained_protocol.switch({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "switch-1", target_workspace_id = other, recipient = "pid"}, workspace))
+            local done = retained_protocol.switch_result({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "switch-1", error_code = "", error = ""}, workspace)
+            test.eq(done and done.error_code, "")
+            local refused = retained_protocol.switch_result({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "switch-1", error_code = "BUSY", error = "pending"}, workspace)
+            test.eq(refused and refused.error, "pending")
+            test.is_nil(retained_protocol.switch_result({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "switch-1", error_code = "", error = "silent failure"}, workspace))
+            test.is_nil(retained_protocol.switch_result({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "switch-1", error_code = "BUSY", error = ""}, workspace))
+        end)
+
         test.it("preserves existing request decoder behavior", function()
             local attach_req = {version = 1, workspace_id = workspace, desktop_id = desktop,
                 op = "attach", request_id = "req-1", recipient = "proc-1", mode = "control"}

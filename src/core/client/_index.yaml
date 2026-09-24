@@ -40,6 +40,7 @@ entries:
   modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
   imports: &client_imports
     node_appearance: bee.client:node_appearance
+    workspace_pages: bee.client:workspace_pages
     retained_protocol: bee.launch:retained_protocol
     clipboard: bee.client:clipboard
     launcher: bee.launch:bootstrap
@@ -148,6 +149,10 @@ entries:
   security:
     policies: [bee:client_storage_policy]
 
+- name: workspace_pages
+  kind: library.lua
+  source: file://workspace_pages.lua
+  modules: [funcs, channel]
 - name: node_appearance
   kind: library.lua
   source: file://node_appearance.lua

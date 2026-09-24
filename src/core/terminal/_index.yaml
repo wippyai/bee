@@ -29,6 +29,7 @@ entries:
   modules: [tty, process, channel, time, uuid, ctx, logger]
   imports:
     connection: bee.terminal:connection
+    workspace_menu: bee.terminal:workspace_menu
     delivery: bee.terminal:delivery
     contract: bee.protocol:application
     title_editor: bee.terminal:title_editor
@@ -45,6 +46,13 @@ entries:
     names: bee.application:names
     display_transfer: bee.protocol:display_transfer
     status_surface: bee.application:status_surface
+- name: workspace_menu
+  kind: library.lua
+  source: file://workspace_menu.lua
+  modules: [tty]
+  imports:
+    appearance: bee.application:appearance
+    names: bee.application:names
 - name: render
   kind: library.lua
   source: file://render.lua
@@ -56,6 +64,7 @@ entries:
     layout: bee.desktop:layout
     appearance: bee.application:appearance
     connection: bee.terminal:connection
+    workspace_menu: bee.terminal:workspace_menu
     chrome: bee.terminal:chrome
     bar: bee.terminal:bar
     window_chrome: bee.terminal:window_chrome

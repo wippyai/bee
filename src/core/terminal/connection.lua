@@ -4,7 +4,8 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local names = require("names")
-type Info = {node: string, workspace: string, display: string, hive: string, attachments: string, details: boolean?}
+-- switchable: a desktop bridge serves this display, so it can show another workspace.
+type Info = {node: string, workspace: string, display: string, hive: string, attachments: string, details: boolean?, switchable: boolean}
 local M = {}
 local function line(value: unknown, limit: integer): string?
     if type(value) ~= "string" or value == "" or #value > limit or value:find("%c") then return nil end
@@ -14,7 +15,7 @@ function M.new(owner: string, workspace: string, display: unknown, supervisor: u
     local node = owner:match("^{([^@|}]+)@[^|}]+|[^}]+}$") or "Local node"
     local selected = line(supervisor, 160)
     return {node = node, workspace = workspace, display = line(display, 64) or "Current session",
-        hive = selected and "Supervisor ready" or "Not reported", attachments = "Not reported"}
+        hive = selected and "Supervisor ready" or "Not reported", attachments = "Not reported", switchable = selected ~= nil}
 end
 function M.observe(info: Info, value: unknown): boolean
     if type(value) ~= "table" or value.version ~= 1 or value.display_id ~= info.display then return false end
@@ -31,6 +32,7 @@ function M.observe(info: Info, value: unknown): boolean
     info.attachments = status
     return true
 end
+function M.switchable(info: Info): boolean return info.switchable end
 function M.toggle_details(info: Info)
     info.details = not info.details
 end
@@ -115,6 +117,7 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
         if details_available(height) then
             footer = (info.details and "‹ Less [D]" or "› Details [D]") .. "     " .. footer
         end
+        if info.switchable then put(rows - 3, "› Workspaces [W]", muted) end
         put(rows - 2, footer, muted)
     end
 end

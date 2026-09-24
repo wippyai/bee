@@ -12,6 +12,7 @@ local bar = require("bar")
 local window_chrome = require("window_chrome")
 local surface = require("surface")
 local connection = require("connection")
+local workspace_menu = require("workspace_menu")
 local display_transfer = require("display_transfer")
 type Text = {cut: (string, integer, integer) -> string, plain: (string) -> string, width: (string) -> integer}
 local text = tty.text :: Text
@@ -26,7 +27,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     capture: layout.Capture?, preview: model.Rect?, status: string, label: string,
     preferences: appearance.Preferences?, start: menu.State?, initial: boolean?, catalog: {menu.Descriptor}?, editor: title_editor.State?, modal: dialog.State?,
     badges: {[string]: surface.Badge}?, active_selection: selection.State?, connection_info: connection.Info?, connection_open: boolean?, ready: boolean?,
-    transfers: display_transfer.Snapshot?, display_id: string?): Frame
+    transfers: display_transfer.Snapshot?, display_id: string?, workspaces: workspace_menu.Menu?): Frame
     local prefs = preferences or appearance.defaults()
     local theme = appearance.theme(prefs.theme)
     local FRAME = appearance.style(theme.border, theme.surface)
@@ -92,6 +93,10 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     end
     if connection_open and connection_info then
         connection.draw(canvas, width, height, prefs, connection_info, ready == true)
+        cursor.visible = false
+    end
+    if workspaces then
+        workspace_menu.draw(canvas, width, height, prefs, workspaces)
         cursor.visible = false
     end
     if editor then cursor = title_editor.draw(canvas, editor, width, height, prefs) end

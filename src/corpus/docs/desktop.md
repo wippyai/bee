@@ -113,8 +113,10 @@ not recreated at its former instruction.
 
 ## Current limits
 
-- A desktop client currently boots against one workspace. Mixed tabs from
-  several workspaces or several owning nodes are not a supported client mode.
+- A desktop client presents one workspace at a time. On a node without a folder
+  workspace (`bee daemon`) the client picks the workspace and switches through
+  the picker (Ctrl+] returns to it). Mixed tabs from several workspaces or
+  several owning nodes are not a supported client mode.
 - Local retained desktops and authenticated attachment paths are available.
   Nodes of one host join one hive with `bee hive invite` and `bee hive join`
   (see the [Hive module](../../modules/hive/src/README.md)); joins across

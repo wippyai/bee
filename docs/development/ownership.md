@@ -28,7 +28,7 @@ and caches are projections that owners can rebuild.
 | Subsystem | Owns | Availability |
 |---|---|---|
 | Native runtime | Processes, supervision, transport, storage, terminal surfaces, filesystem events and lifecycle | Implemented platform foundation; Bee policy remains above runtime primitives |
-| Workspace owner | Workspace identity, the node workspace catalog, application data, resources, instances and recovery | Implemented locally: any number of logical workspaces per node, catalog operations, extensions and hosts started on a lease; public workspace selection across nodes is a proposal |
+| Workspace owner | Workspace identity, the node workspace catalog, application data, resources, instances and recovery | Implemented: any number of logical workspaces per node, catalog operations, extensions, hosts started on a lease, desktops attached through the host manager, a daemon without a folder workspace and a paged Hive workspace listing; presenting another node's workspace needs that node to admit the display client |
 | Host and attachments | Application admission, producer lifetime, view sharing, control/observation and retained execution | Implemented for local host/client attachment |
 | Client shell | Start, windows, layout, presenter replacement, Timeline, Inbox and local commands | Presentation consumes owner data; it does not own execution or authorization |
 | Registry/catalog | Stable definitions, dependency closure, versions and discovery projections | Metadata is descriptive; admission and policy are separate |

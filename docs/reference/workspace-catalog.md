@@ -17,7 +17,7 @@ unknown; do not retry blindly).
 | `create` | `{label, root_ref, subpath?, create_directory?}` | `bee.workspaces.manage` on `root_ref` | the new row |
 | `read` | `{workspace_id}` | `bee.workspaces.read` on `workspace_id` | `{workspace, live}` |
 | `list` | `{state?, after?, limit?}` | `bee.workspaces.read` on `catalog` | `{items, next_after?}` |
-| `search` | `{state?, label? \| root_ref + path?, after?, limit?}` | `bee.workspaces.read` on `catalog` | `{items, next_after?}` |
+| `search` | `{state?, label? \| root_ref + path? \| path, after?, limit?}` | `bee.workspaces.read` on `catalog` | `{items, next_after?}` |
 | `rename` | `{workspace_id, label}` | `bee.workspaces.manage` on `workspace_id` | the row |
 | `archive` | `{workspace_id}` | `bee.workspaces.manage` on `workspace_id` | the row |
 | `restore` | `{workspace_id}` | `bee.workspaces.manage` on `workspace_id` | the row |
@@ -45,7 +45,10 @@ walk the index `(state, lower(label), workspace_id)`; `label` matches a prefix,
 case-folded over ASCII letters. Path search takes `root_ref` and an optional
 `path` and walks `(state, root_ref, subpath)`: it returns the folder named by
 `path` first, then every folder below `path/`, never a sibling such as
-`path-old`. No operation reads rows it does not return.
+`path-old`. A `path` without `root_ref` runs that search under every root the
+host admits (`bee:resource_roots`), one root after another in name order; its
+cursor names the root of the page's last row. No operation reads rows it does
+not return.
 
 **Inspect and search within.** `inspect` (`{workspace_id}`, read authority on
 that workspace) returns the row, `live`, the applications its checkpoint keeps
@@ -117,6 +120,63 @@ its lease rather than retrying.
 - Applications hold no lease. An application running in an unleased
   workspace stops with its host and restarts from its checkpoint when its
   restart policy is `automatic`.
+- A launched agent run holds a lease on its catalog workspace for the run's
+  whole duration (`bee.harness.carrier:lease`), so the workspace is served
+  while the agent works. An identity outside the catalog's form names no host.
+
+### Desktops through the host manager
+
+The manager is every managed host's owner, so it admits desktops for the lease
+holders that attach to it. A holder sends `bee.workspace.hosts.attach`
+(`{request_id, lease}`) and the manager answers `bee.workspace.hosts.attached`
+with the host's readiness announcement, or `unavailable` while the host starts.
+From then on the holder sends desktop admission requests (`bee.host.client`,
+the host's own format) to the manager, which forwards them to the host only for
+the workspace the holder leases and only for recipients that holder admitted;
+the host's answers (`bee.host.client_result`) and catalog-reader snapshots come
+back through the manager. A holder whose last lease on the host ends loses its
+attachment and its recipients.
+
+A retained desktop supervisor (`bee.launch:retained`) selected by workspace
+identity uses this path: it takes a lease instead of spawning a host, attaches,
+admits its displays through the manager and releases the lease when it ends; it
+never stops the host, and its displays quit through their own lifecycle. A
+supervisor selected by the folder's root (classic mode and `bee start`) still
+spawns and owns its host.
+
+The desktop bridge in the Hive supervisor (`src/hive/desktop`) composes the
+folder workspace when the host selects it (`desktop.folder`, default true) and
+starts a leased supervisor for any other workspace a client attaches to, at
+most 32 at once; the workspace's last detach stops that supervisor and so
+releases its host lease. A client attaches to one workspace at a time and
+detaches before switching. `bee.desktop:list` takes `{owner_execution, label?,
+after?, limit?}` and answers `{owner_execution, desktops, workspaces, next_after?,
+default_workspace?}`: the node's display identities (default first), one page
+of active workspaces `{workspace_id, label, served}` and the folder workspace
+when the bridge composes one. `bee.desktop:create` allocates one node display
+(`{owner_execution, desktop_id}`); displays belong to the node and attach to any
+workspace.
+
+### Node modes
+
+- **Folder** (`bee`, `bee start`): the folder is the node's workspace, composed
+  and served by its own launch composition, as before.
+- **Daemon** (`bee daemon`): the node runs from the folder's state without
+  composing the folder as a workspace; it prints `BEE_DAEMON_READY NODE SEED
+  PID` and serves catalog workspaces to clients through leases. A fresh node
+  database still carries the folder's catalog row that the store migrations
+  seed; the daemon neither composes nor serves it.
+- **Client** (`bee client`, `bee observe`): joins a running node and never
+  starts one. When the node composes a folder workspace the client attaches to
+  it; otherwise it shows a workspace picker (one catalog page, `/` label
+  search, PgUp/PgDn paging, Enter to open). Ctrl+] detaches and returns to the
+  picker; Ctrl+Q leaves.
+- **Hive member**: `bee.hive.host:workspaces` is an open Hive operation that
+  pages a node's catalog (`{label?, after?, limit?}` to `{node_id, workspaces,
+  next_after?}`, each row with whether a host serves it); the Hive app lists and
+  searches the selected node's workspaces through it. A Hive display client
+  from a node the host admits (`desktop.allowed_nodes`) attaches to any of the
+  node's workspaces by identity through the bridge's lease path.
 
 ## Workspaces viewer
 
@@ -125,8 +185,8 @@ application frame. It holds one catalog page (50 rows) and the cursors back to
 earlier pages, never the whole catalog; ↑↓ past either end of a page and
 PgUp/PgDn load the neighbouring page. The Active and Archived tabs list each
 state. `/` edits the search: text is a label prefix, text starting with `/`
-a folder prefix under the node's workspace root (`bee:workspace_root`), and
-Enter runs it from its first page.
+a folder prefix under every root the host admits, and Enter runs it from its
+first page.
 
 The selected workspace's detail shows its folder, last use, creation and
 identity, whether a host serves it, the applications its checkpoint keeps

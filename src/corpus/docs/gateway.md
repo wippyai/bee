@@ -85,8 +85,9 @@ run as the subject. thread_notify resolves a session the same way and
 registers the thread owner's one-shot notice on the caller's own thread. An
 unreadable or unknown session is `NOT_FOUND`; a binding without a workspace
 has no peer sessions. See [Configurable managed MCP](../../guides/agents/mcp.md#coordinating-with-other-sessions). thread_launch starts only a
-definition named in the caller's launch-policy allow-list; its child is
-admitted through the ordinary carrier path with its own policy.
+definition named in the caller's launch-policy allow-list, in the binding's
+workspace or in a `workspace_id` the caller's scope may launch into; its child
+is admitted through the ordinary carrier path with its own policy.
 
 delivery and publish name their destination `workspace_id`; the gateway
 derives a subject's workspace only from its binding, so it refuses a request

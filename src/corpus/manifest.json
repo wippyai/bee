@@ -843,17 +843,17 @@
       "topic": "platform"
     },
     {
-      "bytes": 5708,
+      "bytes": 5888,
       "id": "docs/agent_guide",
-      "sha256": "1e54f2174b917e8757f82a695bcc2f07db75abd3f39292206755a81c41d84658",
+      "sha256": "efa681418a01f7b37132c5da9a6fc7f36c7c2f1c58b27e3e21780ea86f0695e6",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
     },
     {
-      "bytes": 7828,
+      "bytes": 7959,
       "id": "docs/system_map",
-      "sha256": "e6d98d78e61936479a43cb67947fd858f8a2370451f241d1aabc2ab6ec22a1f8",
+      "sha256": "8ad03e47a3ffffb571632f37e2b07b1d1ce2b90e45aa5cbb43e7561a5983f60c",
       "source": "docs/development/ownership.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
@@ -867,9 +867,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 9101,
+      "bytes": 9556,
       "id": "docs/mcp_configuration",
-      "sha256": "deccf7d941eeec4789bbcb9640ffb3efa9a59b3dee860cf6e88e38a2ca65619d",
+      "sha256": "8fd99862f27570bafed0b435fbc9d2ae7c7e2663bd6871c6b91fed430037b902",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -883,9 +883,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 7696,
+      "bytes": 7834,
       "id": "docs/desktop",
-      "sha256": "82b2c6850aad6756de4af0eee12607416a54515bba95b0c1c7a392f57b12809f",
+      "sha256": "d20b06928eed657391ab00b353988464949533c3e8a7284f6ad13c930e210f9f",
       "source": "docs/guides/desktop.md",
       "title": "Desktop",
       "topic": "ui"
@@ -915,9 +915,9 @@
       "topic": "application"
     },
     {
-      "bytes": 6741,
+      "bytes": 6827,
       "id": "docs/gateway",
-      "sha256": "400a15d242849b7811def2904f33a381f1fe6b893036ce0e1c88b2819ece67b7",
+      "sha256": "9b4b9b54616e070fcc0dad5136f306839fed80d4f89f192d046e8ce2e937bbba",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -971,9 +971,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 8968,
+      "bytes": 12728,
       "id": "docs/workspace_catalog",
-      "sha256": "3211a89b3896c20b3666740de65e6dd503df18eefdf6568db0bc9fcc81aab038",
+      "sha256": "1c06fcbefbd051c2d89d943fc1e0af5153c63fa178ca5f06681bce6600ec285e",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -1182,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1337788,
+    "bytes": 1342538,
     "documents": 147
   }
 }

@@ -19,6 +19,12 @@ state, the client route or the retained owner.
 command grammar and the state this invocation would use, computed from the
 launch alone, and exits 0 without selecting a project or reading state.
 
+`bee daemon` takes no arguments and runs the owner route like `bee start`, under
+the owner command `bee-daemon`, with a desktop bridge that composes no folder
+workspace (`desktop.folder = false`); it serves the node's catalog workspaces
+to clients. A client of such a node shows a workspace picker, and Ctrl+] in a
+presented desktop returns to it.
+
 Every other ordinary launch is decoded before project selection. `bee start`
 takes no arguments; `bee MODULE:ENTRY` keeps the runtime's own entry; the rest
 is the client grammar (`observe`, `client`, `attach WORKSPACE DISPLAY`,

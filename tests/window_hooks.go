@@ -283,14 +283,26 @@ func runHarness() error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 3 * time.Second
+	started := time.Now()
 	output, runErr := cmd.CombinedOutput()
+	elapsed := time.Since(started).Round(time.Millisecond)
 	outStr := string(output)
 	if strings.Contains(outStr, "Bearer ") {
 		return fmt.Errorf("credential header reached captured output")
 	}
 
 	if runErr != nil {
-		return fmt.Errorf("acceptance run on terminal host failed against %s (gateway endpoint: %s): %w\n%s", srcDir, endpoint, runErr, outStr)
+		// The exit reason distinguishes the fixture's own failure from the
+		// harness deadline killing the process group.
+		reason := runErr.Error()
+		if cmd.ProcessState != nil {
+			reason = cmd.ProcessState.String()
+		}
+		if ctx.Err() != nil {
+			reason += " (harness deadline: " + ctx.Err().Error() + ")"
+		}
+		return fmt.Errorf("acceptance run on terminal host failed against %s (gateway endpoint: %s) after %s: %s\n--- acceptance output (%d bytes) ---\n%s\n--- end acceptance output ---",
+			srcDir, endpoint, elapsed, reason, len(output), strings.TrimRight(outStr, "\n"))
 	}
 
 	if !strings.Contains(outStr, markerSuccess) {

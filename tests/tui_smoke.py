@@ -91,9 +91,11 @@ class Desktop:
                 break
         process = lookup(self.process.pid)
         state = process.state if process is not None else 'absent'
+        cpu_time = process.cpu_time if process is not None else 'absent'
         raw_tail = bytes(self.raw[-2048:])
         raise AssertionError(
-            f"Missing {text!r}; exit={self.process.poll()}; process_state={state}; "
+            f"Missing {text!r} within {timeout}s; exit={self.process.poll()}; process_state={state}; "
+            f"process_cpu_time={cpu_time}; "
             f"raw_bytes={len(self.raw)}; raw_tail={raw_tail!r}; "
             f"pending_synchronized_bytes={len(self.pending_output.encode())}\n{self.text()}")
 

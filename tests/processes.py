@@ -17,20 +17,23 @@ class Process:
     pid: int
     ppid: int
     state: str
+    # Cumulative CPU time as ps(1) prints it: [[dd-]hh:]mm:ss on Linux and
+    # mm:ss.ss on macOS.
+    cpu_time: str
     command: str
 
 
 def _ps(*selection):
     result = subprocess.run(
-        ['ps', *selection, '-ww', '-o', 'pid=,ppid=,stat=,args='],
+        ['ps', *selection, '-ww', '-o', 'pid=,ppid=,stat=,time=,args='],
         env={**os.environ, 'LC_ALL': 'C'}, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, errors='surrogateescape', check=False)
     rows = []
     for line in result.stdout.splitlines():
-        fields = line.split(None, 3)
-        if len(fields) >= 3:
-            rows.append(Process(int(fields[0]), int(fields[1]), fields[2],
-                                fields[3] if len(fields) == 4 else ''))
+        fields = line.split(None, 4)
+        if len(fields) >= 4:
+            rows.append(Process(int(fields[0]), int(fields[1]), fields[2], fields[3],
+                                fields[4] if len(fields) == 5 else ''))
     # ps -p exits 1 with no rows when the process is gone.
     if result.returncode != 0 and (rows or result.stderr.strip()):
         raise OSError(f'ps failed ({result.returncode}): {result.stderr.strip()}')

@@ -102,3 +102,12 @@ entries:
     actions: [process.registry.register, process.registry.unregister]
     resources: [bee.hive.supervisor]
     effect: allow
+- name: workspaces_test
+  kind: function.lua
+  source: file://workspaces_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry, uuid]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types

@@ -112,7 +112,7 @@ local function main(value: unknown)
         local selected = model.selected(state)
         if selected and selected.status == "reachable" then
             model.apply_stats(state, selected.node_id, source:stats(selected.node_id))
-            if state.catalogs[selected.node_id] then model.apply_catalog(state, selected.node_id, source:desktops(selected.node_id)) end
+            if state.catalogs[selected.node_id] then model.apply_catalog(state, selected.node_id, source:workspaces(selected.node_id, model.query(state, selected.node_id))) end
         end
         dirty = true
     end
@@ -127,7 +127,7 @@ local function main(value: unknown)
         local selected = model.selected(state)
         if not selected then status = "Select a node first"; dirty = true; return end
         if selected.client_only then status = "Display client; workspaces run on its Bee node"; dirty = true; return end
-        model.apply_catalog(state, selected.node_id, source:desktops(selected.node_id))
+        model.apply_catalog(state, selected.node_id, source:workspaces(selected.node_id, model.query(state, selected.node_id)))
         local current = model.selected(state)
         if current and current.node_id == selected.node_id then
             model.set_pane(state, "desktops")
@@ -144,7 +144,7 @@ local function main(value: unknown)
         dirty = true
         model.apply_outcome(state, intent, source:attach(intent))
         local selected = model.selected(state)
-        if selected then model.apply_catalog(state, selected.node_id, source:desktops(selected.node_id)) end
+        if selected then model.apply_catalog(state, selected.node_id, source:workspaces(selected.node_id, model.query(state, selected.node_id))) end
         dirty = true
     end
     -- Control and observation are explicit choices confirmed through the
@@ -210,11 +210,23 @@ local function main(value: unknown)
             local data = event.value
             if data.type == "close" then running = false
             elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+            elseif data.type == "key" and data.action ~= "release" and state.editing then
+                local key = data.key_type
+                if key == "enter" then
+                    if model.submit(state) then perform(open_selected) end
+                elseif key == "esc" or key == "escape" then model.edit(state, false)
+                elseif key == "backspace" then model.erase(state)
+                elseif type(data.key) == "string" and data.key ~= "" and (key == nil or key == "") then model.type_text(state, data.key) end
+                dirty = true
             elseif data.type == "key" and data.action ~= "release" then
                 local key = data.key_type
                 local letter = tostring(data.key or "")
                 status = ""
-                if key == "up" or letter == "k" then model.move(state, -1); dirty = true
+                if state.pane == "desktops" and (key == "pgup" or key == "pgdown") then
+                    if model.page(state, key == "pgdown" and 1 or -1) then perform(open_selected) end
+                    dirty = true
+                elseif state.pane == "desktops" and letter == "/" then model.edit(state, true); dirty = true
+                elseif key == "up" or letter == "k" then model.move(state, -1); dirty = true
                 elseif key == "down" or letter == "j" then model.move(state, 1); dirty = true
                 elseif key == "pgup" then model.move(state, -8); dirty = true
                 elseif key == "pgdown" then model.move(state, 8); dirty = true

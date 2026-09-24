@@ -35,3 +35,52 @@ entries:
       - bee.hive.desktop:host_policy
   meta:
     comment: Host-owned local Hive supervisor; a host overlay may replace input with admitted peer IDs and optional desktop configuration
+- name: workspaces
+  kind: function.lua
+  source: file://workspaces.lua
+  method: handle
+  modules: [funcs, process, system]
+  imports:
+    bounds: bee.threads.records:bounds
+  meta:
+    comment: Open Hive operation listing one page of this node's workspace catalog and which workspaces a host serves now
+    hive: open
+    hive_operation:
+      revision: '1'
+      title: Node workspaces
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          label: {type: string, minLength: 1, maxLength: 240}
+          after: {type: string, minLength: 1, maxLength: 2200}
+          limit: {type: integer, minimum: 1, maximum: 50}
+      output:
+        type: object
+        additionalProperties: false
+        required: [node_id, workspaces]
+        properties:
+          node_id: {type: string}
+          next_after: {type: string}
+          workspaces:
+            type: array
+            maxItems: 50
+            items:
+              type: object
+              additionalProperties: false
+              required: [workspace_id, label, served]
+              properties:
+                workspace_id: {type: string}
+                label: {type: string}
+                served: {type: boolean}
+  security:
+    policies: [bee:hive_telemetry_policy, bee:workspace_catalog_read_policy, bee.hive.host:workspaces_policy]
+- name: workspaces_policy
+  kind: security.policy.expr
+  meta:
+    comment: The workspaces operation reads the catalog through its owner operations and looks up which workspaces a host serves
+  policy:
+    actions: [funcs.call, process.registry.lookup]
+    resources: '*'
+    expression: '(action == "funcs.call" && (resource == "bee.workspace.catalog:list" || resource == "bee.workspace.catalog:search")) || (action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]{32}$")'
+    effect: allow

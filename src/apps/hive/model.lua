@@ -24,12 +24,16 @@ type Node = {node_id: string, label: string, client_only: boolean, is_local: boo
 type Session = {session_id: string, mode: string}
 type NodeSessions = {owner_generation: string, desktops: {[string]: Session}}
 type Pane = "nodes" | "desktops"
+-- Where a node's workspace listing stands: its label search, the page cursor
+-- and the cursors back to earlier pages. One page is held, never the list.
+type Listing = {label: string, after: string?, back: {string}}
 type Hive = "unknown" | "running" | "unavailable"
 type State = {
     hive: Hive, hive_detail: string, membership_detail: string, generation: integer,
     nodes: {Node}, index: {[string]: Node}, names: {[string]: string}, catalogs: {[string]: Catalog},
     selected_node: string?, selected_desktop: string?, wanted_node: string?, wanted_desktop: string?,
     pane: Pane, pending: Attach?, outcome: string, sessions: {[string]: NodeSessions}, technical: boolean,
+    listings: {[string]: Listing}, editing: boolean, search: string,
 }
 type Object = {[string]: unknown}
 function M.text(value: unknown, limit: integer?): string
@@ -53,7 +57,7 @@ end
 function M.new(names: {[string]: string}): State
     return {hive = "unknown", hive_detail = "", membership_detail = "", generation = 0,
         nodes = {}, index = {}, names = names, catalogs = {}, selected_node = nil, selected_desktop = nil, wanted_node = nil, wanted_desktop = nil, pane = "nodes",
-        pending = nil, outcome = "", sessions = {}, technical = false}
+        pending = nil, outcome = "", sessions = {}, technical = false, listings = {}, editing = false, search = ""}
 end
 function M.desktop_key(workspace_id: string, desktop_id: string): string
     return workspace_id .. "\0" .. desktop_id
@@ -73,6 +77,7 @@ local function remove_node(state: State, index: integer)
     local removed = table.remove(state.nodes, index)
     state.index[removed.node_id] = nil
     state.catalogs[removed.node_id] = nil
+    state.listings[removed.node_id] = nil
     state.sessions[removed.node_id] = nil
     if state.selected_node == removed.node_id then
         state.selected_node = nil
@@ -397,6 +402,70 @@ function M.apply_outcome(state: State, intent: Attach, outcome: Outcome)
     else
         state.outcome = M.text(outcome.code .. ": " .. outcome.message)
     end
+end
+M.SEARCH_LIMIT = 120
+local function listing(state: State, node_id: string): Listing
+    local current = state.listings[node_id]
+    if not current then
+        current = {label = "", after = nil, back = {}}
+        state.listings[node_id] = current
+    end
+    return current
+end
+-- The page of a node's workspaces to ask for next.
+function M.query(state: State, node_id: string): directory.Query
+    local current = listing(state, node_id)
+    return {label = current.label ~= "" and current.label or nil, after = current.after}
+end
+function M.page_number(state: State, node_id: string): integer
+    local current = state.listings[node_id]
+    return current and #current.back + 1 or 1
+end
+-- Move the selected node's listing one page forward or back; true when the
+-- page changed and must be read.
+function M.page(state: State, step: integer): boolean
+    local node = state.selected_node
+    if not node then return false end
+    local current = listing(state, node)
+    if step > 0 then
+        local catalog = state.catalogs[node]
+        local next_after = catalog and catalog.available and catalog.next_after
+        if not next_after then return false end
+        current.back[#current.back + 1] = current.after or ""
+        current.after = next_after
+    else
+        if #current.back == 0 then return false end
+        local previous = current.back[#current.back]
+        current.back[#current.back] = nil
+        current.after = previous ~= "" and previous or nil
+    end
+    state.selected_desktop = nil
+    return true
+end
+-- Search edits a label prefix for the selected node's workspaces; running it
+-- starts from the first page.
+function M.edit(state: State, editing: boolean)
+    state.editing = editing
+    if editing then
+        local node = state.selected_node
+        state.search = node and listing(state, node).label or ""
+    end
+end
+function M.type_text(state: State, value: string)
+    if value:find("%c") or #state.search + #value > M.SEARCH_LIMIT then return end
+    state.search = state.search .. value
+end
+function M.erase(state: State)
+    if state.search == "" then return end
+    state.search = state.search:sub(1, #state.search - 1)
+end
+function M.submit(state: State): boolean
+    state.editing = false
+    local node = state.selected_node
+    if not node then return false end
+    state.listings[node] = {label = state.search, after = nil, back = {}}
+    state.selected_desktop = nil
+    return true
 end
 function M.checkpoint(state: State): string
     return json.encode({selected_node = state.selected_node, selected_desktop = state.selected_desktop, technical = state.technical}) or "{}"

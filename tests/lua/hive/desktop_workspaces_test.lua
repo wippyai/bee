@@ -158,6 +158,20 @@ local function define_tests()
             end
             close(h)
         end)
+        test.it("attaches a Hive display client from an admitted node to a workspace by identity", function()
+            local h = harness("remote")
+            -- The client's node is admitted by the host grant, not local enrollment.
+            local node = types.pid_parts(h.standin)
+            if not node then error("stand-in has no node") end
+            h.state.enrolled = {}
+            h.state.config.local_clients = false
+            h.state.config.allowed_nodes = {node}
+            h.state.allowed = {[node] = true}
+            local attached = attach_leased(h)
+            test.is_true(attached.ok)
+            test.eq((attached.value :: Object).workspace_id, LEASED)
+            close(h)
+        end)
         test.it("refuses to switch workspaces without a detach", function()
             local h = harness("switch")
             local attached = attach_leased(h)

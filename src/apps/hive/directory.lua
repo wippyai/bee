@@ -10,17 +10,24 @@ M.PRESENCE = "bee.hive.telemetry:presence"
 M.STATS = "bee.hive.telemetry:stats"
 M.MAX_NODES = 64
 M.MAX_DESKTOPS = 64
+-- One page of a node's workspaces, and its cursor bound.
+M.PAGE = 50
+M.MAX_CURSOR_BYTES = 2200
+M.WORKSPACES = "bee.hive.host:workspaces"
 M.MAX_ADDRESS_BYTES = 200
 M.MAX_LABEL_BYTES = 120
 M.ATTACH_UNAVAILABLE = "Connecting from Hive Manager is not available yet"
 type Reply = types.Reply
 type Member = {node_id: string, is_local: boolean, addr: string, client_only: boolean?}
-type Desktop = {workspace_id: string, desktop_id: string, label: string, controller: string?, observers: integer?}
+type Desktop = {workspace_id: string, desktop_id: string, label: string, controller: string?, observers: integer?, served: boolean?}
 -- A catalog carries the owner generation it was read under; an attach names
 -- that generation and its own idempotency identity, so a stale catalog
 -- never attaches to a replacement desktop and an ambiguous outcome is
 -- recovered by replaying the same request, never by a second one.
-type Catalog = {available: boolean, reason: string, owner_generation: string, desktops: {Desktop}}
+-- next_after continues a node's workspace listing.
+type Catalog = {available: boolean, reason: string, owner_generation: string, desktops: {Desktop}, next_after: string?}
+-- A page of a node's workspaces: a label prefix and a cursor.
+type Query = {label: string?, after: string?}
 type Mode = "control" | "observe"
 type Attach = {node_id: string, workspace_id: string, desktop_id: string, owner_generation: string, mode: Mode, idempotency_key: string}
 type Outcome = {ok: boolean, code: string, message: string, session_id: string?, mode: string?}
@@ -30,7 +37,7 @@ type Directory = {
     members: (Directory) -> ({Member}, string?),
     presence: (Directory, string) -> Reply,
     stats: (Directory, string) -> Reply,
-    desktops: (Directory, string) -> Catalog,
+    workspaces: (Directory, string, Query) -> Catalog,
     attach: (Directory, Attach) -> Outcome,
 }
 type Call = (types.OwnerRef, types.Target, {[string]: unknown}, {timeout: string?}) -> Reply
@@ -41,7 +48,7 @@ local function refused(code: string, message: string): Outcome
     return {ok = false, code = code, message = message}
 end
 local function unavailable(reason: string): Catalog
-    return {available = false, reason = reason, owner_generation = "", desktops = {}}
+    return {available = false, reason = reason, owner_generation = "", desktops = {}, next_after = nil}
 end
 local function decode_member(value: unknown): Member?
     local object = bounds.object(value)
@@ -100,41 +107,34 @@ local function identity(value: unknown): string?
     if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
     return value
 end
--- The owner lists the node's displays and one page of its workspaces; a
--- workspace is offered on the node's default display.
-function M.decode_desktops(value: unknown): Catalog
-    local invalid = "Display catalog reply is malformed"
+-- One page of a node's workspaces as the node answers its open workspaces
+-- operation. A workspace is listed by identity; a display is chosen when a
+-- client attaches to it.
+function M.decode_workspaces(value: unknown): Catalog
+    local invalid = "Workspace catalog reply is malformed"
     local object = bounds.object(value)
-    if not object or bounds.fields(object, {"owner_execution", "desktops", "workspaces", "next_after", "default_workspace"}) then return unavailable(invalid) end
-    local execution = identity(object.owner_execution)
-    local displays = dense(object.desktops, 33)
-    local workspaces = dense(object.workspaces, M.MAX_DESKTOPS)
-    if not execution then return unavailable(invalid) end
-    local generation: string = execution
-    if not displays or #displays == 0 or not workspaces then return unavailable(invalid) end
-    local default_display: string? = nil
-    local seen_displays: {[string]: boolean} = {}
-    for index, raw in ipairs(displays) do
-        local item = bounds.object(raw)
-        if not item or bounds.fields(item, {"desktop_id", "is_default"}) then return unavailable(invalid) end
-        local display = identity(item.desktop_id)
-        if not display or seen_displays[display] or item.is_default ~= (index == 1) then return unavailable(invalid) end
-        seen_displays[display] = true
-        if index == 1 then default_display = display end
+    if not object or bounds.fields(object, {"node_id", "workspaces", "next_after"}) then return unavailable(invalid) end
+    local node = bounds.line(object.node_id, M.MAX_ADDRESS_BYTES)
+    local rows = dense(object.workspaces, M.PAGE)
+    if not node or not rows then return unavailable(invalid) end
+    local generation: string = node
+    local next_after: string? = nil
+    if object.next_after ~= nil then
+        next_after = bounds.line(object.next_after, M.MAX_CURSOR_BYTES)
+        if not next_after or next_after == "" then return unavailable(invalid) end
     end
-    if not default_display then return unavailable(invalid) end
     local desktops: {Desktop} = {}
     local seen: {[string]: boolean} = {}
-    for _, raw in ipairs(workspaces) do
+    for _, raw in ipairs(rows) do
         local workspace = bounds.object(raw)
         if not workspace or bounds.fields(workspace, {"workspace_id", "label", "served"}) then return unavailable(invalid) end
         local id = identity(workspace.workspace_id)
         local label = bounds.line(workspace.label, M.MAX_LABEL_BYTES)
         if not id or seen[id] or not label or type(workspace.served) ~= "boolean" then return unavailable(invalid) end
         seen[id] = true
-        desktops[#desktops + 1] = {workspace_id = id, desktop_id = default_display, label = label}
+        desktops[#desktops + 1] = {workspace_id = id, desktop_id = "", label = label, served = workspace.served == true}
     end
-    return {available = true, reason = "", owner_generation = generation, desktops = desktops}
+    return {available = true, reason = "", owner_generation = generation, desktops = desktops, next_after = next_after}
 end
 function M.live(live: Live): Directory
     local function supervisor(_: Directory): Supervisor
@@ -150,15 +150,18 @@ function M.live(live: Live): Directory
     end
     local function presence(_: Directory, node_id: string): Reply return ask(node_id, M.PRESENCE) end
     local function stats(_: Directory, node_id: string): Reply return ask(node_id, M.STATS) end
-    local function desktops(_: Directory, node: string): Catalog
-        local reply = live.call({node_id = node, service_id = "bee.desktop"}, {operation_ref = "bee.desktop:catalog"}, {}, {timeout = live.timeout})
+    local function workspaces(_: Directory, node: string, query: Query): Catalog
+        local input: {[string]: unknown} = {limit = M.PAGE}
+        if query.label then input.label = query.label end
+        if query.after then input.after = query.after end
+        local reply = live.call({node_id = node, service_id = "bee.hive.host"}, {operation_ref = M.WORKSPACES}, input, {timeout = live.timeout})
         if not reply.ok then
             local fault = reply.error
-            return unavailable(fault and (fault.code .. ": " .. fault.message) or "Display catalog unavailable")
+            return unavailable(fault and (fault.code .. ": " .. fault.message) or "Workspace catalog unavailable")
         end
-        return M.decode_desktops(reply.value)
+        return M.decode_workspaces(reply.value)
     end
     local function attach(_: Directory, _request: Attach): Outcome return refused("UNSUPPORTED_CAPABILITY", M.ATTACH_UNAVAILABLE) end
-    return {supervisor = supervisor, members = members, presence = presence, stats = stats, desktops = desktops, attach = attach}
+    return {supervisor = supervisor, members = members, presence = presence, stats = stats, workspaces = workspaces, attach = attach}
 end
 return M

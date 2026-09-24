@@ -26,7 +26,7 @@ local function bytes(value: integer?): string
         return string.format("%.1f MiB", mib)
     end
 end
-local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "Tab", verb = "desktops"},
+local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "Tab", verb = "workspaces"},
     {key = "C", verb = "control"}, {key = "O", verb = "observe"}, {key = "R", verb = "refresh"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string): Frame
     local painter = frame.new(width, height, preferences)
@@ -91,19 +91,28 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             head = head .. "  heap " .. bytes(selected.heap) .. "  goroutines " .. (selected.goroutines and tostring(selected.goroutines) or "-")
             if catalog and catalog.owner_generation ~= "" then head = head .. "  owner generation " .. catalog.owner_generation end
         end
+        if catalog and catalog.available and not selected.client_only then
+            head = head .. "  ·  Page " .. tostring(model.page_number(state, selected.node_id)) .. (catalog.next_after and " · more" or "")
+            if state.pane == "desktops" and not state.editing then head = head .. "  ·  / search · PgUp/PgDn page" end
+        end
+        if state.editing then head = head .. "  ·  Search: " .. model.text(state.search, 60) .. "▏"
+        elseif not selected.client_only then
+            local query = model.query(state, selected.node_id)
+            if query.label then head = head .. "  ·  Search: " .. model.text(query.label, 60) end
+        end
         lines[#lines + 1] = head
         line_keys[#line_keys + 1] = ""
         if selected.client_only then
             lines[#lines + 1] = "Display client · no Bee service on this node"
             line_keys[#line_keys + 1] = ""
         elseif not catalog then
-            lines[#lines + 1] = "Open the node to list its desktops"
+            lines[#lines + 1] = "Open the node to list its workspaces"
             line_keys[#line_keys + 1] = ""
         elseif not catalog.available then
-            lines[#lines + 1] = "Desktops unavailable: " .. catalog.reason
+            lines[#lines + 1] = "Workspaces unavailable: " .. catalog.reason
             line_keys[#line_keys + 1] = ""
         elseif #catalog.desktops == 0 then
-            lines[#lines + 1] = "No desktops on this node"
+            lines[#lines + 1] = "No workspaces match on this node"
             line_keys[#line_keys + 1] = ""
         else
             local workspace_ids: {string} = {}
@@ -126,11 +135,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 local key = model.desktop_key(desktop.workspace_id, desktop.desktop_id)
                 local session = model.session(state, selected.node_id, desktop.workspace_id, desktop.desktop_id)
                 local workspace_label = workspace_labels[desktop.workspace_id] or names.label(desktop.workspace_id)
-                local display_label = desktop.label ~= "" and desktop.label or (display_labels[desktop.desktop_id] or names.label(desktop.desktop_id))
-                local item = display_label .. "  workspace " .. workspace_label
-                if desktop.controller == nil then item = item .. "  controller unknown"
-                elseif desktop.controller ~= "" then item = item .. "  controlled by " .. desktop.controller
-                else item = item .. "  available to control" end
+                local item = desktop.label ~= "" and desktop.label or workspace_label
+                if desktop.desktop_id ~= "" then item = item .. "  display " .. (display_labels[desktop.desktop_id] or names.label(desktop.desktop_id)) end
+                if desktop.served ~= nil then item = item .. (desktop.served and "  served" or "  not served") end
+                if desktop.controller ~= nil and desktop.controller ~= "" then item = item .. "  controlled by " .. desktop.controller end
                 if desktop.observers ~= nil and desktop.observers > 0 then item = item .. "  observers " .. tostring(desktop.observers) end
                 if session then
                     item = item .. "  your " .. session.mode .. " session"

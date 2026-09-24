@@ -51,6 +51,7 @@ case "$(uname -m)" in
     aarch64|arm64) architecture=arm64 ;;
     *) fail 'supported architectures: amd64 and arm64' ;;
 esac
+[ "$platform/$architecture" != darwin/amd64 ] || fail 'this release ships macOS builds for Apple silicon only'
 command -v curl >/dev/null 2>&1 || fail 'curl is required'
 command -v tar >/dev/null 2>&1 || fail 'tar is required'
 if command -v sha256sum >/dev/null 2>&1; then

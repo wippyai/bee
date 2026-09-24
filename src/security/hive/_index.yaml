@@ -203,3 +203,33 @@ entries:
     - bee.hive.join:peers
     - bee.hive.join:redeem
     effect: allow
+- name: workspace_command_policy
+  kind: security.policy
+  meta:
+    comment: Selected by the host for its Hive supervisor to run the bee workspace commands of enrolled local clients through their worker; without it every workspace command is refused
+  policy:
+    actions:
+    - funcs.call
+    - bee.workspaces.command
+    resources:
+    - bee.hive.supervisor:workspace_command
+    - bee.workspace:create
+    - bee.workspace:list
+    - bee.workspace:archive
+    - bee.workspace:restore
+    - bee.workspace:roots
+    effect: allow
+- name: workspace_command_catalog_policy
+  kind: security.policy
+  meta:
+    comment: Attached to the workspace command worker; the catalog still authorizes each operation under the catalog policies the host attaches beside it
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.workspace.catalog:create
+    - bee.workspace.catalog:list
+    - bee.workspace.catalog:archive
+    - bee.workspace.catalog:restore
+    - bee.workspace.catalog:roots
+    effect: allow

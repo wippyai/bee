@@ -49,6 +49,25 @@ entries:
     desktop_owner: bee.hive.desktop:owner
     desktop_protocol: bee.hive.desktop:protocol
     catalog: bee.hive.registry:catalog
+    workspace_commands: bee.hive.supervisor:workspace_commands
+- name: workspace_commands
+  kind: library.lua
+  source: file://workspace_commands.lua
+  imports:
+    bounds: bee.hive:bounds
+    types: bee.hive:types
+- name: workspace_command
+  kind: function.lua
+  source: file://workspace_command.lua
+  method: handle
+  modules: [funcs, security]
+  meta:
+    comment: Runs one bee workspace command of an enrolled local client under the catalog grants the host attaches here
+  security: {policies: [bee:workspace_catalog_read_policy, bee:workspace_catalog_manage_policy, bee:workspace_command_catalog_policy]}
+  imports:
+    bounds: bee.hive:bounds
+    types: bee.hive:types
+    commands: bee.hive.supervisor:workspace_commands
 - name: advertise
   kind: function.lua
   source: file://advertise_method.lua

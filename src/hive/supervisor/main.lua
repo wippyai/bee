@@ -24,6 +24,7 @@ local replica_admission = require("replica_admission")
 local catalog = require("catalog")
 local desktop_owner = require("desktop_owner")
 local desktop_protocol = require("desktop_protocol")
+local workspace_commands = require("workspace_commands")
 local MAX_ROUTES = 64
 local MAX_EXECUTIONS = 8
 local MAX_CALLER_ROUTES = 8
@@ -276,6 +277,53 @@ local function main(configuration: unknown)
             send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {invite_id = redeemed.invite_id, node_id = input.node_id}))
         end
     end
+    -- command runs one bee workspace command of an enrolled local client on
+    -- its worker, as a route: the loop owns its deadline and correlation, and
+    -- a command past its deadline is answered as an unknown outcome.
+    local function command(sender: string, call: types.Call, value: unknown, now_ms: integer)
+        local sender_node, sender_host = types.pid_parts(sender)
+        if sender_host == desktop_protocol.CLIENT_HOST and sender_node and not local_clients[sender_node] then reconcile_enrollment(now_ms) end
+        if sender_host ~= desktop_protocol.CLIENT_HOST or not sender_node or not local_clients[sender_node] then
+            failed(sender, call.request_id, "DENIED", "workspace commands require an enrolled local client"); return
+        end
+        local operation, refusal = workspace_commands.target(call, node)
+        if not operation then
+            failed(sender, call.request_id, refusal and refusal.code or "INVALID_ARGUMENT", refusal and refusal.message or "invalid workspace command")
+            return
+        end
+        if not security.can(workspace_commands.ACTION, operation) then
+            failed(sender, call.request_id, "DENIED", "the host did not grant workspace commands"); return
+        end
+        local fingerprint = types.digest(value)
+        if not fingerprint then failed(sender, call.request_id, "INVALID_ARGUMENT", "request is not measurable"); return end
+        local origin = sender .. "\0" .. call.request_id
+        local existing_id = origins[origin]
+        if existing_id then
+            if routes[existing_id].fingerprint ~= fingerprint then
+                failed(sender, call.request_id, "CONFLICT", "request id is already pending with different input")
+            end
+            return
+        end
+        if route_count >= MAX_ROUTES then failed(sender, call.request_id, "BUSY", "supervisor request capacity reached"); return end
+        if (caller_routes[sender] or 0) >= MAX_CALLER_ROUTES then failed(sender, call.request_id, "BUSY", "caller request capacity reached"); return end
+        if execution_count >= MAX_EXECUTIONS then failed(sender, call.request_id, "BUSY", "operation capacity reached"); return end
+        local deadline = call.deadline and time.parse(FORMAT, call.deadline)
+        if not deadline then failed(sender, call.request_id, "INVALID_ARGUMENT", "a workspace command needs a deadline"); return end
+        local remaining = math.floor(deadline:sub(time.now()):milliseconds())
+        if remaining <= 0 then failed(sender, call.request_id, "DEADLINE_EXCEEDED", "workspace command deadline has passed"); return end
+        if remaining > workspace_commands.MAX_MS then remaining = workspace_commands.MAX_MS end
+        local exchange_id = nonce()
+        local future, err = funcs.async(workspace_commands.WORKER, {request_id = exchange_id, operation = operation,
+            idempotency_key = call.idempotency_key, input = call.input})
+        if not future or err then failed(sender, call.request_id, "UNAVAILABLE", "workspace command dispatch unavailable"); return end
+        local route: Route = {id = exchange_id, original_id = call.request_id, recipient = sender, origin = origin, fingerprint = fingerprint,
+            operation_ref = operation, idempotency_key = call.idempotency_key, expires_at = now_ms + remaining, abandoned = false,
+            future = future, response = future:response()}
+        routes[exchange_id], origins[origin] = route, exchange_id
+        route_count = route_count + 1
+        execution_count = execution_count + 1
+        caller_routes[sender] = (caller_routes[sender] or 0) + 1
+    end
     local function admit(message: process.Message)
         if desktop and desktop_owner.client_host(message) and not desktop_owner.handles(desktop, message) then
             reconcile_enrollment(elapsed())
@@ -283,6 +331,10 @@ local function main(configuration: unknown)
         local join_call = types.decode_call(message:payload():data())
         if join_call and join_call.owner_ref.service_id == invites.SERVICE then
             join(tostring(message:from()), join_call, elapsed())
+            return
+        end
+        if join_call and join_call.owner_ref.service_id == workspace_commands.SERVICE then
+            command(tostring(message:from()), join_call, message:payload():data(), elapsed())
             return
         end
         if desktop and desktop_owner.handles(desktop, message) then

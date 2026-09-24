@@ -113,3 +113,13 @@ entries:
     types: bee.hive:types
     store: bee.storage:store
     binding: bee.storage:binding
+- name: workspace_commands_test
+  kind: function.lua
+  source: file://workspace_commands_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry, time]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    commands: bee.hive.supervisor:workspace_commands

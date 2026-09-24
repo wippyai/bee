@@ -9,6 +9,7 @@ local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
 local agent_launch = require("agent_launch")
+local agent_protocol = require("agent_protocol")
 local definitions = require("definitions")
 local M = {}
 M.START = "bee.harness.launch:start"
@@ -62,7 +63,7 @@ function M.executor(requested: string?, bound: string?): (funcs.Executor?, Fault
     if not scoped then return nil, {code = "DENIED", message = tostring(executor_error or "the agent launch scope is denied")} end
     return scoped, nil
 end
-function M.start(caller: Caller, request: agent_launch.Request, definition: definitions.Definition): Reply
+function M.start(caller: Caller, request: agent_protocol.Launch, definition: definitions.Definition): Reply
     if definition.default_mode == "window" then
         return fail("LAUNCH_MODE_UNSUPPORTED", "a window definition has no agent-launch carrier; launch a session or batch definition")
     end

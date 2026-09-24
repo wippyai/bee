@@ -1,8 +1,9 @@
 -- MIT. Test-only caller of the application agents library: it runs as the
 -- actor and scope the suite calls it with, as an application process would.
 local agents = require("agents")
+local agent_protocol = require("agent_protocol")
 local function handle(request: {[string]: unknown}): {[string]: unknown}
-    local launch = request.launch :: agents.Launch
+    local launch = request.launch :: agent_protocol.Launch
     local run, fault = agents.launch(launch)
     if not run then return {ok = false, error = fault} end
     if request.cancel == true then

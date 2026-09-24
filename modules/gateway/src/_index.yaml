@@ -221,6 +221,7 @@ entries:
     bounds: bee.threads.records:bounds
     message: bee.threads.records:message
     arguments: bee.application:arguments
+    agent_protocol: bee.application:agent_protocol
     workspace_protocol: bee.governance:workspace_protocol
     delivery_protocol: bee.governance:delivery_protocol
     docs_protocol: bee.docs:protocol

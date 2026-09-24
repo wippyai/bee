@@ -8,6 +8,7 @@
 local ctx = require("ctx")
 local bounds = require("bounds")
 local agent_launch = require("agent_launch")
+local agent_protocol = require("agent_protocol")
 local policy = require("policy")
 local definitions = require("definitions")
 local caller_launch = require("caller_launch")
@@ -53,7 +54,7 @@ local function handle(raw: unknown): Reply
         if not view_id or not instance_id then return fail("UNAUTHENTICATED", "the binding has an invalid origin view") end
         origin_view = {view_id = view_id, instance_id = instance_id}
     end
-    local request, invalid = agent_launch.decode_request(raw)
+    local request, invalid = agent_protocol.decode(raw)
     if not request then return fail("INVALID", invalid or "invalid launch request") end
     -- The allow-list is the host-selected launch policy the caller's own
     -- attempt was admitted under. A definition it does not name is refused by

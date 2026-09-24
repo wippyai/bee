@@ -30,12 +30,18 @@ entries:
 - name: caller
   kind: library.lua
   source: file://caller.lua
+- name: agent_protocol
+  kind: library.lua
+  source: file://agent_protocol.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: agents
   kind: library.lua
   source: file://agents.lua
   modules: [funcs, time]
   imports:
     caller: bee.application:caller
+    agent_protocol: bee.application:agent_protocol
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua

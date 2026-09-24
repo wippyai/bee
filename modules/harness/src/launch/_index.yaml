@@ -86,16 +86,16 @@ entries:
   method: handle
   modules: [ctx]
   imports:
+    agent_protocol: bee.application:agent_protocol
     bounds: bee.threads.records:bounds
-    agent_launch: bee.harness.launch:agent_launch
     caller_launch: bee.harness.launch:caller_launch
   meta:
     type: tool
     title: Launch a managed agent
     llm_alias: BeeThreadLaunch
-    llm_description: Start one allow-listed managed agent launch in your own workspace, or in workspace_id when your host lets you launch there, hand it a brief, and get back the child's thread, action and attempt so you can thread_read, thread_message and thread_wait on it. The child receives exactly its own launch policy's gateway tools and holds its workspace's host while it runs. It mints no grant, credential, trait or overlay authority.
+    llm_description: Start one allow-listed managed agent, in your own workspace or in workspace_id when your host lets you launch there, hand it a brief, and get back the child's thread, action and attempt so you can thread_read, thread_message, thread_notify and thread_wait on it. By default it joins your thread; thread names an existing thread you belong to (thread_id) or a new one (title); workdir names a workspace resource (resource) or a folder under a root the host admits (root_ref, path); placement is native or docker; a saved profile selects preferences for its definition. Each choice is refused unless the definition and its launch policy allow it. The child receives exactly its own launch policy's gateway tools and holds its workspace's host while it runs. It mints no grant, credential, trait or overlay authority.
     input_schema: |
-      {"type":"object","additionalProperties":false,"required":["definition_ref","brief","idempotency_key"],"properties":{"definition_ref":{"type":"string","minLength":1,"maxLength":160},"brief":{"type":"string","minLength":1,"maxLength":16384},"idempotency_key":{"type":"string","minLength":1,"maxLength":64},"workspace_id":{"type":"string","minLength":32,"maxLength":32}}}
+      {"type":"object","additionalProperties":false,"required":["definition_ref","brief","idempotency_key"],"properties":{"definition_ref":{"type":"string","minLength":1,"maxLength":160},"brief":{"type":"string","minLength":1,"maxLength":16384},"idempotency_key":{"type":"string","minLength":1,"maxLength":64},"workspace_id":{"type":"string","minLength":32,"maxLength":32},"saved_profile_id":{"type":"string","minLength":1,"maxLength":160},"saved_profile_revision":{"type":"integer","minimum":1},"workdir":{"type":"object","additionalProperties":false,"properties":{"resource":{"type":"string","minLength":1,"maxLength":160},"root_ref":{"type":"string","minLength":1,"maxLength":160},"path":{"type":"string","maxLength":1024}}},"thread":{"type":"object","additionalProperties":false,"properties":{"thread_id":{"type":"string","minLength":1,"maxLength":160},"title":{"type":"string","minLength":1,"maxLength":512}}},"placement":{"type":"string","enum":["native","docker"]}}}
   security:
     policies: [bee.harness.launch:agent_launch_facade_policy]
 - name: caller_launch
@@ -103,6 +103,7 @@ entries:
   source: file://caller_launch.lua
   modules: [funcs, security]
   imports:
+    agent_protocol: bee.application:agent_protocol
     bounds: bee.threads.records:bounds
     agent_launch: bee.harness.launch:agent_launch
     definitions: bee.harness.launch:definitions
@@ -112,6 +113,7 @@ entries:
   method: handle
   modules: [ctx]
   imports:
+    agent_protocol: bee.application:agent_protocol
     bounds: bee.threads.records:bounds
     agent_launch: bee.harness.launch:agent_launch
     policy: bee.harness.carrier:policy
@@ -125,6 +127,7 @@ entries:
   method: handle
   modules: [security]
   imports:
+    agent_protocol: bee.application:agent_protocol
     bounds: bee.threads.records:bounds
     agent_launch: bee.harness.launch:agent_launch
     caller_launch: bee.harness.launch:caller_launch
@@ -138,6 +141,7 @@ entries:
   method: handle
   modules: [funcs, security, registry]
   imports:
+    agent_protocol: bee.application:agent_protocol
     bounds: bee.threads.records:bounds
     agent_launch: bee.harness.launch:agent_launch
     definitions: bee.harness.launch:definitions

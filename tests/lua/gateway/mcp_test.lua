@@ -49,6 +49,26 @@ local function define_tests()
             local _, malformed = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", workspace_id = "Other"}})
             test.eq(malformed, "workspace_id must be a workspace identity")
         end)
+        test.it("carries working directory, thread, placement and saved profile choices into a launch", function()
+            local chosen = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k",
+                workdir = {root_ref = "bee:workspace_root", path = "legacy/app"}, thread = {title = "Scan"}, placement = "native",
+                saved_profile_id = "p", saved_profile_revision = 1}})
+            if not chosen then error("launch arguments") end
+            test.eq((chosen.workdir :: Object).path, "legacy/app")
+            test.eq((chosen.thread :: Object).title, "Scan")
+            test.eq(chosen.placement, "native")
+            local _, both = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", thread = {thread_id = "t", title = "x"}}})
+            test.eq(both, "thread names either a thread_id or a title")
+            local _, escaping = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", workdir = {root_ref = "r", path = "../x"}}})
+            test.eq(escaping, "workdir.path: subpath has an invalid segment")
+            local _, placement = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", placement = "vm"}})
+            test.eq(placement, "placement must be native or docker")
+            local tool = mcp.tool("thread_launch")
+            if not tool then error("thread_launch tool") end
+            local properties = tool.schema.properties :: Object
+            for _, name in ipairs({"workspace_id", "workdir", "thread", "placement", "saved_profile_id", "saved_profile_revision"}) do test.not_nil(properties[name]) end
+            test.is_true(tool.description:find("PLACEMENT_UNAVAILABLE", 1, true) ~= nil)
+        end)
         test.it("decodes one strict JSON-RPC request and refuses the rest", function()
             local call = mcp.decode({jsonrpc = "2.0", id = 7, method = "tools/list"})
             if not call then error("decode") end

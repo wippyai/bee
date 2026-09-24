@@ -9,6 +9,7 @@
 local security = require("security")
 local bounds = require("bounds")
 local agent_launch = require("agent_launch")
+local agent_protocol = require("agent_protocol")
 local caller_launch = require("caller_launch")
 local BACKEND = "bee.harness.launch:agent_call_backend"
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
@@ -27,7 +28,7 @@ local function handle(raw: unknown): Reply
         for key, value in pairs(object) do
             if key ~= "operation" then body[key] = value end
         end
-        local request, invalid = agent_launch.decode_request(body)
+        local request, invalid = agent_protocol.decode(body)
         if not request then return fail("INVALID", invalid or "invalid launch request") end
         if not security.can(agent_launch.APPLICATION_ACTION, request.definition_ref) then
             return fail("LAUNCH_NOT_PERMITTED", "this application may not launch " .. request.definition_ref)

@@ -6,12 +6,12 @@
 -- scope; the launch then runs as the same actor bound to that workspace.
 local ctx = require("ctx")
 local bounds = require("bounds")
-local agent_launch = require("agent_launch")
+local agent_protocol = require("agent_protocol")
 local caller_launch = require("caller_launch")
 local BACKEND = "bee.harness.launch:agent_launch_backend"
 local BINDING_KEY = "bee.gateway.binding"
 local function handle(raw: unknown): {[string]: unknown}
-    local request, invalid = agent_launch.decode_request(raw)
+    local request, invalid = agent_protocol.decode(raw)
     if not request then return {ok = false, error = {code = "INVALID", message = invalid or "invalid launch request"}} end
     local attribution = bounds.object((ctx.get(BINDING_KEY)))
     local bound = attribution and bounds.id(attribution.workspace_id)

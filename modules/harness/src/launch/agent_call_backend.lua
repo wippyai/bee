@@ -10,6 +10,7 @@ local security = require("security")
 local registry = require("registry")
 local bounds = require("bounds")
 local agent_launch = require("agent_launch")
+local agent_protocol = require("agent_protocol")
 local definitions = require("definitions")
 local caller_launch = require("caller_launch")
 local placement_resolver = require("placement_resolver")
@@ -63,7 +64,7 @@ local function launch(body: {[string]: unknown}): Reply
     local identity = current and bounds.id(current:id())
     local workspace_id = current and bounds.id(current:meta().workspace_id)
     if not identity or not workspace_id then return fail("UNAUTHENTICATED", "the call is not bound to a workspace") end
-    local request, invalid = agent_launch.decode_request(body)
+    local request, invalid = agent_protocol.decode(body)
     if not request then return fail("INVALID", invalid or "invalid launch request") end
     local definition, definition_error = definitions.load(request.definition_ref)
     if not definition then return fail("NOT_FOUND", definition_error or "the launch definition is unavailable") end

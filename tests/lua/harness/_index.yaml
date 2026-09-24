@@ -843,6 +843,7 @@ entries:
   imports:
     test: wippy.test:test
     agent_launch: bee.harness.launch:agent_launch
+    agent_protocol: bee.application:agent_protocol
     record: bee.threads.records:record
 - name: launch_client_policy
   kind: security.policy
@@ -859,6 +860,7 @@ entries:
   meta: {type: test_support}
   imports:
     agents: bee.application:agents
+    agent_protocol: bee.application:agent_protocol
 - name: agents_probe_policy
   kind: security.policy
   meta: {type: test_support, comment: Lets the suite call the agents library probe as an application}

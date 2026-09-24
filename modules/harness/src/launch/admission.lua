@@ -20,6 +20,7 @@ local placement_resolver = require("placement_resolver")
 local continuation = require("continuation")
 local interrupted = require("interrupted")
 local profiles = require("profiles")
+local agent_protocol = require("agent_protocol")
 local M = {}
 M.CARRIER = "bee.harness.carrier:process"
 M.CARRIER_HOST_REF = "bee.harness:carrier_host_ref"
@@ -28,7 +29,6 @@ M.CARRIER_OPS = "bee.threads.carrier"
 M.RESOURCES = "bee.resources.binding"
 M.CREDENTIALS = "bee.credentials.binding"
 M.MAX_BRIEF_BYTES = 16384
-M.PLACEMENTS = {"native", "docker"}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
@@ -288,7 +288,7 @@ function M.decode_request(value: unknown): (Request?, string?)
     end
     local placement: string? = nil
     if object.placement ~= nil then
-        placement = bounds.member(object.placement, M.PLACEMENTS)
+        placement = bounds.member(object.placement, agent_protocol.PLACEMENTS)
         if not placement then return nil, "placement must be native or docker" end
     end
     local origin_view: OriginView? = nil

@@ -183,6 +183,10 @@ native-reconnect-check:
 native-desktop-selection-check:
 	python3 tests/native_desktop_selection.py "$(BEE_BINARY)"
 
+.PHONY: native-workspace-switch-check
+native-workspace-switch-check:
+	python3 tests/native_workspace_switch.py "$(BEE_BINARY)"
+
 .PHONY: native-daemon-check
 native-daemon-check:
 	python3 tests/native_daemon.py "$(BEE_BINARY)"

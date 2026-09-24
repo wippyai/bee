@@ -16,6 +16,8 @@ entries:
     directory: bee.hive_manager:directory
     hive: bee.hive:client
     types: bee.hive:types
+    remote: bee.hive_manager:remote
+    desktop_protocol: bee.hive.desktop:protocol
   meta:
     type: bee.application
     application:
@@ -45,6 +47,13 @@ entries:
     appearance: bee.application:appearance
     model: bee.hive_manager:model
     names: bee.application:names
+- name: remote
+  kind: library.lua
+  source: file://remote.lua
+  imports:
+    appearance: bee.application:appearance
+    frame: bee.application:frame
+    names: bee.application:names
 - name: directory
   kind: library.lua
   source: file://directory.lua
@@ -65,4 +74,13 @@ entries:
   policy:
     actions: [registry.get, system.read]
     resources: [bee.hive_manager:names, cluster]
+    effect: allow
+- name: viewer_policy
+  kind: security.policy.expr
+  meta:
+    comment: The manager opens a remote view of another node's workspace in a view process on the display client host; the owner node's bridge still admits that process and grants its mount
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.registry.lookup, process.monitor, tty.attach, tty.read, tty.write, tty.resize, tty.viewport]
+    resources: '*'
+    expression: '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.hive.desktop:viewer") || (action == "process.host" && resource == "bee.hive.desktop:display_host") || (action == "process.registry.lookup" && resource matches "^bee[.]hive[.]supervisor(/.+)?$") || action == "process.monitor" || action == "tty.attach" || action == "tty.read" || action == "tty.write" || action == "tty.resize" || action == "tty.viewport"'
     effect: allow

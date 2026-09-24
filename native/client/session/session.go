@@ -284,7 +284,9 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 }
 
 // presentWorkspace attaches one display of one workspace, presents it until it
-// ends and detaches it.
+// ends and detaches it. When the display is switched to another workspace from
+// inside the desktop, its old mount ends; the presentation continues with the
+// client's new session on the same display.
 func presentWorkspace(ctx context.Context, operations context.Context, client *hive.Desktop, catalog hive.DesktopCatalog, workspace string,
 	selection Selection, cfg Config, command *hive.DesktopCommand, stdin *os.File, stdout io.Writer) (result error) {
 	mounted, err := attachDesktop(operations, client, catalog, workspace, selection, cfg.Mode)
@@ -308,6 +310,38 @@ func presentWorkspace(ctx context.Context, operations context.Context, client *h
 			return err
 		}
 	}
+	reads := 0
+	current := func(ctx context.Context) (hive.DesktopMount, error) {
+		reads++
+		return client.Current(ctx, fmt.Sprintf("session-current-%d", reads), mounted)
+	}
+	for {
+		err := presentMount(ctx, operations, client, mounted, cfg, stdin, stdout)
+		next, followed := followSwitch(operations, current, mounted, err)
+		if !followed {
+			return err
+		}
+		mounted = next
+	}
+}
+
+// followSwitch asks for the client's current session after a presentation
+// ended on its own, not by a local detach, leave or cancellation. A new session
+// means the display now shows another workspace.
+func followSwitch(ctx context.Context, current func(context.Context) (hive.DesktopMount, error), mounted hive.DesktopMount, ended error) (hive.DesktopMount, bool) {
+	if ended == nil || errors.Is(ended, physical.ErrDetached) || ctx.Err() != nil {
+		return hive.DesktopMount{}, false
+	}
+	next, err := current(ctx)
+	if err != nil || next.Session == mounted.Session {
+		return hive.DesktopMount{}, false
+	}
+	return next, true
+}
+
+// presentMount presents one mount until it ends.
+func presentMount(ctx context.Context, operations context.Context, client *hive.Desktop, mounted hive.DesktopMount, cfg Config,
+	stdin *os.File, stdout io.Writer) error {
 	service := tty.GetService(ctx)
 	if service == nil {
 		return errors.New("native viewport service unavailable")

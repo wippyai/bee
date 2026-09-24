@@ -56,3 +56,11 @@ entries:
     state: bee.client:state
     model: bee.desktop:model
     appearance: bee.application:appearance
+- name: workspace_pages_test
+  kind: function.lua
+  source: file://workspace_pages_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    workspace_pages: bee.client:workspace_pages

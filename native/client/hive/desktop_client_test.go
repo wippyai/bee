@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -167,5 +168,35 @@ func TestDesktopBindingRejectsInvalidSelectionBeforeSend(t *testing.T) {
 	}
 	if s.sent.Load() != 0 {
 		t.Fatal("invalid selection sent")
+	}
+}
+
+func TestDesktopBindingReadsTheCurrentSessionOfItsDisplay(t *testing.T) {
+	d, s := desktopBinding(t)
+	value := mountValue()
+	value["expires_at"] = time.Now().UTC().Add(time.Minute).Format(desktopTimeLayout)
+	go answerDesktop(s, value, nil)
+	mounted, err := d.Attach(context.Background(), "attach-key", selection.Workspace, selection.Desktop, Control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := mountValue()
+	moved["workspace_id"] = strings.Repeat("d", 32)
+	moved["session_id"] = "session-2"
+	moved["expires_at"] = value["expires_at"]
+	calls := make(chan wireCall, 1)
+	go func() { calls <- answerDesktop(s, moved, nil) }()
+	current, err := d.Current(context.Background(), "current-key", mounted)
+	if err != nil || current.Selection.Workspace != strings.Repeat("d", 32) || current.Session != "session-2" {
+		t.Fatalf("current=%+v error=%v", current, err)
+	}
+	call := <-calls
+	var input map[string]string
+	if call.Target.Ref != DesktopCurrent || json.Unmarshal(call.Input, &input) != nil || len(input) != 1 || input["owner_execution"] != selection.Execution {
+		t.Fatalf("wrong current input: %s", call.Input)
+	}
+	mounted.owner = "foreign"
+	if _, err := d.Current(context.Background(), "bad", mounted); err == nil || s.sent.Load() != 2 {
+		t.Fatal("foreign-owner mount sent")
 	}
 }

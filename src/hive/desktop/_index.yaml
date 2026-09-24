@@ -80,3 +80,25 @@ entries:
     actions: [funcs.call]
     resources: [bee.workspace.catalog:list, bee.workspace.catalog:search]
     effect: allow
+- name: remote
+  kind: library.lua
+  source: file://remote.lua
+  imports:
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+    contract: bee.protocol:application
+    display: bee.hive.desktop:display
+- name: viewer
+  kind: process.lua
+  source: file://viewer.lua
+  method: main
+  modules: [process, channel, time, uuid]
+  imports:
+    types: bee.hive:types
+    client: bee.hive:client
+    protocol: bee.hive.desktop:protocol
+    contract: bee.protocol:application
+    display: bee.hive.desktop:display
+    remote: bee.hive.desktop:remote
+    delivery: bee.terminal:delivery
+    input: bee.protocol:input

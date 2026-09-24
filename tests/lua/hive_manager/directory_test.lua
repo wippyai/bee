@@ -1,14 +1,15 @@
 -- MIT. The directory: the live form asks the supervisor for presence and
 -- stats under the telemetry owner, keeps this node when membership is
--- absent, and refuses desktop listing and attachment without a call.
+-- absent, pages a node's workspaces and opens a confirmed attach as a view.
 local test = require("test")
 local directory = require("directory")
 local types = require("types")
 type Object = {[string]: unknown}
+local function no_view(_request: directory.Attach): directory.Outcome error("this directory opens no remote view") end
 local function define_tests()
     test.describe("Hive Manager directory", function()
         test.it("reads client role only from native membership metadata", function()
-            local live = directory.live({local_node = "local", lookup = function(): (string?, string?) return nil, nil end,
+            local live = directory.live({open_view = no_view, local_node = "local", lookup = function(): (string?, string?) return nil, nil end,
                 membership = function(): (unknown, unknown) return {
                     {id = "display", meta = {["bee.role"] = "client"}},
                     {id = "bee-client-name-only", meta = {}},
@@ -25,7 +26,7 @@ local function define_tests()
         end)
         test.it("asks the supervisor for presence and stats under the telemetry owner and keeps this node without membership", function()
             local calls: {{owner: types.OwnerRef, target: types.Target, timeout: string?}} = {}
-            local live = directory.live({
+            local live = directory.live({open_view = no_view, 
                 local_node = "local",
                 lookup = function(): (string?, string?) return nil, "supervisor is not running" end,
                 membership = function(): (unknown, unknown) return nil, "membership unavailable" end,
@@ -55,7 +56,7 @@ local function define_tests()
         test.it("decodes runtime membership, bounds it and always includes this node", function()
             local raw: {unknown} = {}
             for index = 1, 70 do raw[#raw + 1] = {id = "n" .. tostring(index), addr = "10.0.0." .. tostring(index) .. ":7946", is_local = false} end
-            local live = directory.live({
+            local live = directory.live({open_view = no_view, 
                 local_node = "me",
                 lookup = function(): (string?, string?) return "{me@bee.hive:supervisor_host|1}", nil end,
                 membership = function(): (unknown, unknown) return raw, nil end,
@@ -71,7 +72,7 @@ local function define_tests()
             test.is_true(live:supervisor().running)
             local hostile: {unknown} = {{id = "ok", addr = "bad\27addr"}, {id = ""}, {id = "ok"}, "junk", {id = "me", is_local = true}}
             local decoded = live:members()
-            decoded = ({directory.live({local_node = "me", lookup = function(): (string?, string?) return nil, "x" end,
+            decoded = ({directory.live({open_view = no_view, local_node = "me", lookup = function(): (string?, string?) return nil, "x" end,
                 membership = function(): (unknown, unknown) return hostile, nil end,
                 call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
                     return types.reply_ok("r", {})
@@ -81,7 +82,8 @@ local function define_tests()
             test.eq(decoded[1].addr, "")
             test.eq(decoded[2].node_id, "me")
         end)
-        test.it("preserves catalog denial and keeps attachment unavailable", function()
+        test.it("preserves catalog denial and opens a confirmed attach as a remote view", function()
+            local opened: {directory.Attach} = {}
             local live = directory.live({
                 local_node = "local",
                 lookup = function(): (string?, string?) return "{local@bee.hive:supervisor_host|1}", nil end,
@@ -91,20 +93,33 @@ local function define_tests()
                     test.eq(_target.operation_ref, directory.WORKSPACES)
                     return types.reply_error("read", types.fault("DENIED", "not admitted"))
                 end,
+                open_view = function(request: directory.Attach): directory.Outcome
+                    opened[#opened + 1] = request
+                    if request.mode == "observe" then return {ok = false, code = "DENIED", message = "the node does not admit this node's displays"} end
+                    return {ok = true, code = "", message = "", session_id = "session-1", mode = "control", viewer = "{local@bee.hive.desktop:display_host|9}"}
+                end,
             })
             local catalog = live:workspaces("local", {})
             test.is_false(catalog.available)
             test.eq(catalog.reason, "DENIED: not admitted")
             test.eq(#catalog.desktops, 0)
-            local outcome = live:attach({node_id = "local", workspace_id = "ws", desktop_id = "d", owner_generation = "", mode = "control", idempotency_key = "k"})
-            test.is_false(outcome.ok)
-            test.eq(outcome.code, "UNSUPPORTED_CAPABILITY")
-            test.eq(outcome.message, directory.ATTACH_UNAVAILABLE)
+            local intent: directory.Attach = {node_id = "forge", workspace_id = string.rep("b", 32), desktop_id = "", owner_generation = "forge",
+                mode = "control", idempotency_key = "k"}
+            local outcome = live:attach(intent)
+            test.is_true(outcome.ok)
+            test.eq(outcome.session_id, "session-1")
+            test.eq(outcome.viewer, "{local@bee.hive.desktop:display_host|9}")
+            test.eq(opened[1].node_id, "forge")
+            test.eq(opened[1].workspace_id, string.rep("b", 32))
+            intent.mode = "observe"
+            local refused = live:attach(intent)
+            test.is_false(refused.ok)
+            test.eq(refused.code, "DENIED")
         end)
         test.it("pages and searches the selected node's workspaces through the supervisor", function()
             local asked: {Object} = {}
             local workspace = string.rep("b", 32)
-            local live = directory.live({local_node = "local",
+            local live = directory.live({open_view = no_view, local_node = "local",
                 lookup = function(): (string?, string?) return nil, nil end,
                 membership = function(): (unknown, unknown) return {}, nil end,
                 call = function(owner: types.OwnerRef, target: types.Target, input: Object, _options: {timeout: string?}): types.Reply

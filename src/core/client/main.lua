@@ -32,6 +32,7 @@ local arguments = require("arguments")
 local launcher = require("launcher")
 local appearance = require("appearance")
 local node_appearance = require("node_appearance")
+local workspace_pages = require("workspace_pages")
 type Channel = channel.Channel
 type Binding = {generation: string, tab_id: string}
 type TransferPending = {action: transfer_ui.Action, view_id: string, renderer_generation: string, presenter: string}
@@ -41,6 +42,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
     local bootstrap = lifecycle.bootstrap(options)
     if not bootstrap then error("Invalid client bootstrap options") end
     local defaults_reader = node_appearance.new()
+    local page_reader = workspace_pages.new()
     local defaults_timer = assert(time.ticker("1s"))
     local defaults_ticks = defaults_timer:channel()
     local owned_database: store.Store? = nil
@@ -78,6 +80,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local answers = listen("bee.interaction.response")
         local appearance_requests = listen("bee.client.appearance.request")
         local supervisor_controls = listen("bee.client.control")
+        local switch_answers = listen(retained_protocol.TOPIC_SWITCHED)
         if not owner_monitored then
             local monitored, owner_error = process.monitor(owner)
             if not monitored then error("Monitor client owner: " .. tostring(owner_error)) end
@@ -479,6 +482,9 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     cases[#cases + 1] = transfer_results:case_receive()
                 end
                 if defaults_pending then cases[#cases + 1] = defaults_pending.response:case_receive() end
+                local page_pending = page_reader.pending
+                if page_pending and not saved_for_exit then cases[#cases + 1] = page_pending.response:case_receive() end
+                if not saved_for_exit then cases[#cases + 1] = switch_answers:case_receive() end
                 local selected = channel.select(cases)
                 if not selected.ok then break end
                 if selected.channel == presenter_deadline then
@@ -496,6 +502,16 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                             theme = defaults.preferences.theme, background = defaults.preferences.background,
                             taskbar = defaults.preferences.taskbar})
                         if not sent then defaults_request = "" end
+                    end
+                elseif page_pending and selected.channel == page_pending.response then
+                    local page, page_error = workspace_pages.complete(page_reader, page_pending)
+                    if active and (page or page_error) then
+                        local answer: {[string]: unknown} = {version = 1, request_id = page_pending.request_id}
+                        if page then
+                            answer.items = page.items
+                            if page.next_after then answer.next_after = page.next_after end
+                        else answer.error = page_error end
+                        send(presenter, "bee.display.workspaces", answer)
                     end
                 elseif defaults_pending and selected.channel == defaults_pending.response then
                     local defaults = node_appearance.complete(defaults_reader, defaults_pending)
@@ -679,6 +695,12 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                             local result = inbox.result(inbox_state, data)
                             if result and active then send(presenter, "bee.interaction.result", result) end
                         end
+                    elseif selected.channel == switch_answers and sender == owner then
+                        local result = retained_protocol.switch_result(data, workspace_id)
+                        if result and result.desktop_id == database.client_id and active then
+                            send(presenter, "bee.display.switched", {version = 1, request_id = result.request_id,
+                                error_code = result.error_code, error = result.error})
+                        end
                     elseif selected.channel == controls and sender == presenter then
                         if type(data) == "table" and data.version == 1 then
                             if data.op == "transfer" then
@@ -699,6 +721,24 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 end
                             elseif data.op == "quit" then
                                 if request_quit() then break end
+                            elseif data.op == "workspaces" and active and bootstrap.hive_supervisor then
+                                -- One page of the node's workspaces for the display's workspace menu.
+                                local query = workspace_pages.query(data)
+                                if query then
+                                    local _, start_error = workspace_pages.start(page_reader, query)
+                                    if start_error then
+                                        send(presenter, "bee.display.workspaces", {version = 1, request_id = query.request_id, error = start_error})
+                                    end
+                                end
+                            elseif data.op == "switch" and active and bootstrap.hive_supervisor and bootstrap.quit_mode == "supervisor" then
+                                -- The display asks to show another workspace; its supervisor
+                                -- forwards the request to the desktop bridge.
+                                local request_id = contract.text(data.request_id, 80)
+                                local target = contract.workspace_id(data.workspace_id)
+                                if request_id and request_id ~= "" and target then
+                                    send(owner, retained_protocol.TOPIC_SWITCH, {version = 1, workspace_id = workspace_id,
+                                        desktop_id = database.client_id, request_id = request_id, target_workspace_id = target})
+                                end
                             elseif data.op == "rejoin" and active then
                                 -- Keep the old renderer alive until the host revokes its grants.
                                 -- A separate viewport prevents competing output leases during handoff.
@@ -887,6 +927,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
     local completed, err = pcall(boot)
     defaults_timer:stop()
     node_appearance.close(defaults_reader)
+    workspace_pages.close(page_reader)
     if owned_database then store.close(owned_database) end
     if presenter ~= "" then process.terminate(presenter) end
     if retired_presenter ~= "" then process.terminate(retired_presenter) end

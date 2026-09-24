@@ -18,6 +18,10 @@ const DesktopCreate = "bee.desktop:create"
 const DesktopAttach = "bee.desktop:attach"
 const DesktopDetach = "bee.desktop:detach"
 
+// DesktopCurrent reads the client's current session. After its display was
+// switched to another workspace, the session and mount are new.
+const DesktopCurrent = "bee.desktop:current"
+
 type DesktopMode string
 
 const Control DesktopMode = "control"
@@ -237,6 +241,21 @@ func DecodeDesktopMount(reply Reply, selected DesktopSelection, recipient pid.PI
 		return DesktopMount{}, ErrDesktopReply
 	}
 	return DesktopMount{Selection: selected, Session: wire.Session, Recipient: recipient, Mode: mode, Mount: wire.Mount, Expires: expiry, lifetime: reply.lifetime}, nil
+}
+
+// DecodeDesktopCurrent validates the client's current session on the same
+// display under the same execution. Only the workspace may differ from the
+// session the client presented before.
+func DecodeDesktopCurrent(reply Reply, execution, desktop string, recipient pid.PID, mode DesktopMode, now time.Time) (DesktopMount, error) {
+	if !desktopValue(reply) {
+		return DesktopMount{}, ErrDesktopReply
+	}
+	var fields map[string]json.RawMessage
+	var workspace string
+	if json.Unmarshal(reply.Value, &fields) != nil || json.Unmarshal(fields["workspace_id"], &workspace) != nil || !durableID(workspace) {
+		return DesktopMount{}, ErrDesktopReply
+	}
+	return DecodeDesktopMount(reply, DesktopSelection{Execution: execution, Workspace: workspace, Desktop: desktop}, recipient, mode, now)
 }
 func boundedMount(s string) bool {
 	if s == "" || len(s) > 4096 {

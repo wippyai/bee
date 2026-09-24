@@ -21,7 +21,8 @@ actual observation/input/resize rights at use time.
 
 `NewDesktop` additionally binds owner execution and physical actor identity.
 `List`, `Attach` and `Detach` validate workspace, desktop, recipient, session, mode
-and expiry. A node's catalog can contain multiple workspaces. Ordinary typed
+and expiry. `Current` reads the client's current session on the display it
+presents; only its workspace may differ from the mount the client held. A node's catalog can contain multiple workspaces. Ordinary typed
 refusals remain distinct from uncertain mutations. No method owns the terminal,
 starts a workspace or retries a mutation.
 

@@ -197,6 +197,9 @@ local function define_tests()
             if not remembered then error("session missing") end
             test.eq(remembered.session_id, "s-1")
             test.is_true(state.outcome:find("Attached observe session s-1", 1, true) ~= nil)
+            -- The session ends with the view presenting it.
+            model.end_session(state, "laptop", "ws1", "d1")
+            test.is_nil(model.session(state, "laptop", "ws1", "d1"))
             model.move(state, 1)
             test.is_true(model.can_control(state))
             local second = model.attach_intent(state, "control", "key-2")

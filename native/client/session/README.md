@@ -24,7 +24,11 @@ read, after 50 ms with a fresh key; all other failures return immediately. Clean
 context and keeps operation and cleanup failures visible.
 
 The caller owns physical files and the signal context. Ctrl+] detaches locally;
-applications remain owned by the remote runtime. Starting that owner and deciding
+applications remain owned by the remote runtime. When a presentation ends on its
+own (its mount expired), the session asks the owner for its current session
+(`Desktop.Current`); a different session on the same display means the display
+was switched to another workspace from inside the desktop, and the session
+presents the new mount on the same terminal and detaches that one at the end. Starting that owner and deciding
 its lifetime are launcher responsibilities, not side effects of a session.
 
 Waiting for an owner that is still preparing belongs to the launch route; it

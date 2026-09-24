@@ -14,6 +14,7 @@ entries:
     decode: bee.protocol:decode
     protocol: bee.launch:protocol
     contract: bee.protocol:application
+    retained_protocol: bee.launch:retained_protocol
 - name: desktop_storage
   kind: library.lua
   source: file://desktop_storage.lua

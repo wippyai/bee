@@ -177,3 +177,27 @@ func TestDesktopDetachRequiresExactSelectionAndPositiveAcknowledgment(t *testing
 		t.Fatal("foreign workspace accepted")
 	}
 }
+
+// After a switch the display's controller holds a session on another
+// workspace: the same execution, display, recipient and mode.
+func TestDesktopCurrentFollowsItsDisplayIntoAnotherWorkspace(t *testing.T) {
+	moved := strings.Repeat("d", 32)
+	value := mountValue()
+	value["workspace_id"] = moved
+	value["session_id"] = "session-2"
+	value["mount_ref"] = "moved-mount"
+	current, err := DecodeDesktopCurrent(desktopReply(t, value), selection.Execution, selection.Desktop, desktopRecipient, Control, desktopNow)
+	if err != nil || current.Selection.Workspace != moved || current.Selection.Desktop != selection.Desktop || current.Session != "session-2" || current.Mount != "moved-mount" {
+		t.Fatalf("current=%+v error=%v", current, err)
+	}
+	for field, wrong := range map[string]any{"owner_execution": strings.Repeat("e", 32), "desktop_id": strings.Repeat("e", 32),
+		"workspace_id": "short", "recipient": "{other@" + mesh.ActorHost + "|one}", "mode": "observe"} {
+		t.Run("wrong_"+field, func(t *testing.T) {
+			changed := mountValue()
+			changed[field] = wrong
+			if _, err := DecodeDesktopCurrent(desktopReply(t, changed), selection.Execution, selection.Desktop, desktopRecipient, Control, desktopNow); err == nil {
+				t.Fatal("accepted substitution")
+			}
+		})
+	}
+}

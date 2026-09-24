@@ -133,6 +133,27 @@ func (d *Desktop) Attach(ctx context.Context, key, workspace, desktop string, mo
 	mounted.owner = d.owner
 	return mounted, nil
 }
+
+// Current reads the session this client holds now on the display it
+// presents; after a switch it names another workspace, session and mount.
+func (d *Desktop) Current(ctx context.Context, key string, mounted DesktopMount) (DesktopMount, error) {
+	if d == nil || !mounted.Selection.valid() || mounted.Selection.Execution != d.execution || mounted.owner != d.owner ||
+		!samePID(mounted.Recipient, d.recipient) {
+		return DesktopMount{}, errors.New("desktop session unavailable or belongs to another recipient")
+	}
+	reply, err := d.call(ctx, DesktopCurrent, key, struct {
+		Execution string `json:"owner_execution"`
+	}{d.execution})
+	if err != nil {
+		return DesktopMount{}, err
+	}
+	current, err := DecodeDesktopCurrent(reply, d.execution, mounted.Selection.Desktop, d.recipient, mounted.Mode, time.Now())
+	if err != nil {
+		return DesktopMount{}, err
+	}
+	current.owner = d.owner
+	return current, nil
+}
 func (d *Desktop) Detach(ctx context.Context, key string, mounted DesktopMount) error {
 	if d == nil || !mounted.Selection.valid() || mounted.Selection.Execution != d.execution || mounted.owner != d.owner ||
 		!samePID(mounted.Recipient, d.recipient) || !identifier(mounted.Session) || !live(mounted.lifetime) {

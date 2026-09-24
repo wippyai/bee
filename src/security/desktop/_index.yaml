@@ -206,6 +206,17 @@ entries:
     resources:
     - bee.launch:supervisor
     effect: allow
+- name: client_workspace_catalog_call_policy
+  kind: security.policy
+  meta:
+    comment: A retained display pages the node's workspace catalog for its workspace menu; the catalog still authorizes each read
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.workspace.catalog:list
+    - bee.workspace.catalog:search
+    effect: allow
 - name: client_node_defaults_call_policy
   kind: security.policy
   policy:

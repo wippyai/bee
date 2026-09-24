@@ -15,10 +15,12 @@ local appearance = require("appearance")
 local frame = require("frame")
 local model = require("model")
 local names = require("names")
-local view = require("view")
+local layout = require("view")
 local directory = require("directory")
 local hive = require("hive")
 local types = require("types")
+local remote = require("remote")
+local desktop_protocol = require("desktop_protocol")
 local NAMES = "bee.hive_manager:names"
 local POLL = "5s"
 local CALL_TIMEOUT = "2s"
@@ -32,7 +34,8 @@ local function own_node(): string
     if not node or node == "" then return "local" end
     return node
 end
-local function open_directory(handle: hive.Client): directory.Directory
+local VIEW_TIMEOUT = "30s"
+local function open_directory(handle: hive.Client, open_view: (directory.Attach) -> directory.Outcome): directory.Directory
     return directory.live({
         local_node = own_node(),
         lookup = hive.supervisor,
@@ -40,6 +43,7 @@ local function open_directory(handle: hive.Client): directory.Directory
         call = function(owner: types.OwnerRef, target: types.Target, input: {[string]: unknown}, options: {timeout: string?}): types.Reply
             return handle:call(owner, target, input, {timeout = options.timeout})
         end,
+        open_view = open_view,
         timeout = CALL_TIMEOUT,
     })
 end
@@ -57,8 +61,52 @@ local function main(value: unknown)
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
-    local source = open_directory(handle)
+    local frames = assert(process.listen(desktop_protocol.VIEW_FRAME, {message = true}))
+    -- The open remote view, if any: this window draws its rows until it exits.
+    local view: remote.View? = nil
     local state: model.State = model.new(model.names(entry_data(NAMES)))
+    -- Attach a confirmed request in a view process on the display client host;
+    -- the owner node's bridge admits it and leases the workspace's host.
+    local function open_view(request: directory.Attach): directory.Outcome
+        if view then return {ok = false, code = "BUSY", message = "A remote desktop is already open"} end
+        -- A node never admits its own displays as remote clients; this node's
+        -- workspaces open in place from the desktop's workspace menu.
+        if request.node_id == own_node() then
+            return {ok = false, code = "UNSUPPORTED_CAPABILITY", message = "This node's workspaces open from the workspace menu (F9, W)"}
+        end
+        local view_states, listen_error = process.listen(desktop_protocol.VIEW_STATE, {message = true})
+        if not view_states then return {ok = false, code = "UNAVAILABLE", message = tostring(listen_error)} end
+        local pid, spawn_error = process.spawn_monitored(desktop_protocol.VIEWER, desktop_protocol.CLIENT_HOST, tostring(process.pid()),
+            request.node_id, request.workspace_id, request.mode, width, math.max(1, height - 1))
+        if not pid then
+            process.unlisten(view_states)
+            return {ok = false, code = "UNAVAILABLE", message = "Remote view: " .. tostring(spawn_error)}
+        end
+        local viewer = tostring(pid)
+        local deadline = time.after(VIEW_TIMEOUT)
+        local outcome: directory.Outcome? = nil
+        while not outcome do
+            local selected = channel.select({view_states:case_receive(), deadline:case_receive()})
+            if not selected.ok or selected.channel == deadline then
+                process.send(viewer, desktop_protocol.VIEW_CLOSE, {version = 1})
+                outcome = {ok = false, code = "UNCERTAIN", message = "The remote view did not report within " .. VIEW_TIMEOUT .. "; it is closing"}
+            elseif tostring(selected.value:from()) == viewer then
+                local attached, failed = remote.state(selected.value:payload():data())
+                if attached then
+                    local node = model.selected(state)
+                    view = {pid = viewer, node_id = request.node_id, node_label = node and node.node_id == request.node_id and node.label or request.node_id,
+                        workspace_id = attached.workspace_id, desktop_id = attached.desktop_id, mode = attached.mode,
+                        session_id = attached.session_id, rows = {}, cursor = nil, leaving = false}
+                    outcome = {ok = true, code = "", message = "", session_id = attached.session_id, mode = attached.mode, viewer = viewer}
+                else
+                    outcome = {ok = false, code = failed and failed.code or "UNAVAILABLE", message = failed and failed.message or "Remote desktop unavailable"}
+                end
+            end
+        end
+        process.unlisten(view_states)
+        return outcome
+    end
+    local source = open_directory(handle, open_view)
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid Hive Manager checkpoint") end
     local offset = 0
     local hits: {frame.Hit} = {}
@@ -159,9 +207,9 @@ local function main(value: unknown)
         if mode == "control" and not model.can_control(state) then status = "Desktop is controlled by " .. desktop.controller .. "; choose observe"; dirty = true; return end
         local intent, refused = model.preview_intent(state, mode, uuid.v4())
         if not intent then status = refused or "Desktop unavailable"; dirty = true; return end
-        local title = mode == "control" and "Take control of this desktop?" or "Observe this desktop?"
-        local display_label = desktop.label ~= "" and desktop.label or names.label(desktop.desktop_id)
-        local message = model.text(display_label .. " (" .. desktop.desktop_id .. ") on " .. node.label .. ", workspace " .. names.label(desktop.workspace_id) .. " (" .. desktop.workspace_id .. ")", 512)
+        local title = mode == "control" and "Control this workspace here?" or "Observe this workspace here?"
+        local workspace_label = desktop.label ~= "" and desktop.label or names.label(desktop.workspace_id)
+        local message = model.text("Workspace " .. workspace_label .. " (" .. desktop.workspace_id .. ") on " .. node.label, 512)
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = mode == "control" and "Control" or "Observe"})
         if not request_id then status = tostring(err); dirty = true; return end
         dialog = {request_id = request_id, intent = intent}
@@ -170,8 +218,13 @@ local function main(value: unknown)
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     request_refresh()
     while running do
-        if dirty then
-            local drawn = view.draw(width, height, preferences, state, offset, status)
+        local shown = view
+        if dirty and shown then
+            local drawn = remote.draw(width, height, preferences, shown)
+            assert(output:present(drawn.rows, {cursor = drawn.cursor}))
+            dirty = false
+        elseif dirty then
+            local drawn = layout.draw(width, height, preferences, state, offset, status)
             hits = drawn.hits
             offset = drawn.offset
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -183,10 +236,55 @@ local function main(value: unknown)
             end
             dirty = false
         end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), answers:case_receive(), ticks:case_receive(), updates:case_receive()})
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), answers:case_receive(), ticks:case_receive(),
+            updates:case_receive(), frames:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
-            if event.value.kind == process.event.CANCEL then running = false end
+            local happened = event.value
+            if happened.kind == process.event.CANCEL then running = false
+            elseif happened.kind == process.event.EXIT and view and tostring(happened.from) == view.pid then
+                local result: unknown = happened.result
+                local failure = type(result) == "table" and result.error ~= nil and tostring(result.error) or nil
+                model.end_session(state, view.node_id, view.workspace_id, "")
+                view = nil
+                status = failure and ("Remote desktop ended: " .. failure) or "Remote desktop closed"
+                dirty = true
+            end
+        elseif event.channel == frames then
+            local message = event.value
+            local current = view
+            if current and tostring(message:from()) == current.pid then
+                local rows, cursor = remote.frame(message:payload():data())
+                if rows then current.rows, current.cursor, dirty = rows, cursor, true end
+            end
+        elseif view then
+            -- The remote view has the window: its input goes to the view.
+            local current = view
+            if event.channel == input then
+                local data = event.value
+                if data.type == "close" then running = false
+                elseif data.type == "resize" then
+                    width, height = data.width, data.height
+                    process.send(current.pid, desktop_protocol.VIEW_RESIZE, {version = 1, width = width, height = math.max(1, height - 1)})
+                    dirty = true
+                else
+                    local decision, forwarded = remote.forward(current, data :: {[string]: unknown})
+                    if decision == "leave" and not current.leaving then
+                        current.leaving = true
+                        process.send(current.pid, desktop_protocol.VIEW_CLOSE, {version = 1})
+                        dirty = true
+                    elseif decision == "forward" and forwarded then
+                        process.send(current.pid, desktop_protocol.VIEW_INPUT, {version = 1, event = forwarded})
+                    end
+                end
+            elseif event.channel == states then
+                local message = event.value
+                if broker and message:from() == broker then
+                    local payload: unknown = message:payload():data()
+                    local next_preferences = appearance.decode(payload)
+                    if next_preferences and type(payload) == "table" and payload.version == 1 then preferences = next_preferences; dirty = true end
+                end
+            end
         elseif event.channel == updates then
             dirty = true
         elseif event.channel == ticks then
@@ -256,6 +354,9 @@ local function main(value: unknown)
         end
     end
     running = false
+    local open = view
+    if open then process.send(open.pid, desktop_protocol.VIEW_CLOSE, {version = 1}) end
+    process.unlisten(frames)
     updates:close()
     ticker:stop()
     handle:close()

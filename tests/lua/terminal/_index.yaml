@@ -60,3 +60,13 @@ entries:
     test: wippy.test:test
     dialog: bee.terminal:dialog
     appearance: bee.application:appearance
+- name: workspace_menu_test
+  kind: function.lua
+  source: file://workspace_menu_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.application:appearance
+    workspace_menu: bee.terminal:workspace_menu

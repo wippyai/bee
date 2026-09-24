@@ -32,6 +32,7 @@ entries:
     policies:
     - bee:ordinary_app_subsystem_boundary
     - bee.hive_manager:client_policy
+    - bee.hive_manager:viewer_policy
   - definition_id: bee.timeline:app
     policies:
     - bee:ordinary_app_subsystem_boundary

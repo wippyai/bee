@@ -79,6 +79,9 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         local copy_results = listen("bee.client.copied")
         local launch_requests = listen("bee.retained.launch")
         local launch_results = listen("bee.client.launched")
+        -- A retained display's switch request, and the bridge's answer to it.
+        local switch_requests = listen(retained_protocol.TOPIC_SWITCH)
+        local switch_results = listen(retained_protocol.TOPIC_SWITCHED)
         local launch_pending: {id: string, desktop_id: string, client: string}? = nil
         local copy_pending: {id: string, recipient: string, mount: string, desktop_id: string, client: string}? = nil
         local hosts, ready = listen("bee.host.ready"), listen("bee.client.ready")
@@ -195,7 +198,8 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             advance("client_boot")
             if retained_owner then
                 local client_policies: {security.Policy} = {}
-                for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy"}) do
+                for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy",
+        "bee:client_workspace_catalog_call_policy", "bee:workspace_catalog_read_policy"}) do
                     client_policies[#client_policies + 1] = assert(security.policy(name))
                 end
                 local started, start_error = desktops.start(retained,
@@ -236,6 +240,8 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             end
             if retained_displays then
                 for _, timer in ipairs(desktop_lifecycle.deadlines(retained_displays)) do cases[#cases + 1] = timer:case_receive() end
+                cases[#cases + 1] = switch_requests:case_receive()
+                cases[#cases + 1] = switch_results:case_receive()
             end
             if current_storage then
                 cases[#cases + 1] = current_storage.response:case_receive()
@@ -299,6 +305,10 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                     -- This retained display owns its lifecycle message.
                 elseif selected.channel == activations and sender == retained_owner and retained_displays and announced then
                     desktop_lifecycle.activate(retained_displays, data)
+                elseif selected.channel == switch_requests and retained_displays then
+                    desktop_lifecycle.switch(retained_displays, sender, data)
+                elseif selected.channel == switch_results and sender == retained_owner and retained_displays then
+                    desktop_lifecycle.switched(retained_displays, data)
                 elseif selected.channel == storage_requests and sender == retained_owner and announced then
                     local request = desktop_storage.request(data, workspace_id)
                     if request then

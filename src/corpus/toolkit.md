@@ -75,6 +75,8 @@ type Hint = {key: string, verb: string}
 type Window = {offset: integer, capacity: integer}
 type Column = {title: string, width: integer, align: string?}
 type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?}
+type Rect = {x: integer, y: integer, width: integer, height: integer}
+type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer: integer}
 ```
 
 | Call | Meaning |
@@ -99,7 +101,393 @@ type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: strin
 | `frame.window(count: integer, capacity: integer, selected: integer, offset: integer) -> Window` | The visible window of a scrolling list of count rows in capacity slots, keeping the selected index (0 for none) visible. |
 | `frame.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)` | A whole-row target. Selection keeps its text, uses the accent pair and marks column 1 with "›" so focus is visible without color. Unfocused selection (another pane owns focus) keeps the marker in accent on the surface. span extends the target over the item's following rows. |
 | `frame.table(painter: Painter, first: integer, last: integer, value: Table) -> Window` | A table between rows first and last: a muted column caption on row first and rows below it. On a narrow canvas each row becomes its first cell followed by the other nonempty cells joined with " · ". Returns the visible window. |
-| `frame.empty(painter: Painter, y: integer, title: string, action: string?)` | An empty, loading or failure state: what is absent or wrong on row y and the next useful action on the row below it. |
+| `frame.size(width: integer, height: integer) -> string` | The size class of a canvas: "narrow" below 80x24, "compact" from 80x24, "standard" from 120x36 and "wide" from 160x48. Both dimensions must reach a class; layouts change only at these breakpoints. |
+| `frame.layout(painter: Painter, tabs: boolean, actions: boolean) -> Layout` | The canonical anatomy for this canvas: header on row 1, tabs on row 2 when requested and the canvas has at least 6 rows, one blank row, the work area from column 2 to the column before the last, the action bar on the penultimate row when requested and the canvas has at least 6 rows, and the footer on the final row when the canvas has at least 2 rows. |
+| `frame.split(rect: Rect, sizes: {integer}, gap: integer?) -> {Rect}` | Splits a rectangle into columns left to right. A size of 0 is flexible and shares the remaining width; gap (default 2) separates the columns. Columns that do not fit keep their position with a clipped width. |
+| `frame.stack(rect: Rect, sizes: {integer}, gap: integer?) -> {Rect}` | Splits a rectangle into rows top to bottom, like split; gap defaults to 1. |
+| `frame.grid(rect: Rect, columns: integer, rows: integer) -> {Rect}` | A dashboard grid of columns by rows equal cells in reading order, two cells between columns and one row between rows. Leftover cells go to the first columns and rows. |
+| `frame.panel(painter: Painter, rect: Rect, title: string, summary: string?) -> Rect` | A titled panel without a border: the uppercase title in muted at the top of rect, an optional summary aligned right in text, and the returned rectangle below the title for the panel's content. |
+| `frame.field(painter: Painter, y: integer, label: string, value: string, label_width: integer, selected: boolean, index: integer, error_text: string?)` | One form field on row y: the muted label padded to label_width, then the value. The selected field takes the row selection and its target; an error replaces the value's trailing room in the error role after " · ". |
+| `frame.steps(painter: Painter, y: integer, labels: {string}, current: integer)` | A wizard step strip on row y: "1 Source › 2 Review › 3 Deliver". The current step uses the accent pair, finished steps carry "✓" and later steps are muted. On a narrow row only the current step shows, as "Step 2/3 Review". |
+| `frame.empty(painter: Painter, y: integer, title: string, action: string?, area: Rect?)` | An empty, loading or failure state: what is absent or wrong on row y and the next useful action on the row below it. Inside a panel, area bounds both rows to the panel's columns and leaves the rest of the rows untouched. |
+
+## Visualization kit
+
+`bee.application:viz` draws charts inside a `frame.Rect` of a frame painter,
+from semantic roles, and keeps live series bounded. Import it as
+`viz = "bee.application:viz"` next to `frame` and `appearance`. Every function is
+pure: the process owns `viz.series` rings, pushes one sample per tick and
+repaints when `viz.due` says a frame is due; the view reads `viz.values`. Choose
+the function by the question in `docs/app_style` section 12.
+
+```lua
+type Rect = frame.Rect
+type Series = {capacity: integer, items: {number}, first: integer, count: integer, total: integer}
+type Cadence = {interval: integer, next_at: integer}
+type Line = {values: {number}, role: string?, label: string?}
+type Chart = {min: number?, max: number?, area: boolean?, unit: string?, from: string?, to: string?}
+type Bar = {label: string, value: number, role: string?, note: string?}
+type Scale = {max: number?, unit: string?, warn: number?, error: number?}
+type Stack = {label: string, segments: {number}}
+type Grid = {rows: {{number}}, row_labels: {string}?, column_labels: {string}?, max: number?, role: string?}
+type Meter = {label: string?, unit: string?, warn: number?, error: number?}
+type Tile = {label: string, value: string, note: string?, role: string?, values: {number}?}
+type Span = {start: number, finish: number, role: string?}
+type Lane = {label: string, spans: {Span}}
+type Window = {from: number, to: number, now: number?, from_label: string?, to_label: string?}
+type Node = {id: string, label: string, role: string?, note: string?}
+type Edge = {from: string, to: string}
+type Key = {label: string, role: string?, glyph: string?}
+```
+
+| Call | Meaning |
+|------|---------|
+| `viz.is_gap(value: number) -> boolean` | True for a missing sample. |
+| `viz.series(capacity: integer) -> Series` | An empty series holding at most capacity samples. |
+| `viz.push(series: Series, value: number)` | Appends one sample, dropping the oldest when the series is full. |
+| `viz.values(series: Series) -> {number}` | The samples oldest first, as a new list of at most capacity values. |
+| `viz.latest(series: Series) -> number?` | The newest sample, or nil when the series is empty. |
+| `viz.cadence(interval_ms: integer) -> Cadence` | A redraw clock with interval_ms between frames; the first call to due is true. |
+| `viz.due(cadence: Cadence, now_ms: integer) -> boolean` | True when a frame is due at now_ms, then schedules the next one on the interval grid. Samples arriving between frames are pushed, not drawn. |
+| `viz.extent(values: {number}, min: number?, max: number?) -> (number, number)` | The finite range of values, widened by min and max when given. Without samples it is 0..1; a flat range grows by one above its value. |
+| `viz.number(value: number, unit: string?) -> string` | A compact number: 7, 7.5, 42, 1.2k, 12k, 3.4M, 1.1G, with an optional unit after one space. A gap is "—". |
+| `viz.bytes(value: number) -> string` | A byte count in binary units: 512 B, 12.4 KiB, 3.1 MiB, 1.5 GiB. |
+| `viz.count(value: number) -> string` | A whole count with thousands separators: 4,000. A gap is "—". |
+| `viz.spark(values: {number}, width: integer, min: number?, max: number?) -> string` | The newest width samples as one row of ▁…█ scaled between min (default the lower of 0 and the smallest sample) and max (default the largest sample), right-aligned with leading spaces; a gap is "·". |
+| `viz.sparkline(painter: frame.Painter, x: integer, y: integer, width: integer, values: {number}, role: string?, min: number?, max: number?)` | A sparkline at (x, y) over width cells in role (default accent). |
+| `viz.bar_cell(value: number, max: number, width: integer) -> string` | A proportional bar of width cells for value out of max in eighth blocks, padded with spaces: the inline bar of a table cell. |
+| `viz.legend(painter: frame.Painter, x: integer, y: integer, width: integer, keys: {Key}) -> integer` | One legend row: each key as its glyph (default █) in its role and its label, two cells apart. Returns the drawn width. |
+| `viz.line(painter: frame.Painter, rect: Rect, lines: {Line}, options: Chart?)` | A line or area chart in rect: y-axis labels at the top and bottom rows of the plot, an axis row, and the from/to labels below when given. Lines use braille dots (two samples per cell); the second and third series are dotted. With area the first series fills in eighth blocks, one sample per cell. A rect under 4 rows draws the first series as a sparkline. |
+| `viz.bars(painter: frame.Painter, rect: Rect, items: {Bar}, options: Scale?)` | Horizontal bars, one item per row: the label, the bar in eighth blocks scaled to max (default the largest value) and the value right-aligned at the end. Items past the last row fold into a muted "+N more". |
+| `viz.columns(painter: frame.Painter, rect: Rect, items: {Bar}, options: Scale?)` | Vertical columns, one per item, growing from the row above the labels in eighth blocks. Column width is the widest label up to 6 cells; items that do not fit are not drawn. |
+| `viz.stacked(painter: frame.Painter, rect: Rect, stacks: {Stack}, names: {string}, options: Scale?)` | Stacked horizontal bars: a legend of names on the first row, then one row per stack with its label, segments in the legend's glyphs and roles scaled to max (default the largest total) and the total right-aligned. |
+| `viz.bins(values: {number}, count: integer, min: number?, max: number?) -> {integer}` | Counts of values in count equal bins from min to max (default the sample range); gaps are skipped and the maximum falls in the last bin. |
+| `viz.histogram(painter: frame.Painter, rect: Rect, values: {number}, count: integer, options: Chart?)` | A histogram of values in count bins: adjacent columns in eighth blocks and the range labels under the first and last bins. |
+| `viz.heatmap(painter: frame.Painter, rect: Rect, grid: Grid)` | A heatmap: each value one cell (two when room) in the ramp ░▒▓█ of role (default accent) scaled to max, zero as a muted "·", a gap blank; row labels at the left and the first and last column labels under the grid. |
+| `viz.waffle(painter: frame.Painter, rect: Rect, states: {string}) -> integer` | A status grid of many items, two per cell with the half block ▀ (top item in the foreground, bottom in the background), in reading order. Each state is a role name (ok, warn, error, muted). Returns the number of items drawn; write the counts in words beside it. |
+| `viz.gauge(painter: frame.Painter, x: integer, y: integer, width: integer, value: number, max: number, options: Meter?)` | A capacity meter on row y: optional muted label, █ filled and ░ empty cells, then the percentage. The fill takes warn or error at those thresholds (fractions of max), accent otherwise. |
+| `viz.progress(painter: frame.Painter, x: integer, y: integer, width: integer, done: number, total: number, options: Meter?)` | Task progress on row y: the same bar with the exact "done/total" counts after it; the fill is ok once done reaches total. |
+| `viz.tiles(painter: frame.Painter, rect: Rect, tiles: {Tile}, min_width: integer?) -> integer` | Stat tiles in a grid of equal cells at least min_width (default 18) wide: the muted uppercase label and the value with its muted note on the next row, and a sparkline of values on the third row when the rect has it. Returns the number of tiles drawn. |
+| `viz.timeline(painter: frame.Painter, rect: Rect, lanes: {Lane}, window: Window)` | A timeline: one lane per row with its muted label, each span as █ cells in its role (default accent) between from and to (at least one cell), an optional muted "│" at now, and the from and to labels on the last row. |
+| `viz.graph(painter: frame.Painter, rect: Rect, nodes: {Node}, edges: {Edge}) -> integer` | A small directed graph laid out in layers from left to right: a node's layer is one past its furthest predecessor, nodes keep their input order within a layer and are spread over the rect's rows, and each edge runs from the right of its source to an arrow "▸" before its target along box-drawing lines in the border role that never cross a node's text. Each node is "● label" with the dot in its role (default accent) and an optional muted note on the row below when the rows allow. Nodes record hits of kind "node" with their index and id. Returns the number of nodes drawn. |
+
+## Visualization kit examples
+
+Each example below is a block of `tests/lua/frame/viz_test.lua`: the code as
+written, each checked value after `-->`, and the exact screen the golden test
+compares, with the frame's one blank cell at each edge.
+
+### `viz.series`, `viz.push`, `viz.values`, `viz.latest`, `viz.is_gap`
+
+```lua
+local series = viz.series(3)
+for value = 1, 5 do viz.push(series, value) end
+table.concat(viz.values(series), ",") --> "3,4,5"
+viz.latest(series) --> 5
+series.total --> 5
+#series.items --> 3
+for value = 6, 1000 do viz.push(series, value) end
+#series.items --> 3
+table.concat(viz.values(series), ",") --> "998,999,1000"
+viz.push(series, viz.GAP)
+viz.is_gap(viz.latest(series) or 0) --> true
+```
+
+### `viz.cadence`, `viz.due`
+
+```lua
+local cadence = viz.cadence(1000)
+viz.due(cadence, 5000) --> true
+viz.due(cadence, 5400) --> false
+viz.due(cadence, 6000) --> true
+viz.due(cadence, 6999) --> false
+viz.due(cadence, 7100) --> true
+cadence.next_at --> 8000
+viz.due(cadence, 12345) --> true
+cadence.next_at --> 13345
+```
+
+### `viz.number`, `viz.bytes`, `viz.count`, `viz.extent`
+
+```lua
+viz.number(7) --> "7"
+viz.number(7.26) --> "7.3"
+viz.number(42.4, "ms") --> "42 ms"
+viz.number(1234) --> "1.2k"
+viz.number(12345) --> "12k"
+viz.number(999999) --> "1M"
+viz.number(3400000) --> "3.4M"
+viz.number(viz.GAP) --> "—"
+viz.bytes(512) --> "512 B"
+viz.bytes(13002342) --> "12.4 MiB"
+viz.count(4000) --> "4,000"
+viz.count(1234567) --> "1,234,567"
+viz.count(12) --> "12"
+local low, high = viz.extent({4, 9, viz.GAP, 6})
+tostring(low) .. ".." .. tostring(high) --> "0..9"
+local flat_low, flat_high = viz.extent({5, 5}, 5)
+tostring(flat_low) .. ".." .. tostring(flat_high) --> "5..6"
+```
+
+### `viz.spark`
+
+```lua
+viz.spark({0, 2, 4, 8}, 6) --> "  ▁▂▄█"
+viz.spark({1, viz.GAP, 3}, 3) --> "▃·█"
+viz.spark({5, 5, 5}, 2) --> "██"
+viz.spark({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 4) --> "▆▇██"
+viz.spark({4, 6}, 2, 4, 6) --> "▁█"
+viz.spark({1}, 0) --> ""
+```
+
+### `viz.sparkline`
+
+```lua
+local painter = frame.new(24, 1, appearance.defaults())
+viz.sparkline(painter, 2, 1, 22, {3, 5, 2, 8, 6, 9, 4, 7, viz.GAP, 5, 8, 10})
+```
+
+```text
+           ▃▄▂▇▅█▄▆·▄▇█ 
+```
+
+### `viz.bar_cell`
+
+```lua
+viz.bar_cell(5, 10, 4) --> "██  "
+viz.bar_cell(3, 8, 4) --> "█▌  "
+viz.bar_cell(20, 10, 3) --> "███"
+viz.bar_cell(viz.GAP, 10, 2) --> "  "
+local rows = frame.new(50, 4, appearance.defaults())
+frame.table(rows, 1, 4, {columns = {{title = "Process", width = 0}, {title = "Steps", width = 12}, {title = "", width = 4, align = "right"}},
+    cells = {{"bee.host:main", viz.bar_cell(96, 96, 12), "96"}, {"bee.session:main", viz.bar_cell(16, 96, 12), "16"},
+        {"bee.applications:broker", viz.bar_cell(70, 96, 12), "70"}}, kind = "row", selected = 0, offset = 0})
+```
+
+```text
+ PROCESS                       STEPS              
+ bee.host:main                 ████████████    96 
+ bee.session:main              ██              16 
+ bee.applications:broker       ████████▊       70 
+```
+
+### `viz.bins`
+
+```lua
+table.concat(viz.bins({1, 2, 2, 3, 9, viz.GAP}, 4), ",") --> "3,1,0,1"
+table.concat(viz.bins({0, 5, 10}, 2, 0, 10), ",") --> "1,2"
+```
+
+### `viz.line`
+
+```lua
+local values: {number} = {}
+for index = 1, 60 do values[index] = 50 + 40 * math.sin(index / 6) end
+local line = frame.new(40, 8, appearance.defaults())
+viz.line(line, {x = 2, y = 1, width = 38, height = 7}, {{values = values}}, {unit = "ms", from = "-60s", to = "now"})
+```
+
+```text
+ 90 ms ┤  ⢀⡴⠚⠉⠙⠲⣄            ⢀⡴⠚⠉⠙⢦⡀    
+       │ ⣠⠏     ⠘⢦⡀         ⣰⠋     ⠙⢦   
+       │          ⠳⣄      ⢀⡞⠁       ⠈⠳⡄ 
+       │           ⠘⢦⡀  ⢀⡴⠋           ⠙ 
+  0 ms ┤             ⠉⠓⠒⠋               
+       └─────────────────────────────── 
+        -60s                        now 
+                                        
+```
+
+### `viz.line`
+
+```lua
+local area = frame.new(40, 6, appearance.defaults())
+viz.line(area, {x = 2, y = 1, width = 38, height = 5}, {{values = values}}, {area = true, min = 0, max = 100})
+```
+
+```text
+ 100 ┤               ▂▃▄▅▅▅▄▃▂▁         
+     │          ▁▃▅▇███████████▇▅▃▁     
+     │      ▁▂▄▇███████████████████▇▅▃▁ 
+   0 ┤▃▃▄▄▆▇███████████████████████████ 
+     └───────────────────────────────── 
+                                        
+```
+
+### `viz.bars`
+
+```lua
+local bars = frame.new(40, 4, appearance.defaults())
+viz.bars(bars, {x = 2, y = 1, width = 38, height = 4}, {{label = "running", value = 31}, {label = "idle", value = 11}, {label = "waiting", value = 3}})
+```
+
+```text
+ running  █████████████████████████  31 
+ idle     ████████▉                  11 
+ waiting  ██▍                         3 
+                                        
+```
+
+### `viz.columns`
+
+```lua
+local columns = frame.new(30, 5, appearance.defaults())
+viz.columns(columns, {x = 2, y = 1, width = 28, height = 5}, {{label = "mon", value = 4}, {label = "tue", value = 8}, {label = "wed", value = 2}})
+```
+
+```text
+     ███                      
+     ███                      
+ ███ ███                      
+ ███ ███ ███                  
+ mon tue wed                  
+```
+
+### `viz.stacked`
+
+```lua
+local stacked = frame.new(40, 3, appearance.defaults())
+viz.stacked(stacked, {x = 2, y = 1, width = 38, height = 3}, {{label = "node-a", segments = {6, 3, 1}}, {label = "node-b", segments = {2, 2, 0}}}, {"busy", "idle", "failed"})
+```
+
+```text
+ █ busy  ▓ idle  ▒ failed               
+ node-a  ████████████████▓▓▓▓▓▓▓▒▒▒  10 
+ node-b  █████▓▓▓▓▓                   4 
+```
+
+### `viz.histogram`
+
+```lua
+local histogram = frame.new(30, 5, appearance.defaults())
+viz.histogram(histogram, {x = 2, y = 1, width = 28, height = 5}, {1, 2, 2, 3, 3, 3, 4, 4, 5, 9}, 7, {unit = "ms"})
+```
+
+```text
+ ████████                     
+ ████████▅▅▅▅                 
+ ████████████▃▃▃▃        ▃▃▃▃ 
+ ████████████████        ████ 
+ 1 ms                    9 ms 
+```
+
+### `viz.heatmap`
+
+```lua
+local heatmap = frame.new(30, 4, appearance.defaults())
+viz.heatmap(heatmap, {x = 2, y = 1, width = 28, height = 4}, {rows = {{0, 1, 2, 3, 4}, {4, 3, 0 / 0, 1, 0}, {2, 2, 2, 2, 2}},
+    row_labels = {"mon", "tue", "wed"}, column_labels = {"00h", "04h"}})
+```
+
+```text
+ mon · ░░▒▒▓▓██               
+ tue ██▓▓  ░░·                
+ wed ▒▒▒▒▒▒▒▒▒▒               
+     00h    04h               
+```
+
+### `viz.waffle`
+
+```lua
+local waffle = frame.new(12, 2, appearance.defaults())
+local shown = viz.waffle(waffle, {x = 2, y = 1, width = 10, height = 2}, {"ok", "ok", "error", "ok", "ok", "ok", "ok", "ok", "ok", "ok", "ok", "warn"})
+shown --> 12
+```
+
+```text
+ ▀▀▀▀▀▀▀▀▀▀ 
+            
+```
+
+### `viz.gauge`, `viz.progress`
+
+```lua
+local meters = frame.new(40, 2, appearance.defaults())
+viz.gauge(meters, 2, 1, 38, 62, 100, {label = "Heap"})
+viz.progress(meters, 2, 2, 38, 3180, 4000)
+```
+
+```text
+ Heap ██████████████████░░░░░░░░░░░ 62% 
+ █████████████████████░░░░░ 3,180/4,000 
+```
+
+### `viz.tiles`
+
+```lua
+local tiles = frame.new(60, 3, appearance.defaults())
+viz.tiles(tiles, {x = 2, y = 1, width = 58, height = 3}, {{label = "Heap", value = "12.4 MiB", note = "▲0.8", values = {3, 5, 2, 8, 6, 9, 4, 7, 5, 8, 10}},
+    {label = "Goroutines", value = "214"}, {label = "GC", value = "38"}}) --> 3
+```
+
+```text
+ HEAP                GOROUTINES          GC                 
+ 12.4 MiB ▲0.8       214                 38                 
+        ▃▄▂▇▅█▄▆▄▇█                                         
+```
+
+### `viz.timeline`
+
+```lua
+local timeline = frame.new(40, 4, appearance.defaults())
+viz.timeline(timeline, {x = 2, y = 1, width = 38, height = 4}, {{label = "build", spans = {{start = 0, finish = 20}}},
+    {label = "test", spans = {{start = 20, finish = 50, role = "ok"}}}, {label = "ship", spans = {{start = 50, finish = 60}}}},
+    {from = 0, to = 60, now = 45, from_label = "18:00", to_label = "19:00"})
+style_at(frame.rows(timeline)[2], "█") --> rgb(honey().ok) .. "/" .. rgb(honey().surface)
+```
+
+```text
+ build  ███████████            │        
+ test             ████████████████      
+ ship                          │ ██████ 
+        18:00                     19:00 
+```
+
+### `viz.legend`
+
+```lua
+local legend = frame.new(40, 1, appearance.defaults())
+viz.legend(legend, 2, 1, 38, {{label = "heap"}, {label = "stack"}, {label = "free"}})
+```
+
+```text
+ █ heap  ▓ stack  ▒ free                
+```
+
+### `viz.graph`
+
+```lua
+local graph = frame.new(60, 9, appearance.defaults())
+viz.graph(graph, {x = 2, y = 1, width = 58, height = 9}, {{id = "hub", label = "hub", note = "owner"},
+    {id = "a", label = "node-a", role = "ok", note = "ready"}, {id = "b", label = "node-b", role = "warn", note = "degraded"},
+    {id = "c", label = "agent", note = "managed"}}, {{from = "hub", to = "a"}, {from = "hub", to = "b"}, {from = "a", to = "c"}}) --> 4
+```
+
+```text
+                                                            
+              ┌────▸● node-a  ──────┐                       
+              │       ready         │                       
+ ● hub  ──────┤                     └────▸● agent           
+   owner      │                             managed         
+              └────▸● node-b                                
+                      degraded                              
+                                                            
+                                                            
+```
+
+### `viz.graph`
+
+```lua
+local pipeline = frame.new(60, 3, appearance.defaults())
+viz.graph(pipeline, {x = 2, y = 1, width = 58, height = 3}, {{id = "f", label = "fetch"}, {id = "c", label = "classify ×12"},
+    {id = "d", label = "dedupe"}, {id = "r", label = "report"}}, {{from = "f", to = "c"}, {from = "c", to = "d"}, {from = "d", to = "r"}})
+```
+
+```text
+                                                            
+ ● fetch ─────▸● classify ×12 ─────▸● dedupe ─────▸● report 
+                                                            
+```
 
 ## Application client
 
@@ -474,6 +862,494 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local position = sections[section].label .. " · " .. tostring(selected) .. "/" .. tostring(M.item_count(section))
         frame.footer(painter, width >= 60 and position or "", HINTS)
     end
+    return {rows = frame.rows(painter), hits = painter.hits}
+end
+
+return M
+```
+
+
+## Canonical dashboard: System Monitor
+
+**Tools → Learn → System Monitor** is the reference dashboard: stat tiles, then
+a grid of titled panels whose count follows the size class (2x2 from 80x24, 3x2
+from 120x36, 4x2 from 160x48), each panel one kit call over live runtime
+statistics, and a panel whose source fails shows its own empty state. Compose a
+dashboard the same way: `frame.layout`, `viz.tiles`, `frame.grid`, then one
+`frame.panel` and one kit call per cell. These are its exact screens at the
+three size classes from `tests/lua/monitor/view_test.lua`:
+
+```lua
+local series = history()
+local snapshot = sample(60)
+local compact = view.draw(80, 24, appearance.defaults(), snapshot, series, false)
+local standard = view.draw(120, 36, appearance.defaults(), snapshot, series, false)
+local wide = view.draw(160, 48, appearance.defaults(), snapshot, series, false)
+```
+
+```text
+ SYSTEM MONITOR                                        Live · 1s · 24 processes 
+                                                                                
+ HEAP                SCHEDULER           PROCESSES           GOROUTINES         
+ 16.0 MiB            403 steps/s         24 on 3 hosts       214 38 GC          
+ ▇▆▅█▇▆▅██▇▆▅█▇▆▅██  ▆▆▇▇▅▆▆▇▇▅█▆▆▄▇▅█▃                                         
+                                                                                
+ HEAP                          16.0 MiB  PROCESSES BY STATE        24 processes 
+ 18 MiB ┤ █▄   ▆▁  █▄   ▆▁  █▄   ▆▁  █▄  idle     █████████████████████████  12 
+        │ ██▇▃ ██▅ ██▇▃ ██▅ ██▇▃ ██▅ ██  running  ████████████▌               6 
+        │█████▆████████▆████████▆██████  waiting  ████████████▌               6 
+        │██████████████████████████████                                         
+  0 MiB ┤██████████████████████████████                                         
+        └──────────────────────────────                                         
+         -60s                       now                                         
+                                                                                
+ SCHEDULER                  403 steps/s  SERVICES                   30 services 
+ 1.1k ┤  ⢀⣤ ⣠⡄ ⣀⣶⢀⡀⣿ ⣤ ⣀⣶⢀⣰⡆ ⣤ ⣠⡄ ⣀⣶ ⣤⣿  28 running · 1 failed · 1 starting     
+      │   ⠸⠞⠁⣧⠞⢹⡟⠋⣧⠏⢹⡿⠞⢹⡟⠋⣿⠷⢻⡿⠞⠁⠧⠞⢹⡟⢻⡿⢿                                         
+      │             ⠈⠁    ⠉ ⠈⠁      ⠈⠁⠸  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀         
+    0 ┤                                                                         
+      └────────────────────────────────                                         
+       -60s                         now                                         
+  Enter Refresh   P Pause                                                       
+ Enter refresh · P pause · Esc close                                            
+```
+
+```text
+ SYSTEM MONITOR                                                                                Live · 1s · 24 processes 
+                                                                                                                        
+ HEAP                          SCHEDULER                     PROCESSES                     GOROUTINES                   
+ 16.0 MiB                      403 steps/s                   24 on 3 hosts                 214 38 GC                    
+ █▇▆▅█▇▆▅██▇▆▅█▇▆▅██▇▆▅█▇▆▅██  ▆▇▄█▅▆▇▄█▅▆▆▇▇▅▆▆▇▇▅█▆▆▄▇▅█▃                                                             
+                                                                                                                        
+ HEAP                          16.0 MiB  PROCESSES BY STATE        24 processes  SCHEDULER                  403 steps/s 
+ 18 MiB ┤ █    ▃   █    ▃   █    ▃   █   idle     █████████████████████████  12  1.1k ┤         ⣤  ⣿    ⣀          ⣤  ⣿ 
+        │ █▆   █▁  █▆   █▁  █▆   █▁  █▆  running  ████████████▌               6       │   ⣶ ⢀⡀  ⣿  ⣿ ⣿  ⣿ ⢸⡇ ⣶ ⢠⡄ ⣀⣿ ⣤⣿ 
+        │ ██▄  ██  ██▄  ██  ██▄  ██  ██  waiting  ████████████▌               6       │  ⠈⢹ ⡞⡇⢀⣿⣿⢰⡆⣿⣤⣿⢀⣿⣿⢠⣼⡇⣀⣿ ⡞⡇⢠⢿⣿⣀⣿⣿ 
+        │ ███▃ ███ ███▃ ███ ███▃ ███ ██                                               │   ⢸⣸⠁⡇⡞⢸⣿⡏⡇⡟⢻⣿⡼⢸⣿⡏⣿⣷⢻⣿⣸⠁⡇⡞⢸⡿⢿⣿⣿ 
+        │▆████▁███▆████▁███▆████▁███▆██                                               │   ⠸⠇ ⣿⠁⢸⡇ ⣇⡇⢸⡟⠃⢸⡇ ⣿⠉⢸⡟⠃ ⣿⠁⢸⡇⢸⡿⢿ 
+        │██████████████████████████████                                               │        ⠈⠁ ⠛ ⠸⠇ ⠘⠃ ⠿ ⢸⡇    ⠈⠁⢸⡇⢸ 
+        │██████████████████████████████                                               │                             ⠈⠁⢸ 
+        │██████████████████████████████                                               │                               ⠈ 
+        │██████████████████████████████                                               │                                 
+        │██████████████████████████████                                               │                                 
+  0 MiB ┤██████████████████████████████                                             0 ┤                                 
+        └──────────────────────────────                                               └──────────────────────────────── 
+         -60s                       now                                                -60s                         now 
+                                                                                                                        
+ SERVICES                   30 services  HOSTS                          3 hosts  MEMORY               48.0 MiB reserved 
+ 28 running · 1 failed · 1 starting      █ idle  ▓ running  ▒ waiting            Heap ██████████░░░░░░░░░░░░░░░░░░░ 33% 
+                                         bee:host      ███████████▓▓▓▓▓▒▒▒▒▒  8                                         
+ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀          bee:terminal  ███████████▓▓▓▓▓▒▒▒▒▒  8  120k objects · 38 GC cycles            
+                                         bee:workers   ███████████▓▓▓▓▓▒▒▒▒▒  8                                         
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+  Enter Refresh   P Pause                                                                                               
+ Enter refresh · P pause · Esc close                                                                                    
+```
+
+```text
+ SYSTEM MONITOR                                                                                                                        Live · 1s · 24 processes 
+                                                                                                                                                                
+ HEAP                                    SCHEDULER                               PROCESSES                               GOROUTINES                             
+ 16.0 MiB                                403 steps/s                             24 on 3 hosts                           214 38 GC                              
+ ██▇▆▅█▇▆▅██▇▆▅█▇▆▅██▇▆▅█▇▆▅██▇▆▅█▇▆▅██  ▇▄█▅▆▆▇▅█▆▆▇▄█▅▆▇▄█▅▆▆▇▇▅▆▆▇▇▅█▆▆▄▇▅█▃                                                                                 
+                                                                                                                                                                
+ HEAP                          16.0 MiB  PROCESSES BY STATE        24 processes  SCHEDULER                  403 steps/s  SERVICES                   30 services 
+ 18 MiB ┤ █        █        █        █   idle     █████████████████████████  12  1.1k ┤         ⣀  ⣶               ⣀  ⣿  28 running · 1 failed · 1 starting     
+        │ █▁   █   █▁   █   █▁   █   █▁  running  ████████████▌               6       │         ⣿  ⣿ ⣀  ⣿ ⢠⡄       ⣿  ⣿                                         
+        │ ██   █▁  ██   █▁  ██   █▁  ██  waiting  ████████████▌               6       │   ⣶ ⢠⡄  ⣿  ⣿ ⣿  ⣿ ⢸⡇ ⣿ ⢠⡄ ⣀⣿ ⣶⣿  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀         
+        │ ██▂  ██  ██▂  ██  ██▂  ██  ██                                               │  ⠐⢻ ⣸⡇ ⣿⣿⢠⡄⣿ ⣿ ⣶⣿⢀⣸⡇ ⣿ ⡼⡇ ⣿⣿ ⣿⣿                                         
+        │ ███  ██▂ ███  ██▂ ███  ██▂ ██                                               │   ⢸⢀⡇⡇⢸⢹⣿⡼⡇⣿⣿⣿⢰⢻⣿⣸⣿⡇⣶⣿⢠⠇⡇⢸⢹⣿⣤⣿⣿                                         
+        │ ███▃ ███ ███▃ ███ ███▃ ███ ██                                               │   ⢸⢸ ⡇⡞⢸⣿⡇⡇⡏⢹⣿⡼⢸⣿⡇⣿⣷⢻⣿⣸ ⡇⡏⢸⡿⢿⣿⣿                                         
+        │▃████ ███▃████ ███▃████ ███▃██                                               │   ⢸⡏ ⣷⠃⢸⡇ ⡇⡇⢸⡿⠇⢸⡏⠁⣿⠛⢸⣿⡇ ⣷⠃⢸⡇⢸⣿⣿                                         
+        │█████▄████████▄████████▄██████                                               │   ⠈⠁ ⠿ ⢸⡇ ⣷⠃⢸⡇ ⢸⡇ ⣿ ⢸⡇  ⠛ ⢸⡇⢸⡏⢹                                         
+        │██████████████████████████████                                               │           ⠛ ⢸⡇ ⠈⠁ ⠿ ⢸⡇      ⢸⡇⢸                                         
+        │██████████████████████████████                                               │                     ⠈⠁      ⠘⠃⢸                                         
+        │██████████████████████████████                                               │                               ⢸                                         
+        │██████████████████████████████                                               │                                                                         
+        │██████████████████████████████                                               │                                                                         
+        │██████████████████████████████                                               │                                                                         
+        │██████████████████████████████                                               │                                                                         
+        │██████████████████████████████                                               │                                                                         
+  0 MiB ┤██████████████████████████████                                             0 ┤                                                                         
+        └──────────────────────────────                                               └────────────────────────────────                                         
+         -60s                       now                                                -60s                         now                                         
+                                                                                                                                                                
+ HOSTS                          3 hosts  MEMORY               48.0 MiB reserved  TOPOLOGY                     this node  STEPS PER PROCESS         distribution 
+ █ idle  ▓ running  ▒ waiting            Heap ██████████░░░░░░░░░░░░░░░░░░░ 33%                                                      ███                  ███   
+ bee:host      ███████████▓▓▓▓▓▒▒▒▒▒  8                                                                                              ███                  ███   
+ bee:terminal  ███████████▓▓▓▓▓▒▒▒▒▒  8  120k objects · 38 GC cycles                            ┌────▸● bee:host                     ███                  ███   
+ bee:workers   ███████████▓▓▓▓▓▒▒▒▒▒  8                                                         │       8 processes                  ███                  ███   
+                                                                                                │                                    ███                  ███   
+                                                                                                │                           ▃▃▃▃▃▃▃▃▃███▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃███   
+                                                                                                │                           █████████████████████████████████   
+                                                                                                │                           █████████████████████████████████   
+                                                                                 ● node   ──────┼────▸● bee:terminal        █████████████████████████████████   
+                                                                                   3 hosts      │       8 processes         █████████████████████████████████   
+                                                                                                │                           █████████████████████████████████   
+                                                                                                │                           █████████████████████████████████   
+                                                                                                │                           █████████████████████████████████   
+                                                                                                │                           █████████████████████████████████   
+                                                                                                └────▸● bee:workers         █████████████████████████████████   
+                                                                                                        8 processes         █████████████████████████████████   
+                                                                                                                            █████████████████████████████████   
+                                                                                                                         0                                948   
+  Enter Refresh   P Pause                                                                                                                                       
+ Enter refresh · P pause · Esc close                                                                                                                            
+```
+
+### Registry manifest (`src/apps/monitor/_index.yaml`)
+
+```yaml
+version: '1.0'
+namespace: bee.monitor
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, time, uuid]
+  imports:
+    client: bee.application:client
+    appearance: bee.application:appearance
+    frame: bee.application:frame
+    probe: bee.processes:probe
+    view: bee.monitor:view
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: System Monitor
+      icon: M
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools/Learn
+      role: reference
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  imports:
+    appearance: bee.application:appearance
+    frame: bee.application:frame
+    viz: bee.application:viz
+    probe: bee.processes:probe
+    text: bee.application:text
+```
+
+### Process (`src/apps/monitor/app.lua`)
+
+```lua
+-- Reference dashboard: live runtime statistics drawn with the application
+-- frame and the visualization kit. It samples once per second while it is
+-- open and owns no data or control authority.
+local tty = require("tty")
+local process = require("process")
+local channel = require("channel")
+local time = require("time")
+local uuid = require("uuid")
+local client = require("client")
+local appearance = require("appearance")
+local frame = require("frame")
+local probe = require("probe")
+local view = require("view")
+
+local function main(value: unknown)
+    local launch = client.launch(value)
+    if not launch then error("Invalid application launch") end
+    local broker = launch.broker_pid
+    local input = assert(tty.events())
+    local lifecycle = assert(process.events())
+    local states = assert(process.listen("bee.appearance.state", {message = true}))
+    assert(tty.start())
+    local output = assert(tty.surface())
+    local ticker = assert(time.ticker("1s"))
+    local ticks = ticker:channel()
+    local width, height = tty.screen_size()
+    local preferences = appearance.defaults()
+    local history = probe.new_history()
+    local snapshot = probe.sample()
+    local last_time = time.now():unix_nano()
+    probe.append(history, snapshot, nil, 0)
+    local hits: {frame.Hit} = {}
+    local paused = false
+    local running, dirty, ready = true, true, false
+
+    -- One sample per tick; the rate spans the real elapsed time.
+    local function sample(continuous: boolean)
+        local now = time.now():unix_nano()
+        local next_snapshot = probe.sample()
+        probe.append(history, next_snapshot, continuous and snapshot or nil, (now - last_time) / 1000000000)
+        snapshot = next_snapshot
+        last_time = now
+        dirty = true
+    end
+    local function toggle_pause()
+        paused = not paused
+        -- A resumed series starts a fresh rate interval.
+        if not paused then sample(false) end
+        dirty = true
+    end
+
+    if broker then
+        process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
+    end
+    while running do
+        if dirty then
+            local drawn = view.draw(width, height, preferences, snapshot, history, paused)
+            hits = drawn.hits
+            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            if not ready then client.ready(launch); ready = true end
+            dirty = false
+        end
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), ticks:case_receive(), states:case_receive()})
+        if not event.ok then break end
+        if event.channel == lifecycle then
+            if event.value.kind == process.event.CANCEL then running = false end
+        elseif event.channel == ticks then
+            if not paused then sample(true) end
+        elseif event.channel == states then
+            local message = event.value
+            if broker and message:from() == broker then
+                local decoded = appearance.decode(message:payload():data())
+                if decoded then preferences = decoded; dirty = true end
+            end
+        else
+            local data = event.value
+            if data.type == "close" then running = false
+            elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+            elseif data.type == "key" and data.action ~= "release" then
+                local key = data.key_type
+                if data.key == "p" or data.key == " " then toggle_pause()
+                elseif data.key == "r" or key == "enter" then sample(not paused)
+                elseif key == "esc" or key == "escape" then running = false end
+            elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                if hit and hit.kind == "pause" then toggle_pause()
+                elseif hit and hit.kind == "refresh" then sample(not paused) end
+            end
+        end
+    end
+    ticker:stop()
+    process.unlisten(states)
+    output:close()
+    tty.stop()
+end
+
+return {main = main}
+```
+
+### Pure view (`src/apps/monitor/view.lua`)
+
+```lua
+-- Pure dashboard over measured runtime samples, composed from the application
+-- frame and the visualization kit: stat tiles, then a grid of panels whose
+-- count follows the size class (2x2 compact, 3x2 standard, 4x2 wide). No
+-- calls, polling or mutable ownership.
+local appearance = require("appearance")
+local frame = require("frame")
+local viz = require("viz")
+local probe = require("probe")
+local text = require("text")
+
+type Frame = {rows: {string}, hits: {frame.Hit}}
+type Count = {name: string, count: integer}
+type Panel = (painter: frame.Painter, cell: frame.Rect) -> ()
+local M = {}
+local MIB = 1048576
+local HINTS = frame.hints({{key = "Enter", verb = "refresh"}, {key = "P", verb = "pause"}, {key = "Esc", verb = "close"}})
+local GRID: {[string]: {integer}} = {compact = {2, 2}, standard = {3, 2}, wide = {4, 2}}
+
+-- Occurrences of each value, most frequent first, then by name.
+local function tally(values: {string}): {Count}
+    local counts: {[string]: integer} = {}
+    local order: {string} = {}
+    for _, value in ipairs(values) do
+        local name = value ~= "" and value or "unknown"
+        if not counts[name] then order[#order + 1] = name end
+        counts[name] = (counts[name] or 0) + 1
+    end
+    local result: {Count} = {}
+    for _, name in ipairs(order) do result[#result + 1] = {name = name, count = counts[name] or 0} end
+    table.sort(result, function(a: Count, b: Count): boolean
+        if a.count ~= b.count then return a.count > b.count end
+        return a.name < b.name
+    end)
+    return result
+end
+
+local function scaled(series: viz.Series, divisor: number): {number}
+    local values: {number} = {}
+    for index, value in ipairs(viz.values(series)) do values[index] = value / divisor end
+    return values
+end
+
+local function service_role(state: string): string
+    if state == "running" or state == "started" then return "ok" end
+    if state == "failed" or state == "error" then return "error" end
+    if state == "starting" or state == "restarting" or state == "retrying" or state == "stopping" then return "warn" end
+    return "muted"
+end
+
+local function plural(count: integer, one: string, many: string): string
+    return viz.count(count) .. " " .. (count == 1 and one or many)
+end
+
+local function heap_panel(snapshot: probe.Snapshot, history: probe.History): Panel
+    return function(painter: frame.Painter, cell: frame.Rect)
+        local inner = frame.panel(painter, cell, "Heap", snapshot.heap and viz.bytes(snapshot.heap) or "")
+        if not snapshot.heap then frame.empty(painter, inner.y, "Heap unavailable", "R retry", inner); return end
+        viz.line(painter, inner, {{values = scaled(history.heap, MIB)}}, {area = true, unit = "MiB", from = "-60s", to = "now"})
+    end
+end
+
+local function scheduler_panel(history: probe.History): Panel
+    return function(painter: frame.Painter, cell: frame.Rect)
+        local latest = viz.latest(history.rate)
+        local inner = frame.panel(painter, cell, "Scheduler", latest and viz.number(latest, "steps/s") or "")
+        viz.line(painter, inner, {{values = viz.values(history.rate)}}, {from = "-60s", to = "now"})
+    end
+end
+
+local function states_panel(snapshot: probe.Snapshot): Panel
+    return function(painter: frame.Painter, cell: frame.Rect)
+        local inner = frame.panel(painter, cell, "Processes by state", plural(#snapshot.processes, "process", "processes"))
+        local states: {string} = {}
+        for index, item in ipairs(snapshot.processes) do states[index] = text.bound(item.state, 64) end
+        local bars: {viz.Bar} = {}
+        for index, item in ipairs(tally(states)) do bars[index] = {label = item.name, value = item.count} end
+        if #bars == 0 then frame.empty(painter, inner.y, "No processes reported", "R retry", inner); return end
+        viz.bars(painter, inner, bars)
+    end
+end
+
+local function services_panel(snapshot: probe.Snapshot): Panel
+    return function(painter: frame.Painter, cell: frame.Rect)
+        local inner = frame.panel(painter, cell, "Services", plural(#snapshot.services, "service", "services"))
+        if #snapshot.services == 0 then frame.empty(painter, inner.y, "No services reported", "R retry", inner); return end
+        local states: {string} = {}
+        local roles: {string} = {}
+        for index, item in ipairs(snapshot.services) do
+            states[index] = text.bound(item.state, 64)
+            roles[index] = service_role(item.state)
+        end
+        local words: {string} = {}
+        for _, item in ipairs(tally(states)) do words[#words + 1] = viz.count(item.count) .. " " .. item.name end
+        frame.put(painter, inner.x, inner.y, table.concat(words, " · "), inner.width)
+        viz.waffle(painter, {x = inner.x, y = inner.y + 2, width = inner.width, height = inner.height - 2}, roles)
+    end
+end
+
+local function hosts_panel(snapshot: probe.Snapshot): Panel
+    return function(painter: frame.Painter, cell: frame.Rect)
+        local states: {string} = {}
+        local hosts: {string} = {}
+        for index, item in ipairs(snapshot.processes) do
+            states[index] = text.bound(item.state, 64)
+            hosts[index] = text.bound(item.host, 128)
+        end
+        local inner = frame.panel(painter, cell, "Hosts", plural(#tally(hosts), "host", "hosts"))
+        local names: {string} = {}
+        for index, item in ipairs(tally(states)) do if index <= 3 then names[index] = item.name end end
+        local stacks: {viz.Stack} = {}
+        for _, host in ipairs(tally(hosts)) do
+            local segments: {number} = {}
+            for position, name in ipairs(names) do
+                local count = 0
+                for index = 1, #snapshot.processes do
+                    if hosts[index] == host.name and states[index] == name then count = count + 1 end
+                end
+                segments[position] = count
+            end
+            stacks[#stacks + 1] = {label = host.name, segments = segments}
+        end
+        if #stacks == 0 then frame.empty(painter, inner.y, "No hosts reported", "R retry", inner); return end
+        viz.stacked(painter, inner, stacks, names)
+    end
+end
+
+local function memory_panel(snapshot: probe.Snapshot): Panel
+    return function(painter: frame.Painter, cell: frame.Rect)
+        local inner = frame.panel(painter, cell, "Memory", snapshot.reserved and (viz.bytes(snapshot.reserved) .. " reserved") or "")
+        if not snapshot.heap or not snapshot.reserved then frame.empty(painter, inner.y, "Memory statistics unavailable", "R retry", inner); return end
+        viz.gauge(painter, inner.x, inner.y, inner.width, snapshot.heap or 0, snapshot.reserved or 1, {label = "Heap", warn = 0.8, error = 0.95})
+        frame.put(painter, inner.x, inner.y + 2, viz.number(snapshot.heap_objects or viz.GAP) .. " objects · "
+            .. viz.number(snapshot.gc_cycles or viz.GAP) .. " GC cycles", inner.width, painter.theme.muted)
+    end
+end
+
+local function topology_panel(snapshot: probe.Snapshot): Panel
+    return function(painter: frame.Painter, cell: frame.Rect)
+        local hosts: {string} = {}
+        for index, item in ipairs(snapshot.processes) do hosts[index] = text.bound(item.host, 128) end
+        local counts = tally(hosts)
+        local inner = frame.panel(painter, cell, "Topology", "this node")
+        local nodes: {viz.Node} = {{id = "node", label = "node", note = plural(#counts, "host", "hosts")}}
+        local edges: {viz.Edge} = {}
+        for _, host in ipairs(counts) do
+            nodes[#nodes + 1] = {id = host.name, label = host.name, note = plural(host.count, "process", "processes")}
+            edges[#edges + 1] = {from = "node", to = host.name}
+        end
+        viz.graph(painter, inner, nodes, edges)
+    end
+end
+
+local function steps_panel(snapshot: probe.Snapshot): Panel
+    return function(painter: frame.Painter, cell: frame.Rect)
+        local inner = frame.panel(painter, cell, "Steps per process", "distribution")
+        local steps: {number} = {}
+        for index, item in ipairs(snapshot.processes) do steps[index] = item.steps end
+        if #steps == 0 then frame.empty(painter, inner.y, "No processes reported", "R retry", inner); return end
+        viz.histogram(painter, inner, steps, 12, {min = 0})
+    end
+end
+
+-- The dashboard frame for one size class.
+function M.draw(width: integer, height: integer, preferences: appearance.Preferences, snapshot: probe.Snapshot,
+    history: probe.History, paused: boolean): Frame
+    local painter = frame.new(width, height, preferences)
+    local layout = frame.layout(painter, false, true)
+    local work = layout.work
+    local summary = (paused and "Paused" or "Live · 1s") .. " · " .. plural(#snapshot.processes, "process", "processes")
+    frame.header(painter, "SYSTEM MONITOR", summary)
+    local error_text = text.bound(snapshot.error, 512)
+    local grid = GRID[layout.size]
+    local hosts: {string} = {}
+    for index, item in ipairs(snapshot.processes) do hosts[index] = text.bound(item.host, 128) end
+    local host_count = #tally(hosts)
+    local latest_rate = viz.latest(history.rate)
+    local rate = latest_rate and viz.number(latest_rate, "steps/s") or "—"
+    if not grid or work.height < 12 then
+        frame.line(painter, work.y, "Heap " .. (snapshot.heap and viz.bytes(snapshot.heap) or "—") .. " · " .. rate, painter.theme.text)
+        if work.height >= 2 then
+            frame.line(painter, work.y + 1, plural(#snapshot.services, "service", "services") .. " · "
+                .. plural(host_count, "host", "hosts"), painter.theme.muted)
+        end
+    else
+        viz.tiles(painter, {x = work.x, y = work.y, width = work.width, height = 3}, {
+            {label = "Heap", value = snapshot.heap and viz.bytes(snapshot.heap) or "—", values = viz.values(history.heap)},
+            {label = "Scheduler", value = rate, values = viz.values(history.rate)},
+            {label = "Processes", value = viz.count(#snapshot.processes), note = "on " .. plural(host_count, "host", "hosts")},
+            {label = "Goroutines", value = viz.number(snapshot.goroutines or viz.GAP), note = viz.number(snapshot.gc_cycles or viz.GAP) .. " GC"},
+        })
+        local panels: {Panel} = {heap_panel(snapshot, history), states_panel(snapshot), scheduler_panel(history),
+            services_panel(snapshot), hosts_panel(snapshot), memory_panel(snapshot), topology_panel(snapshot), steps_panel(snapshot)}
+        local cells = frame.grid({x = work.x, y = work.y + 4, width = work.width, height = work.height - 4}, grid[1], grid[2])
+        for index, cell in ipairs(cells) do panels[index](painter, cell) end
+    end
+    if layout.actions > 0 then
+        frame.actions(painter, layout.actions, {
+            {kind = "refresh", label = "Refresh", key = "Enter", enabled = true, primary = true},
+            {kind = "pause", label = paused and "Resume" or "Pause", key = "P", enabled = true, active = paused},
+        })
+    end
+    if layout.footer > 0 then frame.footer(painter, error_text, HINTS) end
     return {rows = frame.rows(painter), hits = painter.hits}
 end
 

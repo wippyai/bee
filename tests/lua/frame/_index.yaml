@@ -11,3 +11,24 @@ entries:
     test: wippy.test:test
     frame: bee.application:frame
     appearance: bee.application:appearance
+- name: layout_test
+  kind: function.lua
+  source: file://layout_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+- name: viz_test
+  kind: function.lua
+  source: file://viz_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    frame: bee.application:frame
+    viz: bee.application:viz
+    appearance: bee.application:appearance

@@ -1,46 +1,34 @@
 version: '1.0'
-namespace: bee.processes
+namespace: bee.monitor
 entries:
 - name: app
   kind: process.lua
   source: file://app.lua
   method: main
-  modules:
-  - tty
-  - process
-  - channel
-  - time
-  - uuid
+  modules: [tty, process, channel, time, uuid]
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    probe: bee.processes:probe
-    view: bee.processes:view
     client: bee.application:client
+    appearance: bee.application:appearance
+    frame: bee.application:frame
+    probe: bee.processes:probe
+    view: bee.monitor:view
   meta:
     type: bee.application
     application:
       api_version: 1
-      title: Process Manager
-      icon: P
+      title: System Monitor
+      icon: M
       lifetime: view
       revision: '1'
       instance_policy: singleton
-      group: Tools
-      role: inspection
-- name: probe
-  kind: library.lua
-  source: file://probe.lua
-  modules:
-  - system
-  imports:
-    viz: bee.application:viz
+      group: Tools/Learn
+      role: reference
 - name: view
   kind: library.lua
   source: file://view.lua
   imports:
-    frame: bee.application:frame
     appearance: bee.application:appearance
+    frame: bee.application:frame
+    viz: bee.application:viz
     probe: bee.processes:probe
     text: bee.application:text
-    viz: bee.application:viz

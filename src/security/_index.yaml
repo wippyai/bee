@@ -9,6 +9,10 @@ entries:
     appearance_write: true
   - definition_id: bee.stylebook:app
     policies: [bee:ordinary_app_subsystem_boundary]
+  - definition_id: bee.monitor:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee:processes_policy
   - definition_id: bee.processes:app
     policies:
     - bee:ordinary_app_subsystem_boundary

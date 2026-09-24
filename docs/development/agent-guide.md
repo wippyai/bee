@@ -14,9 +14,11 @@ them. Native Terminal runs with the operating system user's authority.
 
 Keep desktop responsibilities in `src/core`, public application helpers and appearance values in
 `modules/application/src`, and standalone applications in `src/apps`.
-Use the [UI brand book](../guides/ui.md) and the runnable UI Guide for
+Use the [UI brand book](../guides/ui.md), the
+[application visual style](../guides/app-style.md) and the runnable UI Guide for
 presentation and interaction rules. Applications draw through
-`bee.application:frame`; the UI Guide is its reference application. Apps use
+`bee.application:frame` and chart with `bee.application:viz`; the UI Guide and
+the System Monitor are their reference applications. Apps use
 public contracts such as `bee.application:client` and `bee.threads:client`;
 they do not import private broker or store modules.
 

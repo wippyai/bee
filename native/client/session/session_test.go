@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
+	"github.com/wippyai/bee/native/client/physical"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 )
 
@@ -211,5 +212,38 @@ func TestJoinWithoutPublicationCreatesNoOwnerState(t *testing.T) {
 	}
 	if _, err := os.Stat(directory); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("client created owner state", err)
+	}
+}
+
+// A presentation that ended because the display moved to another workspace
+// continues with the client's new session; any other end is final.
+func TestPresentationFollowsTheDisplayIntoItsNewWorkspace(t *testing.T) {
+	previous := hive.DesktopMount{Session: "session-1"}
+	moved := hive.DesktopMount{Session: "session-2"}
+	asked := 0
+	current := func(context.Context) (hive.DesktopMount, error) { asked++; return moved, nil }
+	if next, followed := followSwitch(context.Background(), current, previous, errors.New("mount expired")); !followed || next.Session != "session-2" {
+		t.Fatalf("next=%+v followed=%v", next, followed)
+	}
+	for _, ended := range []error{nil, physical.ErrDetached} {
+		if _, followed := followSwitch(context.Background(), current, previous, ended); followed {
+			t.Fatalf("followed after %v", ended)
+		}
+	}
+	if asked != 1 {
+		t.Fatalf("asked the owner %d times", asked)
+	}
+	same := func(context.Context) (hive.DesktopMount, error) { return previous, nil }
+	if _, followed := followSwitch(context.Background(), same, previous, errors.New("mount expired")); followed {
+		t.Fatal("followed the same session")
+	}
+	refused := func(context.Context) (hive.DesktopMount, error) { return hive.DesktopMount{}, errors.New("not found") }
+	if _, followed := followSwitch(context.Background(), refused, previous, errors.New("mount expired")); followed {
+		t.Fatal("followed without a current session")
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, followed := followSwitch(canceled, current, previous, errors.New("mount expired")); followed {
+		t.Fatal("followed after cancellation")
 	}
 }

@@ -475,7 +475,9 @@ local function main(owner: string, initial_application: string?, secondary_appli
             local message = selected.value
             local current = workspaces
             if current and tostring(message:from()) == owner and workspace_menu.switched(current, message:payload():data()) then
-                status = current.status
+                -- A display that moved closes its menu; a refusal stays in it.
+                if current.status == workspace_menu.SWITCHED then workspaces = nil; status = ""
+                else status = current.status end
                 dirty = true
             end
         elseif selected.channel == transfer_updates then

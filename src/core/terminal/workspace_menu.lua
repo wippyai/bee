@@ -15,6 +15,7 @@ type Panel = {x: integer, y: integer, width: integer, height: integer, capacity:
 local M = {}
 M.MAX_ITEMS = 50
 M.MAX_QUERY = 120
+M.SWITCHED = "Switching this display"
 local NONE: Response = {close = false, page = nil, switch = nil}
 function M.new(current: string): Menu
     return {current = current, items = {}, selected = 1, after = nil, next_after = nil, back = {}, query = "",
@@ -54,7 +55,7 @@ end
 function M.switched(menu: Menu, value: unknown): boolean
     if type(value) ~= "table" or value.version ~= 1 or not menu.switching or value.request_id ~= menu.switching then return false end
     menu.switching = nil
-    if value.error_code == "" then menu.status = "Switching this display"
+    if value.error_code == "" then menu.status = M.SWITCHED
     else menu.status = "Switch refused: " .. (line(value.error, 200) or tostring(value.error_code)) end
     return true
 end

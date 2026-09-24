@@ -5,6 +5,7 @@ package launch
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -75,7 +76,11 @@ func TestRuntimeClientLaunchUsesProjectState(t *testing.T) {
 	project := makeProject(t)
 	t.Chdir(project)
 
-	want, err := ProjectStateDir(filepath.Join(config, desktopCommand), project)
+	root, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := ProjectStateDir(filepath.Join(root, desktopCommand), project)
 	if err != nil {
 		t.Fatal(err)
 	}

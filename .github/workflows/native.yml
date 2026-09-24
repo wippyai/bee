@@ -196,7 +196,11 @@ jobs:
         echo "version=$version" >> "$GITHUB_OUTPUT"
     - name: Verify source-free portable deployment
       if: matrix.goos == 'linux'
-      run: tests/portable_deployment.sh "$PWD/.wippy/bin/bee-wippy" "$PWD/dist/portable-deployment"
+      run: |
+        # Ubuntu runners restrict unprivileged user namespaces through AppArmor;
+        # the check isolates the network in one, so the runner allows them here.
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+        tests/portable_deployment.sh "$PWD/.wippy/bin/bee-wippy" "$PWD/dist/portable-deployment"
     - name: Verify standalone desktop
       if: matrix.goos == 'darwin'
       run: make native-binary-check

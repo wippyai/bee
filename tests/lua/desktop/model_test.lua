@@ -53,6 +53,15 @@ local function define_tests()
             test.eq(added.normal_bounds.y, added.bounds.y)
         end)
 
+        test.it("sizes a new window to the display", function()
+            local wide = window(model.add(model.new(120, 36), "terminal", "instance", "Terminal"), "terminal")
+            test.eq(wide.bounds.width, 90)
+            test.eq(wide.bounds.height, 26)
+            local standard = window(model.add(model.new(80, 24), "terminal", "instance", "Terminal"), "terminal")
+            test.eq(standard.bounds.width, 64)
+            test.eq(standard.bounds.height, 20)
+        end)
+
         test.it("uses every cascade slot before reusing a window position", function()
             local scene = model.new(77, 24)
             local positions: {[string]: boolean} = {}

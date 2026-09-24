@@ -77,7 +77,7 @@ entries:
 - name: agent_launch
   kind: library.lua
   source: file://agent_launch.lua
-  modules: [hash, registry]
+  modules: [hash]
   imports:
     bounds: bee.threads.records:bounds
 - name: agent_launch_call

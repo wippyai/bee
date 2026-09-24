@@ -21,10 +21,10 @@ local function populated(source: string): model.State
     model.apply_presence(state, "forge", types.reply_ok("r", {role = "leader\27[31m", cluster_size = 12, sampled_at = "2026-09-09T00:00:00.000Z"}))
     model.apply_presence(state, "node-2", types.reply_error("r", types.fault("UNAVAILABLE", "peer \27[2J ended\r")))
     model.apply_stats(state, "forge", types.reply_ok("r", {memory = {heap_alloc = 3145728}, goroutines = 40}))
-    model.apply_catalog(state, "forge", {available = true, reason = "", owner_generation = "forge-execution-1", desktops = {
-        {workspace_id = "ws1", desktop_id = "d1", label = "main \7bell"},
-        {workspace_id = "ws1", desktop_id = "d2", label = "second"}}})
-    model.set_pane(state, "desktops")
+    model.apply_catalog(state, "forge", {available = true, reason = "", owner_generation = "forge-execution-1", workspaces = {
+        {workspace_id = "ws1", label = "main \7bell", served = true},
+        {workspace_id = "ws2", label = "second", served = false}}})
+    model.set_pane(state, "workspaces")
     model.move(state, 1)
     model.toggle_technical(state)
     return state
@@ -88,7 +88,7 @@ local function define_tests()
             test.is_true(wide:find("owner generation forge-execution-1", 1, true) ~= nil)
             local kinds: {[string]: boolean} = {}
             for _, hit in ipairs(frame.hits) do kinds[hit.kind] = true end
-            test.is_true(kinds["node"] and kinds["desktop"] and kinds["control"] and kinds["observe"] and kinds["refresh"] and kinds["technical"])
+            test.is_true(kinds["node"] and kinds["workspace"] and kinds["control"] and kinds["observe"] and kinds["refresh"] and kinds["technical"])
             test.is_nil(kinds["open"])
             local found = frames.hit(frame.hits, 3, 4)
             test.eq(found and found.kind, "node")
@@ -96,36 +96,36 @@ local function define_tests()
         end)
         test.it("shows whether a host serves each workspace without inferring a free display", function()
             local state = populated("live")
-            model.apply_catalog(state, "forge", {available = true, reason = "", owner_generation = "forge", next_after = "cursor", desktops = {
-                {workspace_id = "ws1", desktop_id = "", label = "retained", served = true},
-                {workspace_id = "ws2", desktop_id = "", label = "archive", served = false}}})
+            model.apply_catalog(state, "forge", {available = true, reason = "", owner_generation = "forge", next_after = "cursor", workspaces = {
+                {workspace_id = "ws1", label = "retained", served = true},
+                {workspace_id = "ws2", label = "archive", served = false}}})
             local text = table.concat(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "\n")
             test.is_true(text:find("retained  served", 1, true) ~= nil)
             test.is_true(text:find("archive  not served", 1, true) ~= nil)
             test.is_true(text:find("Page 1 · more", 1, true) ~= nil)
             test.is_nil(text:find("available to control", 1, true))
         end)
-        test.it("keeps the selected display visible when the catalog exceeds the pane", function()
+        test.it("keeps the selected workspace visible when the catalog exceeds the pane", function()
             local state = populated("live")
-            local desktops: {directory.Desktop} = {}
+            local workspaces: {directory.Workspace} = {}
             for index = 1, 20 do
-                desktops[index] = {workspace_id = "ws1", desktop_id = "display-" .. tostring(index), label = "Display " .. tostring(index)}
+                workspaces[index] = {workspace_id = "ws-" .. tostring(index), label = "Workspace " .. tostring(index), served = false}
             end
-            model.apply_catalog(state, "forge", {available = true, reason = "", owner_generation = "forge-execution-1", desktops = desktops})
-            model.set_pane(state, "desktops")
+            model.apply_catalog(state, "forge", {available = true, reason = "", owner_generation = "forge-execution-1", workspaces = workspaces})
+            model.set_pane(state, "workspaces")
             model.move(state, 20)
             for _, height in ipairs({14, 30}) do
                 local frame = view.draw(100, height, appearance.defaults(), state, 0, "")
                 local found = false
                 for _, hit in ipairs(frame.hits) do
-                    if hit.kind == "desktop" and hit.key == model.desktop_key("ws1", "display-20") then found = true end
+                    if hit.kind == "workspace" and hit.key == "ws-20" then found = true end
                 end
                 test.is_true(found)
             end
             model.move(state, -19)
             local first = false
             for _, hit in ipairs(view.draw(100, 30, appearance.defaults(), state, 0, "").hits) do
-                if hit.kind == "desktop" and hit.key == model.desktop_key("ws1", "display-1") then first = true end
+                if hit.kind == "workspace" and hit.key == "ws-1" then first = true end
             end
             test.is_true(first)
         end)
@@ -149,7 +149,7 @@ local function define_tests()
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}})
             test.eq(cell(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "display ", "MEMBERSHIP", 10), "left")
         end)
-        test.it("puts the desktops right under a short node list and names an empty hive's next action", function()
+        test.it("puts the workspaces right under a short node list and names an empty hive's next action", function()
             local state = model.new({})
             model.set_supervisor(state, true, "")
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}})
@@ -173,7 +173,7 @@ local function define_tests()
             model.set_supervisor(state, false, "supervisor is not running")
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}}, "membership unavailable")
             model.apply_presence(state, "local", types.reply_error("r", types.fault("UNAVAILABLE", "no supervisor to ask")))
-            model.apply_catalog(state, "local", {available = false, reason = "No supervisor is available", owner_generation = "", desktops = {}})
+            model.apply_catalog(state, "local", {available = false, reason = "No supervisor is available", owner_generation = "", workspaces = {}})
             local frame = view.draw(120, 30, appearance.defaults(), state, 0, "")
             local text = table.concat(frame.rows, "\n")
             test.is_true(text:find("Hive supervisor unavailable: supervisor is not running", 1, true) ~= nil)

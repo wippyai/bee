@@ -60,17 +60,6 @@ function M.member(tx: sql.Transaction, thread_id: string, actor: string): (Membe
     if not row then return nil, nil end
     return member_row(row)
 end
-function M.active_members(tx: sql.Transaction, thread_id: string): ({Member}?, string?)
-    local rows, query_err = tx:query("SELECT actor, role, revision, active FROM bee_thread_members WHERE thread_id = ? AND active = 1 ORDER BY actor", {thread_id})
-    if query_err or not rows then return nil, "read thread members" end
-    local members: {Member} = {}
-    for index, row in ipairs(rows) do
-        local member, member_err = member_row(row)
-        if not member then return nil, member_err end
-        members[index] = member
-    end
-    return members, nil
-end
 function M.command(tx: sql.Transaction, thread_id: string, actor: string, key: string): (Command?, string?)
     local row, err = single(tx, "SELECT operation, request_json, reply_json FROM bee_thread_commands WHERE thread_id = ? AND actor = ? AND idempotency_key = ?", {thread_id, actor, key}, "thread command")
     if err then return nil, err end

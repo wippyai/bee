@@ -1,5 +1,5 @@
 -- MIT. The Hive Manager frame: the Hive state, the nodes as membership and
--- their owners report them, the selected node's desktops, explicit control
+-- their owners report them, the selected node's workspaces, explicit control
 -- and observe actions and the status line. Every text comes through the
 -- model's bounding.
 local appearance = require("appearance")
@@ -46,12 +46,12 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local selected = model.selected(state)
     local catalog = model.catalog(state)
     local nodes = state.nodes
-    -- The node list takes the rows it needs; the selected node's desktops use the rest.
+    -- The node list takes the rows it needs; the selected node's workspaces use the rest.
     local reserved = 0
     if selected and height >= 12 then reserved = math.floor(math.max(5, math.min(height - 8, state.technical and 12 or 8))) end
     local list_last = height - 2 - reserved
     if reserved > 0 then list_last = math.floor(math.min(list_last, 3 + math.max(1, #nodes))) end
-    local desktop_rows = reserved > 0 and (height - 2 - list_last) or 0
+    local workspace_rows = reserved > 0 and (height - 2 - list_last) or 0
     local selected_index = 0
     local cells: {{string}} = {}
     local keys: {string} = {}
@@ -75,7 +75,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         window = frame.table(painter, 3, list_last, {columns = columns, cells = cells, keys = keys, kind = "node",
             selected = selected_index, offset = offset, focused = state.pane == "nodes"})
     end
-    if selected and desktop_rows > 0 then
+    if selected and workspace_rows > 0 then
         local y = list_last + 1
         frame.rule(painter, y)
         local lines: {string} = {}
@@ -93,7 +93,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         end
         if catalog and catalog.available and not selected.client_only then
             head = head .. "  ·  Page " .. tostring(model.page_number(state, selected.node_id)) .. (catalog.next_after and " · more" or "")
-            if state.pane == "desktops" and not state.editing then head = head .. "  ·  / search · PgUp/PgDn page" end
+            if state.pane == "workspaces" and not state.editing then head = head .. "  ·  / search · PgUp/PgDn page" end
         end
         if state.editing then head = head .. "  ·  Search: " .. model.text(state.search, 60) .. "▏"
         elseif not selected.client_only then
@@ -111,58 +111,50 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         elseif not catalog.available then
             lines[#lines + 1] = "Workspaces unavailable: " .. catalog.reason
             line_keys[#line_keys + 1] = ""
-        elseif #catalog.desktops == 0 then
+        elseif #catalog.workspaces == 0 then
             lines[#lines + 1] = "No workspaces match on this node"
             line_keys[#line_keys + 1] = ""
         else
             local workspace_ids: {string} = {}
-            local display_ids: {string} = {}
-            for _, desktop in ipairs(catalog.desktops) do
-                workspace_ids[#workspace_ids + 1] = desktop.workspace_id
-                display_ids[#display_ids + 1] = desktop.desktop_id
-            end
+            for _, workspace in ipairs(catalog.workspaces) do workspace_ids[#workspace_ids + 1] = workspace.workspace_id end
             local workspace_labels = names.labels(workspace_ids)
-            local display_labels = names.labels(display_ids)
-            local visible = math.floor(math.max(1, desktop_rows - 2))
-            local selected_desktop = 0
-            for index, desktop in ipairs(catalog.desktops) do
-                if model.desktop_key(desktop.workspace_id, desktop.desktop_id) == state.selected_desktop then selected_desktop = index end
+            local visible = math.floor(math.max(1, workspace_rows - 2))
+            local selected_workspace = 0
+            for index, workspace in ipairs(catalog.workspaces) do
+                if workspace.workspace_id == state.selected_workspace then selected_workspace = index end
             end
-            local shown = frame.window(#catalog.desktops, visible, math.floor(math.max(1, selected_desktop)), 0)
+            local shown = frame.window(#catalog.workspaces, visible, math.floor(math.max(1, selected_workspace)), 0)
             for slot = 1, shown.capacity do
-                local desktop = catalog.desktops[shown.offset + slot]
-                if not desktop then break end
-                local key = model.desktop_key(desktop.workspace_id, desktop.desktop_id)
-                local session = model.session(state, selected.node_id, desktop.workspace_id, desktop.desktop_id)
-                local workspace_label = workspace_labels[desktop.workspace_id] or names.label(desktop.workspace_id)
-                local item = desktop.label ~= "" and desktop.label or workspace_label
-                if desktop.desktop_id ~= "" then item = item .. "  display " .. (display_labels[desktop.desktop_id] or names.label(desktop.desktop_id)) end
-                if desktop.served ~= nil then item = item .. (desktop.served and "  served" or "  not served") end
+                local workspace = catalog.workspaces[shown.offset + slot]
+                if not workspace then break end
+                local session = model.session(state, selected.node_id, workspace.workspace_id)
+                local item = workspace.label ~= "" and workspace.label or (workspace_labels[workspace.workspace_id] or names.label(workspace.workspace_id))
+                item = item .. (workspace.served and "  served" or "  not served")
                 if session then
                     item = item .. "  your " .. session.mode .. " session"
                     if state.technical then item = item .. " " .. session.session_id end
                 end
-                if state.technical then item = item .. "  workspace " .. desktop.workspace_id .. "  display " .. desktop.desktop_id end
+                if state.technical then item = item .. "  workspace " .. workspace.workspace_id end
                 lines[#lines + 1] = item
-                line_keys[#line_keys + 1] = key
+                line_keys[#line_keys + 1] = workspace.workspace_id
             end
         end
         for index, value in ipairs(lines) do
-            if index > desktop_rows - 1 then break end
+            if index > workspace_rows - 1 then break end
             local key = line_keys[index]
             if key == "" then frame.line(painter, y + index, value, index == 1 and theme.muted or theme.text)
             else
-                frame.row(painter, y + index, value, state.selected_desktop == key, "desktop", index, key, nil, state.pane == "desktops")
+                frame.row(painter, y + index, value, state.selected_workspace == key, "workspace", index, key, nil, state.pane == "workspaces")
             end
         end
     end
     local idle = state.pending == nil
-    local desktop = model.selected_desktop(state)
+    local workspace = model.selected_workspace(state)
     if height >= 4 then
         frame.actions(painter, height - 1, {
             {kind = "open", label = "Open", enabled = selected ~= nil and not selected.client_only and catalog == nil, primary = true},
-            {kind = "control", label = "Control", enabled = desktop ~= nil and idle and model.can_control(state)},
-            {kind = "observe", label = "Observe", enabled = desktop ~= nil and idle, primary = catalog ~= nil},
+            {kind = "control", label = "Control", enabled = workspace ~= nil and idle and model.can_control(state)},
+            {kind = "observe", label = "Observe", enabled = workspace ~= nil and idle, primary = catalog ~= nil},
             {kind = "refresh", label = "Refresh", enabled = idle},
             {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = true},
         })

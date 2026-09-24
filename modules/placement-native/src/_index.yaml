@@ -248,7 +248,6 @@ entries:
     materialization: bee.placement.native:materialization
     executable: bee.placement.native:executable
     quote: bee.driver.kit:quote
-    types: bee.placement:types
     service: bee.placement.native:service
     bounds: bee.threads.records:bounds
     identity: bee.placement.native:identity

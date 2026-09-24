@@ -24,7 +24,6 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     placement_types: bee.placement:types
-    placement_resolver: bee.placement.registry:resolver
     configuration: bee.driver:configuration
     mcp: bee.gateway:mcp
     surface: bee.gateway:surface

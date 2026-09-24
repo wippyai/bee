@@ -52,7 +52,7 @@ entries:
       active_traits: []
       fixed_context: {}
       dynamic_keys: []
-      access: {workspace_id: pending, policy: app-open-runtime, traits: ['bee.application:runtime']}
+      access: {policy: app-open-runtime, traits: ['bee.application:runtime']}
 - name: managed_agent
   kind: registry.entry
   meta:

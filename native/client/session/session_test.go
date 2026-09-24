@@ -21,12 +21,12 @@ import (
 type desktopScript struct {
 	attachErrors []error
 	attached     []Selection
-	created      []Selection
+	created      []string
 }
 
-func (s *desktopScript) Create(_ context.Context, workspace, desktop string) (hive.DesktopSelection, error) {
-	s.created = append(s.created, Selection{Workspace: workspace, Desktop: desktop})
-	return hive.DesktopSelection{Execution: strings.Repeat("e", 32), Workspace: workspace, Desktop: desktop}, nil
+func (s *desktopScript) Create(_ context.Context, desktop string) (string, error) {
+	s.created = append(s.created, desktop)
+	return desktop, nil
 }
 
 func (s *desktopScript) Attach(_ context.Context, _ string, workspace, desktop string, _ hive.DesktopMode) (hive.DesktopMount, error) {
@@ -38,40 +38,31 @@ func (s *desktopScript) Attach(_ context.Context, _ string, workspace, desktop s
 	return hive.DesktopMount{}, nil
 }
 
-func TestDesktopSelectionNeverUsesDiscoveryOrder(t *testing.T) {
-	catalog := hive.DesktopCatalog{Workspaces: []hive.WorkspaceDesktops{
-		{ID: "workspace-a", Desktops: []hive.DesktopDescription{{ID: "desktop-a"}}},
-		{ID: "workspace-b", Desktops: []hive.DesktopDescription{{ID: "desktop-b"}}},
-	}}
-	if _, err := selectDesktop(catalog, Selection{}); err == nil {
-		t.Fatal("ambiguous catalog silently selected")
-	}
+func TestExplicitSelectionNamesANodeDisplayInTheNamedWorkspace(t *testing.T) {
+	catalog := hive.DesktopCatalog{Desktops: []hive.DesktopDescription{{ID: "desktop-a", IsDefault: true}, {ID: "desktop-b"}}}
 	want := Selection{Workspace: "workspace-b", Desktop: "desktop-b"}
 	if got, err := selectDesktop(catalog, want); err != nil || got != want {
 		t.Fatalf("selection=%v error=%v", got, err)
 	}
-	for _, selection := range []Selection{{Workspace: "workspace-a"}, {Desktop: "desktop-a"}, {Workspace: "workspace-a", Desktop: "desktop-b"}} {
+	for _, selection := range []Selection{{Workspace: "workspace-a"}, {Desktop: "desktop-a"}, {Workspace: "workspace-a", Desktop: "desktop-c"}} {
 		if _, err := selectDesktop(catalog, selection); err == nil {
 			t.Fatalf("invalid selection accepted: %v", selection)
 		}
 	}
-	catalog.Workspaces = catalog.Workspaces[:1]
-	if got, err := selectDesktop(catalog, Selection{}); err != nil || got.Workspace != "workspace-a" || got.Desktop != "desktop-a" {
-		t.Fatal(got, err)
-	}
-	if _, err := selectDesktop(hive.DesktopCatalog{}, Selection{}); err == nil {
-		t.Fatal("empty catalog accepted")
+	script := &desktopScript{}
+	if _, err := attachDesktop(context.Background(), script, catalog, "", Selection{}, hive.Control); err == nil || len(script.attached) != 0 {
+		t.Fatal("attached without a workspace")
 	}
 }
 
 func TestOrdinaryControlReusesFreeDisplayOrAllocatesAfterDefiniteConflicts(t *testing.T) {
 	workspace := strings.Repeat("a", 32)
 	first, second := strings.Repeat("b", 32), strings.Repeat("c", 32)
-	catalog := hive.DesktopCatalog{Workspaces: []hive.WorkspaceDesktops{{ID: workspace, Desktops: []hive.DesktopDescription{{ID: first}, {ID: second}}}}}
+	catalog := hive.DesktopCatalog{Desktops: []hive.DesktopDescription{{ID: first, IsDefault: true}, {ID: second}}}
 	controlled := &hive.Rejected{Fault: hive.Fault{Code: "DESKTOP_CONTROLLED", Message: "another controller"}}
 
 	reuse := &desktopScript{attachErrors: []error{controlled, nil}}
-	if _, err := attachDesktop(context.Background(), reuse, catalog, Selection{}, hive.Control); err != nil {
+	if _, err := attachDesktop(context.Background(), reuse, catalog, workspace, Selection{}, hive.Control); err != nil {
 		t.Fatal(err)
 	}
 	if len(reuse.attached) != 2 || reuse.attached[1] != (Selection{Workspace: workspace, Desktop: second}) || len(reuse.created) != 0 {
@@ -79,11 +70,11 @@ func TestOrdinaryControlReusesFreeDisplayOrAllocatesAfterDefiniteConflicts(t *te
 	}
 
 	allocate := &desktopScript{attachErrors: []error{controlled, controlled, nil}}
-	if _, err := attachDesktop(context.Background(), allocate, catalog, Selection{}, hive.Control); err != nil {
+	if _, err := attachDesktop(context.Background(), allocate, catalog, workspace, Selection{}, hive.Control); err != nil {
 		t.Fatal(err)
 	}
-	if len(allocate.created) != 1 || len(allocate.attached) != 3 || allocate.created[0].Workspace != workspace ||
-		len(allocate.created[0].Desktop) != 32 || allocate.attached[2] != allocate.created[0] {
+	if len(allocate.created) != 1 || len(allocate.attached) != 3 || len(allocate.created[0]) != 32 ||
+		allocate.attached[2] != (Selection{Workspace: workspace, Desktop: allocate.created[0]}) {
 		t.Fatalf("new durable display was not allocated and attached: %+v", allocate)
 	}
 }
@@ -91,15 +82,15 @@ func TestOrdinaryControlReusesFreeDisplayOrAllocatesAfterDefiniteConflicts(t *te
 func TestAutomaticDisplaySelectionNeverRetriesUnknownOrExplicitRefusal(t *testing.T) {
 	workspace := strings.Repeat("a", 32)
 	first, second := strings.Repeat("b", 32), strings.Repeat("c", 32)
-	catalog := hive.DesktopCatalog{Workspaces: []hive.WorkspaceDesktops{{ID: workspace, Desktops: []hive.DesktopDescription{{ID: first}, {ID: second}}}}}
+	catalog := hive.DesktopCatalog{Desktops: []hive.DesktopDescription{{ID: first, IsDefault: true}, {ID: second}}}
 	unknown := errors.New("transport lost")
 	script := &desktopScript{attachErrors: []error{unknown}}
-	if _, err := attachDesktop(context.Background(), script, catalog, Selection{}, hive.Control); err != unknown || len(script.attached) != 1 || len(script.created) != 0 {
+	if _, err := attachDesktop(context.Background(), script, catalog, workspace, Selection{}, hive.Control); err != unknown || len(script.attached) != 1 || len(script.created) != 0 {
 		t.Fatalf("unknown result was retried: calls=%+v created=%+v err=%v", script.attached, script.created, err)
 	}
 	explicit := &desktopScript{attachErrors: []error{&hive.Rejected{Fault: hive.Fault{Code: "DESKTOP_CONTROLLED"}}}}
 	selected := Selection{Workspace: workspace, Desktop: second}
-	if _, err := attachDesktop(context.Background(), explicit, catalog, selected, hive.Control); err == nil || len(explicit.attached) != 1 || explicit.attached[0] != selected || len(explicit.created) != 0 {
+	if _, err := attachDesktop(context.Background(), explicit, catalog, workspace, selected, hive.Control); err == nil || len(explicit.attached) != 1 || explicit.attached[0] != selected || len(explicit.created) != 0 {
 		t.Fatalf("explicit selection widened: %+v err=%v", explicit, err)
 	}
 }
@@ -122,7 +113,7 @@ func TestCatalogWaitReadsAgainAfterStartupRefusal(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	keys := map[string]bool{}
-	catalog, err := waitCatalog(ctx, func(ctx context.Context, key string) (hive.DesktopCatalog, error) {
+	catalog, err := waitCatalog(ctx, func(ctx context.Context, key string, _ hive.CatalogQuery) (hive.DesktopCatalog, error) {
 		if keys[key] {
 			t.Fatal("reused cached request key")
 		}
@@ -130,7 +121,7 @@ func TestCatalogWaitReadsAgainAfterStartupRefusal(t *testing.T) {
 		if len(keys) == 1 {
 			return hive.DesktopCatalog{}, &hive.Rejected{Fault: hive.Fault{Code: "UNAVAILABLE"}}
 		}
-		return hive.DesktopCatalog{Workspaces: []hive.WorkspaceDesktops{{ID: "ready"}}}, nil
+		return hive.DesktopCatalog{Workspaces: []hive.WorkspaceSummary{{ID: "ready"}}}, nil
 	})
 	if err != nil || len(keys) != 2 || len(catalog.Workspaces) != 1 {
 		t.Fatal(catalog, err, keys)
@@ -140,7 +131,7 @@ func TestCatalogWaitReadsAgainAfterStartupRefusal(t *testing.T) {
 func TestCatalogWaitDoesNotRetryOtherFailures(t *testing.T) {
 	for _, failure := range []error{&hive.Rejected{Fault: hive.Fault{Code: "FORBIDDEN"}}, hive.ErrProtocol, errors.New("transport lost")} {
 		calls := 0
-		_, err := waitCatalog(context.Background(), func(context.Context, string) (hive.DesktopCatalog, error) {
+		_, err := waitCatalog(context.Background(), func(context.Context, string, hive.CatalogQuery) (hive.DesktopCatalog, error) {
 			calls++
 			return hive.DesktopCatalog{}, failure
 		})
@@ -154,7 +145,7 @@ func TestCatalogWaitCancellationStopsFurtherRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	calls := 0
-	_, err := waitCatalog(ctx, func(context.Context, string) (hive.DesktopCatalog, error) {
+	_, err := waitCatalog(ctx, func(context.Context, string, hive.CatalogQuery) (hive.DesktopCatalog, error) {
 		calls++
 		cancel()
 		return hive.DesktopCatalog{}, &hive.Rejected{Fault: hive.Fault{Code: "UNAVAILABLE"}}

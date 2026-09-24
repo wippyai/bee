@@ -11,6 +11,8 @@ local uuid = require("uuid")
 type Acquire = {request_id: string, workspace_id: string, lease: string}
 type Result = {request_id: string, workspace_id: string, host: string, managed: boolean, error_code: string, error: string}
 type Lease = {name: string, workspace_id: string, host: string, managed: boolean}
+type Attach = {request_id: string, lease: string}
+type Attached = {request_id: string, workspace_id: string, error_code: string, error: string, ready: unknown}
 
 local M = {}
 M.MANAGER = "bee.workspace.hosts"
@@ -18,6 +20,11 @@ M.PREFIX = "bee.workspace.lease/"
 M.ACQUIRE = "bee.workspace.hosts.acquire"
 M.RELEASE = "bee.workspace.hosts.release"
 M.RESULT = "bee.workspace.hosts.result"
+-- A holder that admits desktops attaches to its leased host: the manager, the
+-- host's owner, then relays that holder's desktop admission requests and the
+-- host's answers, and answers the attach with the host's readiness.
+M.ATTACH = "bee.workspace.hosts.attach"
+M.ATTACHED = "bee.workspace.hosts.attached"
 
 local function identity(value: unknown): string?
     if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
@@ -46,6 +53,22 @@ end
 function M.release_request(value: unknown): string?
     if type(value) ~= "table" or value.version ~= 1 then return nil end
     return M.lease_name(value.lease)
+end
+
+function M.attach_request(value: unknown): Attach?
+    if type(value) ~= "table" or value.version ~= 1 then return nil end
+    local request_id, lease = text(value.request_id, 80), M.lease_name(value.lease)
+    if not request_id or request_id == "" or not lease then return nil end
+    return {request_id = request_id, lease = lease}
+end
+
+function M.attached(value: unknown): Attached?
+    if type(value) ~= "table" or value.version ~= 1 then return nil end
+    local request_id, workspace_id = text(value.request_id, 80), identity(value.workspace_id)
+    local code, message = text(value.error_code, 64), text(value.error, 2000)
+    if not request_id or not workspace_id or not code or not message then return nil end
+    if (code == "") == (value.ready == nil) then return nil end
+    return {request_id = request_id, workspace_id = workspace_id, error_code = code, error = message, ready = value.ready}
 end
 
 function M.result(value: unknown): Result?
@@ -108,6 +131,38 @@ function M.acquire(selected: string, timeout: string): (Lease?, string?)
         return nil, result.error_code .. ": " .. result.error
     end
     return {name = name, workspace_id = id, host = result.host, managed = result.managed}, nil
+end
+
+-- Attach to a managed lease's host to admit desktops through the manager. The
+-- value is the host's readiness announcement, for the caller to decode. A
+-- timeout leaves the attachment unknown; the caller releases the lease.
+function M.attach(lease: Lease, timeout: string): (unknown, string?)
+    if not lease.managed then return nil, "the workspace is served by its own composition" end
+    local manager = process.registry.lookup(M.MANAGER)
+    if not manager then return nil, "the node host manager is not running" end
+    local answers, listen_error = process.listen(M.ATTACHED, {message = true})
+    if not answers then return nil, tostring(listen_error) end
+    local request_id = "attach-" .. tostring(uuid.v7())
+    local sent, send_error = process.send(manager, M.ATTACH, {version = 1, request_id = request_id, lease = lease.name})
+    if not sent then process.unlisten(answers); return nil, "send attach request: " .. tostring(send_error) end
+    local timer, timer_error = time.timer(timeout)
+    if not timer then process.unlisten(answers); return nil, tostring(timer_error) end
+    local deadline = timer:channel()
+    local answer: Attached? = nil
+    while true do
+        local selected = channel.select({answers:case_receive(), deadline:case_receive()})
+        if not selected.ok or selected.channel == deadline then break end
+        if tostring(selected.value:from()) == tostring(manager) then
+            local candidate = M.attached(selected.value:payload():data())
+            if candidate and candidate.request_id == request_id then answer = candidate; break end
+        end
+    end
+    timer:stop()
+    process.unlisten(answers)
+    if not answer then return nil, "the host manager did not answer the attach" end
+    if answer.workspace_id ~= lease.workspace_id then return nil, "the host manager attached another workspace" end
+    if answer.error_code ~= "" then return nil, answer.error_code .. ": " .. answer.error end
+    return answer.ready, nil
 end
 
 function M.release(lease: Lease)

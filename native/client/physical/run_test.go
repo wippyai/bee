@@ -130,7 +130,10 @@ func TestLocalDetachRestoresTerminalWithStalledHost(t *testing.T) {
 			}
 			select {
 			case err := <-done:
-				if err != nil {
+				if name == "detach" && !errors.Is(err, ErrDetached) {
+					t.Fatalf("local detach reported %v", err)
+				}
+				if name == "quit" && err != nil {
 					t.Fatal(err)
 				}
 			case <-time.After(time.Second):
@@ -187,7 +190,7 @@ func TestObserverDetachesWithoutSendingInputOrResize(t *testing.T) {
 	}
 	select {
 	case err := <-done:
-		if err != nil {
+		if !errors.Is(err, ErrDetached) {
 			t.Fatal(err)
 		}
 	case <-ctx.Done():

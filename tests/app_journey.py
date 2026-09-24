@@ -24,8 +24,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tui_smoke import Desktop  # noqa: E402
-from workspace import (ROOT, RUNTIME, configure_managed_gateway,
-                       database_environment, deployment_copy, pack_deployment)  # noqa: E402
+from workspace import (ROOT, RUNTIME, classic_workspace, configure_managed_gateway,
+                       database_environment, deployment_copy, pack_deployment, workspace_checkpoint)  # noqa: E402
 
 DEFINITION_ID = "bee.app_journey_demo:app"
 TITLE = "App Journey"
@@ -109,13 +109,6 @@ def assert_delivery_has_no_overlay_authority(project):
     assert seen == wanted, sorted(wanted - seen)
 
 
-def workspace_identity(folder):
-    with sqlite3.connect(Path(folder) / "workspace.db") as db:
-        rows = db.execute("SELECT workspace_id FROM workspace_identity WHERE singleton = 1").fetchall()
-    assert len(rows) == 1 and re.fullmatch(r"[0-9a-f]{32}", rows[0][0]), rows
-    return rows[0][0]
-
-
 def open_admitted(ui, timeout):
     """Boot recovery re-establishes the activation owner's overlay after the
     desktop is already up; the broker then refreshes admission from the
@@ -138,7 +131,7 @@ def deliver(project, folder, deployment=None):
             "--set", f"registry.history_path={folder}/registry.db"]
     result = subprocess.run(args, cwd=folder if deployment else project, capture_output=True, text=True,
                             timeout=300, env=database_environment(
-                                folder, BEE_APP_JOURNEY_WORKSPACE=workspace_identity(folder)))
+                                folder, BEE_APP_JOURNEY_WORKSPACE=classic_workspace(Path(folder) / "workspace.db")))
     output = result.stdout + result.stderr
     assert result.returncode == 0 and "APP_JOURNEY_DELIVERED" in output, output
     match = re.search(r"APP_JOURNEY_DELIVERED\s+(\{.*\})", output)
@@ -226,7 +219,7 @@ def apply_staged_in_ui(ui, staged, root):
     ui.key(b"\t")
     ui.key(b"\r")
     ui.wait("approved by bee.application:", timeout=COLD_BOOT)
-    assert_inbox_decider(root, workspace_identity(root), staged["approval_policy"])
+    assert_inbox_decider(root, classic_workspace(Path(root) / "workspace.db"), staged["approval_policy"])
 
     # Focus the retained delivery window from the taskbar and let its own
     # activation loop consume the one approved effect.
@@ -267,7 +260,7 @@ def guide(project, folder):
             "--set", f"registry.history_path={folder}/registry.db"]
     result = subprocess.run(args, cwd=project, capture_output=True, text=True,
                             timeout=300, env=database_environment(
-                                folder, BEE_APP_JOURNEY_WORKSPACE=workspace_identity(folder)))
+                                folder, BEE_APP_JOURNEY_WORKSPACE=classic_workspace(Path(folder) / "workspace.db")))
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     match = re.search(r"APP_JOURNEY_GUIDE\s+(\{.*\})", output)
@@ -289,7 +282,7 @@ def inspect(project, folder):
             "--set", f"registry.history_path={folder}/registry.db"]
     result = subprocess.run(args, cwd=project, capture_output=True, text=True,
                             timeout=300, env=database_environment(
-                                folder, BEE_APP_JOURNEY_WORKSPACE=workspace_identity(folder)))
+                                folder, BEE_APP_JOURNEY_WORKSPACE=classic_workspace(Path(folder) / "workspace.db")))
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     match = re.search(r"APP_JOURNEY_COMPOSED\s+(\{.*\})", output)
@@ -548,17 +541,11 @@ def wait_binding(root, instance_ids, predicate, timeout=5):
 
 
 def saved_instances(root):
-    with sqlite3.connect(Path(root) / "workspace.db") as db:
-        row = db.execute("SELECT value FROM workspace_state WHERE singleton = 1").fetchone()
-    assert row, "workspace checkpoint is missing"
-    return {item["instance_id"] for item in json.loads(row[0])["applications"]}
+    return {item["instance_id"] for item in workspace_checkpoint(Path(root) / "workspace.db")["applications"]}
 
 
 def saved_application(root, instance_id):
-    with sqlite3.connect(Path(root) / "workspace.db") as db:
-        row = db.execute("SELECT value FROM workspace_state WHERE singleton = 1").fetchone()
-    assert row, "workspace checkpoint is missing"
-    matches = [item for item in json.loads(row[0])["applications"]
+    matches = [item for item in workspace_checkpoint(Path(root) / "workspace.db")["applications"]
                if item["instance_id"] == instance_id]
     assert len(matches) == 1, (instance_id, matches)
     return matches[0]

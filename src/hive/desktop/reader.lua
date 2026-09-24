@@ -7,7 +7,7 @@ local types = require("types")
 local owner = require("owner")
 local catalog = require("catalog")
 local M = {}
-M.OPERATION = "bee.desktop:catalog"
+M.OPERATION = owner.READER_OPERATION
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 function M.handles(value: unknown): boolean
     if type(value) ~= "table" or type(value.target) ~= "table" then return false end
@@ -26,7 +26,7 @@ function M.request(state: owner.State, sender: string, value: unknown, now: inte
         or call.target.operation_ref ~= M.OPERATION or call.target.interface_ref ~= nil or next(call.input) ~= nil then
         refuse("INVALID_ARGUMENT", "Display catalog reads accept only the node and an empty input"); return
     end
-    if state.stopped or not time.now():before(state.expires_at) or state.workspace_id == "" then
+    if state.stopped or not time.now():before(state.expires_at) or (state.folder ~= nil and not owner.folder_workspace(state)) then
         refuse("UNAVAILABLE", "Display catalog is not ready"); return
     end
     local remaining = 30000
@@ -37,6 +37,6 @@ function M.request(state: owner.State, sender: string, value: unknown, now: inte
         if remaining <= 0 then refuse("DEADLINE_EXCEEDED", "Catalog deadline passed"); return end
         if remaining > 30000 then remaining = 30000 end
     end
-    catalog.request(state.catalog, state.supervisor, state.workspace_id, sender, call, nil, now + remaining)
+    catalog.list(state.catalog, state.executor, sender, call, {label = nil, after = nil, limit = 50}, now + remaining)
 end
 return M

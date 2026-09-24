@@ -10,7 +10,7 @@ import time
 import yaml
 
 from tui_smoke import Desktop
-from workspace import ROOT, RUNTIME, pack_deployment
+from workspace import ROOT, RUNTIME, classic_workspace, client_layout, pack_deployment
 from recovery import stored
 
 
@@ -89,8 +89,7 @@ def run():
                 ui.key(b"\x1b[F")
                 ui.wait("Windows Classic")
                 assert stored(pair_folder)["desktop"]["preferences"]["theme"] == "honey", "Display Settings changed workspace defaults"
-                with sqlite3.connect(pair_folder / "workspace.db.client") as db:
-                    display_state = json.loads(db.execute("SELECT value FROM client_state WHERE singleton=1").fetchone()[0])
+                _, display_state = client_layout(pair_folder / "workspace.db.client", classic_workspace(pair_folder / "workspace.db"))
                 assert display_state["preferences"]["theme"] == "classic"
                 assert display_state["appearance_mode"] == "custom"
                 ui.key(b"\x1b\t")
@@ -434,11 +433,11 @@ def public_migration():
             for record in baseline["applications"]:
                 if record.get("window"):
                     record["window"].pop("workspace_id", None)
+            workspace_id = classic_workspace(folder / "workspace.db")
             with sqlite3.connect(folder / "workspace.db") as db:
-                db.execute("UPDATE workspace_state SET value=? WHERE singleton=1", (json.dumps(baseline),))
+                db.execute("UPDATE workspace_state SET value=? WHERE workspace_id=?", (json.dumps(baseline), workspace_id))
             before = [(r["id"], r["instance_id"]) for r in baseline["applications"]]
             with sqlite3.connect(folder / "workspace.db") as db:
-                workspace_id = db.execute("SELECT workspace_id FROM workspace_identity").fetchone()[0]
                 migrations = db.execute("SELECT * FROM workspace_schema_migrations ORDER BY id").fetchall()
             receipt = None
             for attempt in range(2):
@@ -454,17 +453,14 @@ def public_migration():
                     ui.quit()
                 finally:
                     ui.close()
+                assert classic_workspace(folder / "workspace.db") == workspace_id
                 with sqlite3.connect(folder / "workspace.db") as db:
-                    assert db.execute("SELECT workspace_id FROM workspace_identity").fetchone()[0] == workspace_id
                     assert db.execute("SELECT * FROM workspace_schema_migrations ORDER BY id").fetchall() == migrations
                 assert [(r["id"], r["instance_id"]) for r in stored(folder)["applications"]] == before
-                with sqlite3.connect(folder / "workspace.db.client") as db:
-                    imported, current, encoded = db.execute(
-                        "SELECT import_workspace, import_receipt, value FROM client_state WHERE singleton=1").fetchone()
-                assert imported == workspace_id and current
+                current, layout = client_layout(folder / "workspace.db.client", workspace_id)
+                assert current
                 assert receipt is None or current == receipt, "Cold boot replaced the once-only import receipt"
                 receipt = current
-                layout = json.loads(encoded)
                 assert all(t["workspace_id"] == workspace_id for t in layout["targets"])
             print(f"Public migration {'pack' if packed else 'source'}: legacy placement/checkpoint identity, F12, edited layout, once-only import and unchanged migration ledger", flush=True)
 

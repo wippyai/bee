@@ -158,6 +158,10 @@ child cannot be scrubbed.
 
 Actions: `bee.credentials.manage` (define, list, revoke any, revoke_all;
 `bee:credential_manage_policy`), `bee.credentials.issue` (issue for oneself;
-`bee:credential_issue_policy`), `bee.credentials.materialize` (check and
-materialize; `bee:credential_materialize_policy`, attached to placement
-service and runner entries only).
+`bee:credential_issue_policy`, only in the workspace the caller's host-issued
+identity is bound to through `actor.meta.workspace_id`),
+`bee.credentials.materialize` (check and materialize;
+`bee:credential_materialize_policy`, attached to node-level placement service
+and runner entries, which serve every workspace; an application that runs its
+own placement holds `bee:credential_materialize_workspace_policy`, limited to
+its bound workspace).

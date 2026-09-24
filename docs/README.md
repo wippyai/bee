@@ -10,6 +10,7 @@ generator when the corpus is intentionally updated.
 | Runtime modules and Bee contracts available offline | [Agent documentation corpus](../modules/docs/src/README.md) |
 | Running Bee and local development | [Repository README](../README.md), [agent guide](development/agent-guide.md), [development conventions](development/conventions.md) |
 | Ownership and boundaries | [System map](development/ownership.md), [package boundaries](development/package-boundaries.md) |
+| Proposed framework-shaped agents, Bee execution and Dataflow composition | [Agent definitions proposal](development/agent-definitions.md) |
 | Contributions and community standards | [Contributing](../CONTRIBUTING.md) |
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |
 | Bee visual language and accessible terminal UI | [UI brand book](guides/ui.md) |
@@ -17,6 +18,7 @@ generator when the corpus is intentionally updated.
 | Desktop, workspace host, client attachments, and layout persistence | [Desktop](guides/desktop.md) |
 | Application admission, launch, messages, and recovery | [Application contracts](reference/applications.md) |
 | Workspace storage and application state | [Storage](reference/storage.md), [workspace state](reference/workspace-state.md) |
+| Node workspace catalog, lazy workspace hosts, workspace extensions and the Workspaces viewer | [Workspace catalog](reference/workspace-catalog.md) |
 | Threads, Timeline, subscriptions, and delivery | [Threads](reference/threads.md) |
 | Node metadata, synchronization, and approval inbox | [Sync and inbox](reference/sync-and-inbox.md), [approvals](reference/approvals.md) |
 | Native executable, updates, and I/O events | [Native distribution](operations/native.md) |

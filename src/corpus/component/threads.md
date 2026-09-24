@@ -13,11 +13,11 @@ actor.
 |---|---|
 | `bee.threads` | Contracts (`journal`, `authority`, `lifecycle`, `delivery`, `projection`, `carrier`), local bindings, the journal client and methods, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
 | `bee.threads.records` | Pure typed decoders for the seven record families, bounds, the canonical record encoder and canonical JSON for request identity; no I/O |
-| `bee.threads.service` | The authority: access facade, authority and lifecycle operations, and one `function.lua` per method in `<name>_method.lua` |
+| `bee.threads.service` | The authority: access facade, authority and lifecycle operations, one-shot notices, and one `function.lua` per method in `<name>_method.lua` |
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (6 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
+| `bee.threads.persist` | The owned store: checked migration ledger (10 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
 
 ## Dependency interface
 
@@ -61,7 +61,12 @@ to pending only while no intent exists; an expired claim becomes uncertain
 and an owner or lifecycle authority reconciles it. A correlated reply
 settles the sender's obligation and acknowledges its exact live claim.
 Subscriptions are consumer cursors with one outstanding page acknowledged
-by identity and exact extent; they never touch obligations. Claims and
+by identity and exact extent; they never touch obligations. A notice is a
+member's one-shot request to be told on its own thread when an action of a
+thread it reads ends a turn or an attempt; the owner settles notices after
+commits on the target thread and on a sweep, and commits the notification
+once under the watcher's identity. A message may address sessions by
+`recipient_action_ids` and name its sending action; the owner verifies both. Claims and
 subscriptions carry the owner incarnation established by
 `bee.threads:owner` at startup. The recap is folded from records only.
 
@@ -72,7 +77,10 @@ migration: 1 `bee_thread_schema_v1` (journal), 2 `thread_authority` (heads,
 members, records, commands), 3 `work_lifecycle` (actions, attempts, turns,
 settlements), 4 `delivery` (record table rebuilt for the delivery families,
 owner, obligations, claim batches, deliveries, dispatch intents,
-subscriptions, pages), 5 `projection` (checkpoints). Records are stored
+subscriptions, pages), 5 `projection` (checkpoints), 6 `carrier`, 7
+`approvals`, 8 `owner_authority`, 9 `notices`, 10 `workspace_attribution`
+(the owning workspace on each head, attributed from application owners, and
+the index `list_workspace` walks). Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and
 indexes in one transaction; identical retries replay the stored reply and

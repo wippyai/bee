@@ -168,20 +168,20 @@ func probe(ctx context.Context, actor *mesh.Actor) error {
 	if err != nil {
 		return err
 	}
-	catalog, err := client.List(ctx, "native-list")
+	catalog, err := client.List(ctx, "native-list", hive.CatalogQuery{})
 	if err != nil {
 		return err
 	}
-	if len(catalog.Workspaces) != 1 || len(catalog.Workspaces[0].Desktops) != 1 {
+	if catalog.Default == "" || len(catalog.Desktops) != 1 {
 		return errors.New("unexpected owner catalog")
 	}
-	workspace := catalog.Workspaces[0]
+	workspace, desktop := catalog.Default, catalog.Desktops[0].ID
 	service := tty.GetService(ctx)
 	if service == nil {
 		return errors.New("missing native viewport service")
 	}
 	for i := 0; i < 2; i++ {
-		mounted, err := client.Attach(ctx, fmt.Sprintf("native-attach-%d", i), workspace.ID, workspace.Desktops[0].ID, hive.Control)
+		mounted, err := client.Attach(ctx, fmt.Sprintf("native-attach-%d", i), workspace, desktop, hive.Control)
 		if err != nil {
 			return err
 		}
@@ -256,19 +256,19 @@ func physicalProbe(ctx context.Context, actor *mesh.Actor) error {
 	if err != nil {
 		return err
 	}
-	catalog, err := client.List(ctx, "physical-list")
+	catalog, err := client.List(ctx, "physical-list", hive.CatalogQuery{})
 	if err != nil {
 		return err
 	}
-	if len(catalog.Workspaces) != 1 || len(catalog.Workspaces[0].Desktops) != 1 {
+	if catalog.Default == "" || len(catalog.Desktops) != 1 {
 		return errors.New("unexpected physical catalog")
 	}
 	diagnosticPhase("catalog-received")
-	workspace := catalog.Workspaces[0]
+	workspace, desktop := catalog.Default, catalog.Desktops[0].ID
 	// A fresh OS client must never reuse a mutation key from a prior process;
 	// the owner may retain that receipt after retiring the old attachment.
 	keyPrefix := fmt.Sprintf("physical-%d-%d", os.Getpid(), time.Now().UnixNano())
-	mounted, err := client.Attach(ctx, keyPrefix+"-attach", workspace.ID, workspace.Desktops[0].ID, hive.Control)
+	mounted, err := client.Attach(ctx, keyPrefix+"-attach", workspace, desktop, hive.Control)
 	if err != nil {
 		return fmt.Errorf("physical attach: %w", err)
 	}
@@ -302,7 +302,7 @@ func physicalProbe(ctx context.Context, actor *mesh.Actor) error {
 	err = physical.Run(display, remote, tty.MountRights{Observe: true, Input: true, Resize: true}, os.Stdin, os.Stdout)
 	cancel()
 	<-stopped
-	if err != nil {
+	if err != nil && !errors.Is(err, physical.ErrDetached) {
 		return fmt.Errorf("physical run: %w", err)
 	}
 	diagnosticPhase("physical-stopped")

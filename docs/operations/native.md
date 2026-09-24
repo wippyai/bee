@@ -134,7 +134,7 @@ Runtime-generated workspace files retain their own resource/storage owners.
 ## Installed application and updates
 
 The embedded baseline contains the complete default desktop and its bundled
-system applications, including Terminal, Settings, Process Manager, Timeline,
+system applications, including Terminal, Settings, Process Manager, Timeline, Workspaces,
 Hive Manager and About. First boot requires no Hub connection, account or
 downloaded extension. The standalone acceptance harness starts with empty state,
 opens the current default applications, proves that the removed Test Status app

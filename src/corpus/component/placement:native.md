@@ -244,13 +244,17 @@ own generation.
 
 Signal evidence is not exit evidence; the runner records exit only from
 `wait`. Without a live runner, `stop` signals the group only after the
-leader is identified alive by pid, start ticks and boot id; otherwise the
-attempt becomes `uncertain`. A group signal succeeds only when the OS command
+leader is identified alive by pid, start stamp and boot identity; otherwise
+the attempt becomes `uncertain`. Linux reads the start stamp in clock ticks
+from `/proc` and the boot id from the kernel; macOS reads the start second
+from the process table and `kern.bootsessionuuid`. Both read the process
+group with `ps`. A group signal succeeds only when the OS command
 exits with status zero. Command refusal leaves stop unproven and records
 `stop.unproven`, rather than claiming `signal.group` evidence.
 `reconcile` proves absence the same way and
 keeps uncertainty where identity is missing. `cleanup` removes the home
-only from `exited`.
+only from `exited`; a cleanup whose scope is not proven gone records
+`cleanup.refused` with its reason before it answers `CONFLICT`.
 
 Configured launches must carry the digest of their host-selected provider and
 gateway inputs. Placement reconstructs those inputs from its pinned policy,

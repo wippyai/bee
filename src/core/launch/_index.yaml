@@ -66,6 +66,8 @@ entries:
   method: main
   modules: [process, channel, security, ctx, time, uuid, logger]
   imports: &supervisor_imports
+    leases: bee.application:host_leases
+    workspaces: bee.storage:binding
     desktop_lifecycle: bee.launch:desktop_lifecycle
     desktop_storage: bee.launch:desktop_storage
     desktops: bee.client:desktops
@@ -114,3 +116,4 @@ entries:
     leases: bee.application:host_leases
     protocol: bee.launch:protocol
     decode: bee.protocol:decode
+    contract: bee.protocol:application

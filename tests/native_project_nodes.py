@@ -11,6 +11,7 @@ import tempfile
 
 from native_client import owner_handle, stop_owner
 from native_workspace import NativeDesktop, STATE_ENVIRONMENT
+from workspace import classic_workspace
 
 
 def migration_ledgers(state, databases):
@@ -24,13 +25,6 @@ def migration_ledgers(state, databases):
                 ledgers[(relative, table)] = database.execute(
                     f'SELECT * FROM "{table}" ORDER BY 1').fetchall()
     return ledgers
-
-
-def workspace_identity(state, workspace_db):
-    with sqlite3.connect(state / workspace_db) as database:
-        row = database.execute("SELECT workspace_id FROM workspace_identity WHERE singleton=1").fetchone()
-    assert row and row[0], "workspace identity is absent"
-    return row[0]
 
 
 def launch_environment(home):
@@ -73,7 +67,7 @@ def run_legacy_upgrade(binary, previous, databases, bindings):
             if old_owner is not None:
                 stop_owner(old_owner)
 
-        before_identity = workspace_identity(legacy_state, bindings["BEE_WORKSPACE_DB"])
+        before_identity = classic_workspace(legacy_state / bindings["BEE_WORKSPACE_DB"])
         before_ledgers = migration_ledgers(legacy_state, databases)
         hive_authority = legacy_state / "local-hive/authority.pem"
         assert hive_authority.is_file(), "legacy launch did not create machine Hive authority"
@@ -91,7 +85,7 @@ def run_legacy_upgrade(binary, previous, databases, bindings):
                                "project_dir": str(legacy_project.resolve()),
                                "state_dir": str(legacy_state)}, receipt
             assert not list(hashed_legacy.glob("*.db*")), "bound project duplicated legacy databases"
-            assert workspace_identity(legacy_state, bindings["BEE_WORKSPACE_DB"]) == before_identity
+            assert classic_workspace(legacy_state / bindings["BEE_WORKSPACE_DB"]) == before_identity
             after_ledgers = migration_ledgers(legacy_state, databases)
             for key, rows in before_ledgers.items():
                 assert after_ledgers[key][:len(rows)] == rows, f"upgrade rewrote migration ledger {key}"
@@ -101,7 +95,7 @@ def run_legacy_upgrade(binary, previous, databases, bindings):
             other.wait(" BEE ", timeout=30)
             owners.append(owner_handle(other, binary, hashed_other))
             other.wait("Terminal", timeout=10)
-            assert workspace_identity(hashed_other, bindings["BEE_WORKSPACE_DB"]) != before_identity
+            assert classic_workspace(hashed_other / bindings["BEE_WORKSPACE_DB"]) != before_identity
             assert json.loads((legacy_state / "project-state.json").read_text()) == receipt
         finally:
             for view in reversed(views):
@@ -115,7 +109,7 @@ def run_legacy_upgrade(binary, previous, databases, bindings):
             rollback.wait(" BEE ", timeout=30)
             rollback_owner = owner_handle(rollback, previous, legacy_state)
             rollback.wait("Terminal", timeout=10)
-            assert workspace_identity(legacy_state, bindings["BEE_WORKSPACE_DB"]) == before_identity
+            assert classic_workspace(legacy_state / bindings["BEE_WORKSPACE_DB"]) == before_identity
             assert hive_authority.read_bytes() == authority_before, "project cutover replaced Hive authority"
         finally:
             rollback.close()

@@ -113,26 +113,28 @@ local function define_tests()
                     test.eq(owner.service_id, "bee.desktop")
                     test.eq(target.operation_ref, "bee.desktop:catalog")
                     test.is_nil(next(input))
-                    return types.reply_ok("read", {owner_execution = string.rep("a", 32), workspaces = {
-                        {workspace_id = workspace, desktops = {{desktop_id = display, is_default = true}}}}})
+                    return types.reply_ok("read", {owner_execution = string.rep("a", 32), desktops = {{desktop_id = display, is_default = true}},
+                        workspaces = {{workspace_id = workspace, label = "Main", served = true}}})
                 end})
             local catalog = live:desktops("selected")
             test.eq(calls, 1)
             test.is_true(catalog.available)
             test.eq(catalog.desktops[1].desktop_id, display)
         end)
-        test.it("decodes retained identities without inventing occupancy and rejects authority-bearing or sparse replies", function()
+        test.it("decodes the node's displays and workspaces without inventing occupancy and rejects authority-bearing or sparse replies", function()
             local execution = string.rep("a", 32)
             local workspace = string.rep("b", 32)
             local display = string.rep("c", 32)
-            local function response(items: unknown): Object
-                return {owner_execution = execution, workspaces = {{workspace_id = workspace, desktops = items}}}
+            local function response(items: unknown, rows: unknown?): Object
+                return {owner_execution = execution, desktops = items,
+                    workspaces = rows or {{workspace_id = workspace, label = "Main", served = false}}}
             end
             local catalog = directory.decode_desktops(response({{desktop_id = display, is_default = true}}))
             test.is_true(catalog.available)
             test.eq(catalog.owner_generation, execution)
             test.eq(catalog.desktops[1].workspace_id, workspace)
             test.eq(catalog.desktops[1].desktop_id, display)
+            test.eq(catalog.desktops[1].label, "Main")
             test.is_nil(catalog.desktops[1].controller)
             test.is_nil(catalog.desktops[1].observers)
             test.is_false(directory.decode_desktops(response({[2] = {desktop_id = display, is_default = true}})).available)
@@ -140,7 +142,10 @@ local function define_tests()
             test.is_false(directory.decode_desktops(response({{desktop_id = display, is_default = false}})).available)
             test.is_false(directory.decode_desktops(response({{desktop_id = display, is_default = true}, {desktop_id = display, is_default = false}})).available)
             test.is_false(directory.decode_desktops(response({})).available)
-            test.is_false(directory.decode_desktops({owner_execution = execution, workspaces = {}, session_id = "secret"}).available)
+            test.is_false(directory.decode_desktops(response({{desktop_id = display, is_default = true}},
+                {{workspace_id = workspace, label = "Main", served = false}, {workspace_id = workspace, label = "Again", served = false}})).available)
+            test.is_false(directory.decode_desktops({owner_execution = execution, desktops = {{desktop_id = display, is_default = true}},
+                workspaces = {}, session_id = "secret"}).available)
         end)
     end)
 end

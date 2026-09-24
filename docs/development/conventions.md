@@ -12,9 +12,9 @@ upstream licenses.
 | Location | Owns |
 |---|---|
 | `src/_index.yaml` | Host composition, resources and protected admission/policy wiring |
-| `src/core/workspace` | Workspace persistence, application checkpoints and workspace identity |
+| `src/core/workspace` | Workspace persistence, application checkpoints, workspace identity and the node catalog operations and extension contract |
 | `src/core/host` | TTY-free host, client admission, renderer grants and live inventory |
-| `src/core/launch` | Local startup, presenter selection and coordinated exit |
+| `src/core/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
 | `src/core/client` | Desktop client, public commands, qualified layout and client store |
 | `src/core/interaction` | Bounded host/client questions and delivery state |
 | `src/core/session` | Committed desktop projection |
@@ -22,7 +22,7 @@ upstream licenses.
 | `src/core/desktop` | Pure scene, reducer and layout values |
 | `src/core/protocol` | Private core message decoders |
 | `src/core/terminal` | Replaceable presenter, input and composition |
-| `src/core/storage` | Workspace database and migration ledger |
+| `src/core/storage` | Workspace database, catalog rows and migration ledger |
 | `modules/application/src` | Public application helpers, appearance and rendering values |
 | `src/apps/<name>` | A standalone default application and its view/domain helpers |
 | `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |

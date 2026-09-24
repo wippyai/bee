@@ -15,7 +15,7 @@ entries:
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
-  modules: [process, uuid]
+  modules: [funcs, process, channel]
   imports:
     types: bee.hive:types
     protocol: bee.hive.desktop:protocol
@@ -24,7 +24,7 @@ entries:
 - name: owner
   kind: library.lua
   source: file://owner.lua
-  modules: [process, security, channel, time, uuid]
+  modules: [process, security, channel, time, uuid, funcs]
   imports:
     protocol: bee.hive.desktop:protocol
     types: bee.hive:types
@@ -70,7 +70,15 @@ entries:
   policy:
     actions: [bee.desktop.host, process.spawn, process.spawn.monitored, process.host, process.context, process.security, process.terminate, process.registry.register, process.registry.unregister, security.policy.get, security.scope.create]
     resources: '*'
-    expression: '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]retained[.]bridge/[0-9a-f]{32}$") || (action == "bee.desktop.host" && resource == "bee.desktop") || ((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.launch:retained") || (action == "process.host" && resource == "bee:workers") || (action == "security.policy.get" && (resource == "bee:host_policy" || resource == "bee:desktop_policy" || resource == "bee:retained_supervisor_spawn_policy" || resource == "bee:desktop_catalog_policy" || resource == "bee:desktop_catalog_resource_policy")) || action == "process.context" || action == "process.security" || action == "process.terminate" || action == "security.scope.create"'
+    expression: '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]retained[.]bridge/[0-9a-f]{32}$") || (action == "bee.desktop.host" && resource == "bee.desktop") || ((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.launch:retained") || (action == "process.host" && resource == "bee:workers") || (action == "security.policy.get" && (resource == "bee:host_policy" || resource == "bee:desktop_policy" || resource == "bee:retained_supervisor_spawn_policy" || resource == "bee:desktop_catalog_policy" || resource == "bee:desktop_catalog_resource_policy" || resource == "bee:workspace_host_lease_policy" || resource == "bee:workspace_catalog_read_policy" || resource == "bee.hive.desktop:catalog_call_policy")) || action == "process.context" || action == "process.security" || action == "process.terminate" || action == "security.scope.create"'
+    effect: allow
+- name: catalog_call_policy
+  kind: security.policy
+  meta:
+    comment: The desktop bridge pages the node workspace catalog; the catalog authorizes the read under the host's catalog read policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.workspace.catalog:list, bee.workspace.catalog:search]
     effect: allow
 
 - name: reader

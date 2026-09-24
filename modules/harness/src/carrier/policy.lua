@@ -334,13 +334,6 @@ function M.with_workspace(gateway_surface: SurfaceValue?, workspace_id: string):
     local result: SurfaceValue = {}
     for key, value in pairs(gateway_surface) do result[key] = value end
     result.fixed_context = fixed
-    if gateway_surface.access ~= nil then
-        if type(gateway_surface.access) ~= "table" then return nil end
-        local selected: SurfaceValue = {}
-        for key, value in pairs(gateway_surface.access :: SurfaceValue) do selected[key] = value end
-        selected.workspace_id = workspace_id
-        result.access = selected
-    end
     return result
 end
 function M.load(ref: string): (Policy?, string?)

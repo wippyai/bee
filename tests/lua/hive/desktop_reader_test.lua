@@ -3,6 +3,8 @@ local test = require("test")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
+local security = require("security")
+local funcs = require("funcs")
 local types = require("types")
 local owner = require("owner")
 local reader = require("reader")
@@ -14,12 +16,6 @@ local function listen(topic: string): Channel<process.Message>
     local messages, err = process.listen(topic, {message = true})
     if not messages then error(tostring(err)) end
     return messages
-end
-local function call(node: string): types.Call
-    local value = types.decode_call({protocol_revision = types.REVISION, request_id = "reader-call", idempotency_key = "reader-call",
-        owner_ref = {node_id = node, service_id = "bee.desktop"}, target = {operation_ref = reader.OPERATION}, input = {}})
-    if not value then error("invalid catalog reader call") end
-    return value
 end
 local function next_message(messages: Channel<process.Message>): process.Message
     local selected = channel.select({messages:case_receive(), time.after("2s"):case_receive()})
@@ -38,18 +34,22 @@ local function define_tests()
         test.it("uses authenticated supervisor sender snapshots, revokes before a result, and never widens native control", function()
             local snapshots = listen("bee.test.catalog_reader")
             local replies = listen(types.TOPIC_REPLY)
-            local requests = listen("bee.retained.desktops")
             local self = tostring(process.pid())
             -- The production supervisor uses this routing marker when its
             -- native PID has no node component. It must not determine PID
             -- locality for catalog-reader admission.
             local node = "local"
+            local policies: {security.Policy} = {}
+            for _, name in ipairs({"bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy", "bee:workspace_catalog_read_policy",
+                "bee.hive.desktop:catalog_call_policy"}) do policies[#policies + 1] = assert(security.policy(name)) end
+            local executor = funcs.new():with_actor(security.new_actor("bee.hive.supervisor")):with_scope(security.new_scope(policies))
             local state: owner.State = {
-                supervisor = "", bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, workspace_id = WORKSPACE, desktop_id = "", node = node,
+                bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = node,
                 allowed = {}, enrolled = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = false},
-                ready = snapshots, results = snapshots, copies = snapshots, launches = snapshots, catalogs = snapshots,
-                activations = snapshots, reader_updates = snapshots, observers = snapshots, catalog_readers = {}, pending_catalog_readers = nil,
-                catalog = catalog.new(), clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = time.now(),
+                ready = snapshots, results = snapshots, copies = snapshots, launches = snapshots,
+                activations = snapshots, reader_updates = snapshots, observers = snapshots, catalog = catalog.new(),
+                spawn_scope = security.new_scope({}), executor = executor, folder = nil, served = {}, workspaces = {}, served_count = 0,
+                clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = time.now():add("1h"),
             }
             local forged = assert(process.spawn_monitored("bee.hive:reader_sender", "bee:workers", self, WORKSPACE, {"grant_self"}))
             local forged_message = next_message(snapshots)
@@ -66,8 +66,13 @@ local function define_tests()
             test.eq(refused.error and refused.error.code, "DENIED")
 
             local trusted = assert(process.spawn_monitored("bee.hive:reader_sender", "bee:workers", self, WORKSPACE,
-                {"grant_recipient", "forward", "forward", "forward"}))
-            state.supervisor = tostring(trusted)
+                {"grant_recipient", "forward", "forward"}))
+            -- The trusted sender stands in for the folder workspace's supervisor.
+            local served: owner.Served = {supervisor = tostring(trusted), workspace_id = WORKSPACE, desktop_id = DESKTOP, folder = true,
+                ready = true, catalog_readers = {}, pending_catalog_readers = nil}
+            state.served[served.supervisor] = served
+            state.workspaces[WORKSPACE] = served
+            state.folder = served
             local grant = next_message(snapshots)
             owner.catalog_readers(state, grant)
             test.is_true(owner.catalog_reader(state, self))
@@ -85,12 +90,11 @@ local function define_tests()
             test.is_false(accepted, "foreign native node entered catalog readers")
             test.is_true(owner.catalog_reader(state, self), "foreign snapshot changed reader state")
 
-            catalog.request(state.catalog, self, WORKSPACE, self, call(node), nil, 1000)
-            local pending = state.catalog.pending
-            if not pending then error("admitted catalog request did not start") end
-            local dispatched = next_message(requests):payload():data()
-            test.eq(dispatched.request_id, pending.id)
-            test.eq(dispatched.workspace_id, WORKSPACE)
+            reader.request(state, self, {
+                protocol_revision = types.REVISION, request_id = "admitted", idempotency_key = "admitted",
+                owner_ref = {node_id = node, service_id = "bee.desktop"}, target = {operation_ref = reader.OPERATION}, input = {},
+            }, 0)
+            test.not_nil(state.catalog.pending, "admitted catalog request did not start")
 
             assert(process.send(tostring(trusted), "bee.test.catalog_reader.command", {version = 1, workspace_id = WORKSPACE, readers = {}}))
             local clear = next_message(snapshots)
@@ -98,15 +102,21 @@ local function define_tests()
             test.is_false(owner.catalog_reader(state, self), "complete removal snapshot retained reader")
             test.not_nil(state.catalog.pending)
 
-            assert(process.send(tostring(trusted), "bee.test.catalog_reader.command", {version = 1, workspace_id = WORKSPACE,
-                request_id = pending.id, desktop_id = "", code = "OK", message = "", desktops = {{desktop_id = DESKTOP, is_default = true}}}))
-            local result = next_message(snapshots)
-            owner.catalog_result(state, result, 1)
+            -- The catalog read completes after the reader lost its admission.
+            while state.catalog.pending do
+                local cases = {}
+                for _, response in ipairs(owner.catalog_channels(state)) do cases[#cases + 1] = response:case_receive() end
+                local deadline = time.after("10s")
+                cases[#cases + 1] = deadline:case_receive()
+                local selected = channel.select(cases)
+                if selected.channel == deadline then error("catalog read did not complete") end
+                test.is_true(owner.catalog_result(state, selected.channel, 1))
+            end
             local revoked = reply(replies)
             test.is_false(revoked.ok)
             test.eq(revoked.error and revoked.error.code, "DENIED")
             test.is_nil(state.catalog.pending)
-            state.catalog_readers[self] = true
+            served.catalog_readers[self] = true
             state.stopped = true
             reader.request(state, self, {
                 protocol_revision = types.REVISION, request_id = "stopped", idempotency_key = "stopped",
@@ -114,7 +124,7 @@ local function define_tests()
             }, 0)
             local stopped = reply(replies)
             test.eq(stopped.error and stopped.error.code, "DENIED")
-            process.unlisten(snapshots); process.unlisten(replies); process.unlisten(requests)
+            process.unlisten(snapshots); process.unlisten(replies)
         end)
     end)
 end

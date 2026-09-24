@@ -1,10 +1,15 @@
--- MIT. Hive-supervisor-local bridge to the retained desktop owner. Native
--- sender identity is native; only this local owner requests core grants.
+-- MIT. Hive-supervisor-local bridge to the retained desktop supervisors of the
+-- node's workspaces. Native sender identity is native; only this local owner
+-- requests core grants. The owner's folder workspace keeps its supervisor for
+-- the bridge's lifetime; any other workspace gets one when a client attaches
+-- to it, and that supervisor holds a lease on the workspace's host until the
+-- workspace's last session ends.
 local process = require("process")
 local security = require("security")
 local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
+local funcs = require("funcs")
 local types = require("types")
 local protocol = require("protocol")
 local retained = require("retained")
@@ -13,19 +18,29 @@ local workspaces = require("workspaces")
 local M = {}
 type Channel = channel.Channel
 type Session = {id: string, mount: string, mode: "control" | "observe"}
-type Pending = {id: string, op: "attach" | "detach" | "copy" | "launch", call: types.Call?, cache_key: string?, digest: string?, due: integer, activating: boolean?}
-type Client = {recipient: string, desktop_id: string, session: Session?, pending: Pending?, closing: boolean, dirty: boolean}
+-- waiting: the request waits for its workspace's supervisor to be ready.
+type Pending = {id: string, op: "attach" | "detach" | "copy" | "launch", call: types.Call?, cache_key: string?, digest: string?, due: integer,
+    activating: boolean?, waiting: boolean?}
+type Client = {recipient: string, workspace_id: string, desktop_id: string, session: Session?, pending: Pending?, closing: boolean, dirty: boolean}
 type Receipt = {session_id: string?, digest: string, reply: types.Reply, expires: integer}
+-- One retained desktop supervisor. The folder workspace learns its identity
+-- from readiness; a leased workspace is selected by identity.
+type Served = {supervisor: string, workspace_id: string, desktop_id: string, folder: boolean, ready: boolean,
+    catalog_readers: {[string]: boolean}, pending_catalog_readers: retained.CatalogReaders?}
 type State = {
-    config: protocol.Configuration, node: string, supervisor: string, bridge_name: string, owner_name: string,
+    config: protocol.Configuration, node: string, bridge_name: string, owner_name: string,
     ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
-    catalogs: Channel<process.Message>, activations: Channel<process.Message>, reader_updates: Channel<process.Message>,
-    observers: Channel<process.Message>, catalog: catalog.State,
-    workspace_id: string, desktop_id: string, allowed: {[string]: boolean}, enrolled: {[string]: boolean}, catalog_readers: {[string]: boolean}, pending_catalog_readers: retained.CatalogReaders?,
+    activations: Channel<process.Message>, reader_updates: Channel<process.Message>,
+    observers: Channel<process.Message>, catalog: catalog.State, spawn_scope: security.Scope, executor: funcs.Executor,
+    folder: Served?, served: {[string]: Served}, workspaces: {[string]: Served}, served_count: integer,
+    allowed: {[string]: boolean}, enrolled: {[string]: boolean},
     clients: {[string]: Client}, receipts: {[string]: Receipt}, client_count: integer, receipt_count: integer,
     expires_at: time.Time, stopped: boolean,
 }
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
+-- Leased workspaces one bridge serves at once, besides the folder workspace.
+M.MAX_SERVED = 32
+M.READER_OPERATION = "bee.desktop:catalog"
 local function listen(topic: string): Channel<process.Message>
     local value, err = process.listen(topic, {message = true})
     if not value then error(tostring(err)) end
@@ -37,6 +52,26 @@ local function send(recipient: string, topic: string, value: unknown): boolean
 end
 local function failure(recipient: string, id: string, code: string, message: string)
     send(recipient, types.TOPIC_REPLY, types.reply_error(id, types.fault(code, message)))
+end
+local function scope_of(names: {string}): (security.Scope?, string?)
+    local policies: {security.Policy} = {}
+    for _, name in ipairs(names) do
+        local policy, err = security.policy(name)
+        if not policy then return nil, tostring(err) end
+        policies[#policies + 1] = policy
+    end
+    return security.new_scope(policies), nil
+end
+local SPAWN_POLICIES = {"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy",
+    "bee:desktop_catalog_resource_policy", "bee:workspace_host_lease_policy"}
+local CATALOG_POLICIES = {"bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy", "bee:workspace_catalog_read_policy",
+    "bee.hive.desktop:catalog_call_policy"}
+local function spawn(state: State, selection: unknown): (string?, string?)
+    local self = tostring(process.pid())
+    local pid, err = process.with_options({}):with_context({["bee.retained_owner"] = self})
+        :with_scope(state.spawn_scope):spawn_monitored("bee.launch:retained", "bee:workers", self, selection, state.config.application)
+    if not pid then return nil, tostring(err) end
+    return tostring(pid), nil
 end
 -- Configuration is an explicit host grant to selected native nodes, not an
 -- inference from transport authentication, discovery, metadata or a PID prefix.
@@ -53,65 +88,82 @@ function M.start(config: protocol.Configuration, node: string): State
     local results = listen("bee.retained.result")
     local copies = listen("bee.retained.copied")
     local launches = listen("bee.retained.launched")
-    local catalogs = listen("bee.retained.desktops_result")
     local activations = listen("bee.retained.activated")
     local reader_updates = listen("bee.retained.catalog_readers")
     local observers = listen(retained.TOPIC_OBSERVE)
     local named = false
-    -- The bridge composes the classic folder workspace.
-    local workspace = workspaces.classic()
-    local key = workspaces.key(workspace)
+    -- The bridge composes the owner's folder workspace.
+    local folder = workspaces.classic()
+    local key = workspaces.key(folder)
     local bridge_name = key and retained.bridge_name(key) or ""
     local owner_name = key and retained.owner_name(key) or ""
     local function abandon(cause: unknown)
-        for _, topic in ipairs({ready, results, copies, launches, catalogs, activations, reader_updates, observers}) do process.unlisten(topic) end
+        for _, topic in ipairs({ready, results, copies, launches, activations, reader_updates, observers}) do process.unlisten(topic) end
         if named then process.registry.unregister(bridge_name) end
         error(tostring(cause))
     end
     if bridge_name == "" or owner_name == "" then abandon("Invalid retained workspace selection") end
-    local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy"}) do
-        local policy, err = security.policy(name)
-        if not policy then abandon(err) end
-        policies[#policies + 1] = policy
-    end
+    local spawn_scope, spawn_error = scope_of(SPAWN_POLICIES)
+    if not spawn_scope then abandon(spawn_error) end
+    local catalog_scope, catalog_error = scope_of(CATALOG_POLICIES)
+    if not catalog_scope then abandon(catalog_error) end
+    local executor, executor_error = funcs.new():with_scope(catalog_scope)
+    if not executor then abandon(executor_error) end
     -- The owner route authenticates forwarded readiness by this name, so it is
     -- registered before the retained supervisor can announce anything.
     local registered, name_error = process.registry.register(bridge_name)
     if not registered then abandon(name_error) end
     named = true
-    local self = tostring(process.pid())
-    local owner, err = process.with_options({}):with_context({["bee.retained_owner"] = self})
-        :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, workspace, config.application)
-    if not owner then abandon(err) end
-    local clients: {[string]: Client} = {}
-    local receipts: {[string]: Receipt} = {}
-    return {config = config, node = node, supervisor = tostring(owner), bridge_name = bridge_name, owner_name = owner_name, ready = ready, results = results, copies = copies, launches = launches,
-        workspace_id = "", desktop_id = "", allowed = allowed, enrolled = {}, catalogs = catalogs, activations = activations, reader_updates = reader_updates,
-        observers = observers, catalog = catalog.new(),
-        catalog_readers = {}, pending_catalog_readers = nil, clients = clients, receipts = receipts,
-        client_count = 0, receipt_count = 0, expires_at = expiry, stopped = false}
+    local state: State = {config = config, node = node, bridge_name = bridge_name, owner_name = owner_name, ready = ready, results = results,
+        copies = copies, launches = launches, activations = activations, reader_updates = reader_updates, observers = observers,
+        catalog = catalog.new(), spawn_scope = spawn_scope, executor = executor, folder = nil, served = {}, workspaces = {}, served_count = 0,
+        allowed = allowed, enrolled = {}, clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = expiry, stopped = false}
+    local supervisor, err = spawn(state, folder)
+    if not supervisor then abandon(err) end
+    local served: Served = {supervisor = supervisor, workspace_id = "", desktop_id = "", folder = true, ready = false, catalog_readers = {}}
+    state.folder = served
+    state.served[supervisor] = served
+    return state
 end
 local function forget(state: State, recipient: string)
-    if state.clients[recipient] then
-        process.unmonitor(recipient)
-        state.clients[recipient] = nil
-        state.client_count = state.client_count - 1
+    local client = state.clients[recipient]
+    if not client then return end
+    process.unmonitor(recipient)
+    state.clients[recipient] = nil
+    state.client_count = state.client_count - 1
+    -- A leased workspace whose last session ended releases its host lease.
+    local served = state.workspaces[client.workspace_id]
+    if not served or served.folder then return end
+    for _, other in pairs(state.clients) do
+        if other.workspace_id == client.workspace_id then return end
     end
+    state.workspaces[client.workspace_id] = nil
+    state.served[served.supervisor] = nil
+    state.served_count = state.served_count - 1
+    -- Its exit event arrives for a supervisor no longer served and is ignored.
+    process.terminate(served.supervisor)
 end
 local function request_core(state: State, client: Client, pending: Pending, mode: string?): boolean
+    local served = state.workspaces[client.workspace_id]
+    if not served then return false end
+    if not served.ready then
+        pending.waiting = true
+        pending.activating = pending.activating
+        return true
+    end
+    pending.waiting = false
     if pending.activating then
-        return send(state.supervisor, "bee.retained.activate", {version = 1, workspace_id = state.workspace_id,
+        return send(served.supervisor, "bee.retained.activate", {version = 1, workspace_id = served.workspace_id,
             desktop_id = client.desktop_id, request_id = pending.id})
     end
     if pending.op == "launch" then
         local input = pending.call and protocol.input(protocol.LAUNCH, pending.call.input) or nil
         if not input or not input.name or not input.arguments then return false end
-        return send(state.supervisor, "bee.retained.launch", {version = 1, workspace_id = state.workspace_id,
+        return send(served.supervisor, "bee.retained.launch", {version = 1, workspace_id = served.workspace_id,
             desktop_id = client.desktop_id, request_id = pending.id, recipient = client.recipient,
             name = input.name, arguments = input.arguments})
     end
-    return send(state.supervisor, "bee.retained.request", {version = 1, workspace_id = state.workspace_id,
+    return send(served.supervisor, "bee.retained.request", {version = 1, workspace_id = served.workspace_id,
         desktop_id = client.desktop_id, request_id = pending.id, recipient = client.recipient, op = pending.op, mode = mode})
 end
 local function revoke(state: State, client: Client, now: integer)
@@ -120,7 +172,7 @@ local function revoke(state: State, client: Client, now: integer)
     if not client.dirty then forget(state, client.recipient); return end
     local pending: Pending = {id = uuid.v7(), op = "detach", due = now + 1000}
     client.pending = pending
-    request_core(state, client, pending, nil)
+    if not request_core(state, client, pending, nil) then forget(state, client.recipient) end
 end
 local function remember(state: State, client: Client, pending: Pending, reply: types.Reply, now: integer)
     if pending.cache_key and pending.digest then
@@ -143,14 +195,14 @@ local function forget_refusal(state: State, pending: Pending)
         state.receipt_count = state.receipt_count - 1
     end
 end
-local function install_catalog_readers(state: State, snapshot: retained.CatalogReaders)
-    if snapshot.workspace_id ~= state.workspace_id then error("Catalog reader workspace changed") end
+local function install_catalog_readers(served: Served, snapshot: retained.CatalogReaders)
+    if snapshot.workspace_id ~= served.workspace_id then error("Catalog reader workspace changed") end
     -- `state.node` is the Hive routing identity. A local-only supervisor maps
     -- its node-less native PID to "local", so it cannot establish transport
     -- locality. Compare against the exact retained supervisor's native node;
     -- this also does not conflate a real native node named "local" with the
     -- local-only marker.
-    local supervisor_node = types.pid_parts(state.supervisor)
+    local supervisor_node = types.pid_parts(served.supervisor)
     if supervisor_node == nil then error("Retained catalog reader supervisor has no native PID") end
     local readers: {[string]: boolean} = {}
     for _, reader in ipairs(snapshot.readers) do
@@ -158,32 +210,72 @@ local function install_catalog_readers(state: State, snapshot: retained.CatalogR
         if reader_node ~= supervisor_node then error("Catalog reader is not local to this owner") end
         readers[reader] = true
     end
-    state.catalog_readers = readers
-    state.pending_catalog_readers = nil
+    served.catalog_readers = readers
+    served.pending_catalog_readers = nil
 end
--- announce forwards the retained workspace readiness to the owner route
--- registered under the workspace's retained owner name. With a recipient, it answers only when
--- that recipient is the registered owner route. Either side may register
+-- announce forwards the folder workspace's readiness to the owner route
+-- registered under its retained owner name. With a recipient, it answers only
+-- when that recipient is the registered owner route. Either side may register
 -- first: the bridge announces when readiness arrives and the owner route
 -- observes once its name exists, so one of the two always finds the other.
 local function announce(state: State, recipient: string?)
-    if state.stopped or state.workspace_id == "" then return end
+    local folder = state.folder
+    if state.stopped or not folder or not folder.ready then return end
     local route = process.registry.lookup(state.owner_name)
     if not route then return end
     local owner_route = tostring(route)
     if recipient and recipient ~= owner_route then return end
-    send(owner_route, "bee.retained.ready", {version = 1, workspace_id = state.workspace_id, desktop_id = state.desktop_id})
+    send(owner_route, "bee.retained.ready", {version = 1, workspace_id = folder.workspace_id, desktop_id = folder.desktop_id})
 end
-function M.ready(state: State, message: process.Message)
-    if tostring(message:from()) ~= state.supervisor or state.stopped then return end
+-- The folder workspace's identity once its supervisor is ready.
+function M.folder_workspace(state: State): string?
+    local folder = state.folder
+    if folder and folder.ready then return folder.workspace_id end
+    return nil
+end
+-- Whether a retained desktop supervisor serves the workspace now.
+function M.serves(state: State, workspace_id: string): boolean
+    local served = state.workspaces[workspace_id]
+    return served ~= nil and served.ready
+end
+function M.ready(state: State, message: process.Message, now: integer)
+    local served = state.served[tostring(message:from())]
+    if not served or state.stopped then return end
     local value = retained.ready(message:payload():data())
     if not value then error("Invalid retained desktop readiness") end
-    if state.workspace_id ~= "" and (state.workspace_id ~= value.workspace_id or state.desktop_id ~= value.desktop_id) then
-        error("Retained desktop identity changed within an execution")
+    if served.ready then
+        if served.workspace_id ~= value.workspace_id or served.desktop_id ~= value.desktop_id then
+            error("Retained desktop identity changed within an execution")
+        end
+        return
     end
-    state.workspace_id, state.desktop_id = value.workspace_id, value.desktop_id
-    if state.pending_catalog_readers then install_catalog_readers(state, state.pending_catalog_readers) end
-    announce(state, nil)
+    if not served.folder and value.workspace_id ~= served.workspace_id then error("Leased desktop supervisor announced another workspace") end
+    if served.folder then
+        if state.workspaces[value.workspace_id] then error("The folder workspace is already served") end
+        state.workspaces[value.workspace_id] = served
+    end
+    served.workspace_id, served.desktop_id, served.ready = value.workspace_id, value.desktop_id, true
+    if served.pending_catalog_readers then install_catalog_readers(served, served.pending_catalog_readers) end
+    if served.folder then announce(state, nil) end
+    -- Requests that waited for this workspace's supervisor proceed now.
+    for _, client in pairs(state.clients) do
+        local pending = client.pending
+        if client.workspace_id == served.workspace_id and pending and pending.waiting then
+            local mode: string? = nil
+            if pending.op == "attach" and pending.call then
+                local input = protocol.input(protocol.ATTACH, pending.call.input)
+                mode = input and input.mode or nil
+            end
+            if not request_core(state, client, pending, mode) then
+                if pending.call then
+                    remember(state, client, pending, types.reply_error(pending.call.request_id,
+                        types.fault("UNAVAILABLE", "Retained owner did not accept the request")), now)
+                end
+                client.pending = nil
+                if not client.session then forget(state, client.recipient) end
+            end
+        end
+    end
 end
 -- observe answers an owner route that registered after readiness arrived.
 function M.observe(state: State, message: process.Message)
@@ -192,14 +284,19 @@ end
 -- This query is for the separate catalog-read bridge only. It deliberately does
 -- not widen the native desktop-client admission route below.
 function M.catalog_reader(state: State, sender: string): boolean
-    return not state.stopped and state.catalog_readers[sender] == true
+    if state.stopped then return false end
+    for _, served in pairs(state.served) do
+        if served.catalog_readers[sender] then return true end
+    end
+    return false
 end
 function M.catalog_readers(state: State, message: process.Message)
-    if tostring(message:from()) ~= state.supervisor or state.stopped then return end
-    local snapshot = retained.catalog_readers(message:payload():data(), state.workspace_id ~= "" and state.workspace_id or nil)
+    local served = state.served[tostring(message:from())]
+    if not served or state.stopped then return end
+    local snapshot = retained.catalog_readers(message:payload():data(), served.ready and served.workspace_id or nil)
     if not snapshot then error("Invalid retained catalog reader snapshot") end
-    if state.workspace_id == "" then state.pending_catalog_readers = snapshot
-    else install_catalog_readers(state, snapshot) end
+    if not served.ready then served.pending_catalog_readers = snapshot
+    else install_catalog_readers(served, snapshot) end
 end
 -- Only a native sender from an explicitly admitted client node enters
 -- this route: a node the host grant names, or, when the host selected local
@@ -232,6 +329,40 @@ function M.enroll(state: State, nodes: {[string]: boolean}, now: integer)
         if not M.admits(state, recipient) then revoke(state, client, now) end
     end
 end
+-- The listing a catalog reply describes.
+function M.listing(state: State): catalog.Listing
+    return {execution = state.config.execution, default_workspace = M.folder_workspace(state),
+        served = function(workspace_id: string): boolean return M.serves(state, workspace_id) end}
+end
+-- The channels of pending catalog work the owning loop selects on.
+function M.catalog_channels(state: State): {Channel<unknown>}
+    return catalog.channels(state.catalog)
+end
+function M.catalog_result(state: State, selected: unknown, now: integer): boolean
+    if not catalog.handles(state.catalog, selected) then return false end
+    -- A catalog read started for an authorized local app is rechecked against
+    -- the exact current reader PID before its result can leave this owner.
+    local recipient = catalog.reader_recipient(state.catalog, M.READER_OPERATION)
+    if recipient and not M.catalog_reader(state, recipient) then
+        catalog.revoke(state.catalog, "Catalog reader authorization was revoked")
+        return true
+    end
+    catalog.result(state.catalog, selected, M.listing(state), now)
+    return true
+end
+-- A leased workspace's supervisor, started when a client first attaches to it.
+local function serve(state: State, workspace_id: string): (Served?, string?, string?)
+    local served = state.workspaces[workspace_id]
+    if served then return served, nil, nil end
+    if state.served_count >= M.MAX_SERVED then return nil, "BUSY", "Served workspace capacity reached" end
+    local supervisor, err = spawn(state, {workspace_id = workspace_id})
+    if not supervisor then return nil, "UNAVAILABLE", "Workspace desktop could not start: " .. tostring(err) end
+    local started: Served = {supervisor = supervisor, workspace_id = workspace_id, desktop_id = "", folder = false, ready = false, catalog_readers = {}}
+    state.served[supervisor] = started
+    state.workspaces[workspace_id] = started
+    state.served_count = state.served_count + 1
+    return started, nil, nil
+end
 function M.request(state: State, message: process.Message, now: integer)
     local sender = tostring(message:from())
     if not M.admits(state, sender) then return end
@@ -254,21 +385,19 @@ function M.request(state: State, message: process.Message, now: integer)
     -- Bound work on the owner, as ordinary supervisor admission does. A caller's
     -- thirty-second deadline can be slightly ahead of this machine's clock.
     if remaining > 30000 then remaining = 30000 end
-    if state.workspace_id == "" then failure(sender, call.request_id, "UNAVAILABLE", "Desktop is starting"); return end
+    if state.folder and not state.folder.ready then failure(sender, call.request_id, "UNAVAILABLE", "Desktop is starting"); return end
     if operation == protocol.LIST then
-        catalog.request(state.catalog, state.supervisor, state.workspace_id, sender, call, nil, now + remaining)
+        catalog.list(state.catalog, state.executor, sender, call, input.query or {limit = protocol.MAX_PAGE}, now + remaining)
         return
-    end
-    if input.workspace_id ~= state.workspace_id or not input.desktop_id then
-        failure(sender, call.request_id, "NOT_FOUND", "Selected workspace does not belong to this owner"); return
     end
     if operation == protocol.CREATE then
-        if call.idempotency_key ~= input.desktop_id then
+        if not input.desktop_id or call.idempotency_key ~= input.desktop_id then
             failure(sender, call.request_id, "INVALID_ARGUMENT", "Desktop creation requires its identity as the idempotency key"); return
         end
-        catalog.request(state.catalog, state.supervisor, state.workspace_id, sender, call, input.desktop_id, now + remaining)
+        catalog.allocate(state.catalog, state.executor, sender, call, input.desktop_id, now + remaining)
         return
     end
+    if not input.workspace_id or not input.desktop_id then failure(sender, call.request_id, "INVALID_ARGUMENT", "Invalid desktop operation input"); return end
     local key = sender .. "\0" .. call.idempotency_key
     local digest = types.digest({operation = operation, input = call.input, deadline = call.deadline})
     if not digest then failure(sender, call.request_id, "INVALID_ARGUMENT", "Unmeasurable desktop request"); return end
@@ -289,7 +418,7 @@ function M.request(state: State, message: process.Message, now: integer)
         send(sender, types.TOPIC_REPLY, reply); return
     end
     local client = state.clients[sender]
-    if client and client.desktop_id ~= input.desktop_id then
+    if client and (client.desktop_id ~= input.desktop_id or client.workspace_id ~= input.workspace_id) then
         failure(sender, call.request_id, "CONFLICT", "Detach the current desktop before selecting another"); return
     end
     if client and client.pending then
@@ -310,11 +439,13 @@ function M.request(state: State, message: process.Message, now: integer)
     if not client then
         if operation ~= protocol.ATTACH then failure(sender, call.request_id, "NOT_FOUND", "Desktop session not found"); return end
         if state.client_count >= 64 then failure(sender, call.request_id, "BUSY", "Desktop client capacity reached"); return end
+        local _, code, message = serve(state, input.workspace_id)
+        if code then failure(sender, call.request_id, code, message or "Workspace desktop is unavailable"); return end
         local monitored, monitor_error = process.monitor(sender)
         if not monitored or monitor_error then
             failure(sender, call.request_id, "UNAVAILABLE", "Desktop client lifetime could not be monitored"); return
         end
-        client = {recipient = sender, desktop_id = input.desktop_id, closing = false, dirty = false}
+        client = {recipient = sender, workspace_id = input.workspace_id, desktop_id = input.desktop_id, closing = false, dirty = false}
         state.clients[sender] = client; state.client_count = state.client_count + 1
     end
     if operation ~= protocol.ATTACH and (not client.session or client.session.id ~= input.session_id) then
@@ -334,7 +465,7 @@ function M.request(state: State, message: process.Message, now: integer)
             remember(state, client, pending, reply, now)
         else
             remember(state, client, pending, types.reply_ok(call.request_id, {owner_execution = state.config.execution,
-                workspace_id = state.workspace_id, desktop_id = client.desktop_id, session_id = client.session.id,
+                workspace_id = client.workspace_id, desktop_id = client.desktop_id, session_id = client.session.id,
                 recipient = sender, mode = client.session.mode, mount_ref = client.session.mount, expires_at = state.config.expires_at}), now)
         end
         client.pending = nil; return
@@ -345,11 +476,19 @@ function M.request(state: State, message: process.Message, now: integer)
         if not client.session then forget(state, sender) end
     elseif pending.op == "attach" then client.dirty = true end
 end
+-- The supervisor a message came from, with the clients of its workspace.
+local function source(state: State, message: process.Message): Served?
+    local served = state.served[tostring(message:from())]
+    if not served or not served.ready or state.stopped then return nil end
+    return served
+end
 function M.launched(state: State, message: process.Message, now: integer)
-    if tostring(message:from()) ~= state.supervisor or state.stopped then return end
+    local served = source(state, message)
+    if not served then return end
     for _, client in pairs(state.clients) do
         local pending = client.pending
-        local result = retained.launch_result(message:payload():data(), state.workspace_id, client.desktop_id)
+        local result = client.workspace_id == served.workspace_id
+            and retained.launch_result(message:payload():data(), served.workspace_id, client.desktop_id) or nil
         if result and pending and pending.op == "launch" and pending.id == result.request_id and pending.call then
             local session = client.session
             if not session then return end
@@ -363,7 +502,7 @@ function M.launched(state: State, message: process.Message, now: integer)
                 reply = types.reply_error(pending.call.request_id, types.fault(code, result.error))
             else
                 reply = types.reply_ok(pending.call.request_id, {owner_execution = state.config.execution,
-                    workspace_id = state.workspace_id, desktop_id = client.desktop_id, session_id = session.id,
+                    workspace_id = client.workspace_id, desktop_id = client.desktop_id, session_id = session.id,
                     id = result.id, instance_id = result.instance_id})
             end
             remember(state, client, pending, reply, now)
@@ -374,18 +513,19 @@ function M.launched(state: State, message: process.Message, now: integer)
     end
 end
 function M.copied(state: State, message: process.Message, now: integer)
-    if tostring(message:from()) ~= state.supervisor or state.stopped then return end
+    local served = source(state, message)
+    if not served then return end
     local result = retained.copy_result(message:payload():data())
     if not result then return end
     for _, client in pairs(state.clients) do
         local pending = client.pending
-        if pending and pending.op == "copy" and pending.id == result.request_id and pending.call then
+        if client.workspace_id == served.workspace_id and pending and pending.op == "copy" and pending.id == result.request_id and pending.call then
             local session = client.session
             if not session or client.closing then return end
             local reply: types.Reply
             if result.error ~= "" then reply = types.reply_error(pending.call.request_id, types.fault(result.selected and "INVALID_STATE" or "UNAVAILABLE", result.error))
             else reply = types.reply_ok(pending.call.request_id, {owner_execution = state.config.execution,
-                workspace_id = state.workspace_id, desktop_id = client.desktop_id, session_id = session.id,
+                workspace_id = client.workspace_id, desktop_id = client.desktop_id, session_id = session.id,
                 selected = result.selected, text = result.text}) end
             remember(state, client, pending, reply, now)
             client.pending = nil
@@ -394,10 +534,12 @@ function M.copied(state: State, message: process.Message, now: integer)
     end
 end
 function M.result(state: State, message: process.Message, now: integer)
-    if tostring(message:from()) ~= state.supervisor or state.stopped then return end
+    local served = source(state, message)
+    if not served then return end
     for _, client in pairs(state.clients) do
         local pending = client.pending
-        local result = retained.result(message:payload():data(), state.workspace_id, client.desktop_id)
+        local result = client.workspace_id == served.workspace_id
+            and retained.result(message:payload():data(), served.workspace_id, client.desktop_id) or nil
         if result and pending and not pending.activating and pending.id == result.request_id then
             if result.error_code == "" then
                 if pending.op == "attach" then
@@ -422,10 +564,10 @@ function M.result(state: State, message: process.Message, now: integer)
                     reply = types.reply_error(pending.call.request_id, types.fault(code, result.error))
                 elseif client.session then
                     reply = types.reply_ok(pending.call.request_id, {owner_execution = state.config.execution,
-                        workspace_id = state.workspace_id, desktop_id = client.desktop_id, session_id = client.session.id,
+                        workspace_id = client.workspace_id, desktop_id = client.desktop_id, session_id = client.session.id,
                         recipient = client.recipient, mode = client.session.mode, mount_ref = client.session.mount, expires_at = state.config.expires_at})
                 else reply = types.reply_ok(pending.call.request_id, {owner_execution = state.config.execution,
-                    workspace_id = state.workspace_id, desktop_id = client.desktop_id, detached = true}) end
+                    workspace_id = client.workspace_id, desktop_id = client.desktop_id, detached = true}) end
                 remember(state, client, pending, reply, now)
             end
             client.pending = nil
@@ -453,24 +595,14 @@ function M.result(state: State, message: process.Message, now: integer)
         end
     end
 end
-function M.catalog_result(state: State, message: process.Message, now: integer)
-    if tostring(message:from()) ~= state.supervisor or state.stopped then return end
-    local pending = state.catalog.pending
-    -- The catalog bridge was started for an authorized local app. Recheck the
-    -- exact current PID before its result can leave this owner.
-    if pending and pending.call.target.operation_ref == "bee.desktop:catalog" and not M.catalog_reader(state, pending.recipient) then
-        catalog.revoke(state.catalog, "Catalog reader authorization was revoked")
-        return
-    end
-    catalog.result(state.catalog, message:payload():data(), state.workspace_id, state.config.execution, now)
-end
 function M.activated(state: State, message: process.Message, now: integer)
-    if tostring(message:from()) ~= state.supervisor or state.stopped then return end
+    local served = source(state, message)
+    if not served then return end
     local value = message:payload():data()
     for _, client in pairs(state.clients) do
         local pending = client.pending
-        if pending and pending.activating then
-            local result = retained.activation_result(value, state.workspace_id, client.desktop_id)
+        if client.workspace_id == served.workspace_id and pending and pending.activating then
+            local result = retained.activation_result(value, served.workspace_id, client.desktop_id)
             if result and result.request_id == pending.id and pending.call then
                 if result.error_code ~= "" or now >= pending.due or client.closing then
                     local reply = types.reply_error(pending.call.request_id, types.fault(
@@ -522,19 +654,50 @@ function M.tick(state: State, now: integer)
             -- acknowledgement must never be mistaken for completed revocation.
             local cleanup: Pending = {id = uuid.v7(), op = "detach", due = now + 1000}
             client.pending = cleanup
-            request_core(state, client, cleanup, nil)
+            if not request_core(state, client, cleanup, nil) then forget(state, client.recipient) end
+        end
+    end
+end
+-- A leased workspace's supervisor ended: its displays and every session on
+-- them ended with it, and the host lease it held is released.
+local function served_exited(state: State, served: Served, cause: string, now: integer)
+    state.served[served.supervisor] = nil
+    if state.workspaces[served.workspace_id] == served then state.workspaces[served.workspace_id] = nil end
+    state.served_count = state.served_count - 1
+    local ended: {string} = {}
+    for recipient, client in pairs(state.clients) do
+        if client.workspace_id == served.workspace_id then
+            local pending = client.pending
+            if pending and pending.call then
+                remember(state, client, pending, types.reply_error(pending.call.request_id,
+                    types.fault("UNAVAILABLE", "Workspace desktop ended: " .. cause)), now)
+            end
+            ended[#ended + 1] = recipient
+        end
+    end
+    for _, recipient in ipairs(ended) do
+        local client = state.clients[recipient]
+        if client then
+            process.unmonitor(recipient)
+            state.clients[recipient] = nil
+            state.client_count = state.client_count - 1
         end
     end
 end
 function M.event(state: State, event: process.Event, now: integer)
     if event.kind ~= process.event.EXIT and event.kind ~= process.event.LINK_DOWN then return end
     local sender = tostring(event.from)
-    if sender == state.supervisor and event.kind == process.event.EXIT then
-        state.stopped = true
-        state.catalog_readers = {}; state.pending_catalog_readers = nil
+    local served = state.served[sender]
+    if served and event.kind == process.event.EXIT then
         local result: unknown = event.result
         local cause = type(result) == "table" and result.error ~= nil and tostring(result.error) or "without an error result"
-        error("Retained desktop owner exited: " .. cause)
+        if served.folder then
+            state.stopped = true
+            for _, entry in pairs(state.served) do entry.catalog_readers = {}; entry.pending_catalog_readers = nil end
+            error("Retained desktop owner exited: " .. cause)
+        end
+        served_exited(state, served, cause, now)
+        return
     end
     -- Revoking this attachment is our authority, even when the remote actor's
     -- outcome is unknown. This does not declare that actor or its apps exited.
@@ -544,10 +707,13 @@ end
 function M.close(state: State)
     state.stopped = true
     process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
-    process.unlisten(state.catalogs); process.unlisten(state.activations); process.unlisten(state.reader_updates); process.unlisten(state.observers)
+    process.unlisten(state.activations); process.unlisten(state.reader_updates); process.unlisten(state.observers)
     process.registry.unregister(state.bridge_name)
-    state.catalog_readers = {}; state.pending_catalog_readers = nil
+    catalog.revoke(state.catalog, "Desktop owner stopped")
     for recipient in pairs(state.clients) do process.unmonitor(recipient) end
-    process.terminate(state.supervisor)
+    for supervisor, served in pairs(state.served) do
+        served.catalog_readers = {}; served.pending_catalog_readers = nil
+        process.terminate(supervisor)
+    end
 end
 return M

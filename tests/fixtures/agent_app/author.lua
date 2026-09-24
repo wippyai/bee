@@ -96,7 +96,7 @@ local function text_of(value: unknown, label: string): string
     return decoded
 end
 
-local function surface(launch_workspace: string): Object
+local function surface(): Object
     return {tools = {{name = "app_docs", operation = "bee.agent_app_probe:docs",
         description = "Read the Bee application authoring contract and a real example application",
         policies = {"bee.agent_app_probe:docs_policy"},
@@ -111,10 +111,10 @@ local function surface(launch_workspace: string): Object
                 tools = {"thread_message", "overlay"}}},
         base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "agent-authored-app"},
         dynamic_keys = {"round"},
-        access = {workspace_id = launch_workspace, policy = ACCESS_POLICY, traits = {"app:author"}}}
+        access = {policy = ACCESS_POLICY, traits = {"app:author"}}}
 end
 
-local function configure(launch_workspace: string, policy_ref: string, keep_executable: boolean)
+local function configure(policy_ref: string, keep_executable: boolean)
     local policy = registry.get(policy_ref)
     if not policy then error("launch policy " .. policy_ref .. " unavailable") end
     local data = bounds.object(policy.data)
@@ -122,11 +122,11 @@ local function configure(launch_workspace: string, policy_ref: string, keep_exec
     if keep_executable then
         -- The scripted provider binds its own executable, environment and
         -- tools in the fixture; only the surface and instructions are added.
-        data.gateway_surface = surface(launch_workspace)
+        data.gateway_surface = surface()
         data.instructions = INSTRUCTIONS
     else
         data.gateway_tools = {"thread_read", "thread_message", "overlay", "app_docs"}
-        data.gateway_surface = surface(launch_workspace)
+        data.gateway_surface = surface()
         data.instructions = INSTRUCTIONS
     end
     policy.data = data
@@ -370,7 +370,7 @@ local function main()
     local updating = values.update == true
 
     bind(launch_workspace)
-    configure(launch_workspace, policy_ref, definition ~= DEFAULT_DEFINITION)
+    configure(policy_ref, definition ~= DEFAULT_DEFINITION)
     listener_ready()
 
     -- A scripted provider cannot read a computed marker out of the brief, so

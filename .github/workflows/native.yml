@@ -30,6 +30,21 @@ jobs:
       with:
         go-version-file: native/go.mod
         cache: false
+    - name: Locate Go caches
+      id: go-paths
+      run: |
+        echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+    - name: Cache Go builds and modules
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: |
+          ${{ steps.go-paths.outputs.build }}
+          ${{ steps.go-paths.outputs.modules }}
+        key: go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-${{ github.job }}
+        restore-keys: |
+          go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-
+          go-v1-${{ runner.os }}-${{ runner.arch }}-
     - name: Check workflows and scan for secrets
       run: make repository-check
     - name: Validate release tag
@@ -54,12 +69,60 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: native/go.mod
+        cache: false
+    - name: Locate Go caches
+      id: go-paths
+      run: |
+        echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+    - name: Cache Go builds and modules
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: |
+          ${{ steps.go-paths.outputs.build }}
+          ${{ steps.go-paths.outputs.modules }}
+        key: go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-${{ github.job }}
+        restore-keys: |
+          go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-
+          go-v1-${{ runner.os }}-${{ runner.arch }}-
+    - name: Select pinned runtime cache keys
+      id: runtime-key
+      run: python3 build/verify_cached_toolchain.py keys >> "$GITHUB_OUTPUT"
+    - name: Cache pinned toolchain and builder
+      id: toolchain-cache
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: .wippy/bin
+        key: toolchain-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.toolchain }}-${{ hashFiles('build/verify_cached_toolchain.py') }}
+    - name: Verify cached toolchain
+      if: steps.toolchain-cache.outputs.cache-hit == 'true'
+      run: python3 build/verify_cached_toolchain.py verify
     - name: Build pinned native development runtime
+      id: toolchain
+      if: steps.toolchain-cache.outputs.cache-hit != 'true'
       uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
       with:
         mode: toolchain
         manifest: wippy.build.json
         output: .wippy/bin/bee-wippy
+    - name: Record toolchain digests
+      if: steps.toolchain-cache.outputs.cache-hit != 'true'
+      env:
+        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
+      run: |
+        install -m 755 "$BUILDER_BINARY" .wippy/bin/wippy-builder
+        python3 build/verify_cached_toolchain.py record
+    - name: Cache Lua compilation
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: ~/.wippy/cache/lua
+        key: lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
+        restore-keys: |
+          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
+          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
       with:
         python-version: '3.12'
@@ -78,12 +141,60 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: native/go.mod
+        cache: false
+    - name: Locate Go caches
+      id: go-paths
+      run: |
+        echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+    - name: Cache Go builds and modules
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: |
+          ${{ steps.go-paths.outputs.build }}
+          ${{ steps.go-paths.outputs.modules }}
+        key: go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-${{ github.job }}
+        restore-keys: |
+          go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-
+          go-v1-${{ runner.os }}-${{ runner.arch }}-
+    - name: Select pinned runtime cache keys
+      id: runtime-key
+      run: python3 build/verify_cached_toolchain.py keys >> "$GITHUB_OUTPUT"
+    - name: Cache pinned toolchain and builder
+      id: toolchain-cache
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: .wippy/bin
+        key: toolchain-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.toolchain }}-${{ hashFiles('build/verify_cached_toolchain.py') }}
+    - name: Verify cached toolchain
+      if: steps.toolchain-cache.outputs.cache-hit == 'true'
+      run: python3 build/verify_cached_toolchain.py verify
     - name: Build pinned native development runtime
+      id: toolchain
+      if: steps.toolchain-cache.outputs.cache-hit != 'true'
       uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
       with:
         mode: toolchain
         manifest: wippy.build.json
         output: .wippy/bin/bee-wippy
+    - name: Record toolchain digests
+      if: steps.toolchain-cache.outputs.cache-hit != 'true'
+      env:
+        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
+      run: |
+        install -m 755 "$BUILDER_BINARY" .wippy/bin/wippy-builder
+        python3 build/verify_cached_toolchain.py record
+    - name: Cache Lua compilation
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: ~/.wippy/cache/lua
+        key: lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
+        restore-keys: |
+          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
+          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
     # Every target embeds these sealed packs, and Hub publication uploads the
     # same bytes from the release's deployment archive.
     - name: Seal the application packs once
@@ -123,12 +234,60 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: native/go.mod
+        cache: false
+    - name: Locate Go caches
+      id: go-paths
+      run: |
+        echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+    - name: Cache Go builds and modules
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: |
+          ${{ steps.go-paths.outputs.build }}
+          ${{ steps.go-paths.outputs.modules }}
+        key: go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-${{ github.job }}
+        restore-keys: |
+          go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-
+          go-v1-${{ runner.os }}-${{ runner.arch }}-
+    - name: Select pinned runtime cache keys
+      id: runtime-key
+      run: python3 build/verify_cached_toolchain.py keys >> "$GITHUB_OUTPUT"
+    - name: Cache pinned toolchain and builder
+      id: toolchain-cache
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: .wippy/bin
+        key: toolchain-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.toolchain }}-${{ hashFiles('build/verify_cached_toolchain.py') }}
+    - name: Verify cached toolchain
+      if: steps.toolchain-cache.outputs.cache-hit == 'true'
+      run: python3 build/verify_cached_toolchain.py verify
     - name: Build pinned native development runtime
+      id: toolchain
+      if: steps.toolchain-cache.outputs.cache-hit != 'true'
       uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
       with:
         mode: toolchain
         manifest: wippy.build.json
         output: .wippy/bin/bee-wippy
+    - name: Record toolchain digests
+      if: steps.toolchain-cache.outputs.cache-hit != 'true'
+      env:
+        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
+      run: |
+        install -m 755 "$BUILDER_BINARY" .wippy/bin/wippy-builder
+        python3 build/verify_cached_toolchain.py record
+    - name: Cache Lua compilation
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: ~/.wippy/cache/lua
+        key: lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
+        restore-keys: |
+          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
+          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
       with:
         python-version: '3.12'
@@ -155,13 +314,60 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: native/go.mod
+        cache: false
+    - name: Locate Go caches
+      id: go-paths
+      run: |
+        echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+    - name: Cache Go builds and modules
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: |
+          ${{ steps.go-paths.outputs.build }}
+          ${{ steps.go-paths.outputs.modules }}
+        key: go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-${{ github.job }}
+        restore-keys: |
+          go-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum', 'native/go.mod', 'build/builder.lock.json') }}-
+          go-v1-${{ runner.os }}-${{ runner.arch }}-
+    - name: Select pinned runtime cache keys
+      id: runtime-key
+      run: python3 build/verify_cached_toolchain.py keys >> "$GITHUB_OUTPUT"
+    - name: Cache pinned toolchain and builder
+      id: toolchain-cache
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: .wippy/bin
+        key: toolchain-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.toolchain }}-${{ hashFiles('build/verify_cached_toolchain.py') }}
+    - name: Verify cached toolchain
+      if: steps.toolchain-cache.outputs.cache-hit == 'true'
+      run: python3 build/verify_cached_toolchain.py verify
     - name: Build pinned native development runtime
       id: toolchain
+      if: steps.toolchain-cache.outputs.cache-hit != 'true'
       uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
       with:
         mode: toolchain
         manifest: wippy.build.json
         output: .wippy/bin/bee-wippy
+    - name: Record toolchain digests
+      if: steps.toolchain-cache.outputs.cache-hit != 'true'
+      env:
+        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
+      run: |
+        install -m 755 "$BUILDER_BINARY" .wippy/bin/wippy-builder
+        python3 build/verify_cached_toolchain.py record
+    - name: Cache Lua compilation
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: ~/.wippy/cache/lua
+        key: lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
+        restore-keys: |
+          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
+          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
     - name: Verify runner architecture
       env:
         EXPECTED_OS: ${{ matrix.goos }}
@@ -186,7 +392,7 @@ jobs:
     - name: Assemble application
       id: assemble
       env:
-        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
+        BUILDER_BINARY: ${{ github.workspace }}/.wippy/bin/wippy-builder
         REQUESTED_VERSION: ${{ inputs.version || '0.1.0-dev' }}
         GH_TOKEN: ${{ github.token }}
       run: |
@@ -210,7 +416,7 @@ jobs:
       run: make native-binary-offline-check
     - name: Archive binary and provenance
       env:
-        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
+        BUILDER_BINARY: ${{ github.workspace }}/.wippy/bin/wippy-builder
         TARGET: ${{ matrix.goos }}-${{ matrix.goarch }}
       run: '"$BUILDER_BINARY" package dist/bee --output "dist/bee-$TARGET.tar.gz"'
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

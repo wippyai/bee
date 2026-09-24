@@ -8,6 +8,8 @@ local bounds = require("bounds")
 type Object = {[string]: unknown}
 local ACTOR = "bee.test.gateway"
 local THREAD = "access-thread"
+-- The binding names the approval workspace; the surface declaration carries none.
+local WORKSPACE = "access-workspace"
 local function object(raw: unknown): Object
     local value = bounds.object(raw)
     if not value then error("expected object") end
@@ -59,12 +61,12 @@ local function run(address: string)
         value(call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = action .. "-prepare", action_id = action, attempt_id = action .. "-attempt",
             prepared = {binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p", placement_binding = "bee.placement.native:binding", placement_attempt_id = action, plan_digest = "plan"}}))
         local admitted = value(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD,
-            owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "measure_context"}, ttl_ms = 60000,
+            owner_incarnation = 1, carrier_epoch = 1, workspace_id = WORKSPACE, tools = {"thread_read", "measure_context"}, ttl_ms = 60000,
             surface = {tools = {{name = "measure_context", operation = "bee.gateway_probe:context_tool", description = "Read selected app state",
                 policies = {"bee.gateway_probe:context_tool_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
                 traits = {{id = "research:measure", title = "Measure app", prompt = "Read selected app state", tools = {"measure_context"}}},
                 base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "approved-app"}, dynamic_keys = {"experiment"},
-                access = {workspace_id = "access-workspace", policy = "mcp-test", traits = {"research:measure"}}}}))
+                access = {policy = "mcp-test", traits = {"research:measure"}}}}))
         local binding = object(admitted.binding)
         local authorized = value(call("bee.gateway.binding:authorize_materialization", {attempt_id = action .. "-attempt", carrier_epoch = 1, binding_id = binding.binding_id}))
         local materialized = value(call("bee.gateway.binding:materialize", {attempt_id = action .. "-attempt", carrier_epoch = 1, materialization_key = authorized.materialization_key}))
@@ -80,7 +82,7 @@ local function run(address: string)
     local approval_id = bounds.id(approval.approval_id)
     if not approval_id then error("missing approval ID") end
     assert(value(rpc(address, "access-a", token, "session", request)).approval_id == approval_id, "request retry duplicated approval")
-    local inbox = value(call("bee.approvals.binding:inbox", {workspace_id = "access-workspace", after_seq = 0}))
+    local inbox = value(call("bee.approvals.binding:inbox", {workspace_id = WORKSPACE, after_seq = 0}))
     local encoded_inbox = json.encode(inbox)
     assert(encoded_inbox and encoded_inbox:find(approval_id, 1, true), "pending approval missing from durable inbox")
     assert(value(rpc(address, "access-a", token, "session", {operation = "access_status", approval_id = approval_id})).status == "pending", "pending status")

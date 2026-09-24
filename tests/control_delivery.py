@@ -2,14 +2,13 @@
 from pathlib import Path
 import json
 import shutil
-import sqlite3
 import subprocess
 import tempfile
 import time
 
 from recovery import stored
 from tui_smoke import Desktop, ROOT, RUNTIME
-from workspace import pack_deployment
+from workspace import classic_workspace, pack_deployment
 
 CASES = {
     "bind": ("client", 'topic == "bee.app.request" and type(value) == "table" and value.op == "bind"'),
@@ -18,11 +17,6 @@ CASES = {
     "scene": ("client", 'topic == "bee.desktop.command" and type(value) == "table" and value.op == "add"'),
     "receipt": ("host", 'topic == "bee.application.persisted"'),
 }
-
-
-def workspace_identity(folder):
-    with sqlite3.connect(folder / "workspace.db") as db:
-        return db.execute("SELECT workspace_id FROM workspace_identity WHERE singleton=1").fetchone()[0]
 
 
 def snapshot_values(snapshot):
@@ -46,7 +40,7 @@ def run(packed, cases=CASES):
                 ui.quit()
             finally:
                 ui.close()
-            baseline_id = workspace_identity(folder)
+            baseline_id = classic_workspace(folder / "workspace.db")
             baseline = stored(folder)
             before = baseline["applications"]
             assert before, "Settings did not establish recovery state"
@@ -95,7 +89,7 @@ def run(packed, cases=CASES):
                 assert b"Injected core delivery failure" in ui.raw, bytes(ui.raw[-2000:])
                 if case in ("shutdown",):
                     assert time.monotonic() - started < 1.5, f"{case}: rejected quit waited"
-                assert workspace_identity(folder) == baseline_id, f"{case}: failed delivery changed workspace identity"
+                assert classic_workspace(folder / "workspace.db") == baseline_id, f"{case}: failed delivery changed workspace identity"
                 recovered = stored(folder)
                 after = recovered["applications"]
                 if case in ("bind", "restore", "scene"):
@@ -111,7 +105,7 @@ def run(packed, cases=CASES):
             ui = Desktop(folder, packed)
             try:
                 ui.wait("BEE SETTINGS")
-                assert workspace_identity(folder) == baseline_id, f"{case}: recovery changed workspace identity"
+                assert classic_workspace(folder / "workspace.db") == baseline_id, f"{case}: recovery changed workspace identity"
                 ui.quit()
             finally:
                 ui.close()

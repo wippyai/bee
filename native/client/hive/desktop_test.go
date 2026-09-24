@@ -87,45 +87,70 @@ func TestDesktopMountRejectsSubstitutedAuthorityAndMalformedFields(t *testing.T)
 		t.Fatal("accepted closed lifetime")
 	}
 }
-func TestDesktopCatalogPreservesIndependentWorkspaceIdentities(t *testing.T) {
-	value := map[string]any{"owner_execution": selection.Execution, "workspaces": []any{
-		map[string]any{"workspace_id": selection.Workspace, "desktops": []any{map[string]any{"desktop_id": selection.Desktop}}},
-		map[string]any{"workspace_id": strings.Repeat("d", 32), "desktops": map[string]any{}}}}
-	catalog, err := DecodeDesktopCatalog(desktopReply(t, value), selection.Execution)
-	if err != nil || len(catalog.Workspaces) != 2 || len(catalog.Workspaces[1].Desktops) != 0 {
+func catalogValue() map[string]any {
+	return map[string]any{"owner_execution": selection.Execution,
+		"desktops": []any{map[string]any{"desktop_id": selection.Desktop, "is_default": true},
+			map[string]any{"desktop_id": strings.Repeat("e", 32), "is_default": false}},
+		"workspaces": []any{
+			map[string]any{"workspace_id": selection.Workspace, "label": "Alpha", "served": true},
+			map[string]any{"workspace_id": strings.Repeat("d", 32), "label": "", "served": false}},
+		"next_after":        "cursor",
+		"default_workspace": selection.Workspace}
+}
+
+func TestDesktopCatalogListsNodeDisplaysOnceAndOnePageOfWorkspaces(t *testing.T) {
+	catalog, err := DecodeDesktopCatalog(desktopReply(t, catalogValue()), selection.Execution)
+	if err != nil || len(catalog.Workspaces) != 2 || len(catalog.Desktops) != 2 || catalog.Next != "cursor" ||
+		catalog.Default != selection.Workspace || !catalog.Workspaces[0].Served || catalog.Workspaces[1].Served {
 		t.Fatalf("catalog: %+v %v", catalog, err)
 	}
-	for _, raw := range []string{
-		`{"owner_execution":"` + selection.Execution + `","workspaces":null}`,
-		`{"owner_execution":"` + selection.Execution + `","workspaces":{"extra":true}}`,
-		`{"owner_execution":"` + selection.Execution + `","workspaces":[{"workspace_id":"` + selection.Workspace + `","desktops":[{"DESKTOP_ID":"` + selection.Desktop + `"}]}]}`,
-		`{"owner_execution":"` + selection.Execution + `","workspaces":[{"workspace_id":"` + selection.Workspace + `","desktops":[{"desktop_id":"` + selection.Desktop + `"},{"desktop_id":"` + selection.Desktop + `"}]}]}`,
-	} {
-		r := desktopReply(t, value)
-		r.Value = json.RawMessage(raw)
-		if _, err := DecodeDesktopCatalog(r, selection.Execution); err == nil {
-			t.Fatal("accepted malformed catalog", raw)
-		}
+	last := catalogValue()
+	delete(last, "next_after")
+	delete(last, "default_workspace")
+	last["workspaces"] = map[string]any{}
+	if decoded, err := DecodeDesktopCatalog(desktopReply(t, last), selection.Execution); err != nil || decoded.Next != "" || decoded.Default != "" || len(decoded.Workspaces) != 0 {
+		t.Fatalf("Lua empty page refused: %+v %v", decoded, err)
 	}
-	empty := desktopReply(t, map[string]any{"owner_execution": selection.Execution, "workspaces": map[string]any{}})
-	if _, err := DecodeDesktopCatalog(empty, selection.Execution); err != nil {
-		t.Fatal("Lua empty list refused", err)
+	for name, change := range map[string]func(map[string]any){
+		"null workspaces":   func(v map[string]any) { v["workspaces"] = nil },
+		"object workspaces": func(v map[string]any) { v["workspaces"] = map[string]any{"extra": true} },
+		"no displays":       func(v map[string]any) { v["desktops"] = map[string]any{} },
+		"second default":    func(v map[string]any) { v["desktops"].([]any)[1].(map[string]any)["is_default"] = true },
+		"duplicate display": func(v map[string]any) { v["desktops"].([]any)[1].(map[string]any)["desktop_id"] = selection.Desktop },
+		"duplicate workspace": func(v map[string]any) {
+			v["workspaces"].([]any)[1].(map[string]any)["workspace_id"] = selection.Workspace
+		},
+		"label control": func(v map[string]any) { v["workspaces"].([]any)[0].(map[string]any)["label"] = "a\x1b[2J" },
+		"workspace alias": func(v map[string]any) {
+			w := v["workspaces"].([]any)[0].(map[string]any)
+			w["WORKSPACE_ID"] = w["workspace_id"]
+			delete(w, "workspace_id")
+		},
+		"empty cursor":      func(v map[string]any) { v["next_after"] = "" },
+		"invalid default":   func(v map[string]any) { v["default_workspace"] = "short" },
+		"extra field":       func(v map[string]any) { v["extra"] = true },
+		"foreign execution": func(v map[string]any) { v["owner_execution"] = strings.Repeat("f", 32) },
+	} {
+		value := catalogValue()
+		change(value)
+		if _, err := DecodeDesktopCatalog(desktopReply(t, value), selection.Execution); err == nil {
+			t.Fatal("accepted malformed catalog:", name)
+		}
 	}
 }
 func TestDesktopCreatedRequiresExactAllocationReceipt(t *testing.T) {
-	value := map[string]any{"owner_execution": selection.Execution, "workspace_id": selection.Workspace, "desktop_id": selection.Desktop}
-	if err := DecodeDesktopCreated(desktopReply(t, value), selection); err != nil {
+	value := map[string]any{"owner_execution": selection.Execution, "desktop_id": selection.Desktop}
+	if err := DecodeDesktopCreated(desktopReply(t, value), selection.Execution, selection.Desktop); err != nil {
 		t.Fatal(err)
 	}
 	for field, wrong := range map[string]any{
 		"owner_execution": strings.Repeat("d", 32),
-		"workspace_id":    strings.Repeat("d", 32),
 		"desktop_id":      strings.Repeat("d", 32),
-		"extra":           true,
+		"workspace_id":    selection.Workspace,
 	} {
-		changed := map[string]any{"owner_execution": selection.Execution, "workspace_id": selection.Workspace, "desktop_id": selection.Desktop}
+		changed := map[string]any{"owner_execution": selection.Execution, "desktop_id": selection.Desktop}
 		changed[field] = wrong
-		if DecodeDesktopCreated(desktopReply(t, changed), selection) == nil {
+		if DecodeDesktopCreated(desktopReply(t, changed), selection.Execution, selection.Desktop) == nil {
 			t.Fatalf("accepted changed %s", field)
 		}
 	}
@@ -133,7 +158,7 @@ func TestDesktopCreatedRequiresExactAllocationReceipt(t *testing.T) {
 	close(closed)
 	reply := desktopReply(t, value)
 	reply.lifetime = closed
-	if DecodeDesktopCreated(reply, selection) == nil {
+	if DecodeDesktopCreated(reply, selection.Execution, selection.Desktop) == nil {
 		t.Fatal("accepted creation after owner lifetime ended")
 	}
 }

@@ -114,3 +114,31 @@ entries:
         actor: {id: workspace_hosts.lazy_supervisor}
         policies: [bee:host_policy, bee.workspace_hosts:lazy_spawn_policy, bee:workspace_storage_policy,
           bee:workspace_host_lease_policy, bee:workspace_host_manager_policy]
+- name: attach_spawn_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.launch:retained, bee.launch:host_manager, bee.workspace_hosts:attach_recipient]
+    effect: allow
+- name: attach_supervisor
+  kind: process.lua
+  source: file://attach_supervisor.lua
+  method: main
+  modules: [process, channel, security, time, uuid, logger]
+  imports:
+    store: bee.storage:store
+    catalog: bee.storage:catalog
+    leases: bee.application:host_leases
+  meta:
+    command:
+      name: workspace-hosts-attach-supervisor
+      short: A desktop supervisor selected by workspace identity leases its host through the node host manager
+      security:
+        actor: {id: workspace_hosts.attach_supervisor}
+        policies: [bee:host_policy, bee.workspace_hosts:attach_spawn_policy, bee:workspace_storage_policy,
+          bee:workspace_host_lease_policy, bee:workspace_host_manager_policy, bee.workspace_hosts:logical_probe_policy]
+- name: attach_recipient
+  kind: process.lua
+  source: file://attach_recipient.lua
+  method: main
+  modules: [process, channel]

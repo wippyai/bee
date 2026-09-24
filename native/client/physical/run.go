@@ -33,6 +33,10 @@ func (e *DeliveryError) Unwrap() error { return e.Cause }
 
 var ErrInputOverflow = errors.New("physical client: input buffer full; viewport detached without replay")
 
+// ErrDetached means the person detached locally with Ctrl+]; the display
+// keeps running and the caller decides what the terminal shows next.
+var ErrDetached = errors.New("physical client: detached locally")
+
 // ErrCopyRefused means the owner definitively refused this selection and has
 // reported the reason in the desktop UI. It neither interrupts the application
 // nor ends the client.
@@ -62,7 +66,8 @@ type Viewport interface {
 // events to forward; the native grant still authorizes every operation.
 // Run never creates a transport or a producer. The caller owns
 // stdin and stdout. Canceling ctx detaches this client, without stopping the host.
-// Ctrl+] and Ctrl+Q detach locally and never wait behind network input.
+// Ctrl+] (ErrDetached) and Ctrl+Q (nil) detach locally and never wait behind
+// network input.
 func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os.File, stdout io.Writer) (result error) {
 	return RunWithCopy(ctx, client, rights, stdin, stdout, nil)
 }
@@ -103,7 +108,11 @@ func RunWithCopy(ctx context.Context, client Viewport, rights tty.MountRights, s
 		if ctx.Err() != nil {
 			return
 		}
-		if event.Type == "key" && event.Action == "press" && event.Ctrl && !event.Alt && (event.Key == "]" || event.Key == "q") {
+		if event.Type == "key" && event.Action == "press" && event.Ctrl && !event.Alt && event.Key == "]" {
+			cancel(ErrDetached)
+			return
+		}
+		if event.Type == "key" && event.Action == "press" && event.Ctrl && !event.Alt && event.Key == "q" {
 			cancel(nil)
 			return
 		}

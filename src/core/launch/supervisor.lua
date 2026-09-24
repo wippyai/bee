@@ -1,4 +1,6 @@
--- MIT. Owns one local workspace host; never acquires a terminal or client store.
+-- MIT. Owns one local workspace host, or, for a retained workspace selected by
+-- identity, holds a lease on the host the node host manager serves it from.
+-- Never acquires a terminal or client store.
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
@@ -16,6 +18,8 @@ local desktop_storage = require("desktop_storage")
 local desktop_lifecycle = require("desktop_lifecycle")
 local attachments = require("attachments")
 local retained_protocol = require("retained_protocol")
+local leases = require("leases")
+local workspaces = require("workspaces")
 type Channel = channel.Channel
 type Phase = "booting" | "client_boot" | "admitting" | "running" | "rendering" | "saving" | "stopping" | "finishing"
 local function run_supervisor(client: string, workspace: unknown, database_resource: string?, retained_owner: string?, initial_application: string?)
@@ -27,6 +31,10 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
     local announced = false
     local subscriptions: {Channel<process.Message>} = {}
     local host = ""
+    -- Where host-owner requests go and whose answers are trusted: the host this
+    -- supervisor spawned, or the node host manager that owns a leased host.
+    local route = ""
+    local lease: leases.Lease? = nil
     local workspace_id = ""
     local exit_ready: Channel<process.Message>? = nil
     local failure_notified = false
@@ -90,8 +98,27 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             policies[#policies + 1] = policy
         end
         local self = tostring(process.pid())
-        host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
-            :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self, workspace, database_resource)))
+        local selection = workspaces.selection(workspace)
+        local leased_ready: protocol.Host? = nil
+        if retained_owner and selection and selection.workspace_id then
+            -- A workspace selected by identity is the node's to serve: the lease
+            -- starts its host when none is live and keeps it until released.
+            local held, refusal = leases.acquire(selection.workspace_id, "30s")
+            if not held then error("Lease workspace host: " .. tostring(refusal)) end
+            lease = held
+            local announced_value, attach_error = leases.attach(held, "10s")
+            if attach_error then error("Attach workspace host: " .. attach_error) end
+            leased_ready = protocol.host(announced_value)
+            if not leased_ready or leased_ready.workspace_id ~= selection.workspace_id then error("Invalid leased host readiness") end
+            local manager = process.registry.lookup(leases.MANAGER)
+            if not manager then error("The node host manager stopped") end
+            host, route = held.host, tostring(manager)
+            assert(process.monitor(host))
+        else
+            host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
+                :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self, workspace, database_resource)))
+            route = host
+        end
         local connection_id = ""
         local phase: Phase = "booting"
         local pending = ""
@@ -137,7 +164,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         end
         local function primary_renderer(renderer: string)
             pending = uuid.v7(); advance("rendering")
-            send(host, "bee.host.client", {version = 1, workspace_id = workspace_id, request_id = pending,
+            send(route, "bee.host.client", {version = 1, workspace_id = workspace_id, request_id = pending,
                 op = "render", recipient = client, renderer = renderer})
         end
         local function primary_quit(request: protocol.Quit)
@@ -171,6 +198,27 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 end
             end
         end
+        -- The host is ready: the first display boots against it.
+        local function booted(value: protocol.Host)
+            workspace_id = value.workspace_id
+            forward_catalog_readers()
+            advance("client_boot")
+            if retained_owner then
+                local client_policies: {security.Policy} = {}
+                for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy"}) do
+                    client_policies[#client_policies + 1] = assert(security.policy(name))
+                end
+                local started, start_error = desktops.start(retained,
+                    {host = host, workspace_id = workspace_id, database = "bee:client_db", width = 100, height = 32,
+                        application = initial_application, options = {version = 1, quit_mode = "supervisor",
+                            legacy_desktop = value.desktop, inherit_appearance = value.fresh, node_defaults = true, hive_supervisor = retained_owner}}, security.new_scope(client_policies))
+                if not started then error(tostring(start_error)) end
+                desktop, client = started, started.pid
+            else
+                send(client, "bee.launch.host", {version = 1, workspace_id = workspace_id, host = host, desktop = value.desktop})
+            end
+        end
+        if leased_ready then booted(leased_ready) end
         while true do
             if phase == "running" then
                 local quitting, rendering = deferred_quit, deferred_renderer
@@ -186,7 +234,9 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 saved:case_receive(), exit_ready:case_receive(), events:case_receive(), copy_results:case_receive(), catalog_readers:case_receive(), launch_results:case_receive()}
             if phase == "running" or retained_displays then
                 cases[#cases + 1] = renderers:case_receive()
-                cases[#cases + 1] = quits:case_receive()
+                -- A leased workspace outlives its displays: a display quits
+                -- through its retained lifecycle, never by stopping the host.
+                if retained_displays or not lease then cases[#cases + 1] = quits:case_receive() end
             end
             if retained_owner and (phase == "running" or phase == "rendering") then
                 cases[#cases + 1] = attachment_requests:case_receive()
@@ -272,27 +322,11 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                             end
                         end
                     end
-                elseif selected.channel == hosts and sender == host and phase == "booting" then
+                elseif selected.channel == hosts and sender == host and phase == "booting" and not lease then
                     local value = protocol.host(data)
                     if not value then error("Invalid local host readiness") end
-                    workspace_id = value.workspace_id
-                    forward_catalog_readers()
-                    advance("client_boot")
-                    if retained_owner then
-                        local client_policies: {security.Policy} = {}
-                        for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy"}) do
-                            client_policies[#client_policies + 1] = assert(security.policy(name))
-                        end
-                        local started, start_error = desktops.start(retained,
-                            {host = host, workspace_id = workspace_id, database = "bee:client_db", width = 100, height = 32,
-                                application = initial_application, options = {version = 1, quit_mode = "supervisor",
-                                    legacy_desktop = value.desktop, inherit_appearance = value.fresh, node_defaults = true, hive_supervisor = retained_owner}}, security.new_scope(client_policies))
-                        if not started then error(tostring(start_error)) end
-                        desktop, client = started, started.pid
-                    else
-                        send(client, "bee.launch.host", {version = 1, workspace_id = workspace_id, host = host, desktop = value.desktop})
-                    end
-                elseif selected.channel == catalog_readers and sender == host then
+                    booted(value)
+                elseif selected.channel == catalog_readers and sender == route then
                     local snapshot = retained_protocol.catalog_readers(data, workspace_id ~= "" and workspace_id or nil)
                     if not snapshot then error("Invalid host catalog reader snapshot") end
                     reader_snapshot = snapshot
@@ -302,10 +336,10 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                     if not identity then error("Client did not acknowledge durable legacy import") end
                     desktop_id = identity.client_id
                     pending = uuid.v7(); advance("admitting")
-                    send(host, "bee.host.client", {version = 1, workspace_id = workspace_id, request_id = pending,
+                    send(route, "bee.host.client", {version = 1, workspace_id = workspace_id, request_id = pending,
                         op = "admit", recipient = client, permissions = {open = true, close = true, control = true,
                             appearance = true}, display_id = identity.client_id})
-                elseif selected.channel == results and sender == host and type(data) == "table" then
+                elseif selected.channel == results and sender == route and type(data) == "table" then
                     if protocol.request(data, workspace_id) == pending and (phase == "admitting" or phase == "rendering") then
                         if data.error_code ~= "" then
                             if phase == "admitting" then error("Local client admission failed: " .. tostring(data.error)) end
@@ -320,7 +354,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                             connection_id = token; pending = ""; advance("running")
                             if retained_owner and rendered and not announced then
                                 announced = true
-                                retained_displays = desktop_lifecycle.new(retained_owner, host, workspace_id, desktop_id, retained)
+                                retained_displays = desktop_lifecycle.new(retained_owner, host, route, workspace_id, desktop_id, retained)
                                 local initial = desktop
                                 if not initial then error("Initial retained display resource is missing") end
                                 desktop_lifecycle.adopt(retained_displays, desktop_id, initial, connection_id)
@@ -489,7 +523,10 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
     if storage_pending then desktop_storage.cancel(storage_pending) end
     if retained_displays then desktop_lifecycle.close(retained_displays) end
     if retained_owner and client ~= "" then process.terminate(client) end
-    if host ~= "" then process.terminate(host) end
+    -- A leased host is the node's: the lease ends and the manager stops the host
+    -- once it has been idle. A spawned host ends with this supervisor.
+    if lease then leases.release(lease)
+    elseif host ~= "" then process.terminate(host) end
     for _, subscription in ipairs(subscriptions) do process.unlisten(subscription) end
     if not ok then error(err) end
 end

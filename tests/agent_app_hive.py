@@ -11,7 +11,6 @@ import hashlib
 import os
 import re
 import shutil
-import sqlite3
 import subprocess
 import sys
 import time
@@ -20,9 +19,8 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from delivery_review import workspace_identity  # noqa: E402
 from tui_smoke import Desktop  # noqa: E402
-from workspace import ROOT, RUNTIME  # noqa: E402
+from workspace import ROOT, RUNTIME, classic_workspace, workspace_checkpoint  # noqa: E402
 
 TITLE = "Agent App"
 MARKER = "AGENT APP UPDATED"
@@ -72,13 +70,7 @@ def retained_artifact():
 
 
 def application_identity(folder):
-    database = sqlite3.connect(folder / "workspace.db")
-    try:
-        row = database.execute("SELECT value FROM workspace_state WHERE singleton = 1").fetchone()
-    finally:
-        database.close()
-    assert row, "destination desktop did not save workspace state"
-    applications = json.loads(row[0])["applications"]
+    applications = workspace_checkpoint(folder / "workspace.db")["applications"]
     matches = [item for item in applications if item["definition_id"] == DEFINITION_ID]
     assert len(matches) == 1, matches
     return matches[0]["id"], matches[0]["instance_id"]
@@ -101,7 +93,7 @@ def configure_destination(project, workspace_id=None, source_node="node-1"):
         }]}
         governance_path.write_text(yaml.safe_dump(governance, sort_keys=False))
 
-    approvals_path = project / "src/approvals/host/_index.yaml"
+        approvals_path = project / "src/approvals/host/_index.yaml"
         approvals = yaml.safe_load(approvals_path.read_text())
         policies = next(item for item in approvals["entries"] if item["name"] == "approver_policies")
         policies["policies"] = [{"name": "local-agent-app-hive", "approvers": ["bee.replica_probe"],
@@ -137,7 +129,7 @@ def prepare_destination(destination, evidence, source_node="node-1"):
         desktop.quit()
     finally:
         desktop.close()
-    workspace_id = workspace_identity(destination)
+    workspace_id = classic_workspace(destination / "workspace.db")
     configure_destination(destination, workspace_id, source_node)
     return workspace_id
 
@@ -216,7 +208,7 @@ def open_and_restart(destination, workspace_id, evidence, marker=MARKER):
     finally:
         desktop.close()
 
-    assert workspace_identity(destination) == workspace_id, "desktop restart changed destination workspace identity"
+    assert classic_workspace(destination / "workspace.db") == workspace_id, "desktop restart changed destination workspace identity"
     restarted = Desktop(destination, project=destination)
     try:
         restarted.wait(marker, timeout=30)

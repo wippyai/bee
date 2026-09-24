@@ -5,8 +5,10 @@ import atexit
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
+import sqlite3
 import subprocess
 import tempfile
 import yaml
@@ -83,6 +85,52 @@ def database_environment(directory, **overrides):
     root = Path(directory)
     names = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance", "sync")
     return {**os.environ, **{f"BEE_{name.upper()}_DB": str(root / f"{name}.db") for name in names}, **overrides}
+
+
+CLASSIC_ROOT = "bee:workspace_root"
+
+
+def _catalog(database):
+    return sqlite3.connect(f"file:{Path(database)}?mode=ro", uri=True)
+
+
+def classic_workspace(database):
+    """The id of the classic folder workspace in a node workspace catalog."""
+    connection = _catalog(database)
+    try:
+        rows = connection.execute(
+            "SELECT workspace_id FROM workspaces WHERE root_ref = ? AND subpath = ''", (CLASSIC_ROOT,)).fetchall()
+    finally:
+        connection.close()
+    assert len(rows) == 1 and re.fullmatch(r"[0-9a-f]{32}", rows[0][0]), rows
+    return rows[0][0]
+
+
+def workspace_checkpoint(database, workspace_id=None):
+    """The committed state value of one catalog workspace, the classic one by default."""
+    selected = workspace_id or classic_workspace(database)
+    connection = _catalog(database)
+    try:
+        row = connection.execute(
+            "SELECT value FROM workspace_state WHERE workspace_id = ?", (selected,)).fetchone()
+    finally:
+        connection.close()
+    assert row, f"workspace checkpoint is missing for {selected}"
+    return json.loads(row[0])
+
+
+def client_layout(database, workspace_id, desktop_id=None):
+    """The import receipt and layout one desktop keeps for one workspace; the default desktop unless named."""
+    connection = _catalog(database)
+    try:
+        selected = desktop_id or connection.execute("SELECT client_id FROM client_state").fetchone()[0]
+        row = connection.execute(
+            "SELECT import_receipt, value FROM client_layouts WHERE desktop_id = ? AND workspace_id = ?",
+            (selected, workspace_id)).fetchone()
+    finally:
+        connection.close()
+    assert row, f"desktop {selected} has no layout for workspace {workspace_id}"
+    return row[0], json.loads(row[1])
 
 
 @contextmanager

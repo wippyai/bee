@@ -54,11 +54,10 @@ local function main(execution: string, scenario: string?, parent: string?)
     end
     local value = catalog.value
     if not catalog.ok or type(value) ~= "table" or value.owner_execution ~= execution
-        or type(value.workspaces) ~= "table" then error("invalid catalog") end
-    local workspace = value.workspaces[1]
-    if type(workspace) ~= "table" or type(workspace.desktops) ~= "table" then error("missing workspace") end
-    local workspace_id = contract.workspace_id(workspace.workspace_id)
-    local desktop = workspace.desktops[1]
+        or type(value.workspaces) ~= "table" or type(value.desktops) ~= "table" then error("invalid catalog") end
+    -- The owner composes its folder workspace; displays belong to the node.
+    local workspace_id = contract.workspace_id(value.default_workspace)
+    local desktop = value.desktops[1]
     if not workspace_id or type(desktop) ~= "table" then error("invalid workspace") end
     local desktop_id = contract.workspace_id(desktop.desktop_id)
     if not desktop_id then error("invalid desktop") end

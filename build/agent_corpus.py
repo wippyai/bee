@@ -122,6 +122,7 @@ BEE_DOCS = {
     "guides/ui.md": ("ui", "ui_brand_book"),
     "guides/app-style.md": ("ui", "app_style"),
     "reference/workspace-state.md": ("storage", "workspace_state"),
+    "reference/workspace-catalog.md": ("storage", "workspace_catalog"),
     "README.md": ("platform", "readme"),
 }
 

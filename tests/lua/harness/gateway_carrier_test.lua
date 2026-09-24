@@ -134,19 +134,20 @@ local function spawn_carrier(request_value: Object, mode: string, crash_after: s
     return tostring(pid)
 end
 local exited: {[string]: Outcome} = {}
+local function record_exit(event: process.Event)
+    if event.kind ~= process.event.EXIT then return end
+    local result = event.result or {}
+    local value: Object? = nil
+    if type(result.value) == "table" then value = result.value :: Object end
+    exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
+end
 local function await_carrier(pid: string, label: string): Outcome
     local events = assert(process.events())
     local deadline = time.after("40s")
     while not exited[pid] do
         local selected = channel.select({events:case_receive(), deadline:case_receive()})
         if not selected.ok or selected.channel == deadline then error(label .. " did not finish") end
-        local event = selected.value
-        if event.kind == process.event.EXIT then
-            local result = event.result or {}
-            local value: Object? = nil
-            if type(result.value) == "table" then value = result.value :: Object end
-            exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
-        end
+        record_exit(selected.value)
     end
     return exited[pid] :: Outcome
 end
@@ -155,6 +156,33 @@ local function run_carrier(request_value: Object, mode: string, crash_after: str
 end
 local function continue_carrier(pid: string)
     process.send(pid, "bee.carrier.continue", {})
+end
+-- Waits for the carrier's report that it holds at the named step. The
+-- caller listens for bee.carrier.paused before spawning the carrier.
+local function await_paused(paused: Channel<process.Message>, pid: string, wanted: string)
+    local deadline = time.after("30s")
+    while true do
+        local selected = channel.select({paused:case_receive(), deadline:case_receive()})
+        if not selected.ok or selected.channel == deadline then error(pid .. " never held at " .. wanted) end
+        local message = selected.value
+        if tostring(message:from()) == pid and message:payload():data() == wanted then return end
+    end
+end
+-- Waits until the carrier either holds at the named step or ends; its exit
+-- is recorded for await_carrier.
+local function await_paused_or_exit(paused: Channel<process.Message>, pid: string, wanted: string)
+    local events = assert(process.events())
+    local deadline = time.after("30s")
+    while not exited[pid] do
+        local selected = channel.select({paused:case_receive(), events:case_receive(), deadline:case_receive()})
+        if not selected.ok or selected.channel == deadline then error(pid .. " neither held at " .. wanted .. " nor ended") end
+        if selected.channel == events then
+            record_exit(selected.value)
+        else
+            local message = selected.value
+            if tostring(message:from()) == pid and message:payload():data() == wanted then return end
+        end
+    end
 end
 -- The fixture child's report, one stderr line the carrier records as a notice.
 local function records_of(thread_id: string): {Object}
@@ -211,6 +239,19 @@ local function detail_with(details: {string}, marker: string): string?
         if item:find(marker, 1, true) then return item end
     end
     return nil
+end
+-- Placement evidence the runner records on its own schedule; a marker
+-- narrows the wait to evidence of that kind whose detail carries it.
+local function await_evidence(attempt_id: string, kind: string, marker: string?)
+    for _ = 1, 200 do
+        local names, details = evidence_kinds(attempt_id)
+        for index, name in ipairs(names) do
+            if name == kind and (marker == nil or details[index]:find(marker :: string, 1, true)) then return end
+        end
+        time.sleep("50ms")
+    end
+    local _, details = evidence_kinds(attempt_id)
+    error("evidence " .. kind .. (marker and (" with " .. tostring(marker)) or "") .. " never recorded: " .. table.concat(details, " | "))
 end
 local function expect_evidence(names: {string}, details: {string}, wanted: string, present: boolean)
     if has(names, wanted) ~= present then error("evidence " .. wanted .. (present and " missing" or " present") .. " in: " .. table.concat(details, " | ")) end
@@ -412,8 +453,10 @@ local function define_tests()
         test.it("refuses the start when the listener generation changes between readiness and start", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pid = spawn_carrier(request(thread_id, attempt_id, {}), "open", nil, "gateway_ready")
-            time.sleep("300ms")
+            await_paused(paused, pid, "gateway_ready")
+            process.unlisten(paused)
             open_gateway()
             continue_carrier(pid)
             local outcome = await_carrier(pid, "paused carrier")
@@ -433,21 +476,25 @@ local function define_tests()
         test.it("retires the binding when the carrier is lost and no replacement takes over within the grace", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            local launch = request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_HOLD = "5"})
+            local launch = request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_HOLD = "stop"})
             local pid = spawn_carrier(launch, "open", nil, "attempt_started")
             await_presented(attempt_id, 1, 3)
             local live = binding_of(attempt_id, 1)
             test.eq(live.valid, true)
             assert(process.terminate(pid), "terminate carrier")
             await_carrier(pid, "terminated carrier")
-            time.sleep("500ms")
-            -- Within the takeover grace the child keeps its token.
+            -- Once the runner has observed the loss, the child keeps its token
+            -- within the takeover grace.
+            await_evidence(attempt_id, "carrier.lost")
             local kept = binding_of(attempt_id, 1)
             test.eq(kept.valid, true)
-            time.sleep("3200ms")
+            await_evidence(attempt_id, "gateway.revoked", "no takeover")
             local lost = binding_of(attempt_id, 1)
             test.eq(lost.valid, false)
             test.eq(lost.reason, "binding is revoked")
+            -- The child holds until the enforcement path stops it, so it
+            -- presents its token again only after the retirement.
+            call("bee.placement.native:reconcile", {attempt_id = attempt_id})
             local resumed = run_carrier(launch, "resume", nil)
             if not resumed.value then error("resumed carrier failed: " .. tostring(resumed.error)) end
             local seen = report(thread_id)
@@ -458,16 +505,6 @@ local function define_tests()
             expect_detail(details, "lost under generation 1; no takeover", true)
             no_token_in(details)
         end)
-        -- Placement evidence the runner records on its own schedule.
-        local function await_evidence(attempt_id: string, kind: string)
-            for _ = 1, 200 do
-                local names = evidence_kinds(attempt_id)
-                if has(names, kind) then return end
-                time.sleep("50ms")
-            end
-            local _, details = evidence_kinds(attempt_id)
-            error("evidence " .. kind .. " never recorded: " .. table.concat(details, " | "))
-        end
         test.it("records a carrier lost after its child exited, whichever the runner observes first", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
@@ -495,12 +532,11 @@ local function define_tests()
             local old = spawn_carrier(launch, "open", nil, "attempt_started")
             await_presented(attempt_id, 1, 3)
             local replacement = spawn_carrier(launch, "resume", nil, nil)
-            time.sleep("1s")
-            -- The replacement is attached under generation 2; the old carrier's
-            -- exit arrives after the fence and revokes nothing.
+            -- Once the runner has installed generation 2 it no longer monitors
+            -- the old carrier, whose exit then revokes nothing.
+            await_evidence(attempt_id, "attach.fenced", "runner installed generation 2")
             assert(process.terminate(old), "terminate old carrier")
             await_carrier(old, "old carrier")
-            time.sleep("300ms")
             local inherited = binding_of(attempt_id, 2)
             test.eq(inherited.valid, true)
             test.eq(inherited.carrier_epoch, 1)
@@ -523,14 +559,15 @@ local function define_tests()
         -- Inside the takeover grace the binding is alive only for a takeover;
         -- an explicit revocation, a listener reopen and the binding's own
         -- expiry each take effect at once.
-        local function lose_carrier_then(hold: string, policy_ref: string?, act: (string) -> ()): Object
+        local function lose_carrier_then(policy_ref: string?, act: (string) -> ()): Object
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            local launch = request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_HOLD = hold}, nil, policy_ref)
+            local launch = request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_HOLD = "stop"}, nil, policy_ref)
             local pid = spawn_carrier(launch, "open", nil, "attempt_started")
             await_presented(attempt_id, 1, 3)
             assert(process.terminate(pid), "terminate carrier")
             await_carrier(pid, "terminated carrier")
+            await_evidence(attempt_id, "carrier.lost")
             act(attempt_id)
             -- Force the real enforcement path instead of racing the periodic
             -- sweeper. The fixture must still report an actual HTTP denial.
@@ -547,7 +584,7 @@ local function define_tests()
             return seen
         end
         test.it("refuses a token revoked inside the takeover grace at once", function()
-            local seen = lose_carrier_then("10", nil, function(attempt_id: string)
+            local seen = lose_carrier_then(nil, function(attempt_id: string)
                 local live = binding_of(attempt_id, 1)
                 test.eq(live.valid, true)
                 call("bee.gateway.binding:revoke", {binding_id = live.binding_id})
@@ -555,14 +592,14 @@ local function define_tests()
             test.eq(seen.after_hold, 401)
         end)
         test.it("refuses a token whose listener generation changed inside the takeover grace at once", function()
-            local seen = lose_carrier_then("10", nil, function(attempt_id: string)
+            local seen = lose_carrier_then(nil, function(attempt_id: string)
                 test.eq(binding_of(attempt_id, 1).valid, true)
                 open_gateway()
             end)
             test.eq(seen.after_hold, 401)
         end)
         test.it("refuses a token that expires inside the takeover grace at once", function()
-            local seen = lose_carrier_then("10", EXPIRING_POLICY, function(attempt_id: string)
+            local seen = lose_carrier_then(EXPIRING_POLICY, function(attempt_id: string)
                 test.eq(binding_of(attempt_id, 1).valid, true)
                 -- The binding expires 2.5 s after its admission; the poll
                 -- outlasts that by a margin whatever the runtime's load.
@@ -681,23 +718,30 @@ local function define_tests()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
             local launch = request(thread_id, attempt_id, {BEE_FIXTURE_HOOKS = "1", BEE_FIXTURE_GATEWAY_HOLD = "3"})
-            local old = spawn_carrier(launch, "open", nil, pause_at)
-            time.sleep("1500ms")
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
+            -- An original held after its commit holds again once its
+            -- acknowledgment call returns.
+            local pauses = pause_at
+            if pause_at == "hooks_committed" then pauses = "hooks_committed,hooks_acknowledged" end
+            local old = spawn_carrier(launch, "open", nil, pauses)
+            await_paused(paused, old, pause_at)
             local replacement = spawn_carrier(launch, "resume", nil, nil)
             local outcome = await_carrier(replacement, "replacement carrier")
             if not outcome.value then error("replacement carrier failed: " .. tostring(outcome.error)) end
             continue_carrier(old)
-            -- An original held after its commit has nothing left the thread
-            -- would take: its acknowledgment is refused and it idles fenced
-            -- until stopped; one held before its commit is refused at the
-            -- commit and ends on its own.
+            -- An original held after its commit acknowledges nothing the
+            -- replacement claimed; it then holds after that call or ends on its
+            -- next refused commit, and is stopped once either is observed. One
+            -- held before its commit is refused at the commit and ends on its
+            -- own.
             local fenced: Outcome
             if pause_at == "hooks_committed" then
-                time.sleep("1500ms")
+                await_paused_or_exit(paused, old, "hooks_acknowledged")
                 -- Cleanup may race the fenced carrier's own exit. The monitored
                 -- EXIT below is the proof it stopped, not terminate's return.
                 process.terminate(old)
             end
+            process.unlisten(paused)
             fenced = await_carrier(old, "fenced carrier")
             test.is_nil(fenced.value)
             local committed = hook_records(thread_id)

@@ -131,6 +131,8 @@ entries:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
     - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
 - name: request_capability
   kind: function.lua
   source: file://request_capability_method.lua
@@ -161,8 +163,6 @@ entries:
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
     - bee.security.resources:resource_grant_thread_policy
-    - bee.gateway.security:address_policy
-    - bee.gateway.security:supervisor_policy
 - name: drain
   kind: function.lua
   source: file://drain_method.lua

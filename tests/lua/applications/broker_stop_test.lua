@@ -94,6 +94,7 @@ local function define_tests()
                         if reply.request_id == request_id and reply.op == op then return reply end
                     end
                 end
+                error("unreachable fence reply wait")
             end
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "fence-open", op = "open",
                 workspace_id = WORKSPACE, definition_id = DEFINITION,

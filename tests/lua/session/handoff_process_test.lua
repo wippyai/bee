@@ -7,13 +7,18 @@ local time = require("time")
 type Channel = channel.Channel
 
 local workspace = "0123456789abcdef0123456789abcdef"
-local function wait_for(ch: Channel<process.Message>, sender: string, topic: string): {[string]: unknown}
+local function wait_for(ch: Channel<process.Message>, sender: string, topic: string): table
     local timeout = assert(time.after("8s"))
     while true do
         local selected = channel.select({ch:case_receive(), timeout:case_receive()})
         if selected.channel == timeout or not selected.ok then error("Timed out waiting for " .. topic) end
-        if tostring(selected.value:from()) == sender then return selected.value:payload():data() end
+        if tostring(selected.value:from()) == sender then
+            local value: unknown = selected.value:payload():data()
+            if type(value) ~= "table" then error("Invalid " .. topic .. " payload") end
+            return value
+        end
     end
+    error("Message channel ended before " .. topic)
 end
 local function define_tests()
     test.describe("live session code handoff", function()

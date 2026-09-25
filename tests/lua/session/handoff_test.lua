@@ -2,6 +2,7 @@
 local test = require("test")
 local handoff = require("handoff")
 local state = require("state")
+type Queued = {kind: "command" | "bindings", payload: unknown}
 
 local workspace = "0123456789abcdef0123456789abcdef"
 local function fixture()
@@ -10,7 +11,7 @@ local function fixture()
         workspace_id = workspace, title = "Terminal"})
     local bindings = {version = 1, workspace_id = workspace, revision = 2,
         items = {{tab_id = "view", instance_id = "instance", thread_id = "thread"}}}
-    local queued = {{kind = "command", payload = {version = 1, op = "focus", id = "view", request_id = "pending"}}}
+    local queued: {Queued} = {{kind = "command", payload = {version = 1, op = "focus", id = "view", request_id = "pending"}}}
     return state.envelope(desktop), bindings, queued
 end
 local function define_tests()

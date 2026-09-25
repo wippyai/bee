@@ -75,16 +75,12 @@ end
 -- Question 1: how does a Bee application draw? Search the toolkit topic, then
 -- read the reference the search pointed at and take the answer from its text.
 local function terminal_toolkit(token: string): string
-    -- A phrase only Bee's toolkit reference carries, so the search cannot be
-    -- satisfied by the runtime TTY tutorial alone.
+    -- A phrase only Bee's toolkit reference carries, so search must find it.
     local found = value(tool(token, {operation = "search", query = "one-based cells", topic = "terminal", limit = 8}), "search toolkit")
     local results = found.results :: {{[string]: unknown}}
     assert(#results >= 1, "the toolkit search returned nothing")
     local selected: Object? = nil
     for _, result in ipairs(results) do if tostring(result.id) == "toolkit" then selected = result end end
-    if selected == nil then
-        for _, result in ipairs(results) do if tostring(result.id) == "runtime/tutorials/tty" then selected = result end end
-    end
     assert(selected ~= nil, "the toolkit reference was not found by search")
     assert(tostring(selected.section) ~= "", "a toolkit match must name its section")
     local read = value(tool(token, {operation = "read", id = tostring(selected.id), limit = 16384}), "read toolkit")

@@ -11,7 +11,8 @@ local function main()
     local decoded = json.decode(manifest :: string)
     assert(type(decoded) == "table", "corpus manifest is not JSON")
     local totals = (decoded :: {[string]: unknown}).totals :: {[string]: unknown}
-    assert(type(totals.documents) == "number" and totals.documents > 100, "corpus manifest is empty")
+    assert(type(totals.documents) == "number" and totals.documents >= 50 and totals.documents < 100,
+        "corpus manifest does not contain the selected app-authoring references")
     local document, document_error = volume:readfile("/toolkit.md")
     assert(document, "toolkit reference is unreadable: " .. tostring(document_error))
     assert(string.find(document :: string, "one-based", 1, true), "toolkit reference lost its text")

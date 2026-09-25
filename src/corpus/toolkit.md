@@ -516,7 +516,7 @@ tty.Canvas tty.canvas tty.text.truncate tty.text.width
 ```
 
 The runtime module pages retained with this toolkit cover process, channel,
-contract, registry, time, JSON, security, UUID, filesystem, SQL, HTTP client
+contract, registry, time, JSON, types, security, UUID, filesystem, SQL, HTTP client
 and TTY APIs.
 
 ## Compact frame example

@@ -77,9 +77,9 @@ local function string_list(raw: unknown, pattern: string): {string}?
     return result
 end
 
--- Each catalog entry materializes into generated host entries: a policy plus
--- the host-created volume or database it authorizes. Other catalog entries
--- remain review vocabulary until their resource and owner boundaries arrive.
+-- Each installable catalog entry materializes into generated host entries: a
+-- policy plus the host-created volume or database it authorizes. Hive
+-- exposure stays host-published review vocabulary with no app grant.
 local function policy(owner: string, grant: Object, id: string, folder: unknown): (Object?, Object?, Object?, string?)
     local scope = bounds.object(grant.scope)
     if not scope then return nil, nil, nil, "capability scope is malformed" end
@@ -144,7 +144,7 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.HTTP_REQUEST},
                 effect = "allow"}}}, nil, nil, nil
     end
-    return nil, nil, nil, "capability has no installed enforcement in this slice"
+    return nil, nil, nil, "capability has no application-installable enforcement"
 end
 
 -- The workspace folder is part of the measured set whenever a volume is

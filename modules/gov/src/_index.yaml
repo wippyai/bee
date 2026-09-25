@@ -43,6 +43,8 @@ entries:
   kind: library.lua
   source: file://capability_files.lua
   modules: [hash]
+  imports:
+    capability_gateway: bee.gov:capability_gateway
 - name: capability_gateway
   kind: library.lua
   source: file://capability_gateway.lua

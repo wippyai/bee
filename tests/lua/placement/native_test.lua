@@ -2232,7 +2232,9 @@ local function define_tests()
         test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
             local ids: {string} = {}
             for index = 1, 3 do
-                local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
+                -- Keep the children live until this case stops them. Their
+                -- liveness must not depend on how fast a loaded host sweeps.
+                local request = launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
                 ids[index] = request.attempt_id :: string
                 attempt_of(call(OWNER, "prepare", request))
                 test.eq(attempt_of(call(OWNER, "start", {attempt_id = ids[index]})).execution_state, "running")
@@ -2256,14 +2258,15 @@ local function define_tests()
                 return total
             end
             local sweeps = 0
-            while touched_count() < 3 and sweeps < 3 do
+            while sweeps == 0 or (touched_count() < 3 and sweeps < 3) do
                 local swept = value(service.sweep())
                 test.is_true((swept.reconciled :: number) <= 2)
                 sweeps = sweeps + 1
             end
             service.SWEEP_BOUND = previous_bound
             test.eq(touched_count(), 3)
-            test.is_true(sweeps >= 2)
+            -- The independently scheduled sweeper may have reconciled a row
+            -- before this process calls sweep, including all three rows.
             local before = process.registry.lookup(service.SWEEPER_NAME)
             if not before then error("sweeper is not registered") end
             assert(process.terminate(tostring(before)))

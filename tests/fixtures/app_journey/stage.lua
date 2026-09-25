@@ -8,6 +8,7 @@ local json = require("json")
 local logger = require("logger")
 local bounds = require("bounds")
 local base64 = require("base64")
+local hash = require("hash")
 
 type Object = {[string]: unknown}
 
@@ -55,6 +56,7 @@ local function read_entries(): {Object}
     local chunks: {string} = {}
     local offset = 0
     local expected_bytes: integer? = nil
+    local expected_revision: integer? = nil
     local expected_digest: string? = nil
     while true do
         local file = workspace_value("read", SOURCE_WORKSPACE, nil, nil, nil, offset, 16384)
@@ -63,17 +65,21 @@ local function read_entries(): {Object}
         local bytes, decode_error = base64.decode(encoded)
         if not bytes or decode_error then error("decode source entries: " .. tostring(decode_error)) end
         local file_bytes = bounds.count(file.bytes)
+        local page_bytes = bounds.count(file.chunk_bytes)
+        local page_offset = bounds.count(file.offset)
+        local file_revision = bounds.count(file.revision)
         local file_digest = type(file.digest) == "string" and file.digest or nil
         if not file_bytes or file_bytes < 1 or file_bytes > 4 * 1024 * 1024
+            or not page_bytes or page_offset ~= offset or not file_revision or file_revision < 1
             or not file_digest or #file_digest ~= 64 or not file_digest:match("^[0-9a-f]+$")
-            or file.offset ~= offset or file.chunk_bytes ~= #bytes or type(file.eof) ~= "boolean" then
+            or page_bytes ~= #bytes or offset + #bytes > file_bytes or type(file.eof) ~= "boolean" then
             error("source workspace returned an invalid entries.json window (offset=" .. tostring(file.offset)
                 .. ", chunk_bytes=" .. tostring(file.chunk_bytes) .. ", bytes=" .. tostring(file.bytes)
                 .. ", eof=" .. tostring(file.eof) .. ")")
         end
         if expected_bytes == nil then
-            expected_bytes, expected_digest = file_bytes, file_digest
-        elseif file_bytes ~= expected_bytes or file_digest ~= expected_digest then
+            expected_bytes, expected_revision, expected_digest = file_bytes, file_revision, file_digest
+        elseif file_bytes ~= expected_bytes or file_revision ~= expected_revision or file_digest ~= expected_digest then
             error("source entries changed between read windows")
         end
         if #bytes == 0 and file.eof ~= true then error("source workspace returned an empty nonfinal window") end
@@ -86,7 +92,10 @@ local function read_entries(): {Object}
         end
         if offset >= file_bytes then error("source workspace omitted the end of entries.json") end
     end
-    local decoded, json_error = json.decode(table.concat(chunks))
+    local all_bytes = table.concat(chunks)
+    local measured, measure_error = hash.sha256(all_bytes)
+    if measure_error or measured ~= expected_digest then error("source entries digest changed during paged read") end
+    local decoded, json_error = json.decode(all_bytes)
     if json_error or type(decoded) ~= "table" then error("source entries are not JSON: " .. tostring(json_error)) end
     local entries: {Object} = {}
     for index, raw in ipairs(decoded :: {unknown}) do entries[index] = object(raw, "source entry") end

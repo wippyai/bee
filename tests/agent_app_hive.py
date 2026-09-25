@@ -1,10 +1,9 @@
-"""Carry the retained Agent App v2 artifact across Hive into a normal desktop.
+"""Carry an Agent App v2 artifact across Hive into a normal desktop.
 
-This is intentionally opt-in and consumes no provider inference. The optional
-``BEE_AGENT_APP_HIVE_ARTIFACT`` input is retained evidence from a prior managed
-agent run. Its source fixture recreates exactly the v2 artifact from its
-entries; the destination has only its digest until production publication and
-Hive deliver the bytes.
+The default fixture builds its artifact from a checked-in application without
+provider inference. ``BEE_AGENT_APP_HIVE_ARTIFACT`` can select retained evidence
+from a managed agent run. The source recreates the exact artifact from its
+entries; the destination has only its digest until Hive delivers the bytes.
 """
 import json
 import hashlib
@@ -25,7 +24,7 @@ from workspace import ROOT, RUNTIME, classic_workspace, workspace_checkpoint  # 
 TITLE = "Agent App"
 MARKER = "AGENT APP UPDATED"
 DEFINITION_ID = "bee.agent_app_demo:app"
-DEFAULT_ARTIFACT = ROOT / ".wippy/evidence/agent-app-20260919-225922/authored.json"
+FIXTURE_SOURCE = ROOT / "tests/fixtures/agent_app_hive/app.lua"
 
 
 def evidence_root():
@@ -53,8 +52,46 @@ def runtime_identity():
     return {"path": str(RUNTIME), "sha256": digest.hexdigest(), "source_revision": revision}
 
 
-def retained_artifact():
-    path = Path(os.environ.get("BEE_AGENT_APP_HIVE_ARTIFACT", DEFAULT_ARTIFACT)).resolve()
+def canonical(value):
+    """Match the governance artifact's sorted-key canonical JSON for fixture values."""
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        escaped = ''.join('\\"' if char == '"' else '\\\\' if char == '\\' else
+                          f'\\u{ord(char):04x}' if ord(char) < 32 else char for char in value)
+        return '"' + escaped + '"'
+    if isinstance(value, list):
+        return '[' + ','.join(canonical(item) for item in value) + ']'
+    if isinstance(value, dict):
+        return '{' + ','.join(canonical(key) + ':' + canonical(value[key]) for key in sorted(value)) + '}'
+    raise TypeError(f"unsupported fixture value: {type(value).__name__}")
+
+
+def fixture_artifact(evidence):
+    entry = {"id": DEFINITION_ID, "kind": "process.lua", "meta": {"type": "bee.application",
+             "application": {"api_version": 1, "title": TITLE, "lifetime": "view", "revision": "2",
+                             "instance_policy": "multiple", "resume_schema": "agent-app.v1",
+                             "restart_policy": "automatic"}},
+             "data": {"source": FIXTURE_SOURCE.read_text(), "method": "main",
+                      "modules": ["tty", "process", "channel", "json"],
+                      "imports": {"client": "bee.application:client"}}}
+    measured = canonical({"schema_revision": "bee.governance-artifact@1", "entries": [entry]})
+    digest = hashlib.sha256(measured.encode()).hexdigest()
+    path = evidence / "fixture-authored.json"
+    path.write_text(json.dumps({"updated": {"artifact_digest": digest},
+                                "application_marker": MARKER, "entries": [entry]}, indent=2) + "\n")
+    return path
+
+
+def retained_artifact(evidence):
+    selected = os.environ.get("BEE_AGENT_APP_HIVE_ARTIFACT")
+    path = Path(selected).resolve() if selected else fixture_artifact(evidence)
     document = json.loads(path.read_text())
     updated = document.get("updated")
     entries = document.get("entries")
@@ -79,7 +116,7 @@ def application_identity(folder):
 def configure_destination(project, workspace_id=None, source_node="node-1"):
     """Install the destination's local policy in its source composition."""
     if workspace_id is not None:
-        governance_path = project / "modules/gov/src/_index.yaml"
+        governance_path = project / "src/governance/_index.yaml"
         governance = yaml.safe_load(governance_path.read_text())
         profiles = next(item for item in governance["entries"] if item["name"] == "activation_profiles")
         profiles["data"] = {"profiles": [{
@@ -87,6 +124,9 @@ def configure_destination(project, workspace_id=None, source_node="node-1"):
             "source_workspace": "agent-app-source", "component": "bee.agent_app_demo/app",
             "resolver": "overlay", "overlay_owner": "bee.replica_probe:activation_overlay",
             "approval_policy": "local-agent-app-hive", "parameters": [],
+            "applications": [{"definition_id": DEFINITION_ID,
+                              "policies": ["bee.security:ordinary_app_subsystem_boundary"],
+                              "thread_access": "observe_post"}],
             "allow": {"packages": ["bee.agent_app_demo/app"], "namespaces": ["bee.agent_app_demo"],
                       "kinds": ["process.lua"], "databases": [], "grants": [],
                       "modules": ["tty", "process", "channel", "json"]},
@@ -100,20 +140,12 @@ def configure_destination(project, workspace_id=None, source_node="node-1"):
                                  "max_ttl_ms": 60000}]
         approvals_path.write_text(yaml.safe_dump(approvals, sort_keys=False))
 
-    security_path = project / "src/security/_index.yaml"
-    security = yaml.safe_load(security_path.read_text())
-    admission = next(item for item in security["entries"] if item["name"] == "application_admission")
-    if not any(item["definition_id"] == DEFINITION_ID for item in admission["bindings"]):
-        admission["bindings"].append({"definition_id": DEFINITION_ID,
-                                      "policies": ["bee.security:ordinary_app_subsystem_boundary"]})
-    security_path.write_text(yaml.safe_dump(security, sort_keys=False))
-
-
 def prepare_destination(destination, evidence, source_node="node-1"):
     shutil.copytree(ROOT / "src", destination / "src")
     shutil.copytree(ROOT / "modules", destination / "modules")
     for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
         shutil.copy2(ROOT / name, destination / name)
+    configure_destination(destination, source_node=source_node)
     # This acceptance invokes the assembled runtime directly rather than
     # through the native launcher. Supply the same host-owned bindings on every
     # boot so the registry history created by the headless Hive composition is
@@ -152,8 +184,8 @@ def bridge(destination, workspace_id, artifact, evidence):
         environment.update({"BEE_AGENT_APP_HIVE_SOURCE_PROJECT": source_project,
                             "BEE_AGENT_APP_HIVE_SOURCE_STATE": source_state,
                             "BEE_AGENT_APP_HIVE_SOURCE_WORKSPACE": source_workspace})
-    command = ["go", "test", "-race", "-count=1", "-v", "tests/hive_remote.go",
-               "tests/hive_supervisor_test.go", "tests/hive_replica_test.go",
+    command = ["go", "-C", "native", "test", "-race", "-count=1", "-v", "../tests/hive_remote.go",
+               "../tests/hive_supervisor_test.go", "../tests/hive_replica_test.go",
                "-run", "^TestHiveSupervisorAgentSource$" if source_project else "^TestHiveSupervisorAgentArtifact$"]
     result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=360, env=environment)
     output = result.stdout + result.stderr
@@ -186,7 +218,8 @@ def open_and_restart(destination, workspace_id, evidence, marker=MARKER):
         desktop.wait("No applications open", timeout=30)
         deadline = time.monotonic() + 30
         while True:
-            desktop.open_start()
+            desktop.key(b"\x1bOP")
+            desktop.pump(.2)
             if TITLE in desktop.text():
                 break
             desktop.key(b"\x1b")
@@ -223,7 +256,8 @@ def open_and_restart(destination, workspace_id, evidence, marker=MARKER):
 
 
 def exercise():
-    artifact, digest = retained_artifact()
+    evidence = evidence_root()
+    artifact, digest = retained_artifact(evidence)
     authored = json.loads(artifact.read_text())
     source_project = os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_PROJECT")
     source_node = authored.get("source_node", "node-1") if source_project else "node-1"
@@ -234,7 +268,6 @@ def exercise():
         assert re.fullmatch(r"[0-9a-f]{32}", source_workspace_id or ""), source_workspace_id
         os.environ["BEE_AGENT_APP_HIVE_SOURCE_WORKSPACE"] = source_workspace_id
     source_tree_before = tree_digest(Path(source_project) / "src") if source_project else None
-    evidence = evidence_root()
     shutil.copy2(artifact, evidence / "authored.json")
     destination = evidence / "destination"
     receipt = {"schema": 1, "status": "running", "authored_artifact": {"path": "authored.json",

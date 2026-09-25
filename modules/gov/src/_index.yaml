@@ -32,7 +32,10 @@ entries:
   kind: library.lua
   source: file://preflight.lua
   modules: [hash, json]
-  imports: {canonical: bee.sync:canonical}
+  imports: {canonical: bee.sync:canonical, protected_kernel: bee.gov:protected_kernel}
+- name: protected_kernel
+  kind: library.lua
+  source: file://protected_kernel.lua
 - name: capability_catalog
   kind: library.lua
   source: file://capability_catalog.lua
@@ -233,6 +236,7 @@ entries:
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
     application_admission: bee.gov:governed_application_admission
+    protected_kernel: bee.gov:protected_kernel
 - name: overlay_resolver
   kind: library.lua
   source: file://overlay_resolver.lua
@@ -242,6 +246,7 @@ entries:
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
     application_admission: bee.gov:governed_application_admission
+    protected_kernel: bee.gov:protected_kernel
     capability_catalog: bee.gov:capability_catalog
     capability_grants: bee.gov:capability_grants
     capability_files: bee.gov:capability_files

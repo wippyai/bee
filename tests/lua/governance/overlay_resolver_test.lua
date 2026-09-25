@@ -34,6 +34,9 @@ local function fixture(policy_raw: Policy?): (Object, Object, {captured: Capture
             {id = "bee.host:db", kind = "db.sql.sqlite", data = {}, registry = {owner = "bee/host"}},
             {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"},
                 registry = {owner = "host/overlay"}},
+            {id = "bee:protected_kernel", kind = "registry.entry", meta = {type = "bee.protected_kernel"},
+                data = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}},
+                registry = {owner = "bee/host"}},
         },
         overlay_ids = { ["private.app:old-overlay"] = true },
         owner = function(item: Entry): (string?, string?)
@@ -397,6 +400,18 @@ local function define_tests()
             data.changed = true
             local second = resolve(deps, spec)
             test.is_true(second.candidate.base_digest ~= first.candidate.base_digest)
+        end)
+
+        test.it("reads the protected kernel only from the destination registry", function()
+            local deps, spec = fixture(nil)
+            local facts = resolve(deps, spec)
+            local kernel = facts.context.protected :: Object
+            test.eq(kernel.revision, 1)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[#captured.entries] = nil
+            local missing, _, missing_error = resolver.resolve_with(deps, spec)
+            test.is_nil(missing)
+            test.not_nil(string.find(tostring(missing_error), "protected kernel", 1, true))
         end)
 
         test.it("returns selected overlay entries without including them in the base", function()

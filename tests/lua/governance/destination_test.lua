@@ -1,5 +1,6 @@
 -- MIT. Destination coordination asks local Approvals only after review and selection.
 local test = require("test")
+local KERNEL = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
 local destination = require("destination")
 local store = require("plan_store")
 local canonical = require("canonical")
@@ -66,7 +67,7 @@ local function resolver(): destination.Resolver
             registry_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
             packages = {["sample/app"] = true}, namespaces = {sample = true},
             kinds = {}, databases = {}, grants = {}, modules = {}, entries = {}, installed_entries = nil, applied = {},
-            exact_expansion = true, migration_barrier = false, auto_start = true}
+            exact_expansion = true, protected = KERNEL, migration_barrier = false, auto_start = true}
         return candidate, context, nil
     end
     return value :: destination.Resolver

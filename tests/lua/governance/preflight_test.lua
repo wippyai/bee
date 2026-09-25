@@ -17,7 +17,9 @@ local function fixture(): (preflight.Candidate, preflight.Context)
     local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA, policy_digest = SHA,
         packages = {["wolfy-j/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
         entries = entries, installed_entries = nil,
-        applied = {}, grants = {}, modules = {}, exact_expansion = true, migration_barrier = false, auto_start = true}
+        applied = {}, grants = {}, modules = {}, exact_expansion = true, migration_barrier = false, auto_start = true,
+        protected = {revision = 1, namespaces = {"bee.gov", "bee.security"},
+            entries = {"bee:approver_policies", "bee:protected_kernel"}}}
     return candidate, context
 end
 local function checked(candidate: preflight.Candidate, context: preflight.Context): preflight.Report
@@ -81,6 +83,56 @@ local function define_tests()
             candidate.entries[1].auto_start = false
             test.is_true(checked(candidate, context).ready)
         end)
+        test.it("refuses protected kernel edits even under a permissive profile", function()
+            local function entry(id: string, package: string, references: {string}): preflight.Entry
+                return {id = id, kind = "library.lua", package = package, digest = SHA, references = references,
+                    auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {},
+                    config_empty = {}}
+            end
+            local candidate, context = fixture()
+            context.entries["bee.gov:preflight"] = entry("bee.gov:preflight", "bee/gov", {"shared.util:bounds"})
+            context.entries["shared.util:bounds"] = entry("shared.util:bounds", "bee/shared", {})
+            local policies = entry("bee:approver_policies", "bee", {"demo:run"})
+            policies.kind = "registry.entry"
+            context.entries["bee:approver_policies"] = policies
+            local owned = entry("demo:run", "wolfy-j/demo", {})
+            owned.kind = "function.lua"
+            context.entries["demo:run"] = owned
+            -- A host record naming an application does not make it kernel code.
+            test.is_true(checked(candidate, context).ready)
+            -- A permissive explicit profile admits every package, namespace and kind.
+            context.packages["bee/gov"], context.packages["bee/shared"] = true, true
+            context.namespaces["bee.gov"], context.namespaces["bee.gov.extra"] = true, true
+            context.namespaces["shared.util"], context.namespaces["bee"] = true, true
+            context.kinds["library.lua"], context.kinds["registry.entry"] = true, true
+            local direct, _ = fixture()
+            direct.artifacts[1].namespaces = {"demo", "bee.gov.extra"}
+            direct.entries[#direct.entries + 1] = entry("bee.gov.extra:shadow", "wolfy-j/demo", {})
+            local refused = checked(direct, context)
+            test.is_false(refused.ready)
+            test.is_true(has(refused, "PROTECTED_KERNEL"))
+            local transitive, _ = fixture()
+            transitive.artifacts[1] = {component = "bee/shared", version = "2.0.0", digest = SHA,
+                dependencies = {}, namespaces = {"shared.util"}}
+            transitive.entries = {entry("shared.util:bounds", "bee/shared", {})}
+            transitive.requirements, transitive.migrations = {}, {}
+            test.is_true(has(checked(transitive, context), "PROTECTED_KERNEL"))
+            local selector, _ = fixture()
+            selector.requirements[1].targets = {"bee:approver_policies"}
+            test.is_true(has(checked(selector, context), "PROTECTED_KERNEL"))
+            local exact, _ = fixture()
+            exact.artifacts[1].namespaces = {"demo", "bee"}
+            exact.entries[#exact.entries + 1] = entry("bee:protected_kernel", "wolfy-j/demo", {})
+            test.is_true(has(checked(exact, context), "PROTECTED_KERNEL"))
+            context.protected = nil
+            local missing, missing_error = preflight.check(candidate, context)
+            test.is_nil(missing)
+            test.not_nil(missing_error)
+            context.protected = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:approver_policies"}}
+            local open_map, open_error = preflight.check(candidate, context)
+            test.is_nil(open_map)
+            test.not_nil(string.find(tostring(open_error), "protect itself", 1, true))
+        end)
         test.it("refuses app-shipped actor and group selectors on every entry kind", function()
             local candidate, context = fixture()
             local entry = candidate.entries[1] :: {[string]: unknown}
@@ -139,7 +191,8 @@ local function define_tests()
                     grants = context.grants, modules = context.modules, database_bindings = bindings,
                     entries = context.entries, installed_entries = context.installed_entries,
                     applied = context.applied, exact_expansion = context.exact_expansion,
-                    migration_barrier = context.migration_barrier, auto_start = context.auto_start}
+                    migration_barrier = context.migration_barrier, auto_start = context.auto_start,
+                    protected = context.protected}
                 return candidate, mapped
             end
             local candidate, context = logical({database_id = "host:db", table_prefix = "demo_"})

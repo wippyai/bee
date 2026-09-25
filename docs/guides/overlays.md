@@ -47,6 +47,25 @@ that changes during the operation leaves an explicit uncertain or refused
 result; the owner does not infer success or write registry history. Restart
 recovery restores only the previously authorized desired intent.
 
+### Protected kernel
+
+The host-owned `bee:protected_kernel` entry is the trust map no activation
+profile can open, however permissive. It names the governance, security,
+approvals, admission and launch namespaces (`bee.gov`, `bee.governance`,
+`bee.security`, `bee.approvals`, `bee.apps`, `bee.launch`) and the exact host
+selectors `bee:approver_policies`, `bee:capability_catalog`,
+`bee.env:gov_activation_profiles`, `bee.env:gov_publication_profiles`,
+`bee.deps:gov`, `bee.deps:approvals` and itself. Both destination resolvers
+read it from the destination registry, include it in the approval base, and
+pass it to preflight, which fails closed without it. Preflight computes the
+kernel as the named definitions plus the code and wiring they reference
+transitively (registry records and policies are protected by name only, so an
+application they describe stays upgradable) and reports `PROTECTED_KERNEL` for
+a plan that defines or replaces a kernel entry or dependency, declares a
+protected namespace, updates a package that owns kernel definitions, or aims a
+requirement target into the kernel. The kernel changes only through the host
+composition and a person-confirmed native upgrade.
+
 Durable registry publication is a different operation. Overlay activation does
 not become a registry-history write, and a registry publication guard must not
 be simulated with a Lua pre-read.

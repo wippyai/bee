@@ -10,6 +10,7 @@ local application_admission = require("application_admission")
 local capability_catalog = require("capability_catalog")
 local capability_grants = require("capability_grants")
 local capability_files = require("capability_files")
+local protected_kernel = require("protected_kernel")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -502,6 +503,9 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     -- selected overlay itself from this semantic digest. A missing relevant
     -- entry remains absent; when present, its measured definition is hashed.
     local relevant_ids: {[string]: boolean} = {}
+    local kernel, kernel_error = protected_kernel.decode(current_raw[protected_kernel.ID])
+    if not kernel then return nil, nil, kernel_error end
+    relevant_ids[protected_kernel.ID] = true
     if capability_proposal then relevant_ids["bee:capability_catalog"] = true end
     for _, raw in ipairs(candidate_entries) do
         local item = raw :: Object
@@ -534,6 +538,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
     local context, context_error = policy_context(policy :: Policy, captured, base_digest :: string, current, installed)
     if not context then return nil, nil, context_error end
+    context.protected = kernel
     if policy.applications then
         if policy.workspace_id ~= spec.workspace_id or policy.source_node ~= source
             or policy.source_workspace ~= source_workspace or not bounds.id(policy.overlay_owner) then

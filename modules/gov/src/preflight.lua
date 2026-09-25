@@ -3,6 +3,7 @@
 local canonical = require("canonical")
 local hash = require("hash")
 local json = require("json")
+local protected_kernel = require("protected_kernel")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
@@ -22,7 +23,7 @@ type Context = {node_id: string, registry_revision: integer, registry_digest: st
     grants: {[string]: boolean}, modules: {[string]: boolean},
     database_bindings: {[string]: DatabaseBinding}?,
     entries: {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, generated_databases: {[string]: string}?, exact_expansion: boolean,
-    migration_barrier: boolean, auto_start: boolean}
+    migration_barrier: boolean, auto_start: boolean, protected: protected_kernel.Manifest?}
 type Diagnostic = {code: string, target: string, message: string, remedy: string}
 type Report = {schema_revision: string, plan_digest: string, destination_node: string,
     base_revision: integer, policy_digest: string, ready: boolean, diagnostics: {Diagnostic}, pending_migrations: {string}}
@@ -396,6 +397,40 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     local function issue(code: string, target: string, message: string, remedy: string)
         if #diagnostics < 128 then diagnostics[#diagnostics + 1] = {code = code, target = target, message = message, remedy = remedy} end
     end
+    -- The trust map comes from the host, never from the plan. The kernel is
+    -- every definition the manifest names plus the code and wiring those
+    -- definitions reference transitively in the current and installed state.
+    local manifest, manifest_error = protected_kernel.decode(context.protected)
+    if not manifest then return nil, manifest_error end
+    local kernel: {[string]: boolean} = {}
+    local pending_kernel: {string} = {}
+    local function state(id: string): Entry?
+        return context.entries[id] or (context.installed_entries and context.installed_entries[id]) or nil
+    end
+    local function protect(id: string)
+        if kernel[id] or not state(id) then return end
+        kernel[id] = true
+        pending_kernel[#pending_kernel + 1] = id
+    end
+    for id in pairs(context.entries) do if protected_kernel.names(manifest, id) then protect(id) end end
+    for id in pairs(context.installed_entries or {}) do if protected_kernel.names(manifest, id) then protect(id) end end
+    while #pending_kernel > 0 do
+        local id = pending_kernel[#pending_kernel]
+        pending_kernel[#pending_kernel] = nil
+        local item = state(id)
+        if item and protected_kernel.follows(item.kind) then
+            for _, reference in ipairs(item.references) do protect(reference) end
+        end
+    end
+    local function guarded(id: string): boolean
+        return kernel[id] == true or protected_kernel.names(manifest, id)
+    end
+    local kernel_packages: {[string]: boolean} = {}
+    for id in pairs(kernel) do
+        local item = state(id)
+        if item then kernel_packages[item.package] = true end
+    end
+    local PROTECTED_REMEDY = "the protected kernel changes only through a person-confirmed native upgrade"
     if candidate.destination_node ~= context.node_id then issue("WRONG_DESTINATION", candidate.destination_node, "plan is for another owner", "replan at the destination") end
     if candidate.base_revision ~= context.registry_revision then issue("STALE_BASE", tostring(candidate.base_revision), "registry changed since resolution", "resolve again and request new approval") end
     if candidate.base_digest ~= context.registry_digest then issue("STALE_BASE", "composed-registry", "registry content or overlays changed since resolution", "resolve again against the current composed registry") end
@@ -407,11 +442,17 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             or #item.dependencies > 32 or #item.namespaces == 0 or #item.namespaces > 64 then return nil, "invalid artifact measurement" end
         if artifacts[item.component] then issue("DUPLICATE_PACKAGE", item.component, "closure contains competing package selections", "resolve all incoming constraints together") end
         if not context.packages[item.component] then issue("PACKAGE_DENIED", item.component, "package is outside host policy", "request an explicit host policy change") end
+        if kernel_packages[item.component] then
+            issue("PROTECTED_KERNEL", item.component, "package owns protected kernel definitions or their dependencies", PROTECTED_REMEDY)
+        end
         artifacts[item.component] = item
         for _, namespace in ipairs(item.namespaces) do
             if not identifier(namespace) or namespace:find(":", 1, true) then return nil, "invalid owned namespace" end
             if namespace_owners[namespace] then issue("NAMESPACE_COLLISION", namespace, "namespace has duplicate ownership declarations", "declare each namespace under exactly one package") end
             namespace_owners[namespace] = item.component
+            if protected_kernel.namespace(manifest, namespace) then
+                issue("PROTECTED_KERNEL", namespace, "namespace belongs to the protected kernel", PROTECTED_REMEDY)
+            end
             if not context.namespaces[namespace] then issue("NAMESPACE_DENIED", namespace, "declared namespace is outside host policy", "request explicit admission for this namespace") end
         end
     end
@@ -443,6 +484,9 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             or #item.grants > 32 or #item.modules > 32 then return nil, "invalid entry measurement" end
         if seen[item.id] then issue("DUPLICATE_ENTRY", item.id, "candidate defines an entry twice", "remove the conflicting definition") end
         seen[item.id] = true
+        if guarded(item.id) then
+            issue("PROTECTED_KERNEL", item.id, "entry is a protected kernel definition or one of its dependencies", PROTECTED_REMEDY)
+        end
         local namespace = item.id:match("^([^:]+):[^:]+$")
         if not namespace or not context.namespaces[namespace] then issue("NAMESPACE_DENIED", item.id, "entry namespace is outside host policy", "choose an explicitly admitted namespace") end
         if namespace and namespace_owners[namespace] ~= item.package then issue("NAMESPACE_OWNER", item.id, "entry namespace is not declared by its package", "include the exact child namespace in the package ownership manifest") end
@@ -532,6 +576,9 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if not target and not item.capability_request then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")
         elseif target and item.expected_kind and target.kind ~= item.expected_kind then issue("BINDING_KIND", item.id, "resource does not match declared kind", "select a resource of the declared kind") end
         for _, reference in ipairs(item.targets) do
+            if guarded(reference) then
+                issue("PROTECTED_KERNEL", item.id, "requirement selects into protected kernel definition " .. reference, PROTECTED_REMEDY)
+            end
             if not final[reference] then issue("DANGLING_REQUIREMENT_TARGET", item.id, "missing target entry " .. reference, "repair the package requirement target") end
         end
     end
@@ -593,7 +640,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         return a.message < b.message
     end)
     local measurement = canonical.encode({candidate = candidate, policy_digest = context.policy_digest,
-        applied = context.applied, applied_databases = context.applied_databases or {}}, 262144)
+        applied = context.applied, applied_databases = context.applied_databases or {}, protected = manifest}, 262144)
     if not measurement then return nil, "cannot measure plan" end
     local measured, measure_error = hash.sha256(measurement)
     if not measured then return nil, tostring(measure_error) end

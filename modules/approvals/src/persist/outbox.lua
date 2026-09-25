@@ -45,7 +45,7 @@ end
 local function claim(db: sql.DB, holder: string, now: integer): ({Row}?, string?)
     local rows: {Row} = {}
     local result = transaction.write(db, "approval", function(tx: sql.Transaction): Result
-        local due, err = tx:query("SELECT * FROM bee_approval_outbox WHERE acknowledged_at IS NULL AND exhausted_at IS NULL AND next_attempt_ms <= ? AND (lease_until_ms IS NULL OR lease_until_ms <= ?) ORDER BY created_at LIMIT ?",
+        local due, err = tx:query("SELECT * FROM bee_approval_outbox WHERE acknowledged_at IS NULL AND exhausted_at IS NULL AND next_attempt_ms <= ? AND (lease_until_ms IS NULL OR lease_until_ms <= ?) ORDER BY created_at, event_id LIMIT ?",
             {now, now, M.BATCH})
         if err or not due then return transaction.failure("STORAGE", "read due deliveries") end
         for _, raw in ipairs(due) do

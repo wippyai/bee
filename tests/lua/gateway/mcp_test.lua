@@ -218,8 +218,13 @@ local function define_tests()
             local components_schema = components_tools[1].inputSchema :: {[string]: unknown}
             local components_operation = (components_schema.properties :: {[string]: unknown}).operation :: {[string]: unknown}
             local read_operations = components_operation.enum :: {string}
-            test.eq(#read_operations, 8)
-            for _, operation in ipairs({"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan"}) do
+            test.eq(#read_operations, 9)
+            local found_installed_source = false
+            for _, operation in ipairs(read_operations) do
+                if operation == "installed_source" then found_installed_source = true end
+            end
+            test.is_true(found_installed_source)
+            for _, operation in ipairs({"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan"}) do
                 local found = false
                 for _, admitted in ipairs(read_operations) do if admitted == operation then found = true end end
                 test.is_true(found)

@@ -17,12 +17,17 @@ requires management authority. The facade
 validates and authorizes the operation before entering its fixed private scope.
 Requests cannot select credentials, a registry URL, an actor or a host path.
 
-Read operations are `catalog`, `details`, `inspect`, `state`, `files`, `read_file`
-and `installed`. Catalog keyword defaults to `bee`; an empty keyword clears it.
+Read operations are `catalog`, `details`, `inspect`, `state`, `files`, `read_file`,
+`installed` and `installed_source`. Catalog keyword defaults to `bee`; an empty keyword clears it.
 `state` returns an exact uninstalled artifact's metadata, entries and resources.
 `files` and `read_file` read its embedded resource filesystem. These operations
 may populate the native verified cache but do not publish or start the package.
 They expose packaged assets, not a reconstruction of its source repository.
+`installed_source` lists and pages only Lua source entries owned by an exact
+installed component version. The list gives a registry revision; reads require
+that revision and return at most 16,384 bytes. It does not expose registry
+configuration, other owners or package resources. This covers local development
+versions that have no matching Hub artifact.
 See [the API and acceptance status](../../docs/guides/hub.md) for request examples.
 
 Management operations are `plan`, `apply` and `status`. Planning preserves other

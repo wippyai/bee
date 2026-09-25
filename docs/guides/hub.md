@@ -18,7 +18,7 @@ URL, credential, actor, execution scope or host filesystem path.
 
 Managed agents receive the narrower read-only MCP `components` tool when their
 launch policy admits it. It supports `catalog`, `details`, `inspect`, `state`,
-`files`, `read_file`, `installed` and effect-free `plan`; direct apply,
+`files`, `read_file`, `installed`, `installed_source` and effect-free `plan`; direct apply,
 installation, update, removal and status calls are refused at that boundary.
 
 ## Inspect a package
@@ -59,6 +59,16 @@ artifact.
 keyword. `details` reads package details, README and version pages. `inspect`
 reads one exact component/version with typed requirement parameters. `installed`
 reports native ownership, direct roots and dependency users.
+`inspect` and `state` open Hub artifacts; an installed local development version
+may have no Hub artifact and returns `module not found`. To inspect the code
+actually installed, use `installed` to find its exact version and then
+`installed_source` with `{component, version}`. That returns a registry
+`revision` and a manifest of Lua source entry IDs and byte counts. Read one
+entry with `{component, version, entry_id, expected_revision, offset?, limit?}`;
+the reply has `content`, `offset`, `bytes` and `eof`. Each read is at most
+16,384 bytes; the revision fence rejects a changed installation. This read
+exposes only the selected component's Lua source, not registry configuration,
+policy data, other components or native package resources.
 
 ## Plan, review and apply
 

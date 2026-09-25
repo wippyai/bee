@@ -3,6 +3,7 @@
 -- attempt or a thread holding exactly one session, and the listed view.
 local test = require("test")
 local sessions = require("sessions")
+local mcp = require("mcp")
 type Candidate = sessions.Candidate
 local function candidate(action_id: string, attempt_id: string, thread_id: string, epoch: integer): Candidate
     return {binding_id = "binding-" .. attempt_id .. "-" .. tostring(epoch), subject = "subject", action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, carrier_epoch = epoch}
@@ -52,11 +53,14 @@ local function define_tests()
             test.eq(#listed, 2)
             test.eq(listed[1].address.node_id, "node-1")
             test.eq(listed[1].address.action_id, "a")
-            local named, code = sessions.resolve_directory(listed, "reviewer")
-            test.is_nil(named)
-            test.eq(code, "AMBIGUOUS")
-            local exact = sessions.resolve_directory(listed, {node_id = "node-1", action_id = "b"})
-            test.eq(exact and exact.action_id, "b")
+            test.eq(listed[1].name, listed[2].name)
+            test.eq(listed[2].address.action_id, "b")
+            local _, named = mcp.inbox_message_arguments({arguments = {address = "reviewer", grant_epoch = 3,
+                idempotency_key = "key", message_id = "message", content = {text = "hello"}}}, false)
+            test.eq(named, "address must contain only node_id and action_id")
+            local exact = mcp.inbox_message_arguments({arguments = {address = listed[2].address, grant_epoch = 5,
+                idempotency_key = "key", message_id = "message", content = {text = "hello"}}}, false)
+            test.eq(exact and (exact.address :: {[string]: unknown}).action_id, "b")
         end)
         test.it("hides peers without discover scope even when send is granted, and carries the owner's current epoch", function()
             local peers = {
@@ -70,9 +74,7 @@ local function define_tests()
             test.eq(listed[2].action_id, "c")
             test.eq(listed[2].grant_epoch, 7)
             test.eq(listed[2].sendable, false)
-            local hidden, code = sessions.resolve_directory(listed, {node_id = "node-1", action_id = "b"})
-            test.is_nil(hidden)
-            test.eq(code, "NOT_FOUND")
+            for _, item in ipairs(listed) do test.is_false(item.action_id == "b") end
         end)
         test.it("uses the newest carrier binding while preserving the owner's grant epoch", function()
             local old = candidate("b", "attempt-old", "thread-b", 2)

@@ -193,4 +193,4 @@ entries:
   source: file://sessions_test.lua
   method: run
   meta: {type: test, suite: bee}
-  imports: {test: wippy.test:test, sessions: bee.gateway:sessions}
+  imports: {test: wippy.test:test, sessions: bee.gateway:sessions, mcp: bee.gateway:mcp}

@@ -1,11 +1,7 @@
--- MIT. Cross-session coordination between two scripted managed agents of
--- different drivers, each on its own thread in one workspace and reaching
--- Bee only through its own gateway tools. The Claude-driver waiter finds
--- the Codex-driver sender through thread_sessions, asks to be told when the
--- sender's turn ends, tells it "ready" and blocks in thread_wait. The sender
--- waits for "ready" and answers "go ahead" to the waiter's session. The
--- waiter wakes with the message; when the sender's turn ends the thread
--- owner delivers the notice on the waiter's own thread.
+-- MIT. Cross-session coordination through two scripted managed agents of
+-- different drivers. One case covers shared-owner thread tools and notices;
+-- another gives each agent its own actor and thread and exchanges accepted
+-- inbox messages and a correlated reply through their separate MCP bindings.
 local test = require("test")
 local principals = require("principals")
 local funcs = require("funcs")

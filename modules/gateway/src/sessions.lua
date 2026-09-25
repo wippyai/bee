@@ -72,24 +72,4 @@ function M.directory(peers: {DirectoryCandidate}, self_action_id: string): {Dire
     end)
     return result
 end
-function M.resolve_directory(entries: {DirectoryView}, address: unknown): (DirectoryView?, string?)
-    if type(address) == "table" then
-        local object = address :: {[string]: unknown}
-        if type(object.node_id) ~= "string" or type(object.action_id) ~= "string" then return nil, "INVALID_ARGUMENT" end
-        for _, item in ipairs(entries) do
-            if item.address.node_id == object.node_id and item.address.action_id == object.action_id then return item, nil end
-        end
-        return nil, "NOT_FOUND"
-    end
-    if type(address) ~= "string" then return nil, "INVALID_ARGUMENT" end
-    local found: DirectoryView? = nil
-    for _, item in ipairs(entries) do
-        if item.name == address then
-            if found then return nil, "AMBIGUOUS" end
-            found = item
-        end
-    end
-    if found then return found, nil end
-    return nil, "NOT_FOUND"
-end
 return M

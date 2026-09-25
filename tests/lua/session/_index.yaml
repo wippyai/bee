@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.session
+entries:
+- name: handoff_test
+  kind: function.lua
+  source: file://handoff_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    handoff: bee.session:handoff
+    state: bee.desktop:state

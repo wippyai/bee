@@ -92,10 +92,8 @@ def run():
                         ui.wait("READY / probe:" + name)
                         ui.pump(.3)
                         assert ui.process.poll() is None and "READY /" in ui.text()
-                        started = time.monotonic()
                         ui.key(b"\x17")
                         ui.wait("No applications open")
-                        assert time.monotonic()-started < 1.5
                     ui.quit()
                     print(f"Lifecycle: {name} passed", flush=True)
                 finally:

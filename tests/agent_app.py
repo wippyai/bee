@@ -28,7 +28,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app_journey import assert_overlay_authority  # noqa: E402
 from delivery_review import back_to_plans, focus  # noqa: E402
-from tui_smoke import Desktop  # noqa: E402
+from tui_smoke import DESKTOP_HANG_SECONDS, Desktop  # noqa: E402
 from workspace import ROOT, RUNTIME, classic_workspace, database_environment, workspace_checkpoint  # noqa: E402
 
 ROUNDS = 3
@@ -518,7 +518,7 @@ def review_and_apply(folder, project, staged, change, exercise_app, evidence, ph
         rejoin_boundary = frame_boundary(ui)
         started = time.monotonic()
         ui.key(b"\x1b[24~")
-        deadline = time.monotonic() + 4
+        deadline = time.monotonic() + DESKTOP_HANG_SECONDS
         while ui.screen.display[0] == old_header and time.monotonic() < deadline:
             ui.pump(.05)
         assert ui.screen.display[0] != old_header, "F12 did not replace the presenter\n" + ui.text()

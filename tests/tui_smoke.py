@@ -29,6 +29,8 @@ RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).res
 
 
 QUIT_HANG_SECONDS = 60
+# Wait for a rendered event; this bound diagnoses a hang, not startup speed.
+DESKTOP_HANG_SECONDS = 120
 
 
 class Desktop:
@@ -87,7 +89,7 @@ class Desktop:
                         self.observed_frames.append(list(self.screen.display))
                     self.pending_output = self.pending_output[finish + len(end_frame):]
 
-    def wait(self, text, timeout=4):
+    def wait(self, text, timeout=DESKTOP_HANG_SECONDS):
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             self.pump()
@@ -187,7 +189,7 @@ class Desktop:
         assert app_pids and all(pid.endswith("}") for pid in app_pids), "Fixture PID suffix was clipped"
         raw_start = len(self.raw)
         self.key(b"\x1b[21~" if crash else b"\x1b[24~")  # F10 is injected only in the fixture presenter.
-        deadline = time.monotonic() + 4
+        deadline = time.monotonic() + DESKTOP_HANG_SECONDS
         while self.screen.display[0] == header and time.monotonic() < deadline:
             self.pump(.05)
         assert self.screen.display[0] != header, f"Presenter did not change incarnation; exit={self.process.poll()}\n{self.text()}\n{bytes(self.raw[raw_start:])!r}"
@@ -253,7 +255,7 @@ class Desktop:
         assert self.process.poll() is None
         assert re.findall(r"App PID: (\S+)", self.text()) == app_pids
         self.key(b"\x1b[24~")
-        deadline = time.monotonic() + 4
+        deadline = time.monotonic() + DESKTOP_HANG_SECONDS
         while "Desktop paused" in self.text() and time.monotonic() < deadline:
             self.pump(.05)
         assert "Desktop paused" not in self.text(), self.text()

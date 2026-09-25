@@ -13,7 +13,6 @@ local peers = require("peers")
 local enrollment = require("enrollment")
 local invites = require("invites")
 local owner_stop = require("owner_stop")
-local system = require("system")
 local security = require("security")
 local crypto = require("crypto")
 local hash = require("hash")
@@ -279,9 +278,9 @@ local function main(configuration: unknown)
             send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {invite_id = redeemed.invite_id, node_id = input.node_id}))
         end
     end
-    -- stop shuts this owner down gracefully at the request of an enrolled
-    -- local client, after answering it; the runtime's shutdown retires the
-    -- desktop exactly as a termination signal does.
+    -- stop asks this owner's command process to end the run at the request
+    -- of an enrolled local client, after answering it; the runtime's shutdown
+    -- retires the desktop exactly as a termination signal does.
     local function stop(sender: string, call: types.Call, now_ms: integer)
         local sender_node, sender_host = types.pid_parts(sender)
         local request, refusal = owner_stop.decode(call, node)
@@ -297,8 +296,8 @@ local function main(configuration: unknown)
         send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {stopping = stopping}))
         if stopping then
             log:info("Owner stop requested by a local client", {node = sender_node})
-            local exited, exit_error = system.exit(0)
-            if not exited then log:error("Owner stop failed", {cause = tostring(exit_error)}) end
+            local sent, send_error = process.send(owner_stop.COMMAND, owner_stop.TOPIC, {version = 1})
+            if not sent then log:error("Owner stop was not delivered", {cause = tostring(send_error)}) end
         end
     end
     -- command runs one bee workspace command of an enrolled local client on

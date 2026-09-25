@@ -44,6 +44,14 @@ local function define_tests()
                 test.is_false(invalid.ok)
                 local again = handle:call(owner, {operation_ref = "bee.hive.telemetry:presence"}, {}, {timeout = "3s"})
                 test.is_true(again.ok)
+                -- Only an enrolled local client stops its owner; this caller
+                -- is neither, and a malformed stop is refused before that.
+                local owner_service: types.OwnerRef = {node_id = node, service_id = "bee.hive.owner"}
+                local stop_target: types.Target = {operation_ref = "bee.hive.owner:stop"}
+                local refused = handle:call(owner_service, stop_target, {alone = false}, {timeout = "3s"})
+                test.eq(refused.error and refused.error.code, "DENIED")
+                local malformed = handle:call(owner_service, stop_target, {alone = "yes"}, {timeout = "3s"})
+                test.eq(malformed.error and malformed.error.code, "INVALID_ARGUMENT")
             end)
             handle:close()
             local canceled, cancel_error = process.cancel(supervisor)

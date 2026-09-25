@@ -1,7 +1,9 @@
 -- MIT. An enrolled local client asks the owner of its node to shut down
 -- gracefully. The request names this node's owner service; with alone set it
--- stops only when no other local client is enrolled. This library is pure: the
--- supervisor authenticates the caller, answers and shuts the runtime down.
+-- stops only when no other local client is enrolled. The supervisor
+-- authenticates the caller and answers; the owner's command process, which
+-- the runtime waits on, accepts the stop only from the local supervisor and
+-- ends the run. This library is pure.
 local bounds = require("bounds")
 local types = require("types")
 local M = {}
@@ -9,6 +11,10 @@ M.SERVICE = "bee.hive.owner"
 M.STOP = "bee.hive.owner:stop"
 -- The host-named permission the supervisor needs to stop its owner.
 M.ACTION = "hive.owner.stop"
+-- The owner command process registers this name and receives the stop on
+-- this topic.
+M.COMMAND = "bee.launch.command"
+M.TOPIC = "bee.owner.stop"
 type Request = {alone: boolean}
 
 function M.decode(call: types.Call, node: string): (Request?, types.Fault?)
@@ -34,6 +40,11 @@ function M.stops(request: Request, caller: string, local_clients: {[string]: boo
         if client ~= caller then return false end
     end
     return true
+end
+
+-- Whether a stop message came from this node's own supervisor.
+function M.from_supervisor(sender: string, supervisor: string?): boolean
+    return supervisor ~= nil and sender == supervisor
 end
 
 return M

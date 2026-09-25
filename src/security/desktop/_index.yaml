@@ -172,6 +172,15 @@ entries:
     resources:
     - bee.launch:retained
     effect: allow
+- name: owner_command_stop_policy
+  kind: security.policy.expr
+  meta:
+    comment: The owner command process names itself for the stop its local supervisor forwards, and ends the run when that stop arrives
+  policy:
+    expression: '(action == "system.exit") || ((action == "process.registry.register" || action == "process.registry.unregister") && resource == "bee.launch.command")'
+    actions: [system.exit, process.registry.register, process.registry.unregister]
+    resources: ['*', bee.launch.command]
+    effect: allow
 - name: retained_owner_name_policy
   kind: security.policy
   meta:

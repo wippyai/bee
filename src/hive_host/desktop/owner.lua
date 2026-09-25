@@ -491,12 +491,11 @@ function M.request(state: State, message: process.Message, now: integer)
         if client.session.mode ~= input.mode then
             local reply = types.reply_error(call.request_id, types.fault("CONFLICT", "Detach before changing session mode"))
             remember(state, client, pending, reply, now)
-        else
-            remember(state, client, pending, types.reply_ok(call.request_id, {owner_execution = state.config.execution,
-                workspace_id = client.workspace_id, desktop_id = client.desktop_id, session_id = client.session.id,
-                recipient = sender, mode = client.session.mode, mount_ref = client.session.mount, expires_at = state.config.expires_at}), now)
+            client.pending = nil; return
         end
-        client.pending = nil; return
+        -- A repeated attachment reissues the native grant. This is also the
+        -- recovery path after the retained client changes execution: its old
+        -- mount must never be reused as authority for the new process.
     end
     if not request_core(state, client, pending, pending.op == "attach" and input.mode or nil) then
         remember(state, client, pending, types.reply_error(call.request_id, types.fault("UNAVAILABLE", "Retained owner did not accept the request")), now)
@@ -604,7 +603,8 @@ function M.result(state: State, message: process.Message, now: integer)
                         if not input then error("Invalid admitted desktop input") end
                         mode = input.mode
                     end
-                    client.session = {id = uuid.v7(), mount = result.mount, mode = mode}
+                    if client.session then client.session.mount = result.mount
+                    else client.session = {id = uuid.v7(), mount = result.mount, mode = mode} end
                 else client.session = nil; client.dirty = false end
             end
             if pending.call then

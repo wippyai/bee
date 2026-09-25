@@ -20,7 +20,7 @@ type Mode = "control" | "observe"
 type Target = {node_id: string, owner_execution: string, workspace_id: string, desktop_id: string, mode: Mode}
 type Receipt = {owner_execution: string, workspace_id: string, desktop_id: string, session_id: string, recipient: string, mode: string, mount_ref: string}
 type Fault = {code: string, message: string}
-type Session = {target: Target, receipt: Receipt, client: client.Client, lifetime_id: string?, closed: boolean}
+type Session = {target: Target, receipt: Receipt, client: client.Client, lifetime_id: string?, closed: boolean, renewals: integer}
 -- A local caller carries only this opaque session reference. The client handle,
 -- receipt and mount stay in this module's private table.
 type Handle = {id: string}
@@ -113,6 +113,11 @@ function M.receipt(value: unknown, target: Target, recipient: string): (Receipt?
     return {owner_execution = target.owner_execution, workspace_id = target.workspace_id, desktop_id = target.desktop_id,
         session_id = session_id, recipient = recipient, mode = target.mode, mount_ref = mount_ref}, nil
 end
+function M.reissued(value: unknown, previous: Receipt, target: Target, recipient: string): Receipt?
+    local accepted = M.receipt(value, target, recipient)
+    if not accepted or accepted.session_id ~= previous.session_id or accepted.mount_ref == previous.mount_ref then return nil end
+    return accepted
+end
 
 function M.target(node_id: unknown, execution: unknown, workspace_id: unknown, desktop_id: unknown, selected_mode: unknown): (Target?, string?)
     local node = bounds.id(node_id)
@@ -175,7 +180,7 @@ function M.open(target: Target): (Handle?, Fault?)
         handle:close()
         return nil, fault("UNAVAILABLE", mount_error or "attach desktop mount")
     end
-    sessions[accepted.session_id] = {target = target, receipt = accepted, client = handle, lifetime_id = lifetime_id, closed = false}
+    sessions[accepted.session_id] = {target = target, receipt = accepted, client = handle, lifetime_id = lifetime_id, closed = false, renewals = 0}
     return {id = accepted.session_id}, nil
 end
 
@@ -184,12 +189,34 @@ local function session(value: unknown): Session?
     local id = handle and bounds.id(handle.id)
     return id and sessions[id] or nil
 end
+local function renew(active: Session): (boolean, string?)
+    if active.renewals >= 2 then return false, "Desktop reattachment limit reached" end
+    active.renewals = active.renewals + 1
+    local target = active.target
+    local reply = active.client:call({node_id = target.node_id, service_id = protocol.SERVICE}, {operation_ref = protocol.ATTACH}, {
+        owner_execution = target.owner_execution, workspace_id = target.workspace_id,
+        desktop_id = target.desktop_id, mode = target.mode,
+    }, {deadline = deadline(), timeout = DEFAULT_TIMEOUT})
+    if not reply.ok then return false, reply.error and reply.error.message or "Desktop reattachment refused" end
+    local next_receipt = M.reissued(reply.value, active.receipt, target, tostring(process.pid()))
+    if not next_receipt then return false, "Desktop reattachment changed session identity or reused a stale mount" end
+    local attached, err = delivery.attach(next_receipt.session_id, next_receipt.mount_ref, next_receipt.mode == "observe")
+    if not attached then return false, err or "Desktop reattachment failed" end
+    active.receipt = next_receipt
+    return true, nil
+end
 
 function M.content(handle: unknown, width: integer, height: integer): (Content?, string?)
     local session = session(handle)
     if not session then return nil, "Desktop session is closed" end
     if session.closed then return nil, "Desktop session is closed" end
-    return delivery.content(session.receipt.session_id, width, height)
+    local frame, err = delivery.content(session.receipt.session_id, width, height)
+    if (err and err ~= "Attaching") or delivery.is_failed(session.receipt.session_id) then
+        local renewed, renewal_error = renew(session)
+        if not renewed then return nil, renewal_error end
+        return nil, "Attaching"
+    end
+    return frame, err
 end
 
 function M.send(handle: unknown, event: unknown): (boolean, string?)

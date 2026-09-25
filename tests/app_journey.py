@@ -158,7 +158,7 @@ def stage_replacement(project, folder):
                              "--set", f"registry.history_path={folder}/registry.db"], cwd=project,
                             capture_output=True, text=True, timeout=300, env=database_environment(folder))
     output = result.stdout + result.stderr
-    assert result.returncode == 0 and "APP_JOURNEY_REPLACEMENT_STAGED" in output, output[-12000:]
+    assert result.returncode == 0 and "APP_JOURNEY_REPLACEMENT_STAGED" in output, output
     match = re.search(r"APP_JOURNEY_REPLACEMENT_STAGED\s+(\{.*\})", output)
     assert match, output
     evidence = json.loads(match.group(1))

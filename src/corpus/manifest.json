@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 4054,
+      "bytes": 4136,
       "id": "docs/readme",
-      "sha256": "eedfa42114a98e0afa433ea95d03a4d17e392961965455af3a40ea84597d068c",
+      "sha256": "6541c66ea99c8c737a2d84e065b418b0ebee0ab7b7e968bd11fc10240e234050",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -379,11 +379,19 @@
       "topic": "component"
     },
     {
-      "bytes": 9477,
+      "bytes": 9436,
       "id": "component/hive",
-      "sha256": "129b02d1c66e22b929d13041b71bc03f8f168e075affa5ffa372dc3c3224dda0",
+      "sha256": "57df061785d8e0eae9efff554b8bb1ba56304b1df25848a27806037e9e326a8b",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
+      "topic": "component"
+    },
+    {
+      "bytes": 2368,
+      "id": "component/hive:telemetry",
+      "sha256": "36ad4ce07f55dda6fece83741d804d92129ecd3721913f4fc052837b46214db5",
+      "source": "modules/hive-telemetry/src/README.md",
+      "title": "bee.hive.telemetry",
       "topic": "component"
     },
     {
@@ -462,7 +470,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 567485,
-    "documents": 57
+    "bytes": 569894,
+    "documents": 58
   }
 }

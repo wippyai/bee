@@ -35,7 +35,8 @@ entries:
 - name: sender
   kind: ns.requirement
   meta:
-    comment: Host-selected forwarding sender for the outbox pump; the independent Threads owner has no transport default, and with no sender due rows stay queued
+    comment: Forwarding sender for the outbox pump; the module default is its own fail-closed placeholder, and a host replaces it with its transport
+  default: bee.threads.service:pump_sender
   targets:
   - entry: bee.threads.service:pump_worker
     path: .imports.sender

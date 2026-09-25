@@ -349,7 +349,6 @@ entries:
     resources: bee.threads:resources
     outbox: bee.threads.service:outbox
     pump: bee.threads.service:pump
-    sender: bee.threads.service:pump_sender
 - name: inbox_outbox_claim
   kind: function.lua
   source: file://outbox_method.lua

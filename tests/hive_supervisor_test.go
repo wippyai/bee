@@ -106,6 +106,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.application:arguments\n"},
 		{"retained_protocol", "src/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
 		{"workspace_binding", "src/storage/binding.lua", "version: '1.0'\nnamespace: bee.storage\nentries:\n- name: binding\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.threads.records:bounds\n"},
+		{"application_host_leases", "modules/application/src/host_leases.lua", "version: '1.0'\nnamespace: bee.application\nentries:\n- name: host_leases\n  kind: library.lua\n  source: file://source.lua\n  modules: [process, channel, time, uuid]\n"},
 	} {
 		directory := filepath.Join(sourceSnapshot, dependency.directory)
 		if err := os.MkdirAll(directory, 0700); err != nil {

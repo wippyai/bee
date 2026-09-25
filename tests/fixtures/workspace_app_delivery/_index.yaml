@@ -172,12 +172,6 @@ entries:
     capability_catalog: bee.governance:capability_catalog
   security:
     policies: [bee.workspace_app_probe:operator_policy, bee.workspace_app_probe:grant_evidence_policy]
-  meta:
-    command:
-      name: workspace-app-grants
-      security:
-        actor: {id: bee.workspace_app.operator}
-        policies: [bee.workspace_app_probe:operator_policy, bee.workspace_app_probe:grant_evidence_policy]
 - name: inspect_grants_service
   kind: process.service
   process: bee.workspace_app_probe:inspect_grants

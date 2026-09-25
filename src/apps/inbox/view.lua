@@ -23,8 +23,12 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local detail = state.detail
     local selected = model.selected_row(state)
     local detail_rows = 0
+    local permission_lines: {string} = {}
     if detail and selected and detail.approval_id == selected.approval_id and height >= 12 then
-        detail_rows = math.floor(math.max(6, math.min(height - 8, state.technical and 16 or 14)))
+        permission_lines = model.permission_lines(detail)
+        local needed = 5 + #permission_lines
+        if state.technical then needed = needed + 2 + #model.payload_lines(detail) end
+        detail_rows = math.floor(math.max(6, math.min(height - 5, needed)))
     end
     local list_first = 3
     local list_last = height - 2 - detail_rows
@@ -50,7 +54,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             "Effect: " .. selected.effect .. "  target " .. selected.target,
             "Asked: " .. selected.prompt,
         }
-        for _, permission_line in ipairs(model.permission_lines(detail)) do
+        for _, permission_line in ipairs(permission_lines) do
             lines[#lines + 1] = permission_line
         end
         lines[#lines + 1] = "Requester: " .. selected.requester_id .. "  owner " .. selected.owner_node .. "  policy " .. selected.policy

@@ -217,7 +217,7 @@ local function define_tests()
                 base_policy_digest = SHA, workspace_application = true,
                 packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
                 kinds = {["process.lua"] = true, ["ns.requirement"] = true}, databases = {},
-                grants = {}, modules = {}, applied = {}, migration_barrier = false,
+                grants = {["bee.governance.grants:policy." .. SHA] = true}, modules = {}, applied = {}, migration_barrier = false,
                 workspace_id = "workspace-destination", overlay_owner = "bee.apps:workspace-destination",
                 source_node = "node-source", source_workspace = "author/app",
                 applications = {{definition_id = "private.app:main",
@@ -248,6 +248,7 @@ local function define_tests()
             test.eq((binding[1].policies :: {string})[1], (proposal.policies :: {Object})[1].id)
             test.eq((binding[1].policies :: {string})[2], "bee:ordinary-policy")
             test.is_true((facts.context.grants :: Object)[(proposal.policies :: {Object})[1].id :: string] == true)
+            test.is_nil((facts.context.grants :: Object)["bee.governance.grants:policy." .. SHA])
             test.is_true(assert(preflight.check(facts.candidate :: preflight.Candidate,
                 facts.context :: preflight.Context)).ready)
         end)

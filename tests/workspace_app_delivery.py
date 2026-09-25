@@ -211,6 +211,7 @@ def exercise():
     finally:
         ui.close()
         os.environ.pop("BEE_WORKSPACE_APP_INSPECT", None)
+        os.environ.pop("BEE_WORKSPACE_APP_WORKSPACE", None)
 
     restarted = Desktop(folder, project=project)
     try:

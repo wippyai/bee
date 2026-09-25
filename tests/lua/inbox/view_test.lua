@@ -70,6 +70,27 @@ local function define_tests()
             test.is_true(visible:find("Change: added: Read owned threads", 1, true) ~= nil)
             test.is_true(visible:find("Capability: Read owned threads", 1, true) ~= nil)
         end)
+        test.it("keeps the full bounded capability review visible at desktop height", function()
+            local state = model.new({"ws-1"})
+            local item = request("grant-many", "pending", "Install the requested capabilities?")
+            local changes: {string} = {}
+            local resolved: {string} = {}
+            for index = 1, 8 do
+                changes[index] = "added: Capability " .. tostring(index)
+                resolved[index] = "Capability " .. tostring(index)
+            end
+            local proposal = item.proposal :: Object
+            proposal.payload = {permission_changes = changes, resolved_capabilities = resolved}
+            model.apply_inbox(state, "ws-1", {ok = true, error = nil, value = {
+                changes = {{seq = 1, approval_id = "grant-many", revision = 1, request = item}},
+                next_seq = 1, more = false}, replayed = false})
+            model.select(state, "grant-many")
+            model.apply_read(state, "grant-many", {ok = true, error = nil, value = item, replayed = false})
+            local visible = table.concat(view.draw(100, 30, appearance.defaults(), state,
+                model.rows(state), 0, "").rows, "\n")
+            test.is_true(visible:find("Change: added: Capability 8", 1, true) ~= nil)
+            test.is_true(visible:find("Capability: Capability 8", 1, true) ~= nil)
+        end)
         test.it("offers no decision without an opened pending request or while one awaits the owner", function()
             local state = model.new({"ws-1"})
             model.apply_inbox(state, "ws-1", {ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "r1", revision = 1, request = request("r1", "pending", "x")}}, next_seq = 1, more = false}, replayed = false})

@@ -432,6 +432,9 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         for _, raw_id in ipairs(app_binding.policies :: {unknown}) do
             if not capability_grants.reserved(raw_id) then selected_policies[#selected_policies + 1] = raw_id end
         end
+        for grant_id in pairs(policy.grants) do
+            if capability_grants.reserved(grant_id) then policy.grants[grant_id] = nil end
+        end
         for _, generated in ipairs(proposed.policies) do
             local generated_id = generated.id :: string
             selected_policies[#selected_policies + 1] = generated_id

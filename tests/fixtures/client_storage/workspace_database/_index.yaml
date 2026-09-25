@@ -3,7 +3,7 @@ namespace: bee.workspace.db
 entries:
 - name: left
   kind: db.sql.sqlite
-  file: ${env:bee:client_db_path}.workspace-left
+  file: ${env:bee.environment:client_db_path}.workspace-left
 - name: right
   kind: db.sql.sqlite
-  file: ${env:bee:client_db_path}.workspace-right
+  file: ${env:bee.environment:client_db_path}.workspace-right

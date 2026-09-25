@@ -1237,6 +1237,129 @@ local function define_tests()
             apply(policy_entry)
             if not ok then error(tostring(failure)) end
         end)
+        test.it("runs an agent as a function with durable receipts, replay, cancel before start and wait for terminal carrier record", function()
+            local run_workspace = fresh("func-run-ws")
+            local application = "bee.application:" .. run_workspace .. ":launcher"
+            local sources_entry = assert(registry.get("bee:credential_sources"))
+            local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
+            sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
+            apply(sources_entry)
+            local function app_call(actor_id: string, names: {string}, request: {[string]: unknown}): admission.Reply
+                local policies: {security.Policy} = {}
+                for index, name in ipairs(names) do policies[index] = assert(security.policy(name)) end
+                local reply, err = funcs.new():with_actor(principals.actor(actor_id, run_workspace)):with_scope(security.new_scope(policies))
+                    :call("bee.harness.launch:agent_call", request)
+                if err then error("agent_call: " .. tostring(err)) end
+                return reply :: admission.Reply
+            end
+            local granted = {"bee.security.harness:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
+            local run_key = fresh("func-run-key")
+
+            -- 1. Run returns a durable receipt promptly
+            local run_reply = app_call(application, granted, {operation = "run", definition_ref = DEFINITION, brief = "ping function", idempotency_key = run_key})
+            test.eq(run_reply.ok, true)
+            local run_val = value(run_reply)
+            test.not_nil(run_val.thread_id)
+            test.not_nil(run_val.action_id)
+            test.not_nil(run_val.attempt_id)
+            test.eq(run_val.definition_ref, DEFINITION)
+            test.eq(run_val.brief, "ping function")
+            test.eq(run_val.idempotency_key, run_key)
+            test.is_true(run_val.state == "starting" or run_val.state == "running" or run_val.state == "ended")
+            local receipt = bounds.object(run_val.receipt)
+            test.not_nil(receipt)
+            test.eq(receipt and receipt.scope, "attempt")
+            test.eq(receipt and receipt.thread_id, run_val.thread_id)
+            test.eq(receipt and receipt.action_id, run_val.action_id)
+            test.eq(receipt and receipt.attempt_id, run_val.attempt_id)
+            test.eq(receipt and receipt.idempotency_key, run_key)
+
+            -- 2. Idempotent run replay returns identical attempt receipt
+            local replay_reply = app_call(application, granted, {operation = "run", definition_ref = DEFINITION, brief = "ping function", idempotency_key = run_key})
+            test.eq(replay_reply.ok, true)
+            local replay_val = value(replay_reply)
+            test.eq(replay_val.attempt_id, run_val.attempt_id)
+            test.eq(replay_val.action_id, run_val.action_id)
+            test.eq(replay_val.thread_id, run_val.thread_id)
+
+            -- 3. Wait for function run completion
+            local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
+            local settled: {[string]: unknown}? = nil
+            while math.floor(time.now():unix_nano() / 1000000) < deadline_ms do
+                local cur = value(app_call(application, granted, {operation = "wait", thread_id = tostring(run_val.thread_id), attempt_id = tostring(run_val.attempt_id), wait_ms = 5000}))
+                if cur.state == "ended" then settled = cur break end
+            end
+            test.not_nil(settled)
+            test.eq(settled and settled.outcome, "succeeded")
+
+            -- 4. Cancel before start settles attempt as cancelled with terminal receipt
+            local admit_reply = call_as(application, "bee.harness.launch:admit", {
+                request_id = fresh("cancel-before-start-req"),
+                definition_ref = DEFINITION,
+                workspace_id = run_workspace,
+                brief = "cancel before start"
+            })
+            local admitted = value(admit_reply)
+            local adm_thread = admitted.thread_id :: string
+            local adm_attempt = admitted.attempt_id :: string
+
+            local cancel_pre = app_call(application, granted, {
+                operation = "cancel",
+                thread_id = adm_thread,
+                attempt_id = adm_attempt,
+                idempotency_key = fresh("cancel-pre-key")
+            })
+            test.eq(cancel_pre.ok, true)
+            local cancel_pre_val = value(cancel_pre)
+            test.eq(cancel_pre_val.state, "ended")
+            test.eq(cancel_pre_val.outcome, "cancelled")
+
+            local status_pre = value(app_call(application, granted, {
+                operation = "status",
+                thread_id = adm_thread,
+                attempt_id = adm_attempt
+            }))
+            test.eq(status_pre.state, "ended")
+            test.eq(status_pre.outcome, "cancelled")
+
+            local replay_cancel = app_call(application, granted, {
+                operation = "cancel",
+                thread_id = adm_thread,
+                attempt_id = adm_attempt
+            })
+            test.eq(replay_cancel.ok, true)
+            test.eq(value(replay_cancel).state, "ended")
+            test.eq(value(replay_cancel).outcome, "cancelled")
+
+            -- 5. Cancel running attempt with wait for terminal carrier record
+            local policy_entry = assert(registry.get(POLICY))
+            local policy_data = policy_entry.data :: {[string]: unknown}
+            local environment = policy_data.environment :: {[string]: unknown}
+            environment.BEE_FIXTURE_READ = "1"
+            apply(policy_entry)
+            local ok, failure = pcall(function()
+                local held_run = value(app_call(application, granted, {
+                    operation = "run",
+                    definition_ref = DEFINITION,
+                    brief = "hold-run",
+                    idempotency_key = fresh("func-hold-key")
+                }))
+                local cancel_running = app_call(application, granted, {
+                    operation = "cancel",
+                    thread_id = held_run.thread_id,
+                    attempt_id = held_run.attempt_id,
+                    wait_ms = 5000,
+                    idempotency_key = fresh("cancel-run-key")
+                })
+                test.eq(cancel_running.ok, true)
+                local cr_val = value(cancel_running)
+                test.eq(cr_val.state, "ended")
+                test.eq(cr_val.outcome, "cancelled")
+            end)
+            environment.BEE_FIXTURE_READ = nil
+            apply(policy_entry)
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("refuses caller-selected session identities and resources before creating work", function()
             for _, field in ipairs({"session_ref", "session_resource"}) do
                 local request_id = fresh("session-injection")

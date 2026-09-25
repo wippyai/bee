@@ -247,6 +247,31 @@ local function define_tests()
             local req_id2 = agent_launch.request_id(ACTION, "idempotent-key")
             test.eq(req_id1, req_id2)
         end)
+        test.it("decodes run identities with allowed cancel options", function()
+            local allowed = {"thread_id", "attempt_id", "wait_ms", "idempotency_key"}
+            local run, err = agent_launch.decode_run({
+                thread_id = "t1",
+                attempt_id = "a1",
+                wait_ms = 5000,
+                idempotency_key = "k1"
+            }, allowed)
+            test.not_nil(run)
+            test.eq(run and run.thread_id, "t1")
+            test.eq(run and run.attempt_id, "a1")
+
+            local _, unknown_err = agent_launch.decode_run({
+                thread_id = "t1",
+                attempt_id = "a1",
+                extra = "not-allowed"
+            }, allowed)
+            test.eq(unknown_err, "unknown field extra")
+
+            local _, bad_thread = agent_launch.decode_run({
+                thread_id = "bad\0id",
+                attempt_id = "a1"
+            }, allowed)
+            test.eq(bad_thread, "thread_id is not an identifier")
+        end)
     end)
 end
 return test.run_cases(define_tests)

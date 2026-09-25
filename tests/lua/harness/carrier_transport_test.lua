@@ -11,7 +11,7 @@ local function plan(mode: string, protocol: string): machine.Plan
     local launch: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}
     local policy_value: policy.Policy = {ref = "policy", digest = "policy-digest", prepare_options = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated",
             start_ms = 1000, stop_grace_ms = 100, drain_ms = 100, runner_drain_ms = 100, retain_ms = 100,
-            executables = {}, environment = {}, host_environment = {}, allow_host_home = false, gateway_tools = {}, agent_launch = {}, gateway_ttl_ms = 1000, gateway_hooks = {}, fixture = true, allowed_overrides = {}}
+            executables = {}, environment = {}, host_environment = {}, allow_host_home = false, gateway_tools = {}, agent_launch = {}, agent_model_map = {}, agent_delegates = {}, gateway_ttl_ms = 1000, gateway_hooks = {}, fixture = true, allowed_overrides = {}}
     local placement_request_value: placement_types.LaunchRequest = {idempotency_key = "key", owner_id = "actor", owner_incarnation = 1, action_id = "action", attempt_id = "attempt",
             binding_ref = "binding", policy_ref = "policy", profile_id = "window", binding_digest = "binding-digest", profile_digest = "profile-digest",
             placement_binding_ref = "bee.placement.native.binding:binding", placement_binding_digest = string.rep("a", 64),

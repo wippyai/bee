@@ -10,7 +10,6 @@ local hive = require("hive")
 local M = {}
 M.OWNER_SERVICE = "bee.threads"
 M.OPERATION = "bee.threads.service:inbox_send"
-M.MAX_IDEMPOTENCY_BYTES = 160
 type Object = {[string]: unknown}
 type Options = {timeout: string?}
 type Outcome = {ok: boolean, value: unknown, error: unknown}

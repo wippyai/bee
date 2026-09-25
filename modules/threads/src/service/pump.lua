@@ -7,8 +7,7 @@
 -- byte or names a policy.
 local bounds = require("bounds")
 local M = {}
--- One claim never exceeds this many deliveries, and one attempt's outcome
--- is one of these three decisions.
+-- One claim never exceeds this many deliveries.
 M.BATCH = 16
 type Object = {[string]: unknown}
 type Outcome = {decision: string, code: string?, message: string?, receipt: unknown?}
@@ -34,42 +33,5 @@ function M.outcome(reply: unknown, transport_error: unknown): Outcome
     local message = type(fault.message) == "string" and (fault.message :: string) or "delivery refused"
     if FINAL[code] then return {decision = "failed", code = code, message = message, receipt = nil} end
     return {decision = "unknown", code = code, message = message, receipt = nil}
-end
--- claim_request: a pump's own claim is bounded and names only the holder and
--- an optional page size, like the sender-scoped claim.
-function M.claim_request(request: unknown): ({holder: string, limit: integer}?, string?)
-    local object = bounds.object(request)
-    if not object then return nil, "request must be an object" end
-    local extra = bounds.fields(object, {"holder", "limit"})
-    if extra then return nil, extra end
-    local holder = bounds.id(object.holder)
-    if not holder then return nil, "holder is not an identifier" end
-    local limit = M.BATCH
-    if object.limit ~= nil then
-        local number = bounds.integer(object.limit)
-        if not number or number < 1 or number > M.BATCH then return nil, "limit is bounded by the outbox batch" end
-        limit = number
-    end
-    return {holder = holder, limit = limit}, nil
-end
--- settle_request: the pump's acknowledgment. It names the row and the
--- attempt's decision; only a delivered attempt carries a receipt, and only a
--- failed one carries an error. An unknown outcome is not a settle.
-function M.settle_request(request: unknown): ({outbox_id: string, delivered: boolean, receipt: unknown?, error: string?}?, string?)
-    local object = bounds.object(request)
-    if not object then return nil, "request must be an object" end
-    local extra = bounds.fields(object, {"outbox_id", "delivered", "receipt", "error"})
-    if extra then return nil, extra end
-    local outbox_id = bounds.id(object.outbox_id)
-    if not outbox_id or type(object.delivered) ~= "boolean" then return nil, "outbox_id and delivered are required" end
-    local delivered: boolean = object.delivered == true
-    if delivered and object.error ~= nil then return nil, "a delivered attempt carries no error" end
-    if not delivered and object.receipt ~= nil then return nil, "a failed attempt carries no receipt" end
-    local error_text: string? = nil
-    if object.error ~= nil then
-        error_text = bounds.text(object.error)
-        if error_text == nil then return nil, "error must be text" end
-    end
-    return {outbox_id = outbox_id, delivered = delivered, receipt = object.receipt, error = error_text}, nil
 end
 return M

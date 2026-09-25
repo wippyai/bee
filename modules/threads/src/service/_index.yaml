@@ -361,15 +361,3 @@ entries:
   method: settle
   imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
-- name: inbox_outbox_claim_pump
-  kind: function.lua
-  source: file://outbox_method.lua
-  method: claim_pump
-  imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
-  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
-- name: inbox_outbox_settle_pump
-  kind: function.lua
-  source: file://outbox_method.lua
-  method: settle_pump
-  imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
-  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}

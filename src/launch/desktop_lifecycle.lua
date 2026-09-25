@@ -19,7 +19,7 @@ type Phase = "boot" | "admit" | "running" | "render" | "save" | "exit" | "stoppi
 type Renderer = {pid: string, connection: string}
 type Child = {id: string, resource: desktops.Desktop, phase: Phase, connection: string, pending: string,
     ready: boolean, activation: string?, deadline: Channel<time.Time>?, renderer: Renderer?, replace: boolean,
-    host_replacing: boolean, restarts: integer}
+    host_replacing: boolean, restarts: integer, presentation: string?}
 -- host: the workspace host desktops talk to; route: the host's owner-side
 -- address for desktop admission, the host itself or the node host manager.
 type State = {owner: string, host: string, route: string, workspace_id: string, default_id: string,
@@ -60,7 +60,7 @@ local function restart_child(state: State, child: Child)
         return
     end
     child.phase, child.connection, child.pending, child.ready = "boot", "", "", false
-    child.deadline, child.renderer, child.replace = time.after("10s"), nil, false
+    child.deadline, child.renderer, child.replace, child.presentation = time.after("10s"), nil, false, nil
     child.host_replacing = false
     child.restarts = child.restarts + 1
 end
@@ -69,7 +69,7 @@ end
 -- from its owner, so the departure is announced there and the display identity
 -- stays held until the host reports the release.
 local function depart(state: State, child: Child, replacing: boolean?)
-    child.phase, child.deadline, child.ready, child.renderer = replacing and "replacing" or "departing", nil, false, nil
+    child.phase, child.deadline, child.ready, child.renderer, child.presentation = replacing and "replacing" or "departing", nil, false, nil, nil
     if replacing and child.host_replacing then
         child.pending = ""
         if state.replacement_ready then restart_child(state, child) end
@@ -127,7 +127,7 @@ local function control(state: State, child: Child, op: string): boolean
 end
 local function render_failed(state: State, child: Child, message: string)
     if not child.ready then fail(state, child, message); return end
-    child.phase, child.renderer = "running", nil
+    child.phase, child.renderer, child.presentation = "running", nil, nil
     if not control(state, child, "pause") then fail(state, child, "Desktop pause request was not accepted"); return end
     child.pending, child.deadline = "", nil
 end
@@ -279,16 +279,33 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
             return true
         end
         local rendered = child.phase == "render"
+        local presented = child.presentation == connection
         child.connection, child.phase, child.pending, child.deadline = connection, "running", "", nil
-        if rendered then child.ready = true; settle(state, child, "", "")
+        if rendered then
+            child.ready = true
+            settle(state, child, "", "")
         else child.deadline = time.after("10s") end
         render(state, child)
-    elseif topic == "presented" and child.ready and child.phase == "running" and child.restarts > 0 then
-        if type(data) == "table" and data.version == 1 and data.workspace_id == state.workspace_id
-            and data.display_id == child.id and data.connection_id == child.connection
-            and contract.text(data.renderer, 160) and contract.text(data.generation, 80) then
+        if rendered and presented then
+            child.presentation = nil
             send(state.owner, "bee.retained.replaced", {version = 1, workspace_id = state.workspace_id,
                 display_id = child.id, pid = child.resource.pid, schema = 1})
+        end
+    elseif topic == "presented" and child.restarts > 0 then
+        if type(data) == "table" and data.version == 1 and data.workspace_id == state.workspace_id
+            and data.display_id == child.id and contract.text(data.renderer, 160)
+            and contract.text(data.generation, 80) then
+            local connection = contract.text(data.connection_id, 80)
+            if connection and connection ~= "" then
+                if child.ready and child.phase == "running" and connection == child.connection then
+                    send(state.owner, "bee.retained.replaced", {version = 1, workspace_id = state.workspace_id,
+                        display_id = child.id, pid = child.resource.pid, schema = 1})
+                elseif child.phase == "admit" or child.phase == "render" or child.phase == "running" then
+                    -- The client may present before the host's render receipt
+                    -- reaches us; its exact connection waits for that fence.
+                    child.presentation = connection
+                end
+            end
         end
     elseif topic == "quit" and protocol.quit(data, state.workspace_id) and child.phase == "running" then
         child.phase = "save"

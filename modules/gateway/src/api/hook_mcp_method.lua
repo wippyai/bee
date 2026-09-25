@@ -12,7 +12,12 @@ end
 local HOOK_TOOL = {name = "hook", description = "Submit one hook observation about this attempt; it is recorded, never answered with a decision. "
     .. "event names the closed hook catalog event; identity fields correlate the occurrence; "
     .. "content fields keep only sizes and digests, never text",
-    inputSchema = hooks.schema(), annotations = mcp.WRITE_ANNOTATIONS}
+    inputSchema = hooks.schema(), annotations = mcp.WRITE_ANNOTATIONS,
+    outputSchema = {type = "object", additionalProperties = false, required = {"ok"},
+        properties = {ok = {type = "boolean"}, value = {type = "object"},
+            error = {type = "object", additionalProperties = false,
+                properties = {code = {type = "string"}, message = {type = "string"},
+                    field = {type = "string"}, retryable = {type = "boolean"}, remedy = {type = "string"}}}}}}
 local function handle(): nil
     local request = http.request()
     local response = http.response()

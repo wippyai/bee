@@ -31,6 +31,8 @@ HOST_ENTRIES = {
     "src/security/gateway/_index.yaml": {
         "gateway_admit_policy", "gateway_materialize_policy", "gateway_supervision_policy",
         "gateway_manage_policy", "gateway_tool_read_policy", "gateway_tool_message_policy",
+        "gateway_tool_inbox_policy", "gateway_session_discover_policy",
+        "gateway_session_send_denied_policy",
         "gateway_tool_launch_policy", "gateway_tool_overlay_policy", "gateway_tool_docs_policy",
         "gateway_tool_components_policy", "gateway_tool_delivery_policy",
         "gateway_tool_publish_policy", "gateway_tool_application_open_policy",
@@ -45,21 +47,29 @@ HOST_ENTRIES = {
         "thread_lifecycle_policy", "thread_carrier_policy", "thread_approval_policy",
         "thread_approval_client_policy", "thread_waiter_policy",
     },
-    "src/_index.yaml": {"approver_policies", "docs_corpus"},
+    "src/_index.yaml": {"approver_policies", "docs_corpus", "governance_publication_profiles",
+                         "governance_activation_profiles", "placement_path", "placement_host_files",
+                         "placement_executor", "placement_admitted_roots", "placement_resource_mode"},
+    "src/security/_index.yaml": {"ordinary_app_subsystem_boundary"},
+    "src/security/placement/_index.yaml": {"placement_store_policy", "placement_exec_policy"},
     "src/security/docs/_index.yaml": {"docs_policy"},
 }
 
 
 def selected_host_entries():
-    """Return the explicitly selected root entries with no production source copy."""
-    entries = []
+    """Return host selections grouped by source namespace, without copying production src."""
+    selected = {}
     for relative, names in HOST_ENTRIES.items():
         document = yaml.safe_load((ROOT / relative).read_text())
         assert document["namespace"] == "bee" or document["namespace"].startswith("bee.security"), relative
         available = {entry["name"]: entry for entry in document["entries"]}
         assert names <= available.keys(), f"missing host entries in {relative}: {sorted(names - available.keys())}"
-        entries.extend(deepcopy(available[entry["name"]]) for entry in document["entries"] if entry["name"] in names)
-    return entries
+        selected[relative] = {
+            "version": "1.0",
+            "namespace": document["namespace"],
+            "entries": [deepcopy(entry) for entry in document["entries"] if entry["name"] in names],
+        }
+    return selected
 
 
 def dependency(name, component, parameters=()):
@@ -75,37 +85,52 @@ def gateway_parameters(listener):
         ("target_listener", listener),
         ("target_endpoint", "bee:gateway_endpoint"),
         ("target_hook_storage", "bee:gateway_host_environment"),
-        ("target_approval_request_policy", "bee:approval_request_policy"),
-        ("target_approval_consume_policy", "bee:approval_consume_policy"),
-        ("target_tool_read_policy", "bee:gateway_tool_read_policy"),
-        ("target_tool_message_policy", "bee:gateway_tool_message_policy"),
-        ("target_tool_launch_policy", "bee:gateway_tool_launch_policy"),
-        ("target_tool_overlay_policy", "bee:gateway_tool_overlay_policy"),
-        ("target_tool_docs_policy", "bee:gateway_tool_docs_policy"),
-        ("target_tool_components_policy", "bee:gateway_tool_components_policy"),
-        ("target_tool_delivery_policy", "bee:gateway_tool_delivery_policy"),
-        ("target_tool_publish_policy", "bee:gateway_tool_publish_policy"),
-        ("target_tool_application_open_policy", "bee:gateway_tool_application_open_policy"),
+        ("target_approval_request_policy", "bee.security.approvals:approval_request_policy"),
+        ("target_approval_consume_policy", "bee.security.approvals:approval_consume_policy"),
+        ("target_tool_read_policy", "bee.security.gateway:gateway_tool_read_policy"),
+        ("target_tool_message_policy", "bee.security.gateway:gateway_tool_message_policy"),
+        ("target_tool_inbox_policy", "bee.security.gateway:gateway_tool_inbox_policy"),
+        ("target_tool_discover_policy", "bee.security.gateway:gateway_session_discover_policy"),
+        ("target_tool_send_grant_policy", "bee.security.gateway:gateway_session_send_denied_policy"),
+        ("target_tool_launch_policy", "bee.security.gateway:gateway_tool_launch_policy"),
+        ("target_tool_overlay_policy", "bee.security.gateway:gateway_tool_overlay_policy"),
+        ("target_tool_docs_policy", "bee.security.gateway:gateway_tool_docs_policy"),
+        ("target_tool_components_policy", "bee.security.gateway:gateway_tool_components_policy"),
+        ("target_tool_delivery_policy", "bee.security.gateway:gateway_tool_delivery_policy"),
+        ("target_tool_publish_policy", "bee.security.gateway:gateway_tool_publish_policy"),
+        ("target_tool_application_open_policy", "bee.security.gateway:gateway_tool_application_open_policy"),
     )
 
 
 def write_gateway_host(folder, native):
     """Write the fixture's root host and its two small host-selected resources."""
     listener = "bee:gateway_listener" if native else "bee.managed:listener"
+    host_entries = selected_host_entries()
     entries = [
         {"name": "definition", "kind": "ns.definition", "meta": {"title": "Gateway fixture host"}},
         dependency("dependency_persist", "bee/persist"),
-        dependency("dependency_threads", "bee/threads", (("target_db", "bee.threads:db"), ("process_host", "bee:workers"))),
+        dependency("dependency_threads", "bee/threads", (
+            ("target_db", "bee.threads:db"),
+            ("process_host", "bee:workers"),
+            ("waiter_policies", ["bee.security.threads:thread_waiter_policy"]),
+        )),
         dependency("dependency_application", "bee/application"),
         dependency("dependency_sync", "bee/sync", (("target_db", "bee.sync:db"), ("target_exports", "bee:sync_exports"), ("target_sender", "bee.gateway_probe:sync_sender"))),
-        dependency("dependency_approvals", "bee/approvals", (("target_db", "bee.approvals:db"), ("target_policies", "bee:approver_policies"))),
+        dependency("dependency_approvals", "bee/approvals", (
+            ("target_db", "bee.approvals:db"),
+            ("target_policies", "bee:approver_policies"),
+            ("process_host", "bee:workers"),
+            ("authority_policies", ["bee.security.approvals:approval_store_policy", "bee.security.approvals:approval_owner_policy"]),
+            ("worker_policies", ["bee.security.approvals:approval_store_policy", "bee.security.approvals:approval_owner_policy",
+                                 "bee.security.threads:thread_approval_policy", "bee.security.threads:thread_approval_client_policy"]),
+        )),
         dependency("dependency_hub", "bee/hub", (("process_host", "bee:workers"),)),
         dependency("dependency_governance", "bee/governance", (
             ("target_db", "bee.governance:db"),
             ("target_publication_profiles", "bee:governance_publication_profiles"),
             ("target_activation_profiles", "bee:governance_activation_profiles"),
-            ("target_approval_request_policy", "bee:approval_request_policy"),
-            ("target_approval_consume_policy", "bee:approval_consume_policy"),
+            ("target_approval_request_policy", "bee.security.approvals:approval_request_policy"),
+            ("target_approval_consume_policy", "bee.security.approvals:approval_consume_policy"),
         )),
         dependency("dependency_docs", "bee/docs", (("target_corpus", "bee:docs_corpus"),)),
         dependency("dependency_driver", "bee/driver"),
@@ -124,13 +149,8 @@ def write_gateway_host(folder, native):
         {"name": "codex_window_policy", "kind": "registry.entry", "data": {}},
         {"name": "codex_batch_policy", "kind": "registry.entry", "data": {}},
         {"name": "codex_named_batch_policy", "kind": "registry.entry", "data": {}},
-        # This tiny resource pair preserves the configuration renderer's
-        # scope-only proof without bringing native placement implementation
-        # into the component fixture.
-        {"name": "placement_store_policy", "kind": "security.policy", "policy": {"actions": ["db.get", "exec.get"], "resources": ["bee.placement.native:db", "bee:placement_executor"], "effect": "allow"}},
-        {"name": "placement_exec_policy", "kind": "security.policy", "policy": {"actions": ["exec.get"], "resources": ["bee:placement_executor"], "effect": "allow"}},
     ]
-    entries.extend(selected_host_entries())
+    entries.extend(host_entries["src/_index.yaml"]["entries"])
     if native:
         entries.extend([
             {"name": "gateway_listener", "kind": "http.service", "addr": "127.0.0.1:0", "lifecycle": {"auto_start": True}},
@@ -143,13 +163,12 @@ def write_gateway_host(folder, native):
         ])
     (folder / "src").mkdir(exist_ok=True)
     (folder / "src" / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "bee", "entries": entries}, sort_keys=False))
-    (folder / "src" / "governance").mkdir()
-    (folder / "src" / "governance" / "_index.yaml").write_text(yaml.safe_dump({
-        "version": "1.0", "namespace": "bee.governance", "entries": [
-            {"name": "publication_profiles", "kind": "registry.entry", "data": {"profiles": []}},
-            {"name": "activation_profiles", "kind": "registry.entry", "data": {"profiles": []}},
-        ],
-    }, sort_keys=False))
+    for relative, document in host_entries.items():
+        if relative == "src/_index.yaml":
+            continue
+        target = folder / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(yaml.safe_dump(document, sort_keys=False))
     (folder / "src" / "placement").mkdir()
     (folder / "src" / "placement" / "_index.yaml").write_text(yaml.safe_dump({
         "version": "1.0", "namespace": "bee.placement.native", "entries": [

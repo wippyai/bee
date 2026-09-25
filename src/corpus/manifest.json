@@ -843,9 +843,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 5922,
+      "bytes": 6026,
       "id": "docs/agent_guide",
-      "sha256": "bb720bb56e76bc780d23a8e006898dd716ed7b8cb8e4c7f754b18e66925e9d30",
+      "sha256": "6f08298a4fe3427abfb4069a05c40d3bf59f2d37f7ab0a8550a08430ff24058f",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -867,9 +867,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 12299,
+      "bytes": 12316,
       "id": "docs/mcp_configuration",
-      "sha256": "e6ae3fac4397f73a6c24d9818dc6df5ce9d36d632e27add0c4953c6c1bfed0a2",
+      "sha256": "3989925bc93a7bdb02a89a7555a8f5733b2dc823252660dda4e10c9334288ba3",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -893,7 +893,7 @@
     {
       "bytes": 7898,
       "id": "docs/distributed_app_delivery",
-      "sha256": "296b30cdd2b4e261f8a347b0af3453b28e73bdd8263ae975ec5170b86eebcd6b",
+      "sha256": "d0abf93bdb5b551df6bfbb93962d7ec0cdc61b78145c4e00549b35f7479098cb",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -931,9 +931,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 19270,
+      "bytes": 19326,
       "id": "docs/application_contracts",
-      "sha256": "71ad1c01af4a45e57079b36bd0159e7fd0ad2576c6394b9847b909874b2baec3",
+      "sha256": "d18e85fd016f4593747f3426e23eed5e3aebf2f96a02cc803460c341d0c1b697",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -963,9 +963,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 19996,
+      "bytes": 20013,
       "id": "docs/threads",
-      "sha256": "69d655dea950cfc14cc5abe4d72a19b825e9d1fc6975cfe96b2cf0329749442f",
+      "sha256": "e00aa2266912dc6f42b33cc3fab29b6156afe5b1727b8e47cb8585e31ea09e68",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -1091,9 +1091,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8523,
+      "bytes": 8393,
       "id": "component/hive",
-      "sha256": "59fcc870bf604436cbd9d759875f9465dd04bb33d5797a598d16aca241b380c6",
+      "sha256": "d87815a07565adb64e68dc577adcf9317a855540499f9e1d8ade3aa73affd126",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"
@@ -1155,9 +1155,9 @@
       "topic": "component"
     },
     {
-      "bytes": 6674,
+      "bytes": 6708,
       "id": "component/threads",
-      "sha256": "ebf6d7007ce67e7ba9f3a3446e1bd33568e76670d415e2ed5a2eacb0763515d2",
+      "sha256": "fe0a06e48b45954d882c046ae71a9941369a9362276f3ce25d612389c04fad1c",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -1174,7 +1174,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1371942,
-    "documents": 147
+    "bytes": 1372147,
+    "documents": 146
   }
 }

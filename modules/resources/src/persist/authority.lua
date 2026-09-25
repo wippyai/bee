@@ -19,6 +19,7 @@ local M = {}
 M.LEDGER = {table = "bee_resource_schema_migrations", label = "resource"}
 M.MANAGE = "bee.resources.manage"
 M.GRANT = "bee.resources.grant"
+M.GRANT_THREAD = "bee.resources.grant_thread"
 M.RESOLVE = "bee.resources.resolve"
 M.MAX_TTL_MS = 86400000
 M.DEFAULT_TTL_MS = 3600000
@@ -83,7 +84,7 @@ local function association_view(row: Row): {[string]: unknown}
 end
 local function grant_view(row: Row): {[string]: unknown}
     return {grant_id = row.grant_id, workspace_id = row.workspace_id, name = row.name, association_id = row.association_id, association_revision = row.association_revision,
-        issuer_owner = row.issuer_owner, subject = row.subject, audience = row.audience, root_ref = row.root_ref, root_digest = row.root_digest, subpath = row.subpath,
+        issuer_owner = row.issuer_owner, subject = row.subject, thread_id = row.thread_id, audience = row.audience, root_ref = row.root_ref, root_digest = row.root_digest, subpath = row.subpath,
         access = row.access, purpose = row.purpose, attempt_id = row.attempt_id, expires_at = row.expires_at, authorization_epoch = row.authorization_epoch,
         revoked_at = row.revoked_at, created_at = row.created_at}
 end
@@ -189,11 +190,13 @@ end
 -- grant: the authenticated actor is the subject; the audience is the
 -- placement owner the grant is for; the association and root are pinned
 -- at their current revision and digest. An idempotency key replays the
--- same grant for the same request and conflicts on a different one.
+-- same grant for the same request and conflicts on a different one. A
+-- caller admitted to grant_thread may instead name a thread-bound subject
+-- with its thread; the pair travels together and resolves by attempt.
 function M.grant(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"workspace_id", "name", "access", "purpose", "audience", "attempt_id", "ttl_ms", "idempotency_key"})
+    local unknown_field = bounds.fields(object, {"workspace_id", "name", "access", "purpose", "audience", "attempt_id", "ttl_ms", "idempotency_key", "subject", "thread_id"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local idempotency_key: string? = nil
     if object.idempotency_key ~= nil then
@@ -220,10 +223,27 @@ function M.grant(value: unknown): Reply
         if not declared or declared < 1 or declared > M.MAX_TTL_MS then return fail("INVALID", "ttl_ms must be between 1 and " .. tostring(M.MAX_TTL_MS)) end
         ttl = declared
     end
-    local subject = actor()
-    if not subject then return fail("UNAUTHENTICATED", "no actor") end
-    if not security.can(M.GRANT, workspace_id) then return fail("DENIED", "caller may not take grants in workspace " .. workspace_id) end
-    local request_digest, request_digest_error = digest_of({workspace_id = workspace_id, name = name, access = access, purpose = purpose, audience = audience, attempt_id = attempt_id})
+    local caller = actor()
+    if not caller then return fail("UNAUTHENTICATED", "no actor") end
+    local named_subject: string? = nil
+    local named_thread: string? = nil
+    if object.subject ~= nil or object.thread_id ~= nil then
+        named_subject = bounds.id(object.subject)
+        named_thread = bounds.id(object.thread_id)
+        if not named_subject or not named_thread then return fail("INVALID", "subject and thread_id name a thread-bound grant together") end
+    end
+    local subject = named_subject or caller
+    if named_subject then
+        if not security.can(M.GRANT_THREAD, workspace_id) then return fail("DENIED", "caller may not write thread-bound grants in workspace " .. workspace_id) end
+    elseif not security.can(M.GRANT, workspace_id) then
+        return fail("DENIED", "caller may not take grants in workspace " .. workspace_id)
+    end
+    local digest_input: {[string]: unknown} = {workspace_id = workspace_id, name = name, access = access, purpose = purpose, audience = audience, attempt_id = attempt_id}
+    if named_subject then
+        digest_input.subject = named_subject
+        digest_input.thread_id = named_thread
+    end
+    local request_digest, request_digest_error = digest_of(digest_input)
     if not request_digest then return fail("INVALID", request_digest_error or "request is not measurable") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
@@ -274,9 +294,9 @@ function M.grant(value: unknown): Reply
         return fail("STORAGE", "grant id")
     end
     local created = now_ms()
-    local _, insert_error = db:execute([[INSERT INTO bee_resource_grants (grant_id, workspace_id, name, association_id, association_revision, issuer_owner, subject, audience,
-        root_ref, root_digest, subpath, access, purpose, attempt_id, expires_at, authorization_epoch, idempotency_key, request_digest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]],
-        {grant_id, workspace_id, name, association.association_id, association.revision, node(), subject, audience, association.root_ref, association.root_digest,
+    local _, insert_error = db:execute([[INSERT INTO bee_resource_grants (grant_id, workspace_id, name, association_id, association_revision, issuer_owner, subject, thread_id, audience,
+        root_ref, root_digest, subpath, access, purpose, attempt_id, expires_at, authorization_epoch, idempotency_key, request_digest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]],
+        {grant_id, workspace_id, name, association.association_id, association.revision, node(), subject, named_thread, audience, association.root_ref, association.root_digest,
             association.subpath, access, purpose, attempt_id, stamp(created + ttl), epoch, idempotency_key, request_digest, stamp(created)})
     if insert_error then
         db:release()

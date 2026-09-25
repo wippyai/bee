@@ -46,8 +46,12 @@ CREATE TABLE bee_resource_grants (
 );
 CREATE INDEX bee_resource_grants_workspace ON bee_resource_grants (workspace_id, name);
 ]]
+local THREAD_SUBJECT_SQL = [[
+ALTER TABLE bee_resource_grants ADD COLUMN thread_id TEXT;
+]]
 local list: {Migration} = {
     {id = 1, name = "resources", sql = RESOURCES_SQL, rebuild = false},
+    {id = 2, name = "resources_thread_subject", sql = THREAD_SUBJECT_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

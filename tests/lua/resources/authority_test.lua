@@ -45,6 +45,8 @@ end
 local manager = caller(MANAGER, {"bee.security.resources:resource_manage_policy"})
 local user = caller(USER, {"bee.security.resources:resource_grant_policy"})
 local other = caller(OTHER, {"bee.security.resources:resource_grant_policy"})
+local consumer = caller("bee.test.consumer", {"bee.security.resources:resource_grant_thread_policy"})
+local THREAD_ACTOR = "bee.test.thread-actor"
 local placement = caller(PLACEMENT, {"bee.security.resources:resource_resolve_policy"})
 local outsider = caller("bee.test.outsider", {})
 local function call(client: Principal, method: string, value: unknown): authority.Reply
@@ -205,6 +207,34 @@ local function define_tests()
             local reader = value(call(manager, "associate", {workspace_id = workspace, name = "shared", root_ref = SHARED, allowed_access = "read"}))
             test.eq(reader.allowed_access, "read")
             test.eq(code(call(user, "grant", {workspace_id = workspace, name = "shared", access = "write", purpose = "cache", audience = USER})), "FORBIDDEN")
+        end)
+        test.it("writes thread-bound grants only for the admitted consumer", function()
+            local workspace = fresh("thread-grant")
+            value(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "src", allowed_access = "write"}))
+            local elevated = {workspace_id = workspace, name = "project", access = "read", purpose = "session",
+                audience = THREAD_ACTOR, attempt_id = "attempt-1", subject = THREAD_ACTOR, thread_id = "thread-1",
+                ttl_ms = 60000, idempotency_key = "elevation-1"}
+            test.eq(code(call(user, "grant", elevated)), "DENIED")
+            local granted = value(call(consumer, "grant", elevated))
+            test.eq(granted.subject, THREAD_ACTOR)
+            test.eq(granted.thread_id, "thread-1")
+            test.eq(granted.audience, THREAD_ACTOR)
+            test.eq(granted.attempt_id, "attempt-1")
+            local grant_id = granted.grant_id :: string
+            value(call(placement, "resolve", {grant_id = grant_id, subject = THREAD_ACTOR, audience = THREAD_ACTOR, attempt_id = "attempt-1"}))
+            test.eq(code(call(placement, "resolve", {grant_id = grant_id, subject = THREAD_ACTOR, audience = THREAD_ACTOR, attempt_id = "attempt-2"})), "DENIED")
+            test.eq(code(call(placement, "resolve", {grant_id = grant_id, subject = USER, audience = THREAD_ACTOR, attempt_id = "attempt-1"})), "DENIED")
+            local replayed = value(call(consumer, "grant", elevated))
+            test.eq(replayed.grant_id, grant_id)
+            local changed = {workspace_id = workspace, name = "project", access = "write", purpose = "session",
+                audience = THREAD_ACTOR, attempt_id = "attempt-1", subject = THREAD_ACTOR, thread_id = "thread-1",
+                ttl_ms = 60000, idempotency_key = "elevation-1"}
+            test.eq(code(call(consumer, "grant", changed)), "CONFLICT")
+            local foreign = {workspace_id = fresh("elsewhere"), name = "project", access = "read", purpose = "session",
+                audience = THREAD_ACTOR, attempt_id = "attempt-1", subject = THREAD_ACTOR, thread_id = "thread-1"}
+            local denied, denied_error = bound(consumer, workspace):call("bee.resources.binding:grant", foreign)
+            if denied_error then error(tostring(denied_error)) end
+            test.eq(code(denied :: authority.Reply), "DENIED")
         end)
         test.it("stops resolving on expiry, revocation, epoch advance, replaced associations, changed roots and foreign nodes", function()
             local workspace = fresh("ws")

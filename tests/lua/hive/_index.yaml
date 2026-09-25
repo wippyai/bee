@@ -182,6 +182,21 @@ entries:
     thread_admission: bee.hive_host.supervisor:thread_admission
     harness: bee.threads:harness
     sends: bee.threads.service:sends
+- name: inbox_forwarding_test
+  kind: function.lua
+  source: file://inbox_forwarding_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, registry, time, uuid, system]
+  security:
+    policies: [bee.hive:mapping_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    principals: bee.hive_host.supervisor:principals
+    thread_admission: bee.hive_host.supervisor:thread_admission
+    harness: bee.threads:harness
+    sends: bee.threads.service:sends
 - name: desktop_catalog_test
   kind: function.lua
   source: file://desktop_catalog_test.lua

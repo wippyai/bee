@@ -32,7 +32,7 @@ entries:
     resources: [bee.threads.service:create, bee.threads.service:get, bee.threads.service:list, bee.threads.service:list_workspace, bee.threads.service:join,
       bee.threads.service:leave, bee.threads.service:close, bee.threads.service:record, bee.threads.service:read_after, bee.threads.service:send, bee.threads.service:send_status, bee.threads.service:notify,
       bee.threads.service:inbox_accept, bee.threads.service:inbox_send, bee.threads.service:inbox_list, bee.threads.service:inbox_ack, bee.threads.service:inbox_reply, bee.threads.service:inbox_describe,
-      bee.threads.service:inbox_offer, bee.threads.service:inbox_transport,
+      bee.threads.service:inbox_offer, bee.threads.service:inbox_transport, bee.threads.service:inbox_outbox_claim, bee.threads.service:inbox_outbox_settle,
       bee.threads.service:admit_action, bee.threads.service:prepare_attempt, bee.threads.service:start_attempt, bee.threads.service:request_turn,
       bee.threads.service:end_turn, bee.threads.service:receipt,
       bee.threads.delivery:claim, bee.threads.delivery:dispatch, bee.threads.delivery:ack, bee.threads.delivery:release,

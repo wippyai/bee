@@ -130,18 +130,22 @@ only for tags and manual runs, and `release` only for `v*` tags.
 - `pack` (`Bee packs`, ubuntu-24.04, 30 minutes) runs `make native-pack` at the
   selected version, then `make hub-check` against the resulting deployment. It
   uploads the sealed pack set (`sealed-packs`) for the targets and the portable
-  deployment as `bee-deployment.tar.gz` with its `.sha256`.
+  deployment as `bee-deployment.tar.gz` with its `.sha256`, plus the warm Lua
+  compilation cache for the release checks and builds. It starts alongside
+  validation; the required job still gates release on validation.
 - `check` (`Bee check (<shard>)`, ubuntu-24.04, 30 minutes per shard) runs one
-  `make check-shard-<shard>` per matrix entry. The Makefile defines the shards;
+  `make check-shard-<shard>` per matrix entry after validation selects the matrix
+  and the pack job provides the warm cache. The Makefile defines the shards;
   `make check-shards-check` fails unless every step `make check` runs belongs to
   exactly one shard, no shard runs a step outside `make check`, and every shard
   carries the target variables `check` sets. The shards are `foundation`
   (repository tools, lint, the Lua unit suite, packing and headless boot),
-  `modules`, `services`, `windows`, `window-failure`, and the four desktop
-  acceptance groups `desktop-shell`, `desktop-terminal`, `desktop-client` and
-  `desktop-delivery`.
+  `modules`, four `services` groups (core, workspace storage, client storage and workspace hosts),
+  `windows`, `window-failure`, six desktop shell groups, `desktop-terminal`,
+  three desktop client groups and four desktop delivery groups. Each desktop
+  aggregate still runs all its original acceptance scripts through `make check`.
 - `build` runs once per target (45 minutes). On every target it builds the
-  pinned toolchain, verifies the runner architecture, restores the sealed pack
+  pinned toolchain, restores the warm Lua cache, verifies the runner architecture, restores the sealed pack
   set, runs the native module checks, and assembles the standalone executable
   from those packs with `make standalone-sealed`, so every target embeds
   identical pack bytes. Each Linux target proves the source-free portable

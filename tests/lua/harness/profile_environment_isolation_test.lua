@@ -127,12 +127,14 @@ local function define_tests()
             local original: {Original} = {}
             local policy_alpha = assert(registry.get(ALPHA_POLICY))
             local policy_beta = assert(registry.get(BETA_POLICY))
+            local resource_roots = assert(registry.get("bee:resource_roots"))
             local roots = assert(registry.get("bee.placement.native:admitted_roots"))
             local mode = assert(registry.get("bee.placement.native:resource_mode"))
             local sources = assert(registry.get("bee:credential_sources"))
             original = {
                 {entry = policy_alpha, data = policy_alpha.data},
                 {entry = policy_beta, data = policy_beta.data},
+                {entry = resource_roots, data = resource_roots.data},
                 {entry = roots, data = roots.data},
                 {entry = mode, data = mode.data},
                 {entry = sources, data = sources.data},
@@ -141,6 +143,15 @@ local function define_tests()
             local ok, failure = pcall(function()
                 policy_alpha.data = profile_policy(policy_alpha, paths.bin, paths.streams)
                 policy_beta.data = profile_policy(policy_beta, paths.bin, paths.streams)
+                local resource_data = resource_roots.data :: {[string]: unknown}
+                local copied_resources: {{[string]: unknown}} = {}
+                local resource_found = false
+                for index, item in ipairs(resource_data.roots :: {{[string]: unknown}}) do
+                    copied_resources[index] = item
+                    if item.root_ref == ROOT then resource_found = true end
+                end
+                if not resource_found then copied_resources[#copied_resources + 1] = {root_ref = ROOT, access = "write"} end
+                resource_roots.data = {roots = copied_resources}
                 local roots_data = roots.data :: {[string]: unknown}
                 local copied_roots: {{[string]: unknown}} = {}
                 local found_root = false
@@ -159,6 +170,7 @@ local function define_tests()
                 local changes = registry.snapshot():changes()
                 changes:update(policy_alpha)
                 changes:update(policy_beta)
+                changes:update(resource_roots)
                 changes:update(roots)
                 changes:update(mode)
                 changes:update(sources)

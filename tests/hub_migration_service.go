@@ -149,12 +149,16 @@ func appendPolicy(index, name, actions, resources string, groups ...string) stri
 }
 
 func runEnvironment(folder, hubURL string) []string {
-	return []string{
+	environment := []string{
 		"HOME=" + os.Getenv("HOME"),
 		"PATH=" + os.Getenv("PATH"),
 		"WIPPY_REGISTRY=" + hubURL,
 		"XDG_CONFIG_HOME=" + filepath.Join(folder, "config"),
 	}
+	if cache := os.Getenv("WIPPY_CACHE_DIR"); cache != "" {
+		environment = append(environment, "WIPPY_CACHE_DIR="+cache)
+	}
+	return environment
 }
 
 func runRuntime(ctx context.Context, runtime, folder string, environment []string, args ...string) ([]byte, error) {

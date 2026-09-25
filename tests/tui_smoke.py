@@ -41,6 +41,7 @@ class Desktop:
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
         self.raw = bytearray()
         self.pending_output = ""
+        self.first_frame = None
         cwd = directory if packed else project
         if packed:
             deployment_copy(deployment or product_deployment(), directory)
@@ -80,6 +81,8 @@ class Desktop:
                     if finish < 0:
                         break
                     self.stream.feed(self.pending_output[len(begin):finish])
+                    if self.first_frame is None:
+                        self.first_frame = tuple(self.screen.display)
                     if hasattr(self, "observed_frames"):
                         self.observed_frames.append(list(self.screen.display))
                     self.pending_output = self.pending_output[finish + len(end_frame):]

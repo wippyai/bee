@@ -35,6 +35,7 @@ class Literal(Desktop):
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
         self.raw = bytearray()
         self.pending_output = ""
+        self.first_frame = None
         self.process = subprocess.Popen(LAUNCH, cwd=directory, stdin=slave, stdout=slave, stderr=slave,
                                         start_new_session=True, env=database_environment(directory, TERM="xterm-256color"))
         os.close(slave)
@@ -63,7 +64,7 @@ def menu_and_terminal(directory):
         ui.wait("No applications open", timeout=30)
         ui.open_start()
         ui.choose("Tools")
-        ui.pump(.3)
+        ui.wait("Approvals", timeout=10)
         text = ui.text()
         for title in ("Approvals", "Timeline", "Hive Manager", "Process Manager", "Settings"):
             assert title in text, (title, text)
@@ -72,7 +73,7 @@ def menu_and_terminal(directory):
         ui.key(b"\x1b")
         ui.open_start()
         ui.choose("Terminal")
-        ui.pump(1.5)
+        ui.wait("$ ", timeout=10)
         ui.key(b"echo fresh-pack-ok\r")
         ui.wait("fresh-pack-ok", timeout=10)
         ui.resize(120, 40)
@@ -80,10 +81,8 @@ def menu_and_terminal(directory):
         ui.key(b"echo resized-$COLUMNS\r")
         ui.wait("resized-", timeout=10)
         ui.resize(100, 30)
-        ui.pump(.3)
         assert ui.process.poll() is None
         ui.key(b"\x1b[24~")  # F12 reloads the presenter; the terminal keeps running.
-        ui.pump(.5)
         ui.wait("Terminal", timeout=10)
         ui.key(b"echo after-f12\r")
         ui.wait("after-f12", timeout=10)

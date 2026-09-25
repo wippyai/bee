@@ -1,9 +1,13 @@
 """Real PTY selection/copy: one focused body, explicit OSC52, no replay."""
 import base64
+import os
 import re
+import select
+import shlex
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 import yaml
 
@@ -52,6 +56,12 @@ def exercise(packed):
         executor = next(entry for entry in document['entries'] if entry['name'] == 'executor')
         executor['default_env'].update({'HOME': str(folder), 'HISTFILE': '/dev/null', 'PS1': '$ '})
         index.write_text(yaml.safe_dump(document, sort_keys=False))
+        gate = folder / 'selection-gate'
+        completed = folder / 'selection-completed'
+        os.mkfifo(gate)
+        os.mkfifo(completed)
+        gate_fd = os.open(gate, os.O_RDWR | os.O_NONBLOCK)
+        completed_fd = os.open(completed, os.O_RDWR | os.O_NONBLOCK)
         pack = project / 'selection-deployment'
         if packed:
             pack_deployment(project, pack)
@@ -64,7 +74,11 @@ def exercise(packed):
             ui.wait('BACKGROUND_PRIVATE')
             ui.key(b'\x0e')
             ui.pump(.5)
-            ui.key(b"clear; printf 'FOREGROUND_%s\\n' SELECTABLE; (sleep 3; printf '\\033[2J\\033[HCHANGED_OWNER_OUTPUT\\n') &\r")
+            command = ("clear; printf 'FOREGROUND_%s\\n' SELECTABLE; "
+                       f"(IFS= read -r _ < {shlex.quote(str(gate))}; "
+                       "printf '\\033[2J\\033[HCHANGED_OWNER_OUTPUT\\n'; "
+                       f"printf done > {shlex.quote(str(completed))}) &\r")
+            ui.key(command.encode())
             ui.wait('FOREGROUND_SELECTABLE')
             assert ui.screen.display[0].count('Terminal') == 2, ui.text()
             # Shift-right-click remains available to the application body.
@@ -78,7 +92,11 @@ def exercise(packed):
             ui.mouse(0, x, y)
             ui.mouse(32, x + len('FOREGROUND_SELECTABLE') - 1, y)
             ui.mouse(0, x + len('FOREGROUND_SELECTABLE') - 1, y, True)
-            ui.pump(3.5)
+            deadline = time.monotonic() + 3.5
+            os.write(gate_fd, b'go\n')
+            ready, _, _ = select.select([completed_fd], [], [], max(0, deadline - time.monotonic()))
+            assert ready and os.read(completed_fd, 4) == b'done', 'Background output did not complete within 3.5s'
+            ui.pump(min(.1, max(0, deadline - time.monotonic())))
             assert 'FOREGROUND_SELECTABLE' in ui.text(), 'New app output changed the frozen selection'
             assert 'CHANGED_OWNER_OUTPUT' not in ui.text(), 'Live content leaked into selected snapshot'
             # Hover after release must not change the selected range.
@@ -110,6 +128,8 @@ def exercise(packed):
             print(f"Selection {'pack' if packed else 'source'}: focused copy, frozen output, hover, input, cancel/rejoin, resize")
         finally:
             ui.close()
+            os.close(gate_fd)
+            os.close(completed_fd)
 
 
 if __name__ == '__main__':

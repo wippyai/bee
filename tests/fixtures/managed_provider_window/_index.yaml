@@ -116,7 +116,7 @@ entries:
   security:
     policies:
     - bee.security.desktop:desktop_policy
-    - bee.security:core_spawn_policy
+    - bee.managed_provider_fixture:core_spawn_policy
     - bee.security.threads:thread_authority_client_policy
     - bee.security.threads:thread_lifecycle_client_policy
     - bee.security.threads:thread_create_policy
@@ -131,3 +131,16 @@ entries:
   data:
     claude_marker: Let's get started.
     codex_marker: OpenAI Codex
+- name: core_spawn_policy
+  kind: security.policy
+  meta: {test_support: true}
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.host:main
+    - bee.session:main
+    - bee.applications:broker
+    - bee.terminal:main
+    effect: allow

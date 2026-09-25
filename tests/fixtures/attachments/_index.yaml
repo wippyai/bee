@@ -39,7 +39,7 @@ entries:
       name: attachment-probe
       security:
         actor: {id: attachment-test}
-        policies: [bee.security.desktop:desktop_policy, bee.security:core_spawn_policy, bee.security.storage:workspace_storage_policy, bee.attachment_probe:observation_policy]
+        policies: [bee.security.desktop:desktop_policy, bee.attachment_probe:core_spawn_policy, bee.security.storage:workspace_storage_policy, bee.attachment_probe:observation_policy]
 - name: observation
   kind: library.lua
   source: file://observation.lua
@@ -136,3 +136,16 @@ entries:
       instance_policy: multiple
       resume_schema: attachment-v1
       restart_policy: automatic
+- name: core_spawn_policy
+  kind: security.policy
+  meta: {test_support: true}
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.host:main
+    - bee.session:main
+    - bee.applications:broker
+    - bee.terminal:main
+    effect: allow

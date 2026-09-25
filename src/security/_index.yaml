@@ -128,18 +128,6 @@ entries:
     - bee.hive_host.supervisor:main
     - bee.hive_host:supervisor_host
     effect: deny
-- name: core_spawn_policy
-  kind: security.policy
-  policy:
-    actions:
-    - process.spawn
-    - process.spawn.monitored
-    resources:
-    - bee.host:main
-    - bee.session:main
-    - bee.applications:broker
-    - bee.terminal:main
-    effect: allow
 - name: ordinary_app_subsystem_boundary
   kind: security.policy
   meta:

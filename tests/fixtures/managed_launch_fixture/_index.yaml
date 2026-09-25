@@ -57,7 +57,7 @@ entries:
   security:
     policies:
     - bee.security.desktop:desktop_policy
-    - bee.security:core_spawn_policy
+    - bee.fixture_terminal_launch:core_spawn_policy
     - bee.security.threads:thread_authority_client_policy
     - bee.security.threads:thread_lifecycle_client_policy
     - bee.security.threads:thread_create_policy
@@ -65,3 +65,16 @@ entries:
     type: test
     suite: bee
     timeout: 45s
+- name: core_spawn_policy
+  kind: security.policy
+  meta: {test_support: true}
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.host:main
+    - bee.session:main
+    - bee.applications:broker
+    - bee.terminal:main
+    effect: allow

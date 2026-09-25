@@ -38,16 +38,27 @@ local function define_tests()
 
             local announced = false
             local reached = false
+            local login_notice = false
+            local continued = false
             local deadline = time.after("60s")
             while not reached do
+                local poll = time.after("100ms")
                 local selected = channel.select({ready:case_receive(), opening:case_receive(),
-                    events:case_receive(), deadline:case_receive()})
+                    events:case_receive(), deadline:case_receive(), poll:case_receive()})
                 if not selected.ok or selected.channel == deadline then
                     local shown = view:snapshot()
                     error("the direct launch never reached the native open; the window shows:\n"
                         .. (shown and table.concat(shown.rows, "\n") or "nothing"))
                 end
-                if selected.channel == events then
+                if selected.channel == poll then
+                    local shown = view:snapshot()
+                    local rows = shown and table.concat(shown.rows, "\n") or ""
+                    if rows:find("Claude login needed", 1, true) then
+                        login_notice = true
+                        assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
+                        continued = true
+                    end
+                elseif selected.channel == events then
                     local event = selected.value
                     assert(not (event.kind == process.event.EXIT and tostring(event.from) == pid),
                         "the window exited before its launch reached the native open")
@@ -60,6 +71,8 @@ local function define_tests()
             -- Both messages come from the window process, so their order is
             -- the order in which the window sent them.
             test.is_true(announced, "the window held readiness behind launch work that was still running")
+            test.is_true(login_notice, "the direct launch did not show its Claude login notice")
+            test.is_true(continued, "the Claude login notice did not continue to native open on Enter")
 
             assert(process.send(pid, "bee.test.window_release", {version = 1}))
             assert(process.cancel(pid, "readiness test complete"))

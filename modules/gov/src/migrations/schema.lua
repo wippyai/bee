@@ -388,6 +388,50 @@ INSERT INTO bee_governance_receipts_v9 SELECT * FROM bee_governance_receipts;
 DROP TABLE bee_governance_receipts;
 ALTER TABLE bee_governance_receipts_v9 RENAME TO bee_governance_receipts;
 ]]
+-- A one-step revert needs the last good generation retained next to the
+-- observed pointer, the compensating migration receipt that makes the
+-- forward-only schema re-compatible, and a receipt operation of its own.
+local ACTIVATION_ROLLBACK_SQL = [[
+ALTER TABLE bee_governance_activation_slots ADD COLUMN baseline_intent_id TEXT;
+ALTER TABLE bee_governance_activation_slots ADD COLUMN baseline_execution_revision INTEGER
+  CHECK(baseline_execution_revision IS NULL OR baseline_execution_revision >= 1);
+ALTER TABLE bee_governance_activation_slots ADD COLUMN baseline_artifact_digest TEXT
+  CHECK(baseline_artifact_digest IS NULL OR length(baseline_artifact_digest) = 64);
+CREATE TABLE bee_governance_activation_reverts (
+  owner_node TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  overlay_owner TEXT NOT NULL,
+  reverted_from_intent_id TEXT NOT NULL,
+  target_intent_id TEXT NOT NULL,
+  compensation_bytes BLOB NOT NULL CHECK(length(CAST(compensation_bytes AS BLOB)) BETWEEN 1 AND 262144),
+  compensation_digest TEXT NOT NULL CHECK(length(compensation_digest) = 64),
+  diagnostics TEXT CHECK(diagnostics IS NULL OR length(CAST(diagnostics AS BLOB)) <= 8192),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(owner_node, workspace_id, overlay_owner),
+  FOREIGN KEY(owner_node, workspace_id, reverted_from_intent_id)
+    REFERENCES bee_governance_activation_intents(owner_node, workspace_id, intent_id),
+  FOREIGN KEY(owner_node, workspace_id, target_intent_id)
+    REFERENCES bee_governance_activation_intents(owner_node, workspace_id, intent_id)
+);
+CREATE TABLE bee_governance_activation_receipts_v11 (
+  owner_node TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK(operation IN ('prepare_activation', 'bind_approval', 'begin_consume', 'record_consumption', 'begin_apply', 'record_migrations', 'record_outcome', 'revert_activation')),
+  request_digest TEXT NOT NULL CHECK(length(request_digest) = 64),
+  intent_id TEXT NOT NULL,
+  result_revision INTEGER NOT NULL CHECK(result_revision >= 1),
+  PRIMARY KEY(owner_node, workspace_id, idempotency_key),
+  FOREIGN KEY(owner_node, workspace_id, intent_id)
+    REFERENCES bee_governance_activation_intents(owner_node, workspace_id, intent_id)
+);
+INSERT INTO bee_governance_activation_receipts_v11
+  SELECT * FROM bee_governance_activation_receipts;
+DROP TABLE bee_governance_activation_receipts;
+ALTER TABLE bee_governance_activation_receipts_v11 RENAME TO bee_governance_activation_receipts;
+]]
+
 -- A contained upgrade records the exact live grant record used for reuse.
 -- It remains distinct from a consumed approval proposal during recovery.
 local ACTIVATION_GRANT_REUSE_SQL = [[
@@ -410,6 +454,7 @@ function M.all(): {Migration}
         {id = 8, name = "governance_activation_application_admission", sql = ACTIVATION_APPLICATION_ADMISSION_SQL, rebuild = false},
         {id = 9, name = "governance_workspace_append", sql = WORKSPACE_APPEND_SQL, rebuild = false},
         {id = 10, name = "governance_activation_grant_reuse", sql = ACTIVATION_GRANT_REUSE_SQL, rebuild = false},
+        {id = 11, name = "governance_activation_rollback", sql = ACTIVATION_ROLLBACK_SQL, rebuild = false},
     }
 end
 

@@ -169,10 +169,14 @@ Code building the application from its written spec.
 
 ## Limits
 
-File and database provisioning, contract gateways, runtime agent elevation,
-and active revocation fencing are later work. The installed `threads.read`
-policy is registry authority for the selected application scope; this slice
-does not add a service gateway or an immediate stop on revocation.
+File and database provisioning and contract gateways are later work. The
+installed `threads.read` policy is registry authority for the selected
+application scope. Runtime agent elevation is implemented through the gateway
+`request_capability` and `capability_status` tools: an approval bound to the
+authenticated thread and attempt consumes once and writes one thread-actor
+resources grant the attempt's placement resolves. Active revocation fencing is
+implemented: an epoch advance reports its fenced attempts, and an owner fence
+withdraws the fenced instance's thread delegation before stopping it.
 
 Destination migration execution requires a captured immutable registry view and
 is not supplied by ordinary overlay activation. Automatic Hive enrollment and

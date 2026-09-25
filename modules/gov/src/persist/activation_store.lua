@@ -140,6 +140,8 @@ local function view(store: Store, row: Object, current_slot: Object?): Object
         result.desired_intent_id, result.desired_execution_revision = current_slot.desired_intent_id, current_slot.desired_execution_revision
         result.observed_intent_id, result.observed_execution_revision = current_slot.observed_intent_id, current_slot.observed_execution_revision
         result.observed_artifact_digest, result.observed_outcome = current_slot.observed_artifact_digest, current_slot.observed_outcome
+        result.baseline_intent_id, result.baseline_execution_revision = current_slot.baseline_intent_id, current_slot.baseline_execution_revision
+        result.baseline_artifact_digest = current_slot.baseline_artifact_digest
     end
     return result
 end
@@ -192,6 +194,20 @@ local function decode(raw: unknown): (Request?, string?)
         local intent_id = id(value.intent_id)
         if not intent_id then return nil, "intent_id is required" end
         return {operation = operation, intent_id = intent_id}, nil
+    end
+    if operation == "revert_activation" then
+        local extra = unknown(value, {"operation", "overlay_owner", "expected_revision", "idempotency_key", "compensation", "diagnostics"})
+        if extra then return nil, extra end
+        local overlay_owner = id(value.overlay_owner)
+        local key = id(value.idempotency_key)
+        local expected = count(value.expected_revision, false)
+        local compensation, compensation_error = checked_blob(value.compensation, MAX_MIGRATION_RECEIPT, "compensation")
+        local diagnostics = bounds.text(value.diagnostics or "", MAX_DIAGNOSTICS)
+        if not overlay_owner or not key or expected == nil or not compensation or not diagnostics then
+            return nil, compensation_error or "revert requires overlay_owner, expected_revision, idempotency_key and a compensation receipt"
+        end
+        return {operation = operation, overlay_owner = overlay_owner, expected_revision = expected,
+            idempotency_key = key, compensation = compensation, diagnostics = diagnostics}, nil
     end
     local common = {"operation", "intent_id", "expected_revision", "idempotency_key"}
     local intent_id, key, expected = id(value.intent_id), id(value.idempotency_key), count(value.expected_revision, false)
@@ -469,8 +485,19 @@ function M.record_outcome(store: Store, actor: string, input: Request): Result
         local result_slot: Object? = current_slot
         if input.outcome == "applied" then
             if not current_slot or current_slot.desired_intent_id ~= row.intent_id then return failure("CONFLICT", "activation is no longer the desired slot") end
+            -- Retain the previously observed complete generation as the last
+            -- good baseline before this one replaces it. Only an applied
+            -- observation is a revert target; a failed or uncertain attempt
+            -- is never promoted to baseline.
+            local baseline_intent_id, baseline_execution_revision, baseline_artifact_digest =
+                current_slot.baseline_intent_id, current_slot.baseline_execution_revision, current_slot.baseline_artifact_digest
+            if current_slot.observed_intent_id ~= nil and current_slot.observed_outcome == "applied"
+                and current_slot.observed_intent_id ~= row.intent_id then
+                baseline_intent_id, baseline_execution_revision = current_slot.observed_intent_id, current_slot.observed_execution_revision
+                baseline_artifact_digest = current_slot.observed_artifact_digest
+            end
             local slot_revision = (count(current_slot.revision, false) :: number) + 1
-            local slot_updated, slot_error_write = tx:execute("UPDATE bee_governance_activation_slots SET revision = ?, observed_intent_id = ?, observed_execution_revision = ?, observed_artifact_digest = ?, observed_outcome = 'applied', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ? AND revision = ?", {slot_revision, row.intent_id, next_revision, row.artifact_digest, store.node, store.workspace, row.overlay_owner, current_slot.revision})
+            local slot_updated, slot_error_write = tx:execute("UPDATE bee_governance_activation_slots SET revision = ?, observed_intent_id = ?, observed_execution_revision = ?, observed_artifact_digest = ?, observed_outcome = 'applied', baseline_intent_id = ?, baseline_execution_revision = ?, baseline_artifact_digest = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ? AND revision = ?", {slot_revision, row.intent_id, next_revision, row.artifact_digest, baseline_intent_id, baseline_execution_revision, baseline_artifact_digest, store.node, store.workspace, row.overlay_owner, current_slot.revision})
             local slot_update_error = cas_result(slot_updated, slot_error_write, "record observed activation")
             if slot_update_error then return slot_update_error :: Result end
             local refreshed_slot, refresh_error = slot(tx, store, row.overlay_owner :: string, false)
@@ -563,6 +590,92 @@ function M.applied(store: Store, component_raw: unknown): Result
         return transaction.success({migrations = migrations, databases = databases}, false)
     end)
 end
+-- baseline: the retained last good generation for one overlay slot. It is
+-- the exact applied intent a one-step revert restores. An observed pointer
+-- with no retained baseline has nothing to revert to.
+function M.baseline(store: Store, overlay_raw: unknown): Result
+    if store.closed then return failure("CLOSED", "governance activation store is closed") end
+    local overlay_owner = id(overlay_raw)
+    if not overlay_owner then return failure("INVALID", "activation overlay owner is invalid") end
+    return transaction.read(store.db, "governance activation", function(tx): Result
+        local current_slot, slot_error = slot(tx, store, overlay_owner :: string, false)
+        if slot_error then return slot_error end
+        if not current_slot or current_slot.baseline_intent_id == nil then
+            return failure("NOT_FOUND", "no retained baseline generation exists")
+        end
+        local row, row_error = load(tx, store, current_slot.baseline_intent_id :: string)
+        if row_error or not row then return row_error or failure("INTERNAL", "baseline activation intent is missing") end
+        return transaction.success(view(store, row, current_slot), false)
+    end)
+end
+-- revert_activation: one-step, generation-checked activation of the retained
+-- baseline. Applied migrations stay immutable and forward-only; the revert
+-- records the caller's compensating migration receipt and repoints the slot
+-- at the baseline. It never rewrites an applied intent or an epoch.
+function M.revert_activation(store: Store, actor: string, input: Request): Result
+    if store.closed then return failure("CLOSED", "governance activation store is closed") end
+    local measured, measure_error = request_digest(input)
+    if not measured then return measure_error :: Result end
+    return transaction.write(store.db, "governance activation", function(tx: sql.Transaction): Result
+        local key = id(input.idempotency_key)
+        local prior, prior_error = one(tx, "SELECT actor_id, operation, request_digest, result_revision FROM bee_governance_activation_receipts WHERE owner_node = ? AND workspace_id = ? AND idempotency_key = ?", {store.node, store.workspace, key}, "activation revert receipt")
+        if prior_error then return prior_error end
+        if prior then
+            if prior.actor_id ~= actor then return failure("DENIED", "idempotency key belongs to another actor") end
+            if prior.operation ~= input.operation or prior.request_digest ~= measured :: string then
+                return failure("CONFLICT", "idempotency key was used by a different activation request")
+            end
+            local reverted, revert_error = one(tx, "SELECT reverted_from_intent_id, target_intent_id, compensation_bytes, compensation_digest, diagnostics FROM bee_governance_activation_reverts WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ?", {store.node, store.workspace, input.overlay_owner}, "activation revert")
+            if revert_error or not reverted then return revert_error or failure("INTERNAL", "activation revert receipt has no record") end
+            local replayed_target, target_error = load(tx, store, reverted.target_intent_id :: string)
+            if target_error or not replayed_target then return target_error or failure("INTERNAL", "reverted activation intent is missing") end
+            local current_slot, slot_error = slot(tx, store, input.overlay_owner :: string, false)
+            if slot_error then return slot_error end
+            local result = view(store, replayed_target, current_slot)
+            result.reverted_from_intent_id = reverted.reverted_from_intent_id
+            result.compensation_bytes, result.compensation_digest = reverted.compensation_bytes, reverted.compensation_digest
+            result.diagnostics = reverted.diagnostics
+            return transaction.success(result, true)
+        end
+        local current_slot, slot_error = slot(tx, store, input.overlay_owner :: string, true)
+        if slot_error or not current_slot then return slot_error or failure("INTERNAL", "read activation slot") end
+        if count(current_slot.revision, false) ~= input.expected_revision then
+            return failure("CONFLICT", "expected_revision does not match the overlay slot")
+        end
+        if current_slot.observed_intent_id == nil or current_slot.observed_outcome ~= "applied" then
+            return failure("CONFLICT", "overlay has no applied generation to revert")
+        end
+        if current_slot.baseline_intent_id == nil then
+            return failure("CONFLICT", "no retained baseline generation to revert to")
+        end
+        if current_slot.baseline_intent_id == current_slot.observed_intent_id then
+            return failure("CONFLICT", "the retained baseline is the observed generation")
+        end
+        local target, target_error = load(tx, store, current_slot.baseline_intent_id :: string)
+        if target_error or not target then return target_error or failure("INTERNAL", "baseline activation intent is missing") end
+        if target.phase ~= "settled" or target.outcome ~= "applied" then
+            return failure("CONFLICT", "the retained baseline is not an applied generation")
+        end
+        local reverted_from = current_slot.observed_intent_id :: string
+        local compensation: Blob = input.compensation :: Blob
+        local _, upsert_error = tx:execute("INSERT INTO bee_governance_activation_reverts (owner_node, workspace_id, overlay_owner, reverted_from_intent_id, target_intent_id, compensation_bytes, compensation_digest, diagnostics, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) ON CONFLICT(owner_node, workspace_id, overlay_owner) DO UPDATE SET reverted_from_intent_id = excluded.reverted_from_intent_id, target_intent_id = excluded.target_intent_id, compensation_bytes = excluded.compensation_bytes, compensation_digest = excluded.compensation_digest, diagnostics = excluded.diagnostics, created_at = excluded.created_at", {store.node, store.workspace, input.overlay_owner, reverted_from, current_slot.baseline_intent_id, compensation.bytes, compensation.digest, input.diagnostics})
+        if upsert_error then return storage(upsert_error, "record activation revert") end
+        local slot_revision = input.expected_revision + 1
+        local slot_updated, slot_error_write = tx:execute("UPDATE bee_governance_activation_slots SET revision = ?, desired_intent_id = ?, desired_execution_revision = ?, observed_intent_id = NULL, observed_execution_revision = NULL, observed_artifact_digest = NULL, observed_outcome = NULL, baseline_intent_id = NULL, baseline_execution_revision = NULL, baseline_artifact_digest = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ? AND revision = ?", {slot_revision, current_slot.baseline_intent_id, target.revision, store.node, store.workspace, input.overlay_owner, current_slot.revision})
+        local slot_update_error = cas_result(slot_updated, slot_error_write, "revert activation slot")
+        if slot_update_error then return slot_update_error :: Result end
+        local refreshed_slot, refresh_error = slot(tx, store, input.overlay_owner :: string, false)
+        if refresh_error then return refresh_error :: Result end
+        local _, receipt_error = tx:execute("INSERT INTO bee_governance_activation_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, request_digest, intent_id, result_revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", {store.node, store.workspace, input.idempotency_key, actor, input.operation, measured :: string, current_slot.baseline_intent_id, target.revision})
+        if receipt_error then return storage(receipt_error, "record activation revert receipt") end
+        local result = view(store, target, refreshed_slot)
+        result.reverted_from_intent_id = reverted_from
+        result.compensation_bytes = compensation.bytes
+        result.compensation_digest = compensation.digest
+        result.diagnostics = input.diagnostics
+        return transaction.success(result, false)
+    end)
+end
 function M.call(store: Store, actor_raw: string, raw: unknown): Result
     if store.closed then return failure("CLOSED", "governance activation store is closed") end
     local actor = id(actor_raw)
@@ -570,6 +683,7 @@ function M.call(store: Store, actor_raw: string, raw: unknown): Result
     local input, decode_error = decode(raw)
     if not input then return failure("INVALID", decode_error or "invalid activation request") end
     if input.operation == "activation_status" then return M.get(store, input.intent_id) end
+    if input.operation == "revert_activation" then return M.revert_activation(store, actor, input) end
     if input.operation == "prepare_activation" then return M.prepare(store, actor, input) end
     if input.operation == "bind_approval" then return M.bind_approval(store, actor, input) end
     if input.operation == "begin_consume" then return M.begin_consume(store, actor, input) end

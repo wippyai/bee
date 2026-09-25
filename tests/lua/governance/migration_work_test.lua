@@ -178,6 +178,24 @@ local function define_tests()
             candidate.entries[1].package = "not-a-package"
             test.is_nil(migration_work.capture(candidate, exact, context))
         end)
+        test.it("accepts only forward compensating migrations over an applied ledger", function()
+            local applied: {[string]: unknown} = {
+                ["demo:db\ndemo:001"] = {id = "demo:001", target_db = "demo:db", ordinal = 1},
+                ["demo:db\ndemo:002"] = {id = "demo:002", target_db = "demo:db", ordinal = 2},
+            }
+            local forward = {{id = "demo:003", target_db = "demo:db", ordinal = 3}}
+            local ok, problem = migration_work.forward_only(applied, forward)
+            if not ok then error(tostring(problem)) end
+            local rerun = {{id = "demo:002", target_db = "demo:db", ordinal = 3}}
+            test.is_false(migration_work.forward_only(applied, rerun))
+            local backward = {{id = "demo:004", target_db = "demo:db", ordinal = 2}}
+            test.is_false(migration_work.forward_only(applied, backward))
+            local out_of_order = {{id = "demo:004", target_db = "demo:db", ordinal = 5},
+                {id = "demo:003", target_db = "demo:db", ordinal = 4}}
+            test.is_false(migration_work.forward_only(applied, out_of_order))
+            test.is_true(migration_work.forward_only({}, forward))
+            test.is_false(migration_work.forward_only(applied, {{id = "demo:001", target_db = "demo:db"}}))
+        end)
     end)
 end
 

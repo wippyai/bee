@@ -64,6 +64,7 @@ local function main(value: unknown)
     local attaches = assert(process.listen(leases.ATTACH, {message = true}))
     local client_requests = assert(process.listen("bee.host.client", {message = true}))
     local client_results = assert(process.listen("bee.host.client_result", {message = true}))
+    local holdings_requests = assert(process.listen(leases.HOLDINGS, {message = true}))
     local drained: {Channel<process.Message>} = {}
     for _, topic in ipairs(DRAINED) do drained[#drained + 1] = assert(process.listen(topic, {message = true})) end
     local events = assert(process.events())
@@ -210,7 +211,8 @@ local function main(value: unknown)
         while true do
             local cases = {acquires:case_receive(), releases:case_receive(), ready:case_receive(), upgrading:case_receive(),
                 upgraded:case_receive(), upgrade_failed:case_receive(), replies:case_receive(), events:case_receive(),
-                attaches:case_receive(), client_requests:case_receive(), client_results:case_receive()}
+                attaches:case_receive(), client_requests:case_receive(), client_results:case_receive(),
+                holdings_requests:case_receive()}
             for _, subscription in ipairs(drained) do cases[#cases + 1] = subscription:case_receive() end
             local timer: time.Timer? = nil
             local deadline = hosts.next_deadline(state)
@@ -244,6 +246,20 @@ local function main(value: unknown)
                     admit({sender = sender, request = request})
                 elseif request then
                     answer({sender = sender, request = request}, "", false, "permission_denied", "the sender does not hold the lease it names")
+                end
+            elseif selected.channel == holdings_requests then
+                -- A bounded read of this node's live holdings. The manager
+                -- answers with a page of its own state; it changes nothing.
+                local message = selected.value
+                local request, request_error = leases.holdings_request(message:payload():data())
+                if request then
+                    local page, page_error = hosts.holdings(state, {after = request.after, limit = request.limit})
+                    if page then
+                        process.send(tostring(message:from()), leases.HOLDINGS_RESULT, {version = 1, request_id = request.request_id,
+                            workspaces = page.workspaces, has_more = page.has_more, next_after = page.next_after})
+                    else
+                        logger:warn("Holdings read refused", {cause = tostring(page_error)})
+                    end
                 end
             elseif selected.channel == releases then
                 local message = selected.value
@@ -347,7 +363,7 @@ local function main(value: unknown)
     -- Each host monitors this manager and runs its own shutdown when it exits.
     process.registry.unregister(leases.MANAGER)
     for _, subscription in ipairs({acquires, releases, ready, upgrading, upgraded, upgrade_failed,
-        replies, attaches, client_requests, client_results}) do
+        replies, attaches, client_requests, client_results, holdings_requests}) do
         process.unlisten(subscription)
     end
     for _, subscription in ipairs(drained) do process.unlisten(subscription) end

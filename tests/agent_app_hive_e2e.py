@@ -25,7 +25,15 @@ def exercise():
                      "BEE_AGENT_APP_HIVE_SOURCE_STATE": str(source),
                      "BEE_AGENT_APP_HIVE_EVIDENCE": str(evidence / "hive")})
     subprocess.run(["python3", "tests/agent_app_hive.py"], cwd=ROOT, env=delivery, check=True)
-    print("Continuous Agent App Hive: the managed authoring Bee published its locally reviewed application across Hive; evidence in " + str(evidence))
+
+    # The same journey for an agent-built workspace application the
+    # destination admits only through its own shipped rule and person.
+    workspace = os.environ.copy()
+    workspace.update({"BEE_RUNTIME": str(RUNTIME), "BEE_WORKSPACE_APP_HIVE_EVIDENCE": str(evidence / "workspace")})
+    subprocess.run(["python3", "tests/workspace_app_hive.py"], cwd=ROOT, env=workspace, check=True)
+    print("Continuous Agent App Hive: the managed authoring Bee published its locally reviewed application across Hive, "
+          "and an agent-built workspace application opened on a second node after that node's own approval; evidence in "
+          + str(evidence))
 
 
 if __name__ == "__main__":

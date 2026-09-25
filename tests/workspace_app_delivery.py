@@ -36,7 +36,8 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app_journey import apply_staged_in_ui, open_catalog_app  # noqa: E402
 from tui_smoke import Desktop  # noqa: E402
-from workspace import ROOT, RUNTIME, classic_workspace, database_environment  # noqa: E402
+from workspace import (ROOT, RUNTIME, classic_workspace, database_environment, name_node,  # noqa: E402
+                       stage_hive_source)
 
 FIXTURE = ROOT / "tests/fixtures/workspace_app_delivery"
 COLD_BOOT = 30
@@ -47,6 +48,7 @@ DEFINITION_ID = "app.tally:app"
 APPROVAL_POLICY = "workspace-application-delivery"
 SHIPPED = ["modules/gov/src/_index.yaml", "src/_index.yaml", "src/env/_index.yaml"]
 PROVIDER = os.environ.get("BEE_WORKSPACE_APP_PROVIDER", "scripted")
+HIVE_SOURCE = os.environ.get("BEE_WORKSPACE_APP_HIVE_SOURCE_NODE")
 # A live agent is told only how to use its tools; the spec is the person's.
 LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another agent. Read the overlay tool's "
               "guide operation first and follow it. Author the application below in your own overlay, freeze it, "
@@ -105,10 +107,13 @@ def compose(folder):
         shutil.copy2(ROOT / name, project / name)
     (project / SHARED_SUBPATH).mkdir(parents=True, exist_ok=True)
     (project / SHARED_SUBPATH / "greeting.txt").write_text(GREETING)
-    (project / ".wippy" / "app-db").mkdir(parents=True, exist_ok=True)
     shutil.copytree(FIXTURE, project / "src/workspace_app_probe")
     for relative in SHIPPED:
         assert (project / relative).read_bytes() == (ROOT / relative).read_bytes(), relative
+    # A Hive acceptance later starts this project as its named source node.
+    if HIVE_SOURCE:
+        name_node(project, HIVE_SOURCE)
+        stage_hive_source(project)
     answer = folder / "entries.json"
     answer.write_text(json.dumps(answer_entries()))
     index = project / "src/workspace_app_probe/_index.yaml"
@@ -267,6 +272,16 @@ def exercise():
     with sqlite3.connect(f"file:{app_db}?mode=ro", uri=True) as db:
         rows = db.execute("SELECT n, note FROM tally_rows ORDER BY rowid").fetchall()
     assert rows == [(1, GREETING), (2, GREETING), (3, GREETING)], rows
+    if HIVE_SOURCE:
+        with sqlite3.connect(f"file:{folder / 'governance.db'}?mode=ro", uri=True) as db:
+            artifact_digest, source_node = db.execute(
+                "SELECT artifact_digest, source_node FROM bee_governance_plans WHERE source_workspace = ? "
+                "AND version = ?", (SOURCE, version)).fetchone()
+        assert source_node == HIVE_SOURCE, source_node
+        (folder / "authored.json").write_text(json.dumps({
+            "updated": {"artifact_digest": artifact_digest}, "published_version": version,
+            "admission": "rule", "source_workspace": SOURCE, "component": "app." + SOURCE,
+            "definition_id": DEFINITION_ID, "workspace_id": workspace_id}, indent=2))
     print("Workspace application: a managed agent authored " + DEFINITION_ID + " from its written spec on the "
           "shipped host profiles, the person saw the threads.read, workspace.files.read and app.database "
           "capabilities in Approvals, and the installed scope contained their three generated policies; it called "

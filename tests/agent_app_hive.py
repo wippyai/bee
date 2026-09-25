@@ -140,12 +140,16 @@ def configure_destination(project, workspace_id=None, source_node="node-1"):
                                  "max_ttl_ms": 60000}]
         approvals_path.write_text(yaml.safe_dump(approvals, sort_keys=False))
 
-def prepare_destination(destination, evidence, source_node="node-1"):
+def prepare_destination(destination, evidence, source_node="node-1", explicit=True):
+    """Pre-establish the destination desktop. With explicit, the trusted
+    Agent App profile admits the source; otherwise only the shipped
+    workspace-applications rule does."""
     shutil.copytree(ROOT / "src", destination / "src")
     shutil.copytree(ROOT / "modules", destination / "modules")
     for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
         shutil.copy2(ROOT / name, destination / name)
-    configure_destination(destination, source_node=source_node)
+    if explicit:
+        configure_destination(destination, source_node=source_node)
     # This acceptance invokes the assembled runtime directly rather than
     # through the native launcher. Supply the same host-owned bindings on every
     # boot so the registry history created by the headless Hive composition is
@@ -162,11 +166,15 @@ def prepare_destination(destination, evidence, source_node="node-1"):
     finally:
         desktop.close()
     workspace_id = classic_workspace(destination / "workspace.db")
-    configure_destination(destination, workspace_id, source_node)
+    if explicit:
+        configure_destination(destination, workspace_id, source_node)
     return workspace_id
 
 
-def bridge(destination, workspace_id, artifact, evidence):
+def bridge(destination, workspace_id, artifact, evidence, applied=True):
+    """Carry the artifact across Hive. With applied, the trusted probe
+    approves and applies it; otherwise the destination only stages it for its
+    own person."""
     environment = os.environ.copy()
     environment.update({
         "BEE_HIVE_SUPERVISOR_RUNTIME": str(RUNTIME),
@@ -191,13 +199,19 @@ def bridge(destination, workspace_id, artifact, evidence):
     output = result.stdout + result.stderr
     (evidence / "hive-bridge.log").write_text(output)
     assert result.returncode == 0, output[-12000:]
-    for marker in ("agent_artifact_absent", "agent_artifact_published", "agent_artifact_available",
-                   "agent_artifact_staged", "agent_artifact_applied"):
+    markers = ["agent_artifact_absent", "agent_artifact_published", "agent_artifact_available",
+               "agent_artifact_staged"] + (["agent_artifact_applied"] if applied else [])
+    for marker in markers:
         assert marker in output, output[-12000:]
+    assert applied or "agent_artifact_applied" not in output, output[-12000:]
     # The Go acceptance synchronously waits for `stop` on both coordinators;
     # only after this return can the ordinary desktop boot below own its host.
-    expected = ("locally applied Agent App was published by its authoring source"
-                if source_project else "retained Agent App v2 was recreated only on the source")
+    if not applied:
+        expected = "staged under the destination's own workspace-applications rule"
+    elif source_project:
+        expected = "locally applied Agent App was published by its authoring source"
+    else:
+        expected = "retained Agent App v2 was recreated only on the source"
     assert expected in output, output[-12000:]
 
 

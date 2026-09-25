@@ -169,8 +169,13 @@ that folder, the pinned runtime confines traversal and symlinks below the
 volume, a read grant is read-only at the filesystem boundary, and private
 paths and Bee state (`.wippy`) are refused, including ancestor subroots that
 would expose them. A database grant installs a host-provisioned dedicated
-SQLite store outside the readable tree with a `db.get`-only policy on that
-store. The shipped module ceiling includes `funcs` so the installed policy can
+SQLite store under `bee.env:app_databases` (`.wippy/app-db`, created by the
+host), outside the readable tree, with a `db.get`-only policy on that store.
+An application reads the identities of its own granted volumes (by subpath)
+and database (by name) from `bee.gov.binding:granted_resources`, which answers
+only for the calling application's live grant; it never embeds a
+host-generated identity, so the same artifact works on every workspace and
+node. The shipped module ceiling includes `funcs` so the installed policy can
 authorize calls to the Threads owner, which checks the application's actor
 membership, plus `fs` and `sql` so file and database grants are callable
 through the granted identities shown at approval. A child-thread message
@@ -227,7 +232,10 @@ A person reviews the staged plan in Start › Tools › Overlays, selects and
 prepares it there, approves the request in Start › Tools › Approvals, and lets
 Overlays step the activation owner until it settles; the application then
 appears in the Start menu. `make workspace-app-delivery-check` proves this path
-on the unmodified composition with a scripted agent, and
+on the unmodified composition with a scripted agent;
+`make agent-app-hive-e2e-check` also carries that agent-built application
+across Hive to a second node, which admits it only through its own shipped
+rule and person and opens it with its own grants; and
 `make workspace-app-delivery-live-check` proves it with the installed Claude
 Code building the application from its written spec.
 

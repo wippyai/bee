@@ -12,7 +12,7 @@ entries:
   meta:
     type: bee.replica.probe.agent_scenario
     comment: Empty by default; the opt-in agent-artifact Hive acceptance supplies its destination identity and immutable digest.
-  data: {workspace_id: '', artifact_digest: '', source_node: '', source_workspace_id: '', source_version: ''}
+  data: {workspace_id: '', artifact_digest: '', source_node: '', source_workspace_id: '', source_version: '', admission: '', source_workspace: '', component: '', definition_id: ''}
 - name: agent_artifact
   kind: registry.entry
   meta:

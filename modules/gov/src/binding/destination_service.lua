@@ -531,18 +531,38 @@ function M.call(raw: unknown): Result
                 result = failure("UNAVAILABLE", config_error or resource_error or replica_error or "open replica store")
             else
                 -- A version is available here when the host profile selected for
-                -- its source overlay publishes exactly that component.
+                -- its source overlay publishes exactly that component. With Hive
+                -- admission the workspace-applications rule selects for every
+                -- source node that made a version of the feed available.
                 local sources: {string} = {}
                 local listed: Set = {}
-                for _, item in ipairs(config.profiles) do
-                    if item.workspace_id == workspace_id and not listed[item.source_node] then
-                        listed[item.source_node] = true
-                        sources[#sources + 1] = item.source_node
+                local function add(source_node: string)
+                    if not listed[source_node] then
+                        listed[source_node] = true
+                        sources[#sources + 1] = source_node
                     end
                 end
-                if config.workspace_applications and not listed[node_id] then sources[#sources + 1] = node_id end
+                for _, item in ipairs(config.profiles) do
+                    if item.workspace_id == workspace_id then add(item.source_node) end
+                end
+                local rule = config.workspace_applications
+                if rule then add(node_id) end
+                if rule and rule.hive then
+                    local owners = replicas.sources(replica_store, delivery.FEED, 128)
+                    local owners_value = owners.ok and bounds.object(owners.value) or nil
+                    local names = owners_value and owners_value.sources or nil
+                    if type(names) ~= "table" then
+                        result = owners.ok and failure("INTERNAL", "replica source list is malformed") or owners
+                    else
+                        for _, owner_raw in ipairs(names :: {unknown}) do
+                            local owner = bounds.id(owner_raw)
+                            if not owner then result = failure("INTERNAL", "replica source is malformed"); break end
+                            add(owner)
+                        end
+                    end
+                end
                 local items: {unknown} = {}
-                for _, source_node in ipairs(sources) do
+                for _, source_node in ipairs(result == nil and sources or {}) do
                     local found = replicas.available(replica_store, source_node, delivery.FEED, 128)
                     if not found.ok then result = found; break end
                     local value = bounds.object(found.value)

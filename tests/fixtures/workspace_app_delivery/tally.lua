@@ -43,11 +43,11 @@ local function main(value: unknown)
     local count = 0
     if launch.resume_state ~= "" then
         local state: unknown = json.decode(launch.resume_state)
-        if type(state) ~= "table" or type(state.tally) ~= "number"
-            or state.tally ~= math.floor(state.tally) or state.tally < 0 then
-            error("Invalid tally checkpoint")
-        end
-        count = math.floor(state.tally)
+        if type(state) ~= "table" then error("Invalid tally checkpoint") end
+        local saved_tally = state.tally
+        if type(saved_tally) ~= "number" then error("Invalid tally checkpoint") end
+        if saved_tally ~= math.floor(saved_tally) or saved_tally < 0 then error("Invalid tally checkpoint") end
+        count = math.floor(saved_tally)
     end
     assert(tty.start())
     assert(tty.mouse(true))

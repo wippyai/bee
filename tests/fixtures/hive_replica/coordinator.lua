@@ -45,8 +45,23 @@ local function object(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("expected object") end
     return value :: {[string]: unknown}
 end
+-- admission "rule" names a workspace application the destination admits
+-- under its shipped workspace-applications rule; "profile" names the Agent
+-- App the trusted explicit destination profile admits.
 type AgentScenario = {workspace_id: string, artifact_digest: string, source_node: string?,
-    source_workspace_id: string?, source_version: string?}
+    source_workspace_id: string?, source_version: string?, admission: string, source_workspace: string,
+    component: string, definition_id: string}
+local function selection(admission: unknown, source_workspace: unknown, component: unknown,
+    definition_id: unknown): (string, string, string, string)
+    if admission == nil or admission == "" or admission == "profile" then
+        return "profile", AGENT_WORKSPACE, AGENT_PACKAGE, AGENT_DEFINITION
+    end
+    if admission ~= "rule" or type(source_workspace) ~= "string" or not source_workspace:match("^[a-z][a-z0-9_]*$")
+        or component ~= "app." .. source_workspace or definition_id ~= "app." .. source_workspace .. ":app" then
+        error("agent scenario admission is malformed")
+    end
+    return "rule", source_workspace :: string, component :: string, definition_id :: string
+end
 local function agent_scenario(): AgentScenario?
     local entry = registry.get("bee.replica.probe:agent_scenario")
     if not entry then error("agent-artifact scenario entry is unavailable") end
@@ -54,6 +69,8 @@ local function agent_scenario(): AgentScenario?
     local workspace_id, artifact_digest = data.workspace_id, data.artifact_digest
     local source_node, source_workspace_id, source_version = data.source_node, data.source_workspace_id, data.source_version
     if workspace_id == "" and artifact_digest == "" then return nil end
+    local admission, source_workspace, component, definition_id = selection(data.admission, data.source_workspace,
+        data.component, data.definition_id)
     if type(workspace_id) ~= "string" or type(artifact_digest) ~= "string" then
         error("agent-artifact scenario is malformed")
     end
@@ -69,9 +86,11 @@ local function agent_scenario(): AgentScenario?
         if type(source_version) ~= "string" or source_version == "" then error("agent source version is malformed") end
         return {workspace_id = selected_workspace, artifact_digest = selected_digest,
             source_node = source_node :: string, source_workspace_id = source_workspace_id :: string,
-            source_version = source_version :: string}
+            source_version = source_version :: string, admission = admission, source_workspace = source_workspace,
+            component = component, definition_id = definition_id}
     end
-    return {workspace_id = selected_workspace, artifact_digest = selected_digest}
+    return {workspace_id = selected_workspace, artifact_digest = selected_digest, admission = admission,
+        source_workspace = source_workspace, component = component, definition_id = definition_id}
 end
 local function exact_agent_artifact(scenario: AgentScenario): artifact.Artifact
     local entry = registry.get("bee.replica.probe:agent_artifact")
@@ -251,12 +270,22 @@ local function configure_agent_destination(scenario: AgentScenario)
     local profiles = assert(registry.get("bee.env:gov_activation_profiles"))
     local approvals = assert(registry.get("bee:approver_policies"))
     local configured_profiles = object(profiles.data).profiles
+    if scenario.admission == "rule" then
+        -- Only the shipped rule may admit this source: no explicit row, Hive
+        -- admission on, and the person's own approval policy.
+        local rule = object(object(profiles.data).workspace_applications)
+        if type(configured_profiles) ~= "table" or #configured_profiles ~= 0 or rule.hive ~= true
+            or rule.approval_policy ~= "workspace-application-delivery" then
+            error("destination is not on its shipped workspace-applications rule")
+        end
+        return
+    end
     if type(configured_profiles) ~= "table" or #configured_profiles ~= 1 then
         error("agent destination activation profile is unavailable")
     end
     local profile = object(configured_profiles[1])
     if profile.workspace_id ~= scenario.workspace_id or profile.source_node ~= "node-1"
-        or profile.source_workspace ~= AGENT_WORKSPACE or profile.component ~= AGENT_PACKAGE
+        or profile.source_workspace ~= scenario.source_workspace or profile.component ~= scenario.component
         or profile.resolver ~= "overlay" or profile.overlay_owner ~= AGENT_OVERLAY
         or profile.approval_policy ~= "local-agent-app-hive" then
         error("agent destination activation profile is not the trusted local policy")
@@ -286,8 +315,9 @@ local function agent_available(scenario: AgentScenario): {[string]: unknown}?
     for _, raw in ipairs(versions :: {unknown}) do
         local descriptor = object(raw)
         local manifest = object(descriptor.manifest)
-        if descriptor.owner_id == "node-1" and descriptor.feed == delivery.FEED and descriptor.object_id == AGENT_PACKAGE
-            and descriptor.version_id == (scenario.source_version or AGENT_VERSION) and manifest.source_workspace == AGENT_WORKSPACE
+        if descriptor.owner_id == "node-1" and descriptor.feed == delivery.FEED and descriptor.object_id == scenario.component
+            and descriptor.version_id == (scenario.source_version or AGENT_VERSION)
+            and manifest.source_workspace == scenario.source_workspace
             and manifest.artifact_digest == scenario.artifact_digest then
             return descriptor
         end
@@ -310,7 +340,7 @@ local function exact_agent_overlay(scenario: AgentScenario, evidence: {[string]:
 end
 local function activate_agent_artifact(scenario: AgentScenario): {[string]: unknown}
     local identity: {[string]: unknown} = {workspace_id = scenario.workspace_id, source_node = "node-1",
-        source_workspace = AGENT_WORKSPACE, version = scenario.source_version or AGENT_VERSION}
+        source_workspace = scenario.source_workspace, version = scenario.source_version or AGENT_VERSION}
     local current = destination_call({operation = "get", workspace_id = identity.workspace_id,
         source_node = identity.source_node, source_workspace = identity.source_workspace, version = identity.version},
         "read staged agent artifact")
@@ -409,12 +439,17 @@ local function stop(pid: string)
     if event.kind ~= process.event.EXIT or tostring(event.from) ~= pid then error("wrong supervisor stop event") end
 end
 local function main(remote: string, source_destination_workspace: string?, source_digest: string?,
-    source_workspace_id: string?, source_version: string?)
+    source_workspace_id: string?, source_version: string?, admission_raw: string?, source_workspace_raw: string?,
+    component_raw: string?, definition_raw: string?)
     local local_node = assert(system.node.id())
     local agent: AgentScenario? = agent_scenario()
     if source_destination_workspace and source_digest and source_workspace_id and source_version then
+        local admission, source_workspace, component, definition_id = selection(admission_raw, source_workspace_raw,
+            component_raw, definition_raw)
         local supplied: AgentScenario = {workspace_id = source_destination_workspace, artifact_digest = source_digest,
-            source_node = local_node, source_workspace_id = source_workspace_id, source_version = source_version}
+            source_node = local_node, source_workspace_id = source_workspace_id, source_version = source_version,
+            admission = admission, source_workspace = source_workspace, component = component,
+            definition_id = definition_id}
         agent = supplied
     end
     if local_node == "node-0" then
@@ -638,14 +673,16 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                 for attempt = 1, 4 do
                     local raw, recovery_error = funcs.call("bee.gov.binding:destination_call", {operation = "recover",
                         workspace_id = agent.source_workspace_id, source_node = local_node,
-                        source_workspace = AGENT_WORKSPACE,
+                        source_workspace = agent.source_workspace,
                         receipt_key = "agent-source-hive-recovery-" .. tostring(attempt)})
                     if recovery_error then error("recover locally applied agent artifact: " .. tostring(recovery_error)) end
                     local reply = object(raw)
                     if reply.ok ~= true then
                         local fault = type(reply.error) == "table" and reply.error :: {[string]: unknown} or {}
                         local code, message = tostring(fault.code or reply.code), tostring(fault.message or reply.message)
-                        if (code == "UNAVAILABLE" or code == "UNCERTAIN") and attempt < 4 then
+                        -- Boot recovery steps the same desired intent; the
+                        -- loser of that optimistic revision check re-reads it.
+                        if (code == "UNAVAILABLE" or code == "UNCERTAIN" or code == "CONFLICT") and attempt < 4 then
                             time.sleep("100ms")
                         else
                             error("recover locally applied agent artifact was refused: " .. code .. ": " .. message)
@@ -664,7 +701,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                 while time.now():before(deadline) do
                     local raw
                     raw, publish_error = funcs.call("bee.gov.binding:publication_call", {operation = "publish",
-                        workspace_id = agent.source_workspace_id, component = AGENT_PACKAGE,
+                        workspace_id = agent.source_workspace_id, component = agent.component,
                         version = agent.source_version or AGENT_VERSION})
                     if not publish_error then
                         reply = object(raw)
@@ -697,7 +734,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             assert(io.print("BEE_HIVE_SUPERVISOR agent_artifact_published"))
         elseif command == "agent-artifact-absent" then
             if not agent or local_node ~= "node-0" then error("agent artifact absence belongs only to the configured destination") end
-            if agent_available(agent) or registry.get(AGENT_DEFINITION) then
+            if agent_available(agent) or registry.get(agent.definition_id) then
                 error("destination held the agent artifact before source publication")
             end
             assert(io.print("BEE_HIVE_SUPERVISOR agent_artifact_absent"))

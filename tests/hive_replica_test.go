@@ -34,6 +34,13 @@ type hiveAgentArtifactScenario struct {
 	sourceState       string
 	sourceWorkspaceID string
 	sourceVersion     string
+	// admission "rule" leaves the destination with only its shipped
+	// workspace-applications rule; its person reviews and approves the
+	// received application in the desktop after this headless half.
+	admission       string
+	sourceWorkspace string
+	component       string
+	definitionID    string
 }
 
 // TestHiveSupervisorAgentSource publishes from the retained state whose managed
@@ -80,6 +87,10 @@ func TestHiveSupervisorAgentSource(t *testing.T) {
 			ArtifactDigest string `json:"artifact_digest"`
 		} `json:"updated"`
 		PublishedVersion string `json:"published_version"`
+		Admission        string `json:"admission"`
+		SourceWorkspace  string `json:"source_workspace"`
+		Component        string `json:"component"`
+		DefinitionID     string `json:"definition_id"`
 	}
 	if err := json.Unmarshal(raw, &document); err != nil {
 		t.Fatal(err)
@@ -90,7 +101,9 @@ func TestHiveSupervisorAgentSource(t *testing.T) {
 	testHiveSupervisorReplica(t, &hiveAgentArtifactScenario{destinationFolder: destinationFolder,
 		workspaceID: workspaceID, artifactDigest: document.Updated.ArtifactDigest,
 		sourceProject: sourceProject, sourceState: sourceState, sourceWorkspaceID: sourceWorkspaceID,
-		sourceVersion: document.PublishedVersion})
+		sourceVersion: document.PublishedVersion, admission: document.Admission,
+		sourceWorkspace: document.SourceWorkspace, component: document.Component,
+		definitionID: document.DefinitionID})
 }
 
 // TestHiveSupervisorAgentArtifact is intentionally opt-in. Its wrapper starts
@@ -164,13 +177,14 @@ func configureAgentArtifactFixture(folder string, scenario *hiveAgentArtifactSce
 	if err != nil {
 		return err
 	}
-	const scenarioMarker = "data: {workspace_id: '', artifact_digest: '', source_node: '', source_workspace_id: '', source_version: ''}"
+	const scenarioMarker = "data: {workspace_id: '', artifact_digest: '', source_node: '', source_workspace_id: '', source_version: '', admission: '', source_workspace: '', component: '', definition_id: ''}"
 	sourceNode, sourceWorkspaceID := "", ""
 	if scenario.sourceProject != "" {
 		sourceNode, sourceWorkspaceID = "node-1", scenario.sourceWorkspaceID
 	}
-	scenarioData := fmt.Sprintf("data: {workspace_id: %s, artifact_digest: %s, source_node: '%s', source_workspace_id: '%s', source_version: '%s'}",
-		scenario.workspaceID, scenario.artifactDigest, sourceNode, sourceWorkspaceID, scenario.sourceVersion)
+	scenarioData := fmt.Sprintf("data: {workspace_id: %s, artifact_digest: %s, source_node: '%s', source_workspace_id: '%s', source_version: '%s', admission: '%s', source_workspace: '%s', component: '%s', definition_id: '%s'}",
+		scenario.workspaceID, scenario.artifactDigest, sourceNode, sourceWorkspaceID, scenario.sourceVersion,
+		scenario.admission, scenario.sourceWorkspace, scenario.component, scenario.definitionID)
 	updated := strings.Replace(string(data), scenarioMarker, scenarioData, 1)
 	if updated == string(data) {
 		return fmt.Errorf("configure agent artifact scenario")
@@ -259,11 +273,12 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 				}
 			}
 		} else if agent != nil && i == 1 && agent.sourceProject != "" {
+			// The authoring project is also its classic workspace folder:
+			// carry its workspace files and application databases with its
+			// source so the recovered overlay finds the grants it applied.
 			state = agent.sourceState
-			for _, name := range []string{"src", "modules"} {
-				if err := os.CopyFS(filepath.Join(project, name), os.DirFS(filepath.Join(agent.sourceProject, name))); err != nil {
-					t.Fatal(err)
-				}
+			if err := os.CopyFS(project, os.DirFS(agent.sourceProject)); err != nil {
+				t.Fatal(err)
 			}
 		} else if err := os.CopyFS(filepath.Join(project, "src"), os.DirFS(filepath.Join(repository, "src"))); err != nil {
 			t.Fatal(err)
@@ -406,7 +421,8 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		}
 		args = append(args, "--", fmt.Sprintf("node-%d", 1-i))
 		if agent != nil && i == 1 && agent.sourceProject != "" {
-			args = append(args, agent.workspaceID, agent.artifactDigest, agent.sourceWorkspaceID, agent.sourceVersion)
+			args = append(args, agent.workspaceID, agent.artifactDigest, agent.sourceWorkspaceID, agent.sourceVersion,
+				agent.admission, agent.sourceWorkspace, agent.component, agent.definitionID)
 		}
 		cmd := exec.CommandContext(ctx, binary, args...)
 		cmd.Dir = node.project
@@ -496,7 +512,9 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		command(source, "agent-artifact-publish", "agent_artifact_published")
 		command(destination, "agent-artifact-available", "agent_artifact_available")
 		command(destination, "agent-artifact-stage", "agent_artifact_staged")
-		command(destination, "agent-artifact-apply", "agent_artifact_applied")
+		if agent.admission != "rule" {
+			command(destination, "agent-artifact-apply", "agent_artifact_applied")
+		}
 		// The normal desktop below owns the only visible client. Both headless
 		// coordinators are gone before that boot; it receives only the durable
 		// destination state, its configured admission and the applied overlay.
@@ -508,7 +526,9 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		if err := destination.wait(5 * time.Second); err != nil {
 			t.Fatal(err)
 		}
-		if agent.sourceProject != "" {
+		if agent.admission == "rule" {
+			t.Log("locally applied workspace application was published by its authoring source, crossed Hive, and was staged under the destination's own workspace-applications rule for its person's review")
+		} else if agent.sourceProject != "" {
 			t.Log("locally applied Agent App was published by its authoring source, crossed Hive, and was applied through destination-local review and approval")
 		} else {
 			t.Log("retained Agent App v2 was recreated only on the source, published through Hive, and applied through destination-local review and approval")

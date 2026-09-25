@@ -45,3 +45,13 @@ entries:
     types: bee.threads.service:types
   security:
     policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
+- name: cancel_intent
+  kind: function.lua
+  source: file://cancel_intent_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    carrier: bee.threads.carrier:carrier
+    types: bee.threads.service:types
+  security:
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]

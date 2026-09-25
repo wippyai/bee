@@ -68,7 +68,7 @@ function M.contracts(): {Contract}
         contract("bee.threads:lifecycle", {"admit_action", "prepare_attempt", "start_attempt", "request_turn", "end_turn", "receipt"}),
         contract("bee.threads:delivery", {"claim", "dispatch", "ack", "release", "expire", "reconcile", "subscribe", "page", "ack_page", "unsubscribe", "resume", "close_subscription", "forget_subscription", "wait", "watch"}),
         contract("bee.threads:projection", {"recap_read", "recap_update", "recap_rebuild", "status_read", "status_update", "status_rebuild"}),
-        contract("bee.threads:carrier", {"claim", "commit", "checkpoint"}),
+        contract("bee.threads:carrier", {"claim", "commit", "checkpoint", "cancel_intent"}),
         contract("bee.threads:approvals", {"append"}),
     }
 end

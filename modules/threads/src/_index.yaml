@@ -316,6 +316,8 @@ entries:
     description: Commit derived records and the next checkpoint in one transaction under the current epoch and revision
   - name: checkpoint
     description: Read the stored carrier checkpoint, revision and epoch of an attempt
+  - name: cancel_intent
+    description: Record the durable, idempotent cancel intent of an attempt, reconciled against its terminal carrier record
 - name: approvals
   kind: contract.definition
   methods:
@@ -335,6 +337,7 @@ entries:
       claim: bee.threads.carrier:claim
       commit: bee.threads.carrier:commit
       checkpoint: bee.threads.carrier:checkpoint
+      cancel_intent: bee.threads.carrier:cancel_intent
 - name: lifecycle_local
   kind: contract.binding
   contracts:

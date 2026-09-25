@@ -232,6 +232,18 @@ function M.latest_settled_attempt(tx: sql.Transaction, thread_id: string, action
     if not id then return nil, "attempt settlement row is corrupt" end
     return id, nil
 end
+type CancelIntent = {attempt_id: string, idempotency_key: string?, state: string, outcome: string?}
+function M.cancel_intent(tx: sql.Transaction, thread_id: string, attempt_id: string): (CancelIntent?, string?)
+    local row, err = single(tx, "SELECT attempt_id, idempotency_key, state, outcome FROM bee_thread_cancel_intents WHERE thread_id = ? AND attempt_id = ?",
+        {thread_id, attempt_id}, "cancel intent")
+    if err then return nil, err end
+    if not row then return nil, nil end
+    local id, state = text(row.attempt_id), text(row.state)
+    if not id or not state then return nil, "cancel intent row is corrupt" end
+    local key = text(row.idempotency_key)
+    local outcome = text(row.outcome)
+    return {attempt_id = id, idempotency_key = key, state = state, outcome = outcome}, nil
+end
 function M.attempt_outcome(tx: sql.Transaction, thread_id: string, attempt_id: string): (string?, string?)
     local row, err = single(tx, "SELECT outcome FROM bee_thread_settlements WHERE thread_id = ? AND scope = 'attempt' AND attempt_id = ?", {thread_id, attempt_id}, "attempt outcome")
     if err then return nil, err end

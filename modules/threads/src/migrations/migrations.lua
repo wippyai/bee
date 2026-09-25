@@ -544,6 +544,26 @@ ALTER TABLE bee_thread_inbox_outbox ADD COLUMN in_reply_to_thread_id TEXT;
 ALTER TABLE bee_thread_inbox_outbox ADD COLUMN in_reply_to_record_id TEXT;
 ALTER TABLE bee_thread_inbox_outbox ADD COLUMN outcome TEXT CHECK(outcome IN ('succeeded','failed','cancelled','uncertain'));
 ]]
+-- A durable, idempotent cancel intent per attempt. The harness records it
+-- through the carrier owner before stopping placement, so the intent
+-- survives restart and recovery reconciles it against the terminal carrier
+-- record. An ended intent settles a never-started attempt as cancelled.
+local CANCEL_INTENT_SQL = [[
+CREATE TABLE bee_thread_cancel_intents (
+  thread_id TEXT NOT NULL REFERENCES bee_thread_heads(thread_id),
+  attempt_id TEXT NOT NULL,
+  idempotency_key TEXT,
+  state TEXT NOT NULL CHECK(state IN ('cancelling','ended')),
+  outcome TEXT CHECK(outcome IS NULL OR outcome IN ('succeeded','failed','cancelled','uncertain')),
+  recorded_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(thread_id, attempt_id),
+  FOREIGN KEY(thread_id, attempt_id)
+    REFERENCES bee_thread_attempts(thread_id, attempt_id),
+  CHECK((state = 'cancelling' AND outcome IS NULL)
+     OR (state = 'ended' AND outcome = 'cancelled'))
+);
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -560,6 +580,7 @@ local list: {Migration} = {
     {id = 13, name = "action_inbox_delivery_status", sql = ACTION_INBOX_DELIVERY_STATUS_SQL, rebuild = false},
     {id = 14, name = "action_inbox_outbox", sql = ACTION_INBOX_OUTBOX_SQL, rebuild = false},
     {id = 15, name = "action_inbox_outbox_reply", sql = ACTION_INBOX_OUTBOX_REPLY_SQL, rebuild = false},
+    {id = 16, name = "cancel_intent", sql = CANCEL_INTENT_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

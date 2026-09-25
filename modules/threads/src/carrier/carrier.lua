@@ -244,6 +244,71 @@ function M.commit(db: sql.DB, actor: string, request: unknown): Result
         return authority.remember(tx, actor, "carrier_commit", mutation, {attempt_id = attempt_id, carrier_epoch = epoch, checkpoint_revision = next_revision, records = committed})
     end)
 end
+-- cancel_intent: the durable, idempotent cancel intent for one attempt. The
+-- row is keyed by the attempt itself, so every caller recording it replays
+-- the same intent and a restart loses nothing. An ended intent settles a
+-- never-started attempt as cancelled; otherwise recovery reconciles the
+-- intent against the terminal carrier record under the fenced epoch.
+function M.cancel_intent(db: sql.DB, actor: string, request: unknown): Result
+    local object = bounds.object(request)
+    if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"thread_id", "attempt_id", "idempotency_key", "state", "outcome"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local thread_id = bounds.id(object.thread_id)
+    local attempt_id = bounds.id(object.attempt_id)
+    if not thread_id then return failure("INVALID_ARGUMENT", "thread_id is not an identifier") end
+    if not attempt_id then return failure("INVALID_ARGUMENT", "attempt_id is not an identifier") end
+    local state = bounds.member(object.state, {"cancelling", "ended"})
+    if not state then return failure("INVALID_ARGUMENT", "state is not cancelling or ended") end
+    local key: string? = nil
+    if object.idempotency_key ~= nil then
+        key = bounds.id(object.idempotency_key)
+        if not key then return failure("INVALID_ARGUMENT", "idempotency_key is not an identifier") end
+    end
+    local outcome: string? = nil
+    if state == "ended" then
+        outcome = bounds.member(object.outcome, {"cancelled"})
+        if not outcome then return failure("INVALID_ARGUMENT", "an ended cancel intent carries outcome cancelled") end
+    elseif object.outcome ~= nil then
+        return failure("INVALID_ARGUMENT", "a cancelling intent carries no outcome")
+    end
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local head, member, denied = authority.membership(tx, thread_id, actor)
+        if not head or not member then return denied or failure("DENIED", "caller is not a member of the thread") end
+        local attempt, attempt_err = reader.attempt(tx, head.thread_id, attempt_id)
+        if attempt_err then return storage(attempt_err) end
+        if not attempt then return failure("NOT_FOUND", "attempt does not exist") end
+        local current, current_err = reader.cancel_intent(tx, head.thread_id, attempt_id)
+        if current_err then return storage(current_err) end
+        if current and current.state == "ended" then
+            return transaction.success({thread_id = head.thread_id, attempt_id = attempt_id,
+                idempotency_key = current.idempotency_key, state = current.state, outcome = current.outcome}, false)
+        end
+        local at = transaction.now()
+        local err: string?
+        if current then
+            if state == "ended" then
+                local _, update_err = tx:execute("UPDATE bee_thread_cancel_intents SET state = ?, outcome = ?, updated_at = ? WHERE thread_id = ? AND attempt_id = ?",
+                    {state, outcome, at, head.thread_id, attempt_id})
+                if update_err then err = "advance cancel intent" end
+            end
+            if key ~= nil and current.idempotency_key == nil then
+                local _, key_err = tx:execute("UPDATE bee_thread_cancel_intents SET idempotency_key = ? WHERE thread_id = ? AND attempt_id = ?",
+                    {key, head.thread_id, attempt_id})
+                if key_err then err = "record cancel key" end
+            end
+        else
+            local _, insert_err = tx:execute("INSERT INTO bee_thread_cancel_intents (thread_id, attempt_id, idempotency_key, state, outcome, recorded_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                {head.thread_id, attempt_id, key or sql.NULL, state, outcome or sql.NULL, at, at})
+            if insert_err then err = "record cancel intent" end
+        end
+        if err then return storage(err) end
+        local stored, stored_err = reader.cancel_intent(tx, head.thread_id, attempt_id)
+        if not stored then return storage(stored_err or "read cancel intent") end
+        return transaction.success({thread_id = head.thread_id, attempt_id = stored.attempt_id,
+            idempotency_key = stored.idempotency_key, state = stored.state, outcome = stored.outcome}, false)
+    end)
+end
 -- checkpoint: what the last commit stored, for a carrier resuming.
 function M.checkpoint(db: sql.DB, actor: string, request: unknown): Result
     local object, attempt_id, refused = named(request, {"thread_id", "attempt_id"})
@@ -285,6 +350,12 @@ function M.checkpoint(db: sql.DB, actor: string, request: unknown): Result
         local open, open_err = reader.open_turn(tx, head.thread_id, attempt_id)
         if open_err then return storage(open_err) end
         value.open_turn_id = open and open.turn_id or nil
+        local intent, intent_err = reader.cancel_intent(tx, head.thread_id, attempt_id)
+        if intent_err then return storage(intent_err) end
+        if intent then
+            value.cancel_intent = {attempt_id = intent.attempt_id, idempotency_key = intent.idempotency_key,
+                state = intent.state, outcome = intent.outcome}
+        end
         return transaction.success(value, false)
     end)
 end

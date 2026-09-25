@@ -3,6 +3,7 @@ local json = require("json")
 local gateway = require("gateway")
 local mcp = require("mcp")
 local hooks = require("hooks")
+local hook_inbox = require("hook_inbox")
 type Object = {[string]: unknown}
 local function answer(response: http.Response, status: number, body: Object)
     response:set_status(status)
@@ -59,10 +60,19 @@ local function handle(): nil
         answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, fault.code .. ": " .. fault.message)); return nil
     end
     -- Codex reads a hook tool's text content as hook stdout: Stop requires
-    -- JSON there, and other events turn plain text into model context. An
-    -- observer answers no text; the receipt travels as structured content.
+    -- JSON there, and other events turn plain text into model context. A
+    -- recorded boundary event may answer with the bound action's
+    -- outstanding inbox as that text. The read runs as the binding's
+    -- subject; a failure degrades to the proven empty content instead of
+    -- breaking the harness loop.
     local outcome = reply.value :: Object
-    answer(response, http.STATUS.OK, mcp.result(call.id, {content = table.create(1, 0),
+    local event: string? = nil
+    if type(arguments.event) == "string" then event = arguments.event
+    elseif type(arguments.hook_event_name) == "string" then event = arguments.hook_event_name end
+    local content = table.create(1, 0)
+    local carried = hook_inbox.carry_text(event, hook_inbox.context(binding, event))
+    if carried then content = {{type = "text", text = carried}} end
+    answer(response, http.STATUS.OK, mcp.result(call.id, {content = content,
         structuredContent = {status = outcome.status, event_id = outcome.event_id}, isError = false}))
     return nil
 end

@@ -447,6 +447,19 @@ entries:
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     sends: bee.threads.service:sends
+- name: hook_inbox_test
+  kind: function.lua
+  source: file://hook_inbox_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "240s"}
+  modules: [funcs, security, registry, env, json, system, exec, base64]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.security.gateway:gateway_materialize_policy, bee.harness.catalog:workspace_catalog_call_policy, bee.security.storage:workspace_catalog_manage_policy, bee.security.gateway:gateway_session_send_workspace_policy, bee.security.placement:placement_exec_policy, bee.gateway.security:node_policy]
+  imports:
+    principals: bee.test.principals:bound
+    test: wippy.test:test
+    sends: bee.threads.service:sends
+    hook_inbox: bee.gateway:hook_inbox
 - name: workspace_catalog_call_policy
   kind: security.policy
   meta: {type: test_support}

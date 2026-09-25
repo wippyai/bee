@@ -157,12 +157,16 @@ and render host-authored permission text with combined read-to-egress lines.
 For workspace application delivery, the host resolves these values before
 approval and shows the full set, changes from the installed grant, and any
 combined data flows in Approvals. `threads.read` with `scope: owned`,
-`workspace.files.read`, `workspace.files.write` and `app.database` have
-installable host entries; the remaining templates are review vocabulary until
-their resource and owner boundaries arrive, and unsupported requests fail
-resolution. A file grant installs a host-created `fs.directory` at a verified
-workspace subroot: the pinned runtime confines traversal and symlinks below
-that root, a read grant is read-only at the filesystem boundary, and private
+`workspace.files.read`, `workspace.files.write`, `app.database`,
+`threads.message`, `agents.launch`, `contract.call` and `http.api` have
+installable host entries; `hive.expose` is review vocabulary only, and a
+request for it fails resolution. A file grant installs a host-created
+`fs.directory` at a verified subroot of the destination workspace's own
+folder: the destination reads the workspace's root and subpath from the node
+workspace catalog (through `bee.workspace.catalog:read` under
+`bee.security.gov:workspace_folder_read_policy`), the grant record measures
+that folder, the pinned runtime confines traversal and symlinks below the
+volume, a read grant is read-only at the filesystem boundary, and private
 paths and Bee state (`.wippy`) are refused, including ancestor subroots that
 would expose them. A database grant installs a host-provisioned dedicated
 SQLite store outside the readable tree with a `db.get`-only policy on that
@@ -173,15 +177,20 @@ through the granted identities shown at approval. A child-thread message
 grant authorizes calls to the Threads owner's message verbs, which check the
 caller's membership; a launch grant authorizes `bee.harness.launch` on exactly
 the approved definitions through the application launch facade, which binds
-the attempt to the caller's workspace and admits no inherited app grant. A
-contract grant authorizes `contract.open` on the exact binding and
-`contract.call` on the exact methods; the callee owner still checks the
-authenticated caller and workspace against the installed grant record before
-using its own authority, so a grant for one binding never reaches another. An
-HTTP grant authorizes `http_client.request` on URLs under the approved origin
-and path prefix; the approved methods stay review-visible and
-containment-gated because the runtime authorizes the URL alone. Hive exposure
-remains host-published review vocabulary with no app-installable enforcement.
+the attempt to the caller's workspace and admits no inherited app grant. The
+runtime authorizes `contract.call` on the bare method name and
+`http_client.request` on the URL alone, so contract and HTTP grants never give
+an application those actions. They authorize `funcs.call` on the host gateway
+(`bee.gov.binding:contract_call` with `{binding, method, arguments}`,
+`bee.gov.binding:http_request` with `{method, url, headers, body, timeout}`).
+The gateway authenticates the broker-created application principal, reads
+that application's own live grant record and admits only the exact binding and
+method, or an approved method under the approved origin and path prefix
+(traversal and encoded separators refused; a response that arrives from
+outside the prefix is withheld). A contract callee runs under the original
+application actor with none of the gateway's authority, so its owner checks
+see the real caller and workspace: a grant for one binding, workspace or
+application never reaches another.
 
 On approval, one registry overlay transaction installs host-owned policies in
 `bee.gov.grants`, fills the requirement defaults, and records the grant
@@ -195,7 +204,7 @@ the delta; refusal leaves the installed version and grant intact.
 The shipped `workspace_applications` ceiling admits `process.lua`,
 `library.lua` and `ns.requirement` entries. Native imports are limited to
 `tty`, `process`, `channel`, `json`, `time`, `uuid`, `base64`, `hash`, `funcs`,
-`fs` and `sql`. The application binding gets
+`fs` and `sql`; contract and HTTP reach goes through the gateway. The application binding gets
 `bee.security:ordinary_app_subsystem_boundary` and `thread_access: none`; the
 generated grant policies add exactly the approved file, database and thread
 reach. `store.memory` and `store` are outside this ceiling. These are ceilings,

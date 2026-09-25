@@ -64,8 +64,9 @@ def grant_identities(workspace_id):
     """The host-installed volume and database identities for one workspace."""
     import hashlib
     owner = f"bee.gov.apps:{workspace_id}.tally"
+    # The classic folder workspace is rooted at the node's workspace root.
     volume = ("bee.gov.grants:volume."
-              + hashlib.sha256(f"{owner}\n{SHARED_SUBPATH}".encode()).hexdigest())
+              + hashlib.sha256(f"{owner}\nbee.env:workspace_root\n{SHARED_SUBPATH}".encode()).hexdigest())
     database = ("bee.gov.grants:database."
                 + hashlib.sha256(f"{owner}\n{DATABASE_NAME}".encode()).hexdigest())
     return volume, database

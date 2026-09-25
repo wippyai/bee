@@ -47,6 +47,10 @@ entries:
     value: bee.security.approvals:approval_request_policy
   - name: target_approval_consume_policy
     value: bee.security.approvals:approval_consume_policy
+  - name: target_workspace_folder_read
+    value: bee.workspace.catalog:read
+  - name: target_workspace_folder_policy
+    value: bee.security.gov:workspace_folder_read_policy
 - name: gateway
   kind: ns.dependency
   component: bee/gateway

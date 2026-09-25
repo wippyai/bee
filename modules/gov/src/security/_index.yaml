@@ -82,3 +82,10 @@ entries:
     actions: [funcs.call, security.actor.get, registry.get]
     resources: [bee.gov.binding:publication_call, bee.gov.binding:destination_call, bee.gov:publication_profiles_ref]
     effect: allow
+- name: gateway_policy
+  kind: security.policy
+  meta: {comment: The capability gateway reads grant records and performs only calls it has checked against the caller's own live grant; applications never hold these actions}
+  policy:
+    actions: [registry.get, contract.get, contract.open, contract.call, contract.security, security.scope.create, http_client.request]
+    resources: '*'
+    effect: allow

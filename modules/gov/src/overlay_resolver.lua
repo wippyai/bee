@@ -27,8 +27,10 @@ type Policy = {node_id: string, policy_digest: string, packages: {[string]: bool
     auto_start: boolean,
     applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?,
     workspace_application: boolean?, base_policy_digest: string?, generated_databases: {Object}?}
+-- folder resolves the destination workspace folder file grants are rooted in;
+-- it is consulted only when the plan requests workspace files.
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
-    policy: (unknown, Captured, Root) -> (Policy?, string?)}
+    policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -427,10 +429,22 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             return nil, nil, catalog_error or "workspace application capability profile is invalid"
         end
         local requested: {Object} = {}
+        local folder: unknown = nil
         for _, item in ipairs(requirements) do
-            if item.capability_request then requested[#requested + 1] = item end
+            local request = object(item.capability_request)
+            if request then
+                requested[#requested + 1] = item
+                if folder == nil and type(request.capability) == "string"
+                    and (request.capability :: string):sub(1, 16) == "workspace.files." then
+                    local resolve_folder = deps.folder
+                    if not resolve_folder then return nil, nil, "workspace folder is unavailable for a file grant" end
+                    local resolved_folder, folder_error = resolve_folder()
+                    if not resolved_folder then return nil, nil, folder_error or "workspace folder is unavailable" end
+                    folder = resolved_folder
+                end
+            end
         end
-        local proposed, proposed_error = capability_grants.propose(vocabulary, owner, app_id, requested)
+        local proposed, proposed_error = capability_grants.propose(vocabulary, owner, app_id, requested, nil, folder)
         if not proposed then return nil, nil, proposed_error end
         capability_proposal = proposed
         local record_id = capability_grants.record_id(owner)
@@ -566,10 +580,10 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
 end
 
 type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?),
-    policy: (unknown, Captured, Root) -> (Policy?, string?)}
+    policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
 
 function M.new(config: Config): unknown
-    local value = {root = config.root, policy = config.policy}
+    local value = {root = config.root, policy = config.policy, folder = config.folder}
     function value.capture(): (Captured?, string?)
         local snapshot, snapshot_error = registry.snapshot()
         if not snapshot then return nil, tostring(snapshot_error or "capture registry snapshot") end

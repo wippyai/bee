@@ -20,6 +20,7 @@ local function request(capability: string, parameters: {[string]: unknown}): {[s
             target = APP, path = ".security.policies +="}}
 end
 
+local FOLDER = {root_ref = "bee.env:workspace_root", directory = ".", base = "project", subpath = "alpha"}
 local function define_tests()
     test.describe("installed capability grants", function()
         test.it("resolves the catalog request and binds one host policy", function()
@@ -81,17 +82,34 @@ local function define_tests()
             record.id = "bee.governance.grants:record." .. string.rep("0", 64)
             test.is_nil(grants.decode(record, old_owner, "workspace-1", APP, vocabulary()))
         end)
+        test.it("decodes a record whose grants sort differently from their requirements", function()
+            local function named(id: string, capability: string, parameters: {[string]: unknown}): {[string]: unknown}
+                local item = request(capability, parameters)
+                item.id = id
+                return item
+            end
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP, {
+                named("app.notes:shared_files", "workspace.files.read", {subpath = "docs"}),
+                named("app.notes:store", "app.database", {name = "notes"}),
+                named("app.notes:threads", "threads.read", {scope = "owned"})}, nil, FOLDER))
+            local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-several", 1))
+            local decoded, decode_error = grants.decode(record, OWNER, "workspace-1", APP, vocabulary())
+            test.is_nil(decode_error)
+            test.not_nil(decoded)
+        end)
         test.it("materializes a verified workspace file volume and its policy", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
-                {request("workspace.files.read", {subpath = "docs"})}))
+                {request("workspace.files.read", {subpath = "docs"})}, nil, FOLDER))
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "files.read")
             test.eq(#proposed.policies, 1)
             test.eq(proposed.policies[1].kind, "security.policy")
             test.eq(#proposed.volumes, 1)
             test.eq(proposed.volumes[1].kind, "fs.directory")
-            test.eq(proposed.volumes[1].directory, "docs")
-            test.is_true(proposed.volumes[1].readonly)
+            test.eq((proposed.volumes[1].data :: {[string]: unknown}).directory, "alpha/docs")
+            test.is_nil(grants.propose(vocabulary(), OWNER, APP,
+                {request("workspace.files.read", {subpath = "docs"})}))
+            test.is_true((proposed.volumes[1].data :: {[string]: unknown}).readonly)
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed,
                 "approval-files", 1))
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
@@ -119,7 +137,7 @@ local function define_tests()
         end)
         test.it("refuses private workspace subroots and foreign app targets", function()
             test.is_nil(grants.propose(vocabulary(), OWNER, APP,
-                {request("workspace.files.read", {subpath = ".wippy"})}))
+                {request("workspace.files.read", {subpath = ".wippy"})}, nil, FOLDER))
             local foreign = request("threads.read", {scope = "owned"})
             foreign.targets = {"app.other:app"}
             test.is_nil(grants.propose(vocabulary(), OWNER, APP, {foreign}))
@@ -144,20 +162,19 @@ local function define_tests()
             test.eq(#resources, 1)
             test.eq(resources[1], "acme:research")
         end)
-        test.it("materializes scoped HTTP egress on its origin and path prefix", function()
+        test.it("grants scoped HTTP only through the host gateway", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("http.api", {origin = "https://api.example.com",
                     methods = {"GET"}, path_prefix = "/v1"})}))
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "http.request")
-            test.eq(proposed.policies[1].kind, "security.policy.expr")
+            local scope = proposed.capabilities[1].scope :: {[string]: unknown}
+            test.eq(scope.path_prefix, "/v1")
+            test.eq(proposed.policies[1].kind, "security.policy")
             local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
-            local expression = body.expression :: string
-            test.is_true(expression:find("http_client.request", 1, true) ~= nil)
-            test.is_true(expression:find("api", 1, true) ~= nil)
-            test.is_true(expression:find("/v1", 1, true) ~= nil)
-            test.is_true(expression:find("\\.", 1, true) ~= nil)
-            test.is_nil(expression:find("http://", 1, true))
+            test.eq((body.actions :: {string})[1], "funcs.call")
+            test.eq(#(body.resources :: {string}), 1)
+            test.eq((body.resources :: {string})[1], "bee.gov.binding:http_request")
         end)
         test.it("keeps Hive exposure as review vocabulary without installable enforcement", function()
             test.is_nil(grants.propose(vocabulary(), OWNER, APP,

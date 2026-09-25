@@ -61,32 +61,77 @@ local function hex(value: string): (string?, string?)
     return digest, nil
 end
 
-function M.volume_id(owner_raw: unknown, subpath_raw: unknown): (string?, string?)
+-- The workspace folder a host resolved from the node workspace catalog: the
+-- admitted root's registry identity, that root's literal directory and base,
+-- and the workspace's subpath under it. A file grant is rooted here, never at
+-- the node folder, so one workspace's grant never reads another's tree.
+type Folder = {root_ref: string, directory: string, base: string?, subpath: string}
+
+local function folder(raw: unknown): (Folder?, string?)
+    if type(raw) ~= "table" then return nil, "workspace folder is unavailable" end
+    local value = raw :: {[string]: unknown}
+    local root_ref, directory, base, subpath = value.root_ref, value.directory, value.base, value.subpath
+    if type(root_ref) ~= "string" or type(directory) ~= "string" then return nil, "workspace folder is malformed" end
+    if not root_ref:match("^[a-z][a-z0-9_.]*:[A-Za-z0-9_.-]+$") or #root_ref > 160
+        or #directory == 0 or #directory > 512 or directory:find("%c")
+        or directory:find("${", 1, true) or directory:find("\\", 1, true)
+        or (base ~= nil and base ~= "project") or type(subpath) ~= "string" then
+        return nil, "workspace folder is malformed"
+    end
+    for segment in directory:gmatch("[^/]+") do
+        if segment == ".." or segment == PRIVATE_ROOT then return nil, "workspace folder is malformed" end
+    end
+    if subpath ~= "" then
+        local parts = segments(subpath)
+        if not parts then return nil, "workspace folder is malformed" end
+        for _, segment in ipairs(parts) do
+            if segment == PRIVATE_ROOT then return nil, "workspace folder is private" end
+        end
+    end
+    local selected_base: string? = nil
+    if base == "project" then selected_base = "project" end
+    return {root_ref = root_ref, directory = directory, base = selected_base, subpath = subpath}, nil
+end
+
+-- The grant's directory under the workspace folder's root.
+local function located(root: Folder, subpath: string): string
+    local relative = root.subpath == "" and subpath or root.subpath .. "/" .. subpath
+    if root.directory == "." then return relative end
+    if root.directory:sub(-1) == "/" then return root.directory .. relative end
+    return root.directory .. "/" .. relative
+end
+
+function M.volume_id(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (string?, string?)
     if type(owner_raw) ~= "string" or #owner_raw == 0 or #owner_raw > 160 then
         return nil, "file grant owner is invalid"
     end
+    local root, root_error = folder(folder_raw)
+    if not root then return nil, root_error end
     local subpath, subpath_error = M.verify_subpath(subpath_raw)
     if not subpath then return nil, subpath_error end
-    local suffix, suffix_error = hex(owner_raw .. "\n" .. subpath)
+    local relative = root.subpath == "" and subpath or root.subpath .. "/" .. subpath
+    local suffix, suffix_error = hex(owner_raw .. "\n" .. root.root_ref .. "\n" .. relative)
     if not suffix then return nil, suffix_error end
     return M.VOLUME_PREFIX .. suffix, nil
 end
 
--- The host-created directory at the verified subroot. It resolves against the
--- same project root as the workspace root, carries no auto-init, and refuses
--- every mutation for read grants at the filesystem boundary.
-function M.volume(owner_raw: unknown, subpath_raw: unknown, writable_raw: unknown): (unknown?, string?)
-    local id, id_error = M.volume_id(owner_raw, subpath_raw)
-    local subpath = M.verify_subpath(subpath_raw)
-    if not id or not subpath then return nil, id_error or subpath end
+-- The host-created directory at the verified subroot of the workspace folder.
+-- It carries no auto-init for reads and refuses every mutation for read
+-- grants at the filesystem boundary; the pinned runtime confines traversal
+-- and symlinks below it.
+function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
+    writable_raw: unknown): (unknown?, string?)
+    local id, id_error = M.volume_id(owner_raw, folder_raw, subpath_raw)
+    if not id then return nil, id_error end
+    local root = assert(folder(folder_raw))
+    local subpath = assert(M.verify_subpath(subpath_raw))
     if writable_raw ~= nil and type(writable_raw) ~= "boolean" then
         return nil, "file grant mode is invalid"
     end
-    local entry: {[string]: unknown} = {id = id, kind = "fs.directory",
-        directory = subpath, base = "project", auto_init = writable_raw == true,
-        readonly = writable_raw ~= true}
-    if writable_raw == true then entry.mode = "0700" else entry.mode = "0500" end
-    return entry, nil
+    local config: {[string]: unknown} = {directory = located(root, subpath), base = root.base,
+        auto_init = writable_raw == true, readonly = writable_raw ~= true}
+    if writable_raw == true then config.mode = "0700" else config.mode = "0500" end
+    return {id = id, kind = "fs.directory", data = config}, nil
 end
 
 function M.database_id(owner_raw: unknown, name_raw: unknown): (string?, string?)
@@ -109,7 +154,7 @@ function M.database(owner_raw: unknown, name_raw: unknown): (unknown?, string?)
     if not id or not valid then return nil, id_error or valid_error end
     local suffix, suffix_error = hex(owner_raw .. "\n" .. valid)
     if not suffix then return nil, suffix_error end
-    return {id = id, kind = "db.sql.sqlite", file = M.DATABASE_DIR .. "/" .. suffix .. ".db"}, nil
+    return {id = id, kind = "db.sql.sqlite", data = {file = M.DATABASE_DIR .. "/" .. suffix .. ".db"}}, nil
 end
 
 local function policy(id: string, actions: {string}, resources: {string}, comment: string): Object?
@@ -119,9 +164,9 @@ end
 
 -- Acquisition is the policy boundary; the installed volume's readonly flag
 -- enforces the read-only mode below it.
-function M.file_policy(owner_raw: unknown, subpath_raw: unknown, writable_raw: unknown,
+function M.file_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown, writable_raw: unknown,
     policy_id_raw: unknown): (Object?, string?)
-    local volume, volume_error = M.volume(owner_raw, subpath_raw, writable_raw)
+    local volume, volume_error = M.volume(owner_raw, folder_raw, subpath_raw, writable_raw)
     if not volume or type(policy_id_raw) ~= "string" then
         return nil, volume_error or "file grant policy identity is invalid"
     end

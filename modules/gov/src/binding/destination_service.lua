@@ -136,6 +136,47 @@ local function approval_executor(): (unknown?, string?)
     return funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope({request, consume})), nil
 end
 
+-- The destination workspace's folder, read from the node workspace catalog
+-- under the host-selected folder policy and resolved against its admitted
+-- root, for rooting file grants. It is configuration only; the host installs
+-- the volume after approval.
+local function workspace_folder(workspace_id: string): (unknown?, string?)
+    local read_id, read_error = resources.workspace_folder_read()
+    local policy_id, policy_error = resources.workspace_folder_policy()
+    if not read_id or not policy_id then return nil, read_error or policy_error end
+    local policy, load_error = security.policy(policy_id)
+    if not policy then return nil, tostring(load_error or "load workspace folder policy") end
+    local executor = funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope({policy}))
+    local reply_raw, call_error = executor:call(read_id, {workspace_id = workspace_id})
+    local reply = bounds.object(reply_raw)
+    local value = reply and reply.ok == true and bounds.object(reply.value) or nil
+    local row = value and bounds.object(value.workspace) or nil
+    local root_ref = row and bounds.id(row.root_ref) or nil
+    local subpath = row and row.subpath or nil
+    if not root_ref or type(subpath) ~= "string" then
+        local fault = reply and bounds.object(reply.error) or nil
+        return nil, "workspace folder is unavailable: " .. tostring(call_error or (fault and fault.message)
+            or "the workspace catalog returned no folder")
+    end
+    local root = registry.get(root_ref)
+    local data = root and bounds.object(root.data) or nil
+    if not root or root.kind ~= "fs.directory" or not data or type(data.directory) ~= "string" then
+        return nil, "workspace root " .. root_ref .. " is not an fs.directory"
+    end
+    return {root_ref = root_ref, directory = data.directory, base = data.base, subpath = subpath}, nil
+end
+
+-- Whether a plan requests workspace files, which root in the workspace folder.
+local function requests_files(requirements: {unknown}): boolean
+    for _, raw in ipairs(requirements) do
+        local item = bounds.object(raw)
+        local request = item and bounds.object(item.capability_request) or nil
+        local capability = request and request.capability or nil
+        if type(capability) == "string" and capability:sub(1, 16) == "workspace.files." then return true end
+    end
+    return false
+end
+
 local function destination_resolver(profile_value: Profile, node_id: string, workspace_id: string,
     activation_store: activations.Store?, base_policy_digest: string?): unknown
     local function selected_root(spec_raw: unknown): (ResolverRoot?, string?)
@@ -198,7 +239,8 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
                 local root, root_error = selected_root(spec_raw)
                 if not root then return nil, root_error end
                 return {component = root.component, version = root.version}, nil
-            end, policy = selected_policy})
+            end, policy = selected_policy,
+            folder = function(): (unknown?, string?) return workspace_folder(workspace_id) end})
     end
     return resolver.new({overlay_owner = profile_value.overlay_owner,
         root = selected_root, policy = selected_policy})
@@ -225,8 +267,14 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     for _, requirement in ipairs(candidate.requirements) do
         if requirement.capability_request then requested[#requested + 1] = requirement end
     end
+    local folder: unknown = nil
+    if requests_files(requested) then
+        local resolved, folder_error = workspace_folder(profile_value.workspace_id)
+        if not resolved then return nil, folder_error end
+        folder = resolved
+    end
     local proposed, proposed_error = capability_grants.propose(vocabulary, profile_value.overlay_owner,
-        identity.definition_id, requested, uses_prior)
+        identity.definition_id, requested, uses_prior, folder)
     if not proposed then return nil, proposed_error end
     local record_id = uses_prior and capability_grants.prior_record_id(profile_value.overlay_owner)
         or capability_grants.record_id(profile_value.overlay_owner)

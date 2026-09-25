@@ -173,17 +173,23 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
         for _, raw_volume in ipairs((volumes or {}) :: {unknown}) do
             local volume = bounds.object(raw_volume)
             local id = volume and bounds.id(volume.id) or nil
-            local directory = volume and volume.directory or nil
+            local config = volume and bounds.object(volume.data) or nil
+            local directory = config and config.directory or nil
             if not volume or not id or not id:match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
                 or volume.kind ~= "fs.directory" or type(directory) ~= "string"
-                or volume.base ~= "project" or type(volume.auto_init) ~= "boolean"
-                or type(volume.readonly) ~= "boolean"
-                or (volume.readonly and volume.auto_init) then
+                or (config.base ~= nil and config.base ~= "project") or type(config.auto_init) ~= "boolean"
+                or type(config.readonly) ~= "boolean"
+                or (config.readonly and config.auto_init) then
                 return nil, nil, nil, "generated capability volume is invalid"
             end
-            local subpath: string = directory :: string
-            if subpath == ".wippy" or subpath:sub(1, 7) == ".wippy/" or subpath == "." then
+            local location: string = directory :: string
+            if location == "." or location == "/" then
                 return nil, nil, nil, "generated capability volume exposes private state"
+            end
+            for segment in location:gmatch("[^/]+") do
+                if segment == ".wippy" or segment == ".." then
+                    return nil, nil, nil, "generated capability volume exposes private state"
+                end
             end
             if volume_ids[id] then return nil, nil, nil, "generated capability volume is duplicated" end
             volume_ids[id] = true
@@ -193,7 +199,8 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
         for _, raw_database in ipairs((databases or {}) :: {unknown}) do
             local database = bounds.object(raw_database)
             local id = database and bounds.id(database.id) or nil
-            local file = database and database.file or nil
+            local database_config = database and bounds.object(database.data) or nil
+            local file = database_config and database_config.file or nil
             if not database or not id or not id:match("^bee%.gov%.grants:database%.[0-9a-f]+$")
                 or database.kind ~= "db.sql.sqlite" or type(file) ~= "string"
                 or (file :: string):sub(1, 14) ~= ".wippy/app-db/" then
@@ -209,29 +216,12 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             local id = policy and bounds.id(policy.id) or nil
             if not id or (not id:match("^bee%.gov%.grants:policy%.[0-9a-f]+$")
                 and not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$"))
-                or (policy.kind ~= "security.policy" and policy.kind ~= "security.policy.expr")
-                or policy_ids[id] then
+                or policy.kind ~= "security.policy" or policy_ids[id] then
                 return nil, nil, nil, "generated capability policy is invalid"
             end
             policy_ids[id] = true
             local data = bounds.object(policy.data)
             local inner = data and bounds.object(data.policy) or nil
-            local actions = inner and inner.actions or nil
-            if type(actions) == "table" then
-                for _, action in ipairs(actions :: {unknown}) do
-                    if type(action) ~= "string" or #action == 0 or #action > 80
-                        or (action :: string):find("%c") then
-                        return nil, nil, nil, "generated capability policy action is invalid"
-                    end
-                end
-            end
-            if policy.kind == "security.policy.expr" then
-                local expression = inner and inner.expression or nil
-                if type(expression) ~= "string" or #expression == 0 or #expression > 1024
-                    or (expression :: string):find("%c") then
-                    return nil, nil, nil, "generated capability policy expression is invalid"
-                end
-            end
             local resources = inner and inner.resources or nil
             if type(resources) == "table" then
                 for _, resource in ipairs(resources :: {unknown}) do

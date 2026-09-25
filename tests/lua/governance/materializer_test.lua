@@ -167,9 +167,10 @@ local function define_tests()
             local generated = {policies = {{id = policy_id, kind = "security.policy",
                 data = {policy = {actions = {"fs.get"}, resources = {volume_id}, effect = "allow"}}}},
                 bindings = {{requirement_id = "app.notes:files", policy_id = policy_id}},
-                volumes = {{id = volume_id, kind = "fs.directory", directory = "docs",
-                    base = "project", auto_init = false, readonly = true, mode = "0500"}},
-                databases = {{id = database_id, kind = "db.sql.sqlite", file = ".wippy/app-db/" .. string.rep("d", 64) .. ".db"}},
+                volumes = {{id = volume_id, kind = "fs.directory", data = {directory = "docs",
+                    base = "project", auto_init = false, readonly = true, mode = "0500"}}},
+                databases = {{id = database_id, kind = "db.sql.sqlite",
+                    data = {file = ".wippy/app-db/" .. string.rep("d", 64) .. ".db"}}},
                 record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
                     kind = "registry.entry", data = {digest = string.rep("f", 64)}}}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
@@ -178,8 +179,8 @@ local function define_tests()
             test.not_nil(state.entries[volume_id])
             test.not_nil(state.entries[database_id])
             local private = {policies = generated.policies, bindings = generated.bindings,
-                volumes = {{id = volume_id, kind = "fs.directory", directory = ".wippy",
-                    base = "project", auto_init = false, readonly = true, mode = "0500"}},
+                volumes = {{id = volume_id, kind = "fs.directory", data = {directory = ".wippy",
+                    base = "project", auto_init = false, readonly = true, mode = "0500"}}},
                 record = generated.record}
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, private))
@@ -189,7 +190,7 @@ local function define_tests()
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, dangling))
         end)
-        test.it("installs exact contract and HTTP expressions and refuses malformed ones", function()
+        test.it("installs contract and HTTP gateway grants and refuses direct expressions", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local call_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local web_id = "bee.gov.grants:policy." .. string.rep("b", 64)
@@ -202,15 +203,11 @@ local function define_tests()
                     meta = {capability = "http.api", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
             local generated = {policies = {
-                {id = call_id, kind = "security.policy.expr",
-                    data = {policy = {expression = '(action == "contract.open" && resource == "app.peer:api")'
-                        .. ' || (action == "contract.call" && (resource == "get"))',
-                        actions = {"contract.open", "contract.call"}, resources = {"app.peer:api"},
+                {id = call_id, kind = "security.policy",
+                    data = {policy = {actions = {"funcs.call"}, resources = {"bee.gov.binding:contract_call"},
                         effect = "allow"}}},
-                {id = web_id, kind = "security.policy.expr",
-                    data = {policy = {expression = 'action == "http_client.request" && resource matches '
-                        .. '"^https://api\\.example\\.com/v1([?#].*)?$"',
-                        actions = {"http_client.request"}, resources = {"https://api.example.com"},
+                {id = web_id, kind = "security.policy",
+                    data = {policy = {actions = {"funcs.call"}, resources = {"bee.gov.binding:http_request"},
                         effect = "allow"}}}},
                 bindings = {{requirement_id = "app.notes:call", policy_id = call_id},
                     {requirement_id = "app.notes:web", policy_id = web_id}},
@@ -221,13 +218,15 @@ local function define_tests()
             test.eq(applied.overlay_entries, 6)
             test.not_nil(state.entries[call_id])
             test.not_nil(state.entries[web_id])
-            local expressionless = {policies = {{id = call_id, kind = "security.policy.expr",
-                data = {policy = {actions = {"contract.open"}, resources = {"app.peer:api"},
-                    effect = "allow"}}}},
+            -- The runtime cannot pair a binding with a method, so a generated
+            -- expression grant on contract actions is never installable.
+            local direct = {policies = {{id = call_id, kind = "security.policy.expr",
+                data = {policy = {expression = 'action == "contract.call"', actions = {"contract.call"},
+                    resources = {"get"}, effect = "allow"}}}},
                 bindings = {{requirement_id = "app.notes:call", policy_id = call_id}},
                 record = generated.record}
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
-                "bee.gov:overlay", portable, nil, expressionless))
+                "bee.gov:overlay", portable, nil, direct))
         end)
 
         test.it("measures and reconciles an overlay entry near the 256 KiB artifact limit", function()

@@ -31,6 +31,25 @@ entries:
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
   security: {policies: [bee.gov.security:destination_facade_policy]}
+- name: contract_call
+  kind: function.lua
+  source: file://gateway.lua
+  method: contract_call
+  modules: &gateway_modules [registry, security, contract, http_client, hash]
+  imports: &gateway_imports
+    bounds: bee.threads.records:bounds
+    capability_gateway: bee.gov:capability_gateway
+    capability_grants: bee.gov:capability_grants
+    capability_catalog: bee.gov:capability_catalog
+    workspace_applications: bee.gov:workspace_applications
+  security: {policies: [bee.gov.security:gateway_policy]}
+- name: http_request
+  kind: function.lua
+  source: file://gateway.lua
+  method: http_request
+  modules: *gateway_modules
+  imports: *gateway_imports
+  security: {policies: [bee.gov.security:gateway_policy]}
 - name: overlay_call
   kind: function.lua
   source: file://workspace_method.lua

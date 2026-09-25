@@ -25,3 +25,11 @@ entries:
     actions: [bee.gov.delivery.publish]
     resources: '*'
     effect: allow
+- name: workspace_folder_read_policy
+  kind: security.policy.expr
+  meta: {comment: Lets the governance destination read one workspace's catalog row to root its file grants; nothing else}
+  policy:
+    expression: '(action == "funcs.call" && resource == "bee.workspace.catalog:read") || action == "bee.workspace.manager.read"'
+    actions: [funcs.call, bee.workspace.manager.read]
+    resources: ['*']
+    effect: allow

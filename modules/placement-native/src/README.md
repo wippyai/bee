@@ -172,6 +172,8 @@ absent by identity. It does not say its group or descendants ended.
 `direct_process` by the observed exit or proven leader absence,
 `process_group` when no member of the recorded group answers a signal
 probe, `contained_tree` never on this runtime.
+Overlapping cleanup calls treat a home entry already removed by the other
+caller as gone; a path still present after a filesystem error stays uncertain.
 
 A stop accepted during materialization fences the asynchronous credential reply
 before login seeding. If no child was created, the same runner commits its exit

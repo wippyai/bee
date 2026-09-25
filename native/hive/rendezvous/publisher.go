@@ -31,6 +31,7 @@ func Publisher(directory, execution, launch string) (boot.Component, error) {
 				return err
 			}
 			descriptor.Launch = launch
+			descriptor.ClientRevision = ClientRevision
 			return store.Publish(ctx, descriptor)
 		},
 	}), nil

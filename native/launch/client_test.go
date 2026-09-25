@@ -68,7 +68,7 @@ func fakeDescriptor(t *testing.T) rendezvous.Descriptor {
 	d := rendezvous.Descriptor{
 		Version: 1, Execution: "0123456789abcdef0123456789abcdef", Node: "bee-owner-test",
 		Gossip: "127.0.0.1:7946", Transport: "127.0.0.1:9100",
-		PublicKey: base64.RawStdEncoding.EncodeToString(public),
+		PublicKey: base64.RawStdEncoding.EncodeToString(public), ClientRevision: rendezvous.ClientRevision,
 	}
 	return d
 }
@@ -135,6 +135,58 @@ func TestClientReusesRunningOwnerWithoutSpawning(t *testing.T) {
 	}
 	if owner.joined != 1 {
 		t.Fatalf("joined %d times, want 1", owner.joined)
+	}
+}
+
+func TestClientRejectsOlderOwnerBeforeEnrollment(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1}
+	owner.descriptor.ClientRevision = ""
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	seams.waitEnrolled = func(context.Context, string, string, ed25519.PublicKey) error {
+		t.Fatal("enrolled with an incompatible owner")
+		return nil
+	}
+	for _, intent := range []clientIntent{{}, {stop: true}} {
+		err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: intent})
+		if err == nil || !strings.Contains(err.Error(), "older Bee") || !strings.Contains(err.Error(), "kill -TERM") || !strings.Contains(err.Error(), state) {
+			t.Fatalf("intent %+v: %v", intent, err)
+		}
+	}
+	if owner.joined != 0 {
+		t.Fatalf("incompatible owner joined %d times", owner.joined)
+	}
+}
+
+func TestClientExplainsOwnerThatDoesNotAnswer(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	seams.join = func(context.Context, joinRequest) error { return context.DeadlineExceeded }
+	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
+	if err == nil || !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "did not answer") || !strings.Contains(err.Error(), "bee stop") {
+		t.Fatalf("unresponsive owner: %v", err)
+	}
+}
+
+func TestClientExplainsRunningOwnerWithoutRendezvousOrEnrollment(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	seams.waitDescriptor = func(context.Context, string) (rendezvous.Descriptor, error) {
+		return rendezvous.Descriptor{}, os.ErrNotExist
+	}
+	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
+	if err == nil || !strings.Contains(err.Error(), "running Bee owner") || !strings.Contains(err.Error(), "kill -TERM") {
+		t.Fatalf("missing descriptor: %v", err)
+	}
+	seams = owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	seams.waitEnrolled = func(context.Context, string, string, ed25519.PublicKey) error {
+		return errors.New("owner did not enroll this client before the timeout")
+	}
+	err = runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{})
+	if err == nil || !strings.Contains(err.Error(), "running Bee owner") || !strings.Contains(err.Error(), "bee stop") {
+		t.Fatalf("missing enrollment: %v", err)
 	}
 }
 

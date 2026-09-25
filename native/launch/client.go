@@ -217,13 +217,22 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 		held := func() (bool, error) { return seams.owned(launch.State) }
 		published, err := waitDescriptorOrExit(startup, seams.waitDescriptor, directory, previous, done, wait, held)
 		if err != nil {
+			if running, ownedErr := seams.owned(launch.State); ownedErr == nil && running && errors.Is(err, context.DeadlineExceeded) {
+				return fmt.Errorf("a running Bee owner did not publish its rendezvous in time: %w; %s", err, manualOwnerStop(launch.State))
+			}
 			return fmt.Errorf("Bee owner startup: %w", err)
 		}
 		started = published.Launch == launchID
 	}
 	owner, err := seams.waitDescriptor(ctx, directory)
 	if err != nil {
+		if owned {
+			return fmt.Errorf("a running Bee owner has no readable rendezvous for state %q: %w; %s", launch.State, err, manualOwnerStop(launch.State))
+		}
 		return fmt.Errorf("Bee owner rendezvous: %w", err)
+	}
+	if owner.ClientRevision != rendezvous.ClientRevision {
+		return incompatibleOwner(launch.State, owner.ClientRevision)
 	}
 	join.Directory = directory
 	join.Owner = owner
@@ -245,7 +254,7 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	// handshake.
 	if seams.waitEnrolled != nil {
 		if err := seams.waitEnrolled(ctx, launch.State, join.Node, join.Public); err != nil {
-			return err
+			return fmt.Errorf("the running Bee owner did not enroll this client: %w; try `bee stop` for this project; if it also times out, %s", err, manualOwnerStop(launch.State))
 		}
 	}
 	join.State = launch.State
@@ -257,6 +266,9 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 			stop := join
 			stop.Intent = clientIntent{stop: true, alone: true}
 			return errors.Join(err, seams.join(ctx, stop))
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("the running Bee owner did not answer in time: %w; try `bee stop` for this project; if it also times out, %s", err, manualOwnerStop(launch.State))
 		}
 		return err
 	}
@@ -278,6 +290,17 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	}
 	_, err = io.WriteString(seams.report, detachedLine)
 	return err
+}
+
+func incompatibleOwner(state, revision string) error {
+	if revision == "" {
+		revision = "unadvertised"
+	}
+	return fmt.Errorf("a running older Bee owner for state %q uses client protocol %q; %s; then run `bee` again", state, revision, manualOwnerStop(state))
+}
+
+func manualOwnerStop(state string) string {
+	return fmt.Sprintf("run `ps -eo pid,args`, find the Bee owner command containing state %q, and run `kill -TERM <PID>`; wait for it to exit", state)
 }
 
 // detachedLine follows a detached desktop client whose owner keeps running.

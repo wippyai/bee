@@ -29,6 +29,7 @@ func sample() Descriptor {
 
 func TestStrictDescriptorBoundary(t *testing.T) {
 	d := sample()
+	d.ClientRevision = ClientRevision
 	data, _ := json.Marshal(d)
 	got, err := Decode(data)
 	if err != nil || got != d {
@@ -127,6 +128,7 @@ func (m membership) UpdateMeta(map[string]string) {}
 func TestPublisherRequiresStartedMembershipAndPreservesDescriptor(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "discovery")
 	d := sample()
+	d.ClientRevision = ClientRevision
 	component, err := Publisher(dir, d.Execution, "")
 	if err != nil {
 		t.Fatal(err)

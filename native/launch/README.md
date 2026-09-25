@@ -52,6 +52,14 @@ the runtime waits on ends the way a termination signal ends it. The client repor
 project`. A desktop client that detaches (Ctrl+Q) from a running owner prints
 `Bee is still running; bee stop ends it`.
 
+The owner descriptor advertises the native client's Hive protocol revision.
+A client rejects an older or incompatible descriptor before enrollment. This
+also applies to `bee stop`: if the older owner cannot accept its stop operation,
+the error identifies the state and tells the user to find that owner's process
+with `ps -eo pid,args` and send it `kill -TERM <PID>`, wait for exit, then run
+`bee` again. A running owner that does not answer a client before its bounded
+startup deadline reports a timeout and the same recovery route.
+
 `bee hive VERB` manages this node's Hive membership and is decoded before
 project selection like every other command:
 

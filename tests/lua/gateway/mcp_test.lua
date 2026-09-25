@@ -132,7 +132,11 @@ local function define_tests()
             local _, oversized_text = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 4, idempotency_key = "oversized-source", path = "entries.json",
                 content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES + 1)}})
-            test.eq(oversized_text, "content exceeds the MCP text bound")
+            test.eq(oversized_text, "content exceeds the 65,536-byte MCP chunk bound; put the first chunk, then append with offset")
+            local append = mcp.overlay_arguments({arguments = {operation = "append", overlay_id = "research-candidate",
+                expected_revision = 5, idempotency_key = "append-source", path = "entries.json", offset = 65536,
+                result_digest = string.rep("a", 64), content = "more"}})
+            test.eq(append and append.offset, 65536)
 
             -- 65,536 zero bytes in canonical padded base64 exercise the existing
             -- Governance decoder at the MCP allowance's exact decoded boundary.
@@ -218,8 +222,13 @@ local function define_tests()
             local components_schema = components_tools[1].inputSchema :: {[string]: unknown}
             local components_operation = (components_schema.properties :: {[string]: unknown}).operation :: {[string]: unknown}
             local read_operations = components_operation.enum :: {string}
-            test.eq(#read_operations, 8)
-            for _, operation in ipairs({"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan"}) do
+            test.eq(#read_operations, 9)
+            local found_installed_source = false
+            for _, operation in ipairs(read_operations) do
+                if operation == "installed_source" then found_installed_source = true end
+            end
+            test.is_true(found_installed_source)
+            for _, operation in ipairs({"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan"}) do
                 local found = false
                 for _, admitted in ipairs(read_operations) do if admitted == operation then found = true end end
                 test.is_true(found)
@@ -332,7 +341,7 @@ local function define_tests()
             local _, oversized_text = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "large-text", path = "large.txt",
                 content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES + 1)}})
-            test.eq(oversized_text, "content exceeds the MCP text bound")
+            test.eq(oversized_text, "content exceeds the 65,536-byte MCP chunk bound; put the first chunk, then append with offset")
             local _, oversized_base64 = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "large-binary", path = "large.bin",
                 content_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES + 4)}})

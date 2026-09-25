@@ -72,6 +72,10 @@ local function handle(raw: unknown): Result
         local result, problem = inspect.read(value.request)
         if not result then return transaction.failure("UNAVAILABLE", problem or "package inspection unavailable") end
         return transaction.success(result, false)
+    elseif value.operation == "installed_source" then
+        local result, problem = inventory_reader.sources(value.request)
+        if not result then return transaction.failure("UNAVAILABLE", problem or "installed source unavailable") end
+        return transaction.success(result, false)
     elseif value.operation == "installed" then
         local result, problem = inventory_reader.read()
         if not result then return transaction.failure("UNAVAILABLE", problem or "inventory unavailable") end

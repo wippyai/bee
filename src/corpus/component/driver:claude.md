@@ -7,3 +7,7 @@ configuration for the shared driver contract.
 The host supplies the executable/API-key environment and each route's policy.
 The component declares no process authority, credential access, or MCP
 permissions.
+When Bee gateway tools are selected, the launch allows Claude Code's reserved
+`mcp__bee__session` tool in `dontAsk` mode alongside those tools. The gateway
+still checks session operations against the admitted binding. Gateway-only
+authoring does not enable Claude's local `Edit` or `Write` filesystem tools.

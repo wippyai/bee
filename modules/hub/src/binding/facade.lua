@@ -15,7 +15,7 @@ local function handle(raw: unknown): Result
     if not value then return transaction.failure("INVALID", "Hub request must be an object") end
     local extra = bounds.fields(value, {"operation", "request", "expected_digest"})
     if extra then return transaction.failure("INVALID", extra) end
-    local operation = bounds.member(value.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan", "apply", "status"})
+    local operation = bounds.member(value.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan", "apply", "status"})
     if not operation then return transaction.failure("INVALID", "unknown Hub operation") end
     local resource = "catalog"
     if operation == "catalog" then
@@ -32,6 +32,12 @@ local function handle(raw: unknown): Result
     elseif operation == "inspect" then
         local request, problem = inspection.decode(value.request)
         if not request then return transaction.failure("INVALID", problem or "invalid inspection request") end
+        resource = request.component
+    elseif operation == "installed_source" then
+        local supplied = bounds.object(value.request)
+        if not supplied then return transaction.failure("INVALID", "installed source requires a component and version") end
+        local request, problem = inspection.decode({component = supplied.component, version = supplied.version})
+        if not request then return transaction.failure("INVALID", problem or "invalid installed source request") end
         resource = request.component
     elseif operation == "plan" or operation == "apply" then
         local request, problem = plan.decode(value.request)

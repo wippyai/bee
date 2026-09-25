@@ -132,6 +132,7 @@ type Session = {
     -- large to checkpoint. The runner keeps it and every later chunk until
     -- the frame completes, so acknowledgment stops just before it.
     held_from: integer?,
+    dropping_stdout: boolean,
 }
 local function step(io: IO, name: string)
     if io.after then (io.after :: (string) -> ())(name) end
@@ -455,7 +456,40 @@ local function new_session(plan: Plan, turn_id: string, epoch: integer, revision
     if point.output == "complete" then output = "complete" elseif point.output == "truncated" then output = "truncated" end
     return {plan = plan, turn_id = turn_id, turn_open = true, epoch = epoch, revision = revision, checkpoint = point, decoder = decoder, normalizer = point.normalizer_state,
         terminal = terminal, stream_ended = point.stream_ended == true, exit = nil, eof = {stdout = false, stderr = false}, runner = nil, settled = nil, recovered = false, output = output, pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
-        last_sequence = {stdout = point.consumed.stdout, stderr = point.consumed.stderr}, held_from = nil}
+        last_sequence = {stdout = point.consumed.stdout, stderr = point.consumed.stderr}, held_from = nil,
+        dropping_stdout = point.dropping_stdout == true}
+end
+-- A provider may echo an entire tool input or result in one JSONL status
+-- frame. Keep a bounded prefix, record one omission, then drain through the
+-- newline. A checkpoint records the drain state for carrier replacement.
+type FrameProblem = {index: integer, message: string, sample: string}
+type FrameEnvelope = {index: integer, value: {[string]: unknown}}
+local function feed_stdout(session: Session, chunk: string, exhausted: boolean): ({FrameEnvelope}, {FrameProblem}, string?)
+    local data = chunk
+    if session.dropping_stdout then
+        local newline = data:find("\n", 1, true)
+        if not newline then return {}, {}, nil end
+        data = data:sub(newline + 1)
+        session.dropping_stdout = false
+    end
+    local newline = data:find("\n", 1, true)
+    local first_length = #session.decoder.framer.carry + (newline or (#data + 1)) - 1
+    if first_length > M.MAX_FRAME_BYTES
+        or (exhausted and not newline and first_length > checkpoint.MAX_CARRY_BYTES) then
+        session.decoder.framer.carry = ""
+        session.decoder.index = session.decoder.index + 1
+        local problem: FrameProblem = {index = session.decoder.index,
+            message = "oversized frame omitted after the bounded runner window", sample = ""}
+        if not newline then
+            session.dropping_stdout = true
+            return {}, {problem}, nil
+        end
+        local envelopes, rest, feed_error = stream_json.feed(session.decoder, data:sub(newline + 1))
+        table.insert(rest, 1, problem)
+        return envelopes, rest, feed_error
+    end
+    local envelopes, problems, feed_error = stream_json.feed(session.decoder, data)
+    return envelopes, problems, feed_error
 end
 -- The gateway binding of an attempt under a carrier epoch: admitted after
 -- the durable action and attempt preparation, superseding whatever an
@@ -913,7 +947,8 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         return true, nil
     end
     local was_held = session.held_from ~= nil
-    local before = {carry = session.decoder.framer.carry, index = session.decoder.index, state = snapshot_state(session.normalizer)}
+    local before = {carry = session.decoder.framer.carry, index = session.decoder.index,
+        state = snapshot_state(session.normalizer), dropping_stdout = session.dropping_stdout}
     local records: {{[string]: unknown}} = {}
     if message.eof then
         session.eof[message.stream] = true
@@ -938,16 +973,12 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
             end
         end
     elseif message.stream == "stdout" then
-        local envelopes, problems, framing_error = stream_json.feed(session.decoder, message.data or "")
-        -- The runner stops sending once this many chunks are unacknowledged,
-        -- so a partial frame that spans them can never complete.
-        if not framing_error and #session.decoder.framer.carry > checkpoint.MAX_CARRY_BYTES
-            and message.sequence - (session.held_from or message.sequence) + 1 >= placement_protocol.MAX_OUTSTANDING_CHUNKS then
-            session.decoder.framer.carry = ""
-            session.decoder.framer.overflow = true
-            framing_error = "frame exceeds what the runner holds unacknowledged ("
-                .. tostring(placement_protocol.MAX_OUTSTANDING_CHUNKS) .. " chunks)"
-        end
+        -- The runner stops sending once its unacknowledged window is full.
+        -- Count from the last durable acknowledgment, not from the chunk
+        -- where the partial frame first exceeded the checkpoint carry. The
+        -- runner cannot send chunk 17 until all 16 unacknowledged chunks move.
+        local exhausted = message.sequence - session.checkpoint.consumed.stdout >= placement_protocol.MAX_OUTSTANDING_CHUNKS
+        local envelopes, problems, framing_error = feed_stdout(session, message.data or "", exhausted)
         if framing_error then
             local fault = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence, source_last_sequence = message.sequence,
                 envelope_index = session.decoder.index + 1, event_index = 0}, body = {type = "notice", event_key = "ignored", data = {type = "notice", level = "error", code = "framing", content = {text = framing_error}}}}
@@ -955,8 +986,9 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
             records[#records + 1] = fault
         else
             for _, problem in ipairs(problems) do
+                local code = problem.message:find("oversized frame omitted", 1, true) and "oversized_frame" or "undecodable_frame"
                 records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence, source_last_sequence = message.sequence,
-                    envelope_index = problem.index, event_index = 0}, body = {type = "notice", event_key = "ignored", data = {type = "notice", level = "warning", code = "undecodable_frame", content = {text = problem.message}}}}
+                    envelope_index = problem.index, event_index = 0}, body = {type = "notice", event_key = "ignored", data = {type = "notice", level = "warning", code = code, content = {text = problem.message}}}}
             end
             for _, envelope in ipairs(envelopes) do
                 local observations, terminal, err = normalize(io, session, envelope.index, envelope.value, false)
@@ -999,6 +1031,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         if final and at_boundary then
             session.checkpoint.consumed[message.stream] = message.sequence
             session.checkpoint.carry.stdout = session.decoder.framer.carry
+            session.checkpoint.dropping_stdout = session.dropping_stdout
             session.checkpoint.envelope_index = session.decoder.index
             session.checkpoint.normalizer_state = snapshot_state(session.normalizer) :: {[string]: unknown}?
             session.checkpoint.event_cursor = nil
@@ -1008,6 +1041,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
             session.checkpoint.consumed.stderr = message.sequence
         elseif not final and not was_held and at_boundary then
             session.checkpoint.carry.stdout = before.carry
+            session.checkpoint.dropping_stdout = before.dropping_stdout
             session.checkpoint.envelope_index = before.index
             session.checkpoint.normalizer_state = before.state :: {[string]: unknown}?
             session.checkpoint.event_cursor = {envelope_index = before.index + 1, events_committed = offset + #batch}

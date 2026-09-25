@@ -111,14 +111,17 @@ local TOOLS: {Tool} = {
                 title = {type = "string", minLength = 1, maxLength = 512}}},
             placement = {type = "string", enum = {"native", "docker"}},
         }}},
-    {name = "overlay", description = "Learn this destination's governed overlay contract (read-only guide), or create, inspect, edit or freeze a caller-owned overlay", operation = "bee.governance.binding:overlay_call",
+    {name = "overlay", description = "Learn this destination's governed overlay contract (read-only guide), or create, inspect, put, append, remove or freeze a caller-owned overlay. List without overlay_id returns your own overlay IDs; list with one returns its files. For files over 65,536 bytes, put the first chunk then append bounded chunks with the exact byte offset. The owner returns the assembled SHA-256 digest; result_digest is an optional assertion if you already know it.", operation = "bee.governance.binding:overlay_call",
         policies = {TOOL_POLICY_REFS.overlay}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
-            operation = {type = "string", enum = {"guide", "create", "list", "read", "put", "remove", "freeze"}},
+            operation = {type = "string", enum = {"guide", "create", "list", "read", "put", "append", "remove", "freeze"}},
             overlay_id = {type = "string", minLength = 1, maxLength = 160},
             expected_revision = {type = "integer", minimum = 0, maximum = 9007199254740990},
             idempotency_key = {type = "string", minLength = 1, maxLength = 160},
             path = {type = "string", minLength = 1, maxLength = 240},
+            offset = {type = "integer", minimum = 0, maximum = 4194304},
+            limit = {type = "integer", minimum = 1, maximum = 16384},
+            result_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
             content = {type = "string", maxLength = M.MAX_WORKSPACE_TEXT_BYTES},
             content_base64 = {type = "string", maxLength = M.MAX_WORKSPACE_BASE64_BYTES},
             snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
@@ -134,10 +137,10 @@ local TOOLS: {Tool} = {
             offset = {type = "integer", minimum = 0},
             limit = {type = "integer", minimum = 1, maximum = 16384},
         }}},
-    {name = "components", description = "Inspect installed registry components, explore Hub packages and review a resolved installation plan without applying it. Catalog and details discover packages; installed reads effective component state; inspect and state show exact package entries, resources and requirements; files and read_file inspect packaged documentation and examples; plan resolves the exact dependency closure, migrations and capabilities. This tool cannot apply, install, update, uninstall or write the registry.", operation = "bee.hub.binding:call",
+    {name = "components", description = "Inspect installed registry components, explore Hub packages and review a resolved installation plan without applying it. Catalog and details discover Hub packages; installed reads effective component inventory; installed_source lists and pages Lua source of an exact installed component, including local dev versions, under its registry revision; inspect and state read exact Hub artifacts, which may differ from installed versions; files and read_file inspect packaged resources; plan resolves dependencies and capabilities. This tool cannot apply or write the registry.", operation = "bee.hub.binding:call",
         policies = {TOOL_POLICY_REFS.components}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
-            operation = {type = "string", enum = {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan"}},
+            operation = {type = "string", enum = {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan"}},
             request = {type = "object"},
         }}},
     {name = "delivery", description = "Request delivery of your frozen component pack to this destination: publish the frozen artifact, stage it and read the destination's preflight verdict; or read a staged version's review, selection and activation status. It names the human steps it cannot take: review in Overlays, approval in Approvals and apply by the activation owner.", operation = "bee.governance.binding:delivery_call",
@@ -468,7 +471,7 @@ function M.overlay_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     if type(arguments.content) == "string" and #arguments.content > M.MAX_WORKSPACE_TEXT_BYTES then
-        return nil, "content exceeds the MCP text bound"
+        return nil, "content exceeds the 65,536-byte MCP chunk bound; put the first chunk, then append with offset"
     end
     if type(arguments.content_base64) == "string" and #arguments.content_base64 > M.MAX_WORKSPACE_BASE64_BYTES then
         return nil, "content_base64 exceeds the MCP body bound"
@@ -490,7 +493,7 @@ function M.components_arguments(params: Object): (Object?, string?)
     if not arguments then return nil, "arguments must be an object" end
     local unknown_field = bounds.fields(arguments, {"operation", "request"})
     if unknown_field then return nil, unknown_field end
-    local operation = bounds.member(arguments.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan"})
+    local operation = bounds.member(arguments.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan"})
     if not operation then return nil, "components operation is read-only" end
     if arguments.request ~= nil and not bounds.object(arguments.request) then return nil, "request must be an object" end
     return {operation = operation, request = arguments.request}, nil

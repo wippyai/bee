@@ -343,10 +343,26 @@ local function main()
     local large_put = tool("workspace-action", workspace_token, "overlay", {operation = "put", overlay_id = "gateway-large-source",
         expected_revision = 1, idempotency_key = "put-large", path = "app.lua", content = source})
     assert(large_put.ok == true, "app-size source refused over HTTP")
-    local large_read = tool("workspace-action", workspace_token, "overlay", {operation = "read", overlay_id = "gateway-large-source", path = "app.lua"})
-    assert(large_read.ok == true and (large_read.value :: Object).bytes == #source, "app-size source was truncated")
-    local recovered = base64.decode(tostring((large_read.value :: Object).content_base64))
-    assert(recovered == source, "app-size source changed during HTTP authoring")
+    local tail = string.rep("local measurement = 2\n", 2200)
+    local large_append = tool("workspace-action", workspace_token, "overlay", {operation = "append", overlay_id = "gateway-large-source",
+        expected_revision = 2, idempotency_key = "append-large", path = "app.lua", offset = #source, content = tail})
+    assert(large_append.ok == true and (large_append.value :: Object).revision == 3, "app-size append refused over HTTP")
+    local complete = source .. tail
+    local parts: {string} = {}
+    local offset = 0
+    local ended = false
+    repeat
+        local page = tool("workspace-action", workspace_token, "overlay", {operation = "read", overlay_id = "gateway-large-source",
+            path = "app.lua", offset = offset})
+        assert(page.ok == true and (page.value :: Object).bytes == #complete, "app-size source was truncated")
+        local value = page.value :: Object
+        local decoded = assert(base64.decode(tostring(value.content_base64)))
+        parts[#parts + 1] = decoded
+        offset = offset + #decoded
+        if value.eof then ended = true; break end
+    until offset >= #complete
+    assert(ended, "app-size source read did not reach EOF")
+    assert(table.concat(parts) == complete, "app-size source changed during HTTP authoring")
     local _, oversized = rpc("workspace-action", workspace_token, "tools/call", {name = "overlay", arguments = {
         operation = "put", overlay_id = "gateway-large-source", expected_revision = 2,
         idempotency_key = "too-large", path = "app.lua", content = string.rep("x", 65537)}})
@@ -354,7 +370,7 @@ local function main()
     local body_status = rpc("workspace-action", workspace_token, "ping", {padding = string.rep("x", 524288)})
     assert(body_status == 400, "whole MCP body limit was not enforced")
     local unchanged = tool("workspace-action", workspace_token, "overlay", {operation = "list", overlay_id = "gateway-large-source"})
-    assert(unchanged.ok == true and (unchanged.value :: Object).revision == 2, "refused oversized request changed the workspace")
+    assert(unchanged.ok == true and (unchanged.value :: Object).revision == 3, "refused oversized request changed the workspace")
     local foreign_admission = ok(call("bee.gateway.binding:admit", {subject = "foreign-workspace-subject", action_id = "foreign-workspace-action",
         attempt_id = "foreign-workspace-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1,
         tools = {"overlay"}, ttl_ms = 60000}), "admit foreign workspace actor")

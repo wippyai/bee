@@ -20,6 +20,25 @@ local function receive(inbox: any): Message
 end
 local function define_tests()
     test.describe("Host renderer recovery", function()
+        test.it("delivers an unexpected application exit to its assigned display", function()
+            local self = tostring(process.pid())
+            local replies = assert(process.listen("bee.host.reply", {message = true}))
+            local assignments = connections.assignment_access(
+                function(_: unknown) return {assignment = {view_id = "view", instance_id = "instance", display_id = display, revision = 1}}, nil end,
+                function() return {}, nil end,
+                function(_: unknown) error("failure notification must not claim an assignment") end)
+            local host = connections.new(self, self, identity, assignments)
+            host.admitted[self] = {recipient = self, connection_id = "connection",
+                permissions = {open = true, close = true, control = true, appearance = true}, detaching = false,
+                renderer = self, renderer_generation = "generation", rendering = false, display_id = display}
+            local failed = contract.reply("", "closed", "application_failed", "Auto Research failed: view error")
+            failed.workspace_id, failed.id, failed.instance_id = identity, "view", "instance"
+            test.is_true(connections.failure(host, failed))
+            local delivered = receive(replies)
+            test.eq(delivered.reply.error_code, "application_failed")
+            test.eq(delivered.reply.error, "Auto Research failed: view error")
+            process.unlisten(replies)
+        end)
         test.it("admits a replacement renderer while the crashed renderer's grants are still being released", function()
             local events = assert(process.events())
             local requests = assert(process.listen("bee.app.request", {message = true}))

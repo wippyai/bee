@@ -147,14 +147,42 @@ end
 ```
 
 `launch` returns `{thread_id, action_id, attempt_id, definition_ref, title,
-brief}`; the same `idempotency_key` replays the same run. `status` and `wait`
-answer `{thread_id, attempt_id, state, outcome?, answer?}` with `state`
-`starting`, `running` or `ended`; they read the child's thread and need the
-application to belong to it, as its creator or a member. `wait` watches the
-thread and returns at the deadline with the last status. `cancel` stops a
+brief}`; the same `idempotency_key` replays the same run. `status`, `wait` and
+`cancel` each return `status, fault`; on failure status is nil and fault is
+`{code, message}`. The status shape is `{thread_id, attempt_id, state,
+outcome?, answer?}` with `state` equal to `starting`, `running`, `cancelling`
+or `ended`. These calls read the child's thread and need the application to
+belong to it, as its creator or a member. `wait` watches the thread and
+returns at the deadline with the last status. `status`, `wait` and `cancel`
+need only `run.thread_id` and `run.attempt_id`; keep the whole launch result
+for display and later calls. `wait` blocks the calling process in slices of at
+most 60 seconds, so a UI event loop must run it in `coroutine.spawn(function()
+... end)` if it needs to keep drawing. `thread = {thread_id = id}` selects an
+existing thread;
+`thread = {title = text}` asks for a new one. `cancel` stops a
 running child through the placement that started it, which accepts only the
 attempt's owner; the attempt then settles `cancelled`. A run whose child has
 not started is refused with `NOT_STARTED`.
+
+Launch definitions are registry entries with `meta.type =
+bee.launch_definition`; a definition ID alone does not reveal whether the
+host lets this application launch it. The installed driver definitions include
+`bee.driver.claude:research_batch`,
+`bee.driver.codex:research_batch`, `bee.driver.codex:named_batch`,
+`bee.driver.agy:research_batch` and `bee.driver.muse:research_batch`. This is
+an inventory of definitions, not an authorization list. An application has no
+public API to list the definitions it may launch or saved profile IDs and
+revisions. The Agent app manages saved profiles; a caller must obtain an exact
+ID and revision from the person, and the host still decides admission.
+
+The application `agents` helper exposes launch, status, wait and cancel. It
+does not expose child thread records, intermediate output, a live steering
+channel or an app-side equivalent of gateway `thread_message` or
+`thread_read`. `client.thread_request` routes operations for an authenticated
+initiating thread through the broker when a host grants that thread access;
+the shipped workspace-application rule sets `thread_access: none`. A UI may
+show its own run statuses and final `status.answer`, but cannot claim a live
+child transcript through this API.
 
 ## Launch and lifecycle
 
@@ -299,6 +327,21 @@ one view returns `busy`. Results contain `accept|cancel`, a value and an error;
 questions are not persisted, are canceled on app exit, and F12 retains the
 question while resetting transient input and focus. They are plain text, not
 password fields. A positive answer is not a capability grant.
+The options are `{kind = "confirm"|"text", title = string, message?, accept?,
+initial?}`. Listen on `bee.application.query.result` before calling `query`;
+it returns `request_id, error`. Decode the broker message with
+`client.query_result(launch, tostring(message:from()), message:payload():data())`
+and match its `request_id`. The decoded reply is `{request_id, action =
+"accept"|"cancel", value, error}`; a busy reply has `error = "busy"`.
+
+Terminal key events use `key_type` values such as `runes`, `space`, `enter`,
+`backspace`, `tab`, `up`, `down`, `left`, `right`, `pgup` and `pgdown`;
+the payload also carries `key`, `ctrl`, `alt` and `shift`. Mouse wheel events
+have `type = "mouse"`, `action = "wheel"` and `button = "wheel_up"` or
+`"wheel_down"` (some senders use `"up"` or `"down"`).
+`bee.application:text.bound(value, limit)` replaces control
+characters, including newlines, with spaces and truncates on a UTF-8
+character boundary.
 
 An app opts into negotiated close with `client.ready(launch,
 {negotiate_close = true})` and the authenticated close request/result helpers.

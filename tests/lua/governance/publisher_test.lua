@@ -2,6 +2,7 @@
 -- destination-independent descriptor through the ordered Sync feed.
 local test = require("test")
 local uuid = require("uuid")
+local hash = require("hash")
 local publisher = require("publisher")
 local delivery = require("delivery")
 local artifact = require("artifact")
@@ -82,6 +83,54 @@ local function define_tests()
             local read = store:read_frozen(workspace, "entries.json", digest)
             test.is_true(read.ok)
             test.eq((read.value :: {[string]: unknown}).content_base64, "W10=")
+            test.is_true(store:close())
+        end)
+        test.it("assembles large authored files with checked append, CAS and replay", function()
+            local suffix = assert(uuid.v7())
+            local store = assert(staging.open("bee.governance:plan_test_db", "append-node-" .. suffix))
+            local id = "append-" .. suffix
+            test.is_true(store:call("author-a", {operation = "create", workspace_id = id,
+                expected_revision = 0, idempotency_key = "create"}).ok)
+            local owned = store:call("author-a", {operation = "list", workspace_id = "", owned = true})
+            test.is_true(owned.ok)
+            local overlays = (owned.value :: {[string]: unknown}).overlays :: {{[string]: unknown}}
+            test.eq(#overlays, 1)
+            test.eq(overlays[1].workspace_id, id)
+            local foreign = store:call("author-b", {operation = "list", workspace_id = "", owned = true})
+            test.eq(#((foreign.value :: {[string]: unknown}).overlays :: {unknown}), 0)
+            local first = string.rep("x", 65536)
+            local tail = string.rep("y", 20000)
+            test.is_true(store:call("author-a", {operation = "put", workspace_id = id,
+                expected_revision = 1, idempotency_key = "put", path = "entries.json", content = first}).ok)
+            local complete_digest = assert(hash.sha256(first .. tail))
+            local appended = store:call("author-a", {operation = "append", workspace_id = id, expected_revision = 2,
+                idempotency_key = "append", path = "entries.json", offset = #first,
+                content = tail})
+            test.is_true(appended.ok)
+            test.eq((appended.value :: {[string]: unknown}).revision, 3)
+            test.is_true(store:call("author-a", {operation = "append", workspace_id = id, expected_revision = 2,
+                idempotency_key = "append", path = "entries.json", offset = #first,
+                content = tail}).replayed)
+            test.eq(store:call("author-a", {operation = "append", workspace_id = id, expected_revision = 2,
+                idempotency_key = "append", path = "entries.json", offset = #first,
+                content = "changed"}).code, "CONFLICT")
+            test.eq(store:call("author-a", {operation = "append", workspace_id = id, expected_revision = 3,
+                idempotency_key = "wrong", path = "entries.json", offset = 0,
+                content = tail, result_digest = complete_digest}).code, "CONFLICT")
+            test.eq(store:call("author-a", {operation = "append", workspace_id = id, expected_revision = 3,
+                idempotency_key = "bad-digest", path = "entries.json", offset = #first + #tail,
+                content = tail, result_digest = complete_digest}).code, "INVALID")
+            local read = store:call("author-a", {operation = "read", workspace_id = id, path = "entries.json"})
+            test.is_true(read.ok)
+            test.eq((read.value :: {[string]: unknown}).bytes, #first + #tail)
+            test.eq((read.value :: {[string]: unknown}).digest, complete_digest)
+            test.eq((read.value :: {[string]: unknown}).chunk_bytes, 16384)
+            test.is_false((read.value :: {[string]: unknown}).eof)
+            local next_page = store:call("author-a", {operation = "read", workspace_id = id,
+                path = "entries.json", offset = 16384, limit = 8192})
+            test.is_true(next_page.ok)
+            test.eq((next_page.value :: {[string]: unknown}).offset, 16384)
+            test.eq((next_page.value :: {[string]: unknown}).chunk_bytes, 8192)
             test.is_true(store:close())
         end)
 

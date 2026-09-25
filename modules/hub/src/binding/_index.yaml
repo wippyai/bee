@@ -66,4 +66,4 @@ entries:
     transaction: bee.persist:transaction
     preview: bee.hub.binding:preview
   security: {policies: [bee.hub.security:facade_policy]}
-  meta: {type: tool, title: Component explorer, llm_alias: BeeComponents, llm_description: Inspect effective installed component state and exact Hub packages without applying them, input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","plan"]},"request":{"type":"object"}}}'}
+  meta: {type: tool, title: Component explorer, llm_alias: BeeComponents, llm_description: Inspect effective installed component state and exact Hub packages without applying them, input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","installed_source","plan"]},"request":{"type":"object"}}}'}

@@ -152,4 +152,68 @@ function M.dependency_members(state: Result): {[string]: boolean}
     end
     return members
 end
+
+-- Source inspection is deliberately narrower than a registry snapshot. A
+-- component read grant reveals only Lua source owned by that exact installed
+-- component; registry configuration, grants and other owners never enter the
+-- result. Revision fences keep paged reads on one effective installation.
+function M.sources(raw_state: unknown, raw_revision: unknown, raw_request: unknown): ({[string]: unknown}?, string?)
+    local request = bounds.object(raw_request)
+    if not request or bounds.fields(request, {"component", "version", "entry_id", "expected_revision", "offset", "limit"}) then
+        return nil, "invalid installed source request"
+    end
+    local name, selected = component(request.component), bounds.line(request.version, 128)
+    local revision = bounds.integer(raw_revision)
+    if not name or not selected or not revision or revision < 0 then return nil, "invalid installed component identity" end
+    local decoded, problem = M.decode(raw_state, revision)
+    if not decoded then return nil, problem end
+    local installed = false
+    for _, item in ipairs(decoded.modules) do
+        if item.component == name and item.version == selected then installed = true; break end
+    end
+    if not installed then return nil, "component version is not installed" end
+    local wanted: string? = nil
+    if request.entry_id ~= nil then
+        wanted = bounds.id(request.entry_id)
+        if not wanted or request.expected_revision ~= revision then return nil, "entry or registry revision changed" end
+    elseif request.expected_revision ~= nil or request.offset ~= nil or request.limit ~= nil then
+        return nil, "select an entry before paging source"
+    end
+    local offset: integer? = 0
+    local limit: integer? = 16384
+    if request.offset ~= nil then offset = bounds.count(request.offset) end
+    if request.limit ~= nil then limit = bounds.count(request.limit) end
+    if not offset or offset > 4194304 or not limit or limit < 1 or limit > 16384 then
+        return nil, "installed source window is out of bounds"
+    end
+    local from: integer = offset
+    local length: integer = limit
+    local state = bounds.object(raw_state)
+    if not state then return nil, "invalid registry state" end
+    local raw_entries = state.entries
+    if type(raw_entries) ~= "table" then return nil, "invalid registry entries" end
+    local entries: {{id: string, kind: string, bytes: integer}} = {}
+    for _, raw_entry in ipairs(raw_entries :: {unknown}) do
+        local entry = bounds.object(raw_entry)
+        local owned = entry and bounds.object(entry.registry)
+        if owned and owned.owner == name and entry then
+            local kind = bounds.member(entry.kind, {"library.lua", "function.lua", "process.lua"})
+            local data = bounds.object(entry.data)
+            local id = bounds.id(entry.id)
+            if kind and data and id and type(data.source) == "string" then
+                local source = data.source :: string
+                if wanted == id then
+                    return {component = name, version = selected, revision = revision, entry_id = id,
+                        offset = from, content = source:sub(from + 1, from + length), bytes = #source,
+                        eof = from + length >= #source}, nil
+                end
+                if #entries >= 256 then return nil, "installed source manifest exceeds its bound" end
+                entries[#entries + 1] = {id = id, kind = kind, bytes = #source}
+            end
+        end
+    end
+    if wanted then return nil, "source entry is not owned by this installed component" end
+    table.sort(entries, function(a, b): boolean return a.id < b.id end)
+    return {component = name, version = selected, revision = revision, entries = entries}, nil
+end
 return M

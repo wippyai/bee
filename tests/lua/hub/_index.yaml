@@ -115,3 +115,5 @@ entries:
     test: wippy.test:test
     inspect: bee.hub.binding:inspect
     inspection: bee.hub:inspection
+    inventory: bee.hub:inventory
+    installed: bee.hub.registry:inventory_reader

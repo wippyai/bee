@@ -333,17 +333,20 @@ local function define_tests()
             test.is_true((reported.max_frame_bytes :: number) > 16384)
             test.eq(reported.takeover, "claim")
         end)
-        test.it("rejects a frame beyond what the runner holds unacknowledged as an uncertain attempt", function()
+        test.it("omits an oversized status frame and continues to the terminal result", function()
             local thread_id = thread()
-            local outcome = run_carrier("bee.harness.carrier:process", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_HUGE = "16000"}), "open", nil)
+            local outcome = run_carrier("bee.harness.carrier:process", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_HUGE = "10400"}), "open", nil)
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
-            test.eq((outcome.value.settlement :: {[string]: unknown}).outcome, "uncertain")
+            local settled = outcome.value.settlement :: {[string]: unknown}
             local _, records = kinds(thread_id)
             local framing = 0
+            local codes: {string} = {}
             for _, item in ipairs(observations(records, nil)) do
                 local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
-                if data.type == "notice" and data.code == "framing" then framing = framing + 1 end
+                if data.type == "notice" and data.code == "oversized_frame" then framing = framing + 1 end
+                if data.type == "notice" then codes[#codes + 1] = tostring(data.code) end
             end
+            if settled.answer ~= "pong" then error("oversized result: " .. tostring(settled.outcome) .. ": " .. tostring(settled.reason) .. ": " .. table.concat(codes, ",")) end
             test.eq(framing, 1)
         end)
         test.it("writes input under control records and reconciles both write boundaries after a crash", function()

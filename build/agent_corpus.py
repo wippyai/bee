@@ -111,6 +111,7 @@ BEE_DOCS = {
     "reference/agents/carrier.md": ("application", "carrier"),
     "guides/desktop.md": ("ui", "desktop"),
     "guides/overlays.md": ("application", "distributed_app_delivery"),
+    "guides/hub.md": ("registry", "hub_inspection"),
     "reference/agents/gateway.md": ("gateway", "gateway"),
     "reference/agents/hooks.md": ("gateway", "gateway_hooks"),
     "guides/agents/mcp.md": ("gateway", "mcp_configuration"),
@@ -297,6 +298,28 @@ def proven_examples(path: Path) -> "list[tuple[list[str], str]]":
     return examples
 
 
+def lua_type_definitions(source: str) -> list[str]:
+    """Read complete type declarations, including a record on several lines."""
+    lines = source.splitlines()
+    result = []
+    index = 0
+    while index < len(lines):
+        match = re.match(r"^type ([A-Za-z]+ = .+)$", lines[index])
+        if match:
+            declaration = match.group(1)
+            depth = declaration.count("{") - declaration.count("}")
+            while depth > 0:
+                index += 1
+                if index >= len(lines):
+                    raise SystemExit("incomplete Lua type declaration")
+                part = lines[index].strip()
+                declaration += " " + part
+                depth += part.count("{") - part.count("}")
+            result.append(declaration)
+        index += 1
+    return result
+
+
 def toolkit_reference() -> bytes:
     """Bee's terminal toolkit, composed from the sources that define it."""
     guide = (ROOT / "modules/gov/src/traits/guide.lua").read_text()
@@ -308,12 +331,12 @@ def toolkit_reference() -> bytes:
     appearance = (ROOT / "modules/application/src/appearance.lua").read_text()
     frame = (ROOT / "modules/application/src/frame.lua").read_text()
     frame_api = [row for _, row in lua_calls(frame, "frame")]
-    frame_types = re.findall(r"^type ([A-Za-z]+ = [^\n]+)$", frame, re.M)
+    frame_types = lua_type_definitions(frame)
     if not frame_api or not frame_types:
         raise SystemExit("modules/application/src/frame.lua has no documented functions or types")
     viz = (ROOT / "modules/application/src/viz.lua").read_text()
     viz_calls = lua_calls(viz, "viz")
-    viz_types = re.findall(r"^type ([A-Za-z]+ = [^\n]+)$", viz, re.M)
+    viz_types = lua_type_definitions(viz)
     examples = proven_examples(ROOT / "tests/lua/frame/viz_test.lua")
     shown = {name for names, _ in examples for name in names}
     missing = [name for name, _ in viz_calls if name not in shown]
@@ -403,6 +426,10 @@ def toolkit_reference() -> bytes:
         "status at the left and the key hints at the right. Selected rows keep their text,",
         "use the accent pair and carry a `›` marker in column 1. Hits are recorded as the",
         "frame draws; resolve mouse input with `frame.hit(hits, x, y)`.",
+        "`frame.tabs` records each tab's `kind` as its hit kind; `frame.field`",
+        "records hit kind `field` and the supplied index. `frame.layout` returns",
+        "0 for omitted `tabs` and `actions` rows, and `Table.area` confines a table",
+        "to one rectangle when a detail pane shares the screen.",
         "",
         "```lua",
         *[f"type {value}" for value in frame_types],

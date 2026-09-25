@@ -233,7 +233,7 @@ entries:
   kind: function.lua
   source: file://publisher_test.lua
   method: run
-  modules: [uuid]
+  modules: [uuid, hash]
   meta: {type: test, suite: bee}
   security: {policies: [bee.governance:plan_test_policy]}
   imports:

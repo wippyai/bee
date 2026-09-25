@@ -6,10 +6,12 @@ tree, and nothing configures a profile. A managed agent, launched through the
 production launch definition, admission, carrier, placement and gateway with
 the spec (tests/fixtures/workspace_app_delivery/SPEC.md) as its brief, authors
 the application using only its gateway tools: the overlay guide, its own
-overlay, freeze and a delivery request that names no workspace. The person then
+overlay, freeze and a delivery request that names no workspace. The application
+requests threads.read, workspace.files.read and app.database; the person then
 reviews the plan in Overlays and approves it in Approvals, the activation owner
-applies it, and the application opens from the Start menu and behaves as the
-spec says, including its saved count after a restart.
+applies it with its host-created volume and isolated database, and the
+application opens from the Start menu and behaves as the spec says, including
+its saved count and its database rows after a restart.
 
 The far end of the launch is the scripted protocol agent
 (tests/fixtures/harness/gateway_client.go, mode spec): it writes the answer a
@@ -53,11 +55,31 @@ LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another
               "1.0.2 and so on. Stop when delivery reports ready.\n\n")
 
 
-def answer_entries():
+GREETING = "hello tally"
+SHARED_SUBPATH = "shared"
+DATABASE_NAME = "tally"
+
+
+def grant_identities(workspace_id):
+    """The host-installed volume and database identities for one workspace."""
+    import hashlib
+    owner = f"bee.gov.apps:{workspace_id}.tally"
+    volume = ("bee.gov.grants:volume."
+              + hashlib.sha256(f"{owner}\n{SHARED_SUBPATH}".encode()).hexdigest())
+    database = ("bee.gov.grants:database."
+                + hashlib.sha256(f"{owner}\n{DATABASE_NAME}".encode()).hexdigest())
+    return volume, database
+
+
+def answer_entries(volume_id=None, database_id=None):
     """The entries.json a model writes for SPEC.md."""
+    source = (FIXTURE / "tally.lua").read_text()
+    if volume_id and database_id:
+        source = source.replace("__TALLY_VOLUME_ID__", volume_id)
+        source = source.replace("__TALLY_DATABASE_ID__", database_id)
     return [{"id": DEFINITION_ID, "kind": "process.lua",
-             "data": {"source": (FIXTURE / "tally.lua").read_text(), "method": "main",
-                      "modules": ["tty", "process", "channel", "json", "funcs"],
+             "data": {"source": source, "method": "main",
+                      "modules": ["tty", "process", "channel", "json", "funcs", "fs", "sql"],
                       "imports": {"client": "bee.application:client", "appearance": "bee.application:appearance",
                                   "frame": "bee.application:frame"}},
              "meta": {"type": "bee.application", "application": {
@@ -66,6 +88,14 @@ def answer_entries():
             {"id": "app.tally:threads_read", "kind": "ns.requirement",
              "meta": {"value_kind": "security.policy", "capability": "threads.read",
                       "parameters": {"scope": "owned"}, "reason": "Read threads owned by this application"},
+             "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}},
+            {"id": "app.tally:shared_files", "kind": "ns.requirement",
+             "meta": {"value_kind": "security.policy", "capability": "workspace.files.read",
+                      "parameters": {"subpath": SHARED_SUBPATH}, "reason": "Read the shared workspace greeting"},
+             "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}},
+            {"id": "app.tally:tally_db", "kind": "ns.requirement",
+             "meta": {"value_kind": "security.policy", "capability": "app.database",
+                      "parameters": {"name": DATABASE_NAME}, "reason": "Persist tally rows across restart"},
              "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}}]
 
 
@@ -75,6 +105,9 @@ def compose(folder):
     shutil.copytree(ROOT / "modules", project / "modules")
     for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
         shutil.copy2(ROOT / name, project / name)
+    (project / SHARED_SUBPATH).mkdir(parents=True, exist_ok=True)
+    (project / SHARED_SUBPATH / "greeting.txt").write_text(GREETING)
+    (project / ".wippy" / "app-db").mkdir(parents=True, exist_ok=True)
     shutil.copytree(FIXTURE, project / "src/workspace_app_probe")
     for relative in SHIPPED:
         assert (project / relative).read_bytes() == (ROOT / relative).read_bytes(), relative
@@ -111,8 +144,17 @@ def compose(folder):
 def author(project, folder):
     """The managed agent's attempt, started by the host with the spec as brief."""
     workspace_id = classic_workspace(folder / "workspace.db")
+    volume_id, database_id = grant_identities(workspace_id)
+    (folder / "entries.json").write_text(json.dumps(answer_entries(volume_id, database_id)))
     spec = (FIXTURE / "SPEC.md").read_text()
-    brief = LIVE_BRIEF + spec if PROVIDER == "claude" else spec
+    if PROVIDER == "claude":
+        note = ("The person's approval installs three grants for this workspace; address them by these exact "
+                "registry identities in the application source: the workspace file volume " + volume_id
+                + " (read /greeting.txt below the approved shared subroot) and the application database "
+                + database_id + ".\n\n")
+        brief = LIVE_BRIEF + note + spec
+    else:
+        brief = spec
     result = subprocess.run([str(RUNTIME), "run", "--verbose", "workspace-app-author",
                              "--set", f"registry.history_path={folder}/registry.db"],
                             cwd=project, capture_output=True, text=True, timeout=1500,
@@ -184,7 +226,9 @@ def exercise():
         version = staged_version(folder)
         assert PROVIDER != "scripted" or version == VERSION, version
         apply_staged_in_ui(ui, {"workspace": SOURCE, "version": version, "approval_policy": APPROVAL_POLICY},
-                           folder, expected_capability="Read owned threads")
+                           folder, expected_capability=["Read owned threads",
+                                                        "Read workspace files under shared",
+                                                        "Use an isolated application database named tally"])
         open_catalog_app(ui, TITLE, COLD_BOOT)
         ui.wait("TALLY", timeout=20)
         ui.wait("Tally: 0", timeout=20)
@@ -206,7 +250,11 @@ def exercise():
             ui.pump(.1)
         assert grant_evidence.exists(), "installed grant scope was not verified"
         grant = json.loads(grant_evidence.read_text())
-        assert grant["capability"] == "threads.read" and len(grant["policies"]) == 2, grant
+        assert grant["capabilities"] == ["app.database", "threads.read", "workspace.files.read"], grant
+        assert len(grant["policies"]) == 4, grant
+        volume_id, database_id = grant_identities(classic_workspace(folder / "workspace.db"))
+        assert grant["volume_id"] == volume_id, grant
+        assert grant["database_id"] == database_id, grant
         ui.quit()
     finally:
         ui.close()
@@ -220,10 +268,18 @@ def exercise():
         restarted.quit()
     finally:
         restarted.close()
+    workspace_id = classic_workspace(folder / "workspace.db")
+    _, database_id = grant_identities(workspace_id)
+    suffix = database_id.rsplit(".", 1)[-1]
+    app_db = project / ".wippy" / "app-db" / f"{suffix}.db"
+    with sqlite3.connect(f"file:{app_db}?mode=ro", uri=True) as db:
+        rows = db.execute("SELECT n, note FROM tally_rows ORDER BY rowid").fetchall()
+    assert rows == [(1, GREETING), (2, GREETING), (3, GREETING)], rows
     print("Workspace application: a managed agent authored " + DEFINITION_ID + " from its written spec on the "
-          "shipped host profiles, the person saw the threads.read capability in Approvals, and the installed "
-          "scope contained its one generated policy; it called the Threads owner, opened from Start, counted, reset "
-          "and restored its saved count")
+          "shipped host profiles, the person saw the threads.read, workspace.files.read and app.database "
+          "capabilities in Approvals, and the installed scope contained their three generated policies; it called "
+          "the Threads owner, read a workspace file through its confined volume, recorded its counts with the "
+          "greeting in its isolated database, and restored its saved count with its rows intact")
 
 
 if __name__ == "__main__":

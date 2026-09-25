@@ -253,6 +253,51 @@ local function define_tests()
                 facts.context :: preflight.Context)).ready)
         end)
 
+        test.it("binds an application database grant to its provisioned store", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                base_policy_digest = SHA, workspace_application = true,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["process.lua"] = true, ["ns.requirement"] = true, ["function.lua"] = true},
+                databases = {}, grants = {}, modules = {}, applied = {}, migration_barrier = false,
+                workspace_id = "workspace-destination", overlay_owner = "bee.apps:workspace-destination",
+                source_node = "node-source", source_workspace = "author/app",
+                applications = {{definition_id = "private.app:main",
+                    policies = {"bee:ordinary-policy"}, thread_access = "none"}}}
+            local deps, spec = fixture(policy)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
+                policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
+                data = {},
+                registry = {owner = "bee/host"}}
+            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+                meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
+                data = {revision = 1, never = {"exec"}, capabilities = {{id = "app.database",
+                    revision = 1, confirm = "standard", parameters = {name = "name"},
+                    text = "Use an isolated application database named {name}",
+                    policies = {{operation = "database.use", resource = "$name",
+                        scope = {name = "$name"}}}, resources = {}}}}}
+            changes(spec, {{id = "private.app:main", kind = "process.lua",
+                meta = {type = "bee.application"}, data = {source = "return true"}},
+                {id = "private.app:db", kind = "ns.requirement",
+                    meta = {value_kind = "security.policy", capability = "app.database",
+                        parameters = {name = "journal"}, reason = "Persist rows"},
+                    data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}},
+                {id = "private.app:migration", kind = "function.lua",
+                    meta = {type = "migration", target_db = "journal", ordinal = 1},
+                    data = {source = "return true"}}})
+            local facts = resolve(deps, spec)
+            local proposal = facts.context.capability_proposal :: Object
+            test.eq(#(proposal.databases :: {unknown}), 1)
+            local bindings = facts.context.database_bindings :: Object
+            local bound = bindings["journal"] :: Object
+            test.eq(bound.database_id,
+                (proposal.databases :: {Object})[1].id)
+            local generated = facts.context.generated_databases :: Object
+            test.eq(generated[(proposal.databases :: {Object})[1].id :: string], "journal")
+            test.is_true(((facts.context.databases :: {[string]: boolean})["journal"]) == true)
+            test.is_true(assert(preflight.check(facts.candidate :: preflight.Candidate,
+                facts.context :: preflight.Context)).ready)
+        end)
         test.it("keeps unrelated registry edits out of the semantic base", function()
             local deps, spec = fixture(nil)
             local first = resolve(deps, spec)

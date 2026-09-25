@@ -15,7 +15,8 @@ end
 local function request(capability: string, parameters: {[string]: unknown}): {[string]: unknown}
     return {id = "app.notes:request", expected_kind = "security.policy", value = nil,
         targets = {APP}, capability_request = {capability = capability, parameters = parameters,
-            catalog_revision = 1, template_revision = 1, reason = "show the person's threads",
+            catalog_revision = assert(vocabulary()).revision,
+            template_revision = 1, reason = "show the person's threads",
             target = APP, path = ".security.policies +="}}
 end
 
@@ -80,9 +81,45 @@ local function define_tests()
             record.id = "bee.governance.grants:record." .. string.rep("0", 64)
             test.is_nil(grants.decode(record, old_owner, "workspace-1", APP, vocabulary()))
         end)
-        test.it("refuses unimplemented materialization and foreign app targets", function()
-            test.is_nil(grants.propose(vocabulary(), OWNER, APP,
+        test.it("materializes a verified workspace file volume and its policy", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("workspace.files.read", {subpath = "docs"})}))
+            test.eq(#proposed.capabilities, 1)
+            test.eq(proposed.capabilities[1].operation, "files.read")
+            test.eq(#proposed.policies, 1)
+            test.eq(proposed.policies[1].kind, "security.policy")
+            test.eq(#proposed.volumes, 1)
+            test.eq(proposed.volumes[1].kind, "fs.directory")
+            test.eq(proposed.volumes[1].directory, "docs")
+            test.is_true(proposed.volumes[1].readonly)
+            local record = assert(grants.record(OWNER, "workspace-1", APP, proposed,
+                "approval-files", 1))
+            local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
+            local installed_entries: {[string]: unknown} = {}
+            installed_entries[proposed.policies[1].id :: string] = proposed.policies[1]
+            installed_entries[proposed.volumes[1].id :: string] = proposed.volumes[1]
+            installed_entries["app.notes:request"] = {kind = "ns.requirement",
+                data = {default = proposed.policies[1].id}}
+            test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
+            installed_entries[proposed.volumes[1].id :: string] = nil
+            test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
+        end)
+        test.it("materializes an isolated application database and its policy", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
+                {request("app.database", {name = "notes"})}))
+            test.eq(#proposed.capabilities, 1)
+            test.eq(proposed.capabilities[1].operation, "database.use")
+            test.eq(#proposed.policies, 1)
+            test.eq(#proposed.databases, 1)
+            test.eq(proposed.databases[1].kind, "db.sql.sqlite")
+            local record = assert(grants.record(OWNER, "workspace-1", APP, proposed,
+                "approval-database", 1))
+            local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
+            test.eq(#(decoded.databases :: {unknown}), 1)
+        end)
+        test.it("refuses private workspace subroots and foreign app targets", function()
+            test.is_nil(grants.propose(vocabulary(), OWNER, APP,
+                {request("workspace.files.read", {subpath = ".wippy"})}))
             local foreign = request("threads.read", {scope = "owned"})
             foreign.targets = {"app.other:app"}
             test.is_nil(grants.propose(vocabulary(), OWNER, APP, {foreign}))

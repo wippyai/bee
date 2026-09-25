@@ -9,6 +9,7 @@ local bounds = require("bounds")
 local application_admission = require("application_admission")
 local capability_catalog = require("capability_catalog")
 local capability_grants = require("capability_grants")
+local capability_files = require("capability_files")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -24,7 +25,7 @@ type Policy = {node_id: string, policy_digest: string, packages: {[string]: bool
     applied_databases: {[string]: unknown}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
     auto_start: boolean,
     applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?,
-    workspace_application: boolean?, base_policy_digest: string?}
+    workspace_application: boolean?, base_policy_digest: string?, generated_databases: {Object}?}
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?)}
 
@@ -252,11 +253,27 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
             bindings[target :: string] = {database_id = database_id, table_prefix = prefix}
         end
     end
+    local generated: {[string]: string} = {}
+    if policy.generated_databases ~= nil then
+        if type(policy.generated_databases) ~= "table" then
+            return nil, "host policy generated databases are malformed"
+        end
+        for _, raw in ipairs(policy.generated_databases :: {unknown}) do
+            local item = object(raw)
+            local database_id = item and bounds.id(item.database_id) or nil
+            local target_db = item and bounds.id(item.target_db) or nil
+            if not item or not database_id or not target_db or generated[database_id] then
+                return nil, "host policy generated database is malformed"
+            end
+            generated[database_id] = target_db
+        end
+    end
     return {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
         policy_digest = policy.policy_digest, packages = policy.packages, namespaces = policy.namespaces,
         kinds = policy.kinds, databases = policy.databases, grants = policy.grants, modules = policy.modules,
         database_bindings = bindings, entries = current, installed_entries = installed, applied = policy.applied,
-        applied_databases = policy.applied_databases or {}, exact_expansion = true,
+        applied_databases = policy.applied_databases or {}, generated_databases = generated,
+        exact_expansion = true,
         migration_barrier = policy.migration_barrier == true, auto_start = policy.auto_start == true}, nil
 end
 
@@ -444,14 +461,40 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             selected_policies[#selected_policies + 1] = generated_id
             policy.grants[generated_id] = true
         end
+        -- An application database grant binds its logical name to the
+        -- host-provisioned database, so the application's own migrations run
+        -- against that dedicated store and no other target is admitted.
+        local generated_databases: {Object} = {}
+        for _, raw_grant in ipairs(proposed.capabilities) do
+            local grant = object(raw_grant)
+            local scope = grant and object(grant.scope) or nil
+            local target: string? = nil
+            if grant and scope and grant.capability == "app.database" then
+                target = bounds.id(scope.name)
+            end
+            if target then
+                local database_id, database_error = capability_files.database_id(owner, target)
+                if not database_id then return nil, nil, database_error end
+                policy.databases[target] = true
+                local bindings = policy.database_bindings
+                if not bindings then
+                    bindings = {}
+                    policy.database_bindings = bindings
+                end
+                bindings[target] = {database_id = database_id}
+                generated_databases[#generated_databases + 1] = {database_id = database_id,
+                    target_db = target}
+            end
+        end
         local prospective_binding: Object = {definition_id = app_id :: string,
             policies = selected_policies, thread_access = proposed.thread_access}
         policy.applications = {prospective_binding}
         local prospective_bytes = canonical.encode({base_policy_digest = policy.base_policy_digest,
-            capability_digest = proposed.digest})
+            capability_digest = proposed.digest, database_bindings = policy.database_bindings or {}})
         local prospective_digest = prospective_bytes and hash.sha256(prospective_bytes) or nil
         if not prospective_digest then return nil, nil, "measure prospective capability policy" end
         policy.policy_digest = prospective_digest
+        policy.generated_databases = generated_databases
     end
     -- The approval base is the external registry state that can affect this
     -- candidate. Keep the complete external context above for preflight and

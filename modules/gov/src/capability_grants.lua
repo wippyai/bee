@@ -5,6 +5,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local catalog = require("capability_catalog")
 local containment = require("capability_containment")
+local files = require("capability_files")
 
 local M = {}
 M.SCHEMA = "bee.governance-capability-grants@1"
@@ -14,7 +15,7 @@ M.PREFIX = "bee.gov.grants:"
 local PRIOR_PREFIX = "bee.governance.grants:"
 type Object = {[string]: unknown}
 type Proposal = {capabilities: {Object}, policies: {Object}, bindings: {Object},
-    thread_access: string, digest: string}
+    volumes: {Object}, databases: {Object}, thread_access: string, digest: string}
 
 local function sha(raw: unknown): string?
     if type(raw) ~= "string" or #raw ~= 64 or not raw:match("^[0-9a-f]+$") then return nil end
@@ -59,19 +60,49 @@ function M.reserved(raw: unknown): boolean
         or raw:sub(1, #PRIOR_PREFIX) == PRIOR_PREFIX)
 end
 
--- This slice materializes only owner-checked thread reads. Other catalog
--- entries remain review vocabulary until their resource and owner boundaries
--- arrive in later slices.
-local function policy(grant: Object, id: string): (Object?, string?)
+-- Each catalog entry materializes into generated host entries: a policy plus
+-- the host-created volume or database it authorizes. Other catalog entries
+-- remain review vocabulary until their resource and owner boundaries arrive.
+local function policy(owner: string, grant: Object, id: string): (Object?, Object?, Object?, string?)
     local scope = bounds.object(grant.scope)
-    if grant.capability ~= "threads.read" or grant.operation ~= "threads.read"
-        or grant.resource ~= "threads" or not scope or scope.scope ~= "owned" then
-        return nil, "capability has no installed enforcement in this slice"
+    if not scope then return nil, nil, nil, "capability scope is malformed" end
+    if grant.capability == "threads.read" and grant.operation == "threads.read"
+        and grant.resource == "threads" and scope.scope == "owned" then
+        return {id = id, kind = "security.policy", meta = {comment = "Host-generated owned thread read grant"},
+            data = {policy = {actions = {"funcs.call"},
+                resources = {"bee.threads.service:get", "bee.threads.service:list",
+                    "bee.threads.service:read_after"}, effect = "allow"}}}, nil, nil, nil
     end
-    return {id = id, kind = "security.policy", meta = {comment = "Host-generated owned thread read grant"},
-        data = {policy = {actions = {"funcs.call"},
-            resources = {"bee.threads.service:get", "bee.threads.service:list",
-                "bee.threads.service:read_after"}, effect = "allow"}}}, nil
+    if (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write")
+        and (grant.operation == "files.read" or grant.operation == "files.write")
+        and grant.resource == "workspace" and type(scope.subpath) == "string" then
+        local writable = grant.capability == "workspace.files.write"
+        local volume, volume_error = files.volume(owner, scope.subpath, writable)
+        local generated, policy_error = volume and files.file_policy(owner, scope.subpath, writable, id) or nil
+        if not volume or not generated then
+            return nil, nil, nil, volume_error or policy_error or "workspace file grant is not installable"
+        end
+        return generated, volume, nil, nil
+    end
+    if grant.capability == "app.database" and grant.operation == "database.use"
+        and grant.resource == scope.name and type(scope.name) == "string" then
+        local database, database_error = files.database(owner, scope.name)
+        local generated, policy_error = database and files.database_policy(owner, scope.name, id) or nil
+        if not database or not generated then
+            return nil, nil, nil, database_error or policy_error or "application database grant is not installable"
+        end
+        return generated, nil, database, nil
+    end
+    return nil, nil, nil, "capability has no installed enforcement in this slice"
+end
+
+local function digest_shape(capabilities: {Object}, bindings: {Object}, policies: {Object},
+    volumes: {Object}, databases: {Object}): Object
+    local shape: Object = {capabilities = capabilities, bindings = bindings, policies = policies,
+        thread_access = "none"}
+    if #volumes > 0 then shape.volumes = volumes end
+    if #databases > 0 then shape.databases = databases end
+    return shape
 end
 
 function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unknown,
@@ -83,6 +114,10 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
     local capabilities: {Object} = table.create(capacity, 0)
     local policies: {Object} = table.create(capacity, 0)
     local bindings: {Object} = table.create(capacity, 0)
+    local volumes: {Object} = table.create(1, 0)
+    local databases: {Object} = table.create(1, 0)
+    local volume_ids: {[string]: boolean} = {}
+    local database_ids: {[string]: boolean} = {}
     local seen: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
         local item = bounds.object(raw)
@@ -105,12 +140,26 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
         if #resolved ~= 1 then return nil, "capability template needs unsupported policy count" end
         local id = policy_id(owner :: string, requirement_id :: string, prior and PRIOR_PREFIX or nil)
         if not id then return nil, "measure generated policy identity" end
-        local generated, policy_error = policy(resolved[1], id)
+        local generated, volume, database, policy_error = policy(owner :: string, resolved[1], id)
         if not generated then return nil, policy_error end
         seen[requirement_id] = true
         capabilities[#capabilities + 1] = resolved[1]
         policies[#policies + 1] = generated
         bindings[#bindings + 1] = {requirement_id = requirement_id, policy_id = id}
+        if volume then
+            local volume_id = (volume :: Object).id :: string
+            if not volume_ids[volume_id] then
+                volume_ids[volume_id] = true
+                volumes[#volumes + 1] = volume
+            end
+        end
+        if database then
+            local database_id = (database :: Object).id :: string
+            if not database_ids[database_id] then
+                database_ids[database_id] = true
+                databases[#databases + 1] = database
+            end
+        end
     end
     table.sort(capabilities, function(a: Object, b: Object): boolean
         return tostring(a.capability) .. tostring(a.resource) < tostring(b.capability) .. tostring(b.resource)
@@ -119,11 +168,12 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
     table.sort(bindings, function(a: Object, b: Object): boolean
         return tostring(a.requirement_id) < tostring(b.requirement_id)
     end)
-    local set_digest = digest({capabilities = capabilities, bindings = bindings, policies = policies,
-        thread_access = "none"})
+    table.sort(volumes, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
+    table.sort(databases, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
+    local set_digest = digest(digest_shape(capabilities, bindings, policies, volumes, databases))
     if not set_digest then return nil, "measure capability proposal" end
     return {capabilities = capabilities, policies = policies, bindings = bindings,
-        thread_access = "none", digest = set_digest}, nil
+        volumes = volumes, databases = databases, thread_access = "none", digest = set_digest}, nil
 end
 
 function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
@@ -139,12 +189,14 @@ function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
     if (artifact_raw ~= nil and not artifact_digest) or (version_raw ~= nil and not version) then
         return nil, "capability grant artifact identity is invalid"
     end
-    return {id = id, kind = "registry.entry", meta = {type = M.SCHEMA},
-        data = {schema_revision = M.SCHEMA, overlay_owner = owner, workspace_id = workspace,
-            application = app, capabilities = proposal.capabilities, bindings = proposal.bindings,
-            policies = proposal.policies, thread_access = proposal.thread_access,
-            digest = proposal.digest, approval_id = approval_id, revision = revision,
-            artifact_digest = artifact_digest, version = version}}, nil
+    local stored: Object = {schema_revision = M.SCHEMA, overlay_owner = owner, workspace_id = workspace,
+        application = app, capabilities = proposal.capabilities, bindings = proposal.bindings,
+        policies = proposal.policies, thread_access = proposal.thread_access,
+        digest = proposal.digest, approval_id = approval_id, revision = revision,
+        artifact_digest = artifact_digest, version = version}
+    if #proposal.volumes > 0 then stored.volumes = proposal.volumes end
+    if #proposal.databases > 0 then stored.databases = proposal.databases end
+    return {id = id, kind = "registry.entry", meta = {type = M.SCHEMA}, data = stored}, nil
 end
 
 function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
@@ -164,10 +216,30 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
         return nil, "installed capability grant record is malformed"
     end
     local capabilities, bindings, policies = list(data.capabilities, 128), list(data.bindings, 128), list(data.policies, 128)
-    if not capabilities or not bindings or not policies or #capabilities ~= #bindings
-        or #bindings ~= #policies then return nil, "installed capability grant set is malformed" end
-    local actual = digest({capabilities = capabilities, bindings = bindings, policies = policies,
-        thread_access = data.thread_access})
+    local volumes = list(data.volumes or {}, 8)
+    local databases = list(data.databases or {}, 8)
+    if not capabilities or not bindings or not policies or not volumes or not databases
+        or #capabilities ~= #bindings or #bindings ~= #policies then
+        return nil, "installed capability grant set is malformed"
+    end
+    for _, raw_volume in ipairs(volumes) do
+        local volume = bounds.object(raw_volume)
+        local id = volume and bounds.text(volume.id, 160) or nil
+        if not volume or not id or id:sub(1, #files.VOLUME_PREFIX) ~= files.VOLUME_PREFIX
+            or volume.kind ~= "fs.directory" then
+            return nil, "installed capability volume is malformed"
+        end
+    end
+    for _, raw_database in ipairs(databases) do
+        local database = bounds.object(raw_database)
+        local id = database and bounds.text(database.id, 160) or nil
+        if not database or not id or id:sub(1, #files.DATABASE_PREFIX) ~= files.DATABASE_PREFIX
+            or database.kind ~= "db.sql.sqlite" then
+            return nil, "installed capability database is malformed"
+        end
+    end
+    local actual = digest(digest_shape(capabilities :: {Object}, bindings :: {Object},
+        policies :: {Object}, volumes :: {Object}, databases :: {Object}))
     if actual ~= data.digest then return nil, "installed capability digest differs from the stored set" end
     local capacity: integer = #bindings > 0 and #bindings or 1
     local reproduced: {Object} = table.create(capacity, 0)
@@ -200,8 +272,9 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
     return copy, nil
 end
 
--- A registry record is live only while its generated policies and requirement
--- defaults are installed beside it. An orphaned record cannot authorize reuse.
+-- A registry record is live only while its generated policies, volumes,
+-- databases and requirement defaults are installed beside it. An orphaned
+-- record cannot authorize reuse.
 function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
     for _, raw_policy in ipairs(record.policies :: {unknown}) do
         local expected = bounds.object(raw_policy)
@@ -211,6 +284,19 @@ function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
         local clean: Object = {}
         for key, value in pairs(current) do if key ~= "registry" then clean[key] = value end end
         if digest(clean) ~= digest(expected) then return false, "installed grant policy differs from approval" end
+    end
+    for _, field in ipairs({"volumes", "databases"}) do
+        for _, raw_entry in ipairs((record[field] or {}) :: {unknown}) do
+            local expected = bounds.object(raw_entry)
+            local id = expected and bounds.id(expected.id) or nil
+            local current = id and bounds.object(lookup(id)) or nil
+            if not expected or not current then return false, "installed grant resource is absent" end
+            local clean: Object = {}
+            for key, value in pairs(current) do if key ~= "registry" then clean[key] = value end end
+            if digest(clean) ~= digest(expected) then
+                return false, "installed grant resource differs from approval"
+            end
+        end
     end
     for _, raw_binding in ipairs(record.bindings :: {unknown}) do
         local binding = bounds.object(raw_binding)

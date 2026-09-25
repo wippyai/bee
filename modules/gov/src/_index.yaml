@@ -36,6 +36,10 @@ entries:
 - name: capability_catalog
   kind: library.lua
   source: file://capability_catalog.lua
+- name: capability_files
+  kind: library.lua
+  source: file://capability_files.lua
+  modules: [hash]
 - name: capability_containment
   kind: library.lua
   source: file://capability_containment.lua
@@ -48,6 +52,7 @@ entries:
     canonical: bee.sync:canonical
     capability_catalog: bee.gov:capability_catalog
     capability_containment: bee.gov:capability_containment
+    capability_files: bee.gov:capability_files
 - name: capability_request
   kind: library.lua
   source: file://capability_request.lua
@@ -234,6 +239,7 @@ entries:
     application_admission: bee.gov:governed_application_admission
     capability_catalog: bee.gov:capability_catalog
     capability_grants: bee.gov:capability_grants
+    capability_files: bee.gov:capability_files
 - name: staging_resources
   kind: library.lua
   source: file://staging_resources.lua

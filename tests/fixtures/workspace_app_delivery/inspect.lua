@@ -19,28 +19,54 @@ local function inspect()
     local installed = assert(grants.decode(installed_entry, identity.overlay_owner,
         workspace, identity.definition_id, host_catalog))
     assert(grants.live(installed, function(id: string): unknown return registry.get(id) end))
-    assert(#(installed.capabilities :: {unknown}) == 1)
-    local capability = (installed.capabilities :: {{[string]: unknown}})[1]
-    assert(capability.capability == "threads.read")
-    local generated_policy = (installed.policies :: {{[string]: unknown}})[1]
-    local policy_id = generated_policy.id
-    local requirement = assert(registry.get("app.tally:threads_read"))
-    assert((requirement.data :: {[string]: unknown}).default == policy_id)
+    local capabilities = installed.capabilities :: {{[string]: unknown}}
+    assert(#capabilities == 3)
+    local seen: {[string]: boolean} = {}
+    for _, grant in ipairs(capabilities) do seen[grant.capability :: string] = true end
+    assert(seen["threads.read"] and seen["workspace.files.read"] and seen["app.database"])
+    local generated_policies = installed.policies :: {{[string]: unknown}}
+    assert(#generated_policies == 3)
+    local policy_ids: {[string]: boolean} = {}
+    for _, generated_policy in ipairs(generated_policies) do
+        policy_ids[generated_policy.id :: string] = true
+        local body = (generated_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}
+        assert(body.effect == "allow")
+        for _, resource in ipairs(body.resources :: {string}) do assert(resource ~= "*") end
+    end
+    local volumes = (installed.volumes or {}) :: {{[string]: unknown}}
+    assert(#volumes == 1)
+    assert(volumes[1].kind == "fs.directory")
+    assert(volumes[1].directory == "shared")
+    assert(volumes[1].readonly == true)
+    local databases = (installed.databases or {}) :: {{[string]: unknown}}
+    assert(#databases == 1)
+    assert(databases[1].kind == "db.sql.sqlite")
+    local expected: {[string]: string} = {["app.tally:threads_read"] = "threads.read",
+        ["app.tally:shared_files"] = "workspace.files.read", ["app.tally:tally_db"] = "app.database"}
+    for requirement_id in pairs(expected) do
+        local requirement = assert(registry.get(requirement_id))
+        local default = (requirement.data :: {[string]: unknown}).default
+        assert(type(default) == "string" and policy_ids[default :: string])
+    end
     local admitted: {[string]: unknown}? = nil
     for _, binding in ipairs(catalog.read(workspace).bindings) do
         if binding.definition_id == identity.definition_id then admitted = binding; break end
     end
     assert(admitted)
     local policies = admitted.policies :: {string}
-    assert(#policies == 2)
-    assert(policies[1] == policy_id)
-    assert(policies[2] == "bee.security:ordinary_app_subsystem_boundary")
-    local body = (generated_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}
-    assert(body.effect == "allow")
-    assert((body.actions :: {string})[1] == "funcs.call")
-    for _, resource in ipairs(body.resources :: {string}) do assert(resource ~= "*") end
-    local evidence = {capability = capability.capability,
-        policy_id = policy_id, policies = policies, approval_id = installed.approval_id,
+    assert(#policies == 4)
+    local boundary_count = 0
+    for _, policy_id in ipairs(policies) do
+        if policy_id == "bee.security:ordinary_app_subsystem_boundary" then boundary_count = boundary_count + 1
+        else assert(policy_ids[policy_id]) end
+    end
+    assert(boundary_count == 1)
+    local names: {string} = {}
+    for name in pairs(seen) do names[#names + 1] = name end
+    table.sort(names)
+    local evidence = {capabilities = names,
+        volume_id = volumes[1].id, database_id = databases[1].id,
+        policies = policies, approval_id = installed.approval_id,
         revision = installed.revision}
     local volume = assert(fs.get("bee.workspace.app.probe:grant_evidence"))
     assert(volume:writefile("/grant.json", assert(json.encode(evidence))))

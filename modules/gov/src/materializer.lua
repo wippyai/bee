@@ -160,10 +160,48 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
         local policies = generated and generated.policies
         local bindings = generated and generated.bindings
         local record = generated and bounds.object(generated.record) or nil
+        local volumes = generated and generated.volumes
+        local databases = generated and generated.databases
         if not generated or type(policies) ~= "table" or type(bindings) ~= "table"
             or not record or not capability_grants.reserved(record.id)
-            or record.kind ~= "registry.entry" or #policies ~= #bindings or #policies > 8 then
+            or record.kind ~= "registry.entry" or #policies ~= #bindings or #policies > 8
+            or (volumes ~= nil and type(volumes) ~= "table")
+            or (databases ~= nil and type(databases) ~= "table") then
             return nil, nil, nil, "generated capability entries are invalid"
+        end
+        local volume_ids: {[string]: boolean} = {}
+        for _, raw_volume in ipairs((volumes or {}) :: {unknown}) do
+            local volume = bounds.object(raw_volume)
+            local id = volume and bounds.id(volume.id) or nil
+            local directory = volume and volume.directory or nil
+            if not volume or not id or not id:match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
+                or volume.kind ~= "fs.directory" or type(directory) ~= "string"
+                or volume.base ~= "project" or type(volume.auto_init) ~= "boolean"
+                or type(volume.readonly) ~= "boolean"
+                or (volume.readonly and volume.auto_init) then
+                return nil, nil, nil, "generated capability volume is invalid"
+            end
+            local subpath: string = directory :: string
+            if subpath == ".wippy" or subpath:sub(1, 7) == ".wippy/" or subpath == "." then
+                return nil, nil, nil, "generated capability volume exposes private state"
+            end
+            if volume_ids[id] then return nil, nil, nil, "generated capability volume is duplicated" end
+            volume_ids[id] = true
+            complete[#complete + 1] = volume
+        end
+        local database_ids: {[string]: boolean} = {}
+        for _, raw_database in ipairs((databases or {}) :: {unknown}) do
+            local database = bounds.object(raw_database)
+            local id = database and bounds.id(database.id) or nil
+            local file = database and database.file or nil
+            if not database or not id or not id:match("^bee%.gov%.grants:database%.[0-9a-f]+$")
+                or database.kind ~= "db.sql.sqlite" or type(file) ~= "string"
+                or (file :: string):sub(1, 14) ~= ".wippy/app-db/" then
+                return nil, nil, nil, "generated capability database is invalid"
+            end
+            if database_ids[id] then return nil, nil, nil, "generated capability database is duplicated" end
+            database_ids[id] = true
+            complete[#complete + 1] = database
         end
         local policy_ids: {[string]: boolean} = {}
         for _, raw_policy in ipairs(policies :: {unknown}) do
@@ -175,6 +213,20 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
                 return nil, nil, nil, "generated capability policy is invalid"
             end
             policy_ids[id] = true
+            local data = bounds.object(policy.data)
+            local inner = data and bounds.object(data.policy) or nil
+            local resources = inner and inner.resources or nil
+            if type(resources) == "table" then
+                for _, resource in ipairs(resources :: {unknown}) do
+                    if type(resource) == "string"
+                        and ((resource :: string):match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
+                            or (resource :: string):match("^bee%.gov%.grants:database%.[0-9a-f]+$"))
+                        and not volume_ids[resource :: string]
+                        and not database_ids[resource :: string] then
+                        return nil, nil, nil, "generated capability policy references an absent resource"
+                    end
+                end
+            end
             complete[#complete + 1] = policy
         end
         local requirement_ids: {[string]: boolean} = {}

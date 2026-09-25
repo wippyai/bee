@@ -15,3 +15,14 @@ here for my approval.
 - Request the host catalog capability `threads.read` with `scope: owned` using
   a measured `ns.requirement` targeting `app.tally:app` at
   `.security.policies +=`. The grant is reviewed during installation.
+- Request the host catalog capability `workspace.files.read` with
+  `subpath: shared` using a measured `ns.requirement` targeting
+  `app.tally:app` at `.security.policies +=`. At startup read the workspace
+  file `/greeting.txt` through the granted volume; the window never opens
+  without it.
+- Request the host catalog capability `app.database` with `name: tally`
+  using a measured `ns.requirement` targeting `app.tally:app` at
+  `.security.policies +=`. Record every count with the greeting as a row in
+  the granted database; the rows survive a restart.
+- The application needs the `fs` and `sql` runtime modules alongside the
+  interface modules above.

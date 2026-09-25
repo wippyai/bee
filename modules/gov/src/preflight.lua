@@ -21,7 +21,7 @@ type Context = {node_id: string, registry_revision: integer, registry_digest: st
     packages: {[string]: boolean}, namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean},
     database_bindings: {[string]: DatabaseBinding}?,
-    entries: {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, exact_expansion: boolean,
+    entries: {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, generated_databases: {[string]: string}?, exact_expansion: boolean,
     migration_barrier: boolean, auto_start: boolean}
 type Diagnostic = {code: string, target: string, message: string, remedy: string}
 type Report = {schema_revision: string, plan_digest: string, destination_node: string,
@@ -550,9 +550,15 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             issue("MISSING_DATABASE_BINDING", item.id, "migration target has no host database binding", "select an explicit host database binding")
         end
         local database_id = binding and binding.database_id or item.target_db
+        local generated_target = context.generated_databases and context.generated_databases[database_id] or nil
         local database = final[database_id]
         local existing_database = context.entries[database_id]
-        if not database or not database.kind:match("^db%.sql%.") then
+        if generated_target == item.target_db then
+            -- The host installs this provisioned store atomically with the
+            -- plan; its bytes are pinned by the capability grant record, so
+            -- preflight checks only the ceiling and the binding, not a base
+            -- definition that cannot exist before first install.
+        elseif not database or not database.kind:match("^db%.sql%.") then
             issue("MISSING_DATABASE", item.id, "migration target is not bound to a final-state SQL resource", "bind an existing SQL resource")
         elseif not existing_database or existing_database.kind ~= database.kind
             or existing_database.package ~= database.package or existing_database.digest ~= database.digest then

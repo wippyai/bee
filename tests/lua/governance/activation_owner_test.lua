@@ -1,7 +1,8 @@
 -- MIT. Destination orchestration keeps selection, approval, desired state and
 -- overlay observation in their separate owners.
 local test = require("test")
-local KERNEL = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
+local KERNEL: {revision: integer, namespaces: {string}, entries: {string}} =
+    {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
 local hash = require("hash")
 local canonical = require("canonical")
 local artifact = require("artifact")
@@ -116,19 +117,20 @@ local function migration_resolver(entry: {[string]: unknown}, state: {[string]: 
         local database: preflight.Entry = {id = "host:db", kind = "db.sql.sqlite", package = "host/base",
             digest = SHA, references = {}, auto_start = false, grants = {}, modules = {},
             config_objects = {}, config_lists = {}, config_empty = {}}
-        return {destination_node = "node-owner", source_node = "source-a", base_revision = 4, base_digest = SHA,
+        local candidate: preflight.Candidate = {destination_node = "node-owner", source_node = "source-a", base_revision = 4, base_digest = SHA,
             artifacts = {{component = "demo/app", version = selected.version :: string, digest = SHA,
                 dependencies = {}, namespaces = {"demo"}}}, entries = {{id = "demo:001", kind = "function.lua",
                 package = "demo/app", digest = checksum, references = {}, auto_start = false, grants = {}, modules = {},
                 config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {},
-            migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}},
-            {node_id = "node-owner", registry_revision = 4, registry_digest = SHA,
-                policy_digest = type(state.policy_digest) == "string" and state.policy_digest :: string or SHA,
-                packages = {["demo/app"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true},
-                databases = {["host:db"] = true}, grants = {}, modules = {}, entries = {["host:db"] = database},
-                installed_entries = nil,
-                database_bindings = nil, applied = applied, applied_databases = nil,
-                exact_expansion = true, protected = KERNEL, migration_barrier = true, auto_start = true}, nil
+            migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}}
+        local context: preflight.Context = {node_id = "node-owner", registry_revision = 4, registry_digest = SHA,
+            policy_digest = type(state.policy_digest) == "string" and state.policy_digest :: string or SHA,
+            packages = {["demo/app"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true},
+            databases = {["host:db"] = true}, grants = {}, modules = {}, entries = {["host:db"] = database},
+            installed_entries = nil,
+            database_bindings = nil, applied = applied, applied_databases = nil,
+            exact_expansion = true, protected = KERNEL, migration_barrier = true, auto_start = true}
+        return candidate, context, nil
     end
     return value :: owner.Resolver
 end

@@ -1,6 +1,7 @@
 -- MIT. Migration work is a pure exact receipt; these tests perform no writes.
 local test = require("test")
-local KERNEL = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
+local KERNEL: {revision: integer, namespaces: {string}, entries: {string}} =
+    {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
 local migration_work = require("migration_work")
 local artifact = require("artifact")
 local canonical = require("canonical")

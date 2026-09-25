@@ -99,7 +99,7 @@ local function define_tests()
             assert(cleanup:apply())
         end)
 
-        test.it("admits an application this node authored under the host's workspace-application rule", function()
+        test.it("admits workspace applications under the host rule and Hive-received ones only with Hive admission", function()
             local node = assert(system.node.id())
             local derived_app = "app.catalog_probe:app"
             local derived_owner = "bee.gov.apps:" .. WORKSPACE .. ".catalog_probe"
@@ -121,8 +121,22 @@ local function define_tests()
 
             local selected = catalog.read(WORKSPACE)
             test.is_true(has(selected, derived_app))
-            test.is_false(has(selected, foreign_app))
+            -- The shipped rule admits a Hive-received application under the
+            -- destination's own profile.
+            test.is_true(has(selected, foreign_app))
             test.is_false(has(catalog.read(FOREIGN), derived_app))
+
+            -- Without Hive admission the rule covers only this node's own.
+            local local_only = registry.snapshot():changes()
+            local closed = assert(registry.get("bee.env:gov_activation_profiles"))
+            local closed_data = closed.data :: {[string]: unknown}
+            local closed_rule = closed_data.workspace_applications :: {[string]: unknown}
+            closed_rule.hive = false
+            assert(local_only:update(closed))
+            assert(local_only:apply())
+            local local_selected = catalog.read(WORKSPACE)
+            test.is_true(has(local_selected, derived_app))
+            test.is_false(has(local_selected, foreign_app))
 
             local withdraw = registry.snapshot():changes()
             local withdrawn = assert(registry.get("bee.env:gov_activation_profiles"))

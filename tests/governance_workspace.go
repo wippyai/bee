@@ -213,6 +213,18 @@ func setup(root string) error {
 	if err := copyTree(filepath.Join(root, "src", "governance_workspace_probe"), "tests/fixtures/governance_workspace"); err != nil {
 		return fmt.Errorf("copy governance fixture: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Join(root, "src", "security"), 0700); err != nil {
+		return fmt.Errorf("create security namespace: %w", err)
+	}
+	for _, name := range []string{"approvals", "threads"} {
+		if err := copyTree(filepath.Join(root, "src", "security", name), filepath.Join("src", "security", name)); err != nil {
+			return fmt.Errorf("stage %s host policies: %w", name, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "security", "_index.yaml"),
+		[]byte("version: '1.0'\nnamespace: bee.security\nentries: []\n"), 0600); err != nil {
+		return fmt.Errorf("write security namespace: %w", err)
+	}
 	rootIndex := `version: '1.0'
 namespace: bee
 entries:
@@ -223,6 +235,15 @@ entries:
 - name: sync_exports
   kind: registry.entry
   data: {exports: []}
+- name: approver_policies
+  kind: registry.entry
+  policies: []
+- name: governance_publication_profiles
+  kind: registry.entry
+  data: {profiles: []}
+- name: governance_activation_profiles
+  kind: registry.entry
+  data: {profiles: []}
 `
 	if err := os.WriteFile(filepath.Join(root, "src", "_index.yaml"), []byte(rootIndex), 0600); err != nil {
 		return fmt.Errorf("write governance host composition: %w", err)
@@ -246,11 +267,38 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
+  - name: waiter_policies
+    value: [bee.security.threads:thread_waiter_policy]
+- name: dependency_approvals
+  kind: ns.dependency
+  component: bee/approvals
+  version: 0.1.0-dev
+  parameters:
+  - name: target_policies
+    value: bee:approver_policies
+  - name: process_host
+    value: bee:workers
+  - name: authority_policies
+    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
+  - name: worker_policies
+    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy,
+      bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]
 - name: dependency_governance
   kind: ns.dependency
   component: bee/governance
   version: 0.1.0-dev
   parameters:
+  - name: target_publication_profiles
+    value: bee:governance_publication_profiles
+  - name: target_activation_profiles
+    value: bee:governance_activation_profiles
   - name: target_approval_request_policy
     value: bee.security.approvals:approval_request_policy
   - name: target_approval_consume_policy
@@ -261,22 +309,6 @@ entries:
 	}
 	if err := os.WriteFile(filepath.Join(root, "src", "deps", "_index.yaml"), []byte(depsIndex), 0600); err != nil {
 		return fmt.Errorf("write governance dependencies: %w", err)
-	}
-	securityApprovalsIndex := `version: '1.0'
-namespace: bee.security.approvals
-entries:
-- name: approval_request_policy
-  kind: security.policy
-  policy: {actions: [bee.approvals.request], resources: '*', effect: allow}
-- name: approval_consume_policy
-  kind: security.policy
-  policy: {actions: [bee.approvals.consume], resources: '*', effect: allow}
-`
-	if err := os.MkdirAll(filepath.Join(root, "src", "security", "approvals"), 0700); err != nil {
-		return fmt.Errorf("create approval security namespace: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "src", "security", "approvals", "_index.yaml"), []byte(securityApprovalsIndex), 0600); err != nil {
-		return fmt.Errorf("write governance approval policies: %w", err)
 	}
 
 	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"

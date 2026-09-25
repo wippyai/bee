@@ -2,11 +2,12 @@
 from pathlib import Path
 import os
 import signal
+import subprocess
 import sys
 import tempfile
 import time
 
-from native_workspace import NativeDesktop
+from native_workspace import STATE_ENVIRONMENT, NativeDesktop
 from processes import children, command_line, hold, table
 from terminal_selection import begin, copies
 
@@ -75,6 +76,7 @@ def run(binary):
             ui.quit()
             ui.close()
             assert not owner.exited(), 'Client quit killed the owner'
+            assert b'Bee is still running; bee stop ends it' in ui.raw, 'Detach did not say how to stop the owner'
             owner_logs = set(state.glob('owner-*.log'))
             rejoin_started = time.monotonic()
             ui = NativeDesktop(binary, folder, state)
@@ -89,6 +91,18 @@ def run(binary):
             assert not copies(ui, 0), 'Rejoin replayed a clipboard request'
             ui.quit()
             assert not owner.exited(), 'Second client quit killed the owner'
+            # bee stop asks the running owner over its client channel and
+            # returns once the owner released the state.
+            env = {key: value for key, value in os.environ.items()
+                   if key not in STATE_ENVIRONMENT | {"BEE_RUNTIME", "USER"}}
+            env.update(HOME=str(folder), PATH=f"{folder}/bin:/usr/bin:/bin", XDG_CONFIG_HOME=str(folder / '.config'))
+            stopped = subprocess.run([str(binary), '--state', str(state), 'stop'], cwd=folder, env=env,
+                                     capture_output=True, text=True, timeout=60)
+            assert stopped.returncode == 0 and stopped.stdout == 'Stopping Bee…\nBee stopped\n', (stopped.stdout, stopped.stderr)
+            assert owner.exited(timeout=10), 'bee stop reported stopped while the owner runs'
+            again = subprocess.run([str(binary), '--state', str(state), 'stop'], cwd=folder, env=env,
+                                   capture_output=True, text=True, timeout=30)
+            assert again.returncode == 0 and again.stdout == 'Bee is not running for this project\n', (again.stdout, again.stderr)
         except AssertionError:
             print(f'Client exit={ui.process.poll()}, output tail={bytes(ui.raw[-1600:])!r}', file=sys.stderr)
             if os.environ.get('BEE_NATIVE_STACK') and ui.process.poll() is None:
@@ -99,7 +113,7 @@ def run(binary):
         finally:
             ui.close()
             stop_owner(owner)
-    print('Public native Bee: cold owner, exact copy, Ctrl+Q detach, retained shell, F12 and no clipboard replay passed')
+    print('Public native Bee: cold owner, exact copy, Ctrl+Q detach, retained shell, F12, no clipboard replay and bee stop passed')
 
 
 def stalled_detach(binary):

@@ -44,6 +44,11 @@ entries:
   kind: library.lua
   source: file://sync_sender.lua
   imports: {transaction: bee.persist:transaction, version: bee.sync:version}
+`
+
+const savedProfilesSecurityHarnessIndex = `version: '1.0'
+namespace: bee.security.harness
+entries:
 - name: profile_store_policy
   kind: security.policy
   policy:
@@ -179,6 +184,9 @@ func savedProfilesWrite(path, content string) error {
 func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesWrite(filepath.Join(root, "src", "_index.yaml"), savedProfilesRootIndex); err != nil {
 		return err
+	}
+	if err := savedProfilesWrite(filepath.Join(root, "src", "security", "harness", "_index.yaml"), savedProfilesSecurityHarnessIndex); err != nil {
+		return fmt.Errorf("write profile storage policy: %w", err)
 	}
 	if err := savedProfilesWrite(filepath.Join(root, "src", "harness", "_index.yaml"), savedProfilesHarnessIndex); err != nil {
 		return fmt.Errorf("write harness index: %w", err)

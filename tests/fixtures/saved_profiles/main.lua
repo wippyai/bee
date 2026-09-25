@@ -78,4 +78,12 @@ local function main(phase: string?, expected_node: string?)
     logger:info("SAVED_PROFILE_SECOND_BOOT_PASS node=" .. node .. " actor=profile-reader")
 end
 
-return {main = main}
+local function reported_main(phase: string?, expected_node: string?)
+    local ok, problem = pcall(main, phase, expected_node)
+    if not ok then
+        logger:error("SAVED_PROFILE_PROBE_FAILED " .. tostring(problem))
+        error(problem)
+    end
+end
+
+return {main = reported_main}

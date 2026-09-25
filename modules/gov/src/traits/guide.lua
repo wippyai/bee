@@ -11,7 +11,7 @@ local workspace_applications = require("workspace_applications")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@7"
+M.REVISION = "bee.governance-component-guide@8"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -276,7 +276,15 @@ function M.document(): string
     lines[#lines + 1] = ""
     lines[#lines + 1] = CONFIG_SHAPE_RULE
     lines[#lines + 1] = ""
-    lines[#lines + 1] = "Every authoring operation except guide names its overlay_id; it is distinct from the agent's runtime workspace."
+    lines[#lines + 1] = "Every authoring operation except guide names its overlay_id; list without one returns only overlays owned by this caller. The overlay_id is distinct from the agent's runtime workspace."
+    lines[#lines + 1] = "An MCP put carries at most 65,536 decoded bytes of one file. For a larger entries.json,"
+        .. " put the first chunk, then append chunks of at most 65,536 bytes. Each append supplies"
+        .. " the current expected_revision, a new idempotency_key, offset equal to the current file"
+        .. " byte length. The owner computes the assembled SHA-256 digest; result_digest may"
+        .. " optionally assert a known lowercase digest. A mismatch changes nothing. Read/list"
+        .. " show the resulting byte count and digest."
+        .. " Each file remains bounded to 4 MiB, and the overlay to 16 MiB. Read returns a base64"
+        .. " window of up to 16,384 bytes with offset, chunk_bytes and eof; page with offset and limit."
     lines[#lines + 1] = "Freeze copies the complete measured file set into owned storage and binds it to"
         .. " the overlay identity and revision; it does not change the edit revision, and later edits"
         .. " cannot change a frozen snapshot. Freeze is not approval, installation or execution."

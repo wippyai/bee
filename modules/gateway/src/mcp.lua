@@ -111,14 +111,17 @@ local TOOLS: {Tool} = {
                 title = {type = "string", minLength = 1, maxLength = 512}}},
             placement = {type = "string", enum = {"native", "docker"}},
         }}},
-    {name = "overlay", description = "Learn this destination's governed overlay contract (read-only guide), or create, inspect, edit or freeze a caller-owned overlay", operation = "bee.governance.binding:overlay_call",
+    {name = "overlay", description = "Learn this destination's governed overlay contract (read-only guide), or create, inspect, put, append, remove or freeze a caller-owned overlay. List without overlay_id returns your own overlay IDs; list with one returns its files. For files over 65,536 bytes, put the first chunk then append bounded chunks with the exact byte offset. The owner returns the assembled SHA-256 digest; result_digest is an optional assertion if you already know it.", operation = "bee.governance.binding:overlay_call",
         policies = {TOOL_POLICY_REFS.overlay}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
-            operation = {type = "string", enum = {"guide", "create", "list", "read", "put", "remove", "freeze"}},
+            operation = {type = "string", enum = {"guide", "create", "list", "read", "put", "append", "remove", "freeze"}},
             overlay_id = {type = "string", minLength = 1, maxLength = 160},
             expected_revision = {type = "integer", minimum = 0, maximum = 9007199254740990},
             idempotency_key = {type = "string", minLength = 1, maxLength = 160},
             path = {type = "string", minLength = 1, maxLength = 240},
+            offset = {type = "integer", minimum = 0, maximum = 4194304},
+            limit = {type = "integer", minimum = 1, maximum = 16384},
+            result_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
             content = {type = "string", maxLength = M.MAX_WORKSPACE_TEXT_BYTES},
             content_base64 = {type = "string", maxLength = M.MAX_WORKSPACE_BASE64_BYTES},
             snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
@@ -468,7 +471,7 @@ function M.overlay_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     if type(arguments.content) == "string" and #arguments.content > M.MAX_WORKSPACE_TEXT_BYTES then
-        return nil, "content exceeds the MCP text bound"
+        return nil, "content exceeds the 65,536-byte MCP chunk bound; put the first chunk, then append with offset"
     end
     if type(arguments.content_base64) == "string" and #arguments.content_base64 > M.MAX_WORKSPACE_BASE64_BYTES then
         return nil, "content_base64 exceeds the MCP body bound"

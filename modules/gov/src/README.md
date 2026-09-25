@@ -31,19 +31,28 @@ The source now includes the `bee.governance.binding:overlay_call` function and
 `bee.governance:overlay_contract` binding through `overlay_local`, with the
 `authoring_trait` agent description. This is private authoring, not activation.
 The managed Agent gateway admits `bee.governance.overlay.read` (list/read) and
-`bee.governance.overlay.write` (create/put/remove/freeze) only through this
+`bee.governance.overlay.write` (create/put/append/remove/freeze) only through this
 facade. Every operation also checks the stored author against the authenticated
 actor; an operation grant does not transfer an existing overlay's ownership.
 The method's protected store policy does not grant callers direct database,
 publication, approval, activation or registry/overlay access.
 
-Public requests use `operation` and `overlay_id`; `guide` is the only operation
-that carries no overlay identity, and `workspace_id` is rejected on this
-surface. The private store translates the public identity to `workspace_id`.
+Public requests use `operation` and `overlay_id`; `guide` and caller-owned
+overlay listing carry no overlay identity, and `workspace_id` is rejected on
+this surface. `list` without `overlay_id` returns up to eight overlays owned
+by the authenticated caller; with an ID it lists that overlay's files. The
+private store translates the public identity to `workspace_id`.
 Create uses expected revision zero;
 other mutations use the revision returned by list. Mutations and freeze require
 `expected_revision` and `idempotency_key`. Put replaces one entire relative file
-using either `content` or canonical padded `content_base64`; read returns base64.
+using either `content` or canonical padded `content_base64`; read returns a
+base64 window of at most 16,384 bytes with `offset`, `chunk_bytes` and `eof`.
+The MCP boundary accepts at most 65,536 decoded bytes per put or append call.
+Append requires the current byte `offset`. An optional lowercase SHA-256
+`result_digest` asserts the assembled file. It checks the offset and any
+asserted digest before changing storage. This allows an
+`entries.json` larger than one MCP request while retaining the 4 MiB file and
+16 MiB overlay ceilings, compare-and-set revisions and idempotent retries.
 Remove deletes one file. Freeze copies the complete measured file set into owned
 SQLite storage without changing the edit revision. Later edits cannot change the
 stored frozen files. The same retry key and request return the original receipt,

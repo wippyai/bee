@@ -86,9 +86,13 @@ end
 local function request_identity(input: protocol.Request): (string?, Result?)
     local path = input.path
     local content_digest: string? = nil
-    if input.operation == "put" then
+    if input.operation == "put" or input.operation == "append" then
         if type(input.content) ~= "string" or #input.content > MAX_FILE_BYTES then return nil, failure("INVALID", "put content is missing or exceeds the workspace limit") end
-        content_digest = digest(input.content)
+        local receipt_bytes = input.content
+        if input.operation == "append" then
+            receipt_bytes = tostring(input.offset) .. ":" .. (input.result_digest or "") .. ":" .. input.content
+        end
+        content_digest = digest(receipt_bytes)
         if not content_digest then return nil, failure("INTERNAL", "calculate workspace content digest") end
     end
     return content_digest, nil
@@ -137,7 +141,7 @@ local function record_receipt(store: Store, tx: sql.Transaction, actor: string, 
         inserted, err = tx:execute("INSERT INTO bee_governance_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, expected_revision, result_revision, snapshot_digest, files_digest, file_count, total_bytes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             {store.node, input.workspace_id, key, actor, input.operation, expected, revision,
             snapshot.digest, snapshot.files_digest, snapshot.file_count, snapshot.total_bytes})
-    elseif input.operation == "put" then
+    elseif input.operation == "put" or input.operation == "append" then
         local path = bounds.text(input.path, MAX_PATH_BYTES)
         if not path or not content_digest then return failure("INTERNAL", "put receipt is incomplete") end
         inserted, err = tx:execute("INSERT INTO bee_governance_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, expected_revision, path, content_sha256, result_revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -337,11 +341,32 @@ local function mutation(store: Store, tx: sql.Transaction, actor: string, input:
     if current.revision >= MAX_REVISION then return failure("CAPACITY_EXHAUSTED", "workspace revision capacity is exhausted") end
     local path = bounds.text(input.path, MAX_PATH_BYTES)
     if not path or #path == 0 then return failure("INVALID", "workspace path is missing") end
-    if input.operation == "put" then
+    if input.operation == "put" or input.operation == "append" then
         if type(input.content) ~= "string" or not content_digest then return failure("INVALID", "put content is missing") end
-        local encoded, encode_error = base64.encode(input.content)
+        local content = input.content
+        local file_digest = content_digest
+        if input.operation == "append" then
+            local row, read_error = one(tx, "SELECT path, content_base64, content_sha256, bytes FROM bee_governance_workspace_files WHERE owner_node = ? AND workspace_id = ? AND path = ?",
+                {store.node, input.workspace_id, path}, "workspace file")
+            if read_error then return read_error end
+            if not row then return failure("NOT_FOUND", "workspace file does not exist; put the first chunk") end
+            local file, decode_error = decode_file(row)
+            if not file then return decode_error or failure("INTERNAL", "workspace file is corrupt") end
+            if input.offset ~= file.bytes then return failure("CONFLICT", "append offset does not match file length") end
+            if #content == 0 or file.bytes + #content > MAX_FILE_BYTES then
+                return failure("INVALID", "append exceeds the 4 MiB file bound or is empty")
+            end
+            content = file.content .. content
+            local measured, measure_error = digest(content)
+            if measure_error then return measure_error end
+            if input.result_digest and measured ~= input.result_digest then
+                return failure("INVALID", "append result_digest does not match assembled file")
+            end
+            file_digest = measured
+        end
+        local encoded, encode_error = base64.encode(content)
         if encode_error or not encoded then return failure("INTERNAL", "encode workspace content") end
-        local _, put_error = tx:execute("INSERT INTO bee_governance_workspace_files (owner_node, workspace_id, path, content_base64, content_sha256, bytes) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_node, workspace_id, path) DO UPDATE SET content_base64 = excluded.content_base64, content_sha256 = excluded.content_sha256, bytes = excluded.bytes", {store.node, input.workspace_id, path, encoded, content_digest, #input.content})
+        local _, put_error = tx:execute("INSERT INTO bee_governance_workspace_files (owner_node, workspace_id, path, content_base64, content_sha256, bytes) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_node, workspace_id, path) DO UPDATE SET content_base64 = excluded.content_base64, content_sha256 = excluded.content_sha256, bytes = excluded.bytes", {store.node, input.workspace_id, path, encoded, file_digest, #content})
         if put_error then return storage(put_error, "write workspace file") end
     else
         local removed, remove_error = tx:execute("DELETE FROM bee_governance_workspace_files WHERE owner_node = ? AND workspace_id = ? AND path = ?", {store.node, input.workspace_id, path})
@@ -425,20 +450,46 @@ local function list(store: Store, tx: sql.Transaction, actor: string, input: pro
     end
     return shared.success(value(store, input.workspace_id, revision, extra), false)
 end
+local function list_owned(store: Store, tx: sql.Transaction, actor: string): Result
+    local rows, query_error = tx:query("SELECT workspace_id, revision FROM bee_governance_workspaces WHERE owner_node = ? AND actor_id = ? ORDER BY workspace_id LIMIT ?",
+        {store.node, actor, MAX_ACTOR_WORKSPACES + 1})
+    if query_error or not rows then return storage(query_error, "list owned workspaces") end
+    if #rows > MAX_ACTOR_WORKSPACES then return failure("INTERNAL", "owned workspace count exceeds limit") end
+    local overlays: {{workspace_id: string, revision: integer}} = {}
+    for _, row in ipairs(rows) do
+        local id, revision = bounds.id(row.workspace_id), integer(row.revision)
+        if not id or not revision then return failure("INTERNAL", "owned workspace row is corrupt") end
+        overlays[#overlays + 1] = {workspace_id = id, revision = revision}
+    end
+    return shared.success({overlays = overlays}, false)
+end
 local function read(store: Store, tx: sql.Transaction, actor: string, input: protocol.Request): Result
     local current, owner_error = owner(store, tx, actor, input.workspace_id)
     if not current then return owner_error or failure("NOT_FOUND", "workspace does not exist") end
     local path = bounds.text(input.path, MAX_PATH_BYTES)
     if not path or #path == 0 then return failure("INVALID", "workspace path is missing") end
+    local function window(file: File): ({[string]: unknown}?, Result?)
+        local offset = input.offset or 0
+        local limit = input.limit or 16384
+        if offset > file.bytes or limit < 1 or limit > 16384 then
+            return nil, failure("INVALID", "read window is outside the file")
+        end
+        local content = file.content:sub(offset + 1, offset + limit)
+        local encoded, encode_error = base64.encode(content)
+        if not encoded or encode_error then return nil, failure("INTERNAL", "encode workspace read window") end
+        return {path = file.path, content_base64 = encoded, bytes = file.bytes, digest = file.digest,
+            offset = offset, chunk_bytes = #content, eof = offset + #content >= file.bytes}, nil
+    end
     if input.snapshot_digest then
         local snapshot, stored, snapshot_error = load_verified_snapshot(store, tx, input.workspace_id, input.snapshot_digest)
         if not snapshot or not stored then return snapshot_error or failure("INTERNAL", "read workspace snapshot") end
         for _, file in ipairs(stored) do
             if file.path == path then
-                return shared.success(value(store, input.workspace_id, snapshot.revision, {path = file.path,
-                    content_base64 = file.content_base64, bytes = file.bytes, digest = file.digest,
-                    snapshot_digest = snapshot.digest, files_digest = snapshot.files_digest,
-                    file_count = snapshot.file_count, total_bytes = snapshot.total_bytes}), false)
+                local part, part_error = window(file)
+                if not part then return part_error or failure("INTERNAL", "read workspace window") end
+                part.snapshot_digest, part.files_digest = snapshot.digest, snapshot.files_digest
+                part.file_count, part.total_bytes = snapshot.file_count, snapshot.total_bytes
+                return shared.success(value(store, input.workspace_id, snapshot.revision, part), false)
             end
         end
         return failure("NOT_FOUND", "workspace snapshot file does not exist")
@@ -448,7 +499,9 @@ local function read(store: Store, tx: sql.Transaction, actor: string, input: pro
     if not row then return failure("NOT_FOUND", "workspace file does not exist") end
     local file, decode_error = decode_file(row)
     if not file then return decode_error or failure("INTERNAL", "workspace file is corrupt") end
-    return shared.success(value(store, input.workspace_id, current.revision, {path = file.path, content_base64 = file.content_base64, bytes = file.bytes, digest = file.digest}), false)
+    local part, part_error = window(file)
+    if not part then return part_error or failure("INTERNAL", "read workspace window") end
+    return shared.success(value(store, input.workspace_id, current.revision, part), false)
 end
 
 -- Host services may read one exact immutable file after selecting the source
@@ -487,6 +540,7 @@ function M.call(store: Store, actor_raw: string, input: protocol.Request): Resul
     if not actor then return failure("INVALID", "workspace actor is invalid") end
     if input.operation == "list" or input.operation == "read" then
         return shared.read(store.db, "governance", function(tx: sql.Transaction): Result
+            if input.owned then return list_owned(store, tx, actor) end
             if input.operation == "list" then return list(store, tx, actor, input) end
             return read(store, tx, actor, input)
         end)
@@ -495,7 +549,7 @@ function M.call(store: Store, actor_raw: string, input: protocol.Request): Resul
         local content_digest, digest_error = request_identity(input)
         if digest_error then return digest_error end
         if input.operation == "create" then return create(store, tx, actor, input, content_digest) end
-        if input.operation == "put" or input.operation == "remove" then return mutation(store, tx, actor, input, content_digest) end
+        if input.operation == "put" or input.operation == "append" or input.operation == "remove" then return mutation(store, tx, actor, input, content_digest) end
         if input.operation == "freeze" then return freeze(store, tx, actor, input, content_digest) end
         return failure("INVALID", "unknown workspace operation")
     end)

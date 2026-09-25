@@ -54,9 +54,21 @@ be simulated with a Lua pre-read.
 ## Agent path
 
 A managed agent uses the bounded `overlay` MCP tool to read the authoring guide
-and create, list, read, put, remove and freeze its own overlay. The agent does
+and create, list, read, put, append, remove and freeze its own overlay. The agent does
 not receive direct overlay-store access. `workspace_id` is not an authoring
 alias; public authoring calls use `overlay_id`.
+`list` without `overlay_id` returns the caller's own overlays and revisions;
+with an ID it returns that overlay's file manifest.
+
+An MCP `put` writes up to 65,536 decoded bytes. For a larger `entries.json`,
+put its first chunk, then call `append` for each remaining chunk. Each append
+supplies `expected_revision`, a new `idempotency_key` and the current byte
+`offset`. The owner computes the assembled SHA-256 digest. If the caller
+already knows it, optional `result_digest` asserts that value; a mismatch
+changes nothing. One file may contain up to 4 MiB; an overlay may contain up to 16 MiB.
+`list` returns file byte counts and digests; `read` returns a base64 window of
+up to 16,384 bytes with `offset`, `chunk_bytes` and `eof`. Page with `offset`
+and `limit` to verify a file before freezing.
 
 The `delivery` tool can request delivery of a frozen artifact and read a
 staged version's review, selection and activation status. Its destination is

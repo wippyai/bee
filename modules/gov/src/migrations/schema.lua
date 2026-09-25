@@ -356,6 +356,39 @@ ALTER TABLE bee_governance_activation_intents ADD COLUMN application_admission_d
   CHECK(application_admission_digest IS NULL OR length(application_admission_digest) = 64);
 ]]
 
+-- Append receipts use the assembled file digest. Existing receipts retain
+-- their original operation, key and result revision across this table rebuild.
+local WORKSPACE_APPEND_SQL = [[
+CREATE TABLE bee_governance_receipts_v9 (
+  owner_node TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL CHECK(expected_revision >= 0),
+  path TEXT,
+  content_sha256 TEXT,
+  result_revision INTEGER NOT NULL CHECK(result_revision >= 1),
+  snapshot_digest TEXT,
+  files_digest TEXT,
+  file_count INTEGER,
+  total_bytes INTEGER,
+  PRIMARY KEY(owner_node, workspace_id, idempotency_key),
+  FOREIGN KEY(owner_node, workspace_id) REFERENCES bee_governance_workspaces(owner_node, workspace_id),
+  CHECK(operation IN ('create', 'put', 'append', 'remove', 'freeze')),
+  CHECK((operation IN ('put', 'append') AND path IS NOT NULL AND content_sha256 IS NOT NULL)
+    OR (operation = 'remove' AND path IS NOT NULL AND content_sha256 IS NULL)
+    OR (operation IN ('create', 'freeze') AND path IS NULL AND content_sha256 IS NULL)),
+  CHECK((operation = 'freeze' AND snapshot_digest IS NOT NULL AND files_digest IS NOT NULL
+      AND file_count IS NOT NULL AND total_bytes IS NOT NULL)
+    OR (operation <> 'freeze' AND snapshot_digest IS NULL AND files_digest IS NULL
+      AND file_count IS NULL AND total_bytes IS NULL))
+);
+INSERT INTO bee_governance_receipts_v9 SELECT * FROM bee_governance_receipts;
+DROP TABLE bee_governance_receipts;
+ALTER TABLE bee_governance_receipts_v9 RENAME TO bee_governance_receipts;
+]]
+
 
 function M.all(): {Migration}
     return {
@@ -367,6 +400,7 @@ function M.all(): {Migration}
         {id = 6, name = "governance_component_slots", sql = COMPONENT_SLOTS_SQL, rebuild = false},
         {id = 7, name = "governance_activation_migrations", sql = ACTIVATION_MIGRATIONS_SQL, rebuild = false},
         {id = 8, name = "governance_activation_application_admission", sql = ACTIVATION_APPLICATION_ADMISSION_SQL, rebuild = false},
+        {id = 9, name = "governance_workspace_append", sql = WORKSPACE_APPEND_SQL, rebuild = false},
     }
 end
 

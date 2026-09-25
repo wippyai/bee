@@ -132,7 +132,11 @@ local function define_tests()
             local _, oversized_text = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 4, idempotency_key = "oversized-source", path = "entries.json",
                 content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES + 1)}})
-            test.eq(oversized_text, "content exceeds the MCP text bound")
+            test.eq(oversized_text, "content exceeds the 65,536-byte MCP chunk bound; put the first chunk, then append with offset")
+            local append = mcp.overlay_arguments({arguments = {operation = "append", overlay_id = "research-candidate",
+                expected_revision = 5, idempotency_key = "append-source", path = "entries.json", offset = 65536,
+                result_digest = string.rep("a", 64), content = "more"}})
+            test.eq(append and append.offset, 65536)
 
             -- 65,536 zero bytes in canonical padded base64 exercise the existing
             -- Governance decoder at the MCP allowance's exact decoded boundary.
@@ -337,7 +341,7 @@ local function define_tests()
             local _, oversized_text = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "large-text", path = "large.txt",
                 content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES + 1)}})
-            test.eq(oversized_text, "content exceeds the MCP text bound")
+            test.eq(oversized_text, "content exceeds the 65,536-byte MCP chunk bound; put the first chunk, then append with offset")
             local _, oversized_base64 = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "large-binary", path = "large.bin",
                 content_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES + 4)}})

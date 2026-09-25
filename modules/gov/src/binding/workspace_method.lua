@@ -26,6 +26,15 @@ local function decode_reply(value: unknown): Result?
         public.overlay_id = stored.workspace_id
         projected = public
     end
+    if stored and type(stored.overlays) == "table" then
+        local overlays: {{[string]: unknown}} = {}
+        for index, raw in ipairs(stored.overlays :: {unknown}) do
+            local row = bounds.object(raw)
+            if not row or type(row.workspace_id) ~= "string" then return nil end
+            overlays[index] = {overlay_id = row.workspace_id, revision = row.revision}
+        end
+        projected = {overlays = overlays}
+    end
     local code: string? = nil
     if type(reply.code) == "string" then code = reply.code end
     local message: string? = nil
@@ -51,7 +60,8 @@ local function handle(raw: unknown): Result
     local actor = security.actor()
     local action = (request.operation == "read" or request.operation == "list")
         and "bee.governance.overlay.read" or "bee.governance.overlay.write"
-    if not actor or not security.can(action, request.workspace_id) then
+    local resource = request.owned and "own-overlays" or request.workspace_id
+    if not actor or not security.can(action, resource) then
         return transaction.failure("DENIED", "overlay operation is not authorized")
     end
     local scope, scope_error = security.named_scope(EXECUTION_SCOPE)

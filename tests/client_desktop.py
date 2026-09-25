@@ -150,10 +150,10 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         shutil.copytree(ROOT / "tests/fixtures/client_storage/client_database", project / "src/client_databases")
         databases = project / "src/client_databases/_index.yaml"
         database_entries = yaml.safe_load(databases.read_text())
-        database_entries["entries"].append({"name": "observer", "kind": "db.sql.sqlite", "file": "${env:bee:client_db_path}.observer"})
-        database_entries["entries"].append({"name": "status", "kind": "db.sql.sqlite", "file": "${env:bee:client_db_path}.status"})
+        database_entries["entries"].append({"name": "observer", "kind": "db.sql.sqlite", "file": "${env:bee.environment:client_db_path}.observer"})
+        database_entries["entries"].append({"name": "status", "kind": "db.sql.sqlite", "file": "${env:bee.environment:client_db_path}.status"})
         databases.write_text(yaml.safe_dump(database_entries, sort_keys=False))
-        config = project / "src/_index.yaml"
+        config = project / "src/environment/_index.yaml"
         value = yaml.safe_load(config.read_text())
         value["entries"].append({"name": "client_db_path", "kind": "env.variable", "storage": "bee.environment:workspace_environment",
                                  "variable": "BEE_CLIENT_DB", "default": str(root / "build-client.db"), "readonly": True})

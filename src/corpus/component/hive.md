@@ -80,13 +80,13 @@ key. The joining node dials the listener over TLS 1.3, accepts it only when its
 certificate key matches FINGERPRINT, proves its own identity key with its client
 certificate, and only then sends the secret. The joiner races candidate TLS
 handshakes and sends the single-use secret over the first verified path. If no
-path verifies, the error names each candidate and failure. The hive node redeems through its
+path verifies, the error names each candidate and failure. The hive node
+redeems through its
 supervisor, pins the joiner's identity key, certifies the joiner's mesh TLS key
 under its own authority and returns its gossip address, the mesh secret and its
 authority pool. The joiner pins the hive node and records the hive; its owner
 then boots with the hive's secret, the verified path's IP and hive node's gossip
-port as a seed, the
-certified leaf and the hive's authorities beside its own.
+port as a seed, the certified leaf and the hive's authorities beside its own.
 
 Both nodes admit each other through the host enrollment: the owner writes
 `bee.hive_host.supervisor:enrollment_nodes` as `{nodes, peers}` from its local client

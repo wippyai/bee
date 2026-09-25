@@ -381,7 +381,7 @@
     {
       "bytes": 9438,
       "id": "component/hive",
-      "sha256": "1d80f645171cab29358dee22e092fae749a64233895181209b20bcdb43b08065",
+      "sha256": "5bb40cacf0d1c3bd2b80b95686bf16090029797309a2879e2e47f4f74cdc2d52",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"

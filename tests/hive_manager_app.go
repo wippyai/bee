@@ -140,6 +140,11 @@ func exercise(runtime, root, mode string, packed bool) error {
 	if out, err := build.CombinedOutput(); err != nil {
 		return fmt.Errorf("deployment build: %w\n%s", err, out)
 	}
+	for _, name := range []string{"home", "config", "data", "state"} {
+		if err := os.MkdirAll(filepath.Join(deployment, name), 0700); err != nil {
+			return err
+		}
+	}
 	return run(runtime, deployment, marker, "run", "hive-manager-app-probe", mode, "--host", "bee:terminal")
 }
 

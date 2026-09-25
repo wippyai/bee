@@ -104,7 +104,7 @@ def run():
         # every later presenter open uses one fixed request ID in this fixture.
         presenter = project / "src/core/terminal/main.lua"
         text = presenter.read_text()
-        anchor = 'request_id = uuid.v7(), op = op, workspace_id = workspace_id, definition_id'
+        anchor = 'request_id = uuid.v7(), op = op, workspace_id = workspace_id,\n            definition_id'
         assert text.count(anchor) == 1, "Presenter retry injection point changed"
         text = text.replace(anchor, 'request_id = op == "open" and "duplicate-probe" or uuid.v7(), op = op, workspace_id = workspace_id, definition_id')
         presenter.write_text(text)
@@ -116,7 +116,7 @@ def run():
                     ui.key(b"\x0e")
                 assert ui.screen.display[0].count("stubborn") == 2, ui.text()
                 ui.key(b"\x17")
-                ui.pump(.5)
+                ui.wait("No applications open", timeout=10)
                 ui.key(b"\x0e")
                 ui.wait("Original application has stopped")
                 assert ui.screen.display[0].count("stubborn") == 1, ui.text()

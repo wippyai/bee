@@ -61,7 +61,7 @@ the runner OS and architecture:
 |---|---|---|
 | `toolchain-v2`: hash of the manifest's runtime and native inputs plus the builder pin, then verifier hash | `.wippy/bin` (the built runtime, its provenance and sidecars, and the builder executable) | Unit, pack, check shards and platform builds |
 | `go-v1`: hash of all `go.sum` files, `native/go.mod` and the builder lock, then job name | Go's `GOCACHE` and `GOMODCACHE` | Repository check, unit, pack, check shards and platform builds |
-| `lua-v1`: runtime commit, hash of all `*.lua` files, then job name | `$HOME/.wippy/cache/lua` | Unit, pack, check shards and platform builds |
+| `lua-v2`: runtime commit, hash of all `*.lua` files, then job name | `.wippy/test-cache` (shared by disposable test homes) | Unit, pack, check shards and platform builds |
 
 The toolchain inputs include the runtime commit, repository, Go version, tags
 and patches, plus the exact native components. Application packs and data do
@@ -78,7 +78,8 @@ Go caches use a matching-input prefix and then an OS/architecture prefix, so
 jobs can reuse downloaded modules and compiled packages as dependencies
 change. Lua caches use a matching-source prefix and then a matching-runtime
 prefix; the runtime's own content checks decide which restored entries remain
-valid when Lua sources change. Cache hits only skip setup work. Lint, unit,
+valid when Lua sources change. Release shards and platform builds also restore
+the pack job's warm compilation artifact from the same run. Cache hits only skip setup work. Lint, unit,
 pack, release checks and packaging still run. The warm push CI target is about
 five minutes; actual time depends on runner load and cache transfer.
 

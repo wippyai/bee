@@ -118,11 +118,11 @@ jobs:
     - name: Cache Lua compilation
       uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
       with:
-        path: ~/.wippy/cache/lua
-        key: lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
+        path: .wippy/test-cache
+        key: lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
         restore-keys: |
-          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
-          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
+          lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
+          lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
       with:
         python-version: '3.12'
@@ -134,7 +134,6 @@ jobs:
   pack:
     name: Bee packs
     if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
-    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -190,11 +189,11 @@ jobs:
     - name: Cache Lua compilation
       uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
       with:
-        path: ~/.wippy/cache/lua
-        key: lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
+        path: .wippy/test-cache
+        key: lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
         restore-keys: |
-          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
-          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
+          lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
+          lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
     # Every target embeds these sealed packs, and Hub publication uploads the
     # same bytes from the release's deployment archive.
     - name: Seal the application packs once
@@ -220,10 +219,18 @@ jobs:
           dist/bee-deployment.tar.gz
           dist/bee-deployment.tar.gz.sha256
         if-no-files-found: error
+    # Pack compilation warms the source tree for the release checks and builds.
+    - name: Archive warm Lua compilation
+      run: tar -cf warm-compile-cache.tar .wippy/test-cache
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: warm-compile-cache
+        path: warm-compile-cache.tar
+        if-no-files-found: error
   check:
     name: Bee check (${{ matrix.shard }})
     if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
-    needs: validate
+    needs: [validate, pack]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -283,11 +290,16 @@ jobs:
     - name: Cache Lua compilation
       uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
       with:
-        path: ~/.wippy/cache/lua
-        key: lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
+        path: .wippy/test-cache
+        key: lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
         restore-keys: |
-          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
-          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
+          lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
+          lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: warm-compile-cache
+    - name: Restore warm Lua compilation
+      run: tar -xf warm-compile-cache.tar && rm warm-compile-cache.tar
     - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
       with:
         python-version: '3.12'
@@ -299,7 +311,7 @@ jobs:
   build:
     name: Bee (${{ matrix.goos }}/${{ matrix.goarch }})
     if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
-    needs: [validate, pack]
+    needs: pack
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -363,11 +375,16 @@ jobs:
     - name: Cache Lua compilation
       uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
       with:
-        path: ~/.wippy/cache/lua
-        key: lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
+        path: .wippy/test-cache
+        key: lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
         restore-keys: |
-          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
-          lua-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
+          lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-
+          lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: warm-compile-cache
+    - name: Restore warm Lua compilation
+      run: tar -xf warm-compile-cache.tar && rm warm-compile-cache.tar
     - name: Verify runner architecture
       env:
         EXPECTED_OS: ${{ matrix.goos }}

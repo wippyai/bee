@@ -209,7 +209,7 @@ pack: lint
 # Release CI runs make check as these shards in parallel jobs. Each shard
 # lists check members; check-shards-check proves every step make check runs
 # belongs to exactly one shard.
-CHECK_SHARD_TARGETS := check-shard-foundation check-shard-modules check-shard-services check-shard-windows check-shard-window-failure check-shard-desktop-shell check-shard-desktop-terminal check-shard-desktop-client check-shard-desktop-delivery
+CHECK_SHARD_TARGETS := check-shard-foundation check-shard-modules check-shard-services check-shard-services-storage check-shard-services-client-storage check-shard-services-workspace check-shard-windows check-shard-window-failure check-shard-desktop-shell check-shard-desktop-shell-smoke check-shard-desktop-shell-workflow check-shard-desktop-shell-close check-shard-desktop-shell-control check-shard-desktop-shell-recovery check-shard-desktop-terminal check-shard-desktop-client check-shard-desktop-client-launch check-shard-desktop-client-recovery check-shard-desktop-delivery check-shard-desktop-delivery-journey check-shard-desktop-delivery-review check-shard-desktop-delivery-hive
 .PHONY: $(CHECK_SHARD_TARGETS) check-shards-check
 CHECK_JOBS ?= 4
 .PHONY: check-parallel
@@ -217,13 +217,26 @@ check-parallel:
 	python3 build/parallel_check.py --jobs "$(CHECK_JOBS)"
 check-shard-foundation: check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check
 check-shard-modules: hub-migration-service-check modules-app-check modules-update-check modules-contents-check app-admission-check retained-owner-check hive-supervisor-check
-check-shard-services: threads threads-module harness-module resources-module gateway-check gateway-readiness-check governance-workspace-check saved-profiles-check workspace-hosts-check storage-check thread-storage-check resources-check
+check-shard-services: threads threads-module harness-module resources-module gateway-check gateway-readiness-check governance-workspace-check saved-profiles-check thread-storage-check resources-check
+check-shard-services-storage: workspace-storage-check
+check-shard-services-client-storage: client-storage-check
+check-shard-services-workspace: workspace-hosts-check
 check-shard-windows: window-native-check managed-window-app-check window-hooks-check window-recovery-check
 check-shard-window-failure: managed-window-failure-check
-check-shard-desktop-shell: desktop-shell-check
+check-shard-desktop-shell: desktop-shell-start-check
+check-shard-desktop-shell-smoke: desktop-shell-smoke-check
+check-shard-desktop-shell-workflow: desktop-shell-interactions-check
+check-shard-desktop-shell-close: desktop-shell-close-confirmation-check
+check-shard-desktop-shell-control: desktop-shell-control-delivery-check
+check-shard-desktop-shell-recovery: desktop-shell-recovery-check
 check-shard-desktop-terminal: desktop-terminal-check
-check-shard-desktop-client: desktop-client-check
-check-shard-desktop-delivery: desktop-delivery-check
+check-shard-desktop-client: desktop-client-core-check
+check-shard-desktop-client-launch: desktop-client-launch-check
+check-shard-desktop-client-recovery: desktop-client-recovery-check
+check-shard-desktop-delivery: desktop-delivery-inbox-check
+check-shard-desktop-delivery-journey: desktop-delivery-app-journey-check
+check-shard-desktop-delivery-review: desktop-delivery-review-check
+check-shard-desktop-delivery-hive: desktop-delivery-hive-check
 check: check-shards-check
 check-shards-check:
 	python3 tests/check_shards.py
@@ -235,30 +248,38 @@ check desktop-check desktop-shell-check desktop-terminal-check desktop-client-ch
 
 check: identity-native-check installer-check agent-corpus-check docs-agent-check lint test window-native-check managed-window-app-check window-hooks-check threads threads-module harness-module resources-module gateway-check governance-workspace-check portable-pack-atomic-check pack about-check headless-check workspace-hosts-check storage-check thread-storage-check resources-check desktop-check
 
-.PHONY: storage-check thread-storage-check resources-check
-storage-check:
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
+.PHONY: storage-check workspace-storage-check thread-storage-check resources-check
+storage-check: workspace-storage-check client-storage-check
+workspace-storage-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import storage; storage.main()'
 thread-storage-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py
 resources-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources.py
 
-.PHONY: desktop-check desktop-shell-check desktop-terminal-check desktop-client-check desktop-delivery-check fresh-pack-check about-check
+.PHONY: desktop-check desktop-shell-check desktop-shell-start-check desktop-shell-smoke-check desktop-shell-workflow-check desktop-shell-interactions-check desktop-shell-close-confirmation-check desktop-shell-control-delivery-check desktop-shell-recovery-check desktop-terminal-check desktop-client-check desktop-client-core-check desktop-client-launch-check desktop-client-recovery-check desktop-delivery-check desktop-delivery-inbox-check desktop-delivery-journey-check desktop-delivery-app-journey-check desktop-delivery-review-check desktop-delivery-hive-check fresh-pack-check about-check
 about-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/about.py
 fresh-pack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fresh_pack.py
 desktop-check: desktop-shell-check desktop-terminal-check desktop-client-check desktop-delivery-check
-desktop-shell-check:
+desktop-shell-check: desktop-shell-start-check desktop-shell-smoke-check desktop-shell-workflow-check desktop-shell-recovery-check
+desktop-shell-start-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/connection_ui.py
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/tui_smoke.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fresh_pack.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/taskbar.py
+desktop-shell-smoke-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/tui_smoke.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/personalization.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/announcements.py
+desktop-shell-workflow-check: desktop-shell-interactions-check desktop-shell-close-confirmation-check desktop-shell-control-delivery-check
+desktop-shell-interactions-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/interactions.py
+desktop-shell-close-confirmation-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/close_confirmation.py
+desktop-shell-control-delivery-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/control_delivery.py
+desktop-shell-recovery-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/drag_failure.py
 	$(MAKE) window-retirement-check WIPPY="$(abspath $(WIPPY))"
 desktop-terminal-check:
@@ -267,15 +288,23 @@ desktop-terminal-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/navigation.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/terminal_selection.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/lifecycle.py
-desktop-client-check:
+desktop-client-check: desktop-client-core-check desktop-client-launch-check desktop-client-recovery-check
+desktop-client-core-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/client_desktop.py
+desktop-client-launch-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
+desktop-client-recovery-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/recovery.py
-desktop-delivery-check:
+desktop-delivery-check: desktop-delivery-inbox-check desktop-delivery-journey-check desktop-delivery-hive-check
+desktop-delivery-inbox-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_app.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_decide.py
+desktop-delivery-journey-check: desktop-delivery-app-journey-check desktop-delivery-review-check
+desktop-delivery-app-journey-check:
 	$(MAKE) app-journey-check WIPPY="$(abspath $(WIPPY))"
+desktop-delivery-review-check:
 	$(MAKE) delivery-review-check WIPPY="$(abspath $(WIPPY))"
+desktop-delivery-hive-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" go run tests/hive_manager_app.go
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/timeline_app.py
 

@@ -15,7 +15,9 @@ every `check` and `materialize`, so removing a source or an audience takes
 effect for projections already issued. A projection binds the authenticated subject, an audience, one
 attempt, the profile, binding and launch-policy digests, the provider's
 frozen declared destination, the materializer identity, an expiry and the workspace
-authorization epoch. `check` re-checks the bindings without bytes;
+authorization epoch. `check` re-checks the bindings without bytes and reports
+file-source `source_present` from a stat when its host-selected source is
+available; an unavailable source leaves this field absent.
 `availability` is a manager-only metadata probe for an existing file
 definition and reports whether its admitted login file is present;
 `materialize` re-checks them for an admitted materializer and returns the
@@ -53,7 +55,8 @@ transient returned format as an initializer that may be installed even when an
 optional login is absent. The setup declaration and its contents are never
 stored in a definition or projection, and a missing setup file is allowed. The host's `bee.security.credentials:credential_file_policy`
 grants filesystem access separately from source metadata and is attached to
-availability for a stat-only check and to materialization for bounded reads.
+availability and materializer check for stat-only checks, and to
+materialization for bounded reads.
 Registry source metadata in `bee:credential_sources` alone cannot grant filesystem
 read: if a source ref is admitted by metadata but absent from
 `bee.security.credentials:credential_file_policy`, availability and materialization fail closed

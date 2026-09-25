@@ -27,6 +27,11 @@ Placement validates the returned launch, measures the selected executable, and
 runs it. The carrier writes accepted observations through Threads. A process
 exit alone never establishes a successful turn.
 
+A window launch may declare `login`: a provider identifier, a display-only
+sign-in command and bounded alternative file paths relative to its selected
+provider home. Placement uses their existence to return a typed advisory
+notice; a login declaration grants no filesystem or credential authority.
+
 ## Saved profiles
 
 A saved profile contains a title, a launch definition, bounded scalar options,

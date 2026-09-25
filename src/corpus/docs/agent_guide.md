@@ -89,6 +89,26 @@ no remote enrollment. On a node without a folder workspace (`bee daemon`),
 `bee client` picks one of the node's workspaces and Ctrl+] returns to the
 picker to switch; see [the workspace catalog](../reference/workspace-catalog.md).
 
+## Managed provider login
+
+Each built-in Codex, Claude, agy, Grok and Muse window launch declares its
+provider's login evidence as safe paths relative to its provider home, plus a
+command to show the person. Native placement checks file existence in the
+home selected for that attempt, including `CODEX_HOME`, `CLAUDE_CONFIG_DIR`
+or `GROK_HOME` when set. For a retained home that will receive an admitted
+file login projection, the credential broker also reports whether the source
+file exists without opening it. Missing evidence yields a typed
+`LOGIN_REQUIRED` notice in placement's prepare reply. The Agent window shows
+the provider and command before starting the CLI; Enter continues to the
+provider's own sign-in flow, and the title keeps a login hint. This is a
+helpful observation, not an authentication decision: Bee checks existence
+only and leaves sign-in to the provider.
+
+The workspace owner inherits the environment of the `bee` invocation that
+started it. Later clients attach to that owner and do not replace its
+provider-home variables. After changing `CODEX_HOME` or another provider
+home variable, run `bee stop` and start Bee again with the new environment.
+
 The local Hub can inspect, plan and apply host-authorized components. Governed
 overlays can stage bounded content, freeze an immutable candidate, obtain an
 exact approval, apply it through the owning host and recover after restart.

@@ -30,8 +30,11 @@ environment of the `bee` invocation that started it. A later `bee` invocation
 joins the running owner and does not change them: to use another provider home,
 run `bee stop`, then start Bee with the new variable set. Sign in with the
 provider's own CLI in that home before opening the window (for example
-`codex login`); a window whose provider has no login shows the provider's own
-sign-in screen.
+`codex login`). When Bee finds no login evidence in the home selected for a
+managed window, Agent shows a `LOGIN_REQUIRED` hint with the provider's
+sign-in command. Press Enter to continue to the provider's own sign-in flow;
+the window title keeps the hint. Bee checks for files without opening them,
+so the hint does not prove whether a provider account is valid.
 
 ## Composition
 

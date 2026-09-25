@@ -9,6 +9,57 @@ future behavior.
 Source citations use paths from the Bee repository root. `../framework` and
 `../dataflow` are sibling Wippy repositories; `../../kickside/main` is the
 Kickside reference tree. Line numbers refer to the surveyed source trees.
+The section "Implemented: framework closure and CLI admission" describes the
+implemented Bee contract in present tense; every other non-survey section
+remains a proposal.
+
+## Implemented: framework closure and CLI admission
+
+A launch definition carries an optional `agent_ref` naming one `agent.gen1`
+registry entry; the definition never copies the agent body
+(`modules/harness/src/launch/definition.lua`).
+`bee.harness.launch:agent_resolver`
+(`modules/harness/src/launch/agent_resolver.lua`) resolves that reference
+from the same pinned registry snapshot as the driver binding and launch
+policy into a hashed launch spec closure: the agent digest, each trait
+digest with its full prompt, member function tools, context and required
+behavior, contract, wrapper, hook, option and delegate semantics, each
+function tool digest with its `llm_alias`, description and input/output
+schemas, delegate digests, the composed prompt and context, the agent model
+and the tuning hints with the owner-permitted declinable set. A missing
+entry is refused (`NOT_FOUND`); an unknown agent, trait or tool field is
+refused (`INVALID`).
+
+A CLI harness route (Claude, Codex, agy, Grok or Muse) admits the closure
+only through the route check in launch admission
+(`modules/harness/src/launch/admission.lua`). The route honors the exact
+agent identity, the composed prompt and context, the selected trait and tool
+schemas, the admitted delegates and the host-approved model mapping from the
+launch policy's `agent_model_map`
+(`modules/harness/src/carrier/policy.lua`). A tuning hint passes only as a
+declined entry when the agent owner lists it as declinable; required memory,
+trait behavior, contracts, wrappers, hooks or options are refused
+(`UNSUPPORTED_CAPABILITY`), so a trait is never reduced to its prompt.
+Delegates outside the policy's `agent_delegates` are refused (`FORBIDDEN`).
+Codex takes no model input, so an agent that names a model is refused on a
+Codex route. The plan pins the closure digest, the exact gateway tool
+aliases, the mapped model and the declined hints; a changed agent, trait,
+tool, delegate or contract reference returns `CONFLICT` before any grant or
+credential projection. The closure's composed text travels through the
+profile instruction channel, so an agent route needs `profile_instructions`;
+`bee.harness.profiles:agent_preferences`
+(`modules/harness/src/profiles/protocol.lua`) narrows a saved profile inside
+the closure and refuses tools outside it or an option claiming `model`
+(`FORBIDDEN`).
+
+`bee.gateway:catalog.from_framework`
+(`modules/gateway/src/catalog.lua`) projects the closure's selected function
+tools and traits into gateway declarations: each function id becomes one MCP
+tool under its `llm_alias` adapter alias with its input schema, and each
+trait keeps its prompt with those aliases. The alias carries no authority;
+the host supplies one policy list per function id, and selection still
+refuses any tool outside the admitted ceiling. The function still executes
+under a host-selected scope.
 
 ## Current state informing the proposal
 
@@ -20,9 +71,9 @@ Kickside reference tree. Line numbers refer to the surveyed source trees.
 | Native Dataflow | The Flow builder has a function operation and an agent operation. Its agent configuration accepts an agent id, arena settings, active traits and active tools; the agent node applies those selections before loading the agent. A Bee run can therefore enter a Flow through the existing function operation. (`../dataflow/src/flow/flow.lua:76-100`, `../dataflow/src/flow/flow.lua:103-147`, `../dataflow/src/node/agent/node.lua:1996-2009`) |
 | Kickside components | Product modules own contracts; bindings map contract methods to function ids, and host requirements supply dependencies. Agent components use a `wippy.agent:resolver` binding and may contribute `agent.gen1` entries. (`../../kickside/main/app/src/app/docs/kickside-development/02-contracts-and-ports.md:15-25`, `../../kickside/main/app/src/app/docs/kickside-development/02-contracts-and-ports.md:87-115`, `../../kickside/main/app/src/app/docs/kickside-development/16-conventions.md:45-85`, `../../kickside/main/app/src/app/docs/kickside-development/06-agents-skills-models.md:264-306`) |
 | Kickside traits/tools | Components contribute `agent.trait` entries and `function.lua` tools with `meta.type: tool`, schema and model-facing metadata. Public tools can be projected as virtual function Blocks. (`../../kickside/main/app/src/app/docs/kickside-development/06-agents-skills-models.md:20-43`, `../../kickside/main/app/src/app/docs/kickside-development/06-agents-skills-models.md:81-135`, `../../kickside/main/app/src/app/docs/kickside-development/18-blocks-flows-workflows.md:73-83`) |
-| Bee launch | `bee.launch-definition@1` identifies a binding, profile and policy, with mode, workdir, thread, session, credentials and presentation rules. It has no `agent_ref`. The measured plan currently covers definition, binding, profile, policy, placement and provider inputs. (`modules/harness/src/launch/definition.lua:9-33`, `modules/harness/src/launch/definition.lua:66-75`, `modules/harness/src/launch/admission.lua:201-210`) |
-| Bee profile | Saved profiles select a launch definition and contain driver options, MCP tool names and instructions capped at 4,096 bytes. These are not a framework agent definition. (`modules/harness/src/profiles/protocol.lua:3-5`, `modules/harness/src/profiles/protocol.lua:8-44`) |
-| Bee gateway | Its catalog uses local tool names, operation ids and policy refs, plus traits limited to prompt and tool names. Selection checks the host tool ceiling; tool execution uses a scoped subject executor. (`modules/gateway/src/catalog.lua:6-9`, `modules/gateway/src/catalog.lua:30-75`, `modules/gateway/src/catalog.lua:78-108`, `modules/gateway/src/api/mcp_method.lua:48-53`) |
+| Bee launch | `bee.launch-definition@1` identifies a binding, profile and policy, with mode, workdir, thread, session, credentials and presentation rules, plus an optional `agent_ref` naming one `agent.gen1` entry. An agent route resolves the framework closure from the same snapshot and pins its digest, exact gateway tools, mapped model and declined hints in the measured plan. (`modules/harness/src/launch/definition.lua`, `modules/harness/src/launch/agent_resolver.lua`, `modules/harness/src/launch/admission.lua`) |
+| Bee profile | Saved profiles select a launch definition and contain driver options, MCP tool names and instructions capped at 4,096 bytes. These are not a framework agent definition; on an agent route `agent_preferences` narrows a saved profile inside the admitted closure and refuses tools outside it or an option claiming `model`. (`modules/harness/src/profiles/protocol.lua`) |
+| Bee gateway | Its catalog uses local tool names, operation ids and policy refs, plus traits of prompt and tool names. `catalog.from_framework` projects an admitted closure's function tools (under their `llm_alias` adapter alias) and traits into the same declarations. Selection checks the host tool ceiling; tool execution uses a scoped subject executor. (`modules/gateway/src/catalog.lua`, `modules/gateway/src/api/mcp_method.lua:48-53`) |
 | Bee child launch | `thread_launch` and the application facade `agent_call` share one request (`bee.application:agent_protocol`: definition or saved profile, brief, retry key, workspace, working directory, thread, placement) and one launch path (`caller_launch`). Workdir, thread and placement choices apply only where the definition and its launch policy both allow the override; a `docker` placement is refused with `PLACEMENT_UNAVAILABLE`. (`modules/application/src/agent_protocol.lua`, `modules/harness/src/launch/caller_launch.lua`, `modules/harness/src/launch/admission.lua`) |
 | Bee drivers | Claude and Codex prepare declarative CLI launches; their model/effort and permission/sandbox options differ. Driver bindings also exist for Agy, Grok and Muse. (`modules/driver-claude/src/launch.lua:13-19`, `modules/driver-claude/src/launch.lua:89-112`, `modules/driver-codex/src/launch.lua:4-17`, `modules/driver-codex/src/launch.lua:65-105`, `modules/driver-agy/src/_index.yaml:71-72`, `modules/driver-grok/src/_index.yaml:62-63`, `modules/driver-muse/src/_index.yaml:74-75`) |
 | Bee driver execution | Current catalog compatibility accepts `stream-json` for batch/session and `pty` for windows; an in-process Wippy profile needs a new execution path. (`modules/harness/src/catalog/classify.lua:46-47`) |
@@ -245,6 +296,10 @@ deliberate migration; no applied migration is edited.
 
 1. Which framework fields are mandatory parity for CLI drivers, and which
    optional fields may a route explicitly decline before admission?
+   (Answered for CLI routes by the implemented closure and admission above:
+   exact identity, composed prompt and context, trait and tool schemas,
+   admitted delegates and a host-approved model mapping are mandatory; only
+   owner-declinable tuning hints may pass as declined.)
 2. Should app-owned run contracts standardize one result/wait/cancel envelope,
    or can they wrap a small Bee execution contract with domain-specific output?
 3. How should a workspace select a user agent supplied by a resolver while

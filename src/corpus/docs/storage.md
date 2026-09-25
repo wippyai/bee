@@ -3,19 +3,19 @@
 `bee.storage:store` is the persistence boundary for workspace hosts. The node
 workspace database holds any number of logical workspaces as rows keyed by
 `workspace_id`; a workspace has no database file, process host or runtime of its
-own. `open(resource, selection)` acquires `bee.environment:workspace_db` (or, for protected
+own. `open(resource, selection)` acquires `bee.env:workspace_db` (or, for protected
 bootstrap, `bee.workspace.db:<name>`) and binds the handle to exactly one catalog
 row. Names contain only letters, digits, underscores and hyphens, with a 160-byte
 total ID limit. The root registry owns each resource's path and lifecycle.
 Callers cannot pass file paths, select client resources or change tables. Native
 `db.get` must grant the selected resource explicitly; the existing default policy
-grants only `bee.environment:workspace_db`. Default applications cannot import this library,
+grants only `bee.env:workspace_db`. Default applications cannot import this library,
 and their storage boundary denies both default core stores and the reserved
 client/workspace database namespaces even under a broader database grant.
 
 A selection, decoded by `bee.storage:binding`, is either `{workspace_id}` or
 `{root_ref, subpath}`. Classic folder mode passes `binding.classic()`, the
-workspace rooted at `bee.environment:workspace_root` with an empty subpath. The host is
+workspace rooted at `bee.env:workspace_root` with an empty subpath. The host is
 told its selection by the composition that spawns it
 (`bee.host:main(owner, selection, database_resource)`) and never infers the
 workspace from the database it opens.
@@ -25,7 +25,7 @@ can provide an explicit path for an isolated workspace. Wippy registry history
 remains separate in `.wippy/registry.db` (or its configured
 `registry.history_path`).
 
-Local desktop layout belongs to `bee.environment:client_db`, at the selected workspace path
+Local desktop layout belongs to `bee.env:client_db`, at the selected workspace path
 plus `.client`. The desktop client cannot acquire the workspace store. Desktop
 identities (the default desktop and up to 32 allocated ones) belong to the
 client node and double as the display IDs workspaces record. Each desktop keeps
@@ -74,7 +74,7 @@ listing and search walk.
 
 Migration 6 (`node_workspaces_v1`) turns a single-workspace install into this
 catalog. The ID from the former `workspace_identity` singleton becomes the
-classic row (root `bee.environment:workspace_root`, empty subpath, empty label), and
+classic row (using the root ID of that release, empty subpath, empty label), and
 `workspace_state`, `workspace_display_assignments`,
 `workspace_display_transfer_receipts` and `workspace_application_thread_bindings`
 are rebuilt with `workspace_id` as their leading key; every existing row keeps
@@ -94,6 +94,12 @@ created. The first `open()` of the classic selection then creates it with a
 fresh ID, once; a daemon, which never opens the folder, keeps an empty catalog.
 A database migrated before keeps its classic row, recorded as created, so a
 classic row that later goes missing still fails `open()`.
+
+Migration 9 (`nested_bee_names_v1`) translates the catalog root, known
+Bee-owned application definition IDs in workspace checkpoints and exact
+application/thread binding rows. It preserves workspace, view and instance IDs,
+opaque app state, migration history and generation numbers. The unchanged client
+layout schema contains no application definition ID.
 
 `workspace_state` has one row per workspace containing the envelope, schema
 version, monotonic generation and update timestamp.

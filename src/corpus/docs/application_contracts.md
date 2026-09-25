@@ -28,7 +28,7 @@ The protected `bee.security:application_admission.bindings` selection supplies s
 definitions, policy IDs and grants such as `appearance_write` and
 `application_stop`. A reviewed governed overlay may add a
 workspace-local definition through the host's
-`bee:governance_activation_profiles.applications` selection. Activation freezes
+`bee.env:gov_activation_profiles.applications` selection. Activation freezes
 the selected artifact, owner, bindings and external policy definitions in its
 immutable intent and creates one reserved admission record beside the artifact.
 Portable content cannot claim that identity. Static and governed claims cannot
@@ -142,7 +142,7 @@ local run, fault = agents.launch({
     definition_ref = "bee.driver.codex:research_batch",
     brief = "Summarize the build scripts in this folder.",
     idempotency_key = "summarize-build-1",
-    workdir = {root_ref = "bee.environment:workspace_root", path = "legacy/app"},
+    workdir = {root_ref = "bee.env:workspace_root", path = "legacy/app"},
     thread = {thread_id = launch.thread_id},
 })
 if not run then return fault.code .. ": " .. fault.message end

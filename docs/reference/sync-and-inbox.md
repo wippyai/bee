@@ -90,7 +90,7 @@ Policy changes require a reset; each page checks authority again. Event payloads
 carry a typed current approval projection, not an executable callback. Pages are
 bounded by count and 192 KiB of encoded items, below the Hive reply limit.
 
-The host may configure `bee.inbox:sources` as
+The host may configure `bee.approvals.inbox:sources` as
 `data: {sources: [{node_id: node-b, workspace_id: workspace-id}]}`. Existing local
 workspace configuration still applies. At most 16 sources are accepted. Each
 source uses a staged snapshot, incremental catch-up and periodic reconciliation;

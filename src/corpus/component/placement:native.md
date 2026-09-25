@@ -18,7 +18,7 @@ volume, linked through the `target_root` requirement.
    A host policy selecting another placement is refused before the native
    capability probe or intent, even when a direct caller omits its placement
    hint. Calling the native operation does not override host selection.
-   A request for `bee.environment:machine_home` is admitted only when the pinned host launch
+   A request for `bee.env:machine_home` is admitted only when the pinned host launch
    policy explicitly sets `allow_host_home: true`; profile metadata cannot grant
    that filesystem authority.
    Window login evidence is checked by existence in the selected provider

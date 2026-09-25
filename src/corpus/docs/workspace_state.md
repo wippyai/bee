@@ -1,13 +1,13 @@
 # Workspace state and application restoration
 
 This describes the implemented version-1 store, not the future resource catalog.
-Workspace hosts alone open `bee.environment:workspace_db`, the node workspace database that
+Workspace hosts alone open `bee.env:workspace_db`, the node workspace database that
 keeps every logical workspace as keyed rows. Its source-development default
 is `.wippy/workspace.db`; `BEE_WORKSPACE_DB` selects another file. The standalone
 executable uses its application state directory by default and preserves the
 caller's working directory for native commands. See the [launch instructions](../../README.md).
 Each workspace has a durable opaque ID in the node catalog table `workspaces`;
-classic launch serves the row rooted at `bee.environment:workspace_root`. Selecting a project
+classic launch serves the row rooted at `bee.env:workspace_root`. Selecting a project
 folder does not create an authorized filesystem binding.
 
 ## Persisted values
@@ -67,6 +67,14 @@ Applied migration names and checksums are immutable. Newer, changed or incomplet
 ledgers fail explicitly; Bee does not delete or downgrade the database. Stale
 store handles cannot overwrite a newer generation. These guarantees are tested
 in `tests/storage.py`; source/pack restoration is tested in `tests/recovery.py`.
+
+Migration 9 translates the classic catalog root and Bee-owned saved application
+definition IDs. The workspace recovery decoder also accepts older definition IDs
+in JSON written with different spacing. The client layout stores view and
+instance IDs, not application definition IDs, so its three applied migrations
+stay unchanged. `make nested-names-upgrade-check` boots state from the pre-rename
+main revision and verifies restored Settings and Approvals windows retain their
+identities and client layout.
 
 Workspace database schema, registry revision, app revision and app resume schema
 are different version domains. Apps own interpretation of their opaque state;

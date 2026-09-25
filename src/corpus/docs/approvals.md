@@ -103,7 +103,7 @@ are hints followed by owner `read_after` catch-up. Reads and decisions recheck
 current audience and policy. Removing access clears cached sensitive details
 and marks the owner unavailable when it cannot be queried.
 
-The bundled `bee.inbox:app` reads the launch workspace and host-listed
+The bundled `bee.approvals.inbox:app` reads the launch workspace and host-listed
 workspaces through the approval owner, displays the proposed effect, target,
 requester and expiry, and submits `decide` with the viewed revision and
 proposal digest after its confirmation question. `withdraw` is an explicit

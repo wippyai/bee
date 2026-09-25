@@ -179,7 +179,7 @@ A collection of items with properties. `frame.table` for the list; on
  NAME                                   STATE      STEPS   DETAIL
 › bee.host:main                          running       96   PID    0x0017
   bee.session:main                       idle          16   Host   workers
-  bee.applications:broker                running       70   Steps  96
+  bee.apps:broker                running       70   Steps  96
  ...
   Pause    Sort: name    Stop app
  3 selected                          ↑↓ select · Tab switch · Esc close

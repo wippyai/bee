@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 7136,
+      "bytes": 7160,
       "id": "docs/agent_guide",
-      "sha256": "0fca7559313ed301defb45af61c2ae0bcc7e4a1d78a1150fdb7299c48277c0a0",
+      "sha256": "cacb7a25e249d3c4623c5e2bbb3e2780153ad6bae484bb36cbbb12bab6f61a44",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -149,15 +149,15 @@
     {
       "bytes": 14372,
       "id": "docs/mcp_configuration",
-      "sha256": "b2640697e551d18675a0a22f0f4ec679766878a4ba69d596d20e1dcc0d3cf839",
+      "sha256": "63bfb961a4ed42641fa3f37ca8d3eecbff3d210630338f2237caa791657b2e23",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
     },
     {
-      "bytes": 15574,
+      "bytes": 15566,
       "id": "docs/app_style",
-      "sha256": "e5d1ee17d0920054348cd94448c9db84ca06805168d50b0ec9d0f8004e23718e",
+      "sha256": "d59d5240f757c8b0b82b98b57117b538371bf626c509cc09aadd726efe20284e",
       "source": "docs/guides/app-style.md",
       "title": "Application visual style",
       "topic": "ui"
@@ -179,9 +179,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 10761,
+      "bytes": 10862,
       "id": "docs/distributed_app_delivery",
-      "sha256": "bac469dadd91a495ffea6e7fa484ef96ba129ee8ab06ce7586bbd9cd231f81bd",
+      "sha256": "2f7248674591c5d85478973325ba9b7454fe03c9d40921e4178014d27ca928ec",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -203,9 +203,9 @@
       "topic": "application"
     },
     {
-      "bytes": 10717,
+      "bytes": 10708,
       "id": "docs/gateway",
-      "sha256": "0607ba6897fc9b1d069f6364907dde0ba29a8047464bf4e025087bb72fbd3b16",
+      "sha256": "d6a615c4249136c526c6a9178624a499df5135a3589cc11164b8bf0a49a78893",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -219,33 +219,33 @@
       "topic": "gateway"
     },
     {
-      "bytes": 22390,
+      "bytes": 22379,
       "id": "docs/application_contracts",
-      "sha256": "469c0d4cba0a0e911ff13c0c4adb35fa93d7b82f3b1149ea2897be1f9bf8899f",
+      "sha256": "015a26ab7440431948196019dd21ff3fb4ca25d3449904d051746308d7dcfb52",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
     },
     {
-      "bytes": 10928,
+      "bytes": 10938,
       "id": "docs/approvals",
-      "sha256": "801e0fddf094b4646691291bcc249f5e295a6b84698fbecc578cfe82e61a19fe",
+      "sha256": "e6b96c6942f8c1605d898eef0fcc8b344462113d53bb35c07db9c2b7eca28e0b",
       "source": "docs/reference/approvals.md",
       "title": "Durable approval requests",
       "topic": "approvals"
     },
     {
-      "bytes": 7649,
+      "bytes": 7971,
       "id": "docs/storage",
-      "sha256": "cf2146b42b1b4c1a1d9ebdfd67cbcbf9477b2ce126087f8e641fb849300a4577",
+      "sha256": "bd05cba74c878abe427d43687319f38138bf0e7e5802147366c72c1964e3f644",
       "source": "docs/reference/storage.md",
       "title": "Workspace storage",
       "topic": "storage"
     },
     {
-      "bytes": 7912,
+      "bytes": 7922,
       "id": "docs/sync_and_inbox",
-      "sha256": "df15e4eab2d15368f536e2178a59a54c5e2fdb8f242bb4417faff16953226232",
+      "sha256": "ab0254a81edae53ff66d861ccaed27e9e409e3c37ae8fde68108ceb32aad5ffb",
       "source": "docs/reference/sync-and-inbox.md",
       "title": "Owner-local sync and inbox",
       "topic": "cluster"
@@ -259,17 +259,17 @@
       "topic": "threads"
     },
     {
-      "bytes": 20593,
+      "bytes": 20688,
       "id": "docs/workspace_catalog",
-      "sha256": "af9373dfb8b5cd6d2d7ee95bad6d6a0d240deb9d0b030041ec7c98256b8e1f92",
+      "sha256": "7248b396eb41484f0b0119e51012146fcb3019df588dd9e242c859b1e02194b4",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
     },
     {
-      "bytes": 5387,
+      "bytes": 5877,
       "id": "docs/workspace_state",
-      "sha256": "48d9d06f216f2d40ce779fd92312d0738bbd4123d6c5685ce60b94066adebf67",
+      "sha256": "8bead492babdac683705bb48605e75ae687402ee1248e6a288e5369d86beb2be",
       "source": "docs/reference/workspace-state.md",
       "title": "Workspace state and application restoration",
       "topic": "storage"
@@ -283,17 +283,17 @@
       "topic": "component"
     },
     {
-      "bytes": 3967,
+      "bytes": 3976,
       "id": "component/approvals",
-      "sha256": "943da0d08df1486d803d8e81db8ffabc9a379f07659a91c65c14ae440b29fa58",
+      "sha256": "b44f3cc2b2a02ec6af06fbe4ff113d5a5be8fcd21e5ebd58760a706237aaa68a",
       "source": "modules/approvals/src/README.md",
       "title": "Bee approvals",
       "topic": "component"
     },
     {
-      "bytes": 11510,
+      "bytes": 11506,
       "id": "component/credentials",
-      "sha256": "309b9a8c5be188b250bf40abe37b3d5873ed92853b938c6f5a336d3aafc9c55e",
+      "sha256": "627b63e11c09e04310898f037334d7551b35a072ff183b67fae534ca72f3cb53",
       "source": "modules/credentials/src/README.md",
       "title": "bee.credentials",
       "topic": "component"
@@ -355,17 +355,17 @@
       "topic": "component"
     },
     {
-      "bytes": 4841,
+      "bytes": 4832,
       "id": "component/gateway",
-      "sha256": "b2ba230fc6a32be22442d6facc6c8c53a7583aa55a42eee55f6e032028ee8656",
+      "sha256": "234c28bdfb8aae9ab7e73efb2be7bb7db5ad034895412adcc1dc9b9da17cd7c0",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
     },
     {
-      "bytes": 17380,
+      "bytes": 17285,
       "id": "component/gov",
-      "sha256": "43975efd9915faa0a1d55caf1285e98044d82b469cf245d477bb3d93c4721cf9",
+      "sha256": "7e7863bfe4f15f1076a9dccf314173688b204319e446288f9749367b66c6d9d1",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -379,9 +379,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8393,
+      "bytes": 8367,
       "id": "component/hive",
-      "sha256": "d87815a07565adb64e68dc577adcf9317a855540499f9e1d8ade3aa73affd126",
+      "sha256": "e980c3e2a87d7e37a65d08aa4047f9192592a172d54fd7dd1cd7041829f49dfc",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"
@@ -419,17 +419,17 @@
       "topic": "component"
     },
     {
-      "bytes": 18495,
+      "bytes": 18487,
       "id": "component/placement:native",
-      "sha256": "c2be5c4e5d5e182a29172b92c9ade6ec7449fd51ee68f09855ec31301c4f69f3",
+      "sha256": "c852c2a232316f0b050d74ab1c1c3ae58e09f94ff28b1f55ca421597088aeb22",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
     },
     {
-      "bytes": 3046,
+      "bytes": 3062,
       "id": "component/resources",
-      "sha256": "774fac84515a264f2cfa8da8b90375bee4bad1259a6a4397b11b692e3a0ee301",
+      "sha256": "ad27efa6075c29f90115ac2d682f39de918cc1110f80c0469db222385ace4e6f",
       "source": "modules/resources/src/README.md",
       "title": "bee.resources",
       "topic": "component"
@@ -451,10 +451,10 @@
       "topic": "component"
     },
     {
-      "bytes": 32490,
+      "bytes": 31526,
       "id": "toolkit",
-      "sha256": "722d1b60bf65114e4e152ce5b3becbd2262d7ea5851761baea4eecdd00bd683c",
-      "source": "generated: modules/application/src, src/apps, tests/lua/frame",
+      "sha256": "e78c2857e8b402cf73f47816e4da430e1b9355ac3f52c20b3a3b3255c4fbac72",
+      "source": "generated: modules/application/src, src application views, tests/lua/frame",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
     }
@@ -462,7 +462,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 554529,
+    "bytes": 554472,
     "documents": 57
   }
 }

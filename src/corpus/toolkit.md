@@ -252,7 +252,7 @@ viz.sparkline(painter, 2, 1, 22, {3, 5, 2, 8, 6, 9, 4, 7, viz.GAP, 5, 8, 10})
 ```
 
 ```text
-           ▃▄▂▇▅█▄▆·▄▇█ 
+           ▃▄▂▇▅█▄▆·▄▇█
 ```
 
 ### `viz.bar_cell`
@@ -265,14 +265,14 @@ viz.bar_cell(viz.GAP, 10, 2) --> "  "
 local rows = frame.new(50, 4, appearance.defaults())
 frame.table(rows, 1, 4, {columns = {{title = "Process", width = 0}, {title = "Steps", width = 12}, {title = "", width = 4, align = "right"}},
     cells = {{"bee.host:main", viz.bar_cell(96, 96, 12), "96"}, {"bee.session:main", viz.bar_cell(16, 96, 12), "16"},
-        {"bee.applications:broker", viz.bar_cell(70, 96, 12), "70"}}, kind = "row", selected = 0, offset = 0})
+        {"bee.apps:broker", viz.bar_cell(70, 96, 12), "70"}}, kind = "row", selected = 0, offset = 0})
 ```
 
 ```text
- PROCESS                       STEPS              
- bee.host:main                 ████████████    96 
- bee.session:main              ██              16 
- bee.applications:broker       ████████▊       70 
+ PROCESS                       STEPS
+ bee.host:main                 ████████████    96
+ bee.session:main              ██              16
+ bee.apps:broker               ████████▊       70
 ```
 
 ### `viz.bins`
@@ -292,14 +292,14 @@ viz.line(line, {x = 2, y = 1, width = 38, height = 7}, {{values = values}}, {uni
 ```
 
 ```text
- 90 ms ┤  ⢀⡴⠚⠉⠙⠲⣄            ⢀⡴⠚⠉⠙⢦⡀    
-       │ ⣠⠏     ⠘⢦⡀         ⣰⠋     ⠙⢦   
-       │          ⠳⣄      ⢀⡞⠁       ⠈⠳⡄ 
-       │           ⠘⢦⡀  ⢀⡴⠋           ⠙ 
-  0 ms ┤             ⠉⠓⠒⠋               
-       └─────────────────────────────── 
-        -60s                        now 
-                                        
+ 90 ms ┤  ⢀⡴⠚⠉⠙⠲⣄            ⢀⡴⠚⠉⠙⢦⡀
+       │ ⣠⠏     ⠘⢦⡀         ⣰⠋     ⠙⢦
+       │          ⠳⣄      ⢀⡞⠁       ⠈⠳⡄
+       │           ⠘⢦⡀  ⢀⡴⠋           ⠙
+  0 ms ┤             ⠉⠓⠒⠋
+       └───────────────────────────────
+        -60s                        now
+
 ```
 
 ### `viz.line`
@@ -310,12 +310,12 @@ viz.line(area, {x = 2, y = 1, width = 38, height = 5}, {{values = values}}, {are
 ```
 
 ```text
- 100 ┤               ▂▃▄▅▅▅▄▃▂▁         
-     │          ▁▃▅▇███████████▇▅▃▁     
-     │      ▁▂▄▇███████████████████▇▅▃▁ 
-   0 ┤▃▃▄▄▆▇███████████████████████████ 
-     └───────────────────────────────── 
-                                        
+ 100 ┤               ▂▃▄▅▅▅▄▃▂▁
+     │          ▁▃▅▇███████████▇▅▃▁
+     │      ▁▂▄▇███████████████████▇▅▃▁
+   0 ┤▃▃▄▄▆▇███████████████████████████
+     └─────────────────────────────────
+
 ```
 
 ### `viz.bars`
@@ -326,10 +326,10 @@ viz.bars(bars, {x = 2, y = 1, width = 38, height = 4}, {{label = "running", valu
 ```
 
 ```text
- running  █████████████████████████  31 
- idle     ████████▉                  11 
- waiting  ██▍                         3 
-                                        
+ running  █████████████████████████  31
+ idle     ████████▉                  11
+ waiting  ██▍                         3
+
 ```
 
 ### `viz.columns`
@@ -340,11 +340,11 @@ viz.columns(columns, {x = 2, y = 1, width = 28, height = 5}, {{label = "mon", va
 ```
 
 ```text
-     ███                      
-     ███                      
- ███ ███                      
- ███ ███ ███                  
- mon tue wed                  
+     ███
+     ███
+ ███ ███
+ ███ ███ ███
+ mon tue wed
 ```
 
 ### `viz.stacked`
@@ -355,9 +355,9 @@ viz.stacked(stacked, {x = 2, y = 1, width = 38, height = 3}, {{label = "node-a",
 ```
 
 ```text
- █ busy  ▓ idle  ▒ failed               
- node-a  ████████████████▓▓▓▓▓▓▓▒▒▒  10 
- node-b  █████▓▓▓▓▓                   4 
+ █ busy  ▓ idle  ▒ failed
+ node-a  ████████████████▓▓▓▓▓▓▓▒▒▒  10
+ node-b  █████▓▓▓▓▓                   4
 ```
 
 ### `viz.histogram`
@@ -368,11 +368,11 @@ viz.histogram(histogram, {x = 2, y = 1, width = 28, height = 5}, {1, 2, 2, 3, 3,
 ```
 
 ```text
- ████████                     
- ████████▅▅▅▅                 
- ████████████▃▃▃▃        ▃▃▃▃ 
- ████████████████        ████ 
- 1 ms                    9 ms 
+ ████████
+ ████████▅▅▅▅
+ ████████████▃▃▃▃        ▃▃▃▃
+ ████████████████        ████
+ 1 ms                    9 ms
 ```
 
 ### `viz.heatmap`
@@ -384,10 +384,10 @@ viz.heatmap(heatmap, {x = 2, y = 1, width = 28, height = 4}, {rows = {{0, 1, 2, 
 ```
 
 ```text
- mon · ░░▒▒▓▓██               
- tue ██▓▓  ░░·                
- wed ▒▒▒▒▒▒▒▒▒▒               
-     00h    04h               
+ mon · ░░▒▒▓▓██
+ tue ██▓▓  ░░·
+ wed ▒▒▒▒▒▒▒▒▒▒
+     00h    04h
 ```
 
 ### `viz.waffle`
@@ -399,8 +399,8 @@ shown --> 12
 ```
 
 ```text
- ▀▀▀▀▀▀▀▀▀▀ 
-            
+ ▀▀▀▀▀▀▀▀▀▀
+
 ```
 
 ### `viz.gauge`, `viz.progress`
@@ -412,8 +412,8 @@ viz.progress(meters, 2, 2, 38, 3180, 4000)
 ```
 
 ```text
- Heap ██████████████████░░░░░░░░░░░ 62% 
- █████████████████████░░░░░ 3,180/4,000 
+ Heap ██████████████████░░░░░░░░░░░ 62%
+ █████████████████████░░░░░ 3,180/4,000
 ```
 
 ### `viz.tiles`
@@ -425,9 +425,9 @@ viz.tiles(tiles, {x = 2, y = 1, width = 58, height = 3}, {{label = "Heap", value
 ```
 
 ```text
- HEAP                GOROUTINES          GC                 
- 12.4 MiB ▲0.8       214                 38                 
-        ▃▄▂▇▅█▄▆▄▇█                                         
+ HEAP                GOROUTINES          GC
+ 12.4 MiB ▲0.8       214                 38
+        ▃▄▂▇▅█▄▆▄▇█
 ```
 
 ### `viz.timeline`
@@ -441,10 +441,10 @@ style_at(frame.rows(timeline)[2], "█") --> rgb(honey().ok) .. "/" .. rgb(honey
 ```
 
 ```text
- build  ███████████            │        
- test             ████████████████      
- ship                          │ ██████ 
-        18:00                     19:00 
+ build  ███████████            │
+ test             ████████████████
+ ship                          │ ██████
+        18:00                     19:00
 ```
 
 ### `viz.legend`
@@ -455,7 +455,7 @@ viz.legend(legend, 2, 1, 38, {{label = "heap"}, {label = "stack"}, {label = "fre
 ```
 
 ```text
- █ heap  ▓ stack  ▒ free                
+ █ heap  ▓ stack  ▒ free
 ```
 
 ### `viz.graph`
@@ -468,15 +468,15 @@ viz.graph(graph, {x = 2, y = 1, width = 58, height = 9}, {{id = "hub", label = "
 ```
 
 ```text
-                                                            
-              ┌────▸● node-a  ──────┐                       
-              │       ready         │                       
- ● hub  ──────┤                     └────▸● agent           
-   owner      │                             managed         
-              └────▸● node-b                                
-                      degraded                              
-                                                            
-                                                            
+
+              ┌────▸● node-a  ──────┐
+              │       ready         │
+ ● hub  ──────┤                     └────▸● agent
+   owner      │                             managed
+              └────▸● node-b
+                      degraded
+
+
 ```
 
 ### `viz.graph`
@@ -488,9 +488,9 @@ viz.graph(pipeline, {x = 2, y = 1, width = 58, height = 3}, {{id = "f", label = 
 ```
 
 ```text
-                                                            
- ● fetch ─────▸● classify ×12 ─────▸● dedupe ─────▸● report 
-                                                            
+
+ ● fetch ─────▸● classify ×12 ─────▸● dedupe ─────▸● report
+
 ```
 
 ## Application client

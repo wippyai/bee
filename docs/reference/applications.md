@@ -156,16 +156,15 @@ belong to it, as its creator or a member. `wait` watches the thread and
 returns at the deadline with the last status. `status`, `wait` and `cancel`
 need only `run.thread_id` and `run.attempt_id`; keep the whole launch result
 for display and later calls. `wait` blocks the calling process in slices of at
-most 60 seconds, so a UI event loop must run it in `coroutine.spawn(function()
-... end)` if it needs to keep drawing. `thread = {thread_id = id}` selects an
-existing thread;
+most 60 seconds. A UI event loop can call it from a `coroutine.spawn` worker
+to keep drawing. `thread = {thread_id = id}` selects an existing thread;
 `thread = {title = text}` asks for a new one. `cancel` stops a
 running child through the placement that started it, which accepts only the
 attempt's owner; the attempt then settles `cancelled`. A run whose child has
 not started is refused with `NOT_STARTED`.
 
-Launch definitions are registry entries with `meta.type =
-bee.launch_definition`; a definition ID alone does not reveal whether the
+Launch definitions are registry entries with `meta.type = bee.launch_definition`;
+a definition ID alone does not reveal whether the
 host lets this application launch it. The installed driver definitions include
 `bee.driver.claude:research_batch`,
 `bee.driver.codex:research_batch`, `bee.driver.codex:named_batch`,

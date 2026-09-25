@@ -13,6 +13,7 @@ local gateway = require("capability_gateway")
 local grants = require("capability_grants")
 local catalog = require("capability_catalog")
 local workspace_applications = require("workspace_applications")
+local files = require("capability_files")
 
 type Object = {[string]: unknown}
 type Fault = {code: string, message: string}
@@ -148,4 +149,30 @@ local function http_request(request_raw: unknown): Reply
     return succeed({status_code = response.status_code, headers = response.headers, body = response.body})
 end
 
-return {contract_call = contract_call, http_request = http_request}
+-- The registry identities of the calling application's own installed file
+-- volumes and database, keyed by the approved subpath and database name, so
+-- an application addresses its grants on any node without embedding
+-- host-generated identities.
+local function granted_resources(_request: unknown): Reply
+    local _, record, live, refusal = granted()
+    if refusal then return refusal end
+    if not live or not record then return fail("DENIED", "the caller holds no live application grants") end
+    local volumes: {[string]: string} = {}
+    local databases: {[string]: string} = {}
+    for _, raw_grant in ipairs((record.capabilities or {}) :: {unknown}) do
+        local grant = bounds.object(raw_grant)
+        local scope = grant and bounds.object(grant.scope) or nil
+        if grant and scope and (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write") then
+            local id, id_error = files.volume_id(record.overlay_owner, record.folder, scope.subpath)
+            if not id then return fail("UNAVAILABLE", tostring(id_error)) end
+            volumes[scope.subpath :: string] = id
+        elseif grant and scope and grant.capability == "app.database" then
+            local id, id_error = files.database_id(record.overlay_owner, scope.name)
+            if not id then return fail("UNAVAILABLE", tostring(id_error)) end
+            databases[scope.name :: string] = id
+        end
+    end
+    return succeed({volumes = volumes, databases = databases})
+end
+
+return {contract_call = contract_call, http_request = http_request, granted_resources = granted_resources}

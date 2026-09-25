@@ -42,11 +42,19 @@ entries:
     capability_grants: bee.gov:capability_grants
     capability_catalog: bee.gov:capability_catalog
     workspace_applications: bee.gov:workspace_applications
+    capability_files: bee.gov:capability_files
   security: {policies: [bee.gov.security:gateway_policy]}
 - name: http_request
   kind: function.lua
   source: file://gateway.lua
   method: http_request
+  modules: *gateway_modules
+  imports: *gateway_imports
+  security: {policies: [bee.gov.security:gateway_policy]}
+- name: granted_resources
+  kind: function.lua
+  source: file://gateway.lua
+  method: granted_resources
   modules: *gateway_modules
   imports: *gateway_imports
   security: {policies: [bee.gov.security:gateway_policy]}

@@ -72,12 +72,9 @@ def grant_identities(workspace_id):
     return volume, database
 
 
-def answer_entries(volume_id=None, database_id=None):
+def answer_entries():
     """The entries.json a model writes for SPEC.md."""
     source = (FIXTURE / "tally.lua").read_text()
-    if volume_id and database_id:
-        source = source.replace("__TALLY_VOLUME_ID__", volume_id)
-        source = source.replace("__TALLY_DATABASE_ID__", database_id)
     return [{"id": DEFINITION_ID, "kind": "process.lua",
              "data": {"source": source, "method": "main",
                       "modules": ["tty", "process", "channel", "json", "funcs", "fs", "sql"],
@@ -145,15 +142,9 @@ def compose(folder):
 def author(project, folder):
     """The managed agent's attempt, started by the host with the spec as brief."""
     workspace_id = classic_workspace(folder / "workspace.db")
-    volume_id, database_id = grant_identities(workspace_id)
-    (folder / "entries.json").write_text(json.dumps(answer_entries(volume_id, database_id)))
     spec = (FIXTURE / "SPEC.md").read_text()
     if PROVIDER == "claude":
-        note = ("The person's approval installs three grants for this workspace; address them by these exact "
-                "registry identities in the application source: the workspace file volume " + volume_id
-                + " (read /greeting.txt below the approved shared subroot) and the application database "
-                + database_id + ".\n\n")
-        brief = LIVE_BRIEF + note + spec
+        brief = LIVE_BRIEF + spec
     else:
         brief = spec
     result = subprocess.run([str(RUNTIME), "run", "--verbose", "workspace-app-author",

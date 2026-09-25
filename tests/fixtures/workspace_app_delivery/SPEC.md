@@ -17,9 +17,11 @@ here for my approval.
   `.security.policies +=`. The grant is reviewed during installation.
 - Request the host catalog capability `workspace.files.read` with
   `subpath: shared` using a measured `ns.requirement` targeting
-  `app.tally:app` at `.security.policies +=`. At startup read the workspace
-  file `/greeting.txt` through the granted volume; the window never opens
-  without it.
+  `app.tally:app` at `.security.policies +=`. At startup call
+  `bee.gov.binding:granted_resources` for the granted volume (`volumes.shared`)
+  and database (`databases.tally`) identities, then read the workspace file
+  `/greeting.txt` through the granted volume; the window never opens without
+  it.
 - Request the host catalog capability `app.database` with `name: tally`
   using a measured `ns.requirement` targeting `app.tally:app` at
   `.security.policies +=`. Record every count with the greeting as a row in

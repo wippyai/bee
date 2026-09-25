@@ -14,6 +14,9 @@ local PRIVATE_ROOT = ".wippy"
 local PRIVATE_PREFIX = ".wippy/"
 -- Application databases live outside every approved readable tree.
 M.DATABASE_DIR = ".wippy/app-db"
+-- An application reads the identities of its own installed volumes and
+-- database here instead of embedding host-generated identities.
+M.GRANTED_RESOURCES = "bee.gov.binding:granted_resources"
 
 local function segments(value: string): ({string}?, string?)
     if type(value) ~= "string" or #value == 0 or #value > 160 or value:find("%c")
@@ -131,7 +134,8 @@ function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
     local config: {[string]: unknown} = {directory = located(root, subpath), base = root.base,
         auto_init = writable_raw == true, readonly = writable_raw ~= true}
     if writable_raw == true then config.mode = "0700" else config.mode = "0500" end
-    return {id = id, kind = "fs.directory", data = config}, nil
+    return {id = id, kind = "fs.directory", meta = {comment = "Host-created workspace file grant volume"},
+        data = config}, nil
 end
 
 function M.database_id(owner_raw: unknown, name_raw: unknown): (string?, string?)
@@ -154,7 +158,8 @@ function M.database(owner_raw: unknown, name_raw: unknown): (unknown?, string?)
     if not id or not valid then return nil, id_error or valid_error end
     local suffix, suffix_error = hex(owner_raw .. "\n" .. valid)
     if not suffix then return nil, suffix_error end
-    return {id = id, kind = "db.sql.sqlite", data = {file = M.DATABASE_DIR .. "/" .. suffix .. ".db"}}, nil
+    return {id = id, kind = "db.sql.sqlite", meta = {comment = "Host-provisioned application database"},
+        data = {file = M.DATABASE_DIR .. "/" .. suffix .. ".db"}}, nil
 end
 
 local function policy(id: string, actions: {string}, resources: {string}, comment: string): Object?
@@ -172,7 +177,7 @@ function M.file_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unk
     end
     local id: string = policy_id_raw :: string
     if #id == 0 or #id > 160 then return nil, "file grant policy identity is invalid" end
-    return policy(id, {"fs.get"}, {(volume :: {[string]: unknown}).id :: string},
+    return policy(id, {"fs.get", "funcs.call"}, {(volume :: {[string]: unknown}).id :: string, M.GRANTED_RESOURCES},
         "Host-generated workspace file grant"), nil
 end
 
@@ -185,7 +190,7 @@ function M.database_policy(owner_raw: unknown, name_raw: unknown, policy_id_raw:
     end
     local id: string = policy_id_raw :: string
     if #id == 0 or #id > 160 then return nil, "database grant policy identity is invalid" end
-    return policy(id, {"db.get"}, {(database :: {[string]: unknown}).id :: string},
+    return policy(id, {"db.get", "funcs.call"}, {(database :: {[string]: unknown}).id :: string, M.GRANTED_RESOURCES},
         "Host-generated isolated application database grant"), nil
 end
 

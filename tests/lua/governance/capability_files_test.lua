@@ -66,18 +66,21 @@ local function define_tests()
             local read_inner = (read_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}
             local read_actions = read_inner.actions :: {string}
             local read_resources = read_inner.resources :: {string}
-            test.eq(#read_actions, 1)
+            test.eq(#read_actions, 2)
             test.eq(read_actions[1], "fs.get")
-            test.eq(#read_resources, 1)
+            test.eq(read_actions[2], "funcs.call")
+            test.eq(#read_resources, 2)
             test.eq(read_resources[1], (assert(files.volume(OWNER, CLASSIC, "notes", false))).id)
+            test.eq(read_resources[2], files.GRANTED_RESOURCES)
             local db_policy = assert(files.database_policy(OWNER, "notes", "bee.gov.grants:policy.db"))
             local db_inner = (db_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}
             local db_actions = db_inner.actions :: {string}
             local db_resources = db_inner.resources :: {string}
-            test.eq(#db_actions, 1)
+            test.eq(#db_actions, 2)
             test.eq(db_actions[1], "db.get")
-            test.eq(#db_resources, 1)
+            test.eq(#db_resources, 2)
             test.eq(db_resources[1], (assert(files.database(OWNER, "notes"))).id)
+            test.eq(db_resources[2], files.GRANTED_RESOURCES)
             test.is_nil(files.file_policy(OWNER, CLASSIC, ".wippy", false, "bee.gov.grants:policy.read"))
         end)
         test.it("keeps the volume identity stable for one owner and subpath", function()

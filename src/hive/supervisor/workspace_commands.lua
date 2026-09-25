@@ -23,7 +23,7 @@ M.OPERATIONS = {
     ["bee.workspace:roots"] = "bee.workspace.catalog:roots",
 }
 -- Catalog refusal codes as Hive fault codes; the message keeps the catalog code.
-local CODES = {INVALID = "INVALID_ARGUMENT", UNAUTHENTICATED = "DENIED", DENIED = "DENIED", FORBIDDEN = "DENIED",
+local CODES: {[string]: string} = {INVALID = "INVALID_ARGUMENT", UNAUTHENTICATED = "DENIED", DENIED = "DENIED", FORBIDDEN = "DENIED",
     NOT_FOUND = "NOT_FOUND", CONFLICT = "CONFLICT", BUSY = "INVALID_STATE", STORAGE = "INTERNAL", UNAVAILABLE = "UNAVAILABLE"}
 
 -- The command a call names, or the fault that refuses it. Only this node's own

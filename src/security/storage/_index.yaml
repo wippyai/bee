@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee
+namespace: bee.security.storage
 entries:
 - name: workspace_storage_policy
   kind: security.policy

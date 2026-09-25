@@ -248,7 +248,7 @@ local function define_tests()
         test.it("rejects activation before migrations and unauthorized resource targets", function()
             local candidate, context = fixture()
             candidate.entries[1].auto_start = true
-            candidate.entries[1].grants = {"bee:approval_owner_policy"}
+            candidate.entries[1].grants = {"bee.security.approvals:approval_owner_policy"}
             candidate.entries[1].modules = {"os"}
             context.databases["host:db"] = false
             context.packages["wolfy-j/demo"] = false

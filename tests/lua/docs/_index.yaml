@@ -13,5 +13,5 @@ entries:
   method: run
   modules: [fs, json]
   meta: {type: test, suite: bee}
-  security: {policies: [bee:docs_policy]}
+  security: {policies: [bee.security.docs:docs_policy]}
   imports: {test: wippy.test:test, corpus: bee.docs:corpus, protocol: bee.docs:protocol, resources: bee.docs.registry:resources, method: bee.docs.binding:call}

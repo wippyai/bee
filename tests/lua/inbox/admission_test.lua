@@ -18,7 +18,7 @@ local uuid = require("uuid")
 local REQUESTER, ALICE, STRANGER = "bee.test.inbox_requester", "bee.test.inbox_alice", "bee.test.inbox_stranger"
 local POLICY = "inbox-test"
 local SELECTOR_POLICY = "inbox-selector-test"
-local BASE = {"bee:base_app_policy", "bee:app_boundary_policy", "bee:core_spawn_boundary", "bee:workspace_storage_boundary"}
+local BASE = {"bee.security:base_app_policy", "bee.security:app_boundary_policy", "bee.security:core_spawn_boundary", "bee.security.storage:workspace_storage_boundary"}
 type Object = {[string]: unknown}
 local function key(): string
     local id, err = uuid.v4()
@@ -36,7 +36,7 @@ local function policies_of(names: {string}): {security.Policy}
 end
 -- The admitted scope, from the admission entry the broker reads.
 local function admitted_scope(): security.Scope
-    local entry = registry.get("bee:application_admission")
+    local entry = registry.get("bee.security:application_admission")
     if not entry then error("admission entry") end
     local names: {string} = {}
     for _, item in ipairs(BASE) do names[#names + 1] = item end
@@ -73,7 +73,7 @@ local function install_policy()
     if not applied then error("install approver policy: " .. tostring(err)) end
 end
 local function requester(): funcs.Executor
-    return funcs.new():with_actor(security.new_actor(REQUESTER)):with_scope(security.new_scope(policies_of({"bee.inbox:client_test_policy", "bee:approval_request_policy"})))
+    return funcs.new():with_actor(security.new_actor(REQUESTER)):with_scope(security.new_scope(policies_of({"bee.inbox:client_test_policy", "bee.security.approvals:approval_request_policy"})))
 end
 local function file(workspace: string, policy: string?): string
     local reply, err = requester():call("bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = policy or POLICY,

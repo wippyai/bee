@@ -44,7 +44,7 @@ entries:
       short: Run a local workspace without a desktop
       security:
         actor: {id: bee.local}
-        policies: [bee:host_policy, bee:local_supervisor_spawn_policy]
+        policies: [bee.security.desktop:host_policy, bee.security.desktop:local_supervisor_spawn_policy]
 - name: bootstrap
   kind: library.lua
   source: file://bootstrap.lua
@@ -104,7 +104,7 @@ entries:
       short: Run the retained Bee workspace owner
       security:
         actor: {id: bee.local}
-        policies: [bee:desktop_policy, bee:retained_owner_spawn_policy, bee:retained_owner_name_policy, bee:retained_owner_node_policy, bee:owner_command_stop_policy]
+        policies: [bee.security.desktop:desktop_policy, bee.security.desktop:retained_owner_spawn_policy, bee.security.desktop:retained_owner_name_policy, bee.security.desktop:retained_owner_node_policy, bee.security.desktop:owner_command_stop_policy]
 - name: daemon
   kind: process.lua
   source: file://daemon.lua
@@ -122,7 +122,7 @@ entries:
       short: Run the node's services without a folder workspace
       security:
         actor: {id: bee.local}
-        policies: [bee:retained_owner_node_policy, bee:owner_command_stop_policy]
+        policies: [bee.security.desktop:retained_owner_node_policy, bee.security.desktop:owner_command_stop_policy]
 - name: command_stop
   kind: library.lua
   source: file://command_stop.lua

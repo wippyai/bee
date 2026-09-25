@@ -50,7 +50,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, time, sql]
   security:
-    policies: [bee.resources:apply_test_policy, bee:resource_store_policy]
+    policies: [bee.resources:apply_test_policy, bee.security.resources:resource_store_policy]
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test

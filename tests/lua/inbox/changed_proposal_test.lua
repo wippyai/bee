@@ -34,8 +34,8 @@ local function caller(id: string, grants: {string}): funcs.Executor
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return funcs.new():with_actor(security.new_actor(id)):with_scope(scope(names))
 end
-local requester = caller(REQUESTER, {"bee:approval_request_policy", "bee:approval_consume_policy"})
-local alice = caller(ALICE, {"bee:approval_decide_policy"})
+local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"})
+local alice = caller(ALICE, {"bee.security.approvals:approval_decide_policy"})
 local function call(executor: funcs.Executor, target: string, request: unknown): Reply
     local raw, err = executor:call(target, request)
     if err then error(target .. ": " .. tostring(err)) end

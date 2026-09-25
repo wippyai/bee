@@ -39,9 +39,9 @@ local function caller(id: string, grants: {string}): funcs.Executor
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return funcs.new():with_actor(security.new_actor(id)):with_scope(scope(names))
 end
-local requester = caller(REQUESTER, {"bee:approval_request_policy"})
-local alice = caller(ALICE, {"bee:approval_decide_policy"})
-local bob = caller(BOB, {"bee:approval_decide_policy"})
+local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy"})
+local alice = caller(ALICE, {"bee.security.approvals:approval_decide_policy"})
+local bob = caller(BOB, {"bee.security.approvals:approval_decide_policy"})
 local outsider = caller(OUTSIDER, {})
 local function through(executor: funcs.Executor): app_caller.Client
     return inbox.new(function(target: string, request: unknown): (unknown, string?)

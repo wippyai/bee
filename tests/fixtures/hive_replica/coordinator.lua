@@ -274,7 +274,7 @@ local function configure_agent_destination(scenario: AgentScenario)
         local policies = binding.policies
         if binding.definition_id == AGENT_DEFINITION and binding.thread_access == "observe_post"
             and type(policies) == "table" and #policies == 1
-            and policies[1] == "bee:ordinary_app_subsystem_boundary" then admitted = true end
+            and policies[1] == "bee.security:ordinary_app_subsystem_boundary" then admitted = true end
     end
     if not admitted then error("Agent App is not selected by the trusted destination overlay profile") end
 end
@@ -413,8 +413,8 @@ local function main(remote: string, source_destination_workspace: string?, sourc
         if agent then configure_agent_destination(agent) else configure_destination() end
     else configure_exports() end
     local policies = {}
-	for _, name in ipairs({"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy", "bee:hive_policy_exposure_policy",
-        "bee:hive_dispatch_policy", "bee.replica_probe:names_policy", "bee.replica_probe:execute_policy"}) do
+	for _, name in ipairs({"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.security.hive:hive_policy_exposure_policy",
+        "bee.security.hive:hive_dispatch_policy", "bee.replica_probe:names_policy", "bee.replica_probe:execute_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error("load supervisor policy " .. name .. ": " .. tostring(policy_error)) end
         policies[#policies + 1] = policy

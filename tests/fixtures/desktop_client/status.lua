@@ -77,7 +77,7 @@ local function main()
         end
     end
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
-        "bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"})):spawn_monitored(
+        "bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"})):spawn_monitored(
             "bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""})))
     local host_ready = assert(hosts:receive())
     assert(tostring(host_ready:from()) == host)
@@ -175,7 +175,7 @@ local function main()
         local selected: desktops.Selection = {host = host, workspace_id = workspace_id, database = "bee.client.db:status",
             width = 120, height = 32, application = nil,
             options = {version = 1, quit_mode = "detach", arguments = {}}}
-        local desktop, start_error = desktops.start(retained, selected, scope({"bee:desktop_policy", "bee:client_spawn_policy",
+        local desktop, start_error = desktops.start(retained, selected, scope({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy",
             "bee.desktop_client_probe:status_policy"}))
         if not desktop then error(tostring(start_error)) end
         local client = desktop.pid

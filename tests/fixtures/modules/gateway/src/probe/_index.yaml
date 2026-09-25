@@ -43,7 +43,7 @@ entries:
       security:
         actor: {id: bee.test.gateway}
   security:
-    policies: [bee:approval_decide_policy, bee:approval_consume_policy, bee.gateway_probe:replacement_admin, bee.gateway_probe:policy, bee.gateway_probe:configuration_caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee:gateway_materialize_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy, bee:thread_carrier_policy]
+    policies: [bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.gateway_probe:replacement_admin, bee.gateway_probe:policy, bee.gateway_probe:configuration_caller_policy, bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.security.gateway:gateway_materialize_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_carrier_policy]
 - name: policy
   kind: security.policy
   policy:
@@ -56,7 +56,7 @@ entries:
     comment: Privileged fixture caller may construct a selected child scope and invoke the rendering probe
   policy:
     actions: [funcs.security, security.scope.create, security.policy.get]
-    resources: [security, custom, bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_overlay_policy, bee:gateway_tool_docs_policy]
+    resources: [security, custom, bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:execute_policy, bee.security.gateway:gateway_tool_read_policy, bee.security.gateway:gateway_tool_message_policy, bee.security.gateway:gateway_tool_overlay_policy, bee.security.gateway:gateway_tool_docs_policy]
     effect: allow
 - name: render_configuration
   kind: function.lua
@@ -71,4 +71,4 @@ entries:
   method: main
   modules: [funcs, time]
   security:
-    policies: [bee.gateway_probe:policy, bee:gateway_manage_policy]
+    policies: [bee.gateway_probe:policy, bee.security.gateway:gateway_manage_policy]

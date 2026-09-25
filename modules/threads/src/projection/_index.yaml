@@ -40,7 +40,7 @@ entries:
     recap: bee.threads.projection:recap
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: recap_update
   kind: function.lua
   source: file://recap_update_method.lua
@@ -50,7 +50,7 @@ entries:
     recap: bee.threads.projection:recap
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: recap_rebuild
   kind: function.lua
   source: file://recap_rebuild_method.lua
@@ -60,7 +60,7 @@ entries:
     recap: bee.threads.projection:recap
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: status_read
   kind: function.lua
   source: file://status_read_method.lua
@@ -70,7 +70,7 @@ entries:
     status: bee.threads.projection:status
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: status_update
   kind: function.lua
   source: file://status_update_method.lua
@@ -80,7 +80,7 @@ entries:
     status: bee.threads.projection:status
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: status_rebuild
   kind: function.lua
   source: file://status_rebuild_method.lua
@@ -90,4 +90,4 @@ entries:
     status: bee.threads.projection:status
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]

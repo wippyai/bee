@@ -20,7 +20,6 @@ entries:
   kind: ns.requirement
   meta:
     comment: Process host that runs the module's owner process
-  default: bee:workers
   targets:
   - entry: bee.threads:owner_service
     path: .host
@@ -342,7 +341,7 @@ entries:
     resources: bee.threads:resources
     store: bee.threads.persist:store
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: append
   kind: function.lua
   source: file://methods.lua
@@ -353,7 +352,7 @@ entries:
     resources: bee.threads:resources
     store: bee.threads.persist:store
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: read_after
   kind: function.lua
   source: file://methods.lua
@@ -364,7 +363,7 @@ entries:
     resources: bee.threads:resources
     store: bee.threads.persist:store
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: owner
   kind: process.lua
   source: file://owner.lua
@@ -377,7 +376,7 @@ entries:
     notices: bee.threads.service:notices
     boundary: bee.threads.service:boundary
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: owner_service
   kind: process.service
   process: bee.threads:owner

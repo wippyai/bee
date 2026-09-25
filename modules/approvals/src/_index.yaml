@@ -28,7 +28,6 @@ entries:
   kind: ns.requirement
   meta:
     comment: The host's approver policies; each names its approvers and the longest request lifetime it allows
-  default: bee:approver_policies
   targets:
   - entry: bee.approvals:policies_ref
     path: .resource_ref

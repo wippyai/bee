@@ -24,7 +24,7 @@ entries:
     carrier: bee.threads.carrier:carrier
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: commit
   kind: function.lua
   source: file://commit_method.lua
@@ -34,7 +34,7 @@ entries:
     carrier: bee.threads.carrier:carrier
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: checkpoint
   kind: function.lua
   source: file://checkpoint_method.lua
@@ -44,4 +44,4 @@ entries:
     carrier: bee.threads.carrier:carrier
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]

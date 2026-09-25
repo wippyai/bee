@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee
+namespace: bee.security.gateway
 entries:
 - name: gateway_admit_policy
   kind: security.policy

@@ -12,7 +12,7 @@ type Object = {[string]: unknown}
 
 local function rule(): Object
     return {approval_policy = "workspace-application-delivery", kinds = {"process.lua", "library.lua"},
-        modules = {"tty", "process", "channel", "json"}, policies = {"bee:ordinary_app_subsystem_boundary"},
+        modules = {"tty", "process", "channel", "json"}, policies = {"bee.security:ordinary_app_subsystem_boundary"},
         thread_access = "none"}
 end
 
@@ -63,7 +63,7 @@ local function define_tests()
             local applications = profile.applications :: {Object}
             test.eq(#applications, 1)
             test.eq(applications[1].definition_id, "app.tally:app")
-            test.eq((applications[1].policies :: {string})[1], "bee:ordinary_app_subsystem_boundary")
+            test.eq((applications[1].policies :: {string})[1], "bee.security:ordinary_app_subsystem_boundary")
             test.eq(applications[1].thread_access, "none")
             test.eq(#profile.policy_digest, 64)
             local again = assert(profiles.select(assert(profiles.configuration(configured(), NODE)), WORKSPACE, NODE, "tally"))

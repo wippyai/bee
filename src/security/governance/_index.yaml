@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee
+namespace: bee.security.governance
 entries:
 - name: governance_delivery_read_policy
   kind: security.policy

@@ -68,8 +68,8 @@ local function run()
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local appearance_requests = assert(process.listen("bee.appearance.request", {message = true}))
-    local broker_policy = assert(security.policy("bee:broker_policy"))
-    local boundary = assert(security.policy("bee:core_spawn_boundary"))
+    local broker_policy = assert(security.policy("bee.security.desktop:broker_policy"))
+    local boundary = assert(security.policy("bee.security:core_spawn_boundary"))
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
         :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.applications:broker", "bee:workers", owner,
             {theme = "classic", background = "solid", taskbar = "labels"})))
@@ -326,7 +326,7 @@ func run() error {
 		if name == "test" {
 			entry["source"], entry["method"] = "file://failure.lua", "run"
 			entry["imports"].(map[string]interface{})["placement_store"] = "bee.placement.native:store"
-			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee:placement_store_policy", "bee.managed_window_fixture:failure_evidence_policy")
+			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee.security.placement:placement_store_policy", "bee.managed_window_fixture:failure_evidence_policy")
 		}
 		kept = append(kept, entry)
 	}

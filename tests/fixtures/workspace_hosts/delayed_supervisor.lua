@@ -11,8 +11,8 @@ local decode = require("decode")
 local persistence = require("persistence")
 
 local function spawn_host(owner: string): string
-    local host_policy = assert(security.policy("bee:host_policy"))
-    local spawn_policy = assert(security.policy("bee:host_spawn_policy"))
+    local host_policy = assert(security.policy("bee.security.desktop:host_policy"))
+    local spawn_policy = assert(security.policy("bee.security.desktop:host_spawn_policy"))
     local storage_policy = assert(security.policy("bee.workspace_hosts:first_storage_policy"))
     local scope = security.new_scope({host_policy, spawn_policy, storage_policy})
     return tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner})

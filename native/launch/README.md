@@ -43,7 +43,7 @@ enrolled.
 
 `bee stop` takes no arguments. It joins the running owner as an enrolled local
 client and calls the supervisor's `bee.hive.owner:stop` operation, which the
-host grants through `bee:hive_owner_stop_policy`. The supervisor answers and
+host grants through `bee.security.hive:hive_owner_stop_policy`. The supervisor answers and
 forwards the stop to the owner's command process (`bee-owner` or
 `bee-daemon`, named `bee.launch.command`), which accepts it only from the local
 supervisor, requests the runtime's graceful shutdown and returns, so the run

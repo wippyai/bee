@@ -54,7 +54,7 @@ function M.handle(value: unknown): types.Reply
     if source(resolved.input) ~= request.caller_node_id then
         return denied(id, "DENIED", "replica source owner does not match the authenticated peer")
     end
-    local policy, policy_error = security.policy("bee:hive_replica_peer_policy")
+    local policy, policy_error = security.policy("bee.security.hive:hive_replica_peer_policy")
     if not policy then return denied(id, "UNAVAILABLE", tostring(policy_error or "replica receipt policy unavailable")) end
     local caller = funcs.new():with_actor(security.new_actor("bee.hive.node." .. request.caller_node_id))
         :with_scope(security.new_scope({policy}))

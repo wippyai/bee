@@ -33,9 +33,9 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee:thread_create_policy", "bee:thread_observe_policy",
-    "bee:thread_lifecycle_policy", "bee:thread_carrier_policy", "bee:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee:resource_manage_policy",
-    "bee:resource_grant_policy", "bee:credential_manage_policy", "bee:credential_issue_policy", "bee:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
+local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
+    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.resources:resource_manage_policy",
+    "bee.security.resources:resource_grant_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy", "bee.security.harness:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -67,7 +67,7 @@ local function open_gateway()
     local endpoint = registry.get("bee:gateway_endpoint")
     if not endpoint then error("gateway endpoint entry") end
     local policies: {security.Policy} = {}
-    for index, name in ipairs({"bee.harness.catalog:gateway_client_policy", "bee:gateway_manage_policy"}) do
+    for index, name in ipairs({"bee.harness.catalog:gateway_client_policy", "bee.security.gateway:gateway_manage_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
@@ -1138,8 +1138,8 @@ local function define_tests()
                 if err then error("agent_call: " .. tostring(err)) end
                 return reply :: admission.Reply
             end
-            local granted = {"bee:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
-            local ungranted = {"bee:agent_call_policy"}
+            local granted = {"bee.security.harness:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
+            local ungranted = {"bee.security.harness:agent_call_policy"}
             local key = fresh("app-run")
             test.eq(code(app_call(application, ungranted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key})), "LAUNCH_NOT_PERMITTED")
             local function settle(run: {[string]: unknown}): {[string]: unknown}
@@ -1167,7 +1167,7 @@ local function define_tests()
             test.eq(code(app_call("bee.application:" .. workspace .. ":other", granted, {operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id})), "DENIED")
             test.eq(code(app_call(application, granted, {operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60001})), "INVALID")
             -- The application agents library drives the same facade.
-            local probe_policies = {"bee:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy", "bee.harness.catalog:agents_probe_policy"}
+            local probe_policies = {"bee.security.harness:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy", "bee.harness.catalog:agents_probe_policy"}
             local function probe(request: {[string]: unknown}): {[string]: unknown}
                 local policies: {security.Policy} = {}
                 for index, name in ipairs(probe_policies) do policies[index] = assert(security.policy(name)) end

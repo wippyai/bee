@@ -15,7 +15,7 @@ local function main()
     local phases = assert(process.listen("bee.hive_remote.active_done", {message = true}))
 
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"}) do
         local policy, err = security.policy(name)
         if not policy then error(tostring(err)) end
         policies[#policies + 1] = policy

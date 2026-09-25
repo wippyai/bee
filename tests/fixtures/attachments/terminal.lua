@@ -15,7 +15,7 @@ function M.main()
     local database = assert(store.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
     local workspace_id = assert(database:identity())
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:broker_policy", "bee:core_spawn_boundary", "bee.attachment_probe:naming_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:broker_policy", "bee.security:core_spawn_boundary", "bee.attachment_probe:naming_policy"}) do
         local policy, err = security.policy(name)
         if err then error(tostring(err)) end
         policies[#policies + 1] = policy

@@ -196,7 +196,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security]
   security:
-    policies: [bee:carrier_policy]
+    policies: [bee.security.harness:carrier_policy]
   imports:
     test: wippy.test:test
     machine: bee.harness.carrier:machine
@@ -383,7 +383,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "600s"}
   modules: [funcs, security, process, registry, env, time, channel, json, exec, base64]
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_exec_policy, bee:placement_store_policy, bee:credential_store_policy]
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy, bee.security.credentials:credential_store_policy]
   imports:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
@@ -420,7 +420,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "240s"}
   modules: [funcs, security, process, registry, env, time, channel, json, system]
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:credential_store_policy, bee.gateway.security:node_policy]
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.credentials:credential_store_policy, bee.gateway.security:node_policy]
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
@@ -540,7 +540,7 @@ entries:
     carrier_process: bee.harness.carrier:process
     machine: bee.harness.carrier:machine
   security:
-    policies: [bee:carrier_policy, bee:workspace_host_lease_policy]
+    policies: [bee.security.harness:carrier_policy, bee.security.desktop:workspace_host_lease_policy]
 - name: carrier_test
   kind: function.lua
   source: file://carrier_test.lua
@@ -904,7 +904,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "180s"}
   modules: [funcs, security, process, channel, registry, env, exec, time]
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_store_policy]
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.placement:placement_store_policy]
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
@@ -922,7 +922,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [registry]
   security:
-    policies: [bee:placement_store_policy]
+    policies: [bee.security.placement:placement_store_policy]
   imports:
     test: wippy.test:test
     policy: bee.harness.carrier:policy
@@ -1003,7 +1003,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [exec, env, registry, hash]
   security:
-    policies: [bee:placement_exec_policy]
+    policies: [bee.security.placement:placement_exec_policy]
   imports:
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
@@ -1089,7 +1089,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "300s"}
   modules: [funcs, security, process, registry, env, time, channel, json, exec, hash]
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:approval_store_policy, bee:placement_exec_policy]
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.approvals:approval_store_policy, bee.security.placement:placement_exec_policy]
   imports:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
@@ -1103,7 +1103,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "120s"}
   modules: [exec, env, time]
   security:
-    policies: [bee:placement_exec_policy]
+    policies: [bee.security.placement:placement_exec_policy]
   imports:
     test: wippy.test:test
     launch: bee.driver.codex:launch
@@ -1209,7 +1209,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "300s"}
   modules: [funcs, security, process, registry, env, time, channel, json, exec]
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_exec_policy, bee:placement_store_policy, bee:credential_store_policy]
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy, bee.security.credentials:credential_store_policy]
   imports:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
@@ -1223,7 +1223,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [exec, env, registry, json]
   security:
-    policies: [bee:placement_exec_policy]
+    policies: [bee.security.placement:placement_exec_policy]
   imports:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
@@ -1264,7 +1264,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "300s"}
   modules: [funcs, security, process, registry, env, time, channel, json, exec, hash]
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:approval_store_policy, bee:placement_exec_policy, bee:placement_store_policy]
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.approvals:approval_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy]
   imports:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
@@ -1280,7 +1280,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "300s"}
   modules: [exec, env, registry, time, channel, json]
   security:
-    policies: [bee:placement_exec_policy]
+    policies: [bee.security.placement:placement_exec_policy]
   imports:
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
@@ -1301,7 +1301,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "300s"}
   modules: [funcs, security, process, registry, env, time, channel, json, exec]
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_exec_policy, bee:placement_store_policy, bee:credential_store_policy]
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy, bee.security.credentials:credential_store_policy]
   imports:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
@@ -1315,7 +1315,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   security:
-    policies: [bee:carrier_policy]
+    policies: [bee.security.harness:carrier_policy]
   modules: [channel, time, uuid]
   imports:
     test: wippy.test:test
@@ -1381,7 +1381,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security, registry, process, channel, time, uuid]
   security:
-    policies: [bee:workspace_host_lease_policy]
+    policies: [bee.security.desktop:workspace_host_lease_policy]
   imports:
     test: wippy.test:test
     lease: bee.harness.carrier:lease

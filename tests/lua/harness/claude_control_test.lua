@@ -40,8 +40,8 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local carrier_scope = {"bee.harness.catalog:carrier_client_policy", "bee:thread_create_policy", "bee:thread_observe_policy", "bee:thread_lifecycle_policy",
-    "bee:thread_carrier_policy", "bee:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee:approval_request_policy", "bee:approval_consume_policy"}
+local carrier_scope = {"bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy",
+    "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
 local function scope(names: {string}): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(names) do
@@ -52,7 +52,7 @@ local function scope(names: {string}): security.Scope
     return security.new_scope(policies)
 end
 local actor = security.new_actor(ACTOR)
-local approver = funcs.new():with_actor(security.new_actor(APPROVER)):with_scope(scope({"bee.harness.catalog:approver_client_policy", "bee:approval_decide_policy"}))
+local approver = funcs.new():with_actor(security.new_actor(APPROVER)):with_scope(scope({"bee.harness.catalog:approver_client_policy", "bee.security.approvals:approval_decide_policy"}))
 local function reply_value(target: string, result: unknown, err: unknown): Object
     if err then error(target .. ": " .. tostring(err)) end
     local reply = result :: {ok: boolean, error: {code: string, message: string}?, value: unknown}

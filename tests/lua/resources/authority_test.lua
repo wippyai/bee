@@ -42,10 +42,10 @@ end
 local function executor(client: Principal, value: unknown): funcs.Executor
     return bound(client, principals.workspace(value))
 end
-local manager = caller(MANAGER, {"bee:resource_manage_policy"})
-local user = caller(USER, {"bee:resource_grant_policy"})
-local other = caller(OTHER, {"bee:resource_grant_policy"})
-local placement = caller(PLACEMENT, {"bee:resource_resolve_policy"})
+local manager = caller(MANAGER, {"bee.security.resources:resource_manage_policy"})
+local user = caller(USER, {"bee.security.resources:resource_grant_policy"})
+local other = caller(OTHER, {"bee.security.resources:resource_grant_policy"})
+local placement = caller(PLACEMENT, {"bee.security.resources:resource_resolve_policy"})
 local outsider = caller("bee.test.outsider", {})
 local function call(client: Principal, method: string, value: unknown): authority.Reply
     local reply, err = executor(client, value):call("bee.resources.binding:" .. method, value)

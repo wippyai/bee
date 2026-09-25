@@ -52,7 +52,6 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected process host for structured carriers
-  default: bee:workers
   targets:
   - entry: bee.harness:carrier_host_ref
     path: .host_ref

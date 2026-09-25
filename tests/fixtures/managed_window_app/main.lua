@@ -83,9 +83,9 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         assert(received.ok and received.channel == replies, "broker reply timed out")
         return received.value
     end
-    local broker_policy, broker_error = security.policy("bee:broker_policy")
+    local broker_policy, broker_error = security.policy("bee.security.desktop:broker_policy")
     if not broker_policy then error(tostring(broker_error)) end
-    local boundary, boundary_error = security.policy("bee:core_spawn_boundary")
+    local boundary, boundary_error = security.policy("bee.security:core_spawn_boundary")
     if not boundary then error(tostring(boundary_error)) end
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
@@ -409,8 +409,8 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     local app_ready = assert(process.listen("bee.fixture.checkpoint.ready", {message = true}))
     local sent = assert(process.listen("bee.fixture.checkpoint.sent", {message = true}))
     local events = assert(process.events())
-    local broker_policy = assert(security.policy("bee:broker_policy"))
-    local boundary = assert(security.policy("bee:core_spawn_boundary"))
+    local broker_policy = assert(security.policy("bee.security.desktop:broker_policy"))
+    local boundary = assert(security.policy("bee.security:core_spawn_boundary"))
     local fixture_admission = changed(original_admission)
     local fixture_data = fixture_admission.data :: {[string]: unknown}
     local bindings: {{[string]: unknown}} = {}
@@ -632,7 +632,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
 end
 
 local function checkpoint_ack()
-    local original_admission = assert(registry.get("bee:application_admission"))
+    local original_admission = assert(registry.get("bee.security:application_admission"))
     local original_app = assert(registry.get("bee.managed_window_fixture:checkpoint_app"))
     local ok, failure = pcall(checkpoint_ack_body, original_admission)
     apply(original_app)

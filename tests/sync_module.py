@@ -20,6 +20,13 @@ entries:
   kind: ns.dependency
   component: bee/persist
   version: 0.1.0-dev
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
 - name: dependency_sync
   kind: ns.dependency
   component: bee/sync

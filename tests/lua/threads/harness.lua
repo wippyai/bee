@@ -27,7 +27,7 @@ local function scope_for(grants: {string}): security.Scope
     end
     return security.new_scope(policies)
 end
--- grants name host policies such as bee:thread_create_policy; the client
+-- grants name host policies such as bee.security.threads:thread_create_policy; the client
 -- policy only permits calling the service functions.
 function M.principal(id: string, grants: {string}, workspace_id: string?): Client
     local actor = security.new_actor(id, workspace_id and {workspace_id = workspace_id} or {})
@@ -63,7 +63,7 @@ function M.await(future: any): Reply
     if type(data) ~= "table" then error("async call returned " .. type(data)) end
     return data :: Reply
 end
-M.ALL = {"bee:thread_create_policy", "bee:thread_observe_policy", "bee:thread_lifecycle_policy"}
+M.ALL = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy"}
 function M.key(): string
     local id, err = uuid.v4()
     if err or not id then error("uuid: " .. tostring(err)) end

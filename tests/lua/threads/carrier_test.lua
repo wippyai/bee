@@ -4,7 +4,7 @@
 -- moves on an ended attempt or without carrier authority.
 local test = require("test")
 local harness = require("harness")
-local CARRIER = {"bee:thread_create_policy", "bee:thread_observe_policy", "bee:thread_lifecycle_policy", "bee:thread_carrier_policy"}
+local CARRIER = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy"}
 local function checkpoint(consumed: integer): {[string]: unknown}
     return {schema_revision = "bee.carrier.checkpoint@1", consumed = {stdout = consumed, stderr = 0}, carry = {stdout = "", stderr = ""}, envelope_index = consumed,
         normalizer_state = {answer = "partial"}, binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p", attachment_generation = 1}

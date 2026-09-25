@@ -91,7 +91,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
-    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.security:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 
 - name: natural_completion_test
@@ -104,7 +104,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
-    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.security:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: checkpoint_ack_test
   kind: function.lua
@@ -116,14 +116,14 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
-    policies: [bee:desktop_policy, bee:core_spawn_policy, bee.managed_window_fixture:checkpoint_admission_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.security:core_spawn_policy, bee.managed_window_fixture:checkpoint_admission_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: checkpoint_admission_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [registry.apply]
-    resources: [bee:application_admission, bee.managed_window_fixture:checkpoint_app]
+    resources: [bee.security:application_admission, bee.managed_window_fixture:checkpoint_app]
     effect: allow
 - name: checkpoint_app
   kind: process.lua
@@ -169,7 +169,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
-    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee.managed_window_fixture:selection_policy, bee.managed_window_fixture:resource_inspection_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.security:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.managed_window_fixture:selection_policy, bee.managed_window_fixture:resource_inspection_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: selection_policy
   kind: security.policy
@@ -218,7 +218,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
-    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:resource_manage_policy, bee.managed_window_fixture:selection_policy, bee.managed_window_fixture:retained_read_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.security:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.resources:resource_manage_policy, bee.managed_window_fixture:selection_policy, bee.managed_window_fixture:retained_read_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: retained_read_policy
   kind: security.policy

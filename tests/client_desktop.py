@@ -94,7 +94,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         idempotency_key = "fixture-defaults", preferences = {theme = "dos", background = "solid", taskbar = "labels"}})
     assert(not seed_error and type(seeded) == "table" and seeded.ok == true, "Cannot seed node defaults")""", 1)
             code = code.replace('options = {version = 1, desktop_id', 'options = {version = 1, node_defaults = true, desktop_id', 1)
-            code = code.replace('local client_scope = scope({"bee:desktop_policy",', 'local client_scope = scope({"bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy", "bee:desktop_policy",', 1)
+            code = code.replace('local client_scope = scope({"bee.security.desktop:desktop_policy",', 'local client_scope = scope({"bee.security.desktop:client_node_defaults_call_policy", "bee.security.desktop:client_node_defaults_read_policy", "bee.security.desktop:desktop_policy",', 1)
             checkpoint = '    local other_before = assert(store.read(other_store))'
             assert code.count(checkpoint) == 1
             code = code.replace(checkpoint, """    local defaults_ready = false

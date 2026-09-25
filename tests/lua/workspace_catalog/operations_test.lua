@@ -41,12 +41,12 @@ end
 
 -- A manager, a reader, a principal with neither grant, and an application
 -- principal behind the application storage boundary with both grants.
-local manager = caller("bee.test.catalog_manager", {"bee:workspace_catalog_read_policy", "bee:workspace_catalog_manage_policy"})
-local reader = caller("bee.test.catalog_reader", {"bee:workspace_catalog_read_policy"})
+local manager = caller("bee.test.catalog_manager", {"bee.security.storage:workspace_catalog_read_policy", "bee.security.storage:workspace_catalog_manage_policy"})
+local reader = caller("bee.test.catalog_reader", {"bee.security.storage:workspace_catalog_read_policy"})
 local outsider = caller("bee.test.catalog_outsider", {})
-local browser = caller("bee.test.catalog_browser", {"bee:workspace_folder_browse_policy"})
-local application = caller("bee.test.catalog_application", {"bee:workspace_storage_boundary", "bee:ordinary_app_subsystem_boundary",
-    "bee:workspace_catalog_read_policy", "bee:workspace_catalog_manage_policy"})
+local browser = caller("bee.test.catalog_browser", {"bee.security.storage:workspace_folder_browse_policy"})
+local application = caller("bee.test.catalog_application", {"bee.security.storage:workspace_storage_boundary", "bee.security:ordinary_app_subsystem_boundary",
+    "bee.security.storage:workspace_catalog_read_policy", "bee.security.storage:workspace_catalog_manage_policy"})
 
 local function call(client: funcs.Executor, method: string, value: unknown): Reply
     local reply, err = client:call("bee.workspace.catalog:" .. method, value)

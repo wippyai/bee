@@ -56,14 +56,14 @@ local function main(initial_application: string?, secondary_application: string?
     local restore_request = ""
     local restore_focus = saved and saved.desktop.scene.focus or ""
     local owner = tostring(process.pid())
-    local session_policy, session_error = security.policy("bee:session_policy")
+    local session_policy, session_error = security.policy("bee.security.desktop:session_policy")
     if session_error then error(tostring(session_error)) end
-    local broker_policy, broker_error = security.policy("bee:broker_policy")
+    local broker_policy, broker_error = security.policy("bee.security.desktop:broker_policy")
     if broker_error then error(tostring(broker_error)) end
-    local presenter_policy, presenter_error = security.policy("bee:presenter_policy")
+    local presenter_policy, presenter_error = security.policy("bee.security.desktop:presenter_policy")
     if presenter_error then error(tostring(presenter_error)) end
     local session_scope = security.new_scope({session_policy})
-    local private_core, private_core_error = security.policy("bee:core_spawn_boundary")
+    local private_core, private_core_error = security.policy("bee.security:core_spawn_boundary")
     if private_core_error then error(tostring(private_core_error)) end
     local broker_scope = security.new_scope({broker_policy, private_core})
     local presenter_scope = security.new_scope({presenter_policy})

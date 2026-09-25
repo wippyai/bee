@@ -70,7 +70,7 @@ include `workspace_id` when it is set. `list_workspace`
 (`{workspace_id, after_thread_id?, limit?}`) pages the threads one workspace
 owns in thread order as one range of the index
 `bee_thread_heads(workspace_id, thread_id)`; it needs `bee.threads.workspace`
-on that workspace (host policy `bee:thread_workspace_list_policy`) and no
+on that workspace (host policy `bee.security.threads:thread_workspace_list_policy`) and no
 membership.
 
 Records use schema revision `bee.thread-record@1`. The authority supplies the

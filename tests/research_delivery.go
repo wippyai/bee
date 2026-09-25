@@ -402,7 +402,7 @@ func stageMeasurement(repo, root string, entries []interface{}) error {
 		entry := raw.(map[string]interface{})
 		if entry["name"] == "application_admission" {
 			entry["bindings"] = append(entry["bindings"].([]interface{}), map[string]interface{}{
-				"definition_id": "bee.research.demo:app", "policies": []string{"bee:ordinary_app_subsystem_boundary", "bee:gateway_tool_read_policy"},
+				"definition_id": "bee.research.demo:app", "policies": []string{"bee.security:ordinary_app_subsystem_boundary", "bee.security.gateway:gateway_tool_read_policy"},
 			})
 		}
 	}

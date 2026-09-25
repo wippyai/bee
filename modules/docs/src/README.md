@@ -20,6 +20,6 @@ cannot rot silently.
 one strict request (`list`, `search`, `read`), opens the one volume and answers
 within the bounds `bee.docs:protocol` declares; it holds no writer, no registry
 publication and no host path. The host fills `bee.docs:corpus_ref` through
-`target_corpus` and names `bee:docs_policy` to grant only that reference and its
+`target_corpus` and names `bee.security.docs:docs_policy` to grant only that reference and its
 selected volume. The launch policies admit `docs` beside
 `workspace` for every provider.

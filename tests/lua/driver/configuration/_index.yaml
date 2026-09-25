@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [hash, funcs, security, json, toml]
   security:
-    policies: [bee:resource_resolve_policy, bee:placement_store_policy]
+    policies: [bee.security.resources:resource_resolve_policy, bee.security.placement:placement_store_policy]
   imports:
     test: wippy.test:test
     placement_types: bee.placement:types

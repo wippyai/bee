@@ -31,7 +31,7 @@ entries:
       name: hive-remote-host
       security:
         actor: {id: bee.remote.supervisor}
-        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:workspace_storage_policy, bee.hive_remote:inspect]
+        policies: [bee.security.desktop:desktop_policy, bee.security:core_spawn_policy, bee.security.storage:workspace_storage_policy, bee.hive_remote:inspect]
 - name: client_actor
   kind: process.lua
   source: file://client.lua
@@ -49,4 +49,4 @@ entries:
       name: hive-remote-client
       security:
         actor: {id: bee.remote.client}
-        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:client_spawn_policy, bee:client_storage_policy, bee.hive_remote:controller_spawn_policy, bee.hive_remote:client_policy, bee.hive_remote:inspect]
+        policies: [bee.security.desktop:desktop_policy, bee.security:core_spawn_policy, bee.security.desktop:client_spawn_policy, bee.security.storage:client_storage_policy, bee.hive_remote:controller_spawn_policy, bee.hive_remote:client_policy, bee.hive_remote:inspect]

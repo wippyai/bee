@@ -503,7 +503,7 @@ def main():
                 "modules": ["process"],
                 "imports": {"store": "bee.storage:store", "assignments": "bee.storage:assignments", "thread_bindings": "bee.storage:thread_bindings"},
                 "meta": {"command": {"name": "storage-probe", "short": "storage probe"}},
-                "security": {"policies": ["bee:workspace_storage_policy"]},
+                "security": {"policies": ["bee.security.storage:workspace_storage_policy"]},
             }],
         }, sort_keys=False))
 

@@ -62,29 +62,29 @@ end
 local function define_tests()
     test.describe("Thread workspace attribution", function()
         test.it("attributes a thread to the workspace its creator is bound to", function()
-            local app = bound("bee.application:" .. LEFT .. ":instance-1", LEFT, {"bee:thread_create_policy"})
+            local app = bound("bee.application:" .. LEFT .. ":instance-1", LEFT, {"bee.security.threads:thread_create_policy"})
             local thread_id, created = create(app, "Left work")
             test.eq((harness.value(created) :: Object).workspace_id, LEFT)
             local read = harness.value(call(app, "get", {thread_id = thread_id})) :: Object
             test.eq((read.summary :: Object).workspace_id, LEFT)
-            local node = bound("bee.test.node_actor", nil, {"bee:thread_create_policy"})
+            local node = bound("bee.test.node_actor", nil, {"bee.security.threads:thread_create_policy"})
             local _, node_created = create(node, "Node work")
             test.is_nil((harness.value(node_created) :: Object).workspace_id)
         end)
 
         test.it("never takes the workspace from the request", function()
-            local app = bound("bee.application:" .. LEFT .. ":instance-2", LEFT, {"bee:thread_create_policy"})
+            local app = bound("bee.application:" .. LEFT .. ":instance-2", LEFT, {"bee.security.threads:thread_create_policy"})
             local _, smuggled = create(app, "Smuggled", {workspace_id = RIGHT})
             test.eq(harness.code(smuggled), "INVALID_ARGUMENT")
         end)
 
         test.it("lists one workspace's threads in pages, for a caller the host allows", function()
-            local left = bound("bee.application:" .. LEFT .. ":instance-3", LEFT, {"bee:thread_create_policy"})
-            local right = bound("bee.application:" .. RIGHT .. ":instance-1", RIGHT, {"bee:thread_create_policy"})
+            local left = bound("bee.application:" .. LEFT .. ":instance-3", LEFT, {"bee.security.threads:thread_create_policy"})
+            local right = bound("bee.application:" .. RIGHT .. ":instance-1", RIGHT, {"bee.security.threads:thread_create_policy"})
             local created: {[string]: boolean} = {}
             for index = 1, 5 do created[(create(left, "Left " .. tostring(index)))] = true end
             local right_thread = create(right, "Right")
-            local viewer = bound("bee.test.workspace_viewer", nil, {"bee:thread_workspace_list_policy"})
+            local viewer = bound("bee.test.workspace_viewer", nil, {"bee.security.threads:thread_workspace_list_policy"})
             local ids = listed(viewer, LEFT, 2)
             local found = 0
             for index, id in ipairs(ids) do

@@ -358,7 +358,7 @@ local function main()
             if not instance_id or not saved or saved.execution_pid ~= recipient then
                 error("access revocation sender is not the current application execution")
             end
-            local entry = assert(registry.get("bee:application_admission"))
+            local entry = assert(registry.get("bee.security:application_admission"))
             local data = object(entry.data)
             local bindings = data and data.bindings
             if type(bindings) ~= "table" then error("application admission bindings are unavailable") end

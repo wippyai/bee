@@ -32,8 +32,8 @@ end
 -- limited to shipped static admission; the broker uses read(workspace_id).
 function M.bindings(pinned: registry.Snapshot?): {contract.Binding}
     local entry, entry_error
-    if pinned then entry, entry_error = pinned:get("bee:application_admission")
-    else entry, entry_error = registry.get("bee:application_admission") end
+    if pinned then entry, entry_error = pinned:get("bee.security:application_admission")
+    else entry, entry_error = registry.get("bee.security:application_admission") end
     if entry_error or not entry then error("Invalid application admission: " .. tostring(entry_error)) end
     return static_bindings(entry :: Entry)
 end
@@ -158,7 +158,7 @@ function M.read(workspace_id: string): Selection
     if not configuration then error("Invalid activation profiles: " .. tostring(configuration_error)) end
     local node_id, node_error = system.node.id()
     if not node_id or node_error then error("Node identity is unavailable: " .. tostring(node_error)) end
-    local bindings = static_bindings(lookup("bee:application_admission"))
+    local bindings = static_bindings(lookup("bee.security:application_admission"))
     local dynamic, evidence = governed(pinned, lookup, configuration, workspace_id, node_id)
     local seen: {[string]: boolean} = {}
     for _, binding in ipairs(bindings) do seen[binding.definition_id] = true end

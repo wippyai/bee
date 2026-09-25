@@ -26,9 +26,9 @@ local function fresh(prefix: string): string
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
 
-local scope_names = {"bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee:thread_create_policy", "bee:thread_observe_policy",
-    "bee:thread_lifecycle_policy", "bee:thread_carrier_policy", "bee:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee:resource_manage_policy",
-    "bee:resource_grant_policy", "bee:credential_manage_policy", "bee:credential_issue_policy", "bee:launch_spawn_policy"}
+local scope_names = {"bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
+    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.resources:resource_manage_policy",
+    "bee.security.resources:resource_grant_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy", "bee.security.harness:launch_spawn_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do

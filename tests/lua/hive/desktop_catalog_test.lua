@@ -24,10 +24,10 @@ local function scope(names: {string}): security.Scope
 end
 -- The executor the bridge reads the catalog with, and a catalog manager that
 -- creates the rows it reads.
-local bridge = funcs.new():with_actor(security.new_actor("bee.hive.supervisor")):with_scope(scope({"bee:desktop_catalog_policy",
-    "bee:desktop_catalog_resource_policy", "bee:workspace_catalog_read_policy", "bee.hive.desktop:catalog_call_policy"}))
+local bridge = funcs.new():with_actor(security.new_actor("bee.hive.supervisor")):with_scope(scope({"bee.security.desktop:desktop_catalog_policy",
+    "bee.security.desktop:desktop_catalog_resource_policy", "bee.security.storage:workspace_catalog_read_policy", "bee.hive.desktop:catalog_call_policy"}))
 local manager = funcs.new():with_actor(security.new_actor("bee.test.desktop_catalog_manager")):with_scope(scope({
-    "bee.workspace.catalog:call_test_policy", "bee:workspace_catalog_read_policy", "bee:workspace_catalog_manage_policy"}))
+    "bee.workspace.catalog:call_test_policy", "bee.security.storage:workspace_catalog_read_policy", "bee.security.storage:workspace_catalog_manage_policy"}))
 
 -- The host admits the projects fixture root for catalog rows.
 local function admit()

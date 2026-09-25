@@ -24,7 +24,7 @@ function M.open(): Started?
         local input, input_error = tty.events()
         if not input then error(tostring(input_error)) end
         local policies: {security.Policy} = {}
-        for _, name in ipairs({"bee:host_policy", "bee:local_supervisor_spawn_policy"}) do
+        for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:local_supervisor_spawn_policy"}) do
             local policy, err = security.policy(name)
             if not policy then error(tostring(err)) end
             policies[#policies + 1] = policy

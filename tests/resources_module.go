@@ -256,15 +256,12 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	if err := resourcesModuleBase(folder, true, false); err != nil {
 		return err
 	}
-	resourcePolicyNames := []string{"resource_store_policy", "resource_environment_policy", "resource_manage_policy", "resource_grant_policy", "resource_resolve_policy"}
-	hostEntries := make([]map[string]interface{}, 0, len(resourcePolicyNames)+1)
-	for _, name := range resourcePolicyNames {
-		entry, err := resourcesModuleNamed(root, "security/resources", name)
-		if err != nil {
-			return err
-		}
-		hostEntries = append(hostEntries, entry)
+	// The staged module entries attach the production app policies, so the
+	// closure stages them instead of redeclaring copies.
+	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "resources"), filepath.Join(root, "src", "security", "resources")); err != nil {
+		return err
 	}
+	hostEntries := make([]map[string]interface{}, 0, 1)
 	hostEntries = append(hostEntries, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
 	if !dropRoots {
 		hostEntries = append(hostEntries, map[string]interface{}{"name": "resource_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.resource_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}, {"root_ref": "bee.placement.native:unrelated_env_root", "access": "write"}}}})
@@ -302,15 +299,12 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 	if err := resourcesModuleBase(folder, false, true); err != nil {
 		return err
 	}
-	policyNames := []string{"credential_store_policy", "credential_file_policy", "credential_manage_policy", "credential_issue_policy", "credential_materialize_policy"}
-	hostEntries := make([]map[string]interface{}, 0, len(policyNames)+3)
-	for _, name := range policyNames {
-		entry, err := resourcesModuleNamed(root, "security/credentials", name)
-		if err != nil {
-			return err
-		}
-		hostEntries = append(hostEntries, entry)
+	// The staged module entries attach the production app policies, so the
+	// closure stages them instead of redeclaring copies.
+	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "credentials"), filepath.Join(root, "src", "security", "credentials")); err != nil {
+		return err
 	}
+	hostEntries := make([]map[string]interface{}, 0, 4)
 	// The host selects the placement binding recorded on projection receipts
 	// without admitting placement execution into this closure.
 	hostEntries = append(hostEntries,

@@ -35,7 +35,7 @@ def admit(project):
     document = yaml.safe_load(index.read_text())
     admission = next(entry for entry in document["entries"] if entry["name"] == "application_admission")
     admission["bindings"].append({"definition_id": DEFINITION_ID,
-                                  "policies": ["bee:ordinary_app_subsystem_boundary", "bee:processes_policy"]})
+                                  "policies": ["bee.security:ordinary_app_subsystem_boundary", "bee.security.desktop:processes_policy"]})
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
 

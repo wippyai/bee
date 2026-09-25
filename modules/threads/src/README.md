@@ -24,7 +24,7 @@ actor.
 | Requirement | Default | Injected into |
 |---|---|---|
 | `target_db` | `bee.threads:db` | `bee.threads:database_ref` at `.resource_ref`; every open goes through that resource |
-| `process_host` | `bee:workers` | `bee.threads:owner_service` and `bee.threads.delivery:waiter_service` at `.host` |
+| `process_host` | none; `bee.deps:threads` supplies `bee:workers` | `bee.threads:owner_service` and `bee.threads.delivery:waiter_service` at `.host` |
 
 The host keeps `db.get` on the selected resource and `registry.get` on
 `bee.threads:database_ref` in the policy it attaches to the methods.

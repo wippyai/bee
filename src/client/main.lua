@@ -147,7 +147,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             return security.new_scope({policy})
         end
         session = tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = self,
-            ["bee.workspace_id"] = workspace_id}):with_scope(scope("bee:session_policy")):spawn_monitored(
+            ["bee.workspace_id"] = workspace_id}):with_scope(scope("bee.security.desktop:session_policy")):spawn_monitored(
                 "bee.session:main", "bee:workers", self, display.width, display.height, layout.preferences,
                 {scene = layout.scene, tabs = layout.tabs, preferences = layout.preferences})))
         local function tab(view_id: string, instance_id: string): string?
@@ -428,7 +428,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             local grant = assert(display.view:grant())
             presenter = tostring(assert(process.with_options({terminal = grant}):with_context({["bee.workspace_owner"] = self,
                 ["bee.workspace_id"] = workspace_id, ["bee.display_id"] = database.client_id,
-                ["bee.hive_supervisor"] = bootstrap.hive_supervisor}):with_scope(scope("bee:presenter_policy")):spawn_monitored(
+                ["bee.hive_supervisor"] = bootstrap.hive_supervisor}):with_scope(scope("bee.security.desktop:presenter_policy")):spawn_monitored(
                     "bee.terminal:main", "bee:workers", self, initial_application, bootstrap.secondary_application)))
         end
         local function pause_presenter()

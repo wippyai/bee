@@ -101,9 +101,9 @@ local function main(owner: string, workspace: unknown, database_resource: string
         snapshot = reconciled
     end
     local live_inventory = inventory.new(workspace_id)
-    local broker_policy, broker_error = security.policy("bee:broker_policy")
+    local broker_policy, broker_error = security.policy("bee.security.desktop:broker_policy")
     if not broker_policy then database:close(); error(tostring(broker_error)) end
-    local boundary, boundary_error = security.policy("bee:core_spawn_boundary")
+    local boundary, boundary_error = security.policy("bee.security:core_spawn_boundary")
     if not boundary then database:close(); error(tostring(boundary_error)) end
     local self = tostring(process.pid())
     local broker = tostring(assert(process.with_options({}):with_context({

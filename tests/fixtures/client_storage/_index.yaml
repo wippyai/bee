@@ -23,7 +23,7 @@ entries:
     workspace_store: bee.storage:store
     state: bee.client:state
   security:
-    policies: [bee.client_storage_probe:broad_policy, bee:workspace_storage_boundary]
+    policies: [bee.client_storage_probe:broad_policy, bee.security.storage:workspace_storage_boundary]
   meta:
     command:
       name: client-storage-denial
@@ -53,7 +53,7 @@ entries:
     model: bee.desktop:model
     appearance: bee.application:appearance
   security:
-    policies: [bee:client_storage_policy]
+    policies: [bee.security.storage:client_storage_policy]
   meta:
     command:
       name: client-storage-probe

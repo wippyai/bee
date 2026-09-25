@@ -56,11 +56,11 @@ entries:
     appearance: bee.application:appearance
   security:
     policies:
-    - bee:desktop_policy
-    - bee:core_spawn_policy
-    - bee:thread_authority_client_policy
-    - bee:thread_lifecycle_client_policy
-    - bee:thread_create_policy
+    - bee.security.desktop:desktop_policy
+    - bee.security:core_spawn_policy
+    - bee.security.threads:thread_authority_client_policy
+    - bee.security.threads:thread_lifecycle_client_policy
+    - bee.security.threads:thread_create_policy
   meta:
     type: test
     suite: bee

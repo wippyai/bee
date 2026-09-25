@@ -9,20 +9,28 @@ upstream licenses.
 
 ## Placement and ownership
 
+Folder nesting mirrors namespace nesting: each folder holding an
+`_index.yaml` file is one namespace, so `src/a/b` is `<root>.a.b`, and no
+folder re-declares its parent's namespace. There are no `host/` folders;
+host wiring lives in the app root or beside its component.
+
 | Location | Owns |
 |---|---|
-| `src/_index.yaml` | Host composition, resources and protected admission/policy wiring |
-| `src/core/workspace` | Workspace persistence, application checkpoints, workspace identity and the node catalog operations and extension contract |
-| `src/core/host` | TTY-free host, client admission, renderer grants and live inventory |
-| `src/core/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
-| `src/core/client` | Desktop client, public commands, qualified layout and client store |
-| `src/core/interaction` | Bounded host/client questions and delivery state |
-| `src/core/session` | Committed desktop projection |
-| `src/core/applications` | Admission, application lifecycle, producer capabilities and routing |
-| `src/core/desktop` | Pure scene, reducer and layout values |
-| `src/core/protocol` | Private core message decoders |
-| `src/core/terminal` | Replaceable presenter, input and composition |
-| `src/core/storage` | Workspace database, catalog rows and migration ledger |
+| `src/_index.yaml` | Host composition, resources and protected admission wiring |
+| `src/deps` | One `bee.deps:<module>` dependency per composed module with the host-selected requirement parameters |
+| `src/security`, `src/security/<area>` | Host-selected app policies as `bee.security` and `bee.security.<area>` |
+| `src/environment` | Host environment, workspace and client stores |
+| `src/workspace` | Workspace persistence, application checkpoints, workspace identity and the node catalog operations and extension contract |
+| `src/host` | TTY-free host, client admission, renderer grants and live inventory |
+| `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
+| `src/client` | Desktop client, public commands, qualified layout and client store |
+| `src/interaction` | Bounded host/client questions and delivery state |
+| `src/session` | Committed desktop projection |
+| `src/applications` | Admission, application lifecycle, producer capabilities and routing |
+| `src/desktop` | Pure scene, reducer and layout values |
+| `src/protocol` | Private core message decoders |
+| `src/terminal` | Replaceable presenter, input and composition |
+| `src/storage` | Workspace database, catalog rows and migration ledger |
 | `modules/application/src` | Public application helpers, appearance and rendering values |
 | `src/apps/<name>` | A standalone default application and its view/domain helpers |
 | `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
@@ -33,6 +41,10 @@ upstream licenses.
 | `modules/approvals/src` | Durable approval owner, inbox feed and outbox worker |
 | `modules/placement-native/src` | Native launch attempts, executor boundary, evidence and cleanup state |
 | `modules/node/src` | Authorized native-node descriptions and metadata |
+
+The app never writes into a module namespace; it overrides module entries
+only through `bee.deps` requirement parameters. Module requirement defaults
+never point at app ids.
 
 Registry IDs are public identities independent of file paths. `main.lua` is an
 actor entry point, `app.lua` a default app entry point and `view.lua` a

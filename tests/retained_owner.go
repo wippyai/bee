@@ -155,7 +155,7 @@ local function main()
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:desktop_policy", "bee:retained_owner_spawn_policy", "bee:retained_owner_name_policy", "bee:retained_owner_node_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:retained_owner_spawn_policy", "bee.security.desktop:retained_owner_name_policy", "bee.security.desktop:retained_owner_node_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error(tostring(policy_error)) end
         policies[#policies + 1] = policy

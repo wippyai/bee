@@ -105,7 +105,7 @@ local function prove_configuration_scope(address: string)
 end
 local function prove_endpoint_call_scope()
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee.gateway.security:address_call_policy", "bee.gateway.security:store_policy", "bee.gateway.security:execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy", "bee:gateway_tool_overlay_policy", "bee:gateway_tool_docs_policy"}) do
+    for _, name in ipairs({"bee.gateway.security:address_call_policy", "bee.gateway.security:store_policy", "bee.gateway.security:execute_policy", "bee.security.gateway:gateway_tool_read_policy", "bee.security.gateway:gateway_tool_message_policy", "bee.security.gateway:gateway_tool_overlay_policy", "bee.security.gateway:gateway_tool_docs_policy"}) do
         local selected, err = security.policy(name)
         assert(selected ~= nil and err == nil, "endpoint policy unavailable")
         policies[#policies + 1] = selected

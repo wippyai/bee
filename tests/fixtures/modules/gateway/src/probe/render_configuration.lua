@@ -35,7 +35,7 @@ local function run(request: Object): Object
 
     local placement_db, placement_error = sql.get("bee.placement.native:db")
     local placement_executor, executor_error = exec.get("bee.placement.native:executor")
-    local placement_policy, policy_error = security.policy("bee:placement_store_policy")
+    local placement_policy, policy_error = security.policy("bee.security.placement:placement_store_policy")
     local current_scope = security.scope()
     local recovered_scope, recovered_error = funcs.new():with_scope(current_scope)
     local created, create_error = pcall(function()

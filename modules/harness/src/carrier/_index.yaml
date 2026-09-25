@@ -84,7 +84,7 @@ entries:
     placement_protocol: bee.placement.native:protocol
     lease: bee.harness.carrier:lease
   security:
-    policies: [bee:carrier_policy, bee:carrier_environment_policy, bee:workspace_host_lease_policy]
+    policies: [bee.security.harness:carrier_policy, bee.security.harness:carrier_environment_policy, bee.security.desktop:workspace_host_lease_policy]
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua

@@ -971,9 +971,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 20312,
+      "bytes": 20551,
       "id": "docs/workspace_catalog",
-      "sha256": "ea260371a2eaa91fca6eb11baec21fc4282380028450f6a62991c32660b990f4",
+      "sha256": "fa7d6e68573234551f519286451601c18d2ca1cd5dffd0108acd400f1e426198",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -987,17 +987,9 @@
       "topic": "storage"
     },
     {
-      "bytes": 706,
-      "id": "component/hive:host",
-      "sha256": "6e88aa0e5211e0a0a3062325c1a224dd95c7910e637c1357415220a9eeb3a0fd",
-      "source": "src/hive/host/README.md",
-      "title": "bee.hive.host",
-      "topic": "component"
-    },
-    {
-      "bytes": 2700,
+      "bytes": 2717,
       "id": "component/application",
-      "sha256": "fc1e0afd6e0909663089abd3c7058e2d718a8f11a2f36fd8e5aea7475c4d9d86",
+      "sha256": "c7fddec0679bc245bd5f6cc4086bb939077e6be31c72b1e8ca0d92218204b1b5",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -1011,17 +1003,17 @@
       "topic": "component"
     },
     {
-      "bytes": 11196,
+      "bytes": 11343,
       "id": "component/credentials",
-      "sha256": "a767fe40c51dbba61a437ee8be73a1d230d6876ce565b412e21181c65acf2967",
+      "sha256": "8f10e8a3b31be6ecf04e76563164d50dc1c52da6c42bce6ce6b3d14a37fbeb4a",
       "source": "modules/credentials/src/README.md",
       "title": "bee.credentials",
       "topic": "component"
     },
     {
-      "bytes": 1340,
+      "bytes": 1354,
       "id": "component/docs",
-      "sha256": "22995734abf284bdd5f7ad85a46dd8ad88f90c5d500be6205beac74509e351d5",
+      "sha256": "b594e4cbe87b85299d7395918e40cbbdaccba26ff116428ba693156ed91b89bb",
       "source": "modules/docs/src/README.md",
       "title": "bee docs",
       "topic": "component"
@@ -1091,9 +1083,9 @@
       "topic": "component"
     },
     {
-      "bytes": 18488,
+      "bytes": 18611,
       "id": "component/harness",
-      "sha256": "3db3730d1f5a32026e7540e4c3e147e1e773893d1a743366c38ffe4ad4e5d940",
+      "sha256": "55f8c0d08fb28df2f20e22431ee931d7881e85fa87ec9224a033212638ca0398",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -1147,9 +1139,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2970,
+      "bytes": 3046,
       "id": "component/resources",
-      "sha256": "09df679915d7efc8ec9167557a00a68fc0eb25b02b236766400eaec976d89e31",
+      "sha256": "774fac84515a264f2cfa8da8b90375bee4bad1259a6a4397b11b692e3a0ee301",
       "source": "modules/resources/src/README.md",
       "title": "bee.resources",
       "topic": "component"

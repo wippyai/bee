@@ -25,9 +25,9 @@ local function request(attempt_id: string, required_cleanup: string?): {[string]
 end
 local function caller()
     local policy = assert(security.policy("bee.window_native:caller_policy"))
-    local store_policy = assert(security.policy("bee:placement_store_policy"))
-    local exec_policy = assert(security.policy("bee:placement_exec_policy"))
-    local resource_policy = assert(security.policy("bee:resource_resolve_policy"))
+    local store_policy = assert(security.policy("bee.security.placement:placement_store_policy"))
+    local exec_policy = assert(security.policy("bee.security.placement:placement_exec_policy"))
+    local resource_policy = assert(security.policy("bee.security.resources:resource_resolve_policy"))
     return funcs.new():with_actor(security.new_actor(OWNER)):with_scope(security.new_scope({policy, store_policy, exec_policy, resource_policy}))
 end
 local function prepare(attempt_id: string, required_cleanup: string?): string
@@ -58,7 +58,7 @@ local function process_group_recorded(attempt_id: string): boolean
         and captured_identity(attempt_id)
 end
 local function child_scope(extra: string?): security.Scope
-    local names = {"bee:placement_store_policy", "bee:placement_exec_policy", "bee:placement_runner_policy", "bee:resource_resolve_policy", "bee.window_native:child_policy"}
+    local names = {"bee.security.placement:placement_store_policy", "bee.security.placement:placement_exec_policy", "bee.security.placement:placement_runner_policy", "bee.security.resources:resource_resolve_policy", "bee.window_native:child_policy"}
     if extra then names[#names + 1] = extra end
     local policies: {security.Policy} = {}
     for index, name in ipairs(names) do policies[index] = assert(security.policy(name)) end

@@ -55,7 +55,7 @@ def selected_host_entries():
     entries = []
     for relative, names in HOST_ENTRIES.items():
         document = yaml.safe_load((ROOT / relative).read_text())
-        assert document["namespace"] == "bee", relative
+        assert document["namespace"] == "bee" or document["namespace"].startswith("bee.security"), relative
         available = {entry["name"]: entry for entry in document["entries"]}
         assert names <= available.keys(), f"missing host entries in {relative}: {sorted(names - available.keys())}"
         entries.extend(deepcopy(available[entry["name"]]) for entry in document["entries"] if entry["name"] in names)

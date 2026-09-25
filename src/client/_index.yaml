@@ -96,10 +96,10 @@ entries:
         actor:
           id: bee.local
         policies:
-        - bee:desktop_policy
-        - bee:client_spawn_policy
-        - bee:client_storage_policy
-        - bee:local_launcher_spawn_policy
+        - bee.security.desktop:desktop_policy
+        - bee.security.desktop:client_spawn_policy
+        - bee.security.storage:client_storage_policy
+        - bee.security.desktop:local_launcher_spawn_policy
 - name: application
   kind: process.lua
   source: file://main.lua
@@ -139,7 +139,7 @@ entries:
     binding: bee.storage:binding
     contract: bee.protocol:application
   security:
-    policies: [bee:client_storage_policy]
+    policies: [bee.security.storage:client_storage_policy]
 - name: allocate_desktop
   kind: function.lua
   source: file://desktop_storage.lua
@@ -147,7 +147,7 @@ entries:
   modules: [security]
   imports: *desktop_storage_imports
   security:
-    policies: [bee:client_storage_policy]
+    policies: [bee.security.storage:client_storage_policy]
 
 - name: workspace_pages
   kind: library.lua

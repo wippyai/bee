@@ -213,6 +213,17 @@ func stage(root string, broken bool) (string, error) {
 		}
 	}
 	namespaces := make([]string, 0, len(grouped))
+	// The isolated assembly chooses the process host the way a bundled host
+	// would through its dependency parameters; the module itself carries no
+	// default, so an unlinked requirement still refuses. The broken variant
+	// keeps no default and retargets the link instead.
+	if !broken {
+		for _, entry := range grouped["bee.harness"] {
+			if name, _ := entry["name"].(string); name == "process_host" {
+				entry["default"] = "bee:workers"
+			}
+		}
+	}
 	for namespace := range grouped {
 		namespaces = append(namespaces, namespace)
 	}
@@ -233,6 +244,10 @@ func stage(root string, broken bool) (string, error) {
 	}
 	if err := os.CopyFS(filepath.Join(folder, "src", "host"), os.DirFS(filepath.Join(root, "tests", "fixtures", "modules", "harness", "src"))); err != nil {
 		return "", fmt.Errorf("stage host fixture: %w", err)
+	}
+	// The staged entries attach the production app policies.
+	if err := os.CopyFS(filepath.Join(folder, "src", "security", "harness"), os.DirFS(filepath.Join(root, "src", "security", "harness"))); err != nil {
+		return "", fmt.Errorf("stage harness policies: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  src: ./src\n"), 0600); err != nil {
 		return "", err

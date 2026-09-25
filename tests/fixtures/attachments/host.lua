@@ -23,7 +23,7 @@ function M.main()
     local events = assert(process.events())
     local guest_sent = assert(process.listen("bee.host.guest_sent", {message = true}))
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"}) do
         local policy, err = security.policy(name)
         if not policy then error(tostring(err)) end
         policies[#policies + 1] = policy
@@ -119,7 +119,7 @@ function M.manual()
     local statuses = assert(process.listen("bee.client.status", {message = true}))
     local events = assert(process.events())
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"}) do
         local policy, err = security.policy(name)
         if not policy then error(tostring(err)) end
         policies[#policies + 1] = policy

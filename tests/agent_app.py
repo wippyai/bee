@@ -85,7 +85,7 @@ def configure_continuous_source(project, workspace_id):
         "source_workspace": SOURCE_WORKSPACE, "component": "bee.agent_app_demo/app", "resolver": "overlay",
         "overlay_owner": OVERLAY_OWNER, "approval_policy": "local-agent-app-delivery", "parameters": [],
         "applications": [{"definition_id": DEFINITION_ID,
-                          "policies": ["bee:ordinary_app_subsystem_boundary"],
+                          "policies": ["bee.security:ordinary_app_subsystem_boundary"],
                           "thread_access": "observe_post"}],
         "allow": {"packages": ["bee.agent_app_demo/app"], "namespaces": ["bee.agent_app_demo"],
                   "kinds": ["process.lua"], "databases": [], "grants": [],

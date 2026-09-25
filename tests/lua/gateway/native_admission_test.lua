@@ -85,8 +85,8 @@ end
 
 local function caller(admit: boolean, manage: boolean): funcs.Executor
     local policies: {security.Policy} = {policy("bee.gateway:native_admission_test_policy")}
-    if admit then policies[#policies + 1] = policy("bee:gateway_admit_policy") end
-    if manage then policies[#policies + 1] = policy("bee:gateway_manage_policy") end
+    if admit then policies[#policies + 1] = policy("bee.security.gateway:gateway_admit_policy") end
+    if manage then policies[#policies + 1] = policy("bee.security.gateway:gateway_manage_policy") end
     return funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope(policies))
 end
 

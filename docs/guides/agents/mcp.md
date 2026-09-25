@@ -74,7 +74,7 @@ in the caller's workspace or in an optional `workspace_id`. It accepts a
 definition reference, brief and retry key, and returns the child thread,
 action and attempt identity plus the admitted title. A workspace other than
 the binding's needs `bee.workspaces.launch` on it in the caller's own scope
-(the host attaches `bee:workspace_launch_policy` only to agents it lets act
+(the host attaches `bee.security.harness:workspace_launch_policy` only to agents it lets act
 across workspaces); the launch then runs as the same actor bound to that
 workspace. The child gets its own launch policy and tool scope and holds a
 host lease on its workspace while it runs.

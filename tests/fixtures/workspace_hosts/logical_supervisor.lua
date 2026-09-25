@@ -29,7 +29,7 @@ end
 
 local function host_scope(): security.Scope
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:host_policy", "bee:host_spawn_policy", "bee.workspace_hosts:node_storage_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.workspace_hosts:node_storage_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
     return security.new_scope(policies)
@@ -202,14 +202,14 @@ local function main()
 
     -- Resources are per workspace: an application principal of the left
     -- workspace takes grants there and nowhere else.
-    local manager = resources(assert(security.new_actor("workspace_hosts.logical_manager")), {"bee:resource_manage_policy"})
+    local manager = resources(assert(security.new_actor("workspace_hosts.logical_manager")), {"bee.security.resources:resource_manage_policy"})
     for _, workspace in ipairs({left, right}) do
         local associated = resource_call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = ROOT,
             subpath = "", allowed_access = "read"})
         eq(associated.ok, true, "associate the project resource")
     end
     local application = assert(security.new_actor("bee.application:" .. left .. ":" .. opened.instance_id, {workspace_id = left}))
-    local app = resources(application, {"bee:resource_grant_policy"})
+    local app = resources(application, {"bee.security.resources:resource_grant_policy"})
     local audience = "workspace_hosts.logical_placement"
     local own = resource_call(app, "grant", {workspace_id = left, name = "project", access = "read", purpose = "project", audience = audience})
     eq(own.ok, true, "grant in the principal's own workspace")

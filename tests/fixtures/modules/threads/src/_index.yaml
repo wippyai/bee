@@ -101,3 +101,5 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
+  - name: waiter_policies
+    value: [bee:thread_waiter_policy]

@@ -2,7 +2,6 @@
 from pathlib import Path
 import os
 import shutil
-import sqlite3
 import subprocess
 import tempfile
 import yaml
@@ -68,17 +67,14 @@ def main():
                 entry["targets"] = [{"entry": "bee.threads:missing_ref", "path": ".resource_ref"}]
         index.write_text(yaml.safe_dump(document, sort_keys=False))
 
-    # The runtime linker leaves a dangling target unfilled without an error, so
-    # the module itself refuses to run with an unlinked database reference.
+    # The runtime linker must reject a dangling database target before any
+    # service starts or the journal creates its schema.
     with tempfile.TemporaryDirectory(prefix="bee-thread-module-") as directory:
         folder = stage(Path(directory), broken_target)
         run(folder, "lint")
         output = run(folder, "run", "threads-isolation", ok=False, env={"BEE_THREADS_DB": str(folder / "threads.db")})
-        assert "not linked" in output, output
-        # The SQLite resource auto-starts, so the file exists; the journal schema must not.
-        with sqlite3.connect(folder / "threads.db") as db:
-            tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        assert "bee_threads" not in tables and "bee_thread_schema_migrations" not in tables, tables
+        assert "unresolved requirements" in output and "bee.threads:missing_ref" in output, output
+        assert not (folder / "threads.db").exists(), "rejected dependency created the journal database"
 
     print("Threads module: standalone host, lint, linked target_db default, isolated closure, journal through contract, unlinked database reference refused")
 

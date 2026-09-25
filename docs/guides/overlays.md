@@ -93,6 +93,28 @@ broker has it open. An explicit profile row for the same source takes
 precedence; it admits auto start unless its `allow.auto_start` is `false`. A source the rule does not
 cover is refused with the rule and the profile entries a host adds.
 
+The shipped workspace application profile also admits `ns.requirement` entries
+for capability requests. A request declares `meta.value_kind: security.policy`,
+`meta.capability`, bounded `meta.parameters`, and a printable `meta.reason`. Its
+single target must be its own `bee.application` process entry at
+`.security.policies +=`. The destination resolver checks the request against
+the host-owned `bee:capability_catalog`, preserves the normalized parameters,
+reason, target, and catalog/template revisions in the measured candidate, and
+includes the catalog definition in the candidate's external-base digest. The
+request grants no policy. Preflight refuses app-shipped `security.actor` and
+`security.groups` on every entry with `SECURITY_DENIED`.
+
+The catalog currently describes `workspace.files.read`, `app.database`,
+`threads.read`, `threads.message`, `agents.launch`, `contract.call`, `http.api`
+and `hive.expose`. Its decoder bounds relative subpaths, lists, identities and
+HTTPS origins; it also carries a never-list for execution, environment and
+credential access, registry and scope management, approval decisions, core
+databases, and auto start. Pure helpers expand templates into proposed
+operation/resource/scope values, compare two resolved grant sets semantically,
+and render host-authored permission text with combined read-to-egress lines.
+No activation, approval or installed permission is derived from those helpers
+in this slice.
+
 A person reviews the staged plan in Start › Tools › Overlays, selects and
 prepares it there, approves the request in Start › Tools › Approvals, and lets
 Overlays step the activation owner until it settles; the application then
@@ -102,6 +124,11 @@ on the unmodified composition with a scripted agent, and
 Code building the application from its written spec.
 
 ## Limits
+
+Person-approved capability installation, approval reuse for a contained
+upgrade, runtime enforcement, and active revocation are proposals. Existing
+workspace application delivery still requires approval for each version and
+uses its current host-selected admission policies.
 
 Destination migration execution requires a captured immutable registry view and
 is not supplied by ordinary overlay activation. Public Hive enrollment and

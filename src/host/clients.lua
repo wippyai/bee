@@ -44,6 +44,12 @@ function M.new(owner: string, broker: string, workspace_id: string, assignments:
         admitted = {}, count = 0, routes = {}, route_count = 0, completed = {}, changes = {}, queued_detaches = {},
         appearance_routes = {}, assignment_revision = 0}
 end
+function M.resume(state: State, admitted: {[string]: clients.Client}, count: integer,
+    assignment_revision: integer, current: inventory.State, question_state: questions.State)
+    state.admitted, state.count = admitted, count
+    state.assignment_revision, state.inventory = assignment_revision, current
+    state.questions = question_state
+end
 function M.assignment_access(
     get: (unknown) -> (AssignmentResult?, string?),
     reconcile: () -> (AssignmentEntries?, string?),
@@ -280,6 +286,14 @@ function M.publish(state: State, value: inventory.State, kind: "catalog" | "view
                 sent = process.send(client.recipient, "bee.host.views", inventory.views_message(value, client.connection_id)) == true
             end
             if not sent then detach(state, client, "") end
+        end
+    end
+end
+function M.broker_replaced(state: State, broker: string)
+    for _, client in pairs(state.admitted) do
+        if not client.detaching then
+            process.send(client.recipient, "bee.host.broker_replaced", {version = 1, schema = 1,
+                workspace_id = state.workspace_id, connection_id = client.connection_id, broker = broker})
         end
     end
 end

@@ -4,6 +4,8 @@ local process = require("process")
 local security = require("security")
 local channel = require("channel")
 local time = require("time")
+local logger = require("logger")
+local log = logger:named("bee.launch.desktop")
 local uuid = require("uuid")
 local desktops = require("desktops")
 local attachments = require("attachments")
@@ -11,15 +13,18 @@ local protocol = require("protocol")
 local decode = require("decode")
 local contract = require("contract")
 local retained_protocol = require("retained_protocol")
+local handoff = require("handoff")
 type Channel = channel.Channel
-type Phase = "boot" | "admit" | "running" | "render" | "save" | "exit" | "stopping" | "departing"
+type Phase = "boot" | "admit" | "running" | "render" | "save" | "exit" | "stopping" | "departing" | "replacing"
 type Renderer = {pid: string, connection: string}
 type Child = {id: string, resource: desktops.Desktop, phase: Phase, connection: string, pending: string,
-    ready: boolean, activation: string?, deadline: Channel<time.Time>?, renderer: Renderer?}
+    ready: boolean, activation: string?, deadline: Channel<time.Time>?, renderer: Renderer?, replace: boolean,
+    host_replacing: boolean, restarts: integer, presentation: string?}
 -- host: the workspace host desktops talk to; route: the host's owner-side
 -- address for desktop admission, the host itself or the node host manager.
 type State = {owner: string, host: string, route: string, workspace_id: string, default_id: string,
-    resources: desktops.State, children: {[string]: Child}, scope: security.Scope}
+    resources: desktops.State, children: {[string]: Child}, scope: security.Scope, host_replacing: boolean,
+    replacement_ready: boolean}
 local M = {}
 local function send(recipient: string, topic: string, value: unknown): boolean
     local sent, err = process.send(recipient, topic, value)
@@ -46,16 +51,72 @@ local function fail(state: State, child: Child, message: string)
     process.terminate(child.resource.pid)
     -- Keep the writer reservation until its actual EXIT, including failed stop.
 end
+local function restart_child(state: State, child: Child)
+    local pid, restart_error = desktops.restart(state.resources, child.resource)
+    if not pid then
+        log:error("Retained desktop restart failed", {display_id = child.id, error = restart_error})
+        desktops.retire(state.resources, child.resource)
+        state.children[child.id] = nil
+        return
+    end
+    child.phase, child.connection, child.pending, child.ready = "boot", "", "", false
+    child.deadline, child.renderer, child.replace, child.presentation = time.after("10s"), nil, false, nil
+    child.host_replacing = false
+    child.restarts = child.restarts + 1
+end
 -- This actor spawned the child, so its exit is a departure this owner observes
 -- first hand. The host owns the display admission and accepts a release only
 -- from its owner, so the departure is announced there and the display identity
 -- stays held until the host reports the release.
-local function depart(state: State, child: Child)
-    child.phase, child.deadline, child.ready, child.renderer = "departing", nil, false, nil
+local function depart(state: State, child: Child, replacing: boolean?)
+    child.phase, child.deadline, child.ready, child.renderer, child.presentation = replacing and "replacing" or "departing", nil, false, nil, nil
+    if replacing and child.host_replacing then
+        child.pending = ""
+        if state.replacement_ready then restart_child(state, child) end
+        return
+    end
     child.pending = uuid.v7()
     if not send(state.route, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
         request_id = child.pending, op = "detach", recipient = child.resource.pid}) then
         child.pending = ""
+    end
+end
+function M.request_replace(state: State, sender: string, data: unknown): boolean
+    for _, child in pairs(state.children) do
+        if child.resource.pid == sender then
+            local saved = handoff.decode(data, tostring(process.pid()), state.host, state.workspace_id)
+            if child.replace or child.host_replacing
+                or (child.phase ~= "running" and child.phase ~= "render")
+                or (saved and saved.display_id ~= child.id) then return true end
+            -- The child saved its layout before asking. An incompatible wire
+            -- checkpoint cannot grant an identity, but its authenticated PID
+            -- still names this reservation; reopen that durable store.
+            child.replace = true
+            send(sender, "bee.client.replace_ack", {version = 1, workspace_id = state.workspace_id,
+                display_id = child.id})
+            return true
+        end
+    end
+    return false
+end
+function M.host_replacing(state: State)
+    state.host_replacing, state.replacement_ready = true, false
+    for _, child in pairs(state.children) do child.host_replacing = true end
+end
+function M.host_replaced(state: State, host: string, route: string)
+    state.host, state.route, state.replacement_ready = host, route, true
+    for _, child in pairs(state.children) do
+        desktops.rehost(child.resource, host)
+        if child.phase == "replacing" then restart_child(state, child)
+        else process.terminate(child.resource.pid) end
+    end
+    state.host_replacing = false
+end
+function M.host_upgraded(state: State)
+    state.host_replacing, state.replacement_ready = false, false
+    for _, child in pairs(state.children) do
+        child.host_replacing = false
+        if child.phase == "replacing" then restart_child(state, child) end
     end
 end
 local function control(state: State, child: Child, op: string): boolean
@@ -66,7 +127,7 @@ local function control(state: State, child: Child, op: string): boolean
 end
 local function render_failed(state: State, child: Child, message: string)
     if not child.ready then fail(state, child, message); return end
-    child.phase, child.renderer = "running", nil
+    child.phase, child.renderer, child.presentation = "running", nil, nil
     if not control(state, child, "pause") then fail(state, child, "Desktop pause request was not accepted"); return end
     child.pending, child.deadline = "", nil
 end
@@ -92,7 +153,8 @@ function M.new(owner: string, host: string, route: string, workspace_id: string,
         policies[#policies + 1] = assert(security.policy(name))
     end
     return {owner = owner, host = host, route = route, workspace_id = workspace_id, default_id = default_id,
-        resources = resources, children = {}, scope = security.new_scope(policies)}
+        resources = resources, children = {}, scope = security.new_scope(policies),
+        host_replacing = false, replacement_ready = false}
 end
 -- The initial display discovers the default store identity during bootstrap.
 -- After readiness it follows the same lifetime as every other retained display.
@@ -101,7 +163,7 @@ function M.adopt(state: State, id: string, resource: desktops.Desktop, connectio
         error("Invalid initial retained display adoption")
     end
     state.children[id] = {id = id, resource = resource, phase = "running", connection = connection,
-        pending = "", ready = true}
+        pending = "", ready = true, replace = false, host_replacing = false, restarts = 0}
 end
 -- The caller authenticates state.owner before this decoder. The record must
 -- already exist: the child opens that exact identity and never allocates a new one.
@@ -129,7 +191,8 @@ function M.activate(state: State, value: unknown)
         options = {version = 1, desktop_id = selected_id, quit_mode = "supervisor", node_defaults = true, hive_supervisor = state.owner}}, state.scope)
     if not resource then answer(state, id, request, "UNAVAILABLE", tostring(err)); return end
     state.children[id] = {id = id, resource = resource, phase = "boot", connection = "", pending = "",
-        ready = false, activation = request, deadline = time.after("10s")}
+        ready = false, activation = request, deadline = time.after("10s"), replace = false,
+        host_replacing = false, restarts = 0}
 end
 function M.find(state: State, id: string): desktops.Desktop?
     local child = state.children[id]
@@ -173,8 +236,12 @@ local function departed(state: State, topic: string, sender: string, data: unkno
     local result = protocol.client_result(data, state.workspace_id)
     if not result or result.op ~= "detach" then return false end
     for id, child in pairs(state.children) do
-        if child.phase == "departing" and child.resource.pid == result.recipient then
-            if result.error_code == "" or result.error_code == "not_found" then state.children[id] = nil end
+        if (child.phase == "departing" or child.phase == "replacing") and child.resource.pid == result.recipient then
+            if result.error_code == "" or result.error_code == "not_found" then
+                if child.phase == "replacing" then
+                    restart_child(state, child)
+                else state.children[id] = nil end
+            end
             return true
         end
     end
@@ -212,10 +279,34 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
             return true
         end
         local rendered = child.phase == "render"
+        local presented = child.presentation == connection
         child.connection, child.phase, child.pending, child.deadline = connection, "running", "", nil
-        if rendered then child.ready = true; settle(state, child, "", "")
+        if rendered then
+            child.ready = true
+            settle(state, child, "", "")
         else child.deadline = time.after("10s") end
         render(state, child)
+        if rendered and presented then
+            child.presentation = nil
+            send(state.owner, "bee.retained.replaced", {version = 1, workspace_id = state.workspace_id,
+                display_id = child.id, pid = child.resource.pid, schema = 1})
+        end
+    elseif topic == "presented" and child.restarts > 0 then
+        if type(data) == "table" and data.version == 1 and data.workspace_id == state.workspace_id
+            and data.display_id == child.id and contract.text(data.renderer, 160)
+            and contract.text(data.generation, 80) then
+            local connection = contract.text(data.connection_id, 80)
+            if connection and connection ~= "" then
+                if child.ready and child.phase == "running" and connection == child.connection then
+                    send(state.owner, "bee.retained.replaced", {version = 1, workspace_id = state.workspace_id,
+                        display_id = child.id, pid = child.resource.pid, schema = 1})
+                elseif child.phase == "admit" or child.phase == "render" or child.phase == "running" then
+                    -- The client may present before the host's render receipt
+                    -- reaches us; its exact connection waits for that fence.
+                    child.presentation = connection
+                end
+            end
+        end
     elseif topic == "quit" and protocol.quit(data, state.workspace_id) and child.phase == "running" then
         child.phase = "save"
         if not control(state, child, "save") then fail(state, child, "Desktop save request was not accepted") end
@@ -254,20 +345,32 @@ end
 function M.event(state: State, event: process.Event)
     if event.kind ~= process.event.EXIT and event.kind ~= process.event.LINK_DOWN then return end
     local sender = tostring(event.from)
+    local revoked = false
     for _, child in pairs(state.children) do
         if event.kind == process.event.EXIT and sender == child.resource.pid then
             settle(state, child, "UNAVAILABLE", "Desktop exited before activation completed: " .. (decode.exit_error(event.result) or "without an error"))
-            desktops.exited(state.resources, event)
-            depart(state, child)
+            if child.replace or child.host_replacing then depart(state, child, true)
+            else desktops.exited(state.resources, event); depart(state, child) end
         elseif child.phase ~= "departing" then
             local grants = child.resource.grants
             local attached = (grants.controller and grants.controller.recipient == sender) or grants.observers[sender] ~= nil
             if attached then
                 local result = attachments.detach(grants, sender)
                 if result.error_code ~= "" then fail(state, child, "Desktop attachment revocation failed")
-                else publish_attachments(child) end
+                else revoked = true; publish_attachments(child) end
             end
         end
+    end
+    if event.kind == process.event.LINK_DOWN and revoked and sender ~= state.owner and sender ~= state.host
+        and sender ~= state.route then
+        local held = false
+        for _, child in pairs(state.children) do
+            local grants = child.resource.grants
+            if (grants.controller and grants.controller.recipient == sender) or grants.observers[sender] then
+                held = true; break
+            end
+        end
+        if not held then process.unmonitor(sender) end
     end
 end
 function M.close(state: State)

@@ -85,6 +85,14 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         local launch_pending: {id: string, desktop_id: string, client: string}? = nil
         local copy_pending: {id: string, recipient: string, mount: string, desktop_id: string, client: string}? = nil
         local hosts, ready = listen("bee.host.ready"), listen("bee.client.ready")
+        local host_upgrading = listen("bee.host.upgrading")
+        local host_upgraded = listen("bee.host.upgraded")
+        local host_upgrade_failed = listen("bee.host.upgrade_failed")
+        local lease_replacing = listen("bee.host.replacing")
+        local lease_replaced = listen("bee.host.replaced")
+        local lease_failed = listen("bee.host.replace_failed")
+        local replacements = listen("bee.client.replace")
+        local presented_clients = listen("bee.client.rendered")
         local renderers, results = listen("bee.client.renderer"), listen("bee.host.client_result")
         local quits, answers = listen("bee.client.quit"), listen("bee.client.shutdown_answer")
         local questions, replies = listen("bee.interaction.state"), listen("bee.app.reply")
@@ -122,6 +130,9 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             route = host
         end
         local connection_id = ""
+        local replacing_host = false
+        local host_restarts = 0
+        local host_deadline: Channel<time.Time>? = nil
         local phase: Phase = "booting"
         local pending = ""
         local quit_pending = false
@@ -223,7 +234,9 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 elseif rendering then deferred_renderer = nil; primary_renderer(rendering) end
             end
             local current_storage = storage_pending
-            local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
+            local cases = {hosts:case_receive(), ready:case_receive(), replacements:case_receive(), presented_clients:case_receive(), results:case_receive(),
+                host_upgrading:case_receive(), host_upgraded:case_receive(), host_upgrade_failed:case_receive(),
+                lease_replacing:case_receive(), lease_replaced:case_receive(), lease_failed:case_receive(),
                 answers:case_receive(), questions:case_receive(), replies:case_receive(),
                 saved:case_receive(), exit_ready:case_receive(), events:case_receive(), copy_results:case_receive(), launch_results:case_receive()}
             if phase == "running" or retained_displays then
@@ -248,6 +261,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 cases[#cases + 1] = current_storage.deadline:case_receive()
             end
             if phase ~= "running" then cases[#cases + 1] = deadline:case_receive() end
+            if host_deadline then cases[#cases + 1] = host_deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Local supervisor channel closed") end
             if retained_displays and desktop_lifecycle.timeout(retained_displays, selected.channel) then
@@ -263,6 +277,8 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 -- and let an explicit retry reconcile with that outcome.
                 advance("running"); pending = ""
                 send(client, "bee.client.control", {version = 1, workspace_id = workspace_id, request_id = uuid.v7(), op = "pause"})
+            elseif host_deadline and selected.channel == host_deadline then
+                error("Replacement workspace host did not become ready")
             elseif selected.channel == events then
                 local event = selected.value
                 if retained_displays then desktop_lifecycle.event(retained_displays, event) end
@@ -290,7 +306,20 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                     end
                     if desktop then detach_attachment(desktop, desktop_id, tostring(event.from)) end
                     local failure = decode.exit_error(event.result)
-                    if tostring(event.from) == host and (failure ~= nil or (phase ~= "finishing" and phase ~= "stopping")) then
+                    if tostring(event.from) == host and retained_displays and lease then
+                        if not replacing_host then desktop_lifecycle.host_replacing(retained_displays) end
+                        replacing_host = true
+                        host_deadline = time.after("10s")
+                    elseif tostring(event.from) == host and retained_displays and not lease then
+                        if not replacing_host then desktop_lifecycle.host_replacing(retained_displays) end
+                        replacing_host = true
+                        if host_restarts >= 2 then error("Replacement workspace host restart limit reached") end
+                        host_restarts = host_restarts + 1
+                        host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
+                            :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self, workspace, database_resource)))
+                        route = host
+                        host_deadline = time.after("10s")
+                    elseif tostring(event.from) == host and (failure ~= nil or (phase ~= "finishing" and phase ~= "stopping")) then
                         error("Local workspace host exited during " .. phase .. ": " .. (failure or "without completing cleanup"))
                     end
                 end
@@ -299,9 +328,47 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 local sender = tostring(message:from())
                 local data: unknown = message:payload():data()
                 local topic = selected.channel == ready and "ready" or selected.channel == results and "result"
-                    or selected.channel == renderers and "renderer" or selected.channel == quits and "quit"
+                    or selected.channel == renderers and "renderer" or selected.channel == presented_clients and "presented" or selected.channel == quits and "quit"
                     or selected.channel == saved and "saved" or selected.channel == exit_ready and "finished" or ""
-                if retained_displays and topic ~= "" and desktop_lifecycle.receive(retained_displays, topic, sender, data) then
+                if selected.channel == host_upgrading and (sender == host or (lease and sender == route)) and type(data) == "table"
+                    and data.version == 1 and data.schema == 1 and data.workspace_id == workspace_id
+                    and contract.text(data.request_id, 80) and data.broker then
+                    replacing_host = true
+                    if retained_displays then desktop_lifecycle.host_replacing(retained_displays) end
+                    if not lease then send(host, "bee.host.upgrade_ack", {version = 1, schema = 1, workspace_id = workspace_id,
+                        request_id = data.request_id}) end
+                elseif selected.channel == lease_replacing and lease and sender == route and type(data) == "table"
+                    and data.version == 1 and data.schema == 1 and data.workspace_id == workspace_id and data.host == host then
+                    if not replacing_host and retained_displays then desktop_lifecycle.host_replacing(retained_displays) end
+                    replacing_host = true
+                    host_deadline = time.after("10s")
+                elseif selected.channel == lease_replaced and lease and sender == route and replacing_host
+                    and type(data) == "table" and data.version == 1 and data.schema == 1
+                    and data.workspace_id == workspace_id and contract.text(data.host, 160) then
+                    host = data.host
+                    assert(process.monitor(host))
+                    replacing_host, host_deadline = false, nil
+                    host_restarts = 0
+                    if retained_displays then desktop_lifecycle.host_replaced(retained_displays, host, route) end
+                    if retained_owner then send(retained_owner, "bee.retained.host_replaced", {version = 1,
+                        schema = 1, workspace_id = workspace_id, host = host}) end
+                elseif selected.channel == lease_failed and lease and sender == route and type(data) == "table"
+                    and data.version == 1 and data.schema == 1 and data.workspace_id == workspace_id then
+                    error("Leased workspace host replacement failed: " .. tostring(data.reason))
+                elseif selected.channel == host_upgraded and (sender == host or (lease and sender == route)) and type(data) == "table"
+                    and data.version == 1 and data.schema == 1 and data.workspace_id == workspace_id then
+                    replacing_host = false
+                    if retained_displays then desktop_lifecycle.host_upgraded(retained_displays) end
+                    if retained_owner then send(retained_owner, "bee.retained.host_upgraded", {version = 1,
+                        schema = 1, workspace_id = workspace_id, host = host}) end
+                elseif selected.channel == host_upgrade_failed and (sender == host or (lease and sender == route)) and type(data) == "table"
+                    and data.version == 1 and data.schema == 1 and data.workspace_id == workspace_id then
+                    replacing_host = false
+                    if retained_displays then desktop_lifecycle.host_upgraded(retained_displays) end
+                elseif retained_displays and selected.channel == replacements
+                    and desktop_lifecycle.request_replace(retained_displays, sender, data) then
+                    -- The retained display replaces its client after host revocation.
+                elseif retained_displays and topic ~= "" and desktop_lifecycle.receive(retained_displays, topic, sender, data) then
                     -- This retained display owns its lifecycle message.
                 elseif selected.channel == activations and sender == retained_owner and retained_displays and announced then
                     desktop_lifecycle.activate(retained_displays, data)
@@ -322,6 +389,14 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                             end
                         end
                     end
+                elseif selected.channel == hosts and sender == host and replacing_host and not lease then
+                    local value = protocol.host(data)
+                    if not value or value.workspace_id ~= workspace_id then error("Invalid replacement host readiness") end
+                    replacing_host, host_deadline = false, nil
+                    host_restarts = 0
+                    if retained_displays then desktop_lifecycle.host_replaced(retained_displays, host, route) end
+                    if retained_owner then send(retained_owner, "bee.retained.host_replaced", {version = 1,
+                        schema = 1, workspace_id = workspace_id, host = host}) end
                 elseif selected.channel == hosts and sender == host and phase == "booting" and not lease then
                     local value = protocol.host(data)
                     if not value then error("Invalid local host readiness") end
@@ -440,10 +515,11 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                         end
                     elseif request and selected_desktop then
                         if copy_pending and copy_pending.recipient == request.recipient and copy_pending.desktop_id == requested_id then copy_pending = nil end
+                        local already_monitored = has_attachment(request.recipient)
                         local result: attachments.Result
                         if request.op == "attach" then result = attachments.attach(selected_desktop.grants, request.recipient, request.mode)
                         else result = attachments.detach(selected_desktop.grants, request.recipient) end
-                        if result.error_code == "" and request.op == "attach" then
+                        if result.error_code == "" and request.op == "attach" and not already_monitored then
                             local monitored, monitor_error = process.monitor(request.recipient)
                             if not monitored then
                                 local removed = attachments.detach(selected_desktop.grants, request.recipient)

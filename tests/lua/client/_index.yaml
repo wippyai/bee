@@ -35,6 +35,14 @@ entries:
     state: bee.client:state
     model: bee.desktop:model
     appearance: bee.application:appearance
+- name: handoff_test
+  kind: function.lua
+  source: file://handoff_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    handoff: bee.client:handoff
 - name: assignments_test
   kind: function.lua
   source: file://assignments_test.lua

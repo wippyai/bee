@@ -80,6 +80,15 @@ function M.started(state: State, workspace_id: string, pid: string)
     local host = state.hosts[workspace_id]
     if host then host.pid = pid end
 end
+-- Keep live leases and attached holders while a failed code handoff replaces
+-- the host. Old client routes belonged to the departed host and cannot be
+-- forwarded to the new one until each holder admits its desktop again.
+function M.replacing(state: State, workspace_id: string)
+    local host = state.hosts[workspace_id]
+    if not host then return end
+    host.phase, host.pid, host.idle_at = "starting", "", nil
+    host.recipients, host.requests, host.pending = {}, {}, 0
+end
 
 -- The host announced readiness. A host whose every lease ended while it
 -- started begins its idle period now.

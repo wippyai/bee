@@ -1,6 +1,16 @@
 version: '1.0'
 namespace: bee.host
 entries:
+- name: handoff_test
+  kind: function.lua
+  source: file://handoff_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    handoff: bee.host:handoff
+    inventory: bee.host:inventory
+    questions: bee.interaction:delivery
 - name: recovery_test
   kind: function.lua
   source: file://recovery_test.lua

@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False, host_prompt=False, _transfer_failure=None):
+def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False, host_prompt=False, session_failure=False, session_upgrade=False, failed_session_upgrade=False, client_upgrade=False, client_upgrade_fallback=False, broker_upgrade=False, host_upgrade=False, host_upgrade_fallback=False, broker_upgrade_fallback=False, _transfer_failure=None):
     if transfer_probe and _transfer_failure is None:
         for failure in ("success", "source", "target"):
             run(command=command, shared_store=shared_store, storage_delay=storage_delay, launch_exit=launch_exit,
@@ -239,6 +239,51 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
 '''
             assert anchor in code
             fixture.write_text(code.replace(anchor, injection + anchor, 1))
+        if session_failure:
+            client = project / "src/client/main.lua"
+            code = client.read_text()
+            anchor = '        local function run()\n            send(owner, "bee.client.ready",'
+            assert code.count(anchor) == 1
+            code = code.replace(anchor, '        local function run()\n            local probe_session_exited = false\n            send(owner, "bee.client.ready",', 1)
+            anchor = '                                reply.id = key or ""\n                                send(presenter, "bee.app.reply", reply)\n'
+            assert code.count(anchor) == 1
+            code = code.replace(anchor, anchor + '''                                if database_resource == "bee.client.db:left" and bootstrap.legacy_desktop ~= nil
+                                    and reply.op == "open" and reply.error_code == ""
+                                    and not probe_session_exited then
+                                    probe_session_exited = true
+                                    -- Simulate the open reply outrunning the view inventory.
+                                    live = {}
+                                    process.terminate(session)
+                                end
+''', 1)
+            client.write_text(code)
+        if failed_session_upgrade:
+            session = project / "src/session/main.lua"
+            code = session.read_text()
+            anchor = '                process.upgrade("", owner, width, height, preferences, initial, saved)\n'
+            assert code.count(anchor) == 1
+            session.write_text(code.replace(anchor, '                if width == 100 then saved.version = 2 end\n' + anchor, 1))
+        if client_upgrade_fallback:
+            client = project / "src/client/main.lua"
+            code = client.read_text()
+            anchor = '                        send(owner, "bee.client.replace", checkpoint)\n'
+            assert code.count(anchor) == 1
+            client.write_text(code.replace(anchor, '                        checkpoint.version = 2\n' + anchor, 1))
+        if host_upgrade_fallback:
+            host_source = project / "src/host/main.lua"
+            code = host_source.read_text()
+            anchor = '                    process.upgrade("", owner, workspace, database_resource, saved)\n'
+            assert code.count(anchor) == 1
+            host_source.write_text(code.replace(anchor, '                    saved.version = 2\n' + anchor, 1))
+        if broker_upgrade_fallback:
+            host_source = project / "src/host/main.lua"
+            code = host_source.read_text()
+            anchor = '    local function spawn_broker(): (string?, string?)\n'
+            assert code.count(anchor) == 1
+            code = code.replace(anchor, '    local broker_spawn_count = 0\n' + anchor +
+                '        broker_spawn_count = broker_spawn_count + 1\n'
+                '        if broker_spawn_count == 2 then return nil, "Injected broker startup failure" end\n', 1)
+            host_source.write_text(code)
         if copy_exit:
             client = project / "src/client/main.lua"
             code = client.read_text()
@@ -356,7 +401,11 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
                 deployment_copy(pack, folder)
             args = [str(RUNTIME), "--console", "run"]
             fixture_mode = "transfer" if _transfer_failure == "success" else f"transfer-{_transfer_failure}-save-failure"
-            args += [command] + ([fixture_mode] if transfer_probe else (["shared-store"] if shared_store else [])) + [ "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
+            selected_mode = (fixture_mode if transfer_probe else "shared-store" if shared_store else
+                             "session-failed-upgrade" if failed_session_upgrade else "session-upgrade" if session_upgrade else
+                             "client-upgrade" if client_upgrade else "broker-upgrade" if broker_upgrade else
+                             "host-upgrade" if host_upgrade else None)
+            args += [command] + ([selected_mode] if selected_mode else []) + ["--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
             try:
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=40,
                                         env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db"), **host))
@@ -370,21 +419,55 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
                 "desktop-client-probe": ("DESKTOP_TRANSFER_PROBE_COMPLETE" if _transfer_failure == "success"
                                           else "DESKTOP_TRANSFER_SAVE_FAILURE_PROBE_COMPLETE") if transfer_probe else "DESKTOP_CLIENT_PROBE_COMPLETE",
                 "retained-supervisor-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
+                "retained-client-upgrade-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
+                "retained-client-fallback-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
+                "retained-host-fallback-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
+                "retained-broker-fallback-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
                 "thread-status-probe": "THREAD_STATUS_PROBE_COMPLETE",
             }[command]
             assert marker in logs, logs
             if launch_exit:
                 assert ((folder if packed else project) / "fault-launch-evidence").read_text() == "committed"
-            if command == "retained-supervisor-probe":
+            if command in ("retained-supervisor-probe", "retained-client-upgrade-probe", "retained-client-fallback-probe", "retained-host-fallback-probe"):
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
     if transfer_probe:
         print(f"Display transfer source/pack ({_transfer_failure}): real window menu, exact retained shell PID/state, neighbor unaffected, client layouts" + (" and source F12" if _transfer_failure == "success" else " and failed-display restart"))
+        return
+    if command == "retained-client-upgrade-probe":
+        print("Retained client replacement source/pack: definition change reattaches both live shells")
+        return
+    if command == "retained-client-fallback-probe":
+        print("Retained client fallback source/pack: invalid replacement schema restores both desktops from durable layouts")
+        return
+    if command == "retained-host-fallback-probe":
+        print("Retained host fallback source/pack: incompatible checkpoint restarts host and reattaches both desktops")
+        return
+    if command == "retained-broker-fallback-probe":
+        print("Retained broker fallback source/pack: failed broker startup restarts host and reattaches both desktops")
         return
     if command == "retained-supervisor-probe":
         print(f"Retained supervisor source/pack (slow storage={storage_delay}, launch exit={launch_exit}, primary delay={primary_render_delay}, copy exit={copy_exit}, primary exit={primary_exit}, host prompt={host_prompt}): authorized catalog/allocation and retry, additional activation/replay, independent Terminals, additional F12/save/reactivation with live shell, startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, retained display close/reactivation")
         return
     if command == "thread-status-probe":
         print("Bound thread status source/pack: host-authorized association, visible owner-derived badge, F12 and fresh-client retention")
+        return
+    if session_failure:
+        print("Desktop session failure source/pack: client and live shell remain attached after supervised session replacement")
+        return
+    if session_upgrade:
+        print("Desktop session upgrade source/pack: definition change preserves both displays and live shells")
+        return
+    if failed_session_upgrade:
+        print("Failed desktop session upgrade source/pack: incompatible schema restarts session under live client")
+        return
+    if client_upgrade:
+        print("Desktop client upgrade source/pack: definition change preserves both displays and live shell PIDs")
+        return
+    if broker_upgrade:
+        print("Desktop broker replacement source/pack: definition change retains desktops and restores automatic Settings")
+        return
+    if host_upgrade:
+        print("Workspace host upgrade source/pack: definition change preserves both live shell PIDs")
         return
     print(f"Desktop clients source/pack ({'shared store' if shared_store else 'independent appearance'}): separate displays, qualified tabs, PTY isolation, F12 dialogs, import retry, retained-terminal restart, isolated Settings and negotiated host shutdown")
 

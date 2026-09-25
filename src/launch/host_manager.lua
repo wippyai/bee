@@ -57,6 +57,9 @@ local function main(value: unknown)
     local acquires = assert(process.listen(leases.ACQUIRE, {message = true}))
     local releases = assert(process.listen(leases.RELEASE, {message = true}))
     local ready = assert(process.listen("bee.host.ready", {message = true}))
+    local upgrading = assert(process.listen("bee.host.upgrading", {message = true}))
+    local upgraded = assert(process.listen("bee.host.upgraded", {message = true}))
+    local upgrade_failed = assert(process.listen("bee.host.upgrade_failed", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local attaches = assert(process.listen(leases.ATTACH, {message = true}))
     local client_requests = assert(process.listen("bee.host.client", {message = true}))
@@ -81,6 +84,11 @@ local function main(value: unknown)
     -- Each ready host's announcement, as the host sent it, for the holders
     -- that attach to it.
     local announcements: {[string]: unknown} = {}
+    local restarts: {[string]: integer} = {}
+    local replacing: {[string]: boolean} = {}
+    local function inform(host: hosts.Host, topic: string, value: unknown)
+        for holder in pairs(host.attached) do process.send(holder, topic, value) end
+    end
 
     local function answer(waiter: Waiter, host: string, managed: boolean, code: string, message: string)
         process.send(waiter.sender, leases.RESULT, {version = 1, request_id = waiter.request.request_id,
@@ -103,6 +111,12 @@ local function main(value: unknown)
         local pid, spawn_error = process.with_options({}):with_context({["bee.host_owner"] = self}):with_scope(host_scope)
             :spawn_monitored("bee.host:main", "bee:workers", self, {workspace_id = workspace_id}, settings.database)
         if not pid then
+            local lost = hosts.host(state, workspace_id)
+            if replacing[workspace_id] and lost then
+                inform(lost, "bee.host.replace_failed", {version = 1, schema = 1,
+                    workspace_id = workspace_id, reason = "spawn_failed"})
+                replacing[workspace_id] = nil
+            end
             local failed: {Waiter} = waiters[workspace_id] or {}
             waiters[workspace_id] = nil
             hosts.gone(state, workspace_id)
@@ -160,7 +174,21 @@ local function main(value: unknown)
         announcements[workspace_id] = nil
         local host = hosts.host(state, workspace_id)
         local failure = decode.exit_error(result)
+        if host and host.phase == "ready" and host.lease_count > 0 and (restarts[workspace_id] or 0) < 2 then
+            restarts[workspace_id] = (restarts[workspace_id] or 0) + 1
+            replacing[workspace_id] = true
+            inform(host, "bee.host.replacing", {version = 1, schema = 1,
+                workspace_id = workspace_id, host = pid})
+            hosts.replacing(state, workspace_id)
+            start(workspace_id)
+            return
+        end
         if host and host.phase == "starting" then
+            if replacing[workspace_id] then
+                inform(host, "bee.host.replace_failed", {version = 1, schema = 1,
+                    workspace_id = workspace_id, reason = "startup_failed"})
+                replacing[workspace_id] = nil
+            end
             local failed: {Waiter} = waiters[workspace_id] or {}
             waiters[workspace_id] = nil
             hosts.gone(state, workspace_id)
@@ -180,7 +208,8 @@ local function main(value: unknown)
 
     local function run()
         while true do
-            local cases = {acquires:case_receive(), releases:case_receive(), ready:case_receive(), replies:case_receive(), events:case_receive(),
+            local cases = {acquires:case_receive(), releases:case_receive(), ready:case_receive(), upgrading:case_receive(),
+                upgraded:case_receive(), upgrade_failed:case_receive(), replies:case_receive(), events:case_receive(),
                 attaches:case_receive(), client_requests:case_receive(), client_results:case_receive()}
             for _, subscription in ipairs(drained) do cases[#cases + 1] = subscription:case_receive() end
             local timer: time.Timer? = nil
@@ -228,9 +257,31 @@ local function main(value: unknown)
                 if workspace_id and announced and announced.workspace_id == workspace_id then
                     announcements[workspace_id] = message:payload():data()
                     hosts.ready(state, workspace_id, now())
+                    if replacing[workspace_id] then
+                        replacing[workspace_id] = nil
+                        restarts[workspace_id] = nil
+                        local host = hosts.host(state, workspace_id)
+                        if host then inform(host, "bee.host.replaced", {version = 1, schema = 1,
+                            workspace_id = workspace_id, host = pid}) end
+                    end
                     local list: {Waiter} = waiters[workspace_id] or {}
                     waiters[workspace_id] = nil
                     for _, waiter in ipairs(list) do answer(waiter, pid, true, "", "") end
+                end
+            elseif selected.channel == upgrading or selected.channel == upgraded or selected.channel == upgrade_failed then
+                local message = selected.value
+                local pid = tostring(message:from())
+                local workspace_id = pids[pid]
+                local data: unknown = message:payload():data()
+                local host = workspace_id and hosts.host(state, workspace_id) or nil
+                if host and type(data) == "table" and data.version == 1 and data.schema == 1
+                    and data.workspace_id == workspace_id then
+                    if selected.channel == upgrading and contract.text(data.request_id, 80) then
+                        inform(host, "bee.host.upgrading", data)
+                        process.send(pid, "bee.host.upgrade_ack", {version = 1, schema = 1,
+                            workspace_id = workspace_id, request_id = data.request_id})
+                    elseif selected.channel == upgraded then inform(host, "bee.host.upgraded", data)
+                    elseif selected.channel == upgrade_failed then inform(host, "bee.host.upgrade_failed", data) end
                 end
             elseif selected.channel == attaches then
                 local message = selected.value
@@ -295,7 +346,8 @@ local function main(value: unknown)
     local ok, err = pcall(run)
     -- Each host monitors this manager and runs its own shutdown when it exits.
     process.registry.unregister(leases.MANAGER)
-    for _, subscription in ipairs({acquires, releases, ready, replies, attaches, client_requests, client_results}) do
+    for _, subscription in ipairs({acquires, releases, ready, upgrading, upgraded, upgrade_failed,
+        replies, attaches, client_requests, client_results}) do
         process.unlisten(subscription)
     end
     for _, subscription in ipairs(drained) do process.unlisten(subscription) end

@@ -191,6 +191,70 @@ local function define_tests()
             raw.traits = {{id = "application:spoof", title = "Spoof", prompt = "Spoof", tools = {"application_open"}}}
             test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
         end)
+        test.it("projects framework tools and traits with exact tool authority", function()
+            local framework = {tools = {
+                {alias = "FileRead", operation = "bee.harness.catalog:agent_read_tool", description = "Read a file through the review contract",
+                    schema = {type = "object", properties = {path = {type = "string"}}, required = {"path"}}, annotations = {readOnlyHint = true}},
+                {alias = "FileReport", operation = "bee.harness.catalog:agent_report_tool", description = "Return a review through the review contract",
+                    schema = {type = "object"}, annotations = {readOnlyHint = false}}},
+                traits = {{id = "bee.harness.catalog:agent_repository_trait", title = "Repository",
+                    prompt = "Use the approved repository tools.", tools = {"FileRead"}}}}
+            local policies = {["bee.harness.catalog:agent_read_tool"] = {"research:measure_policy"},
+                ["bee.harness.catalog:agent_report_tool"] = {"research:export_policy"}}
+            local projected = catalog.from_framework(framework, policies)
+            if not projected then error("framework projection refused") end
+            test.eq(#projected.tools, 2)
+            test.eq(projected.tools[1].name, "FileRead")
+            test.eq(projected.tools[1].operation, "bee.harness.catalog:agent_read_tool")
+            test.eq(#projected.traits, 1)
+            local selected = catalog.select(projected, {"FileRead", "FileReport"}, {}, {"bee.harness.catalog:agent_repository_trait"},
+                {"bee.harness.catalog:agent_repository_trait"})
+            if not selected then error("admitted trait refused") end
+            test.eq(#selected, 1)
+            test.eq(selected[1].name, "FileRead")
+            -- The MCP alias carries no authority: the function id alone is not
+            -- selectable, and a ceiling that leaves the trait's tool out
+            -- refuses the trait instead of narrowing it.
+            test.is_nil(catalog.select(projected, {"bee.harness.catalog:agent_read_tool"}, {}, {"bee.harness.catalog:agent_repository_trait"},
+                {"bee.harness.catalog:agent_repository_trait"}))
+            test.is_nil(catalog.select(projected, {"FileReport"}, {}, {"bee.harness.catalog:agent_repository_trait"},
+                {"bee.harness.catalog:agent_repository_trait"}))
+            local idle = catalog.select(projected, {"FileRead", "FileReport"}, {}, {"bee.harness.catalog:agent_repository_trait"}, {})
+            if not idle then error("deselection refused") end
+            test.eq(#idle, 0)
+        end)
+        test.it("refuses framework projections with changed references and unsupported fields", function()
+            local function framework(alias: string, operation: string, schema: unknown, annotations: unknown)
+                return {tools = {{alias = alias, operation = operation, description = "Probe",
+                    schema = schema, annotations = annotations}}, traits = {}}
+            end
+            local policies = {["research:probe"] = {"research:probe_policy"}}
+            test.not_nil(catalog.from_framework(framework("Probe", "research:probe", {type = "object"}, {readOnlyHint = true}), policies))
+            test.is_nil(catalog.from_framework(framework("Probe", "research:probe", {type = "object"}, {readOnlyHint = true}), {}))
+            test.is_nil(catalog.from_framework(framework("Probe", "research:missing", {type = "object"}, {readOnlyHint = true}), policies))
+            test.is_nil(catalog.from_framework(framework("Probe", "research:probe", {type = "string"}, {readOnlyHint = true}), policies))
+            test.is_nil(catalog.from_framework(framework("Probe", "research:probe",
+                {type = "object", properties = {q = {type = "string", bogus = true}}}, {readOnlyHint = true}), policies))
+            test.is_nil(catalog.from_framework(framework("Probe", "research:probe", {type = "object"}, {readOnlyHint = "yes"}), policies))
+            test.is_nil(catalog.from_framework(framework("session", "research:probe", {type = "object"}, {readOnlyHint = true}), policies))
+            test.is_nil(catalog.from_framework(framework("Probe", "not a reference", {type = "object"}, {readOnlyHint = true}), policies))
+            local duplicate = {tools = {
+                {alias = "Probe", operation = "research:probe", description = "Probe",
+                    schema = {type = "object"}, annotations = {readOnlyHint = true}},
+                {alias = "Probe", operation = "research:other", description = "Probe",
+                    schema = {type = "object"}, annotations = {readOnlyHint = true}}}, traits = {}}
+            test.is_nil(catalog.from_framework(duplicate,
+                {["research:probe"] = {"research:probe_policy"}, ["research:other"] = {"research:probe_policy"}}))
+            local unknown_tool = {tools = {{alias = "Probe", operation = "research:probe", description = "Probe",
+                schema = {type = "object"}, annotations = {readOnlyHint = true}}},
+                traits = {{id = "research:stale", title = "Stale", prompt = "Stale", tools = {"Missing"}}}}
+            test.is_nil(catalog.from_framework(unknown_tool, policies))
+            local duplicate_trait = {tools = {{alias = "Probe", operation = "research:probe", description = "Probe",
+                schema = {type = "object"}, annotations = {readOnlyHint = true}}},
+                traits = {{id = "research:stale", title = "Stale", prompt = "Stale", tools = {}},
+                    {id = "research:stale", title = "Stale", prompt = "Stale", tools = {}}}}
+            test.is_nil(catalog.from_framework(duplicate_trait, policies))
+        end)
     end)
 end
 return require("test").run_cases(define_tests)

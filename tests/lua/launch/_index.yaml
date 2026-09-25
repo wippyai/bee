@@ -9,6 +9,14 @@ entries:
   imports:
     test: wippy.test:test
     ownership: bee.launch:ownership
+- name: owner_handoff_test
+  kind: function.lua
+  source: file://owner_handoff_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    owner_handoff: bee.launch:owner_handoff
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua

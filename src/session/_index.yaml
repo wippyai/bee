@@ -16,6 +16,7 @@ entries:
     statuses: bee.session:statuses
     status_driver: bee.session:status
     status_reader: bee.application:status_reader
+    handoff: bee.session:handoff
   security:
     policies: [bee.security.desktop:session_policy, bee.security.desktop:session_status_policy]
 
@@ -42,3 +43,11 @@ entries:
     driver: bee.session:status
     reader: bee.application:status_reader
     model: bee.desktop:model
+- name: handoff
+  kind: library.lua
+  source: file://handoff.lua
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    commands: bee.protocol:commands
+    bindings: bee.session:bindings

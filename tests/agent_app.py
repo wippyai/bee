@@ -665,11 +665,11 @@ def exercise():
         # The replica fixture supplies an enrolled supervisor explicitly.
         # Keep the real Hive sender in bee.hive and disable only the protected
         # service entry for this fixture's explicitly managed supervisor.
-        hive_host_index = project / "src/hive/service/_index.yaml"
-        hive_host = yaml.safe_load(hive_host_index.read_text())
-        service = next(item for item in hive_host["entries"] if item["name"] == "supervisor_service")
+        hive_service_index = project / "src/hive/service/_index.yaml"
+        hive_service = yaml.safe_load(hive_service_index.read_text())
+        service = next(item for item in hive_service["entries"] if item["name"] == "supervisor_service")
         service["lifecycle"]["auto_start"] = False
-        hive_host_index.write_text(yaml.safe_dump(hive_host, sort_keys=False))
+        hive_service_index.write_text(yaml.safe_dump(hive_service, sort_keys=False))
         shutil.copytree(ROOT / "tests/fixtures/hive_replica", project / "src/replica_probe")
         shutil.rmtree(project / "src/replica_probe/host_environment")
         source_probe = project / "src/replica_probe/_index.yaml"

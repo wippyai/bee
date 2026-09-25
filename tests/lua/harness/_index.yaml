@@ -1281,6 +1281,16 @@ entries:
     actions: [funcs.call]
     resources: [bee.approvals.binding:inbox, bee.approvals.binding:decide, bee.approvals.binding:read, bee.approvals.binding:list]
     effect: allow
+- name: capability_test
+  kind: function.lua
+  source: file://capability_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [hash]
+  imports:
+    test: wippy.test:test
+    capability: bee.harness.permission:capability
+    bounds: bee.threads.records:bounds
 - name: permission_carrier_test
   kind: function.lua
   source: file://permission_carrier_test.lua

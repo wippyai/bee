@@ -35,6 +35,10 @@ and active traits, dynamic context, allowed dynamic keys and tool schemas.
 `{operation = "select", expected_revision, active_traits, context}` replaces
 selection atomically. A stale revision, an unknown trait/key or an attempt to
 overwrite fixed context is refused.
+Claude Code launches that select Bee gateway tools include `mcp__bee__session`
+in `--allowedTools`, so `session read` works in `dontAsk` mode. Local Claude
+`Edit` and `Write` are separate filesystem tools; a gateway-only authoring
+session stages source with `overlay put` and `overlay append`.
 
 Context is ordinary native `ctx` data. It does not choose security actors or
 permissions. Native `with_context` overlays it on inherited context, so host
@@ -57,17 +61,25 @@ direct call. The gateway does not rewrite a running harness's system prompt.
 
 `overlay` reaches the public `bee.governance.binding:overlay_call` facade. `guide`
 returns the destination's authoring contract and minimal example without naming
-or granting an overlay. `create`, `list`, `read`, `put`, `remove` and `freeze`
+or granting an overlay. `create`, `list`, `read`, `put`, `append`, `remove` and `freeze`
 operate only on the caller's overlay identity. They use `overlay_id`; a
 caller-supplied `workspace_id` is refused. Inline file text is bounded to
 65,536 bytes, canonical padded base64 to 87,384 bytes (65,536 decoded), and a
 complete MCP JSON request to 524,288 bytes.
+`list` without an ID enumerates only the caller's overlays. `append` uses an
+exact byte offset, expected overlay revision and fresh idempotency key. The
+owner computes the assembled SHA-256 digest; `read` pages up to 16,384 decoded
+bytes.
 
 `components` is the managed-agent read-only Hub view. It permits `catalog`,
-`details`, `inspect`, `state`, `files`, `read_file`, `installed` and `plan`.
+`details`, `inspect`, `state`, `files`, `read_file`, `installed`,
+`installed_source` and `plan`.
 The nested request retains Hub's exact component, version, resource and path
 decoders. It cannot apply a package, change registry state, activate an overlay
 or grant package permissions.
+`inspect` and `state` require a Hub artifact; use `installed_source` for the
+effective Lua source of a locally installed development version. See the
+[Hub inspection guide](../hub.md).
 
 `thread_launch` starts a definition from the caller's launch-policy allow-list
 in the caller's workspace or in an optional `workspace_id`. It accepts a

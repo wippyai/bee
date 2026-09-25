@@ -48,8 +48,13 @@ frame. A larger partial frame is held instead: the carrier commits the complete
 frames around it but acknowledges the runner only up to the chunk before it, so
 the runner keeps those chunks and a replacement carrier re-reads them, while
 event keys absorb the replayed records. A frame is therefore limited to the
-chunks a runner holds unacknowledged (16 chunks of at most 16 KiB); a frame
-that outgrows them ends the attempt `uncertain` with a framing fault. A frame
+chunks a runner holds unacknowledged (16 chunks of at most 16 KiB). If one
+provider status frame exceeds that window, the carrier records an
+`oversized_frame` notice, checkpoints that it is draining through the next
+newline and resumes at the following frame. This handles provider `Write`
+results that echo hundreds of kilobytes of input while preserving the later
+terminal result. If the omitted frame was the terminal result, the turn still
+settles `uncertain` because no result envelope was observed. A frame
 split across chunks resumes from carry bytes. A chunk with multiple
 events commits in consumed-prefix order. A crash before acknowledgement
 replays already committed output and event keys absorb the replay.

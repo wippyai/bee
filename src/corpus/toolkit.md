@@ -65,6 +65,10 @@ penultimate row with one primary button, and the footer on the final row with th
 status at the left and the key hints at the right. Selected rows keep their text,
 use the accent pair and carry a `›` marker in column 1. Hits are recorded as the
 frame draws; resolve mouse input with `frame.hit(hits, x, y)`.
+`frame.tabs` records each tab's `kind` as its hit kind; `frame.field`
+records hit kind `field` and the supplied index. `frame.layout` returns
+0 for omitted `tabs` and `actions` rows, and `Table.area` confines a table
+to one rectangle when a detail pane shares the screen.
 
 ```lua
 type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
@@ -75,7 +79,7 @@ type Hint = {key: string, verb: string}
 type Window = {offset: integer, capacity: integer}
 type Column = {title: string, width: integer, align: string?}
 type Rect = {x: integer, y: integer, width: integer, height: integer}
-type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?,
+type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?, area: Rect?}
 type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer: integer}
 ```
 

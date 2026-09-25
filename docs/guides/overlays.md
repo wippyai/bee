@@ -127,6 +127,23 @@ and render host-authored permission text with combined read-to-egress lines.
 No activation, approval or installed permission is derived from those helpers
 in this slice.
 
+The shipped `workspace_applications` ceiling admits only `process.lua` and
+`library.lua` entries. Native imports are limited to `tty`, `process`,
+`channel`, `json`, `time`, `uuid`, `base64` and `hash`. The application binding
+gets `bee:ordinary_app_subsystem_boundary` and `thread_access: none`.
+`db.sql.sqlite`, `store.memory`, `sql` and `store` are outside this ceiling.
+These are ceilings, not a grant to launch any agent definition: launch remains
+subject to the host's separate definition and application policies. Although
+the catalog describes app database, launch and thread requests, this rule does
+not provision an app database or install requested launch or thread grants.
+
+### Can a workspace application get its own database?
+
+No app-owned SQL or KV database is provisioned for a workspace application.
+The implemented durable state is an opt-in application checkpoint of at most
+65,536 bytes. It survives workspace restart for an automatic instance; closing
+the live view removes its resume record, so it is not a durable app database.
+
 A person reviews the staged plan in Start › Tools › Overlays, selects and
 prepares it there, approves the request in Start › Tools › Approvals, and lets
 Overlays step the activation owner until it settles; the application then

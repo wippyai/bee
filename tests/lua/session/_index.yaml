@@ -10,3 +10,21 @@ entries:
     test: wippy.test:test
     handoff: bee.session:handoff
     state: bee.desktop:state
+- name: handoff_apply_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply, registry.update.process.lua, registry.get, registry.snapshot,
+      process.spawn, process.spawn.monitored, process.context, process.host, process.monitor, process.send, process.cancel]
+    resources: '*'
+    effect: allow
+- name: handoff_process_test
+  kind: function.lua
+  source: file://handoff_process_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [process, channel, registry, time]
+  security:
+    policies: [bee.session:handoff_apply_policy]
+  imports:
+    test: wippy.test:test

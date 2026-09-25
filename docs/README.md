@@ -24,6 +24,7 @@ generator when the corpus is intentionally updated.
 | Native executable, updates, and I/O events | [Native distribution](operations/native.md) |
 | Hive network reachability and runtime proposal | [Reachability study](operations/hive-reachability.md) |
 | Runtime integration and upstream boundaries | [Runtime integration](development/runtime.md) |
+| Live process code handoff and recovery status | [Process handoff](development/process-handoff.md) |
 | Release artifacts and publication | [Releasing](operations/releasing.md) |
 | GitHub protections and repository settings | [GitHub setup](development/github.md) |
 | Hub package inspection and local installation | [Hub](guides/hub.md) |

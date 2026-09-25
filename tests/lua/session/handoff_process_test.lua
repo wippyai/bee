@@ -37,18 +37,25 @@ local function define_tests()
             changes:update(entry)
             local applied, apply_error = changes:apply()
             if not applied then error("Apply session definition change: " .. tostring(apply_error)) end
-            local sent, send_error = process.send(child, "bee.desktop.command", {version = 1, op = "snapshot", request_id = "queued"})
-            if not sent then
-                local event = events:receive()
-                error("Queue command during handoff: " .. tostring(send_error) .. ": "
-                    .. tostring(event and event.result and event.result.error))
+            for index = 1, 16 do
+                local sent, send_error = process.send(child, "bee.desktop.command", {version = 1,
+                    op = "snapshot", request_id = "queued-" .. tostring(index)})
+                if not sent then
+                    local event = events:receive()
+                    error("Queue command during handoff: " .. tostring(send_error) .. ": "
+                        .. tostring(event and event.result and event.result.error))
+                end
             end
             local ready = wait_for(upgraded, child, "upgrade readiness")
             test.eq(ready.pid, child)
             test.eq(ready.schema, 1)
-            local drained = wait_for(acks, child, "queued acknowledgement")
-            test.eq(drained.request_id, "queued")
-            test.eq(drained.scene.windows[1].id, "view")
+            local seen: {[string]: boolean} = {}
+            for _ = 1, 16 do
+                local drained = wait_for(acks, child, "queued acknowledgement")
+                seen[drained.request_id] = true
+                test.eq(drained.scene.windows[1].id, "view")
+            end
+            for index = 1, 16 do test.is_true(seen["queued-" .. tostring(index)] == true) end
             process.cancel(child, "session handoff test complete")
             process.unlisten(scenes); process.unlisten(acks); process.unlisten(upgraded)
         end)

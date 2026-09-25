@@ -236,7 +236,7 @@ check-shard-desktop-shell-close: desktop-shell-close-confirmation-check
 check-shard-desktop-shell-control: desktop-shell-control-delivery-check
 check-shard-desktop-shell-recovery: desktop-shell-recovery-check
 check-shard-desktop-terminal: desktop-terminal-check
-check-shard-desktop-client: desktop-client-core-check session-fallback-check session-upgrade-check
+check-shard-desktop-client: desktop-client-core-check session-fallback-check session-upgrade-check session-upgrade-fallback-check
 check-shard-desktop-client-launch: desktop-client-launch-check
 check-shard-desktop-client-recovery: desktop-client-recovery-check
 check-shard-desktop-delivery: desktop-delivery-inbox-check
@@ -303,6 +303,9 @@ session-fallback-check:
 .PHONY: session-upgrade-check
 session-upgrade-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(session_upgrade=True)'
+.PHONY: session-upgrade-fallback-check
+session-upgrade-fallback-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(failed_session_upgrade=True)'
 desktop-client-launch-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
 desktop-client-recovery-check:

@@ -95,6 +95,7 @@ local function main(mode: string?)
     local stopped_clients = assert(process.listen("bee.client.exit_ready", {message = true}))
     local saved_clients = assert(process.listen("bee.client.saved", {message = true}))
     local host_questions = assert(process.listen("bee.interaction.state", {message = true}))
+    local session_restarted = assert(process.listen("bee.client.session_restarted", {message = true}))
     local events, event_error = process.events()
     if not events then error(tostring(event_error)) end
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
@@ -193,13 +194,22 @@ local function main(mode: string?)
     end
     local left, left_screen = start("left", 100, true)
     local right, right_screen = start("right", 120, true)
-    if mode == "session-upgrade" then
+    if mode == "session-upgrade" or mode == "session-failed-upgrade" then
         local entry = assert(registry.get("bee.session:main"))
         entry.meta.handoff_probe = "desktop-definition-changed"
         local changes = assert(registry.snapshot()):changes()
         changes:update(entry)
         local applied, apply_error = changes:apply()
         if not applied then error("Apply desktop session definition: " .. tostring(apply_error)) end
+        if mode == "session-failed-upgrade" then
+            local selected = channel.select({session_restarted:case_receive(), time.after("5s"):case_receive()})
+            assert(selected.ok and selected.channel == session_restarted,
+                "Incompatible session upgrade did not report supervised restart")
+            assert(tostring(selected.value:from()) == left, "Another client reported session restart")
+            local value: unknown = selected.value:payload():data()
+            assert(type(value) == "table" and value.version == 1 and value.workspace_id == workspace_id
+                and type(value.session) == "string" and value.session ~= "", "Invalid session restart readiness")
+        end
         command(left_screen, "printf 'SESSION_UPGRADE_%s_OK\\n' \"$bee_desktop\"")
         wait_text(left_screen, "SESSION_UPGRADE_left_OK")
         command(right_screen, "printf 'SESSION_UPGRADE_%s_OK\\n' \"$bee_desktop\"")
@@ -457,6 +467,7 @@ local function main(mode: string?)
     detach_physical(physical, physical_screen, false)
     process.unlisten(physical_boot)
     process.unlisten(physical_ready)
+    process.unlisten(session_restarted)
     local probe_store, probe_error = open_store("bee.client.db:left")
     if not probe_store then error(tostring(probe_error)) end
     local probe_state = store.read(probe_store)

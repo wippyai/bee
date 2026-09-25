@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False, host_prompt=False, session_failure=False, session_upgrade=False, _transfer_failure=None):
+def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False, host_prompt=False, session_failure=False, session_upgrade=False, failed_session_upgrade=False, _transfer_failure=None):
     if transfer_probe and _transfer_failure is None:
         for failure in ("success", "source", "target"):
             run(command=command, shared_store=shared_store, storage_delay=storage_delay, launch_exit=launch_exit,
@@ -254,6 +254,12 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
                                 end
 ''', 1)
             client.write_text(code)
+        if failed_session_upgrade:
+            session = project / "src/session/main.lua"
+            code = session.read_text()
+            anchor = '                process.upgrade("", owner, width, height, preferences, initial, saved)\n'
+            assert code.count(anchor) == 1
+            session.write_text(code.replace(anchor, '                if width == 100 then saved.version = 2 end\n' + anchor, 1))
         if copy_exit:
             client = project / "src/client/main.lua"
             code = client.read_text()
@@ -371,7 +377,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
                 deployment_copy(pack, folder)
             args = [str(RUNTIME), "--console", "run"]
             fixture_mode = "transfer" if _transfer_failure == "success" else f"transfer-{_transfer_failure}-save-failure"
-            args += [command] + ([fixture_mode] if transfer_probe else (["shared-store"] if shared_store else (["session-upgrade"] if session_upgrade else []))) + [ "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
+            args += [command] + ([fixture_mode] if transfer_probe else (["shared-store"] if shared_store else (["session-failed-upgrade"] if failed_session_upgrade else (["session-upgrade"] if session_upgrade else [])))) + [ "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
             try:
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=40,
                                         env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db"), **host))
@@ -406,6 +412,9 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         return
     if session_upgrade:
         print("Desktop session upgrade source/pack: definition change preserves both displays and live shells")
+        return
+    if failed_session_upgrade:
+        print("Failed desktop session upgrade source/pack: incompatible schema restarts session under live client")
         return
     print(f"Desktop clients source/pack ({'shared store' if shared_store else 'independent appearance'}): separate displays, qualified tabs, PTY isolation, F12 dialogs, import retry, retained-terminal restart, isolated Settings and negotiated host shutdown")
 

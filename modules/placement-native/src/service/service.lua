@@ -434,6 +434,9 @@ function M.prepare(value: unknown): Reply
     -- authorization, and a wider list is refused before anything runs.
     local admitted_tools: {[string]: boolean} = {}
     if request.gateway then
+        -- Session is the gateway's reserved control tool, present for every
+        -- admitted binding; it is not named in the host's ordinary tool list.
+        admitted_tools.session = true
         for _, tool in ipairs(request.gateway.tools) do admitted_tools[tool] = true end
     end
     local argv = request.launch.argv

@@ -116,6 +116,14 @@ local function define_tests()
             if not request then error(tostring(err)) end
             local launch = claude_launch.specification(request)
             test.eq(launch.executable, "claude")
+            local bound = assert(claude_launch.decode({profile_id = "batch", brief = "read traits",
+                permission_mode = "dontAsk", gateway_tools = {"docs", "overlay"}}))
+            local selected = claude_launch.specification(bound)
+            local allowed = ""
+            for index, arg in ipairs(selected.argv) do
+                if arg == "--allowedTools" then allowed = selected.argv[index + 1] end
+            end
+            test.is_true(allowed:find("mcp__bee__session", 1, true) ~= nil)
             test.eq(quote.line(launch.argv), "-p --output-format stream-json --verbose --include-partial-messages --permission-mode dontAsk --max-turns 2 --model sonnet --effort xhigh -- 'say hi'")
             local _, mode_error = claude_launch.decode({profile_id = "session", brief = "x", permission_mode = "bypassPermissions"})
             test.eq(mode_error, "permission_mode is not one Bee admits")

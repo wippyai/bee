@@ -118,13 +118,16 @@ function M.specification(request: Request): types.Launch
         argv[#argv + 1] = "-r"
         argv[#argv + 1] = request.resume_ref
     end
-    -- Gateway tools are the MCP tools of the user-scope server named bee;
-    -- allowing them by name lets the harness call them under every
-    -- permission mode without a prompt. The list carries names only.
+    -- The session tool reads the active trait schemas and requests host
+    -- approval for changes. It is advertised beside admitted gateway tools,
+    -- so Claude in dontAsk mode must be allowed to call it too. Its operations
+    -- still pass the gateway's own admission checks.
     local gateway_tools = request.gateway_tools or {}
     if #gateway_tools > 0 then
-        local names: {string} = {}
-        for index, tool in ipairs(gateway_tools) do names[index] = "mcp__bee__" .. tool end
+        local names: {string} = {"mcp__bee__session"}
+        for _, tool in ipairs(gateway_tools) do
+            if tool ~= "session" then names[#names + 1] = "mcp__bee__" .. tool end
+        end
         argv[#argv + 1] = "--allowedTools"
         argv[#argv + 1] = table.concat(names, ",")
     end

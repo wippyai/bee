@@ -35,6 +35,10 @@ and active traits, dynamic context, allowed dynamic keys and tool schemas.
 `{operation = "select", expected_revision, active_traits, context}` replaces
 selection atomically. A stale revision, an unknown trait/key or an attempt to
 overwrite fixed context is refused.
+Claude Code launches that select Bee gateway tools include `mcp__bee__session`
+in `--allowedTools`, so `session read` works in `dontAsk` mode. Local Claude
+`Edit` and `Write` are separate filesystem tools; a gateway-only authoring
+session stages source with `overlay put` and `overlay append`.
 
 Context is ordinary native `ctx` data. It does not choose security actors or
 permissions. Native `with_context` overlays it on inherited context, so host

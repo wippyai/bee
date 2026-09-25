@@ -5,13 +5,15 @@ terms: Principal, Owner, Operation, Request, Grant, Session. Every call passes
 the caller's supervisor and, when remote, the destination supervisor; the owner
 decides; a grant may open a direct session.
 
+Cluster telemetry lives in the optional `bee/hive-telemetry` package
+(`bee.hive.telemetry`); this module keeps the protocol itself lean.
+
 ## Slices
 
 | Slice | Responsibility |
 |---|---|
 | `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `client`, the supervisor-host provenance resource, and the default host composition (`replica_sender`, `supervisor_service`, `workspaces`) |
 | `bee.hive.registry` | `catalog`, the registry read model for operation exposure and interfaces |
-| `bee.hive.telemetry` | The open operations: `presence`, `stats`, `catalog_list`, and the root's `bee.hive.api:workspaces` and `bee.hive.api:holdings` |
 | `bee.hive.supervisor` | The root-owned supervisor: hello, admission, forwarding, guarded dispatch, epochs (Astra's lane) |
 | `bee.hive.desktop` | Root-owned desktop integration |
 
@@ -140,7 +142,7 @@ owner execution.
 
 `make test` runs `tests/lua/hive`: envelope decoders and digests, catalog
 ceilings under narrowed scopes, malformed declarations, interface narrowing
-from one snapshot, telemetry output bounds, and the client against a real
+from one snapshot, and the client against a real
 fake-supervisor process on the supervisor host (absent supervisor, wrong
 host, stale and impostor replies, malformed replies, deadlines). Support
 entries carry `meta.type: test_support`.

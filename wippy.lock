@@ -18,6 +18,8 @@ modules:
     version: 0.1.0-dev
   - name: bee/hive
     version: 0.1.0-dev
+  - name: bee/hive-telemetry
+    version: 0.1.0-dev
   - name: bee/approvals
     version: 0.1.0-dev
   - name: bee/application

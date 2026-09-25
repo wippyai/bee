@@ -1,5 +1,5 @@
--- MIT. Bounded OPEN telemetry dispatch tests: allowlist constraints,
--- envelope verification, host ceiling, narrow policy scope, and output validation.
+-- MIT. Bounded OPEN telemetry dispatch tests: host exposure ceiling,
+-- envelope verification, narrow policy scope, and output validation.
 local test = require("test")
 local funcs = require("funcs")
 local security = require("security")
@@ -142,15 +142,28 @@ local function define_tests()
             end
         end)
 
-        test.it("denies unallowed operations even if exposed in catalog metadata", function()
-            -- probe_open is exposed as mode: open in catalog fixtures, but NOT in allowlist
+        test.it("denies operations the host ceiling does not expose", function()
+            -- probe_open carries open metadata in the catalog fixtures, but
+            -- this scope selects no exposure policy for it, so dispatch denies
+            -- it before resolving the catalog.
             local req = make_request("bee.hive:probe_open", {name = "node-1", count = 2})
-            local rep = dispatch.dispatch(req)
+            local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.hive:mapping_test_policy"}, req)
             test.is_false(rep.ok)
             test.not_nil(rep.error)
             if rep.error then
                 test.eq(rep.error.code, "DENIED")
             end
+        end)
+
+        test.it("dispatches an operation the host ceiling exposes with no code allowlist", function()
+            -- probe_open carries open metadata; the fixture ceiling grants it
+            -- only under the probe exposure policy, so dispatch admits it only
+            -- in a scope that selects that policy.
+            local req = make_request("bee.hive:probe_open", {name = "node-1", count = 2})
+            local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.hive:probe_exposure_policy",
+                "bee.hive:mapping_test_policy"}, req)
+            test.is_true(rep.ok)
+            test.is_nil(rep.error)
         end)
 
         test.it("denies unexposed arbitrary functions", function()

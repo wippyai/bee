@@ -171,6 +171,18 @@ frozen work and target ledger. Removing an overlay restores registry state; it
 never claims to roll back committed schema effects. Applied definitions are
 immutable and updates append migrations.
 
+A settled `applied` observation retains the previous complete applied
+generation as its slot baseline. `activation_store` exposes that baseline
+and performs one-step, generation-checked `revert_activation`: it repoints the
+desired pointer at the retained baseline, records the caller's compensating
+migration receipt, and clears the observed pointer so boot recovery reapplies
+the baseline. `migration_work.forward_only` is the pure guard that refuses a
+compensation which re-runs, renumbers or moves backward an applied migration.
+The store never edits an applied intent, migration ledger row or epoch; boot
+failure falls back to this last good generation, and a committed migration
+whose compensation cannot complete stops in recovery rather than booting
+incompatible code against newer data.
+
 `bee.gov:hub_resolver` now provides the destination resolution adapter.
 It captures one atomic registry state, asks the runtime to plan a
 host-selected Hub dependency root, reconstructs the complete selected closure

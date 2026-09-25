@@ -15,6 +15,7 @@ workspace:
     bee/threads: ./modules/threads
     bee/docs: ./modules/docs
     bee/hive: ./modules/hive
+    bee/hive-telemetry: ./modules/hive-telemetry
     bee/approvals: ./modules/approvals
     bee/application: ./modules/application
     bee/node: ./modules/node

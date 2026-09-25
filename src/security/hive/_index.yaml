@@ -32,8 +32,9 @@ entries:
     - bee.hive.telemetry:presence
     - bee.hive.telemetry:stats
     - bee.hive.telemetry:catalog_list
+    - bee.hive.telemetry:holdings
+    - bee.hive.telemetry:cluster
     - bee.hive.api:workspaces
-    - bee.hive.api:holdings
     - bee.threads:capabilities
     effect: allow
 - name: hive_policy_exposure_policy
@@ -148,8 +149,9 @@ entries:
     - bee.hive.telemetry:presence
     - bee.hive.telemetry:stats
     - bee.hive.telemetry:catalog_list
+    - bee.hive.telemetry:holdings
+    - bee.hive.telemetry:cluster
     - bee.hive.api:workspaces
-    - bee.hive.api:holdings
     - bee.threads:capabilities
     effect: allow
 - name: hive_supervisor_spawn_deny

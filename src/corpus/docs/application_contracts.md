@@ -58,9 +58,16 @@ policies and admission binding from that live record. A contained upgrade
 reuses the installed approval after measurement and preflight, and installs
 only the new version's requested subset. A widening requires a new decision;
 refusal leaves the installed grant in place. This slice installs only
-`threads.read` with owned scope. File and database provisioning, contract
-gateways, runtime agent elevation and active revocation fencing remain later
-work.
+`threads.read` with owned scope. An admitted agent attempt elevates itself
+through the gateway `request_capability` tool: the approval shows the host
+catalog's own wording bound to the authenticated thread and attempt, and
+consumption writes one resources grant row for that thread actor, which
+placement resolves for the attempt alone; a child attempt resolves nothing.
+File and database provisioning and contract gateways remain later work, while
+active revocation fencing is implemented: an epoch advance reports its fenced
+attempts, and an owner fence withdraws the fenced instance's thread
+delegation and force-stops it, leaving future opens to re-admit from the
+present authority.
 
 The broker accepts a governed record only for its own workspace while the
 current normalized host profile selects the same source, owner, bindings and

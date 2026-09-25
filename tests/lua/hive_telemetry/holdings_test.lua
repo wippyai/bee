@@ -9,7 +9,7 @@ local funcs = require("funcs")
 local time = require("time")
 local leases = require("leases")
 local A = string.rep("a", 32)
-local OP = "bee.hive.api:holdings"
+local OP = "bee.hive.telemetry:holdings"
 local function call(request: {[string]: unknown}): {[string]: unknown}
     local result, err = funcs.call(OP, request)
     if err or type(result) ~= "table" then error(OP .. ": " .. tostring(err)) end

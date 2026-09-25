@@ -140,8 +140,6 @@ local function view(store: Store, row: Object, current_slot: Object?): Object
         result.desired_intent_id, result.desired_execution_revision = current_slot.desired_intent_id, current_slot.desired_execution_revision
         result.observed_intent_id, result.observed_execution_revision = current_slot.observed_intent_id, current_slot.observed_execution_revision
         result.observed_artifact_digest, result.observed_outcome = current_slot.observed_artifact_digest, current_slot.observed_outcome
-        result.baseline_intent_id, result.baseline_execution_revision = current_slot.baseline_intent_id, current_slot.baseline_execution_revision
-        result.baseline_artifact_digest = current_slot.baseline_artifact_digest
     end
     return result
 end

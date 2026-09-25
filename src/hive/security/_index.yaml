@@ -9,11 +9,4 @@ entries:
     actions: [funcs.call]
     resources: [bee.workspace.catalog:list, bee.workspace.catalog:search]
     effect: allow
-- name: holdings_policy
-  kind: security.policy
-  meta:
-    comment: The holdings operation reads the node host manager through its owner request
-  policy:
-    actions: [process.send, process.registry.lookup]
-    resources: '*'
-    effect: allow
+

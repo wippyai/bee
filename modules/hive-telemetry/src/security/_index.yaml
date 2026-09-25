@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee.hive.telemetry.security
+entries:
+- name: holdings_policy
+  kind: security.policy
+  meta:
+    comment: The holdings operation reads the node host manager through its owner request
+  policy:
+    actions: [process.send, process.registry.lookup]
+    resources: '*'
+    effect: allow
+- name: cluster_policy
+  kind: security.policy
+  meta:
+    comment: The cluster operation reads named nodes' holdings through the local Hive supervisor
+  policy:
+    actions: [process.registry.lookup, process.send]
+    resources: '*'
+    effect: allow

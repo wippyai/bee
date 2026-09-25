@@ -1,0 +1,31 @@
+version: '1.0'
+namespace: bee.hive.telemetry
+entries:
+- name: telemetry_test
+  kind: function.lua
+  source: file://telemetry_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+- name: holdings_test
+  kind: function.lua
+  source: file://holdings_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, process, time]
+  imports:
+    test: wippy.test:test
+    leases: bee.application:host_leases
+- name: cluster_test
+  kind: function.lua
+  source: file://cluster_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    cluster: bee.hive.telemetry:cluster

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -47,9 +48,49 @@ const (
 	peerAddressSuffix = ".addr"
 )
 
-// meshAddress is where the owner's mesh and join listener bind and what they
-// advertise. The owner serves loopback only.
+// meshAddress is the default owner address. A host can explicitly select an
+// assigned address for a Hive reachable from another machine.
 var meshAddress = netip.MustParseAddr("127.0.0.1")
+
+func selectedMeshAddress() (netip.Addr, error) {
+	value := os.Getenv("BEE_MESH_ADDRESS")
+	if value == "" {
+		return meshAddress, nil
+	}
+	address, err := netip.ParseAddr(value)
+	if err != nil || address.Zone() != "" || !address.IsGlobalUnicast() || address.IsLoopback() {
+		return netip.Addr{}, errors.New("BEE_MESH_ADDRESS must be an assigned external IP address")
+	}
+	interfaces, err := net.InterfaceAddrs()
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	for _, entry := range interfaces {
+		if network, ok := entry.(*net.IPNet); ok {
+			if assigned, ok := netip.AddrFromSlice(network.IP); ok && assigned.Unmap() == address.Unmap() {
+				return address.Unmap(), nil
+			}
+		}
+	}
+	return netip.Addr{}, errors.New("BEE_MESH_ADDRESS is not assigned to this host")
+}
+
+func meshBindAddress(address netip.Addr) netip.Addr {
+	if address.IsLoopback() {
+		return address
+	}
+	if address.Is4() {
+		return netip.IPv4Unspecified()
+	}
+	return netip.IPv6Unspecified()
+}
+
+func meshLocalAddress(address netip.Addr) netip.Addr {
+	if address.Is6() {
+		return netip.IPv6Loopback()
+	}
+	return netip.MustParseAddr("127.0.0.1")
+}
 
 // joinedRecord is the persisted outcome of a hive join.
 type joinedRecord struct {
@@ -145,7 +186,7 @@ type meshBoot struct {
 // pool beside its own authority; any other node certifies a fresh leaf with
 // its own authority. The seeds are the joined hive node and every pinned
 // peer's last known address.
-func prepareMesh(state string, now time.Time) (meshBoot, error) {
+func prepareMesh(state string, now time.Time, address netip.Addr) (meshBoot, error) {
 	directory := ownerDirectory(state)
 	authority, err := ensureAuthority(directory, now)
 	if err != nil {
@@ -181,7 +222,11 @@ func prepareMesh(state string, now time.Time) (meshBoot, error) {
 		if err != nil {
 			return meshBoot{}, err
 		}
-		leaf, err := authority.Issue(public, []netip.Addr{meshAddress}, now)
+		addresses := []netip.Addr{address}
+		if !address.IsLoopback() {
+			addresses = append(addresses, meshLocalAddress(address))
+		}
+		leaf, err := authority.Issue(public, addresses, now)
 		if err != nil {
 			return meshBoot{}, err
 		}

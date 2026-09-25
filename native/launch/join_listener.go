@@ -40,20 +40,21 @@ type redeemer interface {
 }
 
 type joinListenerComponent struct {
-	state  string
-	node   string
-	cancel context.CancelFunc
-	done   chan struct{}
+	state   string
+	node    string
+	address netip.Addr
+	cancel  context.CancelFunc
+	done    chan struct{}
 }
 
 // joinListener serves invite redemption for the owner of state and records the
 // hive's addresses the next boot binds and seeds. It depends on the cluster so
 // its admission can name the live gossip address.
-func joinListener(state string) (boot.Component, error) {
+func joinListener(state string, address netip.Addr) (boot.Component, error) {
 	if !filepath.IsAbs(state) {
 		return nil, errors.New("join listener requires an absolute state directory")
 	}
-	l := &joinListenerComponent{state: state, node: ownerNodeName(state)}
+	l := &joinListenerComponent{state: state, node: ownerNodeName(state), address: address}
 	return boot.New(boot.P{Name: "bee.launch.join", DependsOn: []string{"cluster"}, Start: l.Start, Stop: l.Stop}), nil
 }
 
@@ -95,14 +96,14 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	listener, err := net.Listen("tcp", netip.AddrPortFrom(meshAddress, 0).String())
+	listener, err := net.Listen("tcp", netip.AddrPortFrom(meshBindAddress(l.address), 0).String())
 	if err != nil {
 		redeem.Close()
 		return err
 	}
 	descriptor, err := store.Read(ctx)
 	if err == nil {
-		descriptor.Join = listener.Addr().String()
+		descriptor.Join = netip.AddrPortFrom(l.address, uint16(listener.Addr().(*net.TCPAddr).Port)).String()
 		err = store.Publish(ctx, descriptor)
 	}
 	if err != nil {

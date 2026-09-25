@@ -100,8 +100,7 @@ authorize an operation.
 The following remain proposals until their owners, permissions, migration and
 acceptance contracts are implemented:
 
-- Hive joins across machines (a host-selected mesh address), named-node
-  discovery, headless launch and remote workspace composition;
+- Named-node Hive discovery, headless launch and remote workspace composition;
 - destination-owned Hub package transfer/install and durable/federated registry
   publication;
 - independent package releases and alternate overlay lifecycles;

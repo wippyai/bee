@@ -851,9 +851,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 7959,
+      "bytes": 7903,
       "id": "docs/system_map",
-      "sha256": "8ad03e47a3ffffb571632f37e2b07b1d1ce2b90e45aa5cbb43e7561a5983f60c",
+      "sha256": "afd0149f3bfbc263612a17561dd6e2fb5ff9cf17d90bbd1529fd82efc6deed1a",
       "source": "docs/development/ownership.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
@@ -883,17 +883,17 @@
       "topic": "ui"
     },
     {
-      "bytes": 8786,
+      "bytes": 8829,
       "id": "docs/desktop",
-      "sha256": "dbb0e77194229d146b8582d30429e6d25b7257f6ede9c6f34817c1658775f6f2",
+      "sha256": "58768df11b90e49f55b73aac5a0d442a5367cdea720d0e72fcb597c42e023e09",
       "source": "docs/guides/desktop.md",
       "title": "Desktop",
       "topic": "ui"
     },
     {
-      "bytes": 6167,
+      "bytes": 7895,
       "id": "docs/distributed_app_delivery",
-      "sha256": "66eff5c7f0502f86c576bbcc697bebb29f159edf035200b5b24697501decb5bd",
+      "sha256": "b62a59b039dd6b6d17ac510bea2e86bf696149d9d9444d2aab59c67f23610321",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -931,9 +931,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 18320,
+      "bytes": 19270,
       "id": "docs/application_contracts",
-      "sha256": "b2506e6fe8cefde50d7449b87e4d55ff8c7abdeced5f3d192b270954e1b6cbd6",
+      "sha256": "71ad1c01af4a45e57079b36bd0159e7fd0ad2576c6394b9847b909874b2baec3",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -1099,9 +1099,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8274,
+      "bytes": 8523,
       "id": "component/hive",
-      "sha256": "d5d92f6762e2ec5c13a53b997f508971ee2f7869701ab97305eac681152e7983",
+      "sha256": "59fcc870bf604436cbd9d759875f9465dd04bb33d5797a598d16aca241b380c6",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"
@@ -1182,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1368991,
+    "bytes": 1371905,
     "documents": 147
   }
 }

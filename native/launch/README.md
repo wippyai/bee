@@ -110,6 +110,14 @@ the node's own authority. Local clients join with the same credential.
 `internode.peer_key_source` resolves local clients from `hive/trusted` and Hive
 peers from `hive/peers`; the enrollment entry names them as `nodes` and `peers`.
 
+By default an owner binds and advertises loopback. For a Hive spanning
+machines, the host sets `BEE_MESH_ADDRESS` to an assigned, reachable IP address
+when starting each owner and when running `bee hive join`. The owner binds its
+mesh and invite listener on that address family, advertises the selected IP to
+peers, and publishes loopback aliases in the local rendezvous descriptor for
+same-machine clients. An invalid or unassigned selected address fails owner
+preparation.
+
 `bee version` is not answered by the host: the embedded pack version and the
 pinned runtime commit are not visible to `app.Host`, so the word reaches the
 owner as an application command.

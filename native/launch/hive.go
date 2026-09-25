@@ -87,6 +87,10 @@ func parseHive(args []string) (hiveCommand, error) {
 // joins the hive when its owner boots. It pins the hive node, and records the
 // hive's secret, seed, pool and the leaf the hive node certified.
 func redeemInvite(ctx context.Context, state string, line invite.Invite) (result error) {
+	address, err := selectedMeshAddress()
+	if err != nil {
+		return err
+	}
 	unlock, err := lockOwner(ctx, state)
 	if errors.Is(err, errOwnerRunning) {
 		return errors.New("this Bee is running; a node joins a hive when its owner starts, so stop its owner and join again")
@@ -128,7 +132,7 @@ func redeemInvite(ctx context.Context, state string, line invite.Invite) (result
 		return err
 	}
 	admission, pinned, err := invite.Dial(ctx, line, identity, invite.Request{Node: node,
-		Addresses: []string{meshAddress.String()}, Key: base64.RawStdEncoding.EncodeToString(public)})
+		Addresses: []string{address.String()}, Key: base64.RawStdEncoding.EncodeToString(public)})
 	if err != nil {
 		return err
 	}

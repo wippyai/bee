@@ -129,7 +129,7 @@ func TestPublisherRequiresStartedMembershipAndPreservesDescriptor(t *testing.T) 
 	dir := filepath.Join(t.TempDir(), "discovery")
 	d := sample()
 	d.ClientRevision = ClientRevision
-	component, err := Publisher(dir, d.Execution, "")
+	component, err := Publisher(dir, d.Execution, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,6 +167,28 @@ func TestPublisherRequiresStartedMembershipAndPreservesDescriptor(t *testing.T) 
 	external, err := Capture(m.node, d.Execution)
 	if err != nil || external.Transport != "192.168.1.10:45000" {
 		t.Fatalf("override: %v %v", external, err)
+	}
+}
+
+func TestPublisherUsesLocalAliasForExternalOwner(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "discovery")
+	d := sample()
+	component, err := Publisher(dir, d.Execution, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &membership{node: cluster.NodeInfo{ID: d.Node, Addr: d.Gossip, Meta: cluster.NodeMeta{
+		internode.MetadataPublicKey: d.PublicKey, internode.MetadataPort: "40002",
+	}}}
+	ctx := ctxapi.WithAppContext(context.Background(), ctxapi.NewAppContext())
+	ctx = cluster.WithMembership(ctx, m)
+	if err := component.(boot.Starter).Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	store, _ := New(dir)
+	got, err := store.Read(ctx)
+	if err != nil || got.Gossip != "127.0.0.1:40001" || got.Transport != "127.0.0.1:40002" || got.ClientRevision != ClientRevision || !got.MatchesNode(m.node) {
+		t.Fatalf("local alias = %+v, %v", got, err)
 	}
 }
 

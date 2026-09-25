@@ -5,6 +5,7 @@ package rendezvous
 import (
 	"context"
 	"errors"
+	"net/netip"
 
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/cluster"
@@ -14,7 +15,7 @@ import (
 // Register it only on the path holding the application-state lock. Its Start
 // runs after the native cluster, and failure prevents successful boot. No socket
 // is created, and no cleanup removes the next owner's descriptor.
-func Publisher(directory, execution, launch string) (boot.Component, error) {
+func Publisher(directory, execution, launch string, localAlias bool) (boot.Component, error) {
 	store, err := New(directory)
 	if err != nil {
 		return nil, err
@@ -29,6 +30,16 @@ func Publisher(directory, execution, launch string) (boot.Component, error) {
 			descriptor, err := Capture(membership.LocalNode(), execution)
 			if err != nil {
 				return err
+			}
+			if localAlias {
+				loopback := netip.MustParseAddr("127.0.0.1")
+				if endpoint, err := netip.ParseAddrPort(descriptor.Gossip); err == nil && endpoint.Addr().Is6() {
+					loopback = netip.IPv6Loopback()
+				}
+				descriptor, err = CaptureLocal(membership.LocalNode(), execution, loopback, loopback)
+				if err != nil {
+					return err
+				}
 			}
 			descriptor.Launch = launch
 			descriptor.ClientRevision = ClientRevision

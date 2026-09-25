@@ -1,10 +1,10 @@
 # Mesh owner rendezvous
 
 This package publishes public discovery data for a running Bee owner. It reuses
-native mesh endpoints; it does not open a listener. It is not yet selected in
-the public launcher.
+native mesh endpoints; it does not open a listener. The public launcher selects
+it for each retained owner.
 
-`Publisher(directory, execution)` creates a compiled boot component that depends
+`Publisher(directory, execution, launch, localAlias)` creates a compiled boot component that depends
 on the native cluster. Select it only for the owner launch holding the runtime
 application-state lock. After cluster startup it captures the local membership
 address, retained internode endpoint, node ID and public key, and writes

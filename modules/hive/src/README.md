@@ -108,9 +108,12 @@ internode connections and ends the Session; the runtime does not fence an
 established connection.
 
 A node that already joined a hive, or that other nodes joined, refuses to
-join, because one mesh has one secret. The owner binds and advertises loopback,
-so a hive spans the state directories of one host; selecting a host address
-for a hive across machines is a proposal.
+join, because one mesh has one secret. The owner binds and advertises loopback
+by default. A host can select an assigned, reachable IP address with
+`BEE_MESH_ADDRESS` for both owner startup and `bee hive join`; this permits an
+explicit invite to join nodes on different machines. The local descriptor
+still uses loopback aliases for same-machine clients. Peer membership does not
+grant access to remote desktops or destination overlay activation.
 
 ## Client
 

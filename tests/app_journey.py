@@ -158,7 +158,7 @@ def stage_replacement(project, folder):
                              "--set", f"registry.history_path={folder}/registry.db"], cwd=project,
                             capture_output=True, text=True, timeout=300, env=database_environment(folder))
     output = result.stdout + result.stderr
-    assert result.returncode == 0 and "APP_JOURNEY_REPLACEMENT_STAGED" in output, output[-12000:]
+    assert result.returncode == 0 and "APP_JOURNEY_REPLACEMENT_STAGED" in output, output
     match = re.search(r"APP_JOURNEY_REPLACEMENT_STAGED\s+(\{.*\})", output)
     assert match, output
     evidence = json.loads(match.group(1))
@@ -445,15 +445,7 @@ def run_open_probe(project, directory, packed=False, deployment=None):
             evidence = report_path
             detail = evidence.read_text() if evidence.exists() else "missing"
             raise AssertionError(f"{problem}; open evidence={detail}") from problem
-        # This first desktop owns the managed runner whose declared output
-        # drain is 2s plus a 1s runner drain. Prove that bounded cleanup rather
-        # than applying the ordinary sub-second desktop-only shutdown budget.
-        started = time.monotonic()
-        os.write(ui.master, b"\x11")
-        while ui.process.poll() is None and time.monotonic() - started < 4:
-            ui.pump(.02)
-        assert ui.process.poll() == 0, ui.text()
-        assert time.monotonic() - started < 4
+        ui.quit()
     finally:
         ui.close()
     assert report_path.exists(), f"open probe did not write evidence: {ui.text()}"

@@ -79,6 +79,13 @@ type Request = {
 -- The permission exchange the host enabled for this launch: the measured
 -- adapter, the acceptance record it stands on, and how the carrier asks.
 type Exchange = {adapter: permission.Adapter, acceptance_ref: string, acceptance_digest: string, executable_revision: string, executable_kind: string, executable_digest: string, approver_policy: string, poll_ms: integer, ttl_ms: integer}
+-- push: the verified production inbox-push acceptance: the profile-pinned
+-- adapter, the acceptance record and the executable measurement the host
+-- accepted. A fixture policy carries no acceptance and needs none. Push
+-- authorizes no tool effect, so unlike the exchange it names no approver
+-- policy and no poll window; the acceptance's recorded executable kind
+-- still binds what the digest covers.
+type Push = {adapter: permission.Adapter, acceptance_ref: string, acceptance_digest: string, executable_revision: string, executable_kind: string, executable_digest: string}
 type Plan = {
     request: Request,
     binding: classify.Binding,
@@ -93,10 +100,15 @@ type Plan = {
     -- attempt never opens with it; a recovered attempt keeps its plan so it
     -- can close its exchange on record and settle, and dispatches nothing.
     exchange_refusal: string?,
+    -- A refusal the push requirements produced at plan time: a new attempt
+    -- never opens with it; a recovered attempt keeps its plan so it can
+    -- settle, and dispatches no inbox item.
+    push_refusal: string?,
     prepare_target: string,
     resume_ref: string?,
     normalize_target: string,
     exchange: Exchange?,
+    push: Push?,
     -- The gateway projection the launch policy admits: tools and the
     -- host-approved MCP configuration. The binding is admitted at open.
     gateway: placement_types.Gateway?,
@@ -167,7 +179,35 @@ local function digest_of(value: unknown): (string?, string?)
 end
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration_digest: string, gateway: placement_types.Gateway?}
+type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, push: Push?, configuration_digest: string, gateway: placement_types.Gateway?}
+-- verify_acceptance: the acceptance record a host declaration names,
+-- decoded and matched against this snapshot's binding, profile, adapter
+-- and proof fixture. The permission exchange and production inbox push
+-- stand on the same record type; the label names which check failed.
+type DeclaredAcceptance = {adapter_ref: string, acceptance_ref: string, fixture_digest: string}
+local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAcceptance, binding: classify.Binding, profile: classify.Profile, fixture: boolean, label: string): (Push?, string?)
+    if not fixture and (not profile.permission.eligible or profile.permission.adapter_ref ~= declared.adapter_ref) then
+        return nil, "profile " .. profile.id .. " does not pin permission adapter " .. declared.adapter_ref
+    end
+    local adapter_entry = catalog.entry(pinned, declared.adapter_ref)
+    if not adapter_entry then return nil, "permission adapter " .. declared.adapter_ref .. " is not in the registry" end
+    local adapter_meta = bounds.object(adapter_entry.meta) or {}
+    if adapter_meta.type ~= "harness.permission_adapter" then return nil, declared.adapter_ref .. " is not a harness.permission_adapter" end
+    local adapter_data = bounds.object(adapter_entry.data) or {}
+    local adapter, adapter_error = permission.decode(declared.adapter_ref, adapter_data.adapter)
+    if not adapter then return nil, "permission adapter " .. declared.adapter_ref .. ": " .. tostring(adapter_error) end
+    local record_entry = catalog.entry(pinned, declared.acceptance_ref)
+    if not record_entry then return nil, "acceptance record " .. declared.acceptance_ref .. " is not in the registry" end
+    local record_meta = bounds.object(record_entry.meta) or {}
+    if record_meta.type ~= acceptance.ENTRY_TYPE then return nil, declared.acceptance_ref .. " is not a " .. acceptance.ENTRY_TYPE end
+    local record_data = bounds.object(record_entry.data) or {}
+    local record, record_error = acceptance.decode(declared.acceptance_ref, record_data.acceptance)
+    if not record then return nil, "acceptance record " .. declared.acceptance_ref .. ": " .. tostring(record_error) end
+    local mismatch = acceptance.matches(record, {binding_id = binding.binding_id, profile_id = profile.id, binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry,
+        adapter_ref = declared.adapter_ref, adapter_digest = adapter.digest, fixture_digest = declared.fixture_digest})
+    if mismatch then return nil, label .. " acceptance: " .. mismatch end
+    return {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest}, nil
+end
 local function measure(request: Request): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
@@ -201,28 +241,21 @@ local function measure(request: Request): (Measured?, string?)
     local exchange: Exchange? = nil
     local declared = launch_policy.permission_exchange
     if declared then
-        if not launch_policy.fixture and (not profile.permission.eligible or profile.permission.adapter_ref ~= declared.adapter_ref) then
-            return nil, "profile " .. profile.id .. " does not pin permission adapter " .. declared.adapter_ref
-        end
         if not request.workspace_id then return nil, "a permission exchange needs the request's workspace" end
-        local adapter_entry = catalog.entry(pinned, declared.adapter_ref)
-        if not adapter_entry then return nil, "permission adapter " .. declared.adapter_ref .. " is not in the registry" end
-        local adapter_meta = bounds.object(adapter_entry.meta) or {}
-        if adapter_meta.type ~= "harness.permission_adapter" then return nil, declared.adapter_ref .. " is not a harness.permission_adapter" end
-        local adapter_data = bounds.object(adapter_entry.data) or {}
-        local adapter, adapter_error = permission.decode(declared.adapter_ref, adapter_data.adapter)
-        if not adapter then return nil, "permission adapter " .. declared.adapter_ref .. ": " .. tostring(adapter_error) end
-        local record_entry = catalog.entry(pinned, declared.acceptance_ref)
-        if not record_entry then return nil, "acceptance record " .. declared.acceptance_ref .. " is not in the registry" end
-        local record_meta = bounds.object(record_entry.meta) or {}
-        if record_meta.type ~= acceptance.ENTRY_TYPE then return nil, declared.acceptance_ref .. " is not a " .. acceptance.ENTRY_TYPE end
-        local record_data = bounds.object(record_entry.data) or {}
-        local record, record_error = acceptance.decode(declared.acceptance_ref, record_data.acceptance)
-        if not record then return nil, "acceptance record " .. declared.acceptance_ref .. ": " .. tostring(record_error) end
-        local mismatch = acceptance.matches(record, {binding_id = binding.binding_id, profile_id = profile.id, binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry,
-            adapter_ref = declared.adapter_ref, adapter_digest = adapter.digest, fixture_digest = declared.fixture_digest})
-        if mismatch then return nil, "permission exchange acceptance: " .. mismatch end
-        exchange = {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest, approver_policy = declared.approver_policy, poll_ms = declared.poll_ms, ttl_ms = declared.ttl_ms}
+        local verified, verify_error = verify_acceptance(pinned, declared, binding, profile, launch_policy.fixture, "permission exchange")
+        if not verified then return nil, verify_error end
+        exchange = {adapter = verified.adapter, acceptance_ref = verified.acceptance_ref, acceptance_digest = verified.acceptance_digest,
+            executable_revision = verified.executable_revision, executable_kind = verified.executable_kind, executable_digest = verified.executable_digest,
+            approver_policy = declared.approver_policy, poll_ms = declared.poll_ms, ttl_ms = declared.ttl_ms}
+    end
+    local push: Push? = nil
+    local declared_push = launch_policy.push_acceptance
+    if declared_push then
+        local verified_push, push_error = verify_acceptance(pinned, declared_push, binding, profile, launch_policy.fixture, "push")
+        if not verified_push then return nil, push_error end
+        push = verified_push
+    elseif launch_policy.inbox_push and not launch_policy.fixture then
+        return nil, "inbox push needs a pinned executable acceptance before production admission"
     end
     -- The carrier carries only host-selected configuration inputs. Placement
     -- renders and freezes the driver's final delivery with its own HOME path.
@@ -250,7 +283,7 @@ local function measure(request: Request): (Measured?, string?)
     local configuration_digest, configuration_error = configuration_protocol.digest({provider_ref = launch_policy.provider_ref,
         provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder, gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
     if not configuration_digest then return nil, configuration_error end
-    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
+    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange, push = push,
         configuration_digest = configuration_digest, gateway = gateway}
 end
 -- A launch may declare a host file it needs before it starts. Bee never
@@ -269,7 +302,7 @@ end
 function M.plan(io: IO, request: Request): (Plan?, string?)
     local measured, measure_error = measure(request)
     if not measured then return nil, measure_error end
-    local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
+    local binding, profile, launch_policy, placement_binding, exchange, push, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.push, measured.configuration_digest, measured.gateway
     if launch_policy.provider_ref and not profile.private_home then
         return nil, "selected provider configuration requires a private-home profile"
     end
@@ -300,6 +333,11 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if not private_home and not launch_policy.allow_host_home then
         return nil, "launch policy does not authorize host HOME"
     end
+    -- A fresh attempt on a driver without a between-turns controller starts
+    -- carrying its oldest outstanding inbox item in the brief. The plan owns
+    -- the request table from here; nothing downstream rereads the caller's
+    -- brief, and the carry is idempotent across repeated plans.
+    request.brief = M.carry_brief(io, request, binding.driver_id, profile.mode)
     local prepare_request: {[string]: unknown} = {}
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
     prepare_request.profile_id = request.profile_id
@@ -309,9 +347,11 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     -- prepares the launch shape that keeps stdin open for the responses.
     if exchange then prepare_request.permission_exchange = true end
     if launch_policy.inbox_push then
-        if not launch_policy.fixture then return nil, "inbox push needs a pinned executable acceptance before production admission" end
         if binding.driver_id ~= "claude" or profile.mode == "window" or profile.protocol ~= "stream-json" then
             return nil, "inbox push requires a Claude structured stream-json profile"
+        end
+        if not launch_policy.fixture and not push then
+            return nil, "inbox push needs a pinned executable acceptance before production admission"
         end
         prepare_request.control_enabled = true
     end
@@ -357,20 +397,36 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local function refuse_exchange(reason: string)
         if not exchange_refusal then exchange_refusal = reason end
     end
-    if exchange and not launch_policy.fixture then
-        -- A production exchange needs a runtime that measures a stream and
-        -- a measurement volume proven read-only; the report is measured,
-        -- never declared.
+    local push_refusal: string? = nil
+    local function refuse_push(reason: string)
+        if not push_refusal then push_refusal = reason end
+    end
+    -- capabilities_refusal: the placement's executable-measurement proof
+    -- under the label that needs it, or the hard error when the
+    -- capabilities call itself fails. A production channel needs a runtime
+    -- that measures a stream and a measurement volume proven read-only;
+    -- the report is measured, never declared.
+    local function capabilities_refusal(label: string): (string?, string?)
         local capabilities_target = placement_binding.methods.capabilities
         if not capabilities_target then
-            refuse_exchange("production exchange: selected placement cannot measure an executable")
-        else
-            local capabilities_value, capabilities_error = must(io, capabilities_target, {})
-            if capabilities_error then return nil, capabilities_error end
-            local reported = bounds.object((bounds.object(capabilities_value) or {}).executable_measurement) or {}
-            if reported.streaming ~= true then refuse_exchange("production exchange: this runtime cannot measure an executable as a stream") end
-            if reported.read_only_volume ~= true then refuse_exchange("production exchange: the measurement volume is not proven read-only on this runtime: " .. tostring(reported.detail)) end
+            return label .. ": selected placement cannot measure an executable", nil
         end
+        local capabilities_value, capabilities_error = must(io, capabilities_target, {})
+        if capabilities_error then return nil, capabilities_error end
+        local reported = bounds.object((bounds.object(capabilities_value) or {}).executable_measurement) or {}
+        if reported.streaming ~= true then return label .. ": this runtime cannot measure an executable as a stream", nil end
+        if reported.read_only_volume ~= true then return label .. ": the measurement volume is not proven read-only on this runtime: " .. tostring(reported.detail), nil end
+        return nil, nil
+    end
+    if exchange and not launch_policy.fixture then
+        local refusal, capabilities_error = capabilities_refusal("production exchange")
+        if capabilities_error then return nil, capabilities_error end
+        if refusal then refuse_exchange(refusal) end
+    end
+    if push and not launch_policy.fixture then
+        local refusal, capabilities_error = capabilities_refusal("production push")
+        if capabilities_error then return nil, capabilities_error end
+        if refusal then refuse_push(refusal) end
     end
     if launch.executable:sub(1, 1) == "/" then
         local measure_target = placement_binding.methods.measure_executable
@@ -381,15 +437,18 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
             if reply.ok then
                 local measured = bounds.object(reply.value) or {}
                 measurement = {revision = tostring(measured.revision), kind = tostring(measured.kind), digest = tostring(measured.digest)}
-            elseif exchange and not launch_policy.fixture then
+            elseif (exchange or push) and not launch_policy.fixture then
                 local fault = reply.error or {code = "UNAVAILABLE", message = "measurement failed"}
-                refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message)
+                if exchange then refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message) end
+                if push then refuse_push("production push: executable measurement: " .. fault.code .. ": " .. fault.message) end
             end
-        elseif exchange and not launch_policy.fixture then
-            refuse_exchange("production exchange: selected placement cannot measure the executable")
+        elseif (exchange or push) and not launch_policy.fixture then
+            if exchange then refuse_exchange("production exchange: selected placement cannot measure the executable") end
+            if push then refuse_push("production push: selected placement cannot measure the executable") end
         end
-    elseif exchange and not launch_policy.fixture then
-        refuse_exchange("production exchange: the launch policy binds no absolute executable to measure")
+    elseif (exchange or push) and not launch_policy.fixture then
+        if exchange then refuse_exchange("production exchange: the launch policy binds no absolute executable to measure") end
+        if push then refuse_push("production push: the launch policy binds no absolute executable to measure") end
     end
     if exchange and measurement then
         -- A production exchange covers a measured native image only: a
@@ -400,6 +459,14 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         if exchange.executable_revision ~= measurement.revision then refuse_exchange("permission exchange acceptance: executable measurement revision changed since acceptance") end
         if exchange.executable_kind ~= measurement.kind then refuse_exchange("permission exchange acceptance: executable kind changed since acceptance") end
         if exchange.executable_digest ~= measurement.digest then refuse_exchange("permission exchange acceptance: executable measurement changed since acceptance") end
+    end
+    if push and measurement then
+        -- A production push covers the executable the acceptance measured:
+        -- push authorizes no tool effect, so the recorded kind stands, and
+        -- any revision, kind or digest swap still refuses.
+        if push.executable_revision ~= measurement.revision then refuse_push("push acceptance: executable measurement revision changed since acceptance") end
+        if push.executable_kind ~= measurement.kind then refuse_push("push acceptance: executable kind changed since acceptance") end
+        if push.executable_digest ~= measurement.digest then refuse_push("push acceptance: executable measurement changed since acceptance") end
     end
     local environment: {[string]: string} = {}
     for name, value in pairs(request.environment) do environment[name] = value end
@@ -412,10 +479,12 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if request.working_directory then launch.working_directory_ref = request.working_directory end
     local measured_exchange: {[string]: unknown}? = nil
     if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
+    local measured_push: {[string]: unknown}? = nil
+    if push then measured_push = {adapter = push.adapter.digest, acceptance = push.acceptance_ref, acceptance_digest = push.acceptance_digest} end
     local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry,
         placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods,
         launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, reauthorize = request.reauthorize,
-        environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
+        environment = environment, permission = measured_exchange, push = measured_push, configuration = configuration_digest, gateway = gateway})
     if not plan_digest then return nil, digest_error end
     local placement_request: placement_types.LaunchRequest = {
         preferences = request.preferences,
@@ -429,7 +498,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         placement_request.environment_refs.HOME = "bee.env:machine_home"
     end
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
-        placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
+        placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, push = push, push_refusal = push_refusal, gateway = gateway}, nil
 end
 -- Thread operations of the open sequence key on the attempt and the step,
 -- so a start retried after an ambiguous failure replays the same records
@@ -610,8 +679,53 @@ end
 function M.placement_target(plan: Plan, method: string): string?
     return plan.placement_binding.methods[method]
 end
+-- attach_action: a fresh sequential attempt on an action an earlier attempt
+-- already admitted. The admit call reports the action exists; this verifies
+-- the existing action is the requester's own and discovers its latest
+-- settled attempt to chain, so two starters cannot prepare concurrently.
+-- Anything unverified fails closed with the admit refusal. The owner still
+-- enforces the chain, the open thread and the single live attempt.
+M.ATTACH_SCAN_PAGES = 8
+M.ATTACH_PAGE_RECORDS = 64
+function M.attach_action(io: IO, request: Request): (string?, boolean, string?)
+    local owned = false
+    local previous: string? = nil
+    local previous_sequence = 0
+    local cursor = 0
+    for _ = 1, M.ATTACH_SCAN_PAGES do
+        local page, read_error = must(io, M.THREADS .. ":read_after", {thread_id = request.thread_id, cursor = cursor, limit = M.ATTACH_PAGE_RECORDS})
+        if read_error then return nil, false, read_error end
+        local body = bounds.object(page)
+        if not body then return nil, false, "read_after answered without an object" end
+        local records = body.records
+        if type(records) ~= "table" then return nil, false, "read_after answered without records" end
+        for _, raw in ipairs(records :: {unknown}) do
+            local record = bounds.object(raw)
+            if record and record.action_id == request.action_id then
+                if record.kind == "action.admitted" then
+                    local admitted = bounds.object(record.body)
+                    if admitted and admitted.principal_id == request.owner_id then owned = true end
+                elseif record.kind == "receipt" then
+                    local receipt = bounds.object(record.body)
+                    local attempt = bounds.id(record.attempt_id)
+                    local sequence = bounds.integer(record.sequence)
+                    if receipt and receipt.scope == "attempt" and attempt and sequence and sequence > previous_sequence then
+                        previous, previous_sequence = attempt, sequence
+                    end
+                end
+            end
+        end
+        if body.has_more ~= true then break end
+        local scanned = bounds.integer(body.scanned_through)
+        if not scanned then return nil, false, "read_after answered without a cursor" end
+        cursor = scanned
+    end
+    if not owned then return nil, false, nil end
+    return previous, true, nil
+end
 function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, FailedPreparation?)
     if plan.exchange_refusal then return nil, plan.exchange_refusal, nil end
+    if plan.push_refusal then return nil, plan.push_refusal, nil end
     local request = plan.request
     local attempt_prepared = false
     local action_admitted = false
@@ -619,6 +733,11 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     local gateway_binding: string? = nil
     local grant_refs: {string} = {}
     for _, grant in ipairs(request.resources) do grant_refs[#grant_refs + 1] = grant.grant_ref end
+    -- A sequential attempt chains the action's latest settled attempt. A
+    -- resumed attempt names its predecessor; a fresh one discovers it when
+    -- the action is already admitted, so two starters still serialize on
+    -- the owner's chain check.
+    local expected_previous: string? = request.previous_attempt_id
     if not request.previous_attempt_id then
         -- Opening an interactive UI is an action even with no initial prompt.
         -- Describe that action in the ledger without sending text to the child.
@@ -628,11 +747,15 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
             binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = action_input}}
         if request.parent_action_id then admitted_body.parent_action_id = request.parent_action_id end
         local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = admitted_body}, "admit")
-        if admit_error then return nil, admit_error, nil end
+        if admit_error then
+            local previous, attached, attach_error = M.attach_action(io, request)
+            if not attached then return nil, attach_error or admit_error, nil end
+            expected_previous = previous
+        end
         action_admitted = true
     end
     step(io, "admitted")
-    local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, expected_previous_attempt_id = request.previous_attempt_id, prepared = {
+    local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, expected_previous_attempt_id = expected_previous, prepared = {
         binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry,
         placement_binding = plan.placement_binding.binding_id, placement_binding_digest = plan.placement_binding.binding_digest,
         placement_attempt_id = request.attempt_id, plan_digest = plan.plan_digest}}, "prepare")
@@ -1312,19 +1435,103 @@ function M.offer_inbox(io: IO, session: Session): (Offer?, string?)
         payload_digest = digest :: string, message_id = message_id :: string, message_kind = message_kind :: string, sender_action_id = sender_action :: string,
         sender_thread_id = sender_thread :: string, sender_node_id = sender_node :: string, content = content, in_reply_to = in_reply_to, state = state :: string, dispatch = item.dispatch :: boolean, offer_count = offer_count :: integer}, nil
 end
-function M.push_line(item: Offer): (string?, string?)
+-- inbox_prompt: the identified prompt naming one inbox item, shared by the
+-- Claude controller push line and the bounded-driver attempt brief. The
+-- offer count travels only where an offer was made.
+type InboxPromptItem = {thread_id: string, action_id: string, record_id: string, inbox_sequence: integer, offer_count: integer?,
+    payload_digest: string, message_id: string, message_kind: string, sender_action_id: string, sender_thread_id: string,
+    sender_node_id: string, content: unknown, in_reply_to: unknown?}
+function M.inbox_prompt(item: InboxPromptItem): (string?, string?)
     local context: Object = {thread_id = item.thread_id, action_id = item.action_id, record_id = item.record_id, inbox_sequence = item.inbox_sequence,
-        offer_count = item.offer_count, payload_digest = item.payload_digest,
+        payload_digest = item.payload_digest,
         message_id = item.message_id, message_kind = item.message_kind, sender_action_id = item.sender_action_id,
         sender_thread_id = item.sender_thread_id, sender_node_id = item.sender_node_id, content = item.content}
+    if item.offer_count then context.offer_count = item.offer_count end
     if item.in_reply_to then context.in_reply_to = item.in_reply_to end
     local encoded, encode_error = canonical.encode(context)
     if not encoded then return nil, encode_error end
-    local prompt = "Bee action inbox item. Handle this record once. Use session_ack with inbox_sequence, or session_reply to the sender with in_reply_to naming this thread_id and record_id. " .. encoded
+    return "Bee action inbox item. Handle this record once. Use session_ack with inbox_sequence, or session_reply to the sender with in_reply_to naming this thread_id and record_id. " .. encoded, nil
+end
+function M.push_line(item: Offer): (string?, string?)
+    local prompt, prompt_error = M.inbox_prompt({thread_id = item.thread_id, action_id = item.action_id, record_id = item.record_id,
+        inbox_sequence = item.inbox_sequence, offer_count = item.offer_count, payload_digest = item.payload_digest,
+        message_id = item.message_id, message_kind = item.message_kind, sender_action_id = item.sender_action_id,
+        sender_thread_id = item.sender_thread_id, sender_node_id = item.sender_node_id, content = item.content, in_reply_to = item.in_reply_to})
+    if not prompt then return nil, prompt_error end
     local line, line_error = canonical.encode({type = "user", message = {role = "user", content = prompt}})
     if not line then return nil, line_error end
     if #line + 1 > checkpoint.MAX_PENDING_WRITE_BYTES then return nil, "inbox item exceeds the controller input bound" end
     return line .. "\n", nil
+end
+-- carry_brief: for a fresh structured attempt on a driver without a
+-- between-turns controller, prepend the oldest outstanding inbox item to
+-- the brief, so the new attempt starts carrying it. Claude keeps its
+-- controller push, windows keep their hook boundary, and resumed attempts
+-- keep their provider session: no fixture proves inbox-carry combined
+-- with any of those, so none of them is augmented. A read failure or a
+-- missing action leaves the brief alone; delivery still waits in
+-- session_inbox. The carry is idempotent, so planning the same request
+-- twice never prefixes twice.
+M.INBOX_CARRY_LIST_LIMIT = 8
+M.INBOX_CARRY_EXCERPT_BYTES = 4096
+M.BRIEF_BYTES = 16384
+local function carry_text(content: unknown): string
+    local object = bounds.object(content)
+    if object then
+        local text = bounds.text((object :: Object).text)
+        if text then return text end
+    end
+    local encoded = canonical.encode(content)
+    if encoded then return encoded end
+    return "undecodable inbox content"
+end
+function M.carry_brief(io: IO, request: Request, driver_id: string, mode: string): string
+    local brief = request.brief
+    if driver_id == "claude" or mode == "window" then return brief end
+    if request.previous_attempt_id ~= nil or request.session_ref ~= nil then return brief end
+    local page, list_error = must(io, M.THREADS .. ":inbox_list", {thread_id = request.thread_id, action_id = request.action_id,
+        after_sequence = 0, limit = M.INBOX_CARRY_LIST_LIMIT})
+    if list_error then return brief end
+    local items = (bounds.object(page) or {}).items
+    if type(items) ~= "table" then return brief end
+    local oldest: Object? = nil
+    for _, raw in ipairs(items :: {unknown}) do
+        local item = bounds.object(raw)
+        if item then
+            local state = bounds.member(item.state, {"committed", "offered", "transport_accepted", "acknowledged", "replied"})
+            if state and state ~= "acknowledged" and state ~= "replied" then
+                oldest = item
+                break
+            end
+        end
+    end
+    if not oldest then return brief end
+    local record_id, message_id = bounds.id(oldest.record_id), bounds.id(oldest.message_id)
+    local sequence = bounds.integer(oldest.inbox_sequence)
+    local sender_action, sender_thread, sender_node = bounds.id(oldest.sender_action_id), bounds.id(oldest.sender_thread_id), bounds.id(oldest.sender_node_id)
+    local digest = bounds.id(oldest.payload_digest)
+    local kind = bounds.member(oldest.message_kind, {"request", "reply"})
+    local content = bounds.object(oldest.content)
+    if not record_id or not message_id or not sequence or sequence < 1 or not sender_action or not sender_thread or not sender_node
+        or not digest or not kind or not content then return brief end
+    if brief:find(record_id, 1, true) then return brief end
+    local excerpt = carry_text(content)
+    local room = M.BRIEF_BYTES - #brief - 1 - 700
+    local capped = math.min(room, M.INBOX_CARRY_EXCERPT_BYTES)
+    local carried: unknown = content
+    if capped < #excerpt then
+        if capped > 128 then
+            carried = {text = excerpt:sub(1, capped - 128) .. "...[truncated; read the full item with session_inbox]"}
+        else
+            carried = {text = "[content omitted: exceeds the brief bound; read the full item with session_inbox]"}
+        end
+    end
+    local prompt, prompt_error = M.inbox_prompt({thread_id = request.thread_id, action_id = request.action_id, record_id = record_id,
+        inbox_sequence = sequence, payload_digest = digest, message_id = message_id, message_kind = kind, sender_action_id = sender_action,
+        sender_thread_id = sender_thread, sender_node_id = sender_node, content = carried, in_reply_to = oldest.in_reply_to})
+    if not prompt then return brief end
+    if #prompt + 1 + #brief > M.BRIEF_BYTES then return brief end
+    return prompt .. "\n" .. brief
 end
 -- A second Claude turn is admitted before its user line is written. The
 -- previous terminal remains in the checkpoint while idle, so recovery can

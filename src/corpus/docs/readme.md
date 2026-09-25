@@ -22,6 +22,7 @@ generator when the corpus is intentionally updated.
 | Threads, Timeline, subscriptions, and delivery | [Threads](reference/threads.md) |
 | Node metadata, synchronization, and approval inbox | [Sync and inbox](reference/sync-and-inbox.md), [approvals](reference/approvals.md) |
 | Native executable, updates, and I/O events | [Native distribution](operations/native.md) |
+| Hive network reachability and runtime proposal | [Reachability study](operations/hive-reachability.md) |
 | Runtime integration and upstream boundaries | [Runtime integration](development/runtime.md) |
 | Release artifacts and publication | [Releasing](operations/releasing.md) |
 | GitHub protections and repository settings | [GitHub setup](development/github.md) |

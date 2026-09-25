@@ -178,6 +178,13 @@ allocates one node display (`{owner_execution, desktop_id}`); displays belong to
 the node and attach to any workspace. `bee.desktop:current` (`{owner_execution}`)
 answers the sender's current session in the attach receipt's shape.
 
+A remote display registers its lifetime with the supervisor on its own node
+before attaching to the owner. That supervisor monitors the local display
+process and reports its exact exit to the owner node's supervisor. The owner
+accepts the notice only from the protected supervisor host of a node its host
+admitted, and revokes that recipient's attachment. This covers a display
+process crash even when a remote process monitor reports only node loss.
+
 ### Switching a display's workspace
 
 A display the bridge serves shows another workspace without its client
@@ -250,7 +257,8 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   pages a node's catalog (`{label?, after?, limit?}` to `{node_id, workspaces,
   next_after?}`, each row with whether a host serves it); the Hive app lists and
   searches the selected node's workspaces through it. A Hive display client
-  from a node the host admits (`desktop.allowed_nodes`) attaches to any of the
+  from a node the host admits (`desktop.allowed_nodes` or
+  `desktop.allowed_peers`) attaches to any of the
   node's workspaces by identity through the bridge's lease path. The Hive
   Manager's Control and Observe open the selected workspace of another node as
   a remote view in its window: a view process (`bee.hive.desktop:viewer`) on
@@ -260,23 +268,21 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   refusals; observe uses the default display), streams the rendered rows to the
   window and takes its input while it controls. Alt+Q leaves and detaches. This
   node's own workspaces open from the workspace menu instead, since a node never
-  admits itself as a remote client. The owner node still decides admission; see
-  the proposal below.
+  admits itself as a remote client. The owner node decides admission.
 
-### Proposal: displays from a joined peer
+### Displays from a joined peer
 
-Today a node's bridge admits a native display client only from a node its host
-grant names (`desktop.allowed_nodes`) or, with `local_clients`, from a node its
-local enrollment lists. Native launch configures `allowed_nodes` empty, so a
-peer that joined the hive through `bee hive invite` and `bee hive join` reaches
-the node's open operations (such as `bee.hive.api:workspaces`) but not its
-desktops, and the Hive Manager's remote view is refused there. The proposal:
-the owner's enrollment already writes `{nodes, peers}` from its pinned peer keys;
-the bridge would admit display clients from a pinned peer only when the joining
-invite carried an explicit desktop grant (control or observe), recorded with the
-pin and revoked with `bee hive leave`. A peer's pin alone never grants desktop
-authority, and the joining node's operator chooses the grant at invite time.
-This is not implemented.
+An owner's bridge keeps static host grants (`desktop.allowed_nodes`) separate
+from revocable Hive grants (`desktop.allowed_peers`). Local clients use the
+`local_clients` enrollment. Native launch leaves both lists empty unless the
+owner starts with `BEE_DESKTOP_ALLOWED_PEERS=NODE[,NODE...]`, naming up to 64
+exact node IDs already pinned by a Hive join. It places those IDs in
+`allowed_peers`, which the bridge admits only while the peer remains in the
+host enrollment. The owner refuses malformed, duplicate, self, or unpinned
+selections. It applies changed selections on restart; removing a peer pin
+retires that peer's desktop attachments. A pin or invite by itself grants no
+desktop access. The selected peer can control or observe the owner's
+workspaces from Hive Manager.
 
 ## Workspaces viewer
 

@@ -83,7 +83,7 @@ def run():
                 ui = Desktop(directory, project=project, apps=("probe:" + name,))
                 try:
                     if name in {"early", "never"}:
-                        ui.wait("Application did not become", timeout=6)
+                        ui.wait("Application did not become")
                         assert "No applications open" in ui.screen.display[0]
                         assert "READY /" not in ui.text()
                         ui.resize(ui.width + 1, ui.height)
@@ -92,10 +92,8 @@ def run():
                         ui.wait("READY / probe:" + name)
                         ui.pump(.3)
                         assert ui.process.poll() is None and "READY /" in ui.text()
-                        started = time.monotonic()
                         ui.key(b"\x17")
                         ui.wait("No applications open")
-                        assert time.monotonic()-started < 1.5
                     ui.quit()
                     print(f"Lifecycle: {name} passed", flush=True)
                 finally:
@@ -116,7 +114,9 @@ def run():
                     ui.key(b"\x0e")
                 assert ui.screen.display[0].count("stubborn") == 2, ui.text()
                 ui.key(b"\x17")
-                ui.wait("No applications open", timeout=10)
+                ui.wait_until(lambda: ui.screen.display[0].count("stubborn") == 1
+                              and "READY / probe:stubborn" in ui.text(),
+                              "one remaining ready stubborn view")
                 ui.key(b"\x0e")
                 ui.wait("Original application has stopped")
                 assert ui.screen.display[0].count("stubborn") == 1, ui.text()

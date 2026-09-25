@@ -46,10 +46,30 @@ func runHive(ctx context.Context, out io.Writer, client *hive.Join, directory st
 			return rendezvous.ErrDescriptor
 		}
 		line := invite.Invite{ID: minted.ID, Secret: minted.Secret, Address: address, Node: owner.Node, Fingerprint: invite.Fingerprint(key)}
+		line.Candidates, err = joinCandidates(address)
+		if err != nil {
+			return err
+		}
+		for len(line.String()) > invite.MaxInviteBytes && len(line.Candidates) > 0 {
+			line.Candidates = line.Candidates[:len(line.Candidates)-1]
+		}
+		if _, err := invite.Parse(line.String()); err != nil {
+			return err
+		}
 		if _, err := fmt.Fprintln(out, line.String()); err != nil {
 			return err
 		}
 		_, err = io.WriteString(os.Stderr, inviteHint(line.String()))
+		if err != nil {
+			return err
+		}
+		if guest := wslNATAddress(); guest != "" {
+			gossip, gossipErr := netip.ParseAddrPort(owner.Gossip)
+			transport, transportErr := netip.ParseAddrPort(owner.Transport)
+			if gossipErr == nil && transportErr == nil {
+				_, err = io.WriteString(os.Stderr, wslNATWarning(guest, address.Port(), gossip.Port(), transport.Port()))
+			}
+		}
 		return err
 	case hiveInvites:
 		records, err := client.Invites(ctx)

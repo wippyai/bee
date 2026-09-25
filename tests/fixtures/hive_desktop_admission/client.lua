@@ -64,11 +64,13 @@ local function main(execution: string, scenario: string?, parent: string?)
     -- The raw catalog probe has done its single read. Presentation owns its
     -- own Hive reply subscription, so the fixture cannot retain this one.
     process.unlisten(replies)
+    local attach_count = 0
     local function attach(mode: "control" | "observe")
+        attach_count = attach_count + 1
         local target, target_error = display.target("node-0", execution, workspace_id, desktop_id, mode)
         if not target then error(tostring(target_error)) end
         local view, open_error = display.open(target)
-        if not view then error("display attach refused: " .. tostring(open_error and open_error.message)) end
+        if not view then error("display attach #" .. tostring(attach_count) .. " refused: " .. tostring(open_error and open_error.message)) end
         return view
     end
     local function text(view, needle: string)

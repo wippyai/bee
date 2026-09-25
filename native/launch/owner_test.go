@@ -157,6 +157,62 @@ func TestPrepareDaemonComposesNoFolderWorkspace(t *testing.T) {
 	}
 }
 
+func TestPrepareOwnerDesktopPeerGrantRequiresPinnedPeer(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("BEE_MESH_ADDRESS", "")
+	t.Setenv("BEE_DESKTOP_ALLOWED_PEERS", "bee-owner-peer")
+	if _, _, err := prepareOwner(state, false); err == nil || !strings.Contains(err.Error(), "not a pinned Hive peer") {
+		t.Fatalf("unpinned desktop peer grant was accepted: %v", err)
+	}
+	peer, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := ownerPeersDirectory(state)
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "bee-owner-peer.pub"), []byte(base64.RawStdEncoding.EncodeToString(peer)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	config, release, err := prepareOwner(state, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = release() }()
+	input, _ := config.Get("override.bee.hive.service:supervisor_service:input")
+	settings := input.([]any)[0].(map[string]any)
+	bridge := settings["desktop"].(map[string]any)
+	if static := bridge["allowed_nodes"].([]any); len(static) != 0 {
+		t.Fatalf("native peer selection changed static desktop grants: %#v", static)
+	}
+	allowed := bridge["allowed_peers"].([]any)
+	if len(allowed) != 1 || allowed[0] != "bee-owner-peer" {
+		t.Fatalf("desktop allowed_peers = %#v", allowed)
+	}
+}
+
+func TestDesktopPeerGrantRejectsInvalidSelection(t *testing.T) {
+	state := t.TempDir()
+	peer, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := ownerPeersDirectory(state)
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "bee-owner-peer.pub"), []byte(base64.RawStdEncoding.EncodeToString(peer)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"bee-owner-peer,bee-owner-peer", "bee-owner-peer,", "../outside", ownerNodeName(state)} {
+		t.Setenv("BEE_DESKTOP_ALLOWED_PEERS", value)
+		if _, err := selectedDesktopPeers(state); err == nil {
+			t.Fatalf("invalid desktop peer selection %q was accepted", value)
+		}
+	}
+}
+
 func TestPrepareOwnerIsIdempotentAcrossRuns(t *testing.T) {
 	state := t.TempDir()
 	host := newHost(systemHostResolver())

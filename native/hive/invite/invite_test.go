@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -39,9 +40,102 @@ func TestInviteLineRoundTripsExactly(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse %q: %v", line, err)
 		}
-		if parsed != original {
+		if !reflect.DeepEqual(parsed, original) {
 			t.Fatalf("parsed %+v, want %+v", parsed, original)
 		}
+	}
+}
+
+func TestInviteCarriesBoundedTypedCandidates(t *testing.T) {
+	item := sample(netip.MustParseAddrPort("127.0.0.1:40123"), identity(t))
+	item.Candidates = []Candidate{
+		{Kind: "interface", Scope: "lan", Endpoint: "192.168.1.4:40123"},
+		{Kind: "tailnet", Scope: "tailnet", Endpoint: "[fd7a:115c:a1e0::1]:40123"},
+		{Kind: "magicdns", Scope: "tailnet", Endpoint: "bee.tailnet.ts.net:40123"},
+	}
+	line := item.String()
+	parsed, err := Parse(line)
+	if err != nil || !reflect.DeepEqual(parsed, item) || len(line) > 1024 {
+		t.Fatalf("candidate round trip = %+v, %v, bytes %d", parsed, err, len(line))
+	}
+	item.Candidates = append(item.Candidates, item.Candidates...)
+	item.Candidates = append(item.Candidates, item.Candidates...)
+	if _, err := Parse(item.String()); !errors.Is(err, ErrInvite) {
+		t.Fatalf("accepted too many candidates: %v", err)
+	}
+}
+
+func TestDialTriesCandidatesAndReportsEachFailure(t *testing.T) {
+	hive := identity(t)
+	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) (Admission, *Refused) {
+		return Admission{Node: "bee-owner-0123456789abcdef", Gossip: "127.0.0.1:1"}, nil
+	})
+	item := sample(netip.MustParseAddrPort("127.0.0.1:1"), hive)
+	item.Candidates = []Candidate{{Kind: "interface", Scope: "host", Endpoint: address.String()}}
+	_, _, selected, err := DialCandidates(context.Background(), item, identity(t), Request{Node: "bee-owner-joiner"})
+	if err != nil || selected.Endpoint != address.String() {
+		t.Fatalf("selected = %+v, %v", selected, err)
+	}
+	item.Candidates[0].Endpoint = "127.0.0.1:2"
+	_, _, _, err = DialCandidates(context.Background(), item, identity(t), Request{Node: "bee-owner-joiner"})
+	if err == nil || !strings.Contains(err.Error(), "127.0.0.1:1") || !strings.Contains(err.Error(), "127.0.0.1:2") {
+		t.Fatalf("missing per-candidate errors: %v", err)
+	}
+}
+
+func TestDialAcrossASecondLocalInterface(t *testing.T) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var external netip.Addr
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addresses, err := iface.Addrs()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, value := range addresses {
+			if network, ok := value.(*net.IPNet); ok {
+				if address, ok := netip.AddrFromSlice(network.IP); ok && address.Unmap().Is4() && address.IsGlobalUnicast() {
+					external = address.Unmap()
+					break
+				}
+			}
+		}
+		if external.IsValid() {
+			break
+		}
+	}
+	if !external.IsValid() {
+		t.Skip("no second routable interface")
+	}
+	hive := identity(t)
+	listener, err := net.Listen("tcp", netip.AddrPortFrom(external, 0).String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- Serve(ctx, listener, hive, func(context.Context, ed25519.PublicKey, Request) (Admission, *Refused) {
+			return Admission{Node: "bee-owner-0123456789abcdef", Gossip: "127.0.0.1:1"}, nil
+		})
+	}()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	}()
+	port := listener.Addr().(*net.TCPAddr).Port
+	item := sample(netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(port)), hive)
+	item.Candidates = []Candidate{{Kind: "interface", Scope: "lan", Endpoint: netip.AddrPortFrom(external, uint16(port)).String()}}
+	_, _, selected, err := DialCandidates(context.Background(), item, identity(t), Request{Node: "bee-owner-joiner"})
+	if err != nil || selected.Endpoint != item.Candidates[0].Endpoint {
+		t.Fatalf("second interface path = %+v, %v", selected, err)
 	}
 }
 

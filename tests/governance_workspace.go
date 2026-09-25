@@ -51,6 +51,18 @@ func setup(root string) error {
 	if err := copyTree(filepath.Join(root, "src", "governance_workspace_probe"), "tests/fixtures/governance_workspace"); err != nil {
 		return fmt.Errorf("copy governance fixture: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Join(root, "src", "security"), 0700); err != nil {
+		return fmt.Errorf("create security namespace: %w", err)
+	}
+	for _, name := range []string{"approvals", "threads"} {
+		if err := copyTree(filepath.Join(root, "src", "security", name), filepath.Join("src", "security", name)); err != nil {
+			return fmt.Errorf("stage %s host policies: %w", name, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "security", "_index.yaml"),
+		[]byte("version: '1.0'\nnamespace: bee.security\nentries: []\n"), 0600); err != nil {
+		return fmt.Errorf("write security namespace: %w", err)
+	}
 	rootIndex := `version: '1.0'
 namespace: bee
 entries:

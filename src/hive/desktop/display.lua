@@ -7,8 +7,10 @@ local tty = require("tty")
 local channel = require("channel")
 local time = require("time")
 local process = require("process")
+local uuid = require("uuid")
 local bounds = require("bounds")
 local client = require("client")
+local types = require("types")
 local protocol = require("protocol")
 local contract = require("contract")
 local delivery = require("delivery")
@@ -18,7 +20,7 @@ type Mode = "control" | "observe"
 type Target = {node_id: string, owner_execution: string, workspace_id: string, desktop_id: string, mode: Mode}
 type Receipt = {owner_execution: string, workspace_id: string, desktop_id: string, session_id: string, recipient: string, mode: string, mount_ref: string}
 type Fault = {code: string, message: string}
-type Session = {target: Target, receipt: Receipt, client: client.Client, closed: boolean}
+type Session = {target: Target, receipt: Receipt, client: client.Client, lifetime_id: string?, closed: boolean}
 -- A local caller carries only this opaque session reference. The client handle,
 -- receipt and mount stay in this module's private table.
 type Handle = {id: string}
@@ -35,6 +37,55 @@ end
 
 local function fault(code: string, message: string): Fault
     return {code = code, message = message}
+end
+local function source_supervisor(): (string?, string?)
+    local own_node = types.pid_parts(tostring(process.pid()))
+    if not own_node then return nil, "local node identity is unavailable" end
+    local pid, lookup_error = process.registry.lookup(types.SUPERVISOR_NAME .. "/" .. own_node)
+    if not pid then return nil, lookup_error and tostring(lookup_error) or "local Hive supervisor is not running" end
+    local node, host = types.pid_parts(pid)
+    if node ~= own_node or host ~= types.SUPERVISOR_HOST then return nil, "local supervisor name resolved to another process" end
+    return tostring(pid), nil
+end
+
+-- The source node observes local process death. Register before asking the
+-- remote owner for a mount, so a crash immediately after attach is covered.
+local function register_lifetime(owner_node: string): (string?, string?)
+    local own_node = types.pid_parts(tostring(process.pid()))
+    if own_node == owner_node then return nil, nil end
+    local supervisor, lookup_error = source_supervisor()
+    if not supervisor then return nil, lookup_error or "local Hive supervisor unavailable" end
+    local ticket, ticket_error = uuid.v4()
+    if not ticket then return nil, tostring(ticket_error) end
+    ticket = ticket:gsub("-", "")
+    local replies, listen_error = process.listen(protocol.LIFETIME_REPLY .. ticket, {message = true})
+    if not replies then return nil, tostring(listen_error) end
+    local sent, send_error = process.send(supervisor, protocol.LIFETIME,
+        {version = 1, op = "register", ticket = ticket, owner_node = owner_node})
+    if not sent or send_error then process.unlisten(replies); return nil, "local lifetime registration unavailable" end
+    local guard = time.after(DEFAULT_TIMEOUT)
+    local result: string? = nil
+    while true do
+        local selected = channel.select({replies:case_receive(), guard:case_receive()})
+        if not selected.ok or selected.channel == guard then result = "local lifetime registration timed out"; break end
+        local message = selected.value
+        if tostring(message:from()) == supervisor then
+            local data: unknown = message:payload():data()
+            if type(data) == "table" and data.ticket == ticket then
+                if data.ok ~= true then result = tostring(data.error or "local lifetime registration refused") end
+                break
+            end
+        end
+    end
+    process.unlisten(replies)
+    if result then return nil, result end
+    return ticket, nil
+end
+
+local function unregister_lifetime(ticket: string?)
+    if not ticket then return end
+    local supervisor = source_supervisor()
+    if supervisor then process.send(supervisor, protocol.LIFETIME, {version = 1, op = "unregister", ticket = ticket}) end
 end
 
 local function mode(value: unknown): Mode?
@@ -91,20 +142,26 @@ end
 function M.open(target: Target): (Handle?, Fault?)
     local handle, open_error = client.open(target.node_id)
     if not handle then return nil, fault("UNAVAILABLE", open_error or "Hive client unavailable") end
+    local lifetime_id, lifetime_error = register_lifetime(target.node_id)
+    if lifetime_error then handle:close(); return nil, fault("UNAVAILABLE", lifetime_error) end
     local recipient = tostring(process.pid())
     local reply = handle:call({node_id = target.node_id, service_id = protocol.SERVICE}, {operation_ref = protocol.ATTACH}, {
         owner_execution = target.owner_execution, workspace_id = target.workspace_id, desktop_id = target.desktop_id, mode = target.mode,
     }, {deadline = deadline(), timeout = DEFAULT_TIMEOUT})
     if not reply.ok then
+        if reply.error and reply.error.code ~= "UNCERTAIN" and reply.error.code ~= "DEADLINE_EXCEEDED" then unregister_lifetime(lifetime_id) end
         handle:close()
         return nil, fault(reply.error and reply.error.code or "UNAVAILABLE", reply.error and reply.error.message or "desktop attach refused")
     end
     local accepted, receipt_error = M.receipt(reply.value, target, recipient)
     if not accepted then
+        -- The remote attach may have committed; the source registration stays
+        -- until this actor exits and revokes any uncertain grant.
         handle:close()
         return nil, fault("INVALID_STATE", receipt_error or "invalid desktop attachment receipt")
     end
     if sessions[accepted.session_id] then
+        unregister_lifetime(lifetime_id)
         handle:close()
         return nil, fault("CONFLICT", "Desktop session is already attached by this client")
     end
@@ -113,11 +170,12 @@ function M.open(target: Target): (Handle?, Fault?)
         -- A successful owner receipt created a live session even if this local
         -- wrapper cannot consume its mount. Retire it once; never retry an
         -- uncertain detach.
-        detach(target, accepted, handle)
+        local detached = detach(target, accepted, handle)
+        if detached then unregister_lifetime(lifetime_id) end
         handle:close()
         return nil, fault("UNAVAILABLE", mount_error or "attach desktop mount")
     end
-    sessions[accepted.session_id] = {target = target, receipt = accepted, client = handle, closed = false}
+    sessions[accepted.session_id] = {target = target, receipt = accepted, client = handle, lifetime_id = lifetime_id, closed = false}
     return {id = accepted.session_id}, nil
 end
 
@@ -173,6 +231,7 @@ function M.close(handle: unknown): (boolean, string?)
     sessions[session.receipt.session_id] = nil
     delivery.close(session.receipt.session_id)
     local detached, detach_error = detach(session.target, session.receipt, session.client)
+    if detached then unregister_lifetime(session.lifetime_id) end
     session.client:close()
     return detached, detach_error
 end

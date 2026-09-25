@@ -67,13 +67,14 @@ def main():
                 entry["targets"] = [{"entry": "bee.threads:missing_ref", "path": ".resource_ref"}]
         index.write_text(yaml.safe_dump(document, sort_keys=False))
 
-    # A dangling target must fail linking before the journal opens a database.
+    # The runtime linker must reject a dangling database target before any
+    # service starts or the journal creates its schema.
     with tempfile.TemporaryDirectory(prefix="bee-thread-module-") as directory:
         folder = stage(Path(directory), broken_target)
         run(folder, "lint")
         output = run(folder, "run", "threads-isolation", ok=False, env={"BEE_THREADS_DB": str(folder / "threads.db")})
-        assert "bee.threads:missing_ref" in output and "no matching entries found" in output, output
-        assert not (folder / "threads.db").exists(), "the failed link opened the journal database"
+        assert "unresolved requirements" in output and "bee.threads:missing_ref" in output, output
+        assert not (folder / "threads.db").exists(), "rejected dependency created the journal database"
 
     print("Threads module: standalone host, lint, linked target_db default, isolated closure, journal through contract, unlinked database reference refused")
 

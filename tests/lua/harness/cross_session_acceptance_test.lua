@@ -132,11 +132,11 @@ local function open_gateway()
     local entry = assert(registry.get("bee:gateway_endpoint"))
     call("bee.gateway.binding:open", {address = tostring((entry.data :: Object).address)})
 end
-local function session(binding_ref: string, policy_ref: string, thread_id: string, workspace_id: string, environment: {[string]: string}, owner_id: string?): Object
+local function session(binding_ref: string, policy_ref: string, thread_id: string, workspace_id: string, environment: {[string]: string}, owner_id: string?, brief: string?): Object
     local placement = placement_fixture.resolve()
     local attempt_id = fresh("attempt")
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = owner_id or ACTOR, owner_incarnation = 1, binding_ref = binding_ref,
-        profile_id = "batch", brief = "coordinate", policy_ref = policy_ref, workspace_id = workspace_id,
+        profile_id = "batch", brief = brief or "coordinate", policy_ref = policy_ref, workspace_id = workspace_id,
         resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = environment, working_directory = "project", placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
 end
@@ -301,7 +301,7 @@ local function define_tests()
             test.eq(((ending.body :: Object).data :: Object).type, "turn.signal")
             test.eq(((ending.body :: Object).data :: Object).phase, "ended")
         end)
-        test.it("delivers and replies between independent window actors without thread membership", function()
+        test.it("delivers and replies between independent window actors without thread membership or polling", function()
             admit_root()
             bind_policies()
             open_gateway()
@@ -356,6 +356,10 @@ local function define_tests()
             test.eq(sending.reply_ok, true)
             test.eq(waiting.reply_text, "world")
             test.eq(waiting.ack_ok, true)
+            -- Both sides woke on the server wait instead of polling their
+            -- inbox: a ready status names the wake, never a timeout.
+            test.eq(waiting.reply_wait_status, "ready")
+            test.eq(sending.request_wait_status, "ready")
             test.eq((waiting.reply_correlation :: Object).record_id, (waiting.sent :: Object).record_id)
             test.eq((waiting.reply_correlation :: Object).thread_id, sender_thread)
             local inbox_records = 0
@@ -363,6 +367,120 @@ local function define_tests()
                 if item.kind == "message" and (item.body :: Object).message_id == "inbox-hello" then inbox_records = inbox_records + 1 end
             end
             test.eq(inbox_records, 1)
+        end)
+        test.it("answers a Codex-initiated inbox exchange without polling", function()
+            admit_root()
+            bind_policies()
+            open_gateway()
+            local label = fresh("inbox-reverse-ws")
+            local workspace = tostring(call("bee.workspace.catalog:create", {label = label, root_ref = ROOT,
+                subpath = label, create_directory = true}).workspace_id)
+            local replier_actor = "bee.test.cross_session.replier"
+            local replier_thread = tostring(call_as(replier_actor, "bee.threads.service:create", {thread_id = fresh("inbox-replier-thread"),
+                idempotency_key = fresh("key"), title = "Independent C"}, workspace).thread_id)
+            local initiator_thread = tostring(call_as(ACTOR, "bee.threads.service:create", {thread_id = fresh("inbox-initiator-thread"),
+                idempotency_key = fresh("key"), title = "Independent D"}, workspace).thread_id)
+            local streams = setting("bee.harness.catalog:fixture_streams", "BEE_FIXTURE_STREAMS")
+            local replier = session("bee.driver.claude:binding", WAITER_POLICY, replier_thread, workspace,
+                {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_PEER_ROLE = "inbox_sender", BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl"}, replier_actor)
+            local initiator = session(CODEX_BINDING, SENDER_POLICY, initiator_thread, workspace,
+                {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_PEER_ROLE = "inbox_waiter", BEE_FIXTURE_STREAM = streams .. "/codex/exec-json-1/plain.jsonl"})
+            initiator.projections = {codex_projection(workspace, tostring(initiator.attempt_id))}
+            local pids = {replier = spawn(replier), initiator = spawn(initiator)}
+            local admitted, admission_error = pcall(function()
+                wait_for_action(replier_thread, tostring(replier.action_id), replier_actor)
+                wait_for_action(initiator_thread, tostring(initiator.action_id), ACTOR)
+            end)
+            if not admitted then await_all(pids); error(tostring(admission_error)) end
+            local denied, denied_error = funcs.new():with_actor(principals.actor(ACTOR, workspace)):with_scope(scope()):call("bee.threads.service:get", {thread_id = replier_thread})
+            if denied_error then error(tostring(denied_error)) end
+            test.eq(((denied :: Object).error :: Object).code, "DENIED")
+            call_as(replier_actor, "bee.threads.service:inbox_accept", {thread_id = replier_thread, action_id = replier.action_id,
+                sender_id = ACTOR, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
+            call_as(ACTOR, "bee.threads.service:inbox_accept", {thread_id = initiator_thread, action_id = initiator.action_id,
+                sender_id = replier_actor, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
+            local outcomes = await_all(pids)
+            test.eq((outcomes.replier.settlement :: Object).outcome, "succeeded")
+            test.eq((outcomes.initiator.settlement :: Object).outcome, "succeeded")
+            local answering = report(replier_thread, replier_actor)
+            local asking = report(initiator_thread, ACTOR)
+            if not answering.self or not asking.self then
+                error("reverse inbox fixture directory: replier=" .. tostring(json.encode(answering)) .. " initiator=" .. tostring(json.encode(asking)))
+            end
+            test.eq(asking.self, initiator.action_id)
+            test.eq(asking.peer, replier.action_id)
+            test.eq(asking.sent_ok, true)
+            test.eq(asking.replayed, true)
+            test.eq(asking.replay_record_id, (asking.sent :: Object).record_id)
+            test.eq(answering.request_text, "hello")
+            test.eq(answering.ack_ok, true)
+            test.eq(answering.reply_ok, true)
+            test.eq(asking.reply_text, "world")
+            test.eq(asking.ack_ok, true)
+            test.eq(asking.reply_wait_status, "ready")
+            test.eq(answering.request_wait_status, "ready")
+            test.eq((asking.reply_correlation :: Object).record_id, (asking.sent :: Object).record_id)
+            test.eq((asking.reply_correlation :: Object).thread_id, replier_thread)
+            local inbox_records = 0
+            for _, item in ipairs(records_of(replier_thread, replier_actor)) do
+                if item.kind == "message" and (item.body :: Object).message_id == "inbox-hello" then inbox_records = inbox_records + 1 end
+            end
+            test.eq(inbox_records, 1)
+        end)
+        test.it("starts a newly admitted Codex attempt carrying its outstanding inbox item in the brief", function()
+            admit_root()
+            bind_policies()
+            open_gateway()
+            local label = fresh("inbox-carry-ws")
+            local workspace = tostring(call("bee.workspace.catalog:create", {label = label, root_ref = ROOT,
+                subpath = label, create_directory = true}).workspace_id)
+            local codex_thread = tostring(call_as(ACTOR, "bee.threads.service:create", {thread_id = fresh("inbox-carry-thread"),
+                idempotency_key = fresh("key"), title = "Carry"}, workspace).thread_id)
+            local source_thread = tostring(call_as(ACTOR, "bee.threads.service:create", {thread_id = fresh("inbox-carry-source-thread"),
+                idempotency_key = fresh("key"), title = "Carry source"}, workspace).thread_id)
+            local streams = setting("bee.harness.catalog:fixture_streams", "BEE_FIXTURE_STREAMS")
+            -- The first attempt opens the action and ends, so the send
+            -- below finds no live attempt to offer to.
+            local first = session(CODEX_BINDING, SENDER_POLICY, codex_thread, workspace,
+                {BEE_FIXTURE_STREAM = streams .. "/codex/exec-json-1/plain.jsonl"}, nil, "open the work")
+            first.projections = {codex_projection(workspace, tostring(first.attempt_id))}
+            local first_outcome = await_all({first = spawn(first)})
+            test.eq((first_outcome.first.settlement :: Object).outcome, "succeeded")
+            local source_action = fresh("source-action")
+            call_as(ACTOR, "bee.threads.service:admit_action", {thread_id = source_thread, action_id = source_action,
+                idempotency_key = fresh("admit"), admitted = {request_id = fresh("source-request"), principal_id = ACTOR,
+                    binding_ref = CODEX_BINDING, binding_digest = "fixture-digest", grant_refs = {}, budget_ref = SENDER_POLICY,
+                    input = {text = "send an inbox item"}}}, workspace)
+            call_as(ACTOR, "bee.threads.service:inbox_accept", {thread_id = codex_thread, action_id = first.action_id,
+                sender_id = ACTOR, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
+            local native = system.node.id()
+            if not native or native == "" then error("native node identity is unavailable") end
+            local message_id = fresh("message")
+            local content = {text = "carry hello"}
+            local sent = call_as(ACTOR, "bee.threads.service:inbox_send", {thread_id = codex_thread, target_action_id = first.action_id,
+                sender_thread_id = source_thread, sender_action_id = source_action, node_id = native, grant_epoch = 1,
+                idempotency_key = fresh("send"), message_id = message_id, content = content,
+                payload_digest = sends.payload_digest({message_id = message_id, content = content})}, workspace)
+            -- The second attempt starts fresh on the same action: no
+            -- provider resume carries an inbox item without a fixture that
+            -- proves the combination, so the brief carries it instead.
+            local second = session(CODEX_BINDING, SENDER_POLICY, codex_thread, workspace,
+                {BEE_FIXTURE_STREAM = streams .. "/codex/exec-json-1/plain.jsonl"}, nil, "follow up")
+            second.action_id = first.action_id
+            second.attempt_id = fresh("attempt")
+            second.projections = {codex_projection(workspace, tostring(second.attempt_id))}
+            local second_outcome = await_all({second = spawn(second)})
+            test.eq((second_outcome.second.settlement :: Object).outcome, "succeeded")
+            local carried: Object? = nil
+            for _, item in ipairs(records_of(codex_thread, ACTOR)) do
+                if item.kind == "turn.request" and item.attempt_id == second.attempt_id then carried = item.body :: Object end
+            end
+            if not carried then error("the second Codex attempt requested no turn") end
+            local input = carried.input :: Object
+            test.is_true(tostring(input.text):find(tostring(sent.record_id), 1, true) ~= nil)
+            test.is_true(tostring(input.text):find("carry hello", 1, true) ~= nil)
+            test.is_true(tostring(input.text):find("follow up", 1, true) ~= nil)
+            test.is_nil(carried.resume_ref)
         end)
         test.it("queues a busy Claude inbox and pushes its identified record between turns", function()
             admit_root()

@@ -136,67 +136,115 @@ func writeMessage(connection net.Conn, value any) error {
 	return err
 }
 
-// Dial redeems invite as identity. It pins the hive node's identity key by the
-// invite fingerprint before sending the secret, and returns the hive node's
-// admission with that pinned key, or the hive node's definite refusal.
+// Dial redeems invite as identity, trying every bounded candidate. It pins the
+// hive node's identity key before sending the secret and returns its admission
+// with that pinned key, or its definite refusal.
 func Dial(ctx context.Context, invite Invite, identity ed25519.PrivateKey, request Request) (Admission, ed25519.PublicKey, error) {
-	if ctx == nil || !invite.valid() || len(identity) != ed25519.PrivateKeySize {
-		return Admission{}, nil, ErrInvite
+	admission, pinned, _, err := DialCandidates(ctx, invite, identity, request)
+	return admission, pinned, err
+}
+
+type dialResult struct {
+	candidate  Candidate
+	connection net.Conn
+	pinned     ed25519.PublicKey
+	err        error
+}
+
+// DialCandidates races all bounded endpoints. Only the first TLS-verified
+// connection receives the single-use secret; an uncertain redemption is never
+// blindly replayed on another endpoint.
+func DialCandidates(ctx context.Context, line Invite, identity ed25519.PrivateKey, request Request) (Admission, ed25519.PublicKey, Candidate, error) {
+	if ctx == nil || !line.valid() || len(identity) != ed25519.PrivateKeySize {
+		return Admission{}, nil, Candidate{}, ErrInvite
 	}
 	own, err := certificate(identity)
 	if err != nil {
-		return Admission{}, nil, err
+		return Admission{}, nil, Candidate{}, err
 	}
-	var pinned ed25519.PublicKey
 	ctx, cancel := context.WithTimeout(ctx, Timeout)
 	defer cancel()
-	config := &tls.Config{
-		MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{own},
-		// The server is authenticated by its pinned identity key below, not by a
-		// name or authority; the verification callback is the only acceptance.
-		InsecureSkipVerify: true,
-		VerifyConnection: func(state tls.ConnectionState) error {
-			raw := make([][]byte, 0, len(state.PeerCertificates))
-			for _, peer := range state.PeerCertificates {
-				raw = append(raw, peer.Raw)
+	racing, stopRace := context.WithCancel(ctx)
+	defer stopRace()
+	candidates := append([]Candidate{{Kind: "explicit", Scope: "host", Endpoint: line.Address.String()}}, line.Candidates...)
+	results := make(chan dialResult, len(candidates))
+	for _, candidate := range candidates {
+		go func(candidate Candidate) {
+			var pinned ed25519.PublicKey
+			config := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{own}, InsecureSkipVerify: true,
+				VerifyConnection: func(state tls.ConnectionState) error {
+					raw := make([][]byte, 0, len(state.PeerCertificates))
+					for _, peer := range state.PeerCertificates {
+						raw = append(raw, peer.Raw)
+					}
+					key, err := peerKey(raw)
+					if err != nil {
+						return err
+					}
+					if Fingerprint(key) != line.Fingerprint {
+						return errors.New("hive node identity does not match the invite")
+					}
+					pinned = key
+					return nil
+				},
 			}
-			key, err := peerKey(raw)
-			if err != nil {
-				return err
+			connection, err := (&tls.Dialer{Config: config}).DialContext(racing, "tcp", candidate.Endpoint)
+			result := dialResult{candidate: candidate, connection: connection, pinned: pinned, err: err}
+			if racing.Err() != nil && connection != nil {
+				_ = connection.Close()
 			}
-			if Fingerprint(key) != invite.Fingerprint {
-				return errors.New("hive node identity does not match the invite")
-			}
-			pinned = key
-			return nil
-		},
+			results <- result
+		}(candidate)
 	}
-	dialer := &tls.Dialer{Config: config}
-	connection, err := dialer.DialContext(ctx, "tcp", invite.Address.String())
-	if err != nil {
-		return Admission{}, nil, fmt.Errorf("join %s: %w", invite.Address, err)
+	var failures []error
+	var selected dialResult
+	received := 0
+	for range candidates {
+		result := <-results
+		received++
+		if result.err != nil {
+			failures = append(failures, fmt.Errorf("%s (%s/%s): %w", result.candidate.Endpoint, result.candidate.Kind, result.candidate.Scope, result.err))
+			continue
+		}
+		selected = result
+		break
 	}
+	if selected.connection == nil {
+		return Admission{}, nil, Candidate{}, fmt.Errorf("join failed; candidates tried: %w", errors.Join(failures...))
+	}
+	stopRace()
+	go func() {
+		for i := received; i < len(candidates); i++ {
+			if result := <-results; result.connection != nil {
+				_ = result.connection.Close()
+			}
+		}
+	}()
+	connection := selected.connection
 	defer connection.Close()
+	// The peer's socket address is the route actually authenticated. In
+	// particular a MagicDNS name may resolve to one of several tailnet IPs.
+	selected.candidate.Endpoint = connection.RemoteAddr().String()
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = connection.SetDeadline(deadline)
 	}
 	request.Version = Version
-	request.Invite = invite.ID
-	request.Secret = invite.Secret
+	request.Invite = line.ID
+	request.Secret = line.Secret
 	if err := writeMessage(connection, request); err != nil {
-		return Admission{}, nil, err
+		return Admission{}, nil, Candidate{}, err
 	}
 	var reply response
 	if err := readMessage(connection, &reply); err != nil {
-		return Admission{}, nil, fmt.Errorf("join %s: %w", invite.Address, err)
+		return Admission{}, nil, Candidate{}, fmt.Errorf("join %s: %w", selected.candidate.Endpoint, err)
 	}
 	switch {
 	case reply.Refused != nil && reply.Admission == nil:
-		return Admission{}, nil, reply.Refused
-	case reply.Admission != nil && reply.Refused == nil && reply.Admission.Version == Version && reply.Admission.Node == invite.Node:
-		return *reply.Admission, pinned, nil
+		return Admission{}, nil, Candidate{}, reply.Refused
+	case reply.Admission != nil && reply.Refused == nil && reply.Admission.Version == Version && reply.Admission.Node == line.Node:
+		return *reply.Admission, selected.pinned, selected.candidate, nil
 	default:
-		return Admission{}, nil, errors.New("hive node sent an invalid admission")
+		return Admission{}, nil, Candidate{}, errors.New("hive node sent an invalid admission")
 	}
 }
 

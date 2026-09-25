@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 3795,
+      "bytes": 3902,
       "id": "docs/readme",
-      "sha256": "bd26306e3b443a2aa4800a00f2f8f32acc36f351b0ecbf97e721e4b0ceef2fe3",
+      "sha256": "0938c47a165c828aad87d3643aebcca0aa066a39452971920d9cf0c162357992",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -211,9 +211,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 3549,
+      "bytes": 3885,
       "id": "docs/gateway_hooks",
-      "sha256": "6ae522212288cc07afd1c50ce37128263a9d9065173720c5b5a07b04529a65a6",
+      "sha256": "ef5a1ebfc5f7aaf50ad75b9552f0470fcfcbf6a060c3efbfd2c9c58433f5979d",
       "source": "docs/reference/agents/hooks.md",
       "title": "Gateway hooks",
       "topic": "gateway"
@@ -251,17 +251,17 @@
       "topic": "cluster"
     },
     {
-      "bytes": 21578,
+      "bytes": 24208,
       "id": "docs/threads",
-      "sha256": "bbad424f384c5e3329eea2ea0a15122d1296b251258d3e61271768a47645e040",
+      "sha256": "f4827ef23ee2cf90d3c67167b2ee85e710d2d6b4c21153d020df80f957113b5c",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
     },
     {
-      "bytes": 20688,
+      "bytes": 20918,
       "id": "docs/workspace_catalog",
-      "sha256": "7248b396eb41484f0b0119e51012146fcb3019df588dd9e242c859b1e02194b4",
+      "sha256": "e43b88cd7c6f611b9607ce799a19294d049185e17ab922c7888dd5dd25e79648",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -323,9 +323,9 @@
       "topic": "component"
     },
     {
-      "bytes": 1004,
+      "bytes": 1069,
       "id": "component/driver:claude",
-      "sha256": "93f1b6d961bbe12f6c5572f3658e42fd7947ed4c98004256c5305d32d63d3773",
+      "sha256": "c003bf64dad4e73bcc407dce0235ec174f16ed7f640ef82334371531a65ea495",
       "source": "modules/driver-claude/src/README.md",
       "title": "Bee Claude driver",
       "topic": "component"
@@ -371,17 +371,17 @@
       "topic": "component"
     },
     {
-      "bytes": 19333,
+      "bytes": 19796,
       "id": "component/harness",
-      "sha256": "4c2329d2bb0dfe0a34accb730afcf6325f5169aadb92132d36e9ab967df9f2cd",
+      "sha256": "e9855977b119ed00edcb0de3dd46d9fc104fae60ed7e6e740f8296c1968440ba",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
     },
     {
-      "bytes": 8367,
+      "bytes": 9439,
       "id": "component/hive",
-      "sha256": "e980c3e2a87d7e37a65d08aa4047f9192592a172d54fd7dd1cd7041829f49dfc",
+      "sha256": "3ea808d7aadea22552df85864744e03c2eafba2fe481752cf5311be9b6f4f764",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"
@@ -419,9 +419,9 @@
       "topic": "component"
     },
     {
-      "bytes": 18487,
+      "bytes": 18648,
       "id": "component/placement:native",
-      "sha256": "c852c2a232316f0b050d74ab1c1c3ae58e09f94ff28b1f55ca421597088aeb22",
+      "sha256": "8ecc1e8eadf7f0880b12a764979c2d831a10885945ca1f8d7afd60488f8c96aa",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -462,7 +462,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 554472,
+    "bytes": 559654,
     "documents": 57
   }
 }

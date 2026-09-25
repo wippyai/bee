@@ -297,7 +297,8 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee:approver_policies\n" +
 		"  - name: process_host\n    value: bee:workers\n" +
 		"  - name: authority_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]\n" +
-		"  - name: worker_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy, bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]\n"
+		"  - name: worker_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy,\n" +
+		"      bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]\n"
 	if err := os.WriteFile(stagedRoot, append(staged, []byte(dependency)...), 0600); err != nil {
 		t.Fatal(err)
 	}

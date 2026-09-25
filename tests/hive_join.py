@@ -19,7 +19,7 @@ import time
 
 from native_client import hold_owner, live_owners
 
-INVITE = re.compile(r'^bee-hive://[0-9a-f]{32}:[0-9a-f]{64}@127\.0\.0\.1:(\d+)/(bee-owner-[0-9a-f]{16})\?key=[0-9a-f]{64}$')
+INVITE = re.compile(r'^bee-hive://[0-9a-f]{32}:[0-9a-f]{64}@127\.0\.0\.1:(\d+)/(bee-owner-[0-9a-f]{16})\?key=[0-9a-f]{64}(?:&c=[^&\s]+){0,8}$')
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -41,7 +41,8 @@ class Nodes:
         result = subprocess.run([self.binary, '--state', str(self.state(name)), 'hive', *arguments],
                                 cwd=self.project, env=environment, capture_output=True, text=True, timeout=180)
         if check and result.returncode != 0:
-            raise AssertionError(f'bee --state {name} hive {" ".join(arguments)} failed: {result.stdout}{result.stderr}')
+            safe_arguments = ['<invite redacted>' if argument.startswith('bee-hive://') else argument for argument in arguments]
+            raise AssertionError(f'bee --state {name} hive {" ".join(safe_arguments)} failed: {result.stdout}{result.stderr}')
         return result
 
     def peers(self, name):
@@ -88,9 +89,9 @@ def run(binary):
     nodes = Nodes(binary, root)
     try:
         line = nodes.bee('a', 'invite').stdout
-        assert line.endswith('\n') and line.count('\n') == 1, repr(line)
+        assert line.endswith('\n') and line.count('\n') == 1, 'invite is not one line'
         match = INVITE.match(line.strip())
-        assert match, f'invite is not one pasteable line: {line!r}'
+        assert match, 'invite is not one pasteable line'
         node_a = match.group(2)
         a = nodes.descriptor('a')
         assert a['node'] == node_a and a['join'] == f'127.0.0.1:{match.group(1)}', a
@@ -111,7 +112,7 @@ def run(binary):
         used = nodes.bee('c', 'join', line.strip(), check=False)
         assert used.returncode != 0 and 'invite was already used' in used.stderr, used
         revoked_line = nodes.bee('a', 'invite').stdout.strip()
-        assert INVITE.match(revoked_line), revoked_line
+        assert INVITE.match(revoked_line), 'revoked invite is not one pasteable line'
         revoked_id = revoked_line.split('//')[1].split(':')[0]
         assert nodes.bee('a', 'revoke', revoked_id).stdout.strip() == f'Invite {revoked_id} revoked'
         revoked = nodes.bee('c', 'join', revoked_line, check=False)

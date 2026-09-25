@@ -266,6 +266,148 @@ local function define_tests()
             test.eq(calls[#calls], "example.placement:prepare")
             test.is_nil(table.concat(calls, ","):find("bee.placement.native.binding:prepare", 1, true))
         end)
+        test.it("carries the oldest outstanding inbox item in a fresh bounded-driver brief", function()
+            local item = {thread_id = "thread", inbox_sequence = 3, record_id = "record-9", thread_sequence = 41,
+                payload_digest = string.rep("b", 64), state = "committed", delivery_status = "committed", sender_action_id = "sender",
+                sender_node_id = "node", sender_thread_id = "sender-thread", message_id = "message-9",
+                content = {text = "hello again"}, message_kind = "request"}
+            local listed = 0
+            local io: machine.IO = {
+                call = function(target: string, value: unknown): (unknown, string?)
+                    if target == "bee.threads.service:inbox_list" then
+                        listed = listed + 1
+                        return {ok = true, value = {items = {item}}}, nil
+                    end
+                    return nil, "unexpected call " .. target
+                end,
+                send = function(target: string, topic: string, value: unknown) error("unexpected send") end,
+                self_pid = function(): string return "test" end,
+                now_ms = function(): integer return 0 end,
+                key = function(): string return "key" end,
+            }
+            local function request(brief: string): machine.Request
+                return {thread_id = "thread", action_id = "action", attempt_id = "attempt", owner_id = "actor", owner_incarnation = 1,
+                    binding_ref = "binding", profile_id = "batch", brief = brief, policy_ref = "policy",
+                    resources = {} :: {placement_types.ResourceGrant}, environment = {} :: {[string]: string}}
+            end
+            local function profile(mode: string): classify.Profile
+                return {id = "batch", mode = mode, protocol = "stream-json", protocol_revision = "1", supported = true, private_home = true,
+                    permission = {mode = "none", eligible = false}}
+            end
+            for _, driver in ipairs({"codex", "agy", "grok", "muse"}) do
+                local carried = machine.carry_brief(io, request("follow up"), driver, "session")
+                test.is_true(carried:find("record-9", 1, true) ~= nil, driver .. ": " .. carried)
+                test.is_true(carried:find("message-9", 1, true) ~= nil, driver .. ": " .. carried)
+                test.is_true(carried:find("hello again", 1, true) ~= nil, driver .. ": " .. carried)
+                test.is_true(carried:find("session_ack", 1, true) ~= nil, driver .. ": " .. carried)
+                test.is_true(carried:sub(-9) == "follow up", driver .. ": " .. carried)
+            end
+            test.eq(listed, 4)
+            local second = machine.carry_brief(io, request("follow up"), "codex", "session")
+            test.is_true(second:find("record-9", 1, true) ~= nil)
+            local idempotent = machine.carry_brief(io, {thread_id = "thread", action_id = "action", attempt_id = "attempt", owner_id = "actor",
+                owner_incarnation = 1, binding_ref = "binding", profile_id = "batch", brief = second, policy_ref = "policy", resources = {}, environment = {}},
+                "codex", "session")
+            test.eq(idempotent, second)
+            local resumed = request("follow up")
+            resumed.previous_attempt_id = "attempt-1"
+            test.eq(machine.carry_brief(io, resumed, "codex", "session"), "follow up")
+            local retained = request("follow up")
+            retained.session_ref = "session-1"
+            test.eq(machine.carry_brief(io, retained, "codex", "session"), "follow up")
+            test.eq(machine.carry_brief(io, request("follow up"), "claude", "session"), "follow up")
+            test.eq(machine.carry_brief(io, request("follow up"), "codex", "window"), "follow up")
+            local terminal = machine.carry_brief(io, request("follow up"), "codex", "session")
+            test.is_true(terminal:find("record-9", 1, true) ~= nil)
+        end)
+        test.it("leaves the brief alone without outstanding inbox and bounds what it carries", function()
+            local function io_for(items: {unknown}?, failure: string?): machine.IO
+                return {
+                    call = function(target: string, value: unknown): (unknown, string?)
+                        if target == "bee.threads.service:inbox_list" then
+                            if failure then return nil, failure end
+                            return {ok = true, value = {items = items or {}}}, nil
+                        end
+                        return nil, "unexpected call " .. target
+                    end,
+                    send = function(target: string, topic: string, value: unknown) error("unexpected send") end,
+                    self_pid = function(): string return "test" end,
+                    now_ms = function(): integer return 0 end,
+                    key = function(): string return "key" end,
+                }
+            end
+            local function request(): machine.Request
+                return {thread_id = "thread", action_id = "action", attempt_id = "attempt", owner_id = "actor", owner_incarnation = 1,
+                    binding_ref = "binding", profile_id = "batch", brief = "follow up", policy_ref = "policy",
+                    resources = {} :: {placement_types.ResourceGrant}, environment = {} :: {[string]: string}}
+            end
+            test.eq(machine.carry_brief(io_for(nil, nil), request(), "codex", "session"), "follow up")
+            test.eq(machine.carry_brief(io_for(nil, "bee.threads.service:inbox_list: STORAGE: down"), request(), "codex", "session"), "follow up")
+            local terminal = {{thread_id = "thread", inbox_sequence = 1, record_id = "record-1", thread_sequence = 2,
+                payload_digest = string.rep("c", 64), state = "acknowledged", delivery_status = "acknowledged", sender_action_id = "sender",
+                sender_node_id = "node", sender_thread_id = "sender-thread", message_id = "message-1", content = {text = "done"}, message_kind = "request"}}
+            test.eq(machine.carry_brief(io_for(terminal, nil), request(), "codex", "session"), "follow up")
+            local replied = {{thread_id = "thread", inbox_sequence = 2, record_id = "record-2", thread_sequence = 3,
+                payload_digest = string.rep("d", 64), state = "replied", delivery_status = "replied", sender_action_id = "sender",
+                sender_node_id = "node", sender_thread_id = "sender-thread", message_id = "message-2", content = {text = "done"}, message_kind = "reply"}}
+            test.eq(machine.carry_brief(io_for(replied, nil), request(), "codex", "session"), "follow up")
+            local huge = {{thread_id = "thread", inbox_sequence = 4, record_id = "record-4", thread_sequence = 5,
+                payload_digest = string.rep("e", 64), state = "committed", delivery_status = "committed", sender_action_id = "sender",
+                sender_node_id = "node", sender_thread_id = "sender-thread", message_id = "message-4",
+                content = {text = string.rep("x", 20000)}, message_kind = "request"}}
+            local bounded = machine.carry_brief(io_for(huge, nil), request(), "codex", "session")
+            test.is_true(#bounded <= 16383, "brief bound: " .. tostring(#bounded))
+            test.is_true(bounded:find("record-4", 1, true) ~= nil)
+            test.is_true(bounded:find("session_inbox", 1, true) ~= nil)
+            test.is_true(bounded:sub(-9) == "follow up")
+        end)
+        test.it("attaches a fresh sequential attempt to its own admitted action and chains the settled attempt", function()
+            local selected = plan("session", "stream-json")
+            selected.binding.driver_id = "codex"
+            local prepared_body: {[string]: unknown}? = nil
+            local io: machine.IO = {
+                call = function(target: string, value: unknown): (unknown, string?)
+                    if target == "bee.threads.service:admit_action" then return {ok = false, error = {code = "CONFLICT", message = "action already exists"}}, nil end
+                    if target == "bee.threads.service:read_after" then
+                        return {ok = true, value = {records = {
+                            {kind = "action.admitted", action_id = "action", sequence = 2, body = {principal_id = "actor"}},
+                            {kind = "receipt", action_id = "action", attempt_id = "attempt-1", sequence = 9, body = {scope = "attempt", outcome = "succeeded"}},
+                        }, has_more = false, scanned_through = 9}}, nil
+                    end
+                    if target == "bee.threads.service:prepare_attempt" then
+                        prepared_body = value :: {[string]: unknown}
+                        return {ok = true, value = {}}, nil
+                    end
+                    if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 2}}, nil end
+                    return {ok = true, value = {}}, nil
+                end,
+                send = function(target: string, topic: string, value: unknown) error("unexpected send") end,
+                self_pid = function(): string return "test" end,
+                now_ms = function(): integer return 0 end,
+                key = function(): string return "key" end,
+            }
+            local prepared, err = machine.prepare_attempt(io, selected)
+            if not prepared then error(tostring(err)) end
+            test.eq(prepared_body and prepared_body.expected_previous_attempt_id, "attempt-1")
+            local foreign: machine.IO = {
+                call = function(target: string, value: unknown): (unknown, string?)
+                    if target == "bee.threads.service:admit_action" then return {ok = false, error = {code = "CONFLICT", message = "action already exists"}}, nil end
+                    if target == "bee.threads.service:read_after" then
+                        return {ok = true, value = {records = {
+                            {kind = "action.admitted", action_id = "action", sequence = 2, body = {principal_id = "someone-else"}},
+                        }, has_more = false, scanned_through = 2}}, nil
+                    end
+                    return {ok = true, value = {}}, nil
+                end,
+                send = function(target: string, topic: string, value: unknown) error("unexpected send") end,
+                self_pid = function(): string return "test" end,
+                now_ms = function(): integer return 0 end,
+                key = function(): string return "key" end,
+            }
+            local refused, refuse_error = machine.prepare_attempt(foreign, selected)
+            test.is_nil(refused)
+            test.eq(refuse_error, "bee.threads.service:admit_action: CONFLICT: action already exists")
+        end)
         test.it("refuses window and nonstructured profiles before opening or claiming an attempt", function()
             local calls = 0
             local io: machine.IO = {

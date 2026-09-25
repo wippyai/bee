@@ -94,7 +94,7 @@ entries:
 - name: hive_thread_invoke_policy
   kind: security.policy
   meta:
-    comment: What a mapped principal's own scope must carry to invoke the thread operations; the host names it in a principal
+    comment: What a mapped principal's own scope must carry to invoke the thread and inbox operations; the host names it in a principal
       mapping, never in a worker
   policy:
     actions:
@@ -103,19 +103,23 @@ entries:
     resources:
     - bee.threads.service:send
     - bee.threads.service:send_status
+    - bee.threads.service:inbox_describe
+    - bee.threads.service:inbox_send
     - bee.hive.supervisor:invoke_check
     effect: allow
 - name: hive_thread_exposure_policy
   kind: security.policy
   meta:
-    comment: The host ceiling for forwarded thread operations; the destination thread owner still decides membership and the
-      principal table still decides admission
+    comment: The host ceiling for forwarded thread and inbox operations; the destination thread owner still decides membership,
+      the inbox owner still re-checks workspace, grant, action and epoch, and the principal table still decides admission
   policy:
     actions:
     - hive.expose.policy
     resources:
     - bee.threads.service:send
     - bee.threads.service:send_status
+    - bee.threads.service:inbox_describe
+    - bee.threads.service:inbox_send
     effect: allow
 - name: hive_supervisor_policy
   kind: security.policy

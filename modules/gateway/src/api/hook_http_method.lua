@@ -2,6 +2,7 @@ local http = require("http")
 local json = require("json")
 local gateway = require("gateway")
 local hooks = require("hooks")
+local hook_inbox = require("hook_inbox")
 type Object = {[string]: unknown}
 local function refuse(response: http.Response, status: number, message: string): nil
     response:set_content_type("text/plain; charset=utf-8")
@@ -57,7 +58,21 @@ local function submit(): nil
     -- A replay of a terminally rejected occurrence is told so with a status
     -- and plain text, never a body a harness could act on.
     if outcome.status == "rejected" then return refuse(response, http.STATUS.GONE, "rejected: " .. tostring(outcome.rejected_reason or "no reason")) end
+    -- A recorded boundary event may answer with the bound action's
+    -- outstanding inbox as Claude additionalContext. The read runs as the
+    -- binding's subject; a failure keeps the proven empty body instead of
+    -- breaking the harness loop.
+    local submitted = body :: Object
+    local event: string? = nil
+    if type(submitted.hook_event_name) == "string" then event = submitted.hook_event_name
+    elseif type(submitted.event) == "string" then event = submitted.event end
+    local context_text = hook_inbox.context(binding, event)
+    local context_body = hook_inbox.http_body(context_text)
     if outcome.status == "committed" then response:set_status(http.STATUS.OK) else response:set_status(http.STATUS.ACCEPTED) end
+    if context_body then
+        response:set_content_type(http.CONTENT.JSON)
+        response:write_json(context_body)
+    end
     return nil
 end
 local function status(): nil

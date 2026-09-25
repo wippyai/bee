@@ -65,7 +65,7 @@ entries:
   kind: process.lua
   source: file://stage.lua
   method: main
-  modules: [funcs, registry, json, logger, base64]
+  modules: [funcs, registry, json, logger, base64, hash]
   imports:
     bounds: bee.threads.records:bounds
   security:

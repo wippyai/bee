@@ -46,7 +46,7 @@ entries:
   imports: {transaction: bee.persist:transaction, version: bee.sync:version}
 `
 
-const savedProfilesSecurityIndex = `version: '1.0'
+const savedProfilesSecurityHarnessIndex = `version: '1.0'
 namespace: bee.security.harness
 entries:
 - name: profile_store_policy
@@ -185,7 +185,7 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesWrite(filepath.Join(root, "src", "_index.yaml"), savedProfilesRootIndex); err != nil {
 		return err
 	}
-	if err := savedProfilesWrite(filepath.Join(root, "src", "security", "harness", "_index.yaml"), savedProfilesSecurityIndex); err != nil {
+	if err := savedProfilesWrite(filepath.Join(root, "src", "security", "harness", "_index.yaml"), savedProfilesSecurityHarnessIndex); err != nil {
 		return fmt.Errorf("write profile storage policy: %w", err)
 	}
 	if err := savedProfilesWrite(filepath.Join(root, "src", "harness", "_index.yaml"), savedProfilesHarnessIndex); err != nil {

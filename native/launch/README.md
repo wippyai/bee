@@ -97,6 +97,15 @@ address, mesh secret and authority pool. The joiner pins the hive node, writes
 owner and waits until the two supervisors hold an established session. A node
 that already joined a hive, or that other nodes joined, refuses to join.
 
+The owner can grant its desktop to exact pinned Hive peers at boot with
+`BEE_DESKTOP_ALLOWED_PEERS=NODE[,NODE...]`. Up to 64 distinct node IDs are
+accepted. An invalid, duplicate, self, or unpinned node refuses startup. The
+bridge also requires the peer's current host enrollment and retires its
+attachments when the pin is removed. This host selection permits the Hive
+Manager on a selected peer to control or observe this node's workspaces; the
+invite and peer pin alone grant no desktop access. Change the selection by
+stopping and restarting the owner with the new environment value.
+
 `leave` needs no owner: it removes `hive/peers/NODE.pub`, and the joined record
 when NODE is the hive this node joined. The owner's enrollment publisher then
 retires the peer and its session ends; the next owner boot of a node that left
@@ -117,6 +126,16 @@ mesh and invite listener on that address family, advertises the selected IP to
 peers, and publishes loopback aliases in the local rendezvous descriptor for
 same-machine clients. An invalid or unassigned selected address fails owner
 preparation.
+Invites carry up to eight alternate interface, tailnet, MagicDNS, and
+`BEE_HIVE_ADDRESSES` external IP hints. The joining command races TLS
+handshakes, authenticates the pinned identity, and uses the first verified
+route for redemption. It persists that route's IP as its initial gossip seed
+and reports every candidate failure if none verifies. This does not change
+the runtime's one advertised mesh address; keep `BEE_MESH_ADDRESS` reachable
+for established sessions and reconnects. On detected WSL2 NAT, the invite
+prints mirrored-networking instructions and exact Windows TCP forwarding and
+firewall commands, with an explicit warning that Windows portproxy cannot
+forward the UDP gossip path.
 
 `bee version` is not answered by the host: the embedded pack version and the
 pinned runtime commit are not visible to `app.Host`, so the word reaches the

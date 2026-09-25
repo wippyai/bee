@@ -727,7 +727,7 @@ func run() (retErr error) {
 		if cfg.desktopProbe {
 			// Instrument only the disposable copy: distinguish a newly attached
 			// presenter from the physical display's retained previous frame.
-			path := filepath.Join(srcDir, "core", "terminal", "main.lua")
+			path := filepath.Join(srcDir, "terminal", "main.lua")
 			data, err := os.ReadFile(path)
 			if err != nil {
 				return err

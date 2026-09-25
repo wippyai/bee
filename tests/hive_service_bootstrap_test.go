@@ -21,15 +21,15 @@ import (
 )
 
 type hiveHostManifest struct {
-	Namespace string             `yaml:"namespace"`
-	Entries   []hiveServiceEntry `yaml:"entries"`
+	Namespace string                   `yaml:"namespace"`
+	Entries   []map[string]interface{} `yaml:"entries"`
 }
 
 type hiveServiceEntry struct {
 	Name    string `yaml:"name"`
 	Kind    string `yaml:"kind"`
 	Process string `yaml:"process"`
-	Host    any `yaml:"host"`
+	Host    any    `yaml:"host"`
 	Input   []struct {
 		ConfiguredNodes []string `yaml:"configured_nodes"`
 	} `yaml:"input"`
@@ -54,15 +54,22 @@ func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
 		t.Fatalf("Hive service namespace = %q", manifest.Namespace)
 	}
 	var service *hiveServiceEntry
-	for index := range manifest.Entries {
-		entry := &manifest.Entries[index]
-		if entry.Name != "supervisor_service" {
+	for _, entry := range manifest.Entries {
+		if entry["name"] != "supervisor_service" {
 			continue
 		}
 		if service != nil {
 			t.Fatal("duplicate Hive supervisor service")
 		}
-		service = entry
+		encoded, err := yaml.Marshal(entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var selected hiveServiceEntry
+		if err := yaml.Unmarshal(encoded, &selected); err != nil {
+			t.Fatalf("decode Hive supervisor service: %v", err)
+		}
+		service = &selected
 	}
 	if service == nil {
 		t.Fatal("missing default Hive supervisor service")

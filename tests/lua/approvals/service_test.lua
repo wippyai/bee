@@ -158,23 +158,34 @@ end
 local function thread_notices(thread_id: string): {{[string]: unknown}}
     return records_of(thread_id, {"message"})
 end
-local function until_records(thread_id: string, count: integer): {{[string]: unknown}}
+local function await_records(thread_id: string, kinds: {string}, count: integer): {{[string]: unknown}}
+    local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
     local records: {{[string]: unknown}} = {}
-    for _ = 1, 100 do
-        records = thread_records(thread_id)
-        if #records >= count then return records end
-        time.sleep("50ms")
+    local cursor = 0
+    while #records < count do
+        local reply, err = requester:call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor,
+            limit = 64, filter = {kinds = kinds}})
+        if err then error("read thread: " .. tostring(err)) end
+        local page = value(reply :: service.Reply)
+        for _, item in ipairs(page.records :: {{[string]: unknown}}) do records[#records + 1] = item end
+        cursor = math.floor(tonumber(page.scanned_through) or cursor)
+        if #records >= count then break end
+        if page.has_more ~= true then
+            local remaining = guard_ms - math.floor(time.now():unix_nano() / 1000000)
+            if remaining <= 0 then error("thread " .. thread_id .. " retained only " .. tostring(#records) .. " of " .. tostring(count) .. " records") end
+            local watched, watch_error = requester:call("bee.threads.delivery:watch", {thread_id = thread_id,
+                after_sequence = cursor, wait_ms = remaining})
+            if watch_error then error("watch thread: " .. tostring(watch_error)) end
+            value(watched :: service.Reply)
+        end
     end
     return records
 end
+local function until_records(thread_id: string, count: integer): {{[string]: unknown}}
+    return await_records(thread_id, {"approval.request", "approval.transition"}, count)
+end
 local function until_notices(thread_id: string, count: integer): {{[string]: unknown}}
-    local records: {{[string]: unknown}} = {}
-    for _ = 1, 100 do
-        records = thread_notices(thread_id)
-        if #records >= count then return records end
-        time.sleep("50ms")
-    end
-    return records
+    return await_records(thread_id, {"message"}, count)
 end
 local function define_tests()
     test.describe("Approval owner", function()
@@ -421,6 +432,11 @@ local function define_tests()
             test.eq(body.decider_id, ALICE)
             test.eq(body.expected_revision, 1)
             test.eq((body.response :: {[string]: unknown}).text, "go")
+            -- The transition record owes nobody anything, so the outcome is
+            -- also addressed to the requester: the obligation it creates is
+            -- what the delivery layer carries to the waiting agent.
+            local notices = until_notices(thread_id, 1)
+            test.eq(#notices, 1)
             local acked = value(call(requester, "deliveries", {approval_id = approval_id})).deliveries :: {{[string]: unknown}}
             test.eq(#acked, 3)
             test.eq(acked[2].acknowledged_at ~= nil, true)
@@ -429,11 +445,6 @@ local function define_tests()
             test.eq(code(call(requester, "deliveries", {approval_id = approval_id, redeliver = approval_id .. ":2"})), "DENIED")
             test.eq(code(call(manager, "deliveries", {approval_id = approval_id, redeliver = approval_id .. ":2"})), "INVALID_STATE")
             test.eq(#thread_records(thread_id), 2)
-            -- The transition record owes nobody anything, so the outcome is
-            -- also addressed to the requester: the obligation it creates is
-            -- what the delivery layer carries to the waiting agent.
-            local notices = until_notices(thread_id, 1)
-            test.eq(#notices, 1)
             local notice = notices[1].body :: {[string]: unknown}
             test.eq(notice.message_kind, "notification")
             test.eq(notice.sender_id, service.WORKER_NAME)

@@ -344,9 +344,6 @@ function bounds_text(value: unknown): string
     if type(value) ~= "table" then return "" end
     return tostring((value :: Object).text or "")
 end
-local function now_ms(): integer
-    return math.floor(time.now():unix_nano() / 1000000)
-end
 local function hint(pid: string, thread_id: string)
     process.send(pid, "bee.carrier.hints." .. pid, {woke = true, thread_id = thread_id})
 end
@@ -362,17 +359,26 @@ local function define_tests()
     test.describe("Carrier permission exchange", function()
         local stream = prepare_host()
         test.it("asks, waits, consumes and answers an allowed request through one deterministic write, woken by a hint rather than the poll", function()
+            -- Keep the poll beyond the fixture's permission window. A
+            -- successful answer must then come from the approval hint, even
+            -- when the machine is too busy to meet a wall-clock speed target.
+            local policy = assert(registry.get(POLICY))
+            local exchange = ((policy.data :: Object).permission_exchange :: Object)
+            exchange.poll_ms = 120000
+            apply(policy)
             local thread_id, workspace, attempt_id = thread(), fresh("ws"), fresh("attempt")
-            local pid = spawn_carrier("bee.harness.carrier:process", request(thread_id, attempt_id, workspace, stream, "8"), "open", nil)
+            local pid = spawn_carrier("bee.harness.carrier:process", request(thread_id, attempt_id, workspace, stream, "45"), "open", nil)
             local view = await_request(workspace)
             test.eq(view.request_kind, "permission")
             test.eq((view.proposal :: Object).kind, "attempt")
             for _ = 1, 3 do hint(pid, thread_id) end
-            local decided_at = now_ms()
             decide(view, "approved")
             for _ = 1, 3 do hint(pid, thread_id) end
-            local settlement = settlement_of(await_carrier(pid), "allow run")
-            test.is_true(now_ms() - decided_at < 1800)
+            local finished, outcome = pcall(function(): Outcome return await_carrier(pid) end)
+            exchange.poll_ms = 2000
+            apply(policy)
+            if not finished then error(tostring(outcome)) end
+            local settlement = settlement_of(outcome :: Outcome, "allow run")
             test.eq(settlement.outcome, "succeeded")
             test.eq(settlement.answer, "The file says: hello from notes")
             local records = records_of(thread_id)

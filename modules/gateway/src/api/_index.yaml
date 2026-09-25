@@ -16,7 +16,8 @@ entries:
   imports:
     gateway: bee.gateway.binding:gateway
     hooks: bee.gateway:hooks
-  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy]}
+    hook_inbox: bee.gateway:hook_inbox
+  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:hook_inbox_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
 - name: hook_status_http
   kind: function.lua
   source: file://hook_http_method.lua
@@ -25,7 +26,8 @@ entries:
   imports:
     gateway: bee.gateway.binding:gateway
     hooks: bee.gateway:hooks
-  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy]}
+    hook_inbox: bee.gateway:hook_inbox
+  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
 - name: hook_mcp_http
   kind: function.lua
   source: file://hook_mcp_method.lua
@@ -35,7 +37,8 @@ entries:
     gateway: bee.gateway.binding:gateway
     mcp: bee.gateway:mcp
     hooks: bee.gateway:hooks
-  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy]}
+    hook_inbox: bee.gateway:hook_inbox
+  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:hook_inbox_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
 - name: mcp_http
   kind: function.lua
   source: file://mcp_method.lua

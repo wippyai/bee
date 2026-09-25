@@ -109,10 +109,10 @@ entries:
     effect: allow
 - name: access_policy_read_policy
   kind: security.policy
-  meta: {comment: target_approval_* requirements inject exactly the host-selected approval policies that a binding may resolve}
+  meta: {comment: target_approval_* requirements inject exactly the host-selected approval policies that a binding may resolve; elevation loads its own call policy and the thread-grant policy the same way}
   policy:
     actions: [security.policy.get]
-    resources: [bee.gateway.security:access_call_policy]
+    resources: [bee.gateway.security:access_call_policy, bee.gateway.security:elevation_policy, bee.security.resources:resource_grant_thread_policy]
     effect: allow
 - name: access
   kind: library.lua
@@ -122,3 +122,19 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     surface: bee.gateway:surface
+- name: elevation_policy
+  kind: security.policy
+  meta:
+    comment: Private per-binding capability elevation calls the approval operations and the resource grant write the consumed decision effects; the thread-bound approval is the authority for every write
+  policy:
+    actions: [funcs.call, registry.get]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.resources.binding:grant, bee:capability_catalog, bee.threads.service:get, bee.threads.service:read_after]
+    effect: allow
+- name: elevation
+  kind: library.lua
+  source: file://elevation.lua
+  modules: [funcs, security, hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    capability: bee.harness.permission:capability

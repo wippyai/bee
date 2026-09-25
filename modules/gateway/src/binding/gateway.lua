@@ -26,6 +26,7 @@ local mcp = require("mcp")
 local surface = require("surface")
 local surface_store = require("surface_store")
 local access = require("access")
+local elevation = require("elevation")
 local sessions = require("sessions")
 local M = {}
 function M.accepts_host(value: unknown): boolean
@@ -1019,6 +1020,51 @@ function M.access_status(binding: Binding, approval_id: string): Reply
     db:release()
     if commit_error then return fail("STORAGE", "grant commit outcome unknown; retry the same approval") end
     return succeed({approval_id = approval_id, status = "granted", revision = updated.revision, traits = grant.traits})
+end
+-- Capability elevation runs as the bound subject: the binding row is
+-- rechecked on every call, and the approval policy comes from the
+-- binding's own surface access. Only the bound subject may elevate its
+-- own attempt.
+local function elevation_binding(value: unknown): (Binding?, Reply?)
+    local object = bounds.object(value)
+    if not object then return nil, fail("INVALID", "request must be an object") end
+    local binding_id = bounds.id(object.binding_id)
+    if not binding_id then return nil, fail("INVALID", "binding_id is not an identifier") end
+    local caller = actor()
+    if not caller then return nil, fail("UNAUTHENTICATED", "no actor") end
+    local db, open_failure = open()
+    if not db then return nil, open_failure end
+    local binding, missing = binding_by_id(db, binding_id)
+    db:release()
+    if not binding then return nil, missing end
+    if binding.subject ~= caller then return nil, fail("DENIED", "only the bound subject elevates its own attempt") end
+    if binding.revoked then return nil, fail("DENIED", "binding is revoked") end
+    local expires = time.parse(FORMAT, binding.expires_at)
+    if not expires or not time.now():before(expires) then return nil, fail("DENIED", "binding has expired") end
+    return binding, nil
+end
+local function elevation_policy(binding: Binding): (string?, Reply?)
+    local current, failure = M.surface(binding)
+    if not current then return nil, failure or fail("STORAGE", "read surface") end
+    local access = current.configuration.access
+    if not access then return nil, fail("DENIED", "this agent has no elevation approval policy") end
+    return access.policy, nil
+end
+function M.request_capability(value: unknown): Reply
+    local binding, refusal = elevation_binding(value)
+    if not binding then return refusal end
+    local policy_name, policy_refusal = elevation_policy(binding)
+    if not policy_name then return policy_refusal end
+    local object = bounds.object(value) or {}
+    return elevation.request(binding, policy_name, {capability = object.capability, parameters = object.parameters, ttl_ms = object.ttl_ms})
+end
+function M.capability_status(value: unknown): Reply
+    local binding, refusal = elevation_binding(value)
+    if not binding then return refusal end
+    local policy_name, policy_refusal = elevation_policy(binding)
+    if not policy_name then return policy_refusal end
+    local object = bounds.object(value) or {}
+    return elevation.status(binding, policy_name, object.approval_id)
 end
 function M.authenticate(token: string, action_id: string, kind: string): (Binding?, Reply?)
     if #token == 0 or #token > 128 then return nil, fail("UNAUTHENTICATED", "token is not presentable") end

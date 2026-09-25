@@ -160,6 +160,7 @@ end
 -- cancellation. A run whose child has not started yet is settled as cancelled
 -- directly with an attempt receipt. Recovery reconciles an uncertain stop.
 local function cancel(run: agent_launch.Run, wait_ms: integer?, idempotency_key: string?): Reply
+    local budget: integer = wait_ms or 0
     local recorded = cancel_intents[run.attempt_id]
     if recorded and recorded.state == "ended" then
         return {ok = true, error = nil, value = {
@@ -183,7 +184,7 @@ local function cancel(run: agent_launch.Run, wait_ms: integer?, idempotency_key:
         recorded_at = math.floor(time.now():unix_nano() / 1000000),
     }
 
-    if not wait_ms or wait_ms == 0 then
+    if budget == 0 then
         if not stored and idempotency_key ~= nil then
             -- Cancel before start: an admitted attempt that has not started yet.
             cancel_intents[run.attempt_id] = {
@@ -209,7 +210,7 @@ local function cancel(run: agent_launch.Run, wait_ms: integer?, idempotency_key:
         return {ok = true, error = nil, value = {thread_id = run.thread_id, attempt_id = run.attempt_id, state = "cancelling"}}
     end
 
-    local deadline = math.floor(time.now():unix_nano() / 1000000) + wait_ms
+    local deadline = math.floor(time.now():unix_nano() / 1000000) + budget
     local stopped = false
     local uncertain_stop = false
     while math.floor(time.now():unix_nano() / 1000000) < deadline do

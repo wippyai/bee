@@ -22,7 +22,7 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, launch_definitions: string}
+type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, launch_definitions: string, capability: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
     read = "bee.gateway:tool_read_policy_ref",
     message = "bee.gateway:tool_message_policy_ref",
@@ -38,6 +38,7 @@ local TOOL_POLICY_REFS: ToolPolicyRefs = {
     application_open = "bee.gateway:tool_application_open_policy_ref",
     capabilities = "bee.gateway:tool_read_policy_ref",
     launch_definitions = "bee.gateway:tool_launch_policy_ref",
+    capability = "bee.gateway:tool_read_policy_ref",
 }
 local BUILTIN_POLICY_REFS: {[string]: boolean} = {}
 for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = true end
@@ -189,6 +190,20 @@ local TOOLS: {Tool} = {
             source_overlay_id = {type = "string", minLength = 1, maxLength = 160},
             version = {type = "string", minLength = 1, maxLength = 160},
         }}},
+    {name = "request_capability", description = "Ask the person to elevate this attempt with one host catalog capability for a bounded time: the approval shows the catalog's own wording bound to this thread and attempt, and on approval this attempt's placement resolves one grant for the authenticated thread actor. Filing the request grants nothing; poll capability_status for the decision. A retry replays the same approval.",
+        operation = "bee.gateway.binding:request_capability",
+        policies = {TOOL_POLICY_REFS.capability}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"capability"}, properties = {
+            capability = {type = "string", minLength = 1, maxLength = 160},
+            parameters = {type = "object"},
+            ttl_ms = {type = "integer", minimum = 1, maximum = 86400000},
+        }}},
+    {name = "capability_status", description = "Poll one elevation request by approval_id. While the person has not decided it reports the pending decision; on approval it consumes the decision exactly once and writes the thread-actor grant the attempt resolves, returning its grant. A replayed poll replays the same grant.",
+        operation = "bee.gateway.binding:capability_status",
+        policies = {TOOL_POLICY_REFS.capability}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"approval_id"}, properties = {
+            approval_id = {type = "string", minLength = 1, maxLength = 160},
+        }}},
     {name = "application_open", description = "Open one application already applied and admitted in this agent's bound workspace through the existing workspace host. Arguments are literal launch strings. Pending retries coalesce; completed retries use the broker's bounded replay cache.", operation = "bee.apps:open_call",
         policies = {TOOL_POLICY_REFS.application_open}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"definition_id", "arguments", "idempotency_key"}, properties = {
@@ -242,6 +257,11 @@ M.OUTPUT_SCHEMAS = {
             diagnostics = {type = "array"}, human_steps = {type = "array"}}}),
     publish = output_schema({type = "object"}),
     application_open = output_schema({type = "object"}),
+    request_capability = output_schema({type = "object", additionalProperties = false,
+        properties = {approval_id = {type = "string"}, status = {type = "string"}}}),
+    capability_status = output_schema({type = "object", additionalProperties = false,
+        properties = {approval_id = {type = "string"}, status = {type = "string"},
+            grant_id = {type = "string"}, expires_at = {type = "string"}, authorization_epoch = {type = "integer"}}}),
 }
 -- Opening a reviewed application is deliberately not a base capability.  The
 -- surface installs this one built-in trait when the binding admits the tool;
@@ -422,6 +442,35 @@ function M.sessions_arguments(params: Object): (Object?, string?)
         limit = declared
     end
     return {cursor = cursor, limit = limit}, nil
+end
+-- An elevation request names one catalog capability with its parameters
+-- and an optional TTL; the endpoint supplies the binding. Status polls
+-- the request by approval id.
+function M.capability_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"capability", "parameters", "ttl_ms"})
+    if unknown_field then return nil, unknown_field end
+    local name = bounds.id(arguments.capability)
+    if not name then return nil, "capability is required and must be an identifier" end
+    local parameters = bounds.object(arguments.parameters == nil and {} or arguments.parameters)
+    if not parameters then return nil, "parameters must be an object" end
+    local request: Object = {capability = name, parameters = parameters}
+    if arguments.ttl_ms ~= nil then
+        local ttl = bounds.integer(arguments.ttl_ms)
+        if not ttl or ttl < 1 or ttl > 86400000 then return nil, "ttl_ms must be between 1 and 86400000" end
+        request.ttl_ms = ttl
+    end
+    return request, nil
+end
+function M.capability_status_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"approval_id"})
+    if unknown_field then return nil, unknown_field end
+    local approval_id = bounds.id(arguments.approval_id)
+    if not approval_id then return nil, "approval_id is required and must be an identifier" end
+    return {approval_id = approval_id}, nil
 end
 -- The capability report takes no arguments: the binding selects the surface.
 function M.capabilities_arguments(params: Object): (Object?, string?)

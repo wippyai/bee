@@ -82,6 +82,34 @@ local function define_tests()
             for _, name in ipairs({"workspace_id", "workdir", "thread", "placement", "saved_profile_id", "saved_profile_revision"}) do test.not_nil(properties[name]) end
             test.is_true(tool.description:find("PLACEMENT_UNAVAILABLE", 1, true) ~= nil)
         end)
+        test.it("decodes capability elevation requests with a bounded TTL", function()
+            local tool = mcp.tool("request_capability")
+            if not tool then error("request_capability tool") end
+            test.eq(tool.operation, "bee.gateway.binding:request_capability")
+            local properties = tool.schema.properties :: Object
+            for _, name in ipairs({"capability", "parameters", "ttl_ms"}) do test.not_nil(properties[name]) end
+            local chosen = mcp.capability_arguments({arguments = {capability = "app.database",
+                parameters = {name = "journal"}, ttl_ms = 60000}})
+            test.eq(chosen and chosen.capability, "app.database")
+            test.eq(chosen and chosen.ttl_ms, 60000)
+            local defaulted = mcp.capability_arguments({arguments = {capability = "threads.read"}})
+            test.eq(defaulted and (defaulted.parameters :: Object) ~= nil, true)
+            local _, missing = mcp.capability_arguments({arguments = {parameters = {}}})
+            test.eq(missing, "capability is required and must be an identifier")
+            local _, bad_ttl = mcp.capability_arguments({arguments = {capability = "threads.read", ttl_ms = 0}})
+            test.eq(bad_ttl, "ttl_ms must be between 1 and 86400000")
+            local _, bad_params = mcp.capability_arguments({arguments = {capability = "threads.read", parameters = "x"}})
+            test.eq(bad_params, "parameters must be an object")
+            local status = mcp.tool("capability_status")
+            if not status then error("capability_status tool") end
+            test.eq(status.operation, "bee.gateway.binding:capability_status")
+            local polled = mcp.capability_status_arguments({arguments = {approval_id = "approval-1"}})
+            test.eq(polled and polled.approval_id, "approval-1")
+            local _, no_id = mcp.capability_status_arguments({arguments = {}})
+            test.eq(no_id, "approval_id is required and must be an identifier")
+            test.not_nil(mcp.OUTPUT_SCHEMAS.request_capability)
+            test.not_nil(mcp.OUTPUT_SCHEMAS.capability_status)
+        end)
         test.it("decodes one strict JSON-RPC request and refuses the rest", function()
             local call = mcp.decode({jsonrpc = "2.0", id = 7, method = "tools/list"})
             if not call then error("decode") end

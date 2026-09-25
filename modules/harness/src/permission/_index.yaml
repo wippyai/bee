@@ -16,3 +16,11 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+- name: capability
+  kind: library.lua
+  source: file://capability.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    capability_catalog: bee.gov:capability_catalog

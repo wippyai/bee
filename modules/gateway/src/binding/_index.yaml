@@ -28,6 +28,7 @@ entries:
     surface: bee.gateway:surface
     surface_store: bee.gateway.persist:surface_store
     access: bee.gateway.security:access
+    elevation: bee.gateway.security:elevation
 - name: open
   kind: function.lua
   source: file://open_method.lua
@@ -130,6 +131,36 @@ entries:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
     - bee.gateway.security:database_ref_policy
+- name: request_capability
+  kind: function.lua
+  source: file://request_capability_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:elevation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.security.resources:resource_grant_thread_policy
+- name: capability_status
+  kind: function.lua
+  source: file://capability_status_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:elevation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.security.resources:resource_grant_thread_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: drain

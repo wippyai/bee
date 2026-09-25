@@ -64,7 +64,7 @@ entries:
   - name: associate
     description: Bind a workspace name to an admitted root under the host ceiling; optional expected_revision supports atomic create or CAS replacement
   - name: grant
-    description: Issue a grant to the authenticated subject for an audience, pinned to the association revision and root digest
+    description: Issue a grant to the authenticated subject for an audience, pinned to the association revision and root digest; a caller admitted to grant_thread may name a thread-bound subject with its thread instead
   - name: revoke
     description: End one grant
   - name: revoke_all

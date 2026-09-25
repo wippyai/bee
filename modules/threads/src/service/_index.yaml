@@ -302,3 +302,15 @@ entries:
   method: ack
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: inbox_offer
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: offer
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]}
+- name: inbox_transport
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: transport
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]}

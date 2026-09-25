@@ -486,6 +486,15 @@ CREATE TABLE bee_thread_inbox_items (
 );
 CREATE INDEX bee_thread_inbox_sender ON bee_thread_inbox_items(sender_actor, sender_action_id, record_id);
 ]]
+-- An offer belongs to one carrier generation. Reclaiming it under a newer
+-- generation preserves the inbox record and its digest for agent deduplication.
+local ACTION_INBOX_PUSH_SQL = [[
+ALTER TABLE bee_thread_inbox_items ADD COLUMN offer_attempt_id TEXT;
+ALTER TABLE bee_thread_inbox_items ADD COLUMN offer_carrier_epoch INTEGER;
+ALTER TABLE bee_thread_inbox_items ADD COLUMN offer_count INTEGER NOT NULL DEFAULT 0 CHECK(offer_count >= 0);
+ALTER TABLE bee_thread_inbox_items ADD COLUMN offered_at TEXT;
+ALTER TABLE bee_thread_inbox_items ADD COLUMN transport_accepted_at TEXT;
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -498,6 +507,7 @@ local list: {Migration} = {
     {id = 9, name = "notices", sql = NOTICES_SQL, rebuild = false},
     {id = 10, name = "workspace_attribution", sql = WORKSPACE_SQL, rebuild = false},
     {id = 11, name = "action_inbox", sql = ACTION_INBOX_SQL, rebuild = false},
+    {id = 12, name = "action_inbox_push", sql = ACTION_INBOX_PUSH_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

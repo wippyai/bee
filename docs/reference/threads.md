@@ -181,17 +181,20 @@ The owner assigns a record ID and stores the SHA-256 digest of the canonical
 `{message_id, content}` payload with each item. Retrying the same actor,
 destination thread and idempotency key with the same request returns the
 stored receipt; a different request conflicts. Each action holds at most 2,048
-inbox items. The current local state path is `committed` to `acknowledged` or
-`replied`. The schema also defines `offered` and `transport_accepted` for later
-carrier work; neither state is written by this implementation. A commit does
-not claim delivery to a running model.
+inbox items. The target carrier may call `inbox_offer` for only the oldest
+outstanding item under its current attempt and carrier epoch. A replacement
+carrier reoffers the same record ID and digest. `inbox_transport` records that
+the transport accepted the offered input under that fence. An agent's own
+`inbox_ack` or correlated reply advances it to `acknowledged` or `replied`.
+Transport acceptance does not claim delivery to a running model.
 
 `inbox_reply` commits a reply in the original sender's action inbox and marks
 the referenced request `replied` in the same local transaction. Its explicit
 `in_reply_to` points to the request record on the other thread; the owner
 verifies the two admitted actions and the request before accepting it. Ordinary
 `record` replies still settle only same-thread recipient obligations. There is
-no driver push, PTY injection or Hive forwarding for action inboxes yet.
+The owner wakes the thread waiter on an inbox commit. Driver push and Hive
+forwarding are separate controller and transport steps.
 
 `inbox_describe` returns only an action address, current grant epoch, attempt
 state and latest inbox delivery state. A caller may describe another action

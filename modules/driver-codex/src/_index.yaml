@@ -280,3 +280,15 @@ entries:
       path: .codex/auth.json
       content_format: json
       initialize: []
+- name: command
+  kind: registry.entry
+  meta:
+    type: bee.application_command
+    comment: CLI command to launch Codex CLI in the agent window
+  data:
+    name: codex
+    definition_id: bee.harness.window:app
+    arguments:
+    - bee.driver.codex:default_window
+    fullscreen: true
+

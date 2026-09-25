@@ -209,3 +209,15 @@ entries:
       path: .gemini/antigravity-cli/antigravity-oauth-token
       content_format: opaque
       initialize: []
+- name: command
+  kind: registry.entry
+  meta:
+    type: bee.application_command
+    comment: CLI command to launch Antigravity CLI in the agent window
+  data:
+    name: agy
+    definition_id: bee.harness.window:app
+    arguments:
+    - bee.driver.agy:default_window
+    fullscreen: true
+

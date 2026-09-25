@@ -2,10 +2,22 @@
 local registry = require("registry")
 local catalog = require("catalog")
 local arguments = require("arguments")
-local managed = require("managed")
 type Handler = {name: string, arguments: {string}, fullscreen: boolean}
 type Launch = {definition_id: string, arguments: {string}, fullscreen: boolean}
+type ApplicationCommand = {name: string, definition_id: string, arguments: {string}, fullscreen: boolean}
+
+local KNOWN_PACKAGES: {[string]: string} = {
+    agy = "bee/agents",
+    claude = "bee/agents",
+    codex = "bee/agents",
+    grok = "bee/agents",
+    muse = "bee/agents",
+    agent = "bee/agents",
+}
+
 local M = {}
+M.KNOWN_PACKAGES = KNOWN_PACKAGES
+
 function M.decode(value: unknown): {Handler}?
     if value == nil then return {} end
     if type(value) ~= "table" then return nil end
@@ -32,10 +44,63 @@ function M.decode(value: unknown): {Handler}?
     end
     return result
 end
+
+function M.decode_command(value: unknown): ApplicationCommand?
+    if type(value) ~= "table" then return nil end
+    local raw = value :: {[string]: unknown}
+    local data = raw
+    if type(raw.data) == "table" then
+        data = raw.data :: {[string]: unknown}
+    end
+    local name = data.name
+    if type(name) ~= "string" or #name == 0 or #name > 40 or not name:match("^[a-z][a-z0-9_-]*$") then
+        return nil
+    end
+    if name == "run" or name == "runtime" or name == "update" then
+        return nil
+    end
+    local definition_id = data.definition_id
+    if type(definition_id) ~= "string" or #definition_id == 0 or #definition_id > 128 then
+        return nil
+    end
+    local fullscreen = data.fullscreen
+    if fullscreen ~= nil and type(fullscreen) ~= "boolean" then
+        return nil
+    end
+    local prefix = arguments.decode(data.arguments)
+    if not prefix then
+        return nil
+    end
+    local name_str: string = name :: string
+    local def_id_str: string = definition_id :: string
+    local result: ApplicationCommand = {
+        name = name_str,
+        definition_id = def_id_str,
+        arguments = prefix,
+        fullscreen = fullscreen == true,
+    }
+    return result
+end
+
+function M.unknown_error(name: string): string
+    local provider = KNOWN_PACKAGES[name]
+    if provider then
+        return "Unknown Bee command: " .. name .. " (install " .. provider .. ")"
+    end
+    return "Unknown Bee command: " .. name
+end
+
 function M.resolve(name: string, tail: {string}): (Launch?, string?)
+    if type(name) ~= "string" or #name == 0 or #name > 40 or not name:match("^[a-z][a-z0-9_-]*$") then
+        return nil, "Invalid Bee command"
+    end
+
+    local admitted: {[string]: boolean} = {}
     local selected: Launch? = nil
+
     for _, binding in ipairs(catalog.bindings()) do
         if catalog.descriptor(binding.definition_id) then
+            admitted[binding.definition_id] = true
             local entry, err = registry.get(binding.definition_id)
             if err then return nil, tostring(err) end
             local meta: unknown = entry.meta.application
@@ -55,14 +120,33 @@ function M.resolve(name: string, tail: {string}): (Launch?, string?)
             end
         end
     end
-    local agent, agent_error = managed.command(name)
-    if agent_error then return nil, agent_error end
-    if agent then
-        if selected then return nil, "Ambiguous Bee command: " .. name end
-        if #tail > 0 then return nil, "Managed Bee command does not accept raw arguments: " .. name end
-        selected = {definition_id = "bee.harness.window:app", arguments = {agent.definition_ref}, fullscreen = agent.fullscreen}
+
+    local entries, find_error = registry.find({["meta.type"] = "bee.application_command"})
+    if find_error then return nil, tostring(find_error) end
+    if entries then
+        if #entries > 64 then return nil, "Too many application commands" end
+        for _, raw in ipairs(entries) do
+            local cmd = M.decode_command(raw)
+            if not cmd then return nil, "Invalid application command: " .. tostring(raw.id) end
+            if cmd.name == name and admitted[cmd.definition_id] then
+                if selected then return nil, "Ambiguous Bee command: " .. name end
+                if cmd.definition_id == "bee.harness.window:app" and #tail > 0 then
+                    return nil, "Managed Bee command does not accept raw arguments: " .. name
+                end
+                local values: {string} = {}
+                for _, value in ipairs(cmd.arguments) do values[#values + 1] = value end
+                for _, value in ipairs(tail) do values[#values + 1] = value end
+                local decoded = arguments.decode(values)
+                if not decoded then return nil, "Too many or oversized application arguments" end
+                selected = {definition_id = cmd.definition_id, arguments = decoded, fullscreen = cmd.fullscreen}
+            end
+        end
     end
-    if not selected then return nil, "Unknown Bee command: " .. name end
+
+    if not selected then
+        return nil, M.unknown_error(name)
+    end
     return selected, nil
 end
+
 return M

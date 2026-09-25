@@ -5,45 +5,36 @@ local time = require("time")
 local channel = require("channel")
 local io = require("io")
 local system = require("system")
-local registry = require("registry")
+local types = require("types")
+type Channel = channel.Channel
 local EXECUTION = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 local function main(node: string)
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
     local supervisor: string? = nil
-    if node == "node-0" then
-        -- The supervisor runs under the host service's own grants; the fixture
-        -- adds only the registration of its names.
-        local service = registry.get("bee.hive_host:supervisor_service")
-        local data: unknown = service and service.data
-        local lifecycle: unknown = type(data) == "table" and data.lifecycle or nil
-        local grant: unknown = type(lifecycle) == "table" and lifecycle.security or nil
-        local grants: unknown = type(grant) == "table" and grant.policies or nil
-        if type(grants) ~= "table" then error("the host supervisor service declares no policies") end
-        local names: {string} = {"bee.desktop_admission_probe:names"}
-        for _, name in ipairs(grants :: {unknown}) do
-            if type(name) ~= "string" then error("the host supervisor service declares a malformed policy") end
-            names[#names + 1] = name
+    local releases: Channel<process.Message>? = nil
+    if node == "node-0" or node == "node-1" then
+        if node == "node-0" then
+            local registered, register_error = process.registry.register("bee.desktop_admission_probe.release")
+            if not registered then error(tostring(register_error)) end
+            releases = assert(process.listen("bee.desktop.fixture.released", {message = true}))
         end
-        local policies: {security.Policy} = {}
-        for _, name in ipairs(names) do
-            local policy, err = security.policy(name)
-            if not policy then error(tostring(err)) end
-            policies[#policies + 1] = policy
+        -- The service starts under its host-selected grants. A published name
+        -- is its readiness event; the command starts no process host itself.
+        local guard = time.after("45s")
+        local ticker = time.ticker("100ms")
+        while true do
+            local named = process.registry.lookup(types.SUPERVISOR_NAME .. "/" .. node)
+            if named then
+                supervisor = tostring(named)
+                local monitored, monitor_error = process.monitor(supervisor)
+                if not monitored then error(tostring(monitor_error)) end
+                break
+            end
+            local observed = channel.select({events:case_receive(), ticker:channel():case_receive(), guard:case_receive()})
+            if not observed.ok or observed.channel == guard then error("node supervisor did not publish its name") end
         end
-        local pid, err = process.with_options({}):with_scope(security.new_scope(policies)):spawn_monitored(
-            "bee.hive_host.supervisor:main", "bee.hive_host:supervisor_host", {configured_nodes = {}, desktop = {
-                execution = EXECUTION, expires_at = time.now():add("120s"):utc():format("2006-01-02T15:04:05.000Z07:00"),
-                allowed_nodes = {"node-1", "node-2"}, application = "bee.console:app"}})
-        if not pid then error(tostring(err)) end
-        supervisor = tostring(pid)
-        local timeout = time.after("2s")
-        local observed = channel.select({events:case_receive(), timeout:case_receive()})
-        if observed.ok and observed.channel == events then
-            local result: unknown = observed.value.result
-            if type(result) == "table" and result.error ~= nil then error("owner boot: " .. tostring(result.error)) end
-            error("owner exited during startup")
-        end
+        ticker:stop()
     end
     local addr, address_error = system.node.addr()
     if not addr then error(tostring(address_error)) end
@@ -51,7 +42,20 @@ local function main(node: string)
     while true do
         local command, command_error = io.readline()
         if not command then error(tostring(command_error)) end
-        if command == "probe" or command == "crash" or command == "recover" or command == "exit" then
+        if command:sub(1, 14) == "await_release " and releases then
+            local recipient = command:sub(15)
+            local guard = time.after("45s")
+            while true do
+                local selected = channel.select({releases:case_receive(), events:case_receive(), guard:case_receive()})
+                if not selected.ok or selected.channel == guard then error("controller release did not complete for " .. recipient) end
+                if selected.channel == events and selected.value.kind == process.event.EXIT then error("owner exited before controller release") end
+                if selected.channel == releases then
+                    local data: unknown = selected.value:payload():data()
+                    if type(data) == "table" and data.recipient == recipient then break end
+                end
+            end
+            io.print("BEE_HIVE_SUPERVISOR released " .. recipient)
+        elseif command == "probe" or command == "crash" or command == "recover" or command == "exit" then
             local policy, err = security.policy("bee.desktop_admission_probe:client_policy")
             if not policy then error(tostring(err)) end
             local child, spawn_error = process.with_options({}):with_scope(security.new_scope({policy}))
@@ -72,9 +76,9 @@ local function main(node: string)
                     break
                 end
             end
-            io.print("BEE_HIVE_SUPERVISOR probe_passed")
+            io.print("BEE_HIVE_SUPERVISOR probe_passed" .. ((command == "crash" or command == "exit") and " " .. tostring(child) or ""))
         elseif command == "stop" then
-            if supervisor then process.cancel(supervisor) end
+            if releases then process.unlisten(releases); process.registry.unregister("bee.desktop_admission_probe.release") end
             io.print("BEE_HIVE_SUPERVISOR stopped")
             return
         else error("unknown fixture command") end

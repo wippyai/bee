@@ -26,6 +26,9 @@ func TestHiveDesktopAdmission(t *testing.T) { runHiveDesktopAdmission(t, false) 
 // remote actor EXIT gate exercised by TestHiveDesktopAdmission.
 func TestHiveDesktopCatalog(t *testing.T) { runHiveDesktopAdmission(t, true) }
 
+// The separate remote physical fixture starts its supervisor explicitly.
+const desktopSupervisorOverride = "bee.hive_host:supervisor_service:lifecycle.auto_start=false"
+
 // projectReplacements reads the component modules the project composes from
 // source: its .wippy.yaml workspace replacements.
 func projectReplacements(t *testing.T, repository string) map[string]string {
@@ -47,11 +50,6 @@ func projectReplacements(t *testing.T, repository string) map[string]string {
 	}
 	return project.Workspace.Replacements
 }
-
-// The fixture supplies the desktop supervisor's explicit input and owns its
-// lifecycle, so the composition's default supervisor service stays stopped;
-// that service is tested separately.
-const desktopSupervisorOverride = "bee.hive_host:supervisor_service:lifecycle.auto_start=false"
 
 func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	binary := os.Getenv("BEE_HIVE_SUPERVISOR_RUNTIME")
@@ -144,6 +142,43 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		if err := os.CopyFS(filepath.Join(folder, "src"), os.DirFS(sourceSnapshot)); err != nil {
 			t.Fatal(err)
 		}
+		if i == 0 {
+			servicePath := filepath.Join(folder, "src", "hive_host", "_index.yaml")
+			service, err := os.ReadFile(servicePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			serviceAnchor := "  input:\n  - configured_nodes: []\n"
+			expiry := time.Now().Add(5 * time.Minute).UTC().Format("2006-01-02T15:04:05.000Z")
+			input := serviceAnchor + "    desktop:\n      execution: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n      expires_at: '" + expiry + "'\n      allowed_nodes: [node-1, node-2]\n      application: bee.console:app\n"
+			if strings.Count(string(service), serviceAnchor) != 1 {
+				t.Fatal("desktop supervisor input anchor changed")
+			}
+			if err := os.WriteFile(servicePath, []byte(strings.Replace(string(service), serviceAnchor, input, 1)), 0600); err != nil {
+				t.Fatal(err)
+			}
+			// Report the exact owner's completed controller revocation to the
+			// acceptance. A local EXIT and its remote release are independent events.
+			path := filepath.Join(folder, "src", "launch", "supervisor.lua")
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			anchor := `                        if request.op == "attach" then result = attachments.attach(selected_desktop.grants, request.recipient, request.mode)
+                        else result = attachments.detach(selected_desktop.grants, request.recipient) end`
+			probe := `                        local was_controller = selected_desktop.grants.controller and selected_desktop.grants.controller.recipient == request.recipient
+                        if request.op == "attach" then result = attachments.attach(selected_desktop.grants, request.recipient, request.mode)
+                        else result = attachments.detach(selected_desktop.grants, request.recipient) end
+                        if request.op == "detach" and was_controller and result.error_code == "" then
+                            process.send("bee.desktop_admission_probe.release", "bee.desktop.fixture.released", {recipient = request.recipient})
+                        end`
+			if strings.Count(string(body), anchor) != 1 {
+				t.Fatal("controller release probe anchor changed")
+			}
+			if err := os.WriteFile(path, []byte(strings.Replace(string(body), anchor, probe, 1)), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
 		for _, module := range replacements {
 			if err := os.CopyFS(filepath.Join(folder, module), os.DirFS(filepath.Join(repository, module))); err != nil {
 				t.Fatal(err)
@@ -228,7 +263,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	}
 	rejoinDirectory := ""
 	start := func(i int, folder string) *procRunner {
-		cmd := exec.CommandContext(ctx, binary, "run", "--console", "--override", desktopSupervisorOverride, "hive-desktop-admission-probe", "--", fmt.Sprintf("node-%d", i))
+		cmd := exec.CommandContext(ctx, binary, "run", "--console", "hive-desktop-admission-probe", "--", fmt.Sprintf("node-%d", i))
 		if i == 1 && nativeClient != "" {
 			cmd = exec.CommandContext(ctx, nativeClient)
 		}
@@ -275,11 +310,11 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 			}
 		}
 	}
-	command := func(runner *procRunner, cmd, expected string) {
+	command := func(runner *procRunner, cmd, expected string) string {
 		if _, err := io.WriteString(runner.stdin, cmd+"\n"); err != nil {
 			t.Fatal(err)
 		}
-		marker(runner, expected)
+		return marker(runner, expected)
 	}
 	a := start(0, stage(0, ""))
 	seed := marker(a, "ready ")
@@ -293,11 +328,13 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	if catalogOnly {
 		t.Log("catalog, controller and observer authority, controller conflict, detach/rejoin, and retained shell state passed")
 	} else if nativeClient == "" {
-		command(b, "crash", "probe_passed")
+		crashed := strings.TrimSpace(command(b, "crash", "probe_passed"))
+		command(a, "await_release "+crashed, "released "+crashed)
 		command(b, "recover", "probe_passed")
 		// More than the bridge's 64-client capacity: exited actors must release records.
 		for i := 0; i < 66; i++ {
-			command(b, "exit", "probe_passed")
+			exited := strings.TrimSpace(command(b, "exit", "probe_passed"))
+			command(a, "await_release "+exited, "released "+exited)
 		}
 		command(b, "recover", "probe_passed")
 	} else if os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_BINARY") != "" {

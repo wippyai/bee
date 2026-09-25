@@ -789,6 +789,15 @@ function M.event(state: State, event: process.Event, now: integer)
     local client = state.clients[sender]
     if client then revoke(state, client, now) end
 end
+-- Only the authenticated peer supervisor reports a source-node actor EXIT.
+-- The caller of this library verifies that peer before invoking this method.
+function M.revoke_recipient(state: State, recipient: string, now: integer)
+    local client = state.clients[recipient]
+    if client then revoke(state, client, now) end
+end
+function M.allows_node(state: State, node: string): boolean
+    return state.allowed[node] == true or state.enrolled[node] == true
+end
 -- A display asks, through its workspace's supervisor, to show another
 -- workspace. The bridge moves the display's controlling client: it attaches
 -- the client to the same display in the target workspace, leasing that

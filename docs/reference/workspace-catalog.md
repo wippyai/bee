@@ -178,6 +178,13 @@ allocates one node display (`{owner_execution, desktop_id}`); displays belong to
 the node and attach to any workspace. `bee.desktop:current` (`{owner_execution}`)
 answers the sender's current session in the attach receipt's shape.
 
+A remote display registers its lifetime with the supervisor on its own node
+before attaching to the owner. That supervisor monitors the local display
+process and reports its exact exit to the owner node's supervisor. The owner
+accepts the notice only from the protected supervisor host of a node its host
+admitted, and revokes that recipient's attachment. This covers a display
+process crash even when a remote process monitor reports only node loss.
+
 ### Switching a display's workspace
 
 A display the bridge serves shows another workspace without its client

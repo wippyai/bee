@@ -13,6 +13,11 @@ M.LAUNCH = "bee.desktop:launch"
 -- The client's current session: after a switch its display shows another
 -- workspace under a new session and mount.
 M.CURRENT = "bee.desktop:current"
+-- A display registers its lifetime with its own node before the remote
+-- attach. Remote process monitors do not report individual actor exits.
+M.LIFETIME = "bee.desktop.lifetime"
+M.LIFETIME_REPLY = "bee.desktop.lifetime.reply."
+M.LIFETIME_EXIT = "bee.desktop.lifetime.exit"
 -- A catalog page holds at most this many workspaces; a cursor is at most this long.
 M.MAX_PAGE = 50
 M.MAX_CURSOR = 2200

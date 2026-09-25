@@ -93,6 +93,14 @@ def database_environment(directory, **overrides):
 CLASSIC_ROOT = "bee.environment:workspace_root"
 
 
+def retain_test_suites(tests, suites):
+    """Keep selected suites and their required test support in a fixture copy."""
+    keep = set(suites) | {"principals", "workspace_catalog", "storage"}
+    for child in tests.iterdir():
+        if child.is_dir() and child.name not in keep:
+            shutil.rmtree(child)
+
+
 def _catalog(database):
     return sqlite3.connect(f"file:{Path(database)}?mode=ro", uri=True)
 

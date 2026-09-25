@@ -12,7 +12,6 @@ Required environment: BEE_RUNTIME (the combined runtime binary) only.
 """
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -20,7 +19,7 @@ import time
 import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from workspace import RUNTIME, fixture_workspace  # noqa: E402
+from workspace import RUNTIME, fixture_workspace, retain_test_suites  # noqa: E402
 
 SUITES = ("placement", "harness", "driver", "credentials", "threads", "gateway", "managed", "principals")
 TEST = "cross_session_acceptance_test"
@@ -31,9 +30,7 @@ ACCEPTANCES = (
 
 
 def only_acceptance(tests):
-    for child in tests.iterdir():
-        if child.is_dir() and child.name not in SUITES:
-            shutil.rmtree(child)
+    retain_test_suites(tests, SUITES)
     for index in tests.rglob("_index.yaml"):
         document = yaml.safe_load(index.read_text())
         entries = document.get("entries", [])

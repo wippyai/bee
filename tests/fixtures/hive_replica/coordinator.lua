@@ -298,7 +298,13 @@ local function exact_agent_overlay(scenario: AgentScenario, evidence: {[string]:
     if evidence.artifact_digest ~= scenario.artifact_digest then error("activation observed another agent artifact digest") end
     local entries, decode_error = artifact.decode(evidence.artifact_bytes, evidence.artifact_digest)
     if not entries then error(tostring(decode_error)) end
-    local matches, match_error = materializer.matches(AGENT_OVERLAY, entries)
+    if type(evidence.application_admission_bytes) ~= "string"
+        or type(evidence.application_admission_digest) ~= "string" then
+        error("retained agent activation omitted its measured admission")
+    end
+    local admission = {bytes = evidence.application_admission_bytes,
+        digest = evidence.application_admission_digest}
+    local matches, match_error = materializer.matches_composed(AGENT_OVERLAY, entries, admission)
     if matches == nil then error(tostring(match_error)) end
     return matches
 end
@@ -332,9 +338,11 @@ local function activate_agent_artifact(scenario: AgentScenario): {[string]: unkn
             "apply retained agent artifact")
         if settled.phase == "settled" then break end
     end
-    if settled.phase ~= "settled" or settled.outcome ~= "applied" or not exact_agent_overlay(scenario, settled) then
-        error("retained agent artifact was not applied exactly")
+    if settled.phase ~= "settled" or settled.outcome ~= "applied" then
+        error("retained agent artifact did not apply: phase=" .. tostring(settled.phase)
+            .. " outcome=" .. tostring(settled.outcome) .. " error=" .. tostring(settled.error))
     end
+    if not exact_agent_overlay(scenario, settled) then error("retained agent artifact overlay differs from approved bytes") end
     return settled
 end
 local exact_application_overlay: (({[string]: unknown}) -> boolean)

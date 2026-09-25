@@ -79,7 +79,8 @@ func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
 	wantPolicies := []string{
 		"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
 		"bee.security.hive:hive_policy_exposure_policy", "bee.security.hive:hive_dispatch_policy", "bee.security.hive:hive_names_policy",
-		"bee.security.hive:hive_advertise_policy", "bee.security.hive:hive_execute_policy", "bee.security.hive:hive_invite_policy", "bee.security.hive:workspace_command_policy",
+		"bee.security.hive:hive_advertise_policy", "bee.security.hive:hive_execute_policy", "bee.security.hive:hive_invite_policy",
+		"bee.security.hive:hive_owner_stop_policy", "bee.security.hive:workspace_command_policy",
 		"bee.hive_host.desktop:host_policy", "bee.security.desktop:desktop_catalog_policy", "bee.security.desktop:desktop_catalog_resource_policy",
 		"bee.security.storage:workspace_catalog_read_policy",
 		"bee.hive_host.desktop:catalog_call_policy",

@@ -25,7 +25,7 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from workspace import RUNTIME, fixture_workspace  # noqa: E402
+from workspace import RUNTIME, fixture_workspace, retain_test_suites  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITES = ("placement", "harness", "driver", "credentials", "threads", "gateway", "managed", "principals", "workspace_catalog", "storage")
@@ -38,9 +38,7 @@ def main():
         sys.exit(f"BEE_RUNTIME must name the combined runtime binary; got {RUNTIME!r}")
     with fixture_workspace(managed_gateway=True) as folder:
         tests = folder / "src/tests"
-        for child in tests.iterdir():
-            if child.is_dir() and child.name not in SUITES:
-                shutil.rmtree(child)
+        retain_test_suites(tests, SUITES)
         shutil.copytree(ROOT / "tests/fixtures/managed_launch_fixture", tests / "managed_launch_fixture")
         path = tests / "managed_launch_fixture/_index.yaml"
         document = yaml.safe_load(path.read_text())

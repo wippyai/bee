@@ -34,7 +34,9 @@ def main():
                        "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers")}
         environment.pop("ANTHROPIC_API_KEY", None)
         started = time.time()
-        run = subprocess.run([str(RUNTIME), "test", "--host", "bee:terminal"], cwd=folder, capture_output=True, text=True,
+        run = subprocess.run([str(RUNTIME), "test", "--host", "bee:terminal", "test",
+                              "bee.harness.catalog:agent_launch_acceptance_test"],
+                             cwd=folder, capture_output=True, text=True,
                              timeout=int(os.environ.get("BEE_THREAD_LAUNCH_TIMEOUT", "600")), env=environment)
         out = re.sub(r"\x1b\[[0-9;]*m", "", run.stdout + run.stderr).replace("\r", "\n")
         print(f"runtime test exit {run.returncode} after {time.time() - started:.1f} s")

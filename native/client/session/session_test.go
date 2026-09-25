@@ -25,6 +25,34 @@ type desktopScript struct {
 	created      []string
 }
 
+type detachProbe struct {
+	called bool
+}
+
+func (p *detachProbe) Detach(ctx context.Context, key string, mounted hive.DesktopMount) error {
+	p.called = true
+	deadline, ok := ctx.Deadline()
+	if !ok || time.Until(deadline) < 5*time.Second {
+		return errors.New("detach was given a startup speed deadline")
+	}
+	if ctx.Err() != nil || key != "session-detach-"+mounted.Session {
+		return errors.New("detach lost its active session authority")
+	}
+	return nil
+}
+
+func TestDetachKeepsSessionAuthorityAndHangGuard(t *testing.T) {
+	foreground, cancel := context.WithCancel(context.Background())
+	cancel()
+	probe := &detachProbe{}
+	if err := detachMounted(foreground, probe, hive.DesktopMount{Session: "attached"}); err != nil {
+		t.Fatal(err)
+	}
+	if !probe.called {
+		t.Fatal("desktop detach was not requested")
+	}
+}
+
 func (s *desktopScript) Create(_ context.Context, desktop string) (string, error) {
 	s.created = append(s.created, desktop)
 	return desktop, nil

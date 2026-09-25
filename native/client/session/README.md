@@ -20,8 +20,9 @@ and never allocates. Discovery order never selects a workspace. Each call owns a
 fresh actor and one mount. Attachment requests
 and input are never replayed. Supervisor discovery and catalog readiness share
 a 15-second deadline. Only definite UNAVAILABLE catalog refusals trigger another
-read, after 50 ms with a fresh key; all other failures return immediately. Cleanup requests supervisor detach within a bounded
-context and keeps operation and cleanup failures visible.
+read, after 50 ms with a fresh key; all other failures return immediately.
+Cleanup waits for the supervisor's detach acknowledgement with a 30-second
+hang guard and keeps operation and cleanup failures visible.
 
 The caller owns physical files and the signal context. Ctrl+] detaches locally;
 applications remain owned by the remote runtime. When a presentation ends on its

@@ -33,10 +33,10 @@ import (
 // workspaces.
 type Selection struct{ Workspace, Desktop string }
 
-// Physical detach must not wait for the normal operation deadline. If the
-// owner cannot acknowledge promptly, report uncertainty and retire this actor;
-// the owner's monitor still owns eventual attachment cleanup.
-const detachTimeout = 200 * time.Millisecond
+// Detach waits for the owner's acknowledgement, including under scheduler
+// load. This bound diagnoses a stalled owner; it is not an exit speed budget.
+// The owner's monitor still owns eventual cleanup after an uncertain result.
+const detachTimeout = 30 * time.Second
 
 type Config struct {
 	// Directory holds the owner's rendezvous descriptor.
@@ -299,9 +299,7 @@ func presentWorkspace(ctx context.Context, operations context.Context, client *h
 		if ctx.Err() != nil {
 			return
 		}
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachTimeout)
-		defer cancel()
-		if err := client.Detach(cleanup, "session-detach-"+mounted.Session, mounted); err != nil {
+		if err := detachMounted(ctx, client, mounted); err != nil {
 			result = errors.Join(result, fmt.Errorf("detach desktop: %w", err))
 		}
 	}()
@@ -323,6 +321,16 @@ func presentWorkspace(ctx context.Context, operations context.Context, client *h
 		}
 		mounted = next
 	}
+}
+
+type desktopDetacher interface {
+	Detach(context.Context, string, hive.DesktopMount) error
+}
+
+func detachMounted(ctx context.Context, client desktopDetacher, mounted hive.DesktopMount) error {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachTimeout)
+	defer cancel()
+	return client.Detach(cleanup, "session-detach-"+mounted.Session, mounted)
 }
 
 // followSwitch asks for the client's current session after a presentation

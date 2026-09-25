@@ -246,6 +246,18 @@ func resourcesModuleProbeIndex(namespace, command, actor string, modules []strin
 	}
 }
 
+func resourcesModuleThreadsEntries() []map[string]interface{} {
+	return []map[string]interface{}{
+		{"name": "workers", "kind": "process.host", "host": map[string]interface{}{"workers": 2, "max_processes": 8}, "lifecycle": map[string]interface{}{"auto_start": true}},
+		{"name": "thread_waiter_policy", "kind": "security.policy.expr", "policy": map[string]interface{}{
+			"actions": []string{"process.registry.register", "process.send"}, "resources": "*",
+			"expression": `action == "process.send" || resource == "bee.threads.waiter"`, "effect": "allow"}},
+		{"name": "dependency_threads", "kind": "ns.dependency", "component": "bee/threads", "version": "0.1.0-dev",
+			"parameters": []map[string]interface{}{{"name": "process_host", "value": "bee:workers"},
+				{"name": "waiter_policies", "value": []string{"bee:thread_waiter_policy"}}}},
+	}
+}
+
 func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	for _, name := range []string{"resources", "persist", "threads"} {
 		if err := resourcesModuleCopyDir(filepath.Join(folder, "modules", name), filepath.Join(root, "modules", name)); err != nil {
@@ -261,19 +273,12 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "resources"), filepath.Join(root, "src", "security", "resources")); err != nil {
 		return err
 	}
-	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "threads"), filepath.Join(root, "src", "security", "threads")); err != nil {
-		return err
-	}
-	hostEntries := make([]map[string]interface{}, 0, 1)
-	hostEntries = append(hostEntries,
-		map[string]interface{}{"name": "workers", "kind": "process.host", "host": map[string]interface{}{"workers": 2, "max_processes": 8}, "lifecycle": map[string]interface{}{"auto_start": true}},
-		map[string]interface{}{"name": "dependency_threads", "kind": "ns.dependency", "component": "bee/threads", "version": "0.1.0-dev",
-			"parameters": []map[string]interface{}{{"name": "process_host", "value": "bee:workers"}, {"name": "waiter_policies", "value": []string{"bee.security.threads:thread_waiter_policy"}}}},
-		map[string]interface{}{"name": "dependency_resources", "kind": "ns.dependency", "component": "bee/resources", "version": "0.1.0-dev",
-			"parameters": []map[string]interface{}{{"name": "target_roots", "value": "bee:resource_roots"}}},
-		map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
+	hostEntries := resourcesModuleThreadsEntries()
+	hostEntries = append(hostEntries, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
 	if !dropRoots {
 		hostEntries = append(hostEntries, map[string]interface{}{"name": "resource_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.resource_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}, {"root_ref": "bee.placement.native:unrelated_env_root", "access": "write"}}}})
+		hostEntries = append(hostEntries, map[string]interface{}{"name": "dependency_resources", "kind": "ns.dependency", "component": "bee/resources", "version": "0.1.0-dev",
+			"parameters": []map[string]interface{}{{"name": "target_roots", "value": "bee:resource_roots"}}})
 		if err := resourcesModuleWrite(folder, filepath.Join("src", "placement", "_index.yaml"), resourcesModuleIndex{
 			Version: "1.0", Namespace: "bee.placement.native", Entries: []map[string]interface{}{
 				{"name": "environment", "kind": "env.storage.os", "lifecycle": map[string]interface{}{"auto_start": true}},
@@ -313,10 +318,7 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "credentials"), filepath.Join(root, "src", "security", "credentials")); err != nil {
 		return err
 	}
-	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "threads"), filepath.Join(root, "src", "security", "threads")); err != nil {
-		return err
-	}
-	hostEntries := make([]map[string]interface{}, 0, 4)
+	hostEntries := resourcesModuleThreadsEntries()
 	// The host selects the placement binding recorded on projection receipts
 	// without admitting placement execution into this closure.
 	hostEntries = append(hostEntries,
@@ -324,7 +326,8 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 		map[string]interface{}{"name": "module_secret", "kind": "env.variable", "storage": "bee:module_storage", "variable": "BEE_MODULE_SECRET", "default": "module-secret-9c2e"},
 		map[string]interface{}{"name": "module_materializer", "kind": "registry.entry", "meta": map[string]interface{}{"comment": "Placement binding recorded on this closure's projections"}},
 		map[string]interface{}{"name": "dependency_credentials", "kind": "ns.dependency", "component": "bee/credentials", "version": "0.1.0-dev",
-			"parameters": []map[string]interface{}{{"name": "target_materializer", "value": "bee:module_materializer"}}},
+			"parameters": []map[string]interface{}{{"name": "target_materializer", "value": "bee:module_materializer"},
+				{"name": "target_sources", "value": "bee:credential_sources"}}},
 	)
 	// credential_sources is host wiring owned by the app root.
 	sources, err := resourcesModuleNamed(root, "", "credential_sources")
@@ -343,11 +346,7 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 			"data": map[string]interface{}{"schema_revision": "bee.credential-format@1", "environment_destination": "ANTHROPIC_API_KEY"},
 		})
 	}
-	hostEntries = append(hostEntries,
-		map[string]interface{}{"name": "workers", "kind": "process.host", "host": map[string]interface{}{"workers": 2, "max_processes": 8}, "lifecycle": map[string]interface{}{"auto_start": true}},
-		map[string]interface{}{"name": "dependency_threads", "kind": "ns.dependency", "component": "bee/threads", "version": "0.1.0-dev",
-			"parameters": []map[string]interface{}{{"name": "process_host", "value": "bee:workers"}, {"name": "waiter_policies", "value": []string{"bee.security.threads:thread_waiter_policy"}}}},
-		sources, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
+	hostEntries = append(hostEntries, sources, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
 	if err := resourcesModuleWrite(folder, filepath.Join("src", "host", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee", Entries: hostEntries}); err != nil {
 		return err
 	}

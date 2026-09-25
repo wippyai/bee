@@ -40,6 +40,11 @@ entries:
       - bee.hive.desktop:catalog_call_policy
   meta:
     comment: Default local Hive supervisor; a host overlay may replace input with admitted peer IDs and optional desktop configuration
+- name: inbox_sender
+  kind: library.lua
+  source: file://inbox_sender.lua
+  imports:
+    hive: bee.hive:client
 - name: replica_sender
   kind: library.lua
   source: file://replica_sender.lua

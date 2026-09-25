@@ -23,6 +23,8 @@ entries:
     value: bee:workers
   - name: waiter_policies
     value: [bee.security.threads:thread_waiter_policy]
+  - name: sender
+    value: bee.hive.service:inbox_sender
 - name: hub
   kind: ns.dependency
   component: bee/hub

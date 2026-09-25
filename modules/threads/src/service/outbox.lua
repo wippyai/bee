@@ -138,6 +138,71 @@ function M.retry(tx: sql.Transaction, row: Row): Result?
     if err then return storage("retry forwarded send") end
     return nil
 end
+-- claim_pump_due: the node forwarding pump's lease call. The pump is the
+-- node's own forwarding owner, not one sender's worker, so it leases due rows
+-- across every sender under the same lease column; each claimed delivery
+-- names the sender actor whose row it is so the pump can settle exactly that
+-- row. A row already leased, or past its attempt ceiling, is never claimed.
+function M.claim_pump_due(db: sql.DB, actor: string, request: unknown): Result
+    local object = bounds.object(request)
+    if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
+    if bounds.fields(object, {"holder", "limit"}) then return failure("INVALID_ARGUMENT", "claim takes holder and limit only") end
+    local holder = bounds.id(object.holder)
+    if not holder then return failure("INVALID_ARGUMENT", "holder is not an identifier") end
+    local limit = object.limit == nil and M.BATCH or bounds.integer(object.limit)
+    if not limit or limit < 1 or limit > M.BATCH then return failure("INVALID_ARGUMENT", "limit is bounded by the outbox batch") end
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local now = now_ms()
+        local due, read_error = rows(tx, "SELECT * FROM bee_thread_inbox_outbox WHERE state = 'queued' AND next_attempt_ms <= ? " ..
+            "AND (lease_until_ms IS NULL OR lease_until_ms <= ?) ORDER BY created_at LIMIT ?", {now, now, limit})
+        if read_error then return read_error end
+        local deliveries: {unknown} = {}
+        for _, row in ipairs(due or {}) do
+            local _, lease_error = tx:execute("UPDATE bee_thread_inbox_outbox SET lease_owner = ?, lease_until_ms = ?, updated_at = ? WHERE outbox_id = ?",
+                {holder, now + M.LEASE_MS, stamp(now), tostring(row.outbox_id)})
+            if lease_error then return storage("lease forwarded send") end
+            local delivery = M.delivery(row)
+            delivery.outbox_id = tostring(row.outbox_id)
+            deliveries[#deliveries + 1] = delivery
+        end
+        return transaction.success({deliveries = deliveries}, false)
+    end)
+end
+-- settle_pump: the pump's acknowledgment of one claimed row. It settles by
+-- outbox identity, not by sender, because the pump leased the row itself;
+-- the lease column proves the pump, not an arbitrary actor, held it.
+function M.settle_pump(db: sql.DB, actor: string, request: unknown): Result
+    local object = bounds.object(request)
+    if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
+    if bounds.fields(object, {"outbox_id", "delivered", "receipt", "error"}) then
+        return failure("INVALID_ARGUMENT", "settle takes outbox_id, delivered, receipt and error only")
+    end
+    local outbox_id = bounds.id(object.outbox_id)
+    if not outbox_id or type(object.delivered) ~= "boolean" then
+        return failure("INVALID_ARGUMENT", "outbox_id and delivered are required")
+    end
+    local delivered: boolean = object.delivered == true
+    local receipt_json: string? = nil
+    if object.receipt ~= nil then
+        local encoded = json.encode(object.receipt)
+        if not encoded then return failure("INVALID_ARGUMENT", "receipt is not encodable") end
+        receipt_json = encoded
+    end
+    local error_text: string? = nil
+    if object.error ~= nil then
+        error_text = bounds.text(object.error)
+        if error_text == nil then return failure("INVALID_ARGUMENT", "error must be text") end
+    end
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local found, read_error = rows(tx, "SELECT * FROM bee_thread_inbox_outbox WHERE outbox_id = ?", {outbox_id})
+        if read_error then return read_error end
+        local row = found and found[1]
+        if not row then return failure("NOT_FOUND", "forwarded send is not queued") end
+        local failed = M.settle(tx, tostring(row.sender_actor), outbox_id, delivered, receipt_json, error_text)
+        if failed then return failed end
+        return transaction.success({outbox_id = outbox_id, delivered = delivered}, false)
+    end)
+end
 -- claim_deliveries: the pump's lease call at the owner boundary. Claimed
 -- rows shape directly into the destination's admission input.
 function M.claim_deliveries(db: sql.DB, actor: string, request: unknown): Result

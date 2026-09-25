@@ -27,6 +27,7 @@ ACCEPTANCES = (
     "wakes a waiting session with a peer's message and tells it when the peer's turn ends",
     "delivers and replies between independent window actors without thread membership or polling",
     "answers a Codex-initiated inbox exchange without polling",
+    "starts a newly admitted Codex attempt carrying its outstanding inbox item in the brief",
     "queues a busy Claude inbox and pushes its identified record between turns",
     "recovers an ambiguous Claude inbox write under a new carrier epoch",
     "polls an inbox item committed while its controller was down",

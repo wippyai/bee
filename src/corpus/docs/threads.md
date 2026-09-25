@@ -213,8 +213,17 @@ production launch policies do not enable this push path. A production policy
 enables it with `push_acceptance`: the carrier admits the push only where the
 pinned binding, profile, adapter and executable measurement still match the
 host's acceptance record, and refuses a swapped executable before any launch.
-Other structured drivers and PTY windows currently need an
-explicit `session_inbox` call; Hive forwarding remains separate.
+
+A fresh attempt on a structured driver without a between-turns controller
+starts carrying its oldest outstanding inbox item in the brief: Codex, agy,
+Grok and Muse launches close stdin or pass the brief as an argument, so the
+brief is the only channel. Claude keeps its controller push and windows keep
+their hook boundary; resumed attempts keep their provider session, since no
+fixture proves inbox-carry combined with those. A fresh sequential attempt on
+an already-admitted action attaches to its own action and chains the latest
+settled attempt; anything else fails closed with the admit refusal. PTY
+windows currently need an explicit `session_inbox` call; Hive forwarding
+remains separate.
 
 `inbox_describe` returns only an action address, current grant epoch, attempt
 state and latest inbox delivery state. A caller may describe another action

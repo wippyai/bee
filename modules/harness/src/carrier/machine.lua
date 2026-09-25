@@ -333,6 +333,11 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if not private_home and not launch_policy.allow_host_home then
         return nil, "launch policy does not authorize host HOME"
     end
+    -- A fresh attempt on a driver without a between-turns controller starts
+    -- carrying its oldest outstanding inbox item in the brief. The plan owns
+    -- the request table from here; nothing downstream rereads the caller's
+    -- brief, and the carry is idempotent across repeated plans.
+    request.brief = M.carry_brief(io, request, binding.driver_id, profile.mode)
     local prepare_request: {[string]: unknown} = {}
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
     prepare_request.profile_id = request.profile_id
@@ -674,6 +679,50 @@ end
 function M.placement_target(plan: Plan, method: string): string?
     return plan.placement_binding.methods[method]
 end
+-- attach_action: a fresh sequential attempt on an action an earlier attempt
+-- already admitted. The admit call reports the action exists; this verifies
+-- the existing action is the requester's own and discovers its latest
+-- settled attempt to chain, so two starters cannot prepare concurrently.
+-- Anything unverified fails closed with the admit refusal. The owner still
+-- enforces the chain, the open thread and the single live attempt.
+M.ATTACH_SCAN_PAGES = 8
+M.ATTACH_PAGE_RECORDS = 64
+function M.attach_action(io: IO, request: Request): (string?, boolean, string?)
+    local owned = false
+    local previous: string? = nil
+    local previous_sequence = 0
+    local cursor = 0
+    for _ = 1, M.ATTACH_SCAN_PAGES do
+        local page, read_error = must(io, M.THREADS .. ":read_after", {thread_id = request.thread_id, cursor = cursor, limit = M.ATTACH_PAGE_RECORDS})
+        if read_error then return nil, false, read_error end
+        local body = bounds.object(page)
+        if not body then return nil, false, "read_after answered without an object" end
+        local records = body.records
+        if type(records) ~= "table" then return nil, false, "read_after answered without records" end
+        for _, raw in ipairs(records :: {unknown}) do
+            local record = bounds.object(raw)
+            if record and record.action_id == request.action_id then
+                if record.kind == "action.admitted" then
+                    local admitted = bounds.object(record.body)
+                    if admitted and admitted.principal_id == request.owner_id then owned = true end
+                elseif record.kind == "receipt" then
+                    local receipt = bounds.object(record.body)
+                    local attempt = bounds.id(record.attempt_id)
+                    local sequence = bounds.integer(record.sequence)
+                    if receipt and receipt.scope == "attempt" and attempt and sequence and sequence > previous_sequence then
+                        previous, previous_sequence = attempt, sequence
+                    end
+                end
+            end
+        end
+        if body.has_more ~= true then break end
+        local scanned = bounds.integer(body.scanned_through)
+        if not scanned then return nil, false, "read_after answered without a cursor" end
+        cursor = scanned
+    end
+    if not owned then return nil, false, nil end
+    return previous, true, nil
+end
 function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, FailedPreparation?)
     if plan.exchange_refusal then return nil, plan.exchange_refusal, nil end
     if plan.push_refusal then return nil, plan.push_refusal, nil end
@@ -684,6 +733,11 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     local gateway_binding: string? = nil
     local grant_refs: {string} = {}
     for _, grant in ipairs(request.resources) do grant_refs[#grant_refs + 1] = grant.grant_ref end
+    -- A sequential attempt chains the action's latest settled attempt. A
+    -- resumed attempt names its predecessor; a fresh one discovers it when
+    -- the action is already admitted, so two starters still serialize on
+    -- the owner's chain check.
+    local expected_previous: string? = request.previous_attempt_id
     if not request.previous_attempt_id then
         -- Opening an interactive UI is an action even with no initial prompt.
         -- Describe that action in the ledger without sending text to the child.
@@ -693,11 +747,15 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
             binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = action_input}}
         if request.parent_action_id then admitted_body.parent_action_id = request.parent_action_id end
         local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = admitted_body}, "admit")
-        if admit_error then return nil, admit_error, nil end
+        if admit_error then
+            local previous, attached, attach_error = M.attach_action(io, request)
+            if not attached then return nil, attach_error or admit_error, nil end
+            expected_previous = previous
+        end
         action_admitted = true
     end
     step(io, "admitted")
-    local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, expected_previous_attempt_id = request.previous_attempt_id, prepared = {
+    local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, expected_previous_attempt_id = expected_previous, prepared = {
         binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry,
         placement_binding = plan.placement_binding.binding_id, placement_binding_digest = plan.placement_binding.binding_digest,
         placement_attempt_id = request.attempt_id, plan_digest = plan.plan_digest}}, "prepare")
@@ -1377,19 +1435,103 @@ function M.offer_inbox(io: IO, session: Session): (Offer?, string?)
         payload_digest = digest :: string, message_id = message_id :: string, message_kind = message_kind :: string, sender_action_id = sender_action :: string,
         sender_thread_id = sender_thread :: string, sender_node_id = sender_node :: string, content = content, in_reply_to = in_reply_to, state = state :: string, dispatch = item.dispatch :: boolean, offer_count = offer_count :: integer}, nil
 end
-function M.push_line(item: Offer): (string?, string?)
+-- inbox_prompt: the identified prompt naming one inbox item, shared by the
+-- Claude controller push line and the bounded-driver attempt brief. The
+-- offer count travels only where an offer was made.
+type InboxPromptItem = {thread_id: string, action_id: string, record_id: string, inbox_sequence: integer, offer_count: integer?,
+    payload_digest: string, message_id: string, message_kind: string, sender_action_id: string, sender_thread_id: string,
+    sender_node_id: string, content: unknown, in_reply_to: unknown?}
+function M.inbox_prompt(item: InboxPromptItem): (string?, string?)
     local context: Object = {thread_id = item.thread_id, action_id = item.action_id, record_id = item.record_id, inbox_sequence = item.inbox_sequence,
-        offer_count = item.offer_count, payload_digest = item.payload_digest,
+        payload_digest = item.payload_digest,
         message_id = item.message_id, message_kind = item.message_kind, sender_action_id = item.sender_action_id,
         sender_thread_id = item.sender_thread_id, sender_node_id = item.sender_node_id, content = item.content}
+    if item.offer_count then context.offer_count = item.offer_count end
     if item.in_reply_to then context.in_reply_to = item.in_reply_to end
     local encoded, encode_error = canonical.encode(context)
     if not encoded then return nil, encode_error end
-    local prompt = "Bee action inbox item. Handle this record once. Use session_ack with inbox_sequence, or session_reply to the sender with in_reply_to naming this thread_id and record_id. " .. encoded
+    return "Bee action inbox item. Handle this record once. Use session_ack with inbox_sequence, or session_reply to the sender with in_reply_to naming this thread_id and record_id. " .. encoded, nil
+end
+function M.push_line(item: Offer): (string?, string?)
+    local prompt, prompt_error = M.inbox_prompt({thread_id = item.thread_id, action_id = item.action_id, record_id = item.record_id,
+        inbox_sequence = item.inbox_sequence, offer_count = item.offer_count, payload_digest = item.payload_digest,
+        message_id = item.message_id, message_kind = item.message_kind, sender_action_id = item.sender_action_id,
+        sender_thread_id = item.sender_thread_id, sender_node_id = item.sender_node_id, content = item.content, in_reply_to = item.in_reply_to})
+    if not prompt then return nil, prompt_error end
     local line, line_error = canonical.encode({type = "user", message = {role = "user", content = prompt}})
     if not line then return nil, line_error end
     if #line + 1 > checkpoint.MAX_PENDING_WRITE_BYTES then return nil, "inbox item exceeds the controller input bound" end
     return line .. "\n", nil
+end
+-- carry_brief: for a fresh structured attempt on a driver without a
+-- between-turns controller, prepend the oldest outstanding inbox item to
+-- the brief, so the new attempt starts carrying it. Claude keeps its
+-- controller push, windows keep their hook boundary, and resumed attempts
+-- keep their provider session: no fixture proves inbox-carry combined
+-- with any of those, so none of them is augmented. A read failure or a
+-- missing action leaves the brief alone; delivery still waits in
+-- session_inbox. The carry is idempotent, so planning the same request
+-- twice never prefixes twice.
+M.INBOX_CARRY_LIST_LIMIT = 8
+M.INBOX_CARRY_EXCERPT_BYTES = 4096
+M.BRIEF_BYTES = 16384
+local function carry_text(content: unknown): string
+    local object = bounds.object(content)
+    if object then
+        local text = bounds.text((object :: Object).text)
+        if text then return text end
+    end
+    local encoded = canonical.encode(content)
+    if encoded then return encoded end
+    return "undecodable inbox content"
+end
+function M.carry_brief(io: IO, request: Request, driver_id: string, mode: string): string
+    local brief = request.brief
+    if driver_id == "claude" or mode == "window" then return brief end
+    if request.previous_attempt_id ~= nil or request.session_ref ~= nil then return brief end
+    local page, list_error = must(io, M.THREADS .. ":inbox_list", {thread_id = request.thread_id, action_id = request.action_id,
+        after_sequence = 0, limit = M.INBOX_CARRY_LIST_LIMIT})
+    if list_error then return brief end
+    local items = (bounds.object(page) or {}).items
+    if type(items) ~= "table" then return brief end
+    local oldest: Object? = nil
+    for _, raw in ipairs(items :: {unknown}) do
+        local item = bounds.object(raw)
+        if item then
+            local state = bounds.member(item.state, {"committed", "offered", "transport_accepted", "acknowledged", "replied"})
+            if state and state ~= "acknowledged" and state ~= "replied" then
+                oldest = item
+                break
+            end
+        end
+    end
+    if not oldest then return brief end
+    local record_id, message_id = bounds.id(oldest.record_id), bounds.id(oldest.message_id)
+    local sequence = bounds.integer(oldest.inbox_sequence)
+    local sender_action, sender_thread, sender_node = bounds.id(oldest.sender_action_id), bounds.id(oldest.sender_thread_id), bounds.id(oldest.sender_node_id)
+    local digest = bounds.id(oldest.payload_digest)
+    local kind = bounds.member(oldest.message_kind, {"request", "reply"})
+    local content = bounds.object(oldest.content)
+    if not record_id or not message_id or not sequence or sequence < 1 or not sender_action or not sender_thread or not sender_node
+        or not digest or not kind or not content then return brief end
+    if brief:find(record_id, 1, true) then return brief end
+    local excerpt = carry_text(content)
+    local room = M.BRIEF_BYTES - #brief - 1 - 700
+    local capped = math.min(room, M.INBOX_CARRY_EXCERPT_BYTES)
+    local carried: unknown = content
+    if capped < #excerpt then
+        if capped > 128 then
+            carried = {text = excerpt:sub(1, capped - 128) .. "...[truncated; read the full item with session_inbox]"}
+        else
+            carried = {text = "[content omitted: exceeds the brief bound; read the full item with session_inbox]"}
+        end
+    end
+    local prompt, prompt_error = M.inbox_prompt({thread_id = request.thread_id, action_id = request.action_id, record_id = record_id,
+        inbox_sequence = sequence, payload_digest = digest, message_id = message_id, message_kind = kind, sender_action_id = sender_action,
+        sender_thread_id = sender_thread, sender_node_id = sender_node, content = carried, in_reply_to = oldest.in_reply_to})
+    if not prompt then return brief end
+    if #prompt + 1 + #brief > M.BRIEF_BYTES then return brief end
+    return prompt .. "\n" .. brief
 end
 -- A second Claude turn is admitted before its user line is written. The
 -- previous terminal remains in the checkpoint while idle, so recovery can

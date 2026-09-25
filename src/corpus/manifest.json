@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 21800,
+      "bytes": 22373,
       "id": "docs/threads",
-      "sha256": "41b35a245d693e2dc6d61c5f598e80530710b990fe1114ea48e6f56daa087882",
+      "sha256": "82304abde2971d299704d358468cd3fcc77d0d7360f27f75b3dccf3f78976e2d",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -371,9 +371,9 @@
       "topic": "component"
     },
     {
-      "bytes": 19604,
+      "bytes": 19796,
       "id": "component/harness",
-      "sha256": "862aa6722bed069ba959b68a4aaaf93ecf995459c590cbc9a08e23fa49c44f78",
+      "sha256": "e9855977b119ed00edcb0de3dd46d9fc104fae60ed7e6e740f8296c1968440ba",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -462,7 +462,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 556718,
+    "bytes": 557483,
     "documents": 57
   }
 }

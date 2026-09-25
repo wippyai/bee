@@ -30,7 +30,9 @@ profile-pinned adapter, the acceptance record and the proven fixture digest.
 The carrier verifies the acceptance against the pinned binding, profile,
 adapter and executable measurement, refuses a swapped executable at plan
 time, and never opens a new attempt while the refusal stands. The shipped
-policies leave push disabled.
+policies leave push disabled. A fresh structured attempt on a driver without
+a between-turns controller starts carrying its oldest outstanding inbox item
+in the brief instead; resumed attempts keep their provider session.
 
 A binding is compatible when it implements `bee.driver:driver` with four
 bound functions, its `profiles_ref` names a `harness.profile` entry that

@@ -197,6 +197,16 @@ entries:
     path: .security.policies +=
   - entry: bee.gateway.security:tool_policy_read_policy
     path: .policy.resources +=
+- name: target_remote_resolver
+  kind: ns.requirement
+  meta: {comment: Host-selected resolver for node-qualified session addresses; the default resolves nothing, so a composition with no transport answers a remote address as not found}
+  targets:
+  - entry: bee.gateway.api:mcp_http
+    path: .imports.remote
+- name: remote
+  kind: library.lua
+  source: file://remote.lua
+  meta: {comment: Fail-closed default remote session resolver; the host replaces the requirement to enable remote addressing}
 - name: database_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: The linked SQL resource; target_db fills resource_ref}

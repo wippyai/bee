@@ -153,7 +153,7 @@ end
 -- across every sender under the same lease column; each claimed delivery
 -- names the sender actor whose row it is so the pump can settle exactly that
 -- row. A row already leased, or past its attempt ceiling, is never claimed.
-function M.claim_pump_due(db: sql.DB, actor: string, request: unknown): Result
+function M.claim_pump_due(db: sql.DB, request: unknown): Result
     local object = bounds.object(request)
     if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
     if bounds.fields(object, {"holder", "limit"}) then return failure("INVALID_ARGUMENT", "claim takes holder and limit only") end
@@ -181,7 +181,7 @@ end
 -- settle_pump: the pump's acknowledgment of one claimed row. It settles by
 -- outbox identity, not by sender, because the pump leased the row itself;
 -- the lease column proves the pump, not an arbitrary actor, held it.
-function M.settle_pump(db: sql.DB, actor: string, request: unknown): Result
+function M.settle_pump(db: sql.DB, request: unknown): Result
     local object = bounds.object(request)
     if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
     if bounds.fields(object, {"outbox_id", "delivered", "receipt", "error"}) then

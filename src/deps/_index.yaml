@@ -88,6 +88,8 @@ entries:
     value: bee.security.gateway:gateway_tool_publish_policy
   - name: target_tool_application_open_policy
     value: bee.security.gateway:gateway_tool_application_open_policy
+  - name: target_remote_resolver
+    value: bee.hive.service:remote_sessions
 - name: hive
   kind: ns.dependency
   component: bee/hive

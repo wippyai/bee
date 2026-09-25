@@ -149,6 +149,38 @@ function M.accept(db: sql.DB, actor: string, request: unknown): Result
         return authority.remember(tx, actor, "inbox_accept", mutation, {action_id = action_id, grant_epoch = next_epoch, accepted = object.allow})
     end)
 end
+-- resolve: the node-qualified address of an action, without holding a thread
+-- identity. A remote sender that knows only {node_id, action_id} resolves the
+-- action to its thread and workspace here before it addresses the inbox, so a
+-- forwarded send never guesses a thread. The answer is subject to the same
+-- owner-or-discover gate a lookup is: a forwarded principal sees only what the
+-- host's send grant admits, and a local caller sees only what it may discover.
+function M.resolve(db: sql.DB, actor: string, request: unknown): Result
+    local object = bounds.object(request)
+    if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
+    local extra = bounds.fields(object, {"action_id", "node_id", "caller_node_id"})
+    if extra then return failure("INVALID_ARGUMENT", extra) end
+    local action_id, node_id = bounds.id(object.action_id), bounds.id(object.node_id)
+    if not action_id or not node_id then return failure("INVALID_ARGUMENT", "action and node address are required") end
+    return transaction.read(db, function(tx: sql.Transaction): Result
+        if node_id ~= node() then return failure("NOT_FOUND", "address is not on this node") end
+        local heads, heads_err = reader.action_heads(tx, action_id)
+        if not heads then return storage(heads_err or "read action heads") end
+        for _, head in ipairs(heads) do
+            if not head.workspace_id then goto continue end
+            local resource = address(head.workspace_id, node_id, action_id)
+            if access.forwarded(actor) or access.may_discover(resource) then
+                local current, current_err = epoch(tx, head.thread_id, action_id)
+                if current_err then return current_err end
+                return transaction.success({thread_id = head.thread_id, action_id = action_id, node_id = node_id,
+                    workspace_id = head.workspace_id, grant_epoch = current}, false)
+            end
+            ::continue::
+        end
+        return failure("NOT_FOUND", "action address is not resolvable")
+    end)
+end
+
 function M.describe(db: sql.DB, actor: string, request: unknown): Result
     local object = bounds.object(request)
     if not object then return failure("INVALID_ARGUMENT", "request must be an object") end

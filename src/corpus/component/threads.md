@@ -17,7 +17,7 @@ actor.
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (12 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
+| `bee.threads.persist` | The owned store: checked migration ledger (15 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
 
 ## Dependency interface
 
@@ -80,6 +80,17 @@ record and inbox item together. `inbox_list` and `inbox_ack` are restricted to
 the action's admitted principal. `inbox_reply` commits a cross-thread reply
 into the original sender's inbox and marks the request replied in one local
 transaction. Neither send nor discovery enrolls the caller as a member.
+`inbox_resolve` answers a node-qualified `{node_id, action_id}` address with
+the thread, workspace and epoch that action names on this node, so a remote
+sender that holds no thread identity can address the inbox; the answer passes
+the same owner-or-discover gate a lookup does. The forwarding outbox
+(`bee_thread_inbox_outbox`) is drained by a supervised
+`bee.threads.service:pump_worker`: it leases due rows across every sender,
+delivers each through the destination's admission and settles only on the
+destination's own reply. Its transport is host-selected through the `sender`
+requirement — the bundled host links `bee.hive.service:inbox_sender` — and a
+composition that links no sender leaves due rows queued and reports each
+delivery unknown.
 `inbox_offer` gives the target's current carrier only the oldest outstanding
 item and records its attempt and epoch. A newer carrier may reclaim that same
 record and digest after an uncertain dispatch. `inbox_transport` records
@@ -103,7 +114,9 @@ subscriptions, pages), 5 `projection` (checkpoints), 6 `carrier`, 7
 (the owning workspace on each head, attributed from application owners, and
 the index `list_workspace` walks), 11 `action_inbox` (acceptance epochs, rules
 and ordered items), 12 `action_inbox_push` (offer generations and transport
-receipt fields), 13 `action_inbox_delivery_status` (persisted restart blockers).
+receipt fields), 13 `action_inbox_delivery_status` (persisted restart blockers),
+14 `action_inbox_outbox` (the durable forwarding outbox) and 15
+`action_inbox_outbox_reply` (cross-node reply correlation on a queued row).
 Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and

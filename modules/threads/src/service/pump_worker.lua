@@ -23,7 +23,7 @@ local function settle(outbox_id: string, delivered: boolean, receipt: unknown, e
     if not db then return nil, open_error or "thread database unavailable" end
     local request: {[string]: unknown} = {outbox_id = outbox_id, delivered = delivered}
     if delivered then request.receipt = receipt else request.error = error_text or "delivery failed" end
-    local result = outbox.settle_pump(db, "bee.threads.pump", request)
+    local result = outbox.settle_pump(db, request)
     db:release()
     if not result.ok then return nil, result.message or "settle refused" end
     return outbox_id, nil
@@ -36,7 +36,7 @@ local function main()
         if not resource then logger:warn("Forwarding pump has no store", {cause = tostring(resource_error)}); return end
         local db, open_error = database.open(resource)
         if not db then logger:warn("Forwarding pump cannot open its store", {cause = tostring(open_error)}); return end
-        local claimed = outbox.claim_pump_due(db, "bee.threads.pump", {holder = "bee.threads.pump", limit = pump.BATCH})
+        local claimed = outbox.claim_pump_due(db, {holder = "bee.threads.pump", limit = pump.BATCH})
         db:release()
         if not claimed.ok then logger:warn("Forwarding pump claim was refused", {cause = tostring(claimed.message)}); return end
         local value = type(claimed.value) == "table" and (claimed.value :: {[string]: unknown}) or {}

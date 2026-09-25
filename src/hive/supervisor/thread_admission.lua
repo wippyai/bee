@@ -33,10 +33,12 @@ local OWNER_SERVICE_BY_OPERATION: {[string]: string} = {
     ["bee.threads.service:inbox_reply"] = "bee.threads",
     ["bee.threads.service:notify"] = "bee.threads",
     ["bee.threads.delivery:watch"] = "bee.threads.delivery",
+    ["bee.threads.service:inbox_resolve"] = "bee.threads",
 }
 -- Every forwarded thread operation, by reference. Each is owned by the
 -- service its namespace names; a request may not choose another owner.
 M.OPERATIONS = {["bee.threads.service:send"] = true, ["bee.threads.service:send_status"] = true,
+    ["bee.threads.service:inbox_resolve"] = true,
     ["bee.threads.service:inbox_describe"] = true, ["bee.threads.service:inbox_send"] = true,
     ["bee.threads.service:inbox_reply"] = true, ["bee.threads.service:notify"] = true,
     ["bee.threads.delivery:watch"] = true}
@@ -51,6 +53,7 @@ local fields_by_operation: {[string]: {string}} = {
     -- target action, epoch and the reply's own correlation.
     ["bee.threads.service:inbox_reply"] = {"thread_id", "target_action_id", "sender_thread_id", "sender_action_id", "node_id", "workspace_id",
         "grant_epoch", "idempotency_key", "message_id", "content", "payload_digest", "in_reply_to", "outcome", "caller_node_id"},
+    ["bee.threads.service:inbox_resolve"] = {"action_id", "node_id", "caller_node_id"},
     -- A cross-node notice registers the mapped principal's watch on a thread it
     -- is a member of on this node; membership is still the owner's decision.
     ["bee.threads.service:notify"] = {"thread_id", "idempotency_key", "target_thread_id", "target_action_id", "watcher_action_id", "caller_node_id"},
@@ -61,6 +64,9 @@ local fields_by_operation: {[string]: {string}} = {
 }
 M.FIELDS = fields_by_operation
 M.RESERVED = {"actor", "actor_id", "principal", "principal_id", "principal_ref", "scope", "policies", "owner_id"}
+-- Operations whose payload deliberately carries no thread: an address
+-- resolution answers with the thread, it never receives one.
+M.THREADLESS_OPERATIONS = {["bee.threads.service:inbox_resolve"] = true}
 M.INVOKE_CHECK = "bee.hive.supervisor:invoke_check"
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 type Object = {[string]: unknown}
@@ -87,11 +93,20 @@ function M.admit(local_node: string, request: types.Request, mappings: principal
     if not fields then return nil, types.fault("UNSUPPORTED_CAPABILITY", "operation " .. request.operation_ref .. " has no payload contract") end
     local unknown_field = bounds.fields(request.input, fields)
     if unknown_field then return nil, types.fault("INVALID_ARGUMENT", "input: " .. unknown_field) end
-    -- The owner reference binds the destination thread: the resource it
-    -- names is the thread the payload addresses, before anything runs.
-    local thread_id = bounds.id(request.input.thread_id)
-    if not thread_id then return nil, types.fault("INVALID_ARGUMENT", "input.thread_id is not an identifier") end
-    if request.owner_ref.resource_ref ~= thread_id then return nil, types.fault("INVALID_ARGUMENT", "owner resource_ref must name the thread the payload addresses") end
+    -- The owner reference binds the destination thread: the resource it names
+    -- is the thread the payload addresses, before anything runs. An address
+    -- resolution has no thread yet — resolving one is its whole purpose — so
+    -- it binds the owner resource to nothing and answers with the thread it
+    -- found; every other operation names its thread here.
+    if M.THREADLESS_OPERATIONS[request.operation_ref] then
+        if request.owner_ref.resource_ref ~= nil then
+            return nil, types.fault("INVALID_ARGUMENT", "an address resolution binds no owner resource")
+        end
+    else
+        local thread_id = bounds.id(request.input.thread_id)
+        if not thread_id then return nil, types.fault("INVALID_ARGUMENT", "input.thread_id is not an identifier") end
+        if request.owner_ref.resource_ref ~= thread_id then return nil, types.fault("INVALID_ARGUMENT", "owner resource_ref must name the thread the payload addresses") end
+    end
     local digest, digest_error = types.digest(request.input)
     if not digest or digest ~= request.input_digest then return nil, types.fault("INVALID_ARGUMENT", "input digest mismatch: " .. tostring(digest_error)) end
     local deadline, deadline_error = time.parse(FORMAT, request.deadline)

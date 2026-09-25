@@ -165,6 +165,23 @@ function M.admissions(tx: sql.Transaction, action_id: string): ({string}?, strin
     end
     return admissions, nil
 end
+-- The heads that hold an action with this identifier, whichever thread owns
+-- it. A node-qualified address names only the action, so a remote sender that
+-- holds no thread identity resolves it here before addressing the inbox.
+M.MAX_ACTION_HEADS = 16
+function M.action_heads(tx: sql.Transaction, action_id: string): ({Head}?, string?)
+    local rows, query_err = tx:query("SELECT h.thread_id, h.owner_actor, h.title, h.state, h.revision, h.head_sequence, h.created_at, h.workspace_id " ..
+        "FROM bee_thread_actions a JOIN bee_thread_heads h ON h.thread_id = a.thread_id WHERE a.action_id = ? ORDER BY a.thread_id LIMIT ?",
+        {action_id, M.MAX_ACTION_HEADS})
+    if query_err or not rows then return nil, "read action heads" end
+    local heads: {Head} = {}
+    for index, row in ipairs(rows) do
+        local decoded, decode_error = head_row(row)
+        if not decoded then return nil, decode_error end
+        heads[index] = decoded
+    end
+    return heads, nil
+end
 function M.attempt(tx: sql.Transaction, thread_id: string, attempt_id: string): (Attempt?, string?)
     local row, err = single(tx, "SELECT attempt_id, action_id, owner_epoch, state FROM bee_thread_attempts WHERE thread_id = ? AND attempt_id = ?", {thread_id, attempt_id}, "thread attempt")
     if err then return nil, err end

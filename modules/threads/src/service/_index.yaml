@@ -287,6 +287,12 @@ entries:
   method: describe
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: inbox_resolve
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: resolve
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: inbox_send
   kind: function.lua
   source: file://inbox_method.lua
@@ -343,7 +349,6 @@ entries:
     resources: bee.threads:resources
     outbox: bee.threads.service:outbox
     pump: bee.threads.service:pump
-    sender: bee.threads.service:pump_sender
 - name: inbox_outbox_claim
   kind: function.lua
   source: file://outbox_method.lua
@@ -354,17 +359,5 @@ entries:
   kind: function.lua
   source: file://outbox_method.lua
   method: settle
-  imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
-  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
-- name: inbox_outbox_claim_pump
-  kind: function.lua
-  source: file://outbox_method.lua
-  method: claim_pump
-  imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
-  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
-- name: inbox_outbox_settle_pump
-  kind: function.lua
-  source: file://outbox_method.lua
-  method: settle_pump
   imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}

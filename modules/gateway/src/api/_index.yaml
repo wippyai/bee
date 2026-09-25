@@ -50,6 +50,7 @@ entries:
     catalog: bee.gateway:catalog
     context: bee.gateway:context
     sessions: bee.gateway:sessions
+    remote: bee.gateway:remote
     bounds: bee.threads.records:bounds
     sends: bee.threads.service:sends
   security:

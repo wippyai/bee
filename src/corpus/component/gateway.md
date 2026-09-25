@@ -47,7 +47,14 @@ selects a workspace send policy for managed agents; the destination owner
 still requires the authenticated sender to belong to that workspace, the
 current epoch and the recipient's acceptance. An installing host can select
 the deny policy or a narrower address policy instead. Inbox tools commit and
-read durable items; Hive forwarding remains separate.
+read durable items. `session_send` and `session_reply` accept a node-qualified
+remote address: the gateway asks the host-selected remote resolver for the
+thread and workspace it names (the bundled host links
+`bee.hive.service:remote_sessions`, which calls the destination owner's
+`inbox_resolve`), then sends there. Resolution is discovery only — the
+destination owner authenticates the forwarded principal and re-checks
+workspace, send grant, target action and epoch — and a composition that links
+no resolver answers a remote address as not found.
 
 The default remains `127.0.0.1:0`. A host may explicitly select a loopback or
 RFC1918 IPv4 interface for a local container, with its corresponding readiness

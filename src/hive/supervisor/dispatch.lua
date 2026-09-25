@@ -3,21 +3,15 @@
 local canonical = require("canonical")
 local json = require("json")
 local funcs = require("funcs")
+local security = require("security")
 local types = require("types")
 local catalog = require("catalog")
 local bounds = require("bounds")
 
 local M = {}
 
--- Exact reviewed open operations: node telemetry and the node's workspace catalog.
--- Generic exposing metadata must not make arbitrary funcs callable.
-local ALLOWED_OPERATIONS: {[string]: boolean} = {
-    ["bee.hive.telemetry:presence"] = true,
-    ["bee.hive.telemetry:stats"] = true,
-    ["bee.hive.telemetry:catalog_list"] = true,
-    ["bee.hive.api:workspaces"] = true,
-    ["bee.hive.api:holdings"] = true,
-}
+-- Open operations run only when the host exposes them through hive.expose.open.
+-- Registry metadata alone never makes an arbitrary func callable.
 
 local function operation_namespace(operation_ref: string): string?
     return operation_ref:match("^([^:]+):[^:]+$")
@@ -69,9 +63,10 @@ function M.dispatch(request: unknown): types.Reply
         return types.reply_error(request_id, types.fault("INVALID_ARGUMENT", "owner service does not match operation namespace"))
     end
 
-    -- 4. Exact three reviewed telemetry operations only in initial executable allowlist
-    if not ALLOWED_OPERATIONS[req.operation_ref] then
-        return types.reply_error(request_id, types.fault("DENIED", "operation not permitted"))
+    -- 4. Host exposure ceiling: the operation runs only when the host exposes
+    -- it open. The catalog resolves it again below under the same ceiling.
+    if not security.can("hive.expose.open", req.operation_ref) then
+        return types.reply_error(request_id, types.fault("DENIED", "host does not expose this operation"))
     end
 
     -- 5. Resolve canonical operation with catalog.resolve

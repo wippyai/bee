@@ -208,7 +208,7 @@ entries:
 - name: dispatch
   kind: library.lua
   source: file://dispatch.lua
-  modules: [json, funcs]
+  modules: [json, funcs, security]
   imports:
     canonical: bee.threads.records:canonical
     types: bee.hive:types
@@ -219,7 +219,7 @@ entries:
   kind: function.lua
   source: file://dispatch.lua
   method: dispatch
-  modules: [json, funcs]
+  modules: [json, funcs, security]
   imports:
     canonical: bee.threads.records:canonical
     types: bee.hive:types

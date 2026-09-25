@@ -97,24 +97,11 @@ func runHive(ctx context.Context, out io.Writer, client *hive.Join, directory st
 		if err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(out, "NODE %s\nPEER                                SESSION      WORKSPACES\n", view.Node); err != nil {
+		if _, err := fmt.Fprintf(out, "NODE %s\nPEER                                SESSION\n", view.Node); err != nil {
 			return err
 		}
 		for _, peer := range view.Peers {
-			// A peer that holds an established session reports one page of its
-			// live workspace holdings; a peer without a session, or one whose
-			// holdings read fails, is shown with its session only. The read
-			// grants nothing.
-			workspaces := ""
-			if peer.Session == "established" {
-				page, holdingsErr := client.Holdings(ctx, peer.Node)
-				if holdingsErr != nil {
-					workspaces = "unavailable"
-				} else {
-					workspaces = fmt.Sprintf("%d", len(page.Workspaces))
-				}
-			}
-			if _, err := fmt.Fprintf(out, "%-34s  %-11s  %s\n", peer.Node, peer.Session, workspaces); err != nil {
+			if _, err := fmt.Fprintf(out, "%-34s  %s\n", peer.Node, peer.Session); err != nil {
 				return err
 			}
 		}

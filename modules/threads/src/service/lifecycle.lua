@@ -122,6 +122,9 @@ function M.prepare_attempt(db: sql.DB, actor: string, request: unknown): Result
         local existing, existing_err = reader.attempt(tx, head.thread_id, attempt_id)
         if existing_err then return storage(existing_err) end
         if existing then return failure("CONFLICT", "attempt already exists") end
+        local intent, intent_err = reader.cancel_intent(tx, head.thread_id, attempt_id)
+        if intent_err then return storage(intent_err) end
+        if intent and intent.state == "ended" then return failure("CONFLICT", "attempt was cancelled before start") end
         local live, live_err = reader.running_attempt(tx, head.thread_id, action_id)
         if live_err then return storage(live_err) end
         if live then return failure("INVALID_STATE", "action already has a live attempt") end

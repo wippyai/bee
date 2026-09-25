@@ -8,7 +8,7 @@ from unit import report_shard
 
 class UnitRunnerReportTest(unittest.TestCase):
     def test_failed_shard_prints_ids_and_untruncated_assertion(self):
-        output = "early log\n" + ("other case\n" * 100) + "Assertion failed: expected recovery state\n"
+        output = "early log\n" + ("other case\n" * 1000) + "Assertion failed: expected recovery state\n"
         stream = StringIO()
         with redirect_stdout(stream):
             report_shard((2, ["bee.example:first_test", "bee.example:second_test"],

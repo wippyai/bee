@@ -132,6 +132,15 @@ local function define_tests()
             local next_item = harness.value(target:call("inbox_offer", offer))
             test.eq(next_item.record_id, sent[2].record_id)
             test.eq(next_item.inbox_sequence, 2)
+            -- The agent may acknowledge an offered record before the runner's
+            -- accepted-write receipt reaches its carrier. The late receipt
+            -- must keep that stronger state and the same record identity.
+            harness.value(target:call("inbox_ack", {thread_id = target_thread, action_id = "target", inbox_sequence = 2, idempotency_key = harness.key()}))
+            local late = harness.value(target:call("inbox_transport", {thread_id = target_thread, action_id = "target",
+                attempt_id = "target-attempt", carrier_epoch = second_epoch, inbox_sequence = 2, record_id = next_item.record_id}))
+            test.eq(late.record_id, next_item.record_id)
+            test.eq(late.state, "acknowledged")
+            test.eq(harness.value(target:call("inbox_offer", offer)).empty, true)
         end)
     end)
 end

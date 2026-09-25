@@ -501,6 +501,56 @@ local function define_tests()
             local result = await_all({target = replacement})
             test.eq((result.target.settlement :: Object).outcome, "succeeded")
         end)
+        test.it("polls an inbox item committed while its controller was down", function()
+            admit_root()
+            bind_policies()
+            open_gateway()
+            local label = fresh("lost-push-hint-ws")
+            local workspace = tostring(call("bee.workspace.catalog:create", {label = label, root_ref = ROOT,
+                subpath = label, create_directory = true}).workspace_id)
+            local target_actor = "bee.test.cross_session.lost_push_hint"
+            local target_thread = tostring(call_as(target_actor, "bee.threads.service:create", {thread_id = fresh("target-thread"),
+                idempotency_key = fresh("key"), title = "Lost hint target"}, workspace).thread_id)
+            local source_thread = tostring(call_as(ACTOR, "bee.threads.service:create", {thread_id = fresh("source-thread"),
+                idempotency_key = fresh("key"), title = "Lost hint source"}, workspace).thread_id)
+            local source_action = fresh("source-action")
+            call_as(ACTOR, "bee.threads.service:admit_action", {thread_id = source_thread, action_id = source_action,
+                idempotency_key = fresh("admit"), admitted = {request_id = fresh("source-request"), principal_id = ACTOR,
+                    binding_ref = CODEX_BINDING, binding_digest = "fixture-digest", grant_refs = {}, budget_ref = SENDER_POLICY,
+                    input = {text = "send after controller crash"}}}, workspace)
+            local streams = setting("bee.harness.catalog:fixture_streams", "BEE_FIXTURE_STREAMS")
+            local target = session("bee.driver.claude:binding", PUSH_POLICY, target_thread, workspace,
+                {BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl", BEE_FIXTURE_PUSH = "1"}, target_actor)
+            local first = spawn(target, "open", "attempt_started")
+            await_crash(first)
+            call_as(target_actor, "bee.threads.service:inbox_accept", {thread_id = target_thread, action_id = target.action_id,
+                sender_id = ACTOR, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
+            local message_id = fresh("message")
+            local content = {text = "arrived while the controller was down"}
+            local sent = call_as(ACTOR, "bee.threads.service:inbox_send", {thread_id = target_thread, target_action_id = target.action_id,
+                sender_thread_id = source_thread, sender_action_id = source_action, node_id = assert(system.node.id()), grant_epoch = 1,
+                idempotency_key = fresh("send"), message_id = message_id, content = content,
+                payload_digest = sends.payload_digest({message_id = message_id, content = content})}, workspace)
+            local pending = call_as(target_actor, "bee.threads.service:inbox_list", {thread_id = target_thread,
+                action_id = target.action_id, after_sequence = 0, limit = 1}, workspace)
+            test.eq((pending.items :: {Object})[1].state, "committed")
+            local replacement = spawn(target, "resume")
+            local accepted: Object? = nil
+            for _ = 1, 150 do
+                local page = call_as(target_actor, "bee.threads.service:inbox_list", {thread_id = target_thread,
+                    action_id = target.action_id, after_sequence = 0, limit = 1}, workspace)
+                local item = (page.items :: {Object})[1]
+                if item and item.state == "transport_accepted" then accepted = item; break end
+                time.sleep("100ms")
+            end
+            if not accepted then error("replacement missed the item committed without a live hint subscriber") end
+            test.eq(accepted.record_id, sent.record_id)
+            call_as(target_actor, "bee.threads.service:inbox_ack", {thread_id = target_thread, action_id = target.action_id,
+                inbox_sequence = sent.inbox_sequence, idempotency_key = fresh("ack")}, workspace)
+            call_as(target_actor, "bee.placement.native:close_stdin", {attempt_id = target.attempt_id}, workspace)
+            local result = await_all({target = replacement})
+            test.eq((result.target.settlement :: Object).outcome, "succeeded")
+        end)
     end)
 end
 return test.run_cases(define_tests)

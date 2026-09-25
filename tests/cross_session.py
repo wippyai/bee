@@ -28,6 +28,7 @@ ACCEPTANCES = (
     "delivers and replies between independent window actors without thread membership",
     "queues a busy Claude inbox and pushes its identified record between turns",
     "recovers an ambiguous Claude inbox write under a new carrier epoch",
+    "polls an inbox item committed while its controller was down",
 )
 
 

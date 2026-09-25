@@ -21,13 +21,12 @@ local function define_tests()
             test.is_nil(configuration("no"))
         end)
         test.it("keeps static client grants separate from revocable Hive peer grants", function()
-            local common = {execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", local_clients = false}
-            local selected = protocol.configuration({execution = common.execution, expires_at = common.expires_at,
+            local selected = protocol.configuration({execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z",
                 local_clients = false, allowed_nodes = {"client-node"}, allowed_peers = {"peer-node"}})
             if not selected then error("host desktop grants were refused") end
             test.eq(selected.allowed_nodes[1], "client-node")
             test.eq(selected.allowed_peers[1], "peer-node")
-            test.is_nil(protocol.configuration({execution = common.execution, expires_at = common.expires_at,
+            test.is_nil(protocol.configuration({execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z",
                 local_clients = false, allowed_nodes = {"peer-node"}, allowed_peers = {"peer-node"}}))
         end)
         test.it("starts no folder supervisor and lists no default workspace", function()

@@ -47,14 +47,14 @@ class Nodes:
 
     def peers(self, name):
         lines = self.bee(name, 'peers').stdout.splitlines()
-        assert lines[0].startswith('NODE ') and lines[1].split() == ['PEER', 'SESSION', 'WORKSPACES'], lines
+        assert lines[0].startswith('NODE ') and lines[1].split() == ['PEER', 'SESSION'], lines
         rows = [line.split() for line in lines[2:]]
-        # Every peer carries a session and, when established, a live workspace
-        # count (or "unavailable" when its holdings read failed).
+        # Every peer carries a session; per-node holdings live in the
+        # hive-telemetry package aggregate, not in this listing.
         for row in rows:
-            assert len(row) in (2, 3), row
+            assert len(row) == 2, row
             assert row[1] in ('none', 'pending', 'established'), row
-        return lines[0].split()[1], {row[0]: row[1] for row in rows}, {row[0]: (row[2] if len(row) > 2 else '') for row in rows}
+        return lines[0].split()[1], {row[0]: row[1] for row in rows}, {}
 
     def stop(self, name):
         state = self.state(name)

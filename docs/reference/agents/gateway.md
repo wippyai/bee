@@ -124,7 +124,10 @@ session_send takes an exact address, current `grant_epoch`, retry key,
 sender action and thread and computes the payload digest. The destination
 owner requires a host-selected `bee.sessions.send` policy for the exact
 `<workspace_id>/<node_id>/<action_id>` resource and its own acceptance rule.
-The default send policy grants no address. session_inbox pages the bound
+The bundled Bee host grants managed agents a send attempt to actions in their
+own workspace; the destination owner checks the authenticated workspace and
+recipient's acceptance. Another host may select the bundled deny policy or a
+narrower exact-address policy. session_inbox pages the bound
 action's items; session_ack marks one item acknowledged; session_reply commits
 a reply to the original sender's address with an explicit cross-thread
 `in_reply_to` reference and outcome. These tools commit durable records and

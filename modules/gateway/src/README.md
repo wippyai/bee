@@ -42,9 +42,12 @@ the action ID, and another live action cannot reuse it. Directory entries use
 exact `{node_id, action_id}` addresses and show only peers the subject may
 discover, with attempt and latest inbox delivery state. The send tool needs
 the host's `bee.sessions.send` grant on the exact workspace/node/action
-resource and the target owner must accept the sender. The default send policy
-grants no address. Inbox tools commit and read durable items; they do not push
-messages into a driver or forward them over Hive.
+resource and the target owner must accept the sender. The bundled Bee host
+selects a workspace send policy for managed agents; the destination owner
+still requires the authenticated sender to belong to that workspace, the
+current epoch and the recipient's acceptance. An installing host can select
+the deny policy or a narrower address policy instead. Inbox tools commit and
+read durable items; Hive forwarding remains separate.
 
 The default remains `127.0.0.1:0`. A host may explicitly select a loopback or
 RFC1918 IPv4 interface for a local container, with its corresponding readiness

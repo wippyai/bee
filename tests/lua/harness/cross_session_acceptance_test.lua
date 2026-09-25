@@ -317,12 +317,10 @@ local function define_tests()
                 sender_id = waiter_actor, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
             local native = system.node.id()
             if not native or native == "" then error("native node identity is unavailable") end
-            local selected = assert(registry.get("bee.security.gateway:gateway_session_send_denied_policy"))
-            local policy_data = selected.data :: Object
-            local definition = policy_data.policy :: Object
-            definition.resources = {workspace .. "/" .. native .. "/" .. tostring(waiter.action_id),
-                workspace .. "/" .. native .. "/" .. tostring(sender.action_id)}
-            apply(selected)
+            local selected = assert(registry.get("bee.security.gateway:gateway_session_send_workspace_policy"))
+            local policy = (selected.data :: Object).policy :: Object
+            test.eq((policy.actions :: {string})[1], "bee.sessions.send")
+            test.eq(policy.resources, "*")
             local outcomes = await_all(pids)
             test.eq((outcomes.waiter.settlement :: Object).outcome, "succeeded")
             test.eq((outcomes.sender.settlement :: Object).outcome, "succeeded")

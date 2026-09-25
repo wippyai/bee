@@ -12,7 +12,9 @@ standalone application processes, typed boundary decoders and host-selected
 permissions intact. Registry metadata describes capabilities; it never grants
 them. Native Terminal runs with the operating system user's authority.
 
-Keep desktop responsibilities in `src/core`, public application helpers and appearance values in
+Keep desktop responsibilities in the `src/` component folders (`src/host`,
+`src/client`, `src/launch` and their siblings, one namespace per folder),
+public application helpers and appearance values in
 `modules/application/src`, and standalone applications in `src/apps`.
 Use the [UI brand book](../guides/ui.md), the
 [application visual style](../guides/app-style.md) and the runnable UI Guide for

@@ -6,6 +6,7 @@ local time = require("time")
 local channel = require("channel")
 local logger = require("logger")
 local log = logger:named("bee.desktop_client_probe")
+local registry = require("registry")
 type Channel = channel.Channel
 local store = require("store")
 local desktops = require("desktops")
@@ -192,6 +193,18 @@ local function main(mode: string?)
     end
     local left, left_screen = start("left", 100, true)
     local right, right_screen = start("right", 120, true)
+    if mode == "session-upgrade" then
+        local entry = assert(registry.get("bee.session:main"))
+        entry.meta.handoff_probe = "desktop-definition-changed"
+        local changes = assert(registry.snapshot()):changes()
+        changes:update(entry)
+        local applied, apply_error = changes:apply()
+        if not applied then error("Apply desktop session definition: " .. tostring(apply_error)) end
+        command(left_screen, "printf 'SESSION_UPGRADE_%s_OK\\n' \"$bee_desktop\"")
+        wait_text(left_screen, "SESSION_UPGRADE_left_OK")
+        command(right_screen, "printf 'SESSION_UPGRADE_%s_OK\\n' \"$bee_desktop\"")
+        wait_text(right_screen, "SESSION_UPGRADE_right_OK")
+    end
     if mode == "transfer" or mode == "transfer-source-save-failure" or mode == "transfer-target-save-failure" then
         local left_store, left_store_error = open_store("bee.client.db:left")
         if not left_store then error(tostring(left_store_error)) end

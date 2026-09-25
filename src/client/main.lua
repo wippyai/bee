@@ -134,6 +134,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local saved_for_exit = false
         local initial_opened = false
         local initial_request = ""
+        local fullscreen_pending = ""
         local launch_pending: {request_id: string, desktop_id: string, fullscreen: boolean}? = nil
         local attachment_state: unknown = nil
         local self = tostring(process.pid())
@@ -146,10 +147,15 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             if not policy then error(tostring(err)) end
             return security.new_scope({policy})
         end
-        session = tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = self,
-            ["bee.workspace_id"] = workspace_id}):with_scope(scope("bee.security.desktop:session_policy")):spawn_monitored(
-                "bee.session:main", "bee:workers", self, display.width, display.height, layout.preferences,
-                {scene = layout.scene, tabs = layout.tabs, preferences = layout.preferences})))
+        local function spawn_session(): string
+            return tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = self,
+                ["bee.workspace_id"] = workspace_id}):with_scope(scope("bee.security.desktop:session_policy")):spawn_monitored(
+                    "bee.session:main", "bee:workers", self, display.width, display.height, layout.preferences,
+                    {scene = layout.scene, tabs = layout.tabs, preferences = layout.preferences})))
+        end
+        session = spawn_session()
+        local session_restarts = 0
+        local session_recovering = false
         local function tab(view_id: string, instance_id: string): string?
             for key, target in pairs(targets) do
                 if target.view_id == view_id and target.instance_id == instance_id then return key end
@@ -300,6 +306,14 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             local committed, err = store.write(database, next_layout)
             if not committed then error(tostring(err)) end
             layout = next_layout
+            if fullscreen_pending ~= "" then
+                for _, window in ipairs(layout.scene.windows) do
+                    if window.id == fullscreen_pending and window.mode == "fullscreen" then
+                        fullscreen_pending = ""
+                        break
+                    end
+                end
+            end
             if appearance_changed and active then
                 send(host, "bee.client.appearance.changed", {version = 1, workspace_id = workspace_id,
                     connection_id = connection_id, renderer = presenter, renderer_generation = renderer_generation,
@@ -454,6 +468,57 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 revision = layout.scene.revision, theme = current.theme, background = current.background,
                 taskbar = current.taskbar, error_code = code, error = message})
         end
+        local function restart_session(failure: string)
+            if saved_for_exit or session_restarts >= 2 then
+                error("Desktop session recovery exhausted: " .. failure)
+            end
+            session_restarts = session_restarts + 1
+            log:warn("Desktop session exited; restoring committed projection", {workspace_id = workspace_id,
+                attempt = session_restarts, failure = failure})
+            for request_id, pending_appearance in pairs(appearance_pending) do
+                appearance_pending[request_id] = nil
+                appearance_result(pending_appearance.request, "uncertain", "Session ended before appearance confirmation")
+            end
+            defaults_request = ""
+            session = spawn_session()
+            session_recovering = true
+            -- Reconstruct commands that were accepted by this client but not
+            -- yet reflected in its durable projection when the old session died.
+            for key, target in pairs(targets) do
+                if not retired[key] and not state.target(layout, key) then
+                    local replayed = false
+                    for _, view in ipairs(live) do
+                        if view.view_id == target.view_id and view.instance_id == target.instance_id then
+                            send(session, "bee.desktop.command", {version = 1, op = "add", id = key,
+                                workspace_id = workspace_id, instance_id = target.instance_id,
+                                title = view.title, icon = view.icon})
+                            replayed = true
+                            break
+                        end
+                    end
+                    if not replayed then log:warn("Pending desktop tab has no live view to restore", {workspace_id = workspace_id, tab_id = key}) end
+                end
+            end
+            if fullscreen_pending ~= "" then
+                local committed_fullscreen = false
+                for _, window in ipairs(layout.scene.windows) do
+                    if window.id == fullscreen_pending and window.mode == "fullscreen" then committed_fullscreen = true end
+                end
+                if not committed_fullscreen then
+                    send(session, "bee.desktop.command", {version = 1, op = "fullscreen", id = fullscreen_pending})
+                end
+            end
+            for request_id, key in pairs(removals) do
+                if state.target(layout, key) then
+                    send(session, "bee.desktop.command", {version = 1, op = "remove", id = key,
+                        request_id = request_id})
+                else
+                    removals[request_id], retired[key] = nil, nil
+                end
+            end
+            status_fingerprint = ""
+            publish_bindings()
+        end
         local function run()
             send(owner, "bee.client.ready", {version = 1, workspace_id = workspace_id,
                 client_id = database.client_id, import_receipt = import_receipt})
@@ -524,7 +589,9 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     if event.kind == process.event.EXIT then
                         local exited = tostring(event.from)
                         local failure = decode.exit_error(event.result)
-                        if exited == owner or exited == session or (exited == host and (not saved_for_exit or failure ~= nil)) then
+                        if exited == session then
+                            restart_session(failure or "session stopped")
+                        elseif exited == owner or (exited == host and (not saved_for_exit or failure ~= nil)) then
                             error("Desktop dependency exited: " .. exited .. ": " .. (failure or "without completing its lifetime protocol"))
                         end
                         if exited == presenter then
@@ -862,7 +929,10 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                         for _, window in ipairs(layout.scene.windows) do
                                             if window.id == key and window.mode == "fullscreen" then fullscreen = true end
                                         end
-                                        if not fullscreen then send(session, "bee.desktop.command", {version = 1, op = "fullscreen", id = key}) end
+                                        if not fullscreen then
+                                            fullscreen_pending = key
+                                            send(session, "bee.desktop.command", {version = 1, op = "fullscreen", id = key})
+                                        end
                                         initial_request = ""
                                     end
                                 else
@@ -887,6 +957,11 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                         end
                     elseif selected.channel == scenes and sender == session then
                         adopt(data)
+                        if session_recovering then
+                            session_recovering = false
+                            send(owner, "bee.client.session_restarted", {version = 1, workspace_id = workspace_id,
+                                client_id = database.client_id, session = session})
+                        end
                     elseif selected.channel == acknowledgements and sender == session then
                         local ack = decode.ack(data)
                         if ack then

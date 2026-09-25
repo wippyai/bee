@@ -42,7 +42,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, security, tty, time, channel, logger]
+  modules: [process, security, tty, time, channel, logger, registry]
   imports:
     desktops: bee.client:desktops
     desktop_attachments: bee.client:attachments

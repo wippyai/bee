@@ -142,8 +142,14 @@ function M.notify(db: sql.DB, actor: string, request: unknown): Result
     local mutation, invalid = authority.mutation(request)
     if not mutation then return invalid or failure("INVALID_ARGUMENT", "invalid request") end
     local object = bounds.object(request) or {}
-    local unknown_field = bounds.fields(object, {"thread_id", "idempotency_key", "target_thread_id", "target_action_id", "watcher_action_id"})
+    -- caller_node_id is the authenticated caller attestation a forwarded
+    -- request carries; the admission already verified it, and the owner
+    -- accepts it so a cross-node notice is not rejected for naming its caller.
+    local unknown_field = bounds.fields(object, {"thread_id", "idempotency_key", "target_thread_id", "target_action_id", "watcher_action_id", "caller_node_id"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    if object.caller_node_id ~= nil and not bounds.id(object.caller_node_id) then
+        return failure("INVALID_ARGUMENT", "caller_node_id is not an identifier")
+    end
     local target_thread_id, target_action_id = bounds.id(object.target_thread_id), bounds.id(object.target_action_id)
     if not target_thread_id then return failure("INVALID_ARGUMENT", "target_thread_id is not an identifier") end
     if not target_action_id then return failure("INVALID_ARGUMENT", "target_action_id is not an identifier") end

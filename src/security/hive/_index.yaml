@@ -106,6 +106,9 @@ entries:
     - bee.threads.service:send_status
     - bee.threads.service:inbox_describe
     - bee.threads.service:inbox_send
+    - bee.threads.service:inbox_reply
+    - bee.threads.service:notify
+    - bee.threads.delivery:watch
     - bee.hive.supervisor:invoke_check
     effect: allow
 - name: hive_thread_exposure_policy
@@ -121,6 +124,9 @@ entries:
     - bee.threads.service:send_status
     - bee.threads.service:inbox_describe
     - bee.threads.service:inbox_send
+    - bee.threads.service:inbox_reply
+    - bee.threads.service:notify
+    - bee.threads.delivery:watch
     effect: allow
 - name: hive_supervisor_policy
   kind: security.policy

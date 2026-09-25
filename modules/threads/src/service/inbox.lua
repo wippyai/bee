@@ -248,7 +248,17 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
     if is_reply ~= (object.in_reply_to ~= nil) or (is_reply and object.outcome == nil) or (not is_reply and object.outcome ~= nil) then
         return failure("INVALID_ARGUMENT", "reply correlation and outcome must accompany a reply only")
     end
-    if is_reply and node_id ~= node() then return failure("INVALID_ARGUMENT", "cross-node replies are not forwarded") end
+    -- A cross-node reply is a forwarded send that also carries its reply
+    -- correlation: the destination re-checks it against its own inbox item,
+    -- exactly as a local reply does, so a reply cannot be redirected.
+    local reply_ref: {thread_id: string, record_id: string}? = nil
+    if is_reply then
+        local ref = bounds.object(object.in_reply_to)
+        local ref_thread = ref and bounds.id(ref.thread_id)
+        local ref_record = ref and bounds.id(ref.record_id)
+        if not ref_thread or not ref_record then return failure("INVALID_ARGUMENT", "in_reply_to must name a thread and record") end
+        reply_ref = {thread_id = ref_thread, record_id = ref_record}
+    end
     local submitted: Object = {message_id = message_id, message_kind = is_reply and "reply" or "request", sender_id = actor,
         sender_action_id = sender_action, recipient_ids = {}, recipient_action_ids = {target_action}, content = object.content}
     if is_reply then submitted.in_reply_to = object.in_reply_to; submitted.outcome = object.outcome end
@@ -258,9 +268,39 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
         -- A send names its destination node: a remote node persists to the
         -- durable outbox here and never commits to a same-named local
         -- thread, while the destination commits only for its own node.
-        if node_id ~= node() then return forward_enqueue(tx, actor, mutation, {target_action = target_action :: string, sender_thread = sender_thread :: string,
-            sender_action = sender_action :: string, node_id = node_id :: string, workspace_id = claimed_workspace, grant_epoch = grant_epoch :: integer,
-            message_id = message_id :: string, content = object.content, digest = digest :: string}) end
+        if node_id ~= node() then
+            -- A cross-node reply still validates its correlation on the node
+            -- that received the request: the request item, the caller's own
+            -- action and the reply's destination must all agree here before
+            -- anything crosses the wire. The destination then re-authorizes
+            -- the authenticated mapped principal against its own acceptance,
+            -- grant, action and epoch when the reply arrives.
+            if is_reply and reply_ref then
+                local source, source_err = own_action(tx, actor, sender_thread :: string, sender_action :: string)
+                if not source then return source_err or failure("DENIED", "reply action unavailable") end
+                local origin, origin_err = rows(tx, "SELECT * FROM bee_thread_inbox_items WHERE thread_id = ? AND record_id = ?",
+                    {reply_ref.thread_id, reply_ref.record_id})
+                if origin_err then return storage("read original inbox item") end
+                local item = origin and origin[1]
+                if not item or tostring(item.action_id) ~= sender_action or tostring(item.sender_action_id) ~= target_action
+                    or tostring(item.sender_thread_id) ~= mutation.thread_id then
+                    return failure("DENIED", "reply does not match an inbox request addressed to sender")
+                end
+                if tostring(item.state) == "replied" then return failure("CONFLICT", "inbox request already has a reply") end
+                -- The request is settled here, on the node that received it and
+                -- before the reply crosses the wire, so a second reply under a
+                -- different key finds it already answered. The reply record
+                -- itself lives on the destination, which re-authorizes the
+                -- authenticated mapped principal when it commits.
+                local settled = execute(tx, "UPDATE bee_thread_inbox_items SET state = 'replied', delivery_block = NULL WHERE thread_id = ? AND record_id = ?",
+                    {reply_ref.thread_id, reply_ref.record_id})
+                if settled then return storage("mark forwarded reply") end
+            end
+            return forward_enqueue(tx, actor, mutation, {target_action = target_action :: string, sender_thread = sender_thread :: string,
+                sender_action = sender_action :: string, node_id = node_id :: string, workspace_id = claimed_workspace, grant_epoch = grant_epoch :: integer,
+                message_id = message_id :: string, content = object.content, digest = digest :: string,
+                in_reply_to = reply_ref, outcome = is_reply and object.outcome or nil})
+        end
         -- A hive-forwarded send arrives with the authenticated caller node.
         -- The sender action lives on that node, so the destination
         -- re-authorizes the mapped principal against its own acceptance,
@@ -295,7 +335,7 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
         if current_err then return current_err end
         if current ~= grant_epoch then return failure("CONFLICT", "grant epoch is stale") end
         local original: InboxRow? = nil
-        if is_reply then
+        if is_reply and not forwarded then
             local ref = decoded.in_reply_to
             if not ref then return failure("INVALID_ARGUMENT", "reply reference is required") end
             local origin, origin_err = rows(tx, "SELECT * FROM bee_thread_inbox_items WHERE thread_id = ? AND record_id = ?", {ref.thread_id, ref.record_id})

@@ -182,7 +182,8 @@ entries:
     comment: The admitting worker reads the host mapping and calls the two thread operations; the mapped actor's own scope is the mapping's policies
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.threads.service:send, bee.threads.service:send_status, bee.hive.supervisor:principal_mappings]
+    resources: [bee.threads.service:send, bee.threads.service:send_status, bee.threads.service:inbox_reply,
+      bee.threads.service:notify, bee.threads.delivery:watch, bee.hive.supervisor:principal_mappings]
     effect: allow
 - name: thread_identity_policy
   kind: security.policy

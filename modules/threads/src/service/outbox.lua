@@ -65,12 +65,20 @@ function M.delivery(row: Row): Object
     if type(row.content_json) == "string" and row.content_json ~= "" then
         content = json.decode(row.content_json :: string) or {}
     end
-    return {thread_id = tostring(row.dest_thread_id), target_action_id = tostring(row.dest_action_id),
+    local delivery: Object = {thread_id = tostring(row.dest_thread_id), target_action_id = tostring(row.dest_action_id),
         sender_thread_id = tostring(row.sender_thread_id), sender_action_id = tostring(row.sender_action_id),
         node_id = tostring(row.dest_node_id), workspace_id = tostring(row.dest_workspace_id),
         grant_epoch = integer(row.grant_epoch) or 0, idempotency_key = tostring(row.idempotency_key),
         message_id = tostring(row.message_id), content = content, payload_digest = tostring(row.payload_digest),
         caller_node_id = tostring(row.sender_node_id)}
+    -- A reply carries the correlation its destination re-checks; an ordinary
+    -- send leaves both fields empty.
+    if type(row.in_reply_to_thread_id) == "string" and row.in_reply_to_thread_id ~= ""
+        and type(row.in_reply_to_record_id) == "string" and row.in_reply_to_record_id ~= "" then
+        delivery.in_reply_to = {thread_id = row.in_reply_to_thread_id, record_id = row.in_reply_to_record_id}
+        if type(row.outcome) == "string" and row.outcome ~= "" then delivery.outcome = row.outcome end
+    end
+    return delivery
 end
 function M.find(tx: sql.Transaction, sender_thread_id: string, sender_actor: string, idempotency_key: string): (Row?, Result?)
     local found, err = rows(tx, "SELECT * FROM bee_thread_inbox_outbox WHERE sender_thread_id = ? AND sender_actor = ? AND idempotency_key = ?", {sender_thread_id, sender_actor, idempotency_key})
@@ -79,17 +87,19 @@ function M.find(tx: sql.Transaction, sender_thread_id: string, sender_actor: str
 end
 type Spec = {sender_thread_id: string, sender_actor: string, sender_action_id: string, sender_node_id: string, dest_node_id: string,
     dest_workspace_id: string, dest_thread_id: string, dest_action_id: string, grant_epoch: integer, idempotency_key: string,
-    message_id: string, content_json: string, payload_digest: string}
+    message_id: string, content_json: string, payload_digest: string, in_reply_to: {thread_id: string, record_id: string}?, outcome: string?}
 function M.enqueue(tx: sql.Transaction, spec: Spec): (Row?, Result?)
     local outbox_id, id_error = uuid.v7()
     if id_error or not outbox_id then return nil, failure("INTERNAL", "allocate outbox identifier") end
     local now = now_ms()
+    local reply_thread = spec.in_reply_to and spec.in_reply_to.thread_id or sql.NULL
+    local reply_record = spec.in_reply_to and spec.in_reply_to.record_id or sql.NULL
     local _, write_error = tx:execute("INSERT INTO bee_thread_inbox_outbox (outbox_id, sender_thread_id, sender_actor, sender_action_id, sender_node_id, dest_node_id, dest_workspace_id, " ..
-        "dest_thread_id, dest_action_id, grant_epoch, idempotency_key, message_id, content_json, payload_digest, state, attempts, next_attempt_ms, created_at, updated_at) " ..
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)",
+        "dest_thread_id, dest_action_id, grant_epoch, idempotency_key, message_id, content_json, payload_digest, in_reply_to_thread_id, in_reply_to_record_id, outcome, state, attempts, next_attempt_ms, created_at, updated_at) " ..
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)",
         {outbox_id, spec.sender_thread_id, spec.sender_actor, spec.sender_action_id, spec.sender_node_id, spec.dest_node_id, spec.dest_workspace_id,
             spec.dest_thread_id, spec.dest_action_id, spec.grant_epoch, spec.idempotency_key, spec.message_id, spec.content_json,
-            spec.payload_digest, now, stamp(now), stamp(now)})
+            spec.payload_digest, reply_thread, reply_record, spec.outcome or sql.NULL, now, stamp(now), stamp(now)})
     if write_error then return nil, storage("enqueue forwarded send") end
     return M.find(tx, spec.sender_thread_id, spec.sender_actor, spec.idempotency_key)
 end

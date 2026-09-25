@@ -90,10 +90,13 @@ class Desktop:
                     self.pending_output = self.pending_output[finish + len(end_frame):]
 
     def wait(self, text, timeout=DESKTOP_HANG_SECONDS):
+        Desktop.wait_until(self, lambda: text in self.text(), repr(text), timeout)
+
+    def wait_until(self, condition, description, timeout=DESKTOP_HANG_SECONDS):
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             self.pump()
-            if text in self.text():
+            if condition():
                 return
             if self.process.poll() is not None:
                 break
@@ -102,7 +105,7 @@ class Desktop:
         cpu_time = process.cpu_time if process is not None else 'absent'
         raw_tail = bytes(self.raw[-2048:])
         raise AssertionError(
-            f"Missing {text!r} within {timeout}s; exit={self.process.poll()}; process_state={state}; "
+            f"Missing {description} within {timeout}s; exit={self.process.poll()}; process_state={state}; "
             f"process_cpu_time={cpu_time}; "
             f"raw_bytes={len(self.raw)}; raw_tail={raw_tail!r}; "
             f"pending_synchronized_bytes={len(self.pending_output.encode())}\n{self.text()}")

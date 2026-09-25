@@ -1,4 +1,4 @@
-"""Desktop startup waits for its frame even when scheduling takes over four seconds."""
+"""Desktop events use a hang guard even when scheduling exceeds old deadlines."""
 from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
@@ -19,6 +19,23 @@ class DesktopWaitTest(unittest.TestCase):
         with patch("tui_smoke.time.monotonic", side_effect=lambda: clock[0]):
             Desktop.wait(desktop, "BEE SETTINGS")
         self.assertEqual(clock[0], 5)
+
+    def test_lifecycle_close_waits_for_one_remaining_tab(self):
+        clock = [0]
+        screen = SimpleNamespace(display=["stubborn stubborn"])
+        def pump():
+            clock[0] += 1
+            if clock[0] >= 11:
+                screen.display[0] = "stubborn"
+        desktop = SimpleNamespace(
+            pump=pump,
+            screen=screen,
+            process=SimpleNamespace(pid=1, poll=lambda: None),
+        )
+        with patch("tui_smoke.time.monotonic", side_effect=lambda: clock[0]):
+            Desktop.wait_until(desktop, lambda: screen.display[0].count("stubborn") == 1,
+                               "one remaining stubborn tab")
+        self.assertEqual(clock[0], 11)
 
     def test_missing_frame_still_has_hang_guard(self):
         clock = [0]

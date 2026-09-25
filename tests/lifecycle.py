@@ -83,7 +83,7 @@ def run():
                 ui = Desktop(directory, project=project, apps=("probe:" + name,))
                 try:
                     if name in {"early", "never"}:
-                        ui.wait("Application did not become", timeout=6)
+                        ui.wait("Application did not become")
                         assert "No applications open" in ui.screen.display[0]
                         assert "READY /" not in ui.text()
                         ui.resize(ui.width + 1, ui.height)
@@ -114,7 +114,9 @@ def run():
                     ui.key(b"\x0e")
                 assert ui.screen.display[0].count("stubborn") == 2, ui.text()
                 ui.key(b"\x17")
-                ui.wait("No applications open", timeout=10)
+                ui.wait_until(lambda: ui.screen.display[0].count("stubborn") == 1,
+                              "one remaining stubborn tab")
+                assert "READY / probe:stubborn" in ui.text(), ui.text()
                 ui.key(b"\x0e")
                 ui.wait("Original application has stopped")
                 assert ui.screen.display[0].count("stubborn") == 1, ui.text()

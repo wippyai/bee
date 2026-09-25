@@ -28,8 +28,8 @@ entries:
   auto_init: false
 - name: machine_home
   kind: env.variable
-  storage: bee.harness.host:environment
-  variable: home
+  storage: bee.env:workspace_environment
+  variable: HOME
   readonly: true
 - name: machine_login_source
   kind: fs.directory

@@ -9,7 +9,7 @@ local process = require("process")
 local store = require("store")
 local catalog = require("catalog")
 local protocol = require("protocol")
-local resources = require("resources")
+local registry = require("registry")
 local recovery = require("recovery")
 local extensions = require("extensions")
 
@@ -58,11 +58,29 @@ local function folder(path: string): string
     return path
 end
 
+local function host_roots(): ({[string]: string}?, string?)
+    local entry, err = registry.get("bee:resource_roots")
+    if err or not entry then return nil, "host roots unavailable" end
+    local data = entry.data
+    local roots: {[string]: string} = {}
+    local list = type(data) == "table" and data.roots or nil
+    if type(list) ~= "table" then return roots, nil end
+    for _, item in ipairs(list :: {unknown}) do
+        if type(item) == "table" then
+            local declared = item :: {[string]: unknown}
+            if type(declared.root_ref) == "string" and (declared.access == "read" or declared.access == "write") then
+                roots[declared.root_ref :: string] = declared.access :: string
+            end
+        end
+    end
+    return roots, nil
+end
+
 -- A workspace folder lies under a root the host admitted. An existing folder
 -- must be a directory; a new one needs a write-admitted root, an existing
 -- parent and an unused name, and is made inside the insert transaction.
 local function create(request: protocol.Create): protocol.Reply
-    local roots, roots_error = resources.host_roots()
+    local roots, roots_error = host_roots()
     if not roots then return protocol.fail("UNAVAILABLE", roots_error or "host roots are unavailable") end
     local ceiling = roots[request.root_ref]
     if not ceiling then return protocol.fail("FORBIDDEN", "root " .. request.root_ref .. " is not admitted on this host") end
@@ -94,7 +112,7 @@ end
 
 -- The roots the host admits, in name order, with the access it admits.
 local function roots(): protocol.Reply
-    local admitted, roots_error = resources.host_roots()
+    local admitted, roots_error = host_roots()
     if not admitted then return protocol.fail("UNAVAILABLE", roots_error or "host roots are unavailable") end
     local names: {string} = {}
     for root_ref in pairs(admitted) do names[#names + 1] = root_ref end
@@ -108,7 +126,7 @@ end
 -- each with the workspace that holds it. Hidden folders (a leading ".") are
 -- left out. The directory is read once and only the page's names are kept.
 local function folders(request: protocol.Folders): protocol.Reply
-    local admitted, roots_error = resources.host_roots()
+    local admitted, roots_error = host_roots()
     if not admitted then return protocol.fail("UNAVAILABLE", roots_error or "host roots are unavailable") end
     local access = admitted[request.root_ref]
     if not access then return protocol.fail("FORBIDDEN", "root " .. request.root_ref .. " is not admitted on this host") end
@@ -255,7 +273,7 @@ local function handle(value: unknown): protocol.Reply
     if not query then return protocol.fail("INVALID", "listing request is missing") end
     if query.order == "roots" then
         -- A search across roots walks every root the host admits, in name order.
-        local admitted, roots_error = resources.host_roots()
+        local admitted, roots_error = host_roots()
         if not admitted then return protocol.fail("UNAVAILABLE", roots_error or "host roots are unavailable") end
         local roots: {string} = {}
         for root_ref in pairs(admitted) do roots[#roots + 1] = root_ref end

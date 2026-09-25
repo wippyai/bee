@@ -321,4 +321,96 @@ function M.ack(db: sql.DB, actor: string, request: unknown): Result
         return authority.remember(tx, actor, "inbox_ack", mutation, {inbox_sequence = sequence, record_id = item.record_id, state = state})
     end)
 end
+-- Check the carrier fence in the same transaction that changes the offer.
+-- A caller's action identity alone does not authorize transport dispatch.
+local function carrier_target(tx: sql.Transaction, actor: string, thread_id: string, action_id: string, attempt_id: string, carrier_epoch: integer): Result?
+    local head, refused = own_action(tx, actor, thread_id, action_id)
+    if not head then return refused or failure("DENIED", "not caller's action") end
+    if not access.may_carry(thread_id) then return failure("DENIED", "caller holds no carrier authority") end
+    if head.state ~= "open" then return failure("INVALID_STATE", "thread is closed") end
+    local attempt, attempt_err = reader.attempt(tx, thread_id, attempt_id)
+    if attempt_err then return storage(attempt_err) end
+    if not attempt or attempt.action_id ~= action_id then return failure("DENIED", "attempt is not on target action") end
+    if attempt.state == "ended" then return failure("INVALID_STATE", "attempt has ended") end
+    local carriers, read_err = rows(tx, "SELECT carrier_epoch FROM bee_thread_carriers WHERE thread_id = ? AND attempt_id = ?", {thread_id, attempt_id})
+    if not carriers then return read_err or storage("read carrier epoch") end
+    if not carriers[1] or tonumber(carriers[1].carrier_epoch) ~= carrier_epoch then return failure("CONFLICT", "carrier epoch is not current") end
+    return nil
+end
+local function carrier_request(request: unknown, allowed: {string}): (string?, string?, string?, integer?, Result?)
+    local object = bounds.object(request)
+    if not object then return nil, nil, nil, nil, failure("INVALID_ARGUMENT", "request must be an object") end
+    local extra = bounds.fields(object, allowed)
+    if extra then return nil, nil, nil, nil, failure("INVALID_ARGUMENT", extra) end
+    local thread_id, action_id, attempt_id = bounds.id(object.thread_id), bounds.id(object.action_id), bounds.id(object.attempt_id)
+    local carrier_epoch = bounds.integer(object.carrier_epoch)
+    if not thread_id or not action_id or not attempt_id or not carrier_epoch or carrier_epoch < 1 then
+        return nil, nil, nil, nil, failure("INVALID_ARGUMENT", "thread, action, attempt and positive carrier epoch are required")
+    end
+    return thread_id, action_id, attempt_id, carrier_epoch, nil
+end
+-- The oldest outstanding item blocks later items. A carrier replacement may
+-- reoffer it with the same record id even when its earlier transport result
+-- was accepted: transport acceptance never certifies agent comprehension.
+function M.offer(db: sql.DB, actor: string, request: unknown): Result
+    local thread_id, action_id, attempt_id, carrier_epoch, invalid = carrier_request(request,
+        {"thread_id", "action_id", "attempt_id", "carrier_epoch"})
+    if not thread_id or not action_id or not attempt_id or not carrier_epoch then return invalid or failure("INVALID_ARGUMENT", "invalid carrier request") end
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local refused = carrier_target(tx, actor, thread_id, action_id, attempt_id, carrier_epoch)
+        if refused then return refused end
+        local found, read_err = rows(tx, "SELECT i.*, r.record_json FROM bee_thread_inbox_items i JOIN bee_thread_records r ON r.record_id = i.record_id " ..
+            "WHERE i.thread_id = ? AND i.action_id = ? AND i.state NOT IN ('acknowledged','replied') ORDER BY i.inbox_sequence LIMIT 1", {thread_id, action_id})
+        if not found then return read_err or storage("read next inbox item") end
+        local item = found[1]
+        if not item then return transaction.success({empty = true}, false) end
+        local same_carrier = item.offer_attempt_id == attempt_id and tonumber(item.offer_carrier_epoch) == carrier_epoch
+        local dispatch = not same_carrier or item.state == "committed"
+        if dispatch then
+            local changed = execute(tx, "UPDATE bee_thread_inbox_items SET state = 'offered', offer_attempt_id = ?, offer_carrier_epoch = ?, " ..
+                "offer_count = offer_count + 1, offered_at = ?, transport_accepted_at = NULL WHERE thread_id = ? AND action_id = ? AND inbox_sequence = ?",
+                {attempt_id, carrier_epoch, transaction.now(), thread_id, action_id, item.inbox_sequence})
+            if changed then return changed end
+        end
+        local decoded, decode_err = record.decode_json(tostring(item.record_json))
+        if not decoded then return failure("INTERNAL", decode_err or "stored inbox record is corrupt") end
+        local body = decoded.body :: Object
+        local view: Object = {thread_id = thread_id, action_id = action_id, inbox_sequence = item.inbox_sequence, record_id = item.record_id,
+            payload_digest = item.payload_digest, message_id = item.message_id, message_kind = body.message_kind, content = body.content,
+            sender_action_id = item.sender_action_id, sender_thread_id = item.sender_thread_id, sender_node_id = item.sender_node_id,
+            state = dispatch and "offered" or item.state, dispatch = dispatch, offer_count = (tonumber(item.offer_count) or 0) + (dispatch and 1 or 0)}
+        if body.in_reply_to then view.in_reply_to = body.in_reply_to end
+        return transaction.success(view, false)
+    end)
+end
+function M.transport(db: sql.DB, actor: string, request: unknown): Result
+    local thread_id, action_id, attempt_id, carrier_epoch, invalid = carrier_request(request,
+        {"thread_id", "action_id", "attempt_id", "carrier_epoch", "inbox_sequence", "record_id"})
+    if not thread_id or not action_id or not attempt_id or not carrier_epoch then return invalid or failure("INVALID_ARGUMENT", "invalid carrier request") end
+    local object = bounds.object(request) or {}
+    local sequence, record_id = bounds.integer(object.inbox_sequence), bounds.id(object.record_id)
+    if not sequence or sequence < 1 or not record_id then return failure("INVALID_ARGUMENT", "sequence and record id are required") end
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local refused = carrier_target(tx, actor, thread_id, action_id, attempt_id, carrier_epoch)
+        if refused then return refused end
+        local found, read_err = rows(tx, "SELECT record_id, state, offer_attempt_id, offer_carrier_epoch FROM bee_thread_inbox_items " ..
+            "WHERE thread_id = ? AND action_id = ? AND inbox_sequence = ?", {thread_id, action_id, sequence})
+        if not found then return read_err or storage("read offered item") end
+        local item = found[1]
+        if not item then return failure("NOT_FOUND", "inbox item does not exist") end
+        if item.record_id ~= record_id or item.offer_attempt_id ~= attempt_id or tonumber(item.offer_carrier_epoch) ~= carrier_epoch then
+            return failure("CONFLICT", "offer is not held by this carrier")
+        end
+        if item.state == "offered" then
+            local changed = execute(tx, "UPDATE bee_thread_inbox_items SET state = 'transport_accepted', transport_accepted_at = ? " ..
+                "WHERE thread_id = ? AND action_id = ? AND inbox_sequence = ?", {transaction.now(), thread_id, action_id, sequence})
+            if changed then return changed end
+            return transaction.success({record_id = record_id, inbox_sequence = sequence, state = "transport_accepted"}, false)
+        end
+        if item.state == "transport_accepted" or item.state == "acknowledged" or item.state == "replied" then
+            return transaction.success({record_id = record_id, inbox_sequence = sequence, state = item.state}, false)
+        end
+        return failure("CONFLICT", "item was not offered")
+    end)
+end
 return M

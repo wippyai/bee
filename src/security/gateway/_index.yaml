@@ -100,6 +100,13 @@ entries:
     actions: [bee.sessions.send]
     resources: [unassigned-session-address]
     effect: allow
+- name: gateway_session_send_workspace_policy
+  kind: security.policy
+  meta: {comment: Bundled host grants local workspace agents a send attempt; the Threads owner checks authenticated workspace, target address, recipient acceptance and current grant epoch}
+  policy:
+    actions: [bee.sessions.send]
+    resources: '*'
+    effect: allow
 - name: gateway_tool_launch_policy
   kind: security.policy
   meta:

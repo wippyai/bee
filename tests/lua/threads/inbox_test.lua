@@ -81,6 +81,58 @@ local function define_tests()
                 content = class_content, payload_digest = assert(sends.payload_digest({message_id = "class-1", content = class_content}))}))
             test.eq(class_send.inbox_sequence, 2)
         end)
+        test.it("offers one ordered item under a carrier epoch and redelivers its identity after a crash", function()
+            local grants = {"bee:thread_create_policy", "bee:thread_lifecycle_policy", "bee:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
+            local sender = harness.principal("push-sender", grants, WORKSPACE)
+            local target = harness.principal("push-target", grants, WORKSPACE)
+            local sender_thread = harness.thread(sender, "sender")
+            local target_thread = harness.thread(target, "target")
+            harness.value(sender:call("admit_action", {thread_id = sender_thread, idempotency_key = harness.key(), action_id = "sender", admitted = admitted("push-sender")}))
+            harness.value(target:call("admit_action", {thread_id = target_thread, idempotency_key = harness.key(), action_id = "target", admitted = admitted("push-target")}))
+            harness.value(target:call("prepare_attempt", {thread_id = target_thread, idempotency_key = harness.key(), action_id = "target", attempt_id = "target-attempt", prepared = harness.prepared()}))
+            local first_epoch = harness.value(target:call("carrier_claim", {thread_id = target_thread, attempt_id = "target-attempt", idempotency_key = harness.key()})).carrier_epoch
+            harness.value(target:call("inbox_accept", {thread_id = target_thread, action_id = "target", sender_id = "push-sender", allow = true,
+                expected_epoch = 0, idempotency_key = harness.key()}))
+            local native = system.node.id()
+            local node_id = native and native ~= "" and native or "local"
+            local sent: {{[string]: unknown}} = {}
+            for index = 1, 2 do
+                local content = {text = "item " .. tostring(index)}
+                local id = "push-" .. tostring(index)
+                sent[index] = harness.value(sender:call("inbox_send", {thread_id = target_thread, target_action_id = "target", sender_thread_id = sender_thread,
+                    sender_action_id = "sender", node_id = node_id, grant_epoch = 1, idempotency_key = harness.key(), message_id = id,
+                    content = content, payload_digest = assert(sends.payload_digest({message_id = id, content = content}))}))
+            end
+            local offer = {thread_id = target_thread, action_id = "target", attempt_id = "target-attempt", carrier_epoch = first_epoch}
+            local no_carrier = harness.principal("push-target", {"bee:thread_create_policy", "bee:thread_lifecycle_policy"}, WORKSPACE)
+            test.eq(harness.code(no_carrier:call("inbox_offer", offer)), "DENIED")
+            test.eq(harness.code(sender:call("inbox_offer", offer)), "DENIED")
+            local first = harness.value(target:call("inbox_offer", offer))
+            test.eq(first.record_id, sent[1].record_id)
+            test.eq(first.inbox_sequence, 1)
+            test.eq(first.state, "offered")
+            test.eq(first.dispatch, true)
+            test.eq(harness.value(target:call("inbox_offer", offer)).dispatch, false)
+            local second_epoch = harness.value(target:call("carrier_claim", {thread_id = target_thread, attempt_id = "target-attempt", idempotency_key = harness.key()})).carrier_epoch
+            test.eq(harness.code(target:call("inbox_transport", {thread_id = target_thread, action_id = "target", attempt_id = "target-attempt",
+                carrier_epoch = first_epoch, inbox_sequence = 1, record_id = first.record_id})), "CONFLICT")
+            offer.carrier_epoch = second_epoch
+            local redelivered = harness.value(target:call("inbox_offer", offer))
+            test.eq(redelivered.record_id, first.record_id)
+            test.eq(redelivered.payload_digest, first.payload_digest)
+            test.eq(redelivered.dispatch, true)
+            test.eq(redelivered.offer_count, 2)
+            local accepted = harness.value(target:call("inbox_transport", {thread_id = target_thread, action_id = "target", attempt_id = "target-attempt",
+                carrier_epoch = second_epoch, inbox_sequence = 1, record_id = first.record_id}))
+            test.eq(accepted.state, "transport_accepted")
+            test.eq(harness.code(target:call("inbox_transport", {thread_id = target_thread, action_id = "target", attempt_id = "target-attempt",
+                carrier_epoch = second_epoch, inbox_sequence = 1, record_id = sent[2].record_id})), "CONFLICT")
+            test.eq(harness.value(target:call("inbox_offer", offer)).inbox_sequence, 1)
+            harness.value(target:call("inbox_ack", {thread_id = target_thread, action_id = "target", inbox_sequence = 1, idempotency_key = harness.key()}))
+            local next_item = harness.value(target:call("inbox_offer", offer))
+            test.eq(next_item.record_id, sent[2].record_id)
+            test.eq(next_item.inbox_sequence, 2)
+        end)
     end)
 end
 return test.run_cases(define_tests)

@@ -45,7 +45,7 @@ local function define_tests()
 
     test.describe("workspace application activation profile", function()
         test.it("makes the granted function call module available to workspace apps", function()
-            local entry = assert(registry.get("bee.governance:activation_profiles"))
+            local entry = assert(registry.get("bee:governance_activation_profiles"))
             local data = entry.data :: Object
             local shipped = data.workspace_applications :: Object
             local found = false
@@ -100,7 +100,7 @@ local function define_tests()
             local binding = (selected.applications :: {Object})[1]
             test.eq(#(binding.policies :: {string}), 2)
             test.eq((binding.policies :: {string})[1], requested.policies[1].id)
-            test.eq((binding.policies :: {string})[2], "bee:ordinary_app_subsystem_boundary")
+            test.eq((binding.policies :: {string})[2], "bee.security:ordinary_app_subsystem_boundary")
             test.eq(binding.thread_access, requested.thread_access)
             local denied = profiles.select(configuration, WORKSPACE, NODE, "tally",
                 {id = installed.id, kind = installed.kind, meta = installed.meta, data = {digest = "bad"}}, vocabulary)

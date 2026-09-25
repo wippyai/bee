@@ -17,7 +17,7 @@ actor.
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (11 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
+| `bee.threads.persist` | The owned store: checked migration ledger (12 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
 
 ## Dependency interface
 
@@ -80,8 +80,11 @@ record and inbox item together. `inbox_list` and `inbox_ack` are restricted to
 the action's admitted principal. `inbox_reply` commits a cross-thread reply
 into the original sender's inbox and marks the request replied in one local
 transaction. Neither send nor discovery enrolls the caller as a member.
-The current states written are committed, acknowledged and replied; offered
-and transport_accepted are reserved for later driver delivery work.
+`inbox_offer` gives the target's current carrier only the oldest outstanding
+item and records its attempt and epoch. A newer carrier may reclaim that same
+record and digest after an uncertain dispatch. `inbox_transport` records
+transport acceptance under the same fence; it does not acknowledge the item
+for the agent. The agent acknowledges or replies through its own inbox tools.
 
 ## Storage
 
@@ -94,7 +97,8 @@ subscriptions, pages), 5 `projection` (checkpoints), 6 `carrier`, 7
 `approvals`, 8 `owner_authority`, 9 `notices`, 10 `workspace_attribution`
 (the owning workspace on each head, attributed from application owners, and
 the index `list_workspace` walks), 11 `action_inbox` (acceptance epochs, rules
-and ordered items). Records are stored
+and ordered items), 12 `action_inbox_push` (offer generations and transport
+receipt fields). Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and
 indexes in one transaction; identical retries replay the stored reply and

@@ -143,7 +143,7 @@ the delta; refusal leaves the installed version and grant intact.
 The shipped `workspace_applications` ceiling admits only `process.lua` and
 `library.lua` entries. Native imports are limited to `tty`, `process`,
 `channel`, `json`, `time`, `uuid`, `base64` and `hash`. The application binding
-gets `bee:ordinary_app_subsystem_boundary` and `thread_access: none`.
+gets `bee.security:ordinary_app_subsystem_boundary` and `thread_access: none`.
 `db.sql.sqlite`, `store.memory`, `sql` and `store` are outside this ceiling.
 These are ceilings, not a grant to launch any agent definition: launch remains
 subject to the host's separate definition and application policies. Although

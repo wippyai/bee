@@ -9,4 +9,6 @@ function M.send(request: unknown): types.Reply return boundary.run(inbox.send, r
 function M.reply(request: unknown): types.Reply return boundary.run(inbox.reply, request, true) end
 function M.list(request: unknown): types.Reply return boundary.run(inbox.list, request, false) end
 function M.ack(request: unknown): types.Reply return boundary.run(inbox.ack, request, false) end
+function M.offer(request: unknown): types.Reply return boundary.run(inbox.offer, request, false) end
+function M.transport(request: unknown): types.Reply return boundary.run(inbox.transport, request, false) end
 return M

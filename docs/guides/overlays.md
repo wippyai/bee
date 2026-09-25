@@ -124,8 +124,19 @@ credential access, registry and scope management, approval decisions, core
 databases, and auto start. Pure helpers expand templates into proposed
 operation/resource/scope values, compare two resolved grant sets semantically,
 and render host-authored permission text with combined read-to-egress lines.
-No activation, approval or installed permission is derived from those helpers
-in this slice.
+For workspace application delivery, the host resolves these values before
+approval and shows the full set, changes from the installed grant, and any
+combined data flows in Approvals. Only `threads.read` with `scope: owned` has
+an installable policy in this slice; unsupported requests fail resolution.
+
+On approval, one registry overlay transaction installs host-owned policies in
+`bee.governance.grants`, fills the requirement defaults, and records the grant
+set, digest, approval ID, and revision. The workspace application rule derives
+its policy allowance, application binding and thread access from that live
+record. A later version still receives artifact measurement and preflight. If
+its resolved set is contained in the installed grant, it reuses that approval
+and installs only the requested subset. Widening asks the person to approve
+the delta; refusal leaves the installed version and grant intact.
 
 The shipped `workspace_applications` ceiling admits only `process.lua` and
 `library.lua` entries. Native imports are limited to `tty`, `process`,
@@ -154,10 +165,10 @@ Code building the application from its written spec.
 
 ## Limits
 
-Person-approved capability installation, approval reuse for a contained
-upgrade, runtime enforcement, and active revocation are proposals. Existing
-workspace application delivery still requires approval for each version and
-uses its current host-selected admission policies.
+File and database provisioning, contract gateways, runtime agent elevation,
+and active revocation fencing are later work. The installed `threads.read`
+policy is registry authority for the selected application scope; this slice
+does not add a service gateway or an immediate stop on revocation.
 
 Destination migration execution requires a captured immutable registry view and
 is not supplied by ordinary overlay activation. Automatic Hive enrollment and

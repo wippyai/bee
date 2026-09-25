@@ -33,7 +33,7 @@ type PreferenceWaiter = {request_id: string, recipient: string, action: Appearan
 type Checkpoint = {request_id: string, pid: string, deadline: number, resume_state: string}
 type Replacement = {revision: string, exited: boolean}
 type Instance = {view_id: string, instance_id: string, thread_id: string?, execution_pid: string, view: tty.Viewport,
-    descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string,
+    descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string, failure_detail: string?,
     producer_generation: integer, arguments: {string}, replacement: Replacement?, client_appearance_revision: number?, negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 type BindingOpen = {request: contract.Request, provenance: open_protocol.Provenance,
     descriptor: contract.Descriptor, binding: contract.Binding, scope: security.Scope,
@@ -702,7 +702,10 @@ local function main(owner: string, initial_preferences: unknown)
         if not item.opened then
             emit(identified(item, "open", item.open_request, item.state.failure ~= "" and item.state.failure or "startup_failed", "Application did not become ready"), true)
         else
-            emit(identified(item, "closed", "", failed and "application_failed" or "", failed and "Application failed" or ""))
+            local title = item.announced_title or item.descriptor.title
+            local message = title .. " failed"
+            if item.failure_detail then message = message .. ": " .. item.failure_detail end
+            emit(identified(item, "closed", "", failed and "application_failed" or "", failed and message or ""))
         end
         for _, waiter in ipairs(item.waiters) do
             if waiter.control then control_result(waiter, "", "")
@@ -1025,7 +1028,12 @@ local function main(owner: string, initial_preferences: unknown)
                 if item and replacement then
                     replacement.exited = true
                     start_replacement(item)
-                elseif item then transition(item, lifecycle.exit_event(item.state, decode.exit_error(event.result) ~= nil)) end
+                elseif item then
+                    local current: Instance = item
+                    local failure = decode.exit_error(event.result)
+                    if failure then current.failure_detail = failure:gsub("%c", " "):sub(1, 512) end
+                    transition(current, lifecycle.exit_event(current.state, failure ~= nil))
+                end
             end
         elseif selected.channel == ticks then
             refresh_admission()

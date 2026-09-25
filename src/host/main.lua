@@ -566,6 +566,9 @@ local function main(owner: string, workspace: unknown, database_resource: string
                             -- proof used to retire an exact assignment.  Keep
                             -- unresolved prepared fences for recovery, and
                             -- retain every receipt regardless of retirement.
+                            if reply.op == "closed" and reply.error_code == "application_failed" then
+                                connections.failure(client_connections, reply)
+                            end
                             if reply.op == "closed" and not preserved_record then
                                 local assigned, assignment_error = database.assignments:get({view_id = reply.id, instance_id = reply.instance_id})
                                 if assignment_error then error("Read closed display assignment: " .. tostring(assignment_error)) end

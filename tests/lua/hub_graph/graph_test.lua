@@ -11,7 +11,7 @@ local function artifact(name: string, version: string, dependencies: {graph.Edge
         entries[#entries + 1] = {id = name:gsub("/", ".") .. ":dep" .. tostring(i), kind = "ns.dependency", meta = {}, data = dep}
     end
     return {component = name, version = version, digest = string.rep("a", 64), entries = entries,
-        requirements = {requirements = {}, missing = {}}}
+        requirements = {requirements = {}, missing = {}}, next_offset = nil, eof = true}
 end
 local function define_tests()
     test.describe("Hub dependency graph", function()
@@ -80,7 +80,7 @@ local function define_tests()
                 artifact = function(name: string, version: string): (inspect.Inspection?, string?)
                     return {component = name, version = version, digest = string.rep("a", 64),
                         entries = {{id = "acme:collision", kind = "registry.entry", meta = {}, data = {}}},
-                        requirements = {requirements = {}, missing = {}}}, nil
+                        requirements = {requirements = {}, missing = {}}, next_offset = nil, eof = true}, nil
                 end,
             })
             test.is_nil(result); test.not_nil(problem)

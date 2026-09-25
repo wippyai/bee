@@ -117,3 +117,4 @@ entries:
     inspection: bee.hub:inspection
     inventory: bee.hub:inventory
     installed: bee.hub.registry:inventory_reader
+    preview: bee.hub.binding:preview

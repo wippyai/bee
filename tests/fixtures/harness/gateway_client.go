@@ -566,13 +566,13 @@ func reportWorker(client *httpClient, url, authorization string, report object, 
 }
 
 // The scripted authoring agent. This function knows nothing about the
-// application contract: it reads the overlay tool's guide operation over the
-// admitted MCP surface and authors exactly the file and the example text the
-// guide returns, so a contract change is visible here without editing this
-// client. mode is "author" (author the guide example and request delivery) or
-// "repair" (author only index.html and app.js, read the destination's refusal
-// and remedy, then author the guide example into the same workspace and request
-// delivery again), so the whole refusal -> remedy -> repair round is observed.
+// application contract: it reads the overlay tool's guide index over the
+// admitted MCP surface, requests the worked example explicitly, and authors
+// exactly the file and the example text the guide returns. mode is "author"
+// (author the guide example and request delivery) or "repair" (author only
+// index.html and app.js, read the destination's refusal and remedy, then
+// author the guide example into the same workspace and request delivery
+// again), so the whole refusal -> remedy -> repair round is observed.
 func reportAuthoring(client *httpClient, url, authorization string, report object, mode string) {
 	call := func(name string, args object, id int) object {
 		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
@@ -587,12 +587,17 @@ func reportAuthoring(client *httpClient, url, authorization string, report objec
 			}
 		}
 	}
-	guideReply := call("overlay", object{"operation": "guide"}, 31)
+	indexReply := call("overlay", object{"operation": "guide"}, 31)
+	indexValue := mustObject(indexReply["value"])
+	report["guide_revision"] = indexValue["revision"]
+	report["guide_document"] = indexValue["document"]
+	if sections, ok := indexValue["sections"].([]any); ok {
+		report["guide_sections"] = len(sections)
+	}
+	guideReply := call("overlay", object{"operation": "guide", "include_example": true}, 31)
 	guideValue := mustObject(guideReply["value"])
 	example := mustObject(guideValue["example"])
 	entriesJSON, _ := example["entries_json"].(string)
-	report["guide_revision"] = guideValue["revision"]
-	report["guide_document"] = guideValue["document"]
 	report["guide_example_present"] = entriesJSON != ""
 
 	workspace := os.Getenv("BEE_FIXTURE_AUTHOR_WORKSPACE")
@@ -664,10 +669,10 @@ func reportSpecAuthoring(client *httpClient, url, authorization string, report o
 	}
 	names, _ := toolsOf(rpc(client, url, authorization, "tools/list", object{}, 50))
 	report["author_tools"] = names
-	guideValue := mustObject(call("overlay", object{"operation": "guide"}, 51)["value"])
-	document, _ := guideValue["document"].(string)
+	guideValue := mustObject(call("overlay", object{"operation": "guide", "section": "workspace"}, 51)["value"])
+	section, _ := guideValue["text"].(string)
 	report["guide_revision"] = guideValue["revision"]
-	report["guide_names_rule"] = strings.Contains(document, "app.<overlay_id>:app")
+	report["guide_names_rule"] = strings.Contains(section, "app.<overlay_id>:app")
 	source := os.Getenv("BEE_FIXTURE_AUTHOR_SOURCE")
 	version := os.Getenv("BEE_FIXTURE_AUTHOR_VERSION")
 	entries, err := os.ReadFile(os.Getenv("BEE_FIXTURE_AUTHOR_ENTRIES"))

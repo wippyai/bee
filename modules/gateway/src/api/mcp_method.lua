@@ -357,9 +357,13 @@ local function handle(): nil
             inputSchema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
                 operation = {type = "string", enum = {"read", "select", "request_access", "access_status"}}, expected_revision = {type = "integer", minimum = 1},
                 active_traits = {type = "array", items = {type = "string"}}, context = {type = "object"},
-                idempotency_key = {type = "string"}, traits = {type = "array", items = {type = "string"}}, reason = {type = "string", maxLength = 1024}, approval_id = {type = "string"}}}}
+                idempotency_key = {type = "string"}, traits = {type = "array", items = {type = "string"}}, reason = {type = "string", maxLength = 1024}, approval_id = {type = "string"}}},
+            outputSchema = mcp.OUTPUT_SCHEMAS.session,
+            annotations = {readOnlyHint = false, destructiveHint = false, idempotentHint = false, openWorldHint = false}}
         listed[#listed + 1] = {name = "call_tool", description = "Call a currently active tool by name. Use session read for current schemas after changing traits; admission is checked on every call.",
-            inputSchema = {type = "object", additionalProperties = false, required = {"name", "arguments"}, properties = {name = {type = "string"}, arguments = {type = "object"}}}}
+            inputSchema = {type = "object", additionalProperties = false, required = {"name", "arguments"}, properties = {name = {type = "string"}, arguments = {type = "object"}}},
+            outputSchema = mcp.OUTPUT_SCHEMAS.call_tool,
+            annotations = {readOnlyHint = false, destructiveHint = false, idempotentHint = false, openWorldHint = false}}
         answer(response, http.STATUS.OK, mcp.result(call.id, {tools = listed})); return nil
     end
     if call.method ~= "tools/call" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.METHOD_NOT_FOUND, "method not found")); return nil end

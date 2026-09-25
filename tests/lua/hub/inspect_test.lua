@@ -55,7 +55,7 @@ local function define_tests()
             test.eq(explicit and explicit.include_data, true)
             test.eq(explicit and explicit.entry_offset, 32)
             test.is_nil(inspection.decode({component = "acme/tool", version = "1.2.3", entry_limit = 33}))
-            local entries = {}
+            local entries: {inspection.Entry} = {}
             for index = 1, 40 do entries[index] = {id = "acme/tool:entry-" .. tostring(index), kind = "library.lua", meta = {}, data = "source"} end
             local first = inspection.page(entries, 0, 32, false)
             test.eq(#first.entries, 32)

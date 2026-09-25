@@ -79,6 +79,13 @@ type Request = {
 -- The permission exchange the host enabled for this launch: the measured
 -- adapter, the acceptance record it stands on, and how the carrier asks.
 type Exchange = {adapter: permission.Adapter, acceptance_ref: string, acceptance_digest: string, executable_revision: string, executable_kind: string, executable_digest: string, approver_policy: string, poll_ms: integer, ttl_ms: integer}
+-- push: the verified production inbox-push acceptance: the profile-pinned
+-- adapter, the acceptance record and the executable measurement the host
+-- accepted. A fixture policy carries no acceptance and needs none. Push
+-- authorizes no tool effect, so unlike the exchange it names no approver
+-- policy and no poll window; the acceptance's recorded executable kind
+-- still binds what the digest covers.
+type Push = {adapter: permission.Adapter, acceptance_ref: string, acceptance_digest: string, executable_revision: string, executable_kind: string, executable_digest: string}
 type Plan = {
     request: Request,
     binding: classify.Binding,
@@ -93,10 +100,15 @@ type Plan = {
     -- attempt never opens with it; a recovered attempt keeps its plan so it
     -- can close its exchange on record and settle, and dispatches nothing.
     exchange_refusal: string?,
+    -- A refusal the push requirements produced at plan time: a new attempt
+    -- never opens with it; a recovered attempt keeps its plan so it can
+    -- settle, and dispatches no inbox item.
+    push_refusal: string?,
     prepare_target: string,
     resume_ref: string?,
     normalize_target: string,
     exchange: Exchange?,
+    push: Push?,
     -- The gateway projection the launch policy admits: tools and the
     -- host-approved MCP configuration. The binding is admitted at open.
     gateway: placement_types.Gateway?,
@@ -167,7 +179,35 @@ local function digest_of(value: unknown): (string?, string?)
 end
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration_digest: string, gateway: placement_types.Gateway?}
+type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, push: Push?, configuration_digest: string, gateway: placement_types.Gateway?}
+-- verify_acceptance: the acceptance record a host declaration names,
+-- decoded and matched against this snapshot's binding, profile, adapter
+-- and proof fixture. The permission exchange and production inbox push
+-- stand on the same record type; the label names which check failed.
+type DeclaredAcceptance = {adapter_ref: string, acceptance_ref: string, fixture_digest: string}
+local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAcceptance, binding: classify.Binding, profile: classify.Profile, fixture: boolean, label: string): (Push?, string?)
+    if not fixture and (not profile.permission.eligible or profile.permission.adapter_ref ~= declared.adapter_ref) then
+        return nil, "profile " .. profile.id .. " does not pin permission adapter " .. declared.adapter_ref
+    end
+    local adapter_entry = catalog.entry(pinned, declared.adapter_ref)
+    if not adapter_entry then return nil, "permission adapter " .. declared.adapter_ref .. " is not in the registry" end
+    local adapter_meta = bounds.object(adapter_entry.meta) or {}
+    if adapter_meta.type ~= "harness.permission_adapter" then return nil, declared.adapter_ref .. " is not a harness.permission_adapter" end
+    local adapter_data = bounds.object(adapter_entry.data) or {}
+    local adapter, adapter_error = permission.decode(declared.adapter_ref, adapter_data.adapter)
+    if not adapter then return nil, "permission adapter " .. declared.adapter_ref .. ": " .. tostring(adapter_error) end
+    local record_entry = catalog.entry(pinned, declared.acceptance_ref)
+    if not record_entry then return nil, "acceptance record " .. declared.acceptance_ref .. " is not in the registry" end
+    local record_meta = bounds.object(record_entry.meta) or {}
+    if record_meta.type ~= acceptance.ENTRY_TYPE then return nil, declared.acceptance_ref .. " is not a " .. acceptance.ENTRY_TYPE end
+    local record_data = bounds.object(record_entry.data) or {}
+    local record, record_error = acceptance.decode(declared.acceptance_ref, record_data.acceptance)
+    if not record then return nil, "acceptance record " .. declared.acceptance_ref .. ": " .. tostring(record_error) end
+    local mismatch = acceptance.matches(record, {binding_id = binding.binding_id, profile_id = profile.id, binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry,
+        adapter_ref = declared.adapter_ref, adapter_digest = adapter.digest, fixture_digest = declared.fixture_digest})
+    if mismatch then return nil, label .. " acceptance: " .. mismatch end
+    return {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest}, nil
+end
 local function measure(request: Request): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
@@ -201,28 +241,21 @@ local function measure(request: Request): (Measured?, string?)
     local exchange: Exchange? = nil
     local declared = launch_policy.permission_exchange
     if declared then
-        if not launch_policy.fixture and (not profile.permission.eligible or profile.permission.adapter_ref ~= declared.adapter_ref) then
-            return nil, "profile " .. profile.id .. " does not pin permission adapter " .. declared.adapter_ref
-        end
         if not request.workspace_id then return nil, "a permission exchange needs the request's workspace" end
-        local adapter_entry = catalog.entry(pinned, declared.adapter_ref)
-        if not adapter_entry then return nil, "permission adapter " .. declared.adapter_ref .. " is not in the registry" end
-        local adapter_meta = bounds.object(adapter_entry.meta) or {}
-        if adapter_meta.type ~= "harness.permission_adapter" then return nil, declared.adapter_ref .. " is not a harness.permission_adapter" end
-        local adapter_data = bounds.object(adapter_entry.data) or {}
-        local adapter, adapter_error = permission.decode(declared.adapter_ref, adapter_data.adapter)
-        if not adapter then return nil, "permission adapter " .. declared.adapter_ref .. ": " .. tostring(adapter_error) end
-        local record_entry = catalog.entry(pinned, declared.acceptance_ref)
-        if not record_entry then return nil, "acceptance record " .. declared.acceptance_ref .. " is not in the registry" end
-        local record_meta = bounds.object(record_entry.meta) or {}
-        if record_meta.type ~= acceptance.ENTRY_TYPE then return nil, declared.acceptance_ref .. " is not a " .. acceptance.ENTRY_TYPE end
-        local record_data = bounds.object(record_entry.data) or {}
-        local record, record_error = acceptance.decode(declared.acceptance_ref, record_data.acceptance)
-        if not record then return nil, "acceptance record " .. declared.acceptance_ref .. ": " .. tostring(record_error) end
-        local mismatch = acceptance.matches(record, {binding_id = binding.binding_id, profile_id = profile.id, binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry,
-            adapter_ref = declared.adapter_ref, adapter_digest = adapter.digest, fixture_digest = declared.fixture_digest})
-        if mismatch then return nil, "permission exchange acceptance: " .. mismatch end
-        exchange = {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest, approver_policy = declared.approver_policy, poll_ms = declared.poll_ms, ttl_ms = declared.ttl_ms}
+        local verified, verify_error = verify_acceptance(pinned, declared, binding, profile, launch_policy.fixture, "permission exchange")
+        if not verified then return nil, verify_error end
+        exchange = {adapter = verified.adapter, acceptance_ref = verified.acceptance_ref, acceptance_digest = verified.acceptance_digest,
+            executable_revision = verified.executable_revision, executable_kind = verified.executable_kind, executable_digest = verified.executable_digest,
+            approver_policy = declared.approver_policy, poll_ms = declared.poll_ms, ttl_ms = declared.ttl_ms}
+    end
+    local push: Push? = nil
+    local declared_push = launch_policy.push_acceptance
+    if declared_push then
+        local verified_push, push_error = verify_acceptance(pinned, declared_push, binding, profile, launch_policy.fixture, "push")
+        if not verified_push then return nil, push_error end
+        push = verified_push
+    elseif launch_policy.inbox_push and not launch_policy.fixture then
+        return nil, "inbox push needs a pinned executable acceptance before production admission"
     end
     -- The carrier carries only host-selected configuration inputs. Placement
     -- renders and freezes the driver's final delivery with its own HOME path.
@@ -250,7 +283,7 @@ local function measure(request: Request): (Measured?, string?)
     local configuration_digest, configuration_error = configuration_protocol.digest({provider_ref = launch_policy.provider_ref,
         provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder, gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
     if not configuration_digest then return nil, configuration_error end
-    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
+    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange, push = push,
         configuration_digest = configuration_digest, gateway = gateway}
 end
 -- A launch may declare a host file it needs before it starts. Bee never
@@ -269,7 +302,7 @@ end
 function M.plan(io: IO, request: Request): (Plan?, string?)
     local measured, measure_error = measure(request)
     if not measured then return nil, measure_error end
-    local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
+    local binding, profile, launch_policy, placement_binding, exchange, push, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.push, measured.configuration_digest, measured.gateway
     if launch_policy.provider_ref and not profile.private_home then
         return nil, "selected provider configuration requires a private-home profile"
     end
@@ -309,9 +342,11 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     -- prepares the launch shape that keeps stdin open for the responses.
     if exchange then prepare_request.permission_exchange = true end
     if launch_policy.inbox_push then
-        if not launch_policy.fixture then return nil, "inbox push needs a pinned executable acceptance before production admission" end
         if binding.driver_id ~= "claude" or profile.mode == "window" or profile.protocol ~= "stream-json" then
             return nil, "inbox push requires a Claude structured stream-json profile"
+        end
+        if not launch_policy.fixture and not push then
+            return nil, "inbox push needs a pinned executable acceptance before production admission"
         end
         prepare_request.control_enabled = true
     end
@@ -357,20 +392,36 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local function refuse_exchange(reason: string)
         if not exchange_refusal then exchange_refusal = reason end
     end
-    if exchange and not launch_policy.fixture then
-        -- A production exchange needs a runtime that measures a stream and
-        -- a measurement volume proven read-only; the report is measured,
-        -- never declared.
+    local push_refusal: string? = nil
+    local function refuse_push(reason: string)
+        if not push_refusal then push_refusal = reason end
+    end
+    -- capabilities_refusal: the placement's executable-measurement proof
+    -- under the label that needs it, or the hard error when the
+    -- capabilities call itself fails. A production channel needs a runtime
+    -- that measures a stream and a measurement volume proven read-only;
+    -- the report is measured, never declared.
+    local function capabilities_refusal(label: string): (string?, string?)
         local capabilities_target = placement_binding.methods.capabilities
         if not capabilities_target then
-            refuse_exchange("production exchange: selected placement cannot measure an executable")
-        else
-            local capabilities_value, capabilities_error = must(io, capabilities_target, {})
-            if capabilities_error then return nil, capabilities_error end
-            local reported = bounds.object((bounds.object(capabilities_value) or {}).executable_measurement) or {}
-            if reported.streaming ~= true then refuse_exchange("production exchange: this runtime cannot measure an executable as a stream") end
-            if reported.read_only_volume ~= true then refuse_exchange("production exchange: the measurement volume is not proven read-only on this runtime: " .. tostring(reported.detail)) end
+            return label .. ": selected placement cannot measure an executable", nil
         end
+        local capabilities_value, capabilities_error = must(io, capabilities_target, {})
+        if capabilities_error then return nil, capabilities_error end
+        local reported = bounds.object((bounds.object(capabilities_value) or {}).executable_measurement) or {}
+        if reported.streaming ~= true then return label .. ": this runtime cannot measure an executable as a stream", nil end
+        if reported.read_only_volume ~= true then return label .. ": the measurement volume is not proven read-only on this runtime: " .. tostring(reported.detail), nil end
+        return nil, nil
+    end
+    if exchange and not launch_policy.fixture then
+        local refusal, capabilities_error = capabilities_refusal("production exchange")
+        if capabilities_error then return nil, capabilities_error end
+        if refusal then refuse_exchange(refusal) end
+    end
+    if push and not launch_policy.fixture then
+        local refusal, capabilities_error = capabilities_refusal("production push")
+        if capabilities_error then return nil, capabilities_error end
+        if refusal then refuse_push(refusal) end
     end
     if launch.executable:sub(1, 1) == "/" then
         local measure_target = placement_binding.methods.measure_executable
@@ -381,15 +432,18 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
             if reply.ok then
                 local measured = bounds.object(reply.value) or {}
                 measurement = {revision = tostring(measured.revision), kind = tostring(measured.kind), digest = tostring(measured.digest)}
-            elseif exchange and not launch_policy.fixture then
+            elseif (exchange or push) and not launch_policy.fixture then
                 local fault = reply.error or {code = "UNAVAILABLE", message = "measurement failed"}
-                refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message)
+                if exchange then refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message) end
+                if push then refuse_push("production push: executable measurement: " .. fault.code .. ": " .. fault.message) end
             end
-        elseif exchange and not launch_policy.fixture then
-            refuse_exchange("production exchange: selected placement cannot measure the executable")
+        elseif (exchange or push) and not launch_policy.fixture then
+            if exchange then refuse_exchange("production exchange: selected placement cannot measure the executable") end
+            if push then refuse_push("production push: selected placement cannot measure the executable") end
         end
-    elseif exchange and not launch_policy.fixture then
-        refuse_exchange("production exchange: the launch policy binds no absolute executable to measure")
+    elseif (exchange or push) and not launch_policy.fixture then
+        if exchange then refuse_exchange("production exchange: the launch policy binds no absolute executable to measure") end
+        if push then refuse_push("production push: the launch policy binds no absolute executable to measure") end
     end
     if exchange and measurement then
         -- A production exchange covers a measured native image only: a
@@ -400,6 +454,14 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         if exchange.executable_revision ~= measurement.revision then refuse_exchange("permission exchange acceptance: executable measurement revision changed since acceptance") end
         if exchange.executable_kind ~= measurement.kind then refuse_exchange("permission exchange acceptance: executable kind changed since acceptance") end
         if exchange.executable_digest ~= measurement.digest then refuse_exchange("permission exchange acceptance: executable measurement changed since acceptance") end
+    end
+    if push and measurement then
+        -- A production push covers the executable the acceptance measured:
+        -- push authorizes no tool effect, so the recorded kind stands, and
+        -- any revision, kind or digest swap still refuses.
+        if push.executable_revision ~= measurement.revision then refuse_push("push acceptance: executable measurement revision changed since acceptance") end
+        if push.executable_kind ~= measurement.kind then refuse_push("push acceptance: executable kind changed since acceptance") end
+        if push.executable_digest ~= measurement.digest then refuse_push("push acceptance: executable measurement changed since acceptance") end
     end
     local environment: {[string]: string} = {}
     for name, value in pairs(request.environment) do environment[name] = value end
@@ -412,10 +474,12 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if request.working_directory then launch.working_directory_ref = request.working_directory end
     local measured_exchange: {[string]: unknown}? = nil
     if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
+    local measured_push: {[string]: unknown}? = nil
+    if push then measured_push = {adapter = push.adapter.digest, acceptance = push.acceptance_ref, acceptance_digest = push.acceptance_digest} end
     local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry,
         placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods,
         launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, reauthorize = request.reauthorize,
-        environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
+        environment = environment, permission = measured_exchange, push = measured_push, configuration = configuration_digest, gateway = gateway})
     if not plan_digest then return nil, digest_error end
     local placement_request: placement_types.LaunchRequest = {
         preferences = request.preferences,
@@ -429,7 +493,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         placement_request.environment_refs.HOME = "bee.environment:machine_home"
     end
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
-        placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
+        placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, push = push, push_refusal = push_refusal, gateway = gateway}, nil
 end
 -- Thread operations of the open sequence key on the attempt and the step,
 -- so a start retried after an ambiguous failure replays the same records
@@ -612,6 +676,7 @@ function M.placement_target(plan: Plan, method: string): string?
 end
 function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, FailedPreparation?)
     if plan.exchange_refusal then return nil, plan.exchange_refusal, nil end
+    if plan.push_refusal then return nil, plan.push_refusal, nil end
     local request = plan.request
     local attempt_prepared = false
     local action_admitted = false

@@ -209,8 +209,11 @@ Claude structured carrier checks the oldest item on wake and at a bounded
 poll interval, then writes its identified stream-json user message between
 turns. Its write journal and transport receipt survive carrier replacement;
 acknowledgment still requires the agent's own `inbox_ack` or reply. Shipped
-production launch policies do not enable this push path pending executable
-acceptance. Other structured drivers and PTY windows currently need an
+production launch policies do not enable this push path. A production policy
+enables it with `push_acceptance`: the carrier admits the push only where the
+pinned binding, profile, adapter and executable measurement still match the
+host's acceptance record, and refuses a swapped executable before any launch.
+Other structured drivers and PTY windows currently need an
 explicit `session_inbox` call; Hive forwarding remains separate.
 
 `inbox_describe` returns only an action address, current grant epoch, attempt

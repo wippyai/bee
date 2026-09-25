@@ -206,6 +206,22 @@ entries:
     classify: bee.harness.catalog:classify
     checkpoint: bee.harness.carrier:checkpoint
     stream_json: bee.driver.transport:stream_json
+- name: push_production_test
+  kind: function.lua
+  source: file://push_production_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "300s"}
+  modules: [funcs, security, process, registry, env, time, channel, json, system, exec, hash]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy, bee.gateway.security:node_policy]
+  imports:
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    catalog: bee.harness.catalog:catalog
+    adapter: bee.harness.permission:adapter
+    launch: bee.driver.claude:launch
+    placement_fixture: bee.harness.catalog:placement_fixture
+    sends: bee.threads.service:sends
 - name: placement_fixture
   kind: library.lua
   source: file://placement_fixture.lua
@@ -497,6 +513,33 @@ entries:
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
     gateway_tools: [session_inbox, session_ack, session_reply]
+- name: push_production_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Production-shaped Claude inbox push policy with no fixture flag; the suite binds the pinned executable and the push acceptance at runtime
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: independent
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    inbox_push: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: []
+- name: push_production_acceptance
+  kind: registry.entry
+  meta:
+    type: harness.permission_acceptance
+    test_support: true
+    comment: Push acceptance record for the production-shaped policy; measurements are filled by the suite
+  data:
+    acceptance: {}
 - name: gateway_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua

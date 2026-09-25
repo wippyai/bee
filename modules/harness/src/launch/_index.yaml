@@ -18,6 +18,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     definition: bee.harness.launch:definitions
+    agent_resolver: bee.harness.launch:agent_resolver
     carrier: bee.harness.carrier:machine
     placement_types: bee.placement:types
     placement_resolver: bee.placement:resolver
@@ -25,6 +26,13 @@ entries:
     interrupted: bee.harness.window:interrupted
     profiles: bee.harness.profiles:protocol
     agent_protocol: bee.application:agent_protocol
+- name: agent_resolver
+  kind: library.lua
+  source: file://agent_resolver.lua
+  modules: [hash, json, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
 - name: resolve
   kind: function.lua
   source: file://resolve_method.lua

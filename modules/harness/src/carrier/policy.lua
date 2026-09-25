@@ -14,6 +14,8 @@ local mcp = require("mcp")
 local surface = require("surface")
 local M = {}
 M.MAX_AGENT_LAUNCH = 16
+M.MAX_AGENT_DELEGATES = 16
+M.MAX_AGENT_MODELS = 16
 M.SCHEMA = "bee.launch-policy@2"
 M.TYPE = placement_types.LAUNCH_POLICY_TYPE
 -- The launch overrides a host policy may admit. A request override takes
@@ -62,6 +64,13 @@ type Policy = {
     -- Empty means the agent may launch nothing; a launch policy never
     -- conveys grant, credential or overlay authority.
     agent_launch: {AgentLaunch},
+    -- agent_model_map approves framework agent models for this route: each
+    -- agent-declared model name maps to the driver model identifier the
+    -- launch carries. An agent model without a mapping is refused.
+    agent_model_map: {[string]: string},
+    -- agent_delegates lists the framework agent references a run under this
+    -- policy may delegate to. Empty means the run may delegate to nothing.
+    agent_delegates: {string},
     -- gateway_ttl_ms bounds a gateway binding's life from admission.
     gateway_ttl_ms: integer,
     -- gateway_hooks names the hook events the launch reports to the gateway.
@@ -148,7 +157,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "inbox_push", "push_acceptance", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_launch", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "inbox_push", "push_acceptance", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_launch", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -308,6 +317,30 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
             agent_launch[#agent_launch + 1] = definition_ref
         end
     end
+    local agent_model_map: {[string]: string} = {}
+    if data.agent_model_map ~= nil then
+        local declared = bounds.object(data.agent_model_map)
+        if not declared then return nil, ref .. ": agent_model_map must be an object" end
+        local count = 0
+        for name, mapped in pairs(declared) do
+            count = count + 1
+            if count > M.MAX_AGENT_MODELS then return nil, ref .. ": agent_model_map exceeds " .. tostring(M.MAX_AGENT_MODELS) .. " models" end
+            if type(name) ~= "string" or #name == 0 or #name > 128 or name:find("%c") then
+                return nil, ref .. ": agent_model_map keys must be bounded model names"
+            end
+            if type(mapped) ~= "string" or #mapped == 0 or #mapped > 128 or not mapped:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then
+                return nil, ref .. ": agent_model_map maps " .. tostring(name) .. " to a bounded model identifier"
+            end
+            agent_model_map[name] = mapped
+        end
+    end
+    local agent_delegates: {string} = {}
+    if data.agent_delegates ~= nil then
+        local declared, delegates_error = bounds.ids(data.agent_delegates, true)
+        if not declared then return nil, ref .. ": agent_delegates: " .. tostring(delegates_error) end
+        if #declared > M.MAX_AGENT_DELEGATES then return nil, ref .. ": agent_delegates exceeds " .. tostring(M.MAX_AGENT_DELEGATES) .. " agents" end
+        agent_delegates = declared
+    end
     local gateway_hooks: {string} = {}
     if data.gateway_hooks ~= nil then
         local declared, hooks_error = bounds.ids(data.gateway_hooks, true)
@@ -349,7 +382,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         gateway_ttl_ms = declared
     end
     local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, inbox_push = data.inbox_push == true, push_acceptance = push, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
-        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_launch = agent_launch, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
+        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_launch = agent_launch, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end
 type SurfaceValue = {[string]: unknown}

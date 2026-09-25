@@ -14,6 +14,7 @@ local canonical = require("canonical")
 local catalog = require("catalog")
 local policy = require("policy")
 local definition = require("definition")
+local agent_resolver = require("agent_resolver")
 local carrier = require("carrier")
 local placement_types = require("placement_types")
 local placement_resolver = require("placement_resolver")
@@ -29,6 +30,7 @@ M.CARRIER_OPS = "bee.threads.carrier"
 M.RESOURCES = "bee.resources.binding"
 M.CREDENTIALS = "bee.credentials.binding"
 M.MAX_BRIEF_BYTES = 16384
+M.MAX_AGENT_INSTRUCTIONS_BYTES = 4096
 -- A saved window that can never be resumed; recovery ends it instead of
 -- retrying or asking for review.
 M.NOT_RESUMABLE = "NOT_RESUMABLE"
@@ -57,6 +59,13 @@ type Plan = {
     catalog_generation: integer,
     mode: string,
     plan_digest: string,
+    -- The admitted framework agent closure, pinned by digest. Absent for
+    -- legacy routes without an agent reference.
+    agent_ref: string?,
+    agent_digest: string?,
+    agent_tools: {string}?,
+    agent_model: string?,
+    declined_tuning: {string}?,
 }
 type OriginView = {view_id: string, instance_id: string}
 type Admitted = {
@@ -150,7 +159,42 @@ local function preference_value(selected: Selected?): placement_types.Preference
     if not selected then return nil end
     return {options = selected.profile.options, mcp_tools = selected.profile.mcp_tools, instructions = selected.profile.instructions}
 end
-local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?): (Plan?, Reply?)
+-- agent_preferences: the carrier preferences for one admitted agent closure.
+-- The run offers exactly the closure's tool aliases through the gateway and
+-- carries its composed prompt and context as instructions; a saved profile
+-- may narrow neither outward. The host-approved model mapping owns the
+-- model option.
+local function agent_preferences(selected: Selected?, closure: agent_resolver.Closure, checked: agent_resolver.Checked,
+    launch_policy: policy.Policy, profile_instructions: boolean): (placement_types.Preferences?, Reply?)
+    local options: {[string]: string | number | boolean} = {}
+    local saved_instructions = ""
+    if selected then
+        local narrowed, narrow_error = profiles.agent_preferences(selected.profile, closure.tool_names)
+        if not narrowed then return nil, fail("FORBIDDEN", narrow_error or "saved profile is outside the admitted agent") end
+        for name, item in pairs(narrowed.options) do options[name] = item end
+        saved_instructions = narrowed.instructions
+    end
+    if checked.model then options.model = checked.model end
+    local host_tools: {[string]: boolean} = {}
+    for _, name in ipairs(launch_policy.gateway_tools) do host_tools[name] = true end
+    for _, name in ipairs(closure.tool_names) do
+        if not host_tools[name] then
+            return nil, fail("FORBIDDEN", "host policy admits no gateway tool " .. name .. " for agent definition " .. closure.ref)
+        end
+    end
+    local instructions = closure.instructions
+    if saved_instructions ~= "" then
+        if not profile_instructions then
+            return nil, fail("FORBIDDEN", "profile instructions are disabled by the host policy")
+        end
+        instructions = instructions .. "\n\n" .. saved_instructions
+    end
+    if #instructions > M.MAX_AGENT_INSTRUCTIONS_BYTES then
+        return nil, fail("INVALID", "agent instructions exceed " .. tostring(M.MAX_AGENT_INSTRUCTIONS_BYTES) .. " bytes for this route")
+    end
+    return {options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
+end
+local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?): (Plan?, Reply?, placement_types.Preferences?)
     local definition_ref = launch.ref
     local chosen = launch.default_mode
     if mode and mode ~= chosen then
@@ -179,8 +223,44 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     if not supported then return nil, fail("UNSUPPORTED_CAPABILITY", "profile " .. launch.profile_id .. " of " .. launch.binding_ref .. " does not run in mode " .. chosen) end
     local policy_entry = catalog.entry(pinned, launch.policy_ref)
     if not policy_entry then return nil, fail("NOT_FOUND", "launch policy " .. launch.policy_ref .. " is not in the registry") end
-    local launch_policy, policy_error = policy.decode(launch.policy_ref, policy_entry, nil, preference_value(selected))
-    if not launch_policy then return nil, fail("NOT_FOUND", policy_error or "policy") end
+    -- A framework agent route resolves its agent.gen1 closure from this same
+    -- snapshot, checks the CLI parity of the selected driver, and measures
+    -- the policy under the closure's exact preferences before admission. The
+    -- closure's composed prompt and context travel through the profile
+    -- instruction channel, so an agent route needs profile_instructions;
+    -- admission supplies that text, never the caller's profile.
+    local agent: agent_resolver.Closure? = nil
+    local checked: agent_resolver.Checked? = nil
+    local effective = preference_value(selected)
+    local launch_policy: policy.Policy
+    if launch.agent_ref then
+        local host_policy, host_error = policy.decode(launch.policy_ref, policy_entry, nil, nil)
+        if not host_policy then return nil, fail("NOT_FOUND", host_error or "policy") end
+        local closure, closure_code, closure_error = agent_resolver.resolve(pinned, launch.agent_ref)
+        if not closure then return nil, fail(closure_code or "UNAVAILABLE", closure_error or "agent definition") end
+        agent = closure
+        local route, route_code, route_error = agent_resolver.check_route(closure,
+            {driver_id = binding and binding.driver_id or "", model_map = host_policy.agent_model_map,
+                admitted_delegates = host_policy.agent_delegates})
+        if not route then return nil, fail(route_code or "UNAVAILABLE", route_error or "agent route") end
+        checked = route
+        local policy_data = bounds.object(policy_entry.data) or {}
+        local agent_prefs, prefs_refused = agent_preferences(selected, closure, route, host_policy, policy_data.profile_instructions == true)
+        if not agent_prefs then return nil, prefs_refused end
+        effective = agent_prefs
+        local measured, measure_error = policy.decode(launch.policy_ref, policy_entry, nil, agent_prefs)
+        if not measured then
+            if measure_error and measure_error:find("option model", 1, true) then
+                return nil, fail("UNSUPPORTED_CAPABILITY", "host policy declares no model option for the mapped agent model")
+            end
+            return nil, fail("NOT_FOUND", measure_error or "policy")
+        end
+        launch_policy = measured
+    else
+        local decoded, policy_error = policy.decode(launch.policy_ref, policy_entry, nil, preference_value(selected))
+        if not decoded then return nil, fail("NOT_FOUND", policy_error or "policy") end
+        launch_policy = decoded
+    end
     -- Resolve placement alongside the driver and policy from this immutable
     -- registry snapshot. The policy may select an implementation; absent that
     -- field the resolver's native host default is used.
@@ -214,21 +294,28 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     end
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest, placement_methods = placement.methods,
-        provider = provider_digest, mode = chosen, saved_profile = selected})
+        provider = provider_digest, mode = chosen, saved_profile = selected,
+        agent = agent and agent.digest or nil, agent_model = checked and checked.model or nil,
+        declined_tuning = checked and checked.declined or nil})
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
     return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest,
         placement_methods = placement.methods, placement_kind = placement.placement_kind, overrides = overrides,
         catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest,
-        saved_profile_id = selected and selected.profile_id or nil, saved_profile_revision = selected and selected.revision or nil}, nil
+        saved_profile_id = selected and selected.profile_id or nil, saved_profile_revision = selected and selected.revision or nil,
+        agent_ref = agent and agent.ref or nil, agent_digest = agent and agent.digest or nil,
+        agent_tools = agent and agent.tool_names or nil, agent_model = checked and checked.model or nil,
+        declined_tuning = checked and checked.declined or nil}, nil, effective
 end
 -- A caller composing a larger host plan can retain the same snapshot for
 -- its other declarations; this read performs no registry mutation or admission.
 function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?): (Plan?, Reply?)
     local launch, definition_error = read_definition(pinned, definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    return resolve(pinned, launch, mode)
+    local plan, refused = resolve(pinned, launch, mode)
+    if not plan then return nil, refused end
+    return plan, nil
 end
 function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?): (Plan?, Reply?)
     local selected: Selected? = nil
@@ -242,7 +329,9 @@ function M.resolve(definition_ref: string, mode: string?, workspace: string?, sa
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    return resolve(pinned, launch, mode, selected)
+    local plan, refused = resolve(pinned, launch, mode, selected)
+    if not plan then return nil, refused end
+    return plan, nil
 end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
@@ -361,7 +450,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, request.definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, plan_refused = resolve(pinned, launch, request.mode, selected)
+    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected)
     if not plan then return nil, plan_refused end
     if request.expected_plan_digest and request.expected_plan_digest ~= plan.plan_digest then
         return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
@@ -475,7 +564,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         projections[index] = tostring(issued.projection_id)
     end
     local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1, parent_action_id = request.parent_action_id,
-        preferences = preference_value(selected),
+        preferences = preferences or preference_value(selected),
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
         placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,

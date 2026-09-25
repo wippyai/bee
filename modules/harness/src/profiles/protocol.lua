@@ -68,6 +68,28 @@ function M.profile(value: unknown): (Profile?, string?)
     return {title = title, definition_ref = definition_ref, options = options, mcp_tools = tools, instructions = instructions,
         workdir = workdir, thread = thread}, nil
 end
+-- agent_preferences: narrow a saved profile to one resolved agent closure.
+-- The host agent model mapping owns the model option, and the profile may
+-- only offer tools the closure names; anything else is refused, never
+-- narrowed silently.
+type AgentValue = {options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string}
+function M.agent_preferences(profile: Profile, tool_names: {string}): (AgentValue?, string?)
+    if profile.options.model ~= nil then
+        return nil, "option model is owned by the host agent model mapping"
+    end
+    local admitted: {[string]: boolean} = {}
+    for _, name in ipairs(tool_names) do admitted[name] = true end
+    for _, name in ipairs(profile.mcp_tools) do
+        if not admitted[name] then
+            return nil, "mcp_tools names " .. name .. ", which is outside the admitted agent"
+        end
+    end
+    local options: {[string]: string | number | boolean} = {}
+    for name, item in pairs(profile.options) do options[name] = item end
+    local tools: {string} = {}
+    for _, name in ipairs(profile.mcp_tools) do tools[#tools + 1] = name end
+    return {options = options, mcp_tools = tools, instructions = profile.instructions}, nil
+end
 
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)

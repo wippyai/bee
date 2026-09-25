@@ -942,6 +942,27 @@ entries:
       - high
     profile_instructions: true
     prepare_options: {}
+- name: governance_publication_profiles
+  kind: registry.entry
+  meta:
+    type: bee.governance.publication_profiles
+    comment: Host-selected source workspaces and overlay owners available for immutable publication; workspace_applications publishes the overlays a workspace's own agents author under the app.<overlay_id> naming rule
+  data:
+    profiles: []
+    workspace_applications: true
+- name: governance_activation_profiles
+  kind: registry.entry
+  meta:
+    type: bee.governance.activation_profiles
+    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications this node's agents author for their own workspace, applied only after the person approves each version in Approvals; remote artifacts cannot edit this entry
+  data:
+    profiles: []
+    workspace_applications:
+      approval_policy: workspace-application-delivery
+      kinds: [process.lua, library.lua, ns.requirement]
+      modules: [tty, process, channel, json, time, uuid, base64, hash]
+      policies: [bee:ordinary_app_subsystem_boundary]
+      thread_access: none
 - name: resource_roots
   kind: registry.entry
   meta:

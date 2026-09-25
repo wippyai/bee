@@ -74,7 +74,7 @@ def configure_source_node(project):
 def configure_continuous_source(project, workspace_id):
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") != "1":
         return
-    governance_path = project / "src/governance/_index.yaml"
+    governance_path = project / "modules/gov/src/_index.yaml"
     governance = yaml.safe_load(governance_path.read_text())
     publication = next(item for item in governance["entries"] if item["name"] == "publication_profiles")
     publication["data"] = {"profiles": [{"workspace_id": workspace_id,
@@ -91,7 +91,7 @@ def configure_continuous_source(project, workspace_id):
                   "kinds": ["process.lua"], "databases": [], "grants": [],
                   "modules": ["tty", "process", "channel", "json"]}}]}
     governance_path.write_text(yaml.safe_dump(governance, sort_keys=False))
-    approvals_path = project / "src/approvals/host/_index.yaml"
+    approvals_path = project / "src/_index.yaml"
     approvals = yaml.safe_load(approvals_path.read_text())
     policies = next(item for item in approvals["entries"] if item["name"] == "approver_policies")
     policies["policies"] = [{"name": "local-agent-app-delivery",
@@ -662,8 +662,12 @@ def exercise():
     shutil.copytree(ROOT / "tests/fixtures/agent_app", project / "src/probe")
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") == "1":
         # The replica fixture supplies an enrolled supervisor explicitly.
-        # Keep the default offline service out of that composition.
-        shutil.rmtree(project / "src/hive/host")
+        # Keep the default offline service stopped in that composition.
+        hive_module = project / "modules/hive/src/_index.yaml"
+        staged_hive = yaml.safe_load(hive_module.read_text())
+        service = next(item for item in staged_hive["entries"] if item["name"] == "supervisor_service")
+        service["lifecycle"]["auto_start"] = False
+        hive_module.write_text(yaml.safe_dump(staged_hive, sort_keys=False))
         shutil.copytree(ROOT / "tests/fixtures/hive_replica", project / "src/replica_probe")
         shutil.rmtree(project / "src/replica_probe/host_environment")
         source_probe = project / "src/replica_probe/_index.yaml"

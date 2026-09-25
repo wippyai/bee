@@ -114,9 +114,9 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 
 	// Patch the owning indexes in the disposable fixture, with exact anchors.
 	patches := []struct{ path, from, to string }{
-		{"src/gateway/host/_index.yaml", "address: 127.0.0.1:0", "address: " + endpointAddress},
+		{"src/_index.yaml", "address: 127.0.0.1:0", "address: " + endpointAddress},
 		{"modules/gateway/src/security/_index.yaml", `resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$"`, `resource == "http://` + endpointAddress + `/ready"`},
-		{"src/harness/host/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window_hooks_fixture:binding\n"},
+		{"src/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window_hooks_fixture:binding\n"},
 		{"src/_index.yaml", "hide_logs: true", "hide_logs: false"},
 	}
 	for _, patch := range patches {

@@ -271,7 +271,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			}
 		}
 		if i == 0 && agent == nil {
-			governancePath := filepath.Join(project, "src", "governance", "_index.yaml")
+			governancePath := filepath.Join(project, "modules", "gov", "src", "_index.yaml")
 			governance, err := os.ReadFile(governancePath)
 			if err != nil {
 				t.Fatal(err)

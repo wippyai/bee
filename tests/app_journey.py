@@ -356,7 +356,7 @@ def configure_open_agent(project):
     policy["data"]["environment"]["BEE_FIXTURE_STREAM"] = \
         str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
     policy["data"]["environment"]["BEE_FIXTURE_WINDOW_DEFINITION"] = "bee.harness.window:app"
-    harness = project / "src/harness/host/_index.yaml"
+    harness = project / "src/_index.yaml"
     harness_document = yaml.safe_load(harness.read_text())
     activation = next(entry for entry in harness_document["entries"] if entry["name"] == "harness_activation")
     activation["data"]["bindings"].append("bee.window_hooks_fixture:binding")
@@ -369,7 +369,7 @@ def configure_open_agent(project):
     hooks.write_text(yaml.safe_dump(hooks_document, sort_keys=False))
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
-    approvals = project / "src/approvals/host/_index.yaml"
+    approvals = project / "src/_index.yaml"
     approval_document = yaml.safe_load(approvals.read_text())
     approvers = next(entry for entry in approval_document["entries"]
                      if entry["name"] == "approver_policies")

@@ -45,8 +45,8 @@ HOST_ENTRIES = {
         "thread_lifecycle_policy", "thread_carrier_policy", "thread_approval_policy",
         "thread_approval_client_policy", "thread_waiter_policy",
     },
-    "src/approvals/host/_index.yaml": {"approver_policies"},
-    "src/docs/host/_index.yaml": {"docs_corpus", "docs_policy"},
+    "src/_index.yaml": {"approver_policies", "docs_corpus"},
+    "src/security/docs/_index.yaml": {"docs_policy"},
 }
 
 

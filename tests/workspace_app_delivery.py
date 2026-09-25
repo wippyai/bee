@@ -43,7 +43,7 @@ VERSION = "1.0.0"
 TITLE = "Tally"
 DEFINITION_ID = "app.tally:app"
 APPROVAL_POLICY = "workspace-application-delivery"
-SHIPPED = ["src/governance/_index.yaml", "src/approvals/host/_index.yaml"]
+SHIPPED = ["modules/gov/src/_index.yaml", "src/_index.yaml"]
 PROVIDER = os.environ.get("BEE_WORKSPACE_APP_PROVIDER", "scripted")
 # A live agent is told only how to use its tools; the spec is the person's.
 LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another agent. Read the overlay tool's "

@@ -97,14 +97,12 @@ address, mesh secret and authority pool. The joiner pins the hive node, writes
 owner and waits until the two supervisors hold an established session. A node
 that already joined a hive, or that other nodes joined, refuses to join.
 
-The owner can grant its desktop to exact pinned Hive peers at boot with
-`BEE_DESKTOP_ALLOWED_PEERS=NODE[,NODE...]`. Up to 64 distinct node IDs are
-accepted. An invalid, duplicate, self, or unpinned node refuses startup. The
-bridge also requires the peer's current host enrollment and retires its
-attachments when the pin is removed. This host selection permits the Hive
-Manager on a selected peer to control or observe this node's workspaces; the
-invite and peer pin alone grant no desktop access. Change the selection by
-stopping and restarting the owner with the new environment value.
+The owner grants its desktop to every pinned Hive peer by default: joining the
+hive is the whole selection, so no environment variable and no restart is
+needed. The bridge still requires the peer's current host enrollment and
+retires its attachments when the pin is removed, so `bee hive leave NODE`
+revokes the grant by retiring the pin. The grant permits the Hive Manager on a
+pinned peer to control or observe this node's workspaces.
 
 `leave` needs no owner: it removes `hive/peers/NODE.pub`, and the joined record
 when NODE is the hive this node joined. The owner's enrollment publisher then
@@ -119,23 +117,44 @@ the node's own authority. Local clients join with the same credential.
 `internode.peer_key_source` resolves local clients from `hive/trusted` and Hive
 peers from `hive/peers`; the enrollment entry names them as `nodes` and `peers`.
 
-By default an owner binds and advertises loopback. For a Hive spanning
-machines, the host sets `BEE_MESH_ADDRESS` to an assigned, reachable IP address
-when starting each owner and when running `bee hive join`. The owner binds its
-mesh and invite listener on that address family, advertises the selected IP to
-peers, and publishes loopback aliases in the local rendezvous descriptor for
-same-machine clients. An invalid or unassigned selected address fails owner
-preparation.
-Invites carry up to eight alternate interface, tailnet, MagicDNS, and
-`BEE_HIVE_ADDRESSES` external IP hints. The joining command races TLS
-handshakes, authenticates the pinned identity, and uses the first verified
-route for redemption. It persists that route's IP as its initial gossip seed
-and reports every candidate failure if none verifies. This does not change
-the runtime's one advertised mesh address; keep `BEE_MESH_ADDRESS` reachable
-for established sessions and reconnects. On detected WSL2 NAT, the invite
-prints mirrored-networking instructions and exact Windows TCP forwarding and
-firewall commands, with an explicit warning that Windows portproxy cannot
-forward the UDP gossip path.
+No environment variable selects an address. An owner picks the address it
+advertises to the mesh itself: a Tailscale address when `tailscale status`
+reports one, otherwise the first non-virtual LAN interface address, otherwise
+loopback when the node is alone. It writes the pick to `hive/advertise` and
+reads it back on the next boot, repicking when the stored address is no longer
+assigned locally, so a DHCP lease change or a Tailscale toggle never advertises
+a stale address. The owner binds its mesh and invite listener on all interfaces
+of the pick's family and publishes loopback aliases in the local rendezvous
+descriptor for same-machine clients.
+
+`bee hive invite` prints one line; `--out FILE` writes it to FILE and
+`--share DIR` writes it to `DIR/bee-hive-invite.txt` in a shared folder the
+person picks. Both files hold the single-use secret and are written
+owner-only, atomically, and never over an existing file.
+
+Invites carry up to eight alternate interface, tailnet and MagicDNS hints. The
+joining command races TLS handshakes, authenticates the pinned identity, and
+uses the first verified route for redemption. The hive node reports the IP it
+saw on that authenticated TCP connection; the joiner adopts it as its
+advertised address when this host owns it, and otherwise records itself in
+`hive/nat` and publishes `internode_dial=out` so the peer keeps the connection
+open instead of dialing an address it cannot reach. The joiner persists the
+verified route's IP as its initial gossip seed and reports every candidate
+failure if none verifies.
+
+A running owner republishes a changed advertise address with
+`Membership.UpdateMeta` and rewrites each pinned peer's `.addr` seed from the
+cluster's `NodeJoined`, `NodeLeft` and `NodeUpdated` events, so a peer that
+restarts at a new address is seeded there on the next boot without a restart
+of either side.
+
+On detected WSL2 NAT the invite prints an informational notice: Bee needs no
+environment variable and no Windows port proxy, because it advertises the
+address its inviter observed and dials out over the authenticated join path.
+The runtime still carries memberlist gossip over UDP in both directions, so
+until the runtime's gossip-over-internode hook lands, mirrored networking
+(`networkingMode=mirrored` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`)
+is the complete answer for a NATed peer.
 
 `bee version` is not answered by the host: the embedded pack version and the
 pinned runtime commit are not visible to `app.Host`, so the word reaches the

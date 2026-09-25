@@ -218,6 +218,10 @@ bee workspace roots
 bee workspace create LABEL ROOT[/PATH] [--new-folder]
 bee workspace archive WORKSPACE | restore WORKSPACE
                                  manage the running node's workspace catalog
+bee hive invite [--out FILE | --share DIR]
+bee hive invites | revoke INVITE_ID | peers | leave NODE
+bee hive join INVITE
+                                 print, write or redeem a single-use Hive invite
 bee MODULE:ENTRY [ARGUMENTS...]  run one application entry directly
 bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT
 bee help | -h | --help

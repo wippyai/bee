@@ -274,15 +274,13 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
 
 An owner's bridge keeps static host grants (`desktop.allowed_nodes`) separate
 from revocable Hive grants (`desktop.allowed_peers`). Local clients use the
-`local_clients` enrollment. Native launch leaves both lists empty unless the
-owner starts with `BEE_DESKTOP_ALLOWED_PEERS=NODE[,NODE...]`, naming up to 64
-exact node IDs already pinned by a Hive join. It places those IDs in
-`allowed_peers`, which the bridge admits only while the peer remains in the
-host enrollment. The owner refuses malformed, duplicate, self, or unpinned
-selections. It applies changed selections on restart; removing a peer pin
-retires that peer's desktop attachments. A pin or invite by itself grants no
-desktop access. The selected peer can control or observe the owner's
-workspaces from Hive Manager.
+`local_clients` enrollment. Native launch places every pinned Hive peer in
+`allowed_peers`: joining the hive is the whole selection, with no environment
+variable and no restart. The bridge admits one of those IDs only while the peer
+remains in the host enrollment, so `bee hive leave NODE` revokes the grant by
+retiring the pin and its desktop attachments. A pin or invite by itself grants
+no desktop access. A pinned peer can control or observe the owner's workspaces
+from Hive Manager.
 
 ## Workspaces viewer
 

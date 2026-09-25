@@ -110,23 +110,27 @@ internode connections and ends the Session; the runtime does not fence an
 established connection.
 
 A node that already joined a hive, or that other nodes joined, refuses to
-join, because one mesh has one secret. The owner binds and advertises loopback
-by default. A host can select an assigned, reachable IP address with
-`BEE_MESH_ADDRESS` for both owner startup and `bee hive join`; this permits an
-explicit invite to join nodes on different machines. The local descriptor
-still uses loopback aliases for same-machine clients. `BEE_HIVE_ADDRESSES` adds
-host-selected external IP hints, such as forwarded Windows host addresses, to
-the invite; it does not configure the runtime's one advertised mesh address.
-The runtime currently does not retry a set of authenticated mesh paths, expose
-the live path to `bee hive peers`, or reverse-dial through the join channel.
-The [reachability guide](../../../docs/operations/hive-reachability.md) describe
-the required runtime extension and the UDP limitation of Windows portproxy.
-Peer membership does not
-grant access to remote desktops or destination overlay activation. A desktop
-owner can separately select up to 64 exact pinned peers with
-`BEE_DESKTOP_ALLOWED_PEERS=NODE[,NODE...]` when it starts. Its bridge admits
-those nodes only while their peer pins remain in the host enrollment. A Hive
-Manager on an admitted node can then control or observe that owner's desktop.
+join, because one mesh has one secret. The owner picks the address it
+advertises to the mesh itself: a Tailscale address when one is present,
+otherwise the first non-virtual LAN interface address, otherwise loopback when
+the node is alone. It persists the pick in `hive/advertise` and reads it back on
+the next boot, repicking when the stored address is no longer assigned locally,
+so a DHCP lease change or a Tailscale toggle never advertises a stale address.
+The local descriptor still uses loopback aliases for same-machine clients. A
+join adopts the IP the inviter observed on the authenticated join TCP when this
+host owns it, and otherwise records itself in `hive/nat` and publishes
+`internode_dial=out`; a running owner republishes a changed address through the
+runtime's membership metadata and rewrites each pinned peer's `.addr` seed from
+cluster `NodeJoined`, `NodeLeft` and `NodeUpdated` events. The runtime does not
+yet carry memberlist gossip over the internode link, so a NATed peer needs
+mirrored networking or a forwarded UDP path until that runtime hook lands. The
+[reachability guide](../../../docs/operations/hive-reachability.md) describes
+the remaining runtime work.
+Peer membership also grants desktop access: every pinned peer may reach this
+node's desktop in Hive Manager, still subject to that peer's live host
+enrollment. `bee hive leave NODE` revokes the grant by retiring the pin. A
+statically configured node (`desktop.allowed_nodes`) remains separate from
+these revocable peer grants.
 
 ## Client
 

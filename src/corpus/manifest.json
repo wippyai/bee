@@ -163,9 +163,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 9100,
+      "bytes": 9130,
       "id": "docs/desktop",
-      "sha256": "e10eade08b3dcc90cba55d2e5183b1835295ccd5a63fff421156b3deb4c4ec8e",
+      "sha256": "ac1119daf9fb346d6bee23c05f0d4f04544c682b241fc846b8815c8bfc1619fd",
       "source": "docs/guides/desktop.md",
       "title": "Desktop",
       "topic": "ui"
@@ -259,9 +259,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 21014,
+      "bytes": 20877,
       "id": "docs/workspace_catalog",
-      "sha256": "93e04d044be2db1c3825a8eb503b675e7812c849045af1fa0ad8453da1d340b4",
+      "sha256": "817a9d79f0381f9952ce5a286c16f753b9cf0823a7b18091eb53505aed5cd35a",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -379,9 +379,9 @@
       "topic": "component"
     },
     {
-      "bytes": 9436,
+      "bytes": 9708,
       "id": "component/hive",
-      "sha256": "57df061785d8e0eae9efff554b8bb1ba56304b1df25848a27806037e9e326a8b",
+      "sha256": "6f313561b20187586cdca42616e915e6361ab0af0977587ee4c529bb2b17b482",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"
@@ -470,7 +470,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 569894,
+    "bytes": 570059,
     "documents": 58
   }
 }

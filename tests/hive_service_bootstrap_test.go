@@ -111,7 +111,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 
 	root := t.TempDir()
 	transportTLS := supervisorTLS(t, root)
-	frozenSource, _ := freezeHiveSupervisorSource(t, root, true)
+	frozenSource, _ := freezeHiveSupervisorSource(t, root)
 	serviceFixture := filepath.Join(root, "service-fixture")
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {

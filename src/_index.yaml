@@ -172,7 +172,7 @@ entries:
     workspace_applications:
       approval_policy: workspace-application-delivery
       kinds: [process.lua, library.lua, ns.requirement]
-      modules: [tty, process, channel, json, time, uuid, base64, hash]
+      modules: [tty, process, channel, json, time, uuid, base64, hash, funcs]
       policies: [bee.security:ordinary_app_subsystem_boundary]
       thread_access: none
 - name: credential_sources

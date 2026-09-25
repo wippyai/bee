@@ -127,7 +127,9 @@ and render host-authored permission text with combined read-to-egress lines.
 For workspace application delivery, the host resolves these values before
 approval and shows the full set, changes from the installed grant, and any
 combined data flows in Approvals. Only `threads.read` with `scope: owned` has
-an installable policy in this slice; unsupported requests fail resolution.
+an installable policy in this slice; unsupported requests fail resolution. The
+shipped module ceiling includes `funcs` so the installed policy can authorize
+calls to the Threads owner, which checks the application's actor membership.
 
 On approval, one registry overlay transaction installs host-owned policies in
 `bee.governance.grants`, fills the requirement defaults, and records the grant

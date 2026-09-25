@@ -6,12 +6,15 @@ local channel = require("channel")
 local json = require("json")
 local appearance = require("appearance")
 local frame = require("frame")
+local funcs = require("funcs")
 
 local HINTS = frame.hints({{key = "Enter", verb = "add one"}, {key = "r", verb = "reset"}, {key = "Esc", verb = "exit"}})
 
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid launch") end
+    local owned, read_error = funcs.call("bee.threads.service:list", {limit = 1})
+    if read_error or not owned or owned.ok ~= true then error("Owned thread read grant is unavailable") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))

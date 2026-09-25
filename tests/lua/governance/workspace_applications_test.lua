@@ -44,6 +44,16 @@ local function define_tests()
     end)
 
     test.describe("workspace application activation profile", function()
+        test.it("makes the granted function call module available to workspace apps", function()
+            local entry = assert(registry.get("bee.governance:activation_profiles"))
+            local data = entry.data :: Object
+            local shipped = data.workspace_applications :: Object
+            local found = false
+            for _, module in ipairs(shipped.modules :: {string}) do
+                if module == "funcs" then found = true end
+            end
+            test.is_true(found)
+        end)
         test.it("selects the host ceilings for an eligible overlay this node authored", function()
             local config = assert(profiles.configuration(configured(), NODE))
             local profile, refused = profiles.select(config, WORKSPACE, NODE, "tally")

@@ -57,7 +57,7 @@ def answer_entries():
     """The entries.json a model writes for SPEC.md."""
     return [{"id": DEFINITION_ID, "kind": "process.lua",
              "data": {"source": (FIXTURE / "tally.lua").read_text(), "method": "main",
-                      "modules": ["tty", "process", "channel", "json"],
+                      "modules": ["tty", "process", "channel", "json", "funcs"],
                       "imports": {"client": "bee.application:client", "appearance": "bee.application:appearance",
                                   "frame": "bee.application:frame"}},
              "meta": {"type": "bee.application", "application": {
@@ -222,7 +222,8 @@ def exercise():
         restarted.close()
     print("Workspace application: a managed agent authored " + DEFINITION_ID + " from its written spec on the "
           "shipped host profiles, the person saw the threads.read capability in Approvals, and the installed "
-          "scope contained its one generated policy; it opened from Start, counted, reset and restored its saved count")
+          "scope contained its one generated policy; it called the Threads owner, opened from Start, counted, reset "
+          "and restored its saved count")
 
 
 if __name__ == "__main__":

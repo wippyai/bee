@@ -2,7 +2,7 @@
 local arguments = require("arguments")
 local thread_bounds = require("thread_bounds")
 local M = {}
-type ReplyOp = "open" | "close" | "closed" | "focus" | "attached" | "bind" | "unbind" | "page" | "title" | "closing" | "quit" | "shutdown"
+type ReplyOp = "open" | "close" | "closed" | "focus" | "attached" | "bind" | "unbind" | "page" | "title" | "closing" | "quit" | "shutdown" | "fence"
 type Reply = {version: integer, request_id: string, op: ReplyOp, id: string, instance_id: string, workspace_id: string?,
     title: string, icon: string?, mount: string, definition_id: string, thread_id: string?, resume_schema: string, restart_policy: string, resume_state: string, error: string, error_code: string, observer: boolean?}
 type RequestOp = "open" | "close" | "bind" | "unbind" | "shutdown"

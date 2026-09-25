@@ -127,6 +127,58 @@ local function define_tests()
                 error("missing thread refusal changed: " .. tostring(fault))
             end
         end)
+        test.it("stops thread instances on an owner fence", function()
+            local owner = tostring(process.pid())
+            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
+                ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
+                assert(security.policy("bee.security:core_spawn_boundary"))}))
+                :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())
+            if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
+            local broker = tostring(broker_pid)
+            assert(catalogs:receive():from() == broker)
+            assert(process.send(broker, "bee.app.request", {version = 1, request_id = "fence-thread-open", op = "open",
+                workspace_id = WORKSPACE, thread_id = THREAD, definition_id = DEFINITION, arguments = {}}))
+            local opened: {[string]: unknown}? = nil
+            local deadline = time.after("30s")
+            while not opened do
+                local received = channel.select({replies:case_receive(), deadline:case_receive()})
+                assert(received.ok and received.channel == replies, "open reply timed out")
+                local message = received.value
+                if tostring(message:from()) == broker then
+                    local data: unknown = message:payload():data()
+                    if type(data) == "table" and (data :: {[string]: unknown}).request_id == "fence-thread-open"
+                        and (data :: {[string]: unknown}).op == "open" then opened = data :: {[string]: unknown} end
+                end
+            end
+            assert(opened.error_code == "", "managed window did not become ready: " .. tostring(opened.error))
+            local instance_id = assert(opened.instance_id) :: string
+            assert(process.send(broker, "bee.application.fence", {version = 1, request_id = "fence-thread", thread_id = THREAD}))
+            local acked: {[string]: unknown}? = nil
+            deadline = time.after("30s")
+            while not acked do
+                local received = channel.select({replies:case_receive(), deadline:case_receive()})
+                assert(received.ok and received.channel == replies, "fence reply timed out")
+                local message = received.value
+                if tostring(message:from()) == broker then
+                    local data: unknown = message:payload():data()
+                    if type(data) == "table" and (data :: {[string]: unknown}).request_id == "fence-thread"
+                        and (data :: {[string]: unknown}).op == "fence" then acked = data :: {[string]: unknown} end
+                end
+            end
+            test.eq(acked.error_code, "")
+            local stopped = false
+            for _ = 1, 150 do
+                local ok = pcall(as_application, instance_id, "bee.threads.service:get", {thread_id = THREAD})
+                if not ok then stopped = true; break end
+                time.sleep(time.parse_duration("200ms"))
+            end
+            test.is_true(stopped, "the fenced thread instance is still running")
+            assert(process.cancel(broker))
+            process.unlisten(catalogs)
+            process.unlisten(replies)
+        end)
     end)
 end
 return test.run_cases(define_tests)

@@ -70,6 +70,61 @@ local function define_tests()
             process.unlisten(catalogs)
             process.unlisten(replies)
         end)
+        test.it("stops one instance on an owner fence", function()
+            local marker = "bee-broker-fence-" .. uuid.v7()
+            local owner = tostring(process.pid())
+            local events = assert(process.events())
+            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
+                ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
+                assert(security.policy("bee.security:core_spawn_boundary"))}))
+                :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())
+            if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
+            local broker = tostring(broker_pid)
+            assert(catalogs:receive():from() == broker)
+            local function wait_reply(op: string, request_id: string): {[string]: unknown}
+                local deadline = time.after("30s")
+                while true do
+                    local received = channel.select({replies:case_receive(), deadline:case_receive()})
+                    assert(received.ok and received.channel == replies, op .. " reply timed out")
+                    local data: unknown = received.value:payload():data()
+                    if type(data) == "table" then
+                        local reply = data :: {[string]: unknown}
+                        if reply.request_id == request_id and reply.op == op then return reply end
+                    end
+                end
+            end
+            assert(process.send(broker, "bee.app.request", {version = 1, request_id = "fence-open", op = "open",
+                workspace_id = WORKSPACE, definition_id = DEFINITION,
+                arguments = {"/bin/sh", "-c", "trap \"\" TERM; while :; do sleep 0.1; done", marker}}))
+            local opened = wait_reply("open", "fence-open")
+            test.eq(opened.error_code, "")
+            test.is_true(running(marker), "the terminal child is not running")
+            assert(process.send(broker, "bee.application.fence", {version = 1, request_id = "fence-1", instance_id = opened.instance_id}))
+            local acked = wait_reply("fence", "fence-1")
+            test.eq(acked.error_code, "")
+            local waited = 0
+            while running(marker) and waited < 150 do
+                time.sleep(time.parse_duration("200ms"))
+                waited = waited + 1
+            end
+            test.is_false(running(marker), "the fenced child is still running")
+            assert(process.send(broker, "bee.application.fence", {version = 1, request_id = "fence-bad"}))
+            local refused = wait_reply("fence", "fence-bad")
+            test.eq(refused.error_code, "invalid")
+            assert(process.cancel(broker))
+            local exited = false
+            local deadline = time.after("30s")
+            while not exited do
+                local received = channel.select({events:case_receive(), deadline:case_receive()})
+                assert(received.ok and received.channel == events, "broker did not exit")
+                local event = received.value
+                exited = event.kind == process.event.EXIT and tostring(event.from) == broker
+            end
+            process.unlisten(catalogs)
+            process.unlisten(replies)
+        end)
     end)
 end
 return test.run_cases(define_tests)

@@ -78,6 +78,7 @@ local function main(owner: string, initial_preferences: unknown)
     local binding_recovery = assert(process.listen("bee.application.binding.recovery", {message = true}))
     local replace_acks = assert(process.listen("bee.application.replace_ack", {message = true}))
     local thread_requests = assert(process.listen("bee.application.thread.request", {message = true}))
+    local fences = assert(process.listen("bee.application.fence", {message = true}))
     local checkpoint_waiters: {[string]: Checkpoint} = {}
     local events = assert(process.events())
     assert(process.monitor(owner))
@@ -175,6 +176,35 @@ local function main(owner: string, initial_preferences: unknown)
             return false, "thread_conflict", "Application thread changed while opening"
         end
         return false, "permission_denied", tostring(fault and fault.message or "the thread refused the application principal")
+    end
+    -- A fence is a revocation of this instance's thread delegation. The plain
+    -- launch path admits the application principal directly, without a durable
+    -- binding coordinator to clean it up, so the broker releases that exact
+    -- membership itself. The caller is the broker's own owner authority: the
+    -- same identity that admitted the principal may withdraw it. Absence is
+    -- already released; a failed call leaves the epoch and host authority as
+    -- the fence and is not reported as success.
+    local function release_principal(item: Instance): boolean
+        local thread_id = item.thread_id
+        if not thread_id then return true end
+        local actor_id = thread_binding.actor(workspace_id, item.instance_id)
+        if not actor_id then return true end
+        local member_reply = thread_call(actor_id, "bee.threads.service:get", {thread_id = thread_id})
+        if active_principal(member_reply, actor_id) ~= true then return true end
+        local head_revision: integer? = nil
+        if type(member_reply) == "table" then
+            local value = bounds.object((member_reply :: {[string]: unknown}).value)
+            local summary = value and bounds.object(value.summary)
+            local revision = summary and bounds.integer(summary.revision)
+            if revision and revision >= 1 then head_revision = revision end
+        end
+        if not head_revision then return false end
+        local request = thread_binding.leave_request({instance_id = item.instance_id, thread_id = thread_id,
+            actor_id = actor_id, role = "participant", initiating_owner_id = actor_id},
+            workspace_id, "fence:" .. item.instance_id, head_revision)
+        if not request then return false end
+        local left = funcs.new():with_scope(membership_scope):call("bee.threads.service:leave", request)
+        return type(left) == "table" and (left :: {[string]: unknown}).ok == true
     end
     local function facade_call(actor_id: string, target: string, request: unknown)
         local actor, actor_error = security.new_actor(actor_id)
@@ -971,7 +1001,7 @@ local function main(owner: string, initial_preferences: unknown)
     local replace_started = 0
     while running do
         local selected = channel.select({requests:case_receive(), app_ready:case_receive(), titles:case_receive(), queries:case_receive(), answers:case_receive(), close_replies:case_receive(), shutdown_requests:case_receive(), appearance_requests:case_receive(),
-            appearance_states:case_receive(), controls:case_receive(), checkpoints:case_receive(), persisted:case_receive(), binding_results:case_receive(), binding_recovery:case_receive(), replace_acks:case_receive(), thread_requests:case_receive(), events:case_receive(), ticks:case_receive()})
+            appearance_states:case_receive(), controls:case_receive(), checkpoints:case_receive(), persisted:case_receive(), binding_results:case_receive(), binding_recovery:case_receive(), replace_acks:case_receive(), thread_requests:case_receive(), fences:case_receive(), events:case_receive(), ticks:case_receive()})
         if not selected.ok then break end
         if selected.channel == replace_acks then
             local message = selected.value
@@ -1029,6 +1059,51 @@ local function main(owner: string, initial_preferences: unknown)
                 if settled then
                     recovery_received = true
                     assert(process.send(owner, "bee.application.binding.recovered", {version = 1, workspace_id = workspace_id}))
+                end
+            end
+        elseif selected.channel == fences then
+            local message = selected.value
+            if message:from() == owner then
+                local data: unknown = message:payload():data()
+                local object = type(data) == "table" and data :: {[string]: unknown} or nil
+                local request_id = object and contract.text(object.request_id, 80) or nil
+                local instance_id = object and contract.text(object.instance_id, 160) or nil
+                local thread_id = object and contract.text(object.thread_id, 160) or nil
+                if not object or object.version ~= 1 or not request_id or request_id == ""
+                    or ((not instance_id or instance_id == "") and (not thread_id or thread_id == "")) then
+                    if request_id and request_id ~= "" then
+                        emit(contract.reply(request_id, "fence", "invalid", "Fence names an instance_id or thread_id"))
+                    end
+                else
+                    -- Revocation fencing stops the affected executions now: a
+                    -- pending open fails through its revoked binding, and a
+                    -- running instance stops with its process scope intact.
+                    -- Future opens re-admit from the present authority.
+                    local want_instance = (instance_id ~= nil and instance_id ~= "") and instance_id or nil
+                    local want_thread = (thread_id ~= nil and thread_id ~= "") and thread_id or nil
+                    local released = true
+                    for _, raw_item in pairs(instances) do
+                        local item: Instance = raw_item
+                        if (want_instance and item.instance_id == want_instance)
+                            or (want_thread and item.thread_id == want_thread) then
+                            local coordinator = coordinators[item.instance_id]
+                            local revoked = coordinator ~= nil and coordinator.state.binding ~= nil
+                                and coordinator.state.binding.state == "revoked"
+                            if revoked then transition(item, "force_stop")
+                            elseif coordinator then
+                                coordinator.stop_event = "force_stop"
+                                drive_binding(coordinator, {kind = "revoke"})
+                            else
+                                -- No reducer owns this delegation; withdraw the
+                                -- exact principal before stopping the process.
+                                if not release_principal(item) then released = false end
+                                transition(item, "force_stop")
+                            end
+                        end
+                    end
+                    if released then emit(contract.reply(request_id, "fence"))
+                    else emit(contract.reply(request_id, "fence", "revocation_incomplete",
+                        "Fenced executions stopped but one thread delegation could not be withdrawn")) end
                 end
             end
         elseif selected.channel == events then

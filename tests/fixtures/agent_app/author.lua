@@ -49,7 +49,7 @@ reaches the destination as neither and its preflight refuses the version with CO
 Declare exactly the native modules and library imports your source uses.
 Your own file, search and shell tools are outside this work: everything you need arrives
 through the admitted read tool and the bound thread. Your transport carries one output line
-at a time and refuses a line over 16384 bytes, which ends the attempt, so never echo a large
+at a time and refuses a line over 262144 bytes, which ends the attempt, so never echo a large
 file or a long tool output.
 You hold no registry publication, approval or activation capability and create no security policy.
 The host lints, reviews, approves and applies your frozen artifact. Report no check you did not run.

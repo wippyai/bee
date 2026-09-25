@@ -62,9 +62,12 @@ if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   if [ -n "$gateway_stopping" ] || [ "$gateway_status" -eq 143 ]; then exit 143; fi
 fi
 if [ -n "${BEE_FIXTURE_HUGE:-}" ]; then
+  # One frame of BEE_FIXTURE_HUGE times 32 bytes of padding; 1 means 700.
+  repeat=700
+  if [ "$BEE_FIXTURE_HUGE" -gt 1 ]; then repeat=$BEE_FIXTURE_HUGE; fi
   printf '{"type":"system","subtype":"status","padding":"'
   i=0
-  while [ "$i" -lt 700 ]; do printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'; i=$((i + 1)); done
+  while [ "$i" -lt "$repeat" ]; do printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'; i=$((i + 1)); done
   printf '"}\n'
 fi
 if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then

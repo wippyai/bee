@@ -43,9 +43,14 @@ that output and `bee.carrier.checkpoint@1`. The checkpoint contains:
 - binding/profile references and their measured digests; and
 - the current placement attachment generation and any event cursor.
 
-The checkpoint is at most 64 KiB; a stream frame is limited to 16 KiB. A frame
-that cannot be checkpointed ends the attempt `uncertain` with a framing fault.
-A frame split across chunks resumes from carry bytes. A chunk with multiple
+The checkpoint is at most 64 KiB and carries at most 16 KiB of a partial
+frame. A larger partial frame is held instead: the carrier commits the complete
+frames around it but acknowledges the runner only up to the chunk before it, so
+the runner keeps those chunks and a replacement carrier re-reads them, while
+event keys absorb the replayed records. A frame is therefore limited to the
+chunks a runner holds unacknowledged (16 chunks of at most 16 KiB); a frame
+that outgrows them ends the attempt `uncertain` with a framing fault. A frame
+split across chunks resumes from carry bytes. A chunk with multiple
 events commits in consumed-prefix order. A crash before acknowledgement
 replays already committed output and event keys absorb the replay.
 

@@ -47,7 +47,8 @@ local TOOLS: {Tool} = {
         schema = {type = "object", additionalProperties = false, properties = {after_sequence = {type = "integer", minimum = 0}, wait_ms = {type = "integer", minimum = 0}}}, annotations = READ_ANNOTATIONS},
     {name = "thread_sessions", description = "List the running agent sessions in your workspace whose threads you may read, yourself included (self). Each has a session address (its action_id), attempt, thread and title. Pass an action_id, attempt_id, or a thread_id holding one session as session to thread_message or thread_notify.", operation = "bee.threads.service:get",
         policies = {TOOL_POLICY_REFS.read},
-        schema = {type = "object", additionalProperties = false, properties = {}}, annotations = READ_ANNOTATIONS},
+        -- An empty table encodes as a JSON list unless allocated as a map.
+        schema = {type = "object", additionalProperties = false, properties = table.create(0, 1)}, annotations = READ_ANNOTATIONS},
     {name = "thread_message", description = "Append one message as the authenticated subject: to the bound thread with recipient_ids, or with session to that running session's thread, addressed to it; it reads the message at its next thread_read and a thread_wait there wakes", operation = "bee.threads.service:record",
         policies = {TOOL_POLICY_REFS.message}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"idempotency_key", "message_id", "message_kind", "content"}, properties = {

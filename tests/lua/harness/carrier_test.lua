@@ -302,9 +302,40 @@ local function define_tests()
             test.eq(batch_ended, base_ended)
             test.eq(count(batch_list, "receipt"), 1)
         end)
-        test.it("rejects a frame beyond the checkpointable bound as an uncertain attempt", function()
+        test.it("carries a frame larger than the checkpointable carry and resumes across it", function()
+            -- A provider echoes a whole tool result as one frame, which may be
+            -- larger than a checkpoint can carry. The carrier holds the
+            -- runner's acknowledgment until the frame completes.
             local thread_id = thread()
             local outcome = run_carrier("bee.harness.carrier:process", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_HUGE = "1"}), "open", nil)
+            if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
+            test.eq((outcome.value.settlement :: {[string]: unknown}).answer, "pong")
+            local function framing_notices(records: {{[string]: unknown}}): integer
+                local framing = 0
+                for _, item in ipairs(observations(records, nil)) do
+                    local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
+                    if data.type == "notice" and data.code == "framing" then framing = framing + 1 end
+                end
+                return framing
+            end
+            local _, records = kinds(thread_id)
+            test.eq(framing_notices(records), 0)
+            local resumed_thread = thread()
+            local held = request(resumed_thread, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_HUGE = "1", BEE_FIXTURE_LINGER = "1"})
+            local crashed = run_carrier("bee.harness.catalog:carrier_faulted", held, "open", "committed")
+            test.is_nil(crashed.value)
+            local resumed = run_carrier("bee.harness.catalog:carrier_faulted", held, "resume", nil)
+            if not resumed.value then error("resume across a held frame failed: " .. tostring(resumed.error)) end
+            test.eq((resumed.value.settlement :: {[string]: unknown}).answer, "pong")
+            local _, resumed_records = kinds(resumed_thread)
+            test.eq(framing_notices(resumed_records), 0)
+            local reported = funcs.call("bee.harness.carrier:capabilities", {}) :: {[string]: unknown}
+            test.is_true((reported.max_frame_bytes :: number) > 16384)
+            test.eq(reported.takeover, "claim")
+        end)
+        test.it("rejects a frame beyond what the runner holds unacknowledged as an uncertain attempt", function()
+            local thread_id = thread()
+            local outcome = run_carrier("bee.harness.carrier:process", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_HUGE = "16000"}), "open", nil)
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
             test.eq((outcome.value.settlement :: {[string]: unknown}).outcome, "uncertain")
             local _, records = kinds(thread_id)
@@ -314,9 +345,6 @@ local function define_tests()
                 if data.type == "notice" and data.code == "framing" then framing = framing + 1 end
             end
             test.eq(framing, 1)
-            local reported = funcs.call("bee.harness.carrier:capabilities", {}) :: {[string]: unknown}
-            test.eq(reported.max_frame_bytes, 16384)
-            test.eq(reported.takeover, "claim")
         end)
         test.it("writes input under control records and reconciles both write boundaries after a crash", function()
             local clean_thread = thread()

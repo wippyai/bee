@@ -34,6 +34,9 @@ M.THREADS = "bee.threads.service"
 M.CARRIER_OPS = "bee.threads.carrier"
 M.GATEWAY = "bee.gateway.binding"
 M.MAX_RECORDS_PER_COMMIT = 64
+-- A frame may be as large as the chunks the runner holds unacknowledged; a
+-- checkpoint carries only a partial frame up to checkpoint.MAX_CARRY_BYTES.
+M.MAX_FRAME_BYTES = placement_protocol.MAX_OUTSTANDING_CHUNKS * placement_protocol.MAX_CHUNK_BYTES
 M.APPROVALS = "bee.approvals.binding"
 M.DELIVERY = "bee.threads.delivery"
 M.WAITER_NAME = "bee.threads.waiter"
@@ -125,6 +128,10 @@ type Session = {
     placement_evidence: integer,
     stderr_sequence: integer,
     last_sequence: {stdout: integer, stderr: integer},
+    -- held_from: the first chunk whose stdout bytes sit in a partial frame too
+    -- large to checkpoint. The runner keeps it and every later chunk until
+    -- the frame completes, so acknowledgment stops just before it.
+    held_from: integer?,
 }
 local function step(io: IO, name: string)
     if io.after then (io.after :: (string) -> ())(name) end
@@ -439,7 +446,7 @@ function M.commit(io: IO, session: Session, records: {{[string]: unknown}}): (bo
     return true, nil
 end
 local function new_session(plan: Plan, turn_id: string, epoch: integer, revision: integer, point: checkpoint.Checkpoint): Session
-    local decoder = stream_json.new(checkpoint.MAX_CARRY_BYTES)
+    local decoder = stream_json.new(M.MAX_FRAME_BYTES)
     decoder.framer.carry = point.carry.stdout
     decoder.index = point.envelope_index
     local terminal: driver_types.Terminal? = nil
@@ -448,7 +455,7 @@ local function new_session(plan: Plan, turn_id: string, epoch: integer, revision
     if point.output == "complete" then output = "complete" elseif point.output == "truncated" then output = "truncated" end
     return {plan = plan, turn_id = turn_id, turn_open = true, epoch = epoch, revision = revision, checkpoint = point, decoder = decoder, normalizer = point.normalizer_state,
         terminal = terminal, stream_ended = point.stream_ended == true, exit = nil, eof = {stdout = false, stderr = false}, runner = nil, settled = nil, recovered = false, output = output, pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
-        last_sequence = {stdout = point.consumed.stdout, stderr = point.consumed.stderr}}
+        last_sequence = {stdout = point.consumed.stdout, stderr = point.consumed.stderr}, held_from = nil}
 end
 -- The gateway binding of an attempt under a carrier epoch: admitted after
 -- the durable action and attempt preparation, superseding whatever an
@@ -892,12 +899,20 @@ local function acknowledge_permissions(session: Session, records: {{[string]: un
         end
     end
 end
+-- The runner may forget every chunk through this sequence: all of it is
+-- committed, and no partial frame beyond the checkpoint's carry needs it.
+local function acknowledged_through(session: Session, sequence: integer): integer
+    local held = session.held_from
+    if held and held - 1 < sequence then return held - 1 end
+    return sequence
+end
 function M.on_output(io: IO, session: Session, sender: string, message: placement_protocol.Output): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end
     if message.sequence <= session.last_sequence[message.stream] then
-        io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = message.sequence})
+        io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
         return true, nil
     end
+    local was_held = session.held_from ~= nil
     local before = {carry = session.decoder.framer.carry, index = session.decoder.index, state = snapshot_state(session.normalizer)}
     local records: {{[string]: unknown}} = {}
     if message.eof then
@@ -924,6 +939,15 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         end
     elseif message.stream == "stdout" then
         local envelopes, problems, framing_error = stream_json.feed(session.decoder, message.data or "")
+        -- The runner stops sending once this many chunks are unacknowledged,
+        -- so a partial frame that spans them can never complete.
+        if not framing_error and #session.decoder.framer.carry > checkpoint.MAX_CARRY_BYTES
+            and message.sequence - (session.held_from or message.sequence) + 1 >= placement_protocol.MAX_OUTSTANDING_CHUNKS then
+            session.decoder.framer.carry = ""
+            session.decoder.framer.overflow = true
+            framing_error = "frame exceeds what the runner holds unacknowledged ("
+                .. tostring(placement_protocol.MAX_OUTSTANDING_CHUNKS) .. " chunks)"
+        end
         if framing_error then
             local fault = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence, source_last_sequence = message.sequence,
                 envelope_index = session.decoder.index + 1, event_index = 0}, body = {type = "notice", event_key = "ignored", data = {type = "notice", level = "error", code = "framing", content = {text = framing_error}}}}
@@ -952,6 +976,17 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     if session.turn_open then
         for _, record in ipairs(records) do record.turn_id = session.turn_id end
     end
+    if message.stream == "stdout" then
+        if #session.decoder.framer.carry > checkpoint.MAX_CARRY_BYTES then
+            session.held_from = session.held_from or message.sequence
+        else
+            session.held_from = nil
+        end
+    end
+    -- Only a boundary whose partial frame fits the checkpoint moves the
+    -- stdout position; records committed beyond it replay idempotently from
+    -- the chunks the runner still holds.
+    local at_boundary = session.held_from == nil
     local detected, detect_error = detect_permissions(session, records)
     if detect_error then return false, detect_error end
     acknowledge_permissions(session, records)
@@ -961,7 +996,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         local batch: {{[string]: unknown}} = {}
         for index = offset + 1, math.min(offset + M.MAX_RECORDS_PER_COMMIT, total) do batch[#batch + 1] = records[index] end
         local final = offset + #batch >= total
-        if final then
+        if final and at_boundary then
             session.checkpoint.consumed[message.stream] = message.sequence
             session.checkpoint.carry.stdout = session.decoder.framer.carry
             session.checkpoint.envelope_index = session.decoder.index
@@ -969,7 +1004,9 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
             session.checkpoint.event_cursor = nil
             session.checkpoint.terminal = snapshot_state(session.terminal) :: {[string]: unknown}?
             session.checkpoint.stream_ended = session.stream_ended
-        else
+        elseif final and message.stream == "stderr" then
+            session.checkpoint.consumed.stderr = message.sequence
+        elseif not final and not was_held and at_boundary then
             session.checkpoint.carry.stdout = before.carry
             session.checkpoint.envelope_index = before.index
             session.checkpoint.normalizer_state = before.state :: {[string]: unknown}?
@@ -984,7 +1021,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     session.last_sequence[message.stream] = message.sequence
     step(io, "committed")
     if detected > 0 then step(io, "permission_intended") end
-    io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = message.sequence})
+    io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
     step(io, "acknowledged")
     return true, nil
 end
@@ -1528,7 +1565,7 @@ function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Set
 end
 -- What this carrier can promise; the resource mode is the placement's.
 function M.capabilities(): {[string]: unknown}
-    return {max_frame_bytes = checkpoint.MAX_CARRY_BYTES, max_records_per_commit = M.MAX_RECORDS_PER_COMMIT, max_checkpoint_bytes = 65536,
+    return {max_frame_bytes = M.MAX_FRAME_BYTES, max_records_per_commit = M.MAX_RECORDS_PER_COMMIT, max_checkpoint_bytes = 65536,
         max_pending_writes = checkpoint.MAX_PENDING_WRITES, max_pending_write_bytes = checkpoint.MAX_PENDING_WRITE_BYTES,
         max_permissions = checkpoint.MAX_PERMISSIONS, permission_exchange = "host_policy_with_acceptance_record",
         takeover = "claim", resource_authority = "host_configured", delegated_resource_grants = false, credential_broker = false}

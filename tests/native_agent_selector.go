@@ -1064,9 +1064,20 @@ func savedProfileLaunch(binary string) error {
 	if err := ui.waitFor("Name: Antigravity", 5*time.Second); err != nil {
 		return err
 	}
-	// Tool rows are alphabetical. Preserve overlay while turning off the
-	// components, delivery, docs and thread_message rows.
-	if err := ui.send("\x15Saved Launch\t\x15" + guidance + "\t\x1b[C\x1b[C\x1b[C\t \t \t \t\t "); err != nil {
+	// The window launch allows folder and thread overrides, so their rows
+	// follow the instructions; the saved profile keeps the definition folder
+	// and a new thread. Tool rows are alphabetical. Preserve overlay while
+	// turning off the components, delivery, docs and thread_message rows.
+	if err := ui.send("\x15Saved Launch\t\x15" + guidance); err != nil {
+		return err
+	}
+	if err := ui.waitFor("Folder: Definition folder", 5*time.Second); err != nil {
+		return err
+	}
+	if err := ui.waitFor("Thread: New thread", 5*time.Second); err != nil {
+		return err
+	}
+	if err := ui.send("\t\t\t\x1b[C\x1b[C\x1b[C\t \t \t \t\t "); err != nil {
 		return err
 	}
 	_, before, _ := ui.snapshot()

@@ -16,6 +16,19 @@ end
 
 local function define_tests()
     test.describe("Gateway MCP protocol", function()
+        test.it("lists every tool with an input schema whose properties are a JSON object", function()
+            -- A client validates tools/list as a whole: one schema whose
+            -- properties arrive as a list makes it drop every tool.
+            local names: {string} = {}
+            for _, tool in ipairs(mcp.TOOLS) do names[#names + 1] = tool.name end
+            local listed = mcp.list(names).tools :: {{[string]: unknown}}
+            test.eq(#listed, #names)
+            for _, tool in ipairs(listed) do
+                local schema = tool.inputSchema :: {[string]: unknown}
+                local encoded = assert(json.encode(schema.properties))
+                test.eq(tostring(tool.name) .. " " .. encoded:sub(1, 1), tostring(tool.name) .. " {")
+            end
+        end)
         test.it("discovers the production traits and overlay schema", function()
             for _, expected in ipairs({
                 {id = "bee.governance.traits:authoring_trait", tools = {"bee.governance.binding:overlay_call"}},

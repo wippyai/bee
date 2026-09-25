@@ -16,11 +16,11 @@ M.MAX_TURNS = 32
 -- permission_exchange is set by the host when it enabled an interactive
 -- exchange: the launch then takes its brief over stream-json input, keeps
 -- stdin open for the responses and routes permission prompts to stdin.
-type Request = {profile_id: string, brief: string, permission_mode: string, max_turns: integer, model: string?, effort: string?, resume_ref: string?, permission_exchange: boolean, gateway_tools: {string}?}
+type Request = {profile_id: string, brief: string, permission_mode: string, max_turns: integer, model: string?, effort: string?, resume_ref: string?, permission_exchange: boolean, control_enabled: boolean?, gateway_tools: {string}?}
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "max_turns", "model", "effort", "resume_ref", "permission_exchange", "gateway_tools", "gateway_hooks"})
+    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "max_turns", "model", "effort", "resume_ref", "permission_exchange", "control_enabled", "gateway_tools", "gateway_hooks"})
     if unknown_field then return nil, unknown_field end
     local profile_id = bounds.id(object.profile_id)
     if not profile_id then return nil, "profile_id is not an identifier" end
@@ -63,6 +63,12 @@ function M.decode(value: unknown): (Request?, string?)
         exchange = object.permission_exchange :: boolean
     end
     if profile_id == "window" and exchange then return nil, "stdio permission exchange is only supported for structured turns" end
+    local control = false
+    if object.control_enabled ~= nil then
+        if type(object.control_enabled) ~= "boolean" then return nil, "control_enabled must be a boolean" end
+        control = object.control_enabled :: boolean
+    end
+    if profile_id == "window" and control then return nil, "stream-json control is only supported for structured turns" end
     -- Hook events reach Claude Code through the settings adapter in its
     -- home; the launch line carries nothing for them.
     if object.gateway_hooks ~= nil then
@@ -79,7 +85,7 @@ function M.decode(value: unknown): (Request?, string?)
         table.sort(declared)
         gateway_tools = declared
     end
-    return {profile_id = profile_id, brief = brief, permission_mode = mode, max_turns = turns, model = model, effort = effort, resume_ref = resume, permission_exchange = exchange, gateway_tools = gateway_tools}, nil
+    return {profile_id = profile_id, brief = brief, permission_mode = mode, max_turns = turns, model = model, effort = effort, resume_ref = resume, permission_exchange = exchange, control_enabled = control, gateway_tools = gateway_tools}, nil
 end
 -- The exchange launch: the executable reads stream-json input, so the
 -- brief is the first user line on stdin rather than an argument, stdin
@@ -91,7 +97,7 @@ function M.specification(request: Request): types.Launch
     local argv: {string} = {}
     if not window then
         argv[#argv + 1] = "-p"
-        if request.permission_exchange then
+        if request.permission_exchange or request.control_enabled then
             argv[#argv + 1] = "--input-format"
             argv[#argv + 1] = "stream-json"
         end
@@ -140,12 +146,12 @@ function M.specification(request: Request): types.Launch
         return {executable = "claude", argv = argv, environment = environment, readiness = "terminal:attached",
             login = {provider = "claude", command = "claude", files = {{variable = "CLAUDE_CONFIG_DIR", default_directory = ".claude", path = ".credentials.json"}}}}
     end
-    if not request.permission_exchange then
+    if not request.permission_exchange and not request.control_enabled then
         argv[#argv + 1] = "--"
         argv[#argv + 1] = request.brief
     end
     local launch: types.Launch = {executable = "claude", argv = argv, environment = environment, readiness = "protocol:system.init"}
-    if request.permission_exchange then
+    if request.permission_exchange or request.control_enabled then
         -- Canonical encoding keeps the launch specification, and with it
         -- the plan digest, identical across processes.
         local line, encode_error = canonical.encode({type = "user", message = {role = "user", content = request.brief}})

@@ -134,6 +134,8 @@ type Session = {
     held_from: integer?,
     dropping_stdout: boolean,
 }
+type Offer = {thread_id: string, action_id: string, record_id: string, inbox_sequence: integer, payload_digest: string, message_id: string,
+    message_kind: string, sender_action_id: string, sender_thread_id: string, sender_node_id: string, content: unknown, in_reply_to: unknown?, state: string, dispatch: boolean, offer_count: integer}
 local function step(io: IO, name: string)
     if io.after then (io.after :: (string) -> ())(name) end
 end
@@ -306,6 +308,13 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     -- The host enabled an interactive permission exchange: the driver
     -- prepares the launch shape that keeps stdin open for the responses.
     if exchange then prepare_request.permission_exchange = true end
+    if launch_policy.inbox_push then
+        if not launch_policy.fixture then return nil, "inbox push needs a pinned executable acceptance before production admission" end
+        if binding.driver_id ~= "claude" or profile.mode == "window" or profile.protocol ~= "stream-json" then
+            return nil, "inbox push requires a Claude structured stream-json profile"
+        end
+        prepare_request.control_enabled = true
+    end
     -- The driver shapes its launch to reach the admitted gateway tools and
     -- to load the hook adapter the runner writes.
     if gateway then
@@ -1200,7 +1209,7 @@ end
 -- open_hints: resume the checkpointed subscription under this carrier's
 -- lease, or subscribe afresh; returns the cursor to register wakeups from.
 function M.open_hints(io: IO, session: Session): (integer?, string?)
-    if not session.plan.exchange then return nil, nil end
+    if not session.plan.exchange and not session.plan.policy.inbox_push then return nil, nil end
     local request = session.plan.request
     local key = "launch:" .. request.attempt_id .. ":hints:" .. tostring(session.epoch)
     local existing = session.checkpoint.hint_subscription
@@ -1214,8 +1223,11 @@ function M.open_hints(io: IO, session: Session): (integer?, string?)
     end
     -- One consumer identity per attempt: a second open subscription under it
     -- is refused by the owner, which leaves polling as the only source.
+    local kinds: {string} = {}
+    if session.plan.exchange then kinds[#kinds + 1] = "approval.transition" end
+    if session.plan.policy.inbox_push then kinds[#kinds + 1] = "message" end
     local created, code, message = hints_call(io, M.DELIVERY .. ":subscribe", {thread_id = request.thread_id, idempotency_key = key, consumer_id = "carrier:" .. request.attempt_id,
-        after_sequence = 0, filter = {kinds = {"approval.transition"}}, durability = "durable"})
+        after_sequence = 0, filter = {kinds = kinds}, durability = "durable"})
     if not created then
         if code == "CONFLICT" then return nil, nil end
         return nil, tostring(code) .. ": " .. tostring(message)
@@ -1269,6 +1281,85 @@ function M.close_hints(io: IO, session: Session)
     local request = session.plan.request
     hints_call(io, M.DELIVERY .. ":unsubscribe", {thread_id = request.thread_id, idempotency_key = "launch:" .. request.attempt_id .. ":hints:close:" .. tostring(session.epoch), subscription_id = subscription})
     session.checkpoint.hint_subscription = nil
+end
+-- The inbox owner returns at most its oldest outstanding item. Rechecking on
+-- every wake and bounded tick also catches a signal lost before registration.
+function M.offer_inbox(io: IO, session: Session): (Offer?, string?)
+    if not session.plan.policy.inbox_push then return nil, nil end
+    local request = session.plan.request
+    local value, err = must(io, M.THREADS .. ":inbox_offer", {thread_id = request.thread_id, action_id = request.action_id,
+        attempt_id = request.attempt_id, carrier_epoch = session.epoch})
+    if err then return nil, err end
+    local item = bounds.object(value)
+    if not item then return nil, "inbox offer is not an object" end
+    if item.empty == true then return nil, nil end
+    local record_id, digest, message_id = bounds.id(item.record_id), bounds.id(item.payload_digest), bounds.id(item.message_id)
+    local sequence = bounds.integer(item.inbox_sequence)
+    local offer_count = bounds.integer(item.offer_count)
+    local sender_action, sender_thread, sender_node = bounds.id(item.sender_action_id), bounds.id(item.sender_thread_id), bounds.id(item.sender_node_id)
+    local content = bounds.object(item.content)
+    local message_kind = bounds.member(item.message_kind, {"request", "reply"})
+    local state = bounds.member(item.state, {"offered", "transport_accepted"})
+    local in_reply_to: Object? = nil
+    if item.in_reply_to ~= nil then
+        local reference = bounds.object(item.in_reply_to)
+        if not reference or not bounds.id(reference.thread_id) or not bounds.id(reference.record_id) then return nil, "inbox reply reference is malformed" end
+        in_reply_to = {thread_id = reference.thread_id, record_id = reference.record_id}
+    end
+    if not record_id or not digest or #digest ~= 64 or not digest:match("^%x+$") or not message_id or not sequence or sequence < 1 or not offer_count or offer_count < 1 or not sender_action or not sender_thread or not sender_node or not content or not message_kind or not state
+        or type(item.dispatch) ~= "boolean" then return nil, "inbox offer is malformed" end
+    return {thread_id = request.thread_id, action_id = request.action_id, record_id = record_id :: string, inbox_sequence = sequence :: integer,
+        payload_digest = digest :: string, message_id = message_id :: string, message_kind = message_kind :: string, sender_action_id = sender_action :: string,
+        sender_thread_id = sender_thread :: string, sender_node_id = sender_node :: string, content = content, in_reply_to = in_reply_to, state = state :: string, dispatch = item.dispatch :: boolean, offer_count = offer_count :: integer}, nil
+end
+function M.push_line(item: Offer): (string?, string?)
+    local context: Object = {thread_id = item.thread_id, action_id = item.action_id, record_id = item.record_id, inbox_sequence = item.inbox_sequence,
+        offer_count = item.offer_count, payload_digest = item.payload_digest,
+        message_id = item.message_id, message_kind = item.message_kind, sender_action_id = item.sender_action_id,
+        sender_thread_id = item.sender_thread_id, sender_node_id = item.sender_node_id, content = item.content}
+    if item.in_reply_to then context.in_reply_to = item.in_reply_to end
+    local encoded, encode_error = canonical.encode(context)
+    if not encoded then return nil, encode_error end
+    local prompt = "Bee action inbox item. Handle this record once. Use session_ack with inbox_sequence, or session_reply to the sender with in_reply_to naming this thread_id and record_id. " .. encoded
+    local line, line_error = canonical.encode({type = "user", message = {role = "user", content = prompt}})
+    if not line then return nil, line_error end
+    if #line + 1 > checkpoint.MAX_PENDING_WRITE_BYTES then return nil, "inbox item exceeds the controller input bound" end
+    return line .. "\n", nil
+end
+-- A second Claude turn is admitted before its user line is written. The
+-- previous terminal remains in the checkpoint while idle, so recovery can
+-- distinguish a completed turn from one awaiting its result.
+function M.begin_push_turn(io: IO, session: Session, item: Offer): (string?, string?)
+    if not session.plan.policy.inbox_push or not item.dispatch then return nil, "inbox item is not dispatchable" end
+    local turn_prefix = "turn:" .. session.plan.request.attempt_id .. ":inbox:" .. tostring(item.inbox_sequence) .. ":"
+    if session.turn_open and session.turn_id:sub(1, #turn_prefix) ~= turn_prefix then
+        return nil, "a different turn is still open"
+    end
+    if session.exit or not session.runner then return nil, "inbox controller has no live runner" end
+    local line, line_error = M.push_line(item)
+    if not line then return nil, line_error end
+    if not session.turn_open then
+        session.terminal = nil
+        session.checkpoint.terminal = nil
+        session.stream_ended = false
+        session.checkpoint.stream_ended = nil
+        session.normalizer = nil
+        session.checkpoint.normalizer_state = nil
+        local cleared, clear_error = M.commit(io, session, {})
+        if not cleared then return nil, clear_error end
+        local turn_id = turn_prefix .. tostring(item.offer_count)
+        local request = session.plan.request
+        local _, turn_error = thread_call(io, request, "request_turn", {action_id = request.action_id, attempt_id = request.attempt_id,
+            turn_id = turn_id, carrier_epoch = session.epoch,
+            turn = {input_message_ids = {item.message_id}, input = {text = line}, delivery_ids = {}}}, "inbox-turn:" .. item.record_id .. ":" .. tostring(item.offer_count))
+        if turn_error then return nil, turn_error end
+        session.turn_id = turn_id
+        session.turn_open = true
+    end
+    local write_id = "inbox:" .. item.record_id .. ":" .. tostring(item.inbox_sequence) .. ":" .. tostring(session.epoch)
+    local written, write_error = M.write(io, session, write_id, line)
+    if not written then return nil, write_error end
+    return write_id, nil
 end
 -- advance_permissions: drives every exchange forward from what the
 -- checkpoint holds. Polling the owner happens only on the poll tick.
@@ -1508,9 +1599,32 @@ local function settle_write(io: IO, session: Session, write_id: string, phase: s
     step(io, "write_settled")
     return true, nil
 end
+local function accept_push_write(io: IO, session: Session, write_id: string): (boolean, string?)
+    if write_id:sub(1, 6) ~= "inbox:" then return true, nil end
+    local record_id, sequence_text = write_id:match("^inbox:(.+):(%d+):%d+$")
+    local sequence = bounds.integer(sequence_text and tonumber(sequence_text))
+    if not record_id or not sequence or sequence < 1 then return false, "malformed inbox write id" end
+    local request = session.plan.request
+    local page, read_error = must(io, M.THREADS .. ":inbox_list", {thread_id = request.thread_id, action_id = request.action_id,
+        after_sequence = (sequence :: integer) - 1, limit = 1})
+    if read_error then return false, read_error end
+    local view = bounds.object(page)
+    local items = view and view.items
+    local item: Object? = nil
+    if type(items) == "table" then item = bounds.object((items :: {unknown})[1]) end
+    if not item or item.record_id ~= record_id or item.inbox_sequence ~= sequence then return false, "inbox write no longer names its record" end
+    if item.state == "acknowledged" or item.state == "replied" then return true, nil end
+    local _, err = must(io, M.THREADS .. ":inbox_transport", {thread_id = request.thread_id, action_id = request.action_id,
+        attempt_id = request.attempt_id, carrier_epoch = session.epoch, inbox_sequence = sequence, record_id = record_id})
+    return err == nil, err
+end
 function M.on_write_ack(io: IO, session: Session, sender: string, message: placement_protocol.InputAck): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end
     if not pending_write(session, message.write_id) then return true, nil end
+    if message.accepted then
+        local accepted, accept_error = accept_push_write(io, session, message.write_id)
+        if not accepted then return false, accept_error end
+    end
     local phase = message.accepted and "accepted" or "uncertain"
     return settle_write(io, session, message.write_id, phase, message.reason)
 end
@@ -1535,7 +1649,11 @@ function M.on_write_status(io: IO, session: Session, sender: string, message: pl
     if not from_runner(session, sender, message.generation) then return true, nil end
     local found = pending_write(session, message.write_id)
     if not found then return true, nil end
-    if message.status == "accepted" then return settle_write(io, session, message.write_id, "accepted", nil) end
+    if message.status == "accepted" then
+        local accepted, accept_error = accept_push_write(io, session, message.write_id)
+        if not accepted then return false, accept_error end
+        return settle_write(io, session, message.write_id, "accepted", nil)
+    end
     if found.dispatched then return true, nil end
     io.send(session.runner :: string, placement_protocol.TOPIC_INPUT, {write_id = found.write_id, generation = session.epoch, data = found.data})
     found.dispatched = true
@@ -1563,6 +1681,25 @@ function M.close_exchanges(io: IO, session: Session, drain_elapsed: boolean): (b
             if not closed then return false, close_error end
         end
     end
+    return true, nil
+end
+function M.finish_push_turn(io: IO, session: Session): (boolean, string?)
+    if not session.plan.policy.inbox_push or not session.turn_open or not session.terminal or session.stream_ended or session.exit then return false, nil end
+    if #session.checkpoint.pending_writes > 0 then return false, nil end
+    local result = session.terminal
+    if result.outcome ~= "succeeded" then return false, nil end
+    local closed, close_error = M.close_exchanges(io, session, false)
+    if close_error then return false, close_error end
+    if not closed then return false, nil end
+    local request = session.plan.request
+    local _, hooks_error = M.drain_hooks(io, session)
+    if hooks_error then return false, hooks_error end
+    local _, end_error = thread_call(io, request, "end_turn", {action_id = request.action_id, attempt_id = request.attempt_id,
+        turn_id = session.turn_id, carrier_epoch = session.epoch,
+        turn_end = {outcome = result.outcome, answer_message_ids = {}, evidence_refs = {}, usage = result.usage}}, "inbox-end:" .. session.turn_id)
+    if end_error then return false, end_error end
+    session.turn_open = false
+    step(io, "push_turn_ended")
     return true, nil
 end
 function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Settlement?, string?)

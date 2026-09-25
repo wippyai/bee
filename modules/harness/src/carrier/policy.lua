@@ -29,6 +29,7 @@ type Policy = {
     ref: string,
     digest: string,
     permission_exchange: PermissionExchange?,
+    inbox_push: boolean?,
     provider_ref: string?,
     instructions: string?,
     instruction_builder: configuration.InstructionBuilder?,
@@ -139,7 +140,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_launch", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "inbox_push", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_launch", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -171,6 +172,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     end
     local allow_host_home = data.allow_host_home == true
     local fixture = data.fixture == true
+    if data.inbox_push ~= nil and type(data.inbox_push) ~= "boolean" then return nil, ref .. ": inbox_push must be a boolean" end
     if observation == "eof_gated" and not fixture then return nil, ref .. ": eof_gated execution is permitted only in a fixture policy" end
     local _, profile_options_error = preferences.decode_profile_options(data.profile_options)
     if profile_options_error then return nil, ref .. ": " .. profile_options_error end
@@ -324,7 +326,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not declared or declared < 1000 or declared > 86400000 then return nil, ref .. ": gateway_ttl_ms must be between 1000 and 86400000" end
         gateway_ttl_ms = declared
     end
-    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
+    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, inbox_push = data.inbox_push == true, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
         start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_launch = agent_launch, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end

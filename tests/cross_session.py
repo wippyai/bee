@@ -26,6 +26,8 @@ TEST = "cross_session_acceptance_test"
 ACCEPTANCES = (
     "wakes a waiting session with a peer's message and tells it when the peer's turn ends",
     "delivers and replies between independent window actors without thread membership",
+    "queues a busy Claude inbox and pushes its identified record between turns",
+    "recovers an ambiguous Claude inbox write under a new carrier epoch",
 )
 
 
@@ -63,7 +65,7 @@ def main():
         for acceptance in ACCEPTANCES:
             if not re.search(r"^\s+o .*" + re.escape(acceptance), out, re.M):
                 sys.exit("the cross-session acceptance did not pass: " + acceptance)
-        print("Cross-session threads (fixture providers, no account): shared-owner notice and independent-action inbox reply passed")
+        print("Cross-session threads (fixture providers, no account): shared-owner notice, independent-action reply and Claude push recovery passed")
 
 
 if __name__ == "__main__":

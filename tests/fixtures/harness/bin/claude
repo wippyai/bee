@@ -136,6 +136,18 @@ if [ -n "${BEE_FIXTURE_LATE_STDERR:-}" ]; then
   printf '%s\n' "late:stderr" >&2
 fi
 if [ -n "$stream_json" ]; then
+  if [ -n "${BEE_FIXTURE_PUSH:-}" ]; then
+    if IFS= read -r -t 20 line; then
+      escaped="${line//\\/\\\\}"
+      escaped="${escaped//\"/\\\"}"
+      printf '{"type":"system","subtype":"informational","level":"info","content":"push:%s"}\n' "$escaped"
+      printf '{"type":"result","subtype":"success","is_error":false,"result":"pushed","session_id":"fixture","num_turns":1}\n'
+      if [ -n "${BEE_FIXTURE_PUSH_EXIT:-}" ]; then exit 0; fi
+    else
+      printf '{"type":"result","subtype":"error","is_error":true,"terminal_reason":"push_timeout","result":"no push input","session_id":"fixture"}\n'
+      exit 2
+    fi
+  fi
   # A stream-json session ends when stdin closes, as the real executable's does.
   while IFS= read -r _; do :; done
 fi

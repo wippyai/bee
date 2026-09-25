@@ -204,6 +204,8 @@ entries:
     policy: bee.harness.carrier:policy
     placement_types: bee.placement:types
     classify: bee.harness.catalog:classify
+    checkpoint: bee.harness.carrier:checkpoint
+    stream_json: bee.driver.transport:stream_json
 - name: placement_fixture
   kind: library.lua
   source: file://placement_fixture.lua
@@ -428,6 +430,7 @@ entries:
     placement_fixture: bee.harness.catalog:placement_fixture
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
+    sends: bee.threads.service:sends
 - name: workspace_catalog_call_policy
   kind: security.policy
   meta: {type: test_support}
@@ -474,6 +477,26 @@ entries:
     prepare_options: {sandbox: read-only}
     provider_ref: bee.harness.catalog:codex_fixture_provider
     gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, session_directory, session_send, session_inbox, session_ack, session_reply]
+- name: cross_session_claude_push_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Fenced Claude stream-json inbox controller with a scripted second user turn
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    inbox_push: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [session_inbox, session_ack, session_reply]
 - name: gateway_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua

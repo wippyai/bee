@@ -131,8 +131,10 @@ narrower exact-address policy. session_inbox pages the bound
 action's items; session_ack marks one item acknowledged; session_reply commits
 a reply to the original sender's address with an explicit cross-thread
 `in_reply_to` reference and outcome. These tools commit durable records and
-receipts. They do not inject prompts into a running driver, type into a PTY or
-forward across Hive.
+receipts. A fixture-enabled Claude structured carrier can insert an identified
+item between turns through its fenced stdin controller. Shipped production
+policies leave that path disabled pending executable acceptance. The gateway
+does not type into a PTY or forward inbox messages across Hive.
 
 delivery and publish take their destination `workspace_id` from the binding:
 an omitted `workspace_id` is the binding's own workspace, a request naming any

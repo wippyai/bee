@@ -5,6 +5,8 @@ local driver_types = require("driver_types")
 local policy = require("policy")
 local placement_types = require("placement_types")
 local classify = require("classify")
+local checkpoint = require("checkpoint")
+local stream_json = require("stream_json")
 local function plan(mode: string, protocol: string): machine.Plan
     local launch: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}
     local policy_value: policy.Policy = {ref = "policy", digest = "policy-digest", prepare_options = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated",
@@ -40,6 +42,108 @@ local function plan(mode: string, protocol: string): machine.Plan
 end
 local function define_tests()
     test.describe("Carrier transport ownership", function()
+        test.it("queues an inbox offer during a turn and writes its identified line only after the turn ends", function()
+            local selected = plan("session", "stream-json")
+            selected.binding.driver_id = "claude"
+            selected.policy.inbox_push = true
+            selected.launch.session_end = "stdin_close"
+            local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "session", profile_digest = "profile-digest"}, 1)
+            local terminal: driver_types.Terminal = {outcome = "succeeded", answer = "first", resume_ref = "provider-session"}
+            local session: machine.Session = {plan = selected, turn_id = "turn:attempt:1", turn_open = true, epoch = 1, revision = 0,
+                checkpoint = point, decoder = stream_json.new(machine.MAX_FRAME_BYTES), normalizer = {terminal = terminal}, terminal = terminal,
+                stream_ended = false, exit = nil, eof = {stdout = false, stderr = false}, runner = "runner", settled = nil, recovered = false,
+                output = "open", pending_hint = nil, placement_evidence = 0, stderr_sequence = 0, last_sequence = {stdout = 0, stderr = 0}, held_from = nil}
+            local offer: machine.Offer = {thread_id = "thread", action_id = "action", record_id = "record-1", inbox_sequence = 1,
+                payload_digest = string.rep("a", 64), message_id = "message-1", message_kind = "request", sender_action_id = "sender",
+                sender_thread_id = "sender-thread", sender_node_id = "local-node", content = {text = "hello"}, state = "offered", dispatch = true, offer_count = 1}
+            local calls: {string} = {}
+            local writes: {string} = {}
+            local inbox_state = "offered"
+            local io: machine.IO = {call = function(target: string, request: unknown): (unknown, string?)
+                    calls[#calls + 1] = target
+                    if target == "bee.threads.carrier:commit" then return {ok = true, value = {checkpoint_revision = session.revision + 1}}, nil end
+                    if target == "bee.threads.service:inbox_offer" then return {ok = true, value = offer}, nil end
+                    if target == "bee.threads.service:inbox_list" then return {ok = true, value = {items = {{record_id = offer.record_id, inbox_sequence = offer.inbox_sequence, state = inbox_state}}}}, nil end
+                    return {ok = true, value = {}}, nil
+                end,
+                send = function(target: string, topic: string, value: unknown)
+                    test.eq(target, "runner")
+                    test.eq(topic, "bee.placement.input")
+                    writes[#writes + 1] = (value :: {[string]: unknown}).data :: string
+                end,
+                self_pid = function(): string return "carrier" end,
+                now_ms = function(): integer return 1 end,
+                key = function(): string return "key" end}
+            local offered, offer_error = machine.offer_inbox(io, session)
+            test.is_nil(offer_error)
+            test.eq((offered :: machine.Offer).record_id, "record-1")
+            local busy, busy_error = machine.begin_push_turn(io, session, offer)
+            test.is_nil(busy)
+            test.eq(busy_error, "a different turn is still open")
+            test.eq(#writes, 0)
+            local ended, end_error = machine.finish_push_turn(io, session)
+            test.is_nil(end_error)
+            test.is_true(ended)
+            local write_id, write_error = machine.begin_push_turn(io, session, offer)
+            test.is_nil(write_error)
+            test.eq(write_id, "inbox:record-1:1:1")
+            test.eq(#writes, 1)
+            test.is_true(writes[1]:find("record-1", 1, true) ~= nil)
+            test.is_true(writes[1]:find(offer.payload_digest, 1, true) ~= nil)
+            test.eq(session.turn_id, "turn:attempt:inbox:1:1")
+            test.is_true(session.turn_open)
+            test.eq(calls[#calls - 1], "bee.threads.service:request_turn")
+            test.eq(calls[#calls], "bee.threads.carrier:commit")
+            local before_stale = #calls
+            local stale, stale_error = machine.on_write_ack(io, session, "runner", {attempt_id = "attempt", write_id = write_id :: string, generation = 0, accepted = true})
+            test.is_true(stale)
+            test.is_nil(stale_error)
+            test.eq(#calls, before_stale)
+            local accepted, accepted_error = machine.on_write_ack(io, session, "runner", {attempt_id = "attempt", write_id = write_id :: string, generation = 1, accepted = true})
+            test.is_true(accepted)
+            test.is_nil(accepted_error)
+            test.eq(calls[#calls - 2], "bee.threads.service:inbox_list")
+            test.eq(calls[#calls - 1], "bee.threads.service:inbox_transport")
+            test.eq(calls[#calls], "bee.threads.carrier:commit")
+            test.eq(#session.checkpoint.pending_writes, 0)
+            inbox_state = "acknowledged"
+            table.insert(session.checkpoint.pending_writes, {write_id = write_id :: string, input_digest = string.rep("b", 64), data = writes[1], dispatched = true})
+            local after_agent_ack = #calls
+            local late, late_error = machine.on_write_ack(io, session, "runner", {attempt_id = "attempt", write_id = write_id :: string, generation = 1, accepted = true})
+            test.is_true(late)
+            test.is_nil(late_error)
+            test.eq(#calls, after_agent_ack + 2)
+            test.eq(calls[#calls - 1], "bee.threads.service:inbox_list")
+            test.eq(calls[#calls], "bee.threads.carrier:commit")
+            inbox_state = "offered"
+            -- The recovered runner answers a status query for the old write
+            -- under its new attachment generation. Its original record ID
+            -- is transported before the accepted journal entry is retired.
+            session.epoch = 2
+            session.checkpoint.attachment_generation = 2
+            table.insert(session.checkpoint.pending_writes, {write_id = write_id :: string, input_digest = string.rep("b", 64), data = writes[1], dispatched = true})
+            local recovered, recovered_error = machine.on_write_status(io, session, "runner", {attempt_id = "attempt", write_id = write_id :: string, generation = 2, status = "accepted"})
+            test.is_true(recovered)
+            test.is_nil(recovered_error)
+            test.eq(calls[#calls - 2], "bee.threads.service:inbox_list")
+            test.eq(calls[#calls - 1], "bee.threads.service:inbox_transport")
+            test.eq(calls[#calls], "bee.threads.carrier:commit")
+            test.eq(#session.checkpoint.pending_writes, 0)
+            session.terminal = terminal
+            session.checkpoint.terminal = terminal
+            local completed, complete_error = machine.finish_push_turn(io, session)
+            test.is_true(completed)
+            test.is_nil(complete_error)
+            session.epoch = 3
+            offer.offer_count = 2
+            offer.dispatch = true
+            local redelivered, redelivery_error = machine.begin_push_turn(io, session, offer)
+            test.is_nil(redelivery_error)
+            test.eq(redelivered, "inbox:record-1:1:3")
+            test.eq(session.turn_id, "turn:attempt:inbox:1:2")
+            test.eq(#writes, 2)
+            test.is_true(writes[2]:find("record-1", 1, true) ~= nil)
+        end)
         test.it("refuses a required host file in a private home but allows it in the inherited home", function()
             local launch: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached",
                 required_files = {{variable = "CODEX_HOME", path = "ds-flash.config.toml", default_directory = ".codex"}}}

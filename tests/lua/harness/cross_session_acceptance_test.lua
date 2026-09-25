@@ -16,8 +16,10 @@ local system = require("system")
 local placement_fixture = require("placement_fixture")
 local catalog = require("catalog")
 local policy = require("policy")
+local sends = require("sends")
 local ACTOR = "bee.test.cross_session"
 local WAITER_POLICY = "bee.harness.catalog:cross_session_claude_policy"
+local PUSH_POLICY = "bee.harness.catalog:cross_session_claude_push_policy"
 local SENDER_POLICY = "bee.harness.catalog:cross_session_codex_policy"
 local CODEX_BINDING = "bee.driver.codex:binding"
 local SENTINEL_SOURCE = "bee.harness.catalog:codex_sentinel_key"
@@ -32,7 +34,8 @@ end
 local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy",
     "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.gateway:gateway_manage_policy", "bee.security.gateway:gateway_admit_policy",
     "bee.harness.catalog:codex_credential_client_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy",
-    "bee.harness.catalog:workspace_catalog_call_policy", "bee.security.storage:workspace_catalog_manage_policy"}
+    "bee.harness.catalog:workspace_catalog_call_policy", "bee.security.storage:workspace_catalog_manage_policy",
+    "bee.security.gateway:gateway_session_send_workspace_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -137,10 +140,24 @@ local function session(binding_ref: string, policy_ref: string, thread_id: strin
         resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = environment, working_directory = "project", placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
 end
-local function spawn(request_value: Object): string
-    local pid, err = process.with_context({}):with_actor(principals.actor(tostring(request_value.owner_id), request_value.workspace_id)):with_scope(scope()):spawn_monitored(CARRIER, "bee:workers", request_value, "open", process.pid())
+local function spawn(request_value: Object, mode: string?, crash_after: string?): string
+    local pid, err = process.with_context({}):with_actor(principals.actor(tostring(request_value.owner_id), request_value.workspace_id)):with_scope(scope()):spawn_monitored(CARRIER, "bee:workers", request_value, mode or "open", process.pid(), crash_after)
     if not pid then error("spawn carrier: " .. tostring(err)) end
     return tostring(pid)
+end
+local function await_crash(pid: string)
+    local events = assert(process.events())
+    local deadline = time.after("30s")
+    while true do
+        local selected = channel.select({events:case_receive(), deadline:case_receive()})
+        if not selected.ok or selected.channel == deadline then error("faulted push carrier did not exit") end
+        local event = selected.value
+        if event.kind == process.event.EXIT and tostring(event.from) == pid then
+            local result = event.result or {}
+            if not result.error then error("faulted push carrier did not crash") end
+            return
+        end
+    end
 end
 -- Waits for both carriers; each must settle.
 local function await_all(pids: {[string]: string}): {[string]: Object}
@@ -346,6 +363,143 @@ local function define_tests()
                 if item.kind == "message" and (item.body :: Object).message_id == "inbox-hello" then inbox_records = inbox_records + 1 end
             end
             test.eq(inbox_records, 1)
+        end)
+        test.it("queues a busy Claude inbox and pushes its identified record between turns", function()
+            admit_root()
+            bind_policies()
+            open_gateway()
+            local bin = setting("bee.harness.catalog:fixture_bin", "BEE_FIXTURE_BIN")
+            local entry = assert(registry.get(PUSH_POLICY))
+            local entry_data = entry.data :: Object
+            entry_data.executables = {claude = bin .. "/claude"}
+            apply(entry)
+            local label = fresh("push-ws")
+            local workspace = tostring(call("bee.workspace.catalog:create", {label = label, root_ref = ROOT,
+                subpath = label, create_directory = true}).workspace_id)
+            local target_actor = "bee.test.cross_session.push_target"
+            local target_thread = tostring(call_as(target_actor, "bee.threads.service:create", {thread_id = fresh("push-target-thread"),
+                idempotency_key = fresh("key"), title = "Push target"}, workspace).thread_id)
+            local source_thread = tostring(call_as(ACTOR, "bee.threads.service:create", {thread_id = fresh("push-source-thread"),
+                idempotency_key = fresh("key"), title = "Push source"}, workspace).thread_id)
+            local streams = setting("bee.harness.catalog:fixture_streams", "BEE_FIXTURE_STREAMS")
+            local target = session("bee.driver.claude:binding", PUSH_POLICY, target_thread, workspace,
+                {BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl", BEE_FIXTURE_PUSH = "1",
+                    BEE_FIXTURE_PUSH_EXIT = "1", BEE_FIXTURE_PACE = "0.2"}, target_actor)
+            local source = session(CODEX_BINDING, SENDER_POLICY, source_thread, workspace,
+                {BEE_FIXTURE_STREAM = streams .. "/codex/exec-json-1/plain.jsonl"})
+            source.projections = {codex_projection(workspace, tostring(source.attempt_id))}
+            local pids = {target = spawn(target), source = spawn(source)}
+            wait_for_action(target_thread, tostring(target.action_id), target_actor)
+            wait_for_action(source_thread, tostring(source.action_id), ACTOR)
+            call_as(target_actor, "bee.threads.service:inbox_accept", {thread_id = target_thread, action_id = target.action_id,
+                sender_id = ACTOR, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
+            local native = assert(system.node.id())
+            local content = {text = "push while busy"}
+            local message_id = fresh("message")
+            local sent = call_as(ACTOR, "bee.threads.service:inbox_send", {thread_id = target_thread, target_action_id = target.action_id,
+                sender_thread_id = source_thread, sender_action_id = source.action_id, node_id = native, grant_epoch = 1,
+                idempotency_key = fresh("send"), message_id = message_id, content = content,
+                payload_digest = sends.payload_digest({message_id = message_id, content = content})}, workspace)
+            test.not_nil(sent.record_id)
+            local accepted: Object? = nil
+            for _ = 1, 150 do
+                local page = call_as(target_actor, "bee.threads.service:inbox_list", {thread_id = target_thread,
+                    action_id = target.action_id, after_sequence = 0, limit = 4}, workspace)
+                local item = (page.items :: {Object})[1]
+                if item and item.state == "transport_accepted" then accepted = item; break end
+                time.sleep("100ms")
+            end
+            if not accepted then error("Claude did not accept the pushed inbox transport") end
+            test.eq(accepted.record_id, sent.record_id)
+            test.eq(accepted.payload_digest, sent.payload_digest)
+            local ack = call_as(target_actor, "bee.threads.service:inbox_ack", {thread_id = target_thread,
+                action_id = target.action_id, inbox_sequence = sent.inbox_sequence, idempotency_key = fresh("ack")}, workspace)
+            test.eq(ack.state, "acknowledged")
+            local outcomes = await_all(pids)
+            test.eq((outcomes.target.settlement :: Object).outcome, "succeeded")
+            test.eq((outcomes.source.settlement :: Object).outcome, "succeeded")
+            local first_end, pushed = 0, 0
+            for _, item in ipairs(records_of(target_thread, target_actor)) do
+                if item.kind == "observation" and item.source == "stream" then
+                    local data = (item.body :: Object).data :: Object
+                    if data.type == "turn.signal" and data.phase == "ended" and first_end == 0 then first_end = item.sequence :: integer end
+                    local value = json.encode(item.body)
+                    if value:find("push:", 1, true) and value:find(tostring(sent.record_id), 1, true) then pushed = item.sequence :: integer end
+                end
+            end
+            test.is_true((sent.thread_sequence :: integer) < first_end, "the inbox item was not committed while Claude was busy")
+            test.is_true(first_end > 0 and pushed > first_end, "push was not observed after the initial turn")
+        end)
+        test.it("recovers an ambiguous Claude inbox write under a new carrier epoch", function()
+            admit_root()
+            bind_policies()
+            open_gateway()
+            local bin = setting("bee.harness.catalog:fixture_bin", "BEE_FIXTURE_BIN")
+            local entry = assert(registry.get(PUSH_POLICY))
+            local data = entry.data :: Object
+            data.executables = {claude = bin .. "/claude"}
+            apply(entry)
+            local label = fresh("push-recovery-ws")
+            local workspace = tostring(call("bee.workspace.catalog:create", {label = label, root_ref = ROOT,
+                subpath = label, create_directory = true}).workspace_id)
+            local target_actor = "bee.test.cross_session.push_recovery"
+            local thread_id = tostring(call_as(target_actor, "bee.threads.service:create", {thread_id = fresh("push-thread"),
+                idempotency_key = fresh("key"), title = "Push recovery"}, workspace).thread_id)
+            local source_thread = tostring(call_as(ACTOR, "bee.threads.service:create", {thread_id = fresh("source-thread"),
+                idempotency_key = fresh("key"), title = "Push source"}, workspace).thread_id)
+            local source_action = fresh("source-action")
+            call_as(ACTOR, "bee.threads.service:admit_action", {thread_id = source_thread, action_id = source_action,
+                idempotency_key = fresh("admit"), admitted = {request_id = fresh("source-request"), principal_id = ACTOR,
+                    binding_ref = CODEX_BINDING, binding_digest = "fixture-digest", grant_refs = {}, budget_ref = SENDER_POLICY,
+                    input = {text = "send an inbox item"}}}, workspace)
+            local streams = setting("bee.harness.catalog:fixture_streams", "BEE_FIXTURE_STREAMS")
+            local target = session("bee.driver.claude:binding", PUSH_POLICY, thread_id, workspace,
+                {BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl", BEE_FIXTURE_PUSH = "1",
+                    BEE_FIXTURE_PACE = "0.2"}, target_actor)
+            local first = spawn(target, "open", "write_dispatched")
+            wait_for_action(thread_id, tostring(target.action_id), target_actor)
+            call_as(target_actor, "bee.threads.service:inbox_accept", {thread_id = thread_id, action_id = target.action_id,
+                sender_id = ACTOR, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
+            local idle = false
+            for _ = 1, 100 do
+                for _, item in ipairs(records_of(thread_id, target_actor)) do
+                    if item.kind == "observation" and item.source == "stream" then
+                        local data = (item.body :: Object).data :: Object
+                        if data.type == "turn.signal" and data.phase == "ended" then idle = true end
+                    end
+                end
+                if idle then break end
+                time.sleep("100ms")
+            end
+            test.is_true(idle, "Claude did not reach an idle turn boundary before the inbox send")
+            local message_id = fresh("message")
+            local content = {text = "survive an ambiguous write"}
+            local sent = call_as(ACTOR, "bee.threads.service:inbox_send", {thread_id = thread_id, target_action_id = target.action_id,
+                sender_thread_id = source_thread, sender_action_id = source_action, node_id = assert(system.node.id()), grant_epoch = 1,
+                idempotency_key = fresh("send"), message_id = message_id, content = content,
+                payload_digest = sends.payload_digest({message_id = message_id, content = content})}, workspace)
+            await_crash(first)
+            local previous = call_as(target_actor, "bee.threads.carrier:checkpoint", {thread_id = thread_id,
+                attempt_id = target.attempt_id}, workspace)
+            local replacement = spawn(target, "resume")
+            local accepted: Object? = nil
+            for _ = 1, 150 do
+                local page = call_as(target_actor, "bee.threads.service:inbox_list", {thread_id = thread_id,
+                    action_id = target.action_id, after_sequence = 0, limit = 1}, workspace)
+                local item = (page.items :: {Object})[1]
+                if item and item.state == "transport_accepted" then accepted = item; break end
+                time.sleep("100ms")
+            end
+            if not accepted then error("replacement did not recover the accepted inbox write") end
+            test.eq(accepted.record_id, sent.record_id)
+            local current = call_as(target_actor, "bee.threads.carrier:checkpoint", {thread_id = thread_id,
+                attempt_id = target.attempt_id}, workspace)
+            test.is_true((current.carrier_epoch :: integer) > (previous.carrier_epoch :: integer))
+            call_as(target_actor, "bee.threads.service:inbox_ack", {thread_id = thread_id, action_id = target.action_id,
+                inbox_sequence = sent.inbox_sequence, idempotency_key = fresh("ack")}, workspace)
+            call_as(target_actor, "bee.placement.native:close_stdin", {attempt_id = target.attempt_id}, workspace)
+            local result = await_all({target = replacement})
+            test.eq((result.target.settlement :: Object).outcome, "succeeded")
         end)
     end)
 end

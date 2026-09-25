@@ -174,8 +174,10 @@ the current epoch, the recipient's acceptance, and the caller's host-granted
 `<workspace_id>/<node_id>/<action_id>` resource. The owner checks these facts,
 the local node, the source action's admitted principal, both threads'
 workspace, and inbox capacity inside the write transaction. A stale epoch is
-`CONFLICT`; lack of a grant or acceptance is `DENIED`. Host policy selection
-grants no send address by default.
+`CONFLICT`; lack of a grant or acceptance is `DENIED`. The bundled host selects
+a same-workspace send policy for managed agents. Another host may select the
+deny policy or a narrower address policy. The destination owner checks the
+authenticated workspace and recipient acceptance on every send.
 
 The owner assigns a record ID and stores the SHA-256 digest of the canonical
 `{message_id, content}` payload with each item. Retrying the same actor,
@@ -192,9 +194,16 @@ Transport acceptance does not claim delivery to a running model.
 the referenced request `replied` in the same local transaction. Its explicit
 `in_reply_to` points to the request record on the other thread; the owner
 verifies the two admitted actions and the request before accepting it. Ordinary
-`record` replies still settle only same-thread recipient obligations. There is
-The owner wakes the thread waiter on an inbox commit. Driver push and Hive
-forwarding are separate controller and transport steps.
+`record` replies still settle only same-thread recipient obligations.
+
+The owner wakes the thread waiter on an inbox commit. A fixture-enabled
+Claude structured carrier checks the oldest item on wake and at a bounded
+poll interval, then writes its identified stream-json user message between
+turns. Its write journal and transport receipt survive carrier replacement;
+acknowledgment still requires the agent's own `inbox_ack` or reply. Shipped
+production launch policies do not enable this push path pending executable
+acceptance. Other structured drivers and PTY windows currently need an
+explicit `session_inbox` call; Hive forwarding remains separate.
 
 `inbox_describe` returns only an action address, current grant epoch, attempt
 state and latest inbox delivery state. A caller may describe another action

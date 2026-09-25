@@ -116,9 +116,9 @@ def application_identity(folder):
 def configure_destination(project, workspace_id=None, source_node="node-1"):
     """Install the destination's local policy in its source composition."""
     if workspace_id is not None:
-        governance_path = project / "src/governance/_index.yaml"
+        governance_path = project / "src/_index.yaml"
         governance = yaml.safe_load(governance_path.read_text())
-        profiles = next(item for item in governance["entries"] if item["name"] == "activation_profiles")
+        profiles = next(item for item in governance["entries"] if item["name"] == "governance_activation_profiles")
         profiles["data"] = {"profiles": [{
             "workspace_id": workspace_id, "source_node": source_node,
             "source_workspace": "agent-app-source", "component": "bee.agent_app_demo/app",

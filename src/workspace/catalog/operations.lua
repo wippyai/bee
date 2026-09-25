@@ -6,7 +6,7 @@ local funcs = require("funcs")
 local security = require("security")
 local protocol = require("protocol")
 
-local SCOPE = "bee:workspace_catalog_scope"
+local SCOPE = "bee.security.storage:workspace_catalog_scope"
 local BACKEND = "bee.workspace.catalog:backend"
 
 local function run(operation: string, value: unknown): protocol.Reply

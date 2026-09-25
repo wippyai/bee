@@ -139,6 +139,9 @@ entries:
     migration_effect: bee.governance.binding:migration_effect
     migration_runner: bee.hub.binding:migration_runner
     activation_profiles: bee.governance:activation_profile_decoder
+    capability_grants: bee.governance:capability_grants
+    capability_catalog: bee.governance:capability_catalog
+    workspace_applications: bee.governance:workspace_applications
     preflight: bee.governance:preflight
 - name: destination_backend_call
   kind: function.lua

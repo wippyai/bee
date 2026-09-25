@@ -13,7 +13,8 @@ type Policy = {node_id: string, policy_digest: string, packages: {[string]: bool
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
     database_bindings: {[string]: Object}?, migration_barrier: boolean, applications: {Object}?,
-    workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?}
+    workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?,
+    workspace_application: boolean?, base_policy_digest: string?}
 type Captured = {revision: integer, entries: {Entry}, overlay_ids: {[string]: boolean}?,
     owner: (Entry) -> (string?, string?)}
 type Facts = {candidate: Object, context: Object}
@@ -209,6 +210,46 @@ local function define_tests()
             test.is_nil(candidate)
             test.is_nil(context)
             test.is_true(tostring(err):find("selected overlay", 1, true) ~= nil)
+        end)
+
+        test.it("projects a requested thread grant before its atomic install", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                base_policy_digest = SHA, workspace_application = true,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["process.lua"] = true, ["ns.requirement"] = true}, databases = {},
+                grants = {}, modules = {}, applied = {}, migration_barrier = false,
+                workspace_id = "workspace-destination", overlay_owner = "bee.apps:workspace-destination",
+                source_node = "node-source", source_workspace = "author/app",
+                applications = {{definition_id = "private.app:main",
+                    policies = {"bee:ordinary-policy"}, thread_access = "none"}}}
+            local deps, spec = fixture(policy)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
+                policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
+                data = {},
+                registry = {owner = "bee/host"}}
+            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+                meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
+                data = {revision = 1, never = {"exec"}, capabilities = {{id = "threads.read",
+                    revision = 1, confirm = "standard", parameters = {scope = "owned_scope"},
+                    text = "Read owned threads", policies = {{operation = "threads.read",
+                        resource = "threads", scope = {scope = "$scope"}}}, resources = {}}}}}
+            changes(spec, {{id = "private.app:main", kind = "process.lua",
+                meta = {type = "bee.application"}, data = {source = "return true"}},
+                {id = "private.app:threads", kind = "ns.requirement",
+                    meta = {value_kind = "security.policy", capability = "threads.read",
+                        parameters = {scope = "owned"}, reason = "Show threads"},
+                    data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}})
+            local facts = resolve(deps, spec)
+            local proposal = facts.context.capability_proposal :: Object
+            test.eq(#(proposal.policies :: {unknown}), 1)
+            local binding = ((facts.context.application_admission :: Object).record :: Object).bindings :: {Object}
+            test.eq(#(binding[1].policies :: {unknown}), 2)
+            test.eq((binding[1].policies :: {string})[1], (proposal.policies :: {Object})[1].id)
+            test.eq((binding[1].policies :: {string})[2], "bee:ordinary-policy")
+            test.is_true((facts.context.grants :: Object)[(proposal.policies :: {Object})[1].id :: string] == true)
+            test.is_true(assert(preflight.check(facts.candidate :: preflight.Candidate,
+                facts.context :: preflight.Context)).ready)
         end)
 
         test.it("keeps unrelated registry edits out of the semantic base", function()

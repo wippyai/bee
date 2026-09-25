@@ -18,8 +18,8 @@ type Object = {[string]: unknown}
 type Result = transaction.Result
 type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
 type Executor = approval.Executor
-type Apply = (string, unknown, unknown?) -> ({[string]: unknown}?, string?)
-type Observe = (string, unknown, unknown?) -> (boolean?, string?)
+type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?)
+type Observe = (string, unknown, unknown?, unknown) -> (boolean?, string?)
 type Config = {plans: plans.Store, activations: activations.Store, resolver: Resolver,
     approvals: Executor, actor_id: string, consumer_id: string, overlay_owner: string,
     approval_policy: string, apply: Apply, matches: Observe, migrations: any}
@@ -138,7 +138,7 @@ end
 local function unchanged(intent: Object, current: Object): Result?
     local fields = {"owner_node", "workspace_id", "source_node", "source_workspace", "version",
         "plan_digest", "artifact_digest", "resolution_digest", "preflight_digest", "migration_work_digest",
-        "application_admission_digest"}
+        "application_admission_digest", "grant_predecessor_digest"}
     for _, field in ipairs(fields) do
         if intent[field] ~= current[field] then
             if field == "resolution_digest" then
@@ -211,13 +211,42 @@ function M.prepare(raw_config: Config, raw: unknown): Result
         plan_digest = facts.plan_digest, plan_revision = facts.plan_revision,
         selection_revision = facts.selection_revision, artifact = facts.artifact,
         resolution = facts.resolution, preflight = facts.preflight,
-        migration_work = facts.migration_work, application_admission = facts.application_admission})
+        migration_work = facts.migration_work, application_admission = facts.application_admission,
+        grant_predecessor_digest = facts.grant_predecessor_digest})
     if not prepared.ok then return prepared end
     local intent = object(prepared.value)
     if not intent then return failure("INTERNAL", "activation store returned no prepared intent") end
     if intent.phase ~= "prepared" then return prepared end
+    local review = object(facts.capability_review)
+    local installed = object(facts.capability_installed)
+    if review and review.requires_approval == false and installed then
+        local prior_digest = bounds.text(installed.record_digest, 64)
+        local prior_approval = bounds.id(installed.approval_id)
+        if not prior_digest or not prior_approval then
+            return failure("CONFLICT", "installed grant cannot authorize reuse")
+        end
+        local bound = activations.call(config.activations, config.actor_id, {operation = "bind_approval",
+            intent_id = intent_id, expected_revision = intent.revision, idempotency_key = bind_key,
+            approval_id = prior_approval, approval_proposal_digest = prior_digest,
+            approval_owner_incarnation = 1, grant_reuse_digest = prior_digest})
+        if not bound.ok then return bound end
+        local linked = object(bound.value)
+        if not linked then return failure("INTERNAL", "grant reuse has no bound intent") end
+        local consume_key = key(prefix, "reuse-start")
+        local record_key = key(prefix, "reuse-record")
+        if not consume_key or not record_key then return failure("INVALID", "activation receipt_key is too long") end
+        local started = activations.call(config.activations, config.actor_id, {operation = "begin_consume",
+            intent_id = intent_id, expected_revision = linked.revision, idempotency_key = consume_key})
+        if not started.ok then return started end
+        local consuming = object(started.value)
+        if not consuming then return failure("INTERNAL", "grant reuse has no consuming intent") end
+        return activations.call(config.activations, config.actor_id, {operation = "record_consumption",
+            intent_id = intent_id, expected_revision = consuming.revision, idempotency_key = record_key,
+            consumer_id = "bee.governance.grant_reuse", proposal_digest = prior_digest,
+            effect_key = consuming.effect_key})
+    end
     local bound, approval_error = approval.request_activation(config.approvals, intent,
-        config.approval_policy, request_key)
+        config.approval_policy, request_key, review)
     if not bound then return failure("APPROVAL", tostring(approval_error)) end
     return activations.call(config.activations, config.actor_id, {operation = "bind_approval",
         intent_id = intent_id, expected_revision = intent.revision, idempotency_key = bind_key,
@@ -299,6 +328,21 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     end
 
     if intent.phase == "consuming" then
+        if intent.grant_reuse_digest ~= nil then
+            local current, current_error = remeasure_authorized(config, intent)
+            if not current then return current_error :: Result end
+            local installed = object(current.capability_installed)
+            if not installed or installed.record_digest ~= intent.grant_reuse_digest
+                or installed.approval_id ~= intent.approval_id then
+                return failure("CONFLICT", "installed grant changed before reuse")
+            end
+            local reuse_key = key(prefix, "reuse-record")
+            if not reuse_key then return failure("INVALID", "activation receipt key is too long") end
+            return activations.call(config.activations, config.actor_id, {operation = "record_consumption",
+                intent_id = intent_id, expected_revision = intent.revision, idempotency_key = reuse_key,
+                consumer_id = "bee.governance.grant_reuse",
+                proposal_digest = installed.record_digest, effect_key = intent.effect_key})
+        end
         -- begin_consume was written only after the last current-selection
         -- check. From here the exact effect may already have happened, so
         -- recovery must replay/reconcile it before consulting newer plans.
@@ -330,8 +374,14 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     end
 
     if intent.phase == "authorized" then
-        local _, measurement_error = remeasure_authorized(config, intent)
-        if measurement_error then return measurement_error end
+        local current, measurement_error = remeasure_authorized(config, intent)
+        if not current then return measurement_error :: Result end
+        if intent.grant_reuse_digest ~= nil then
+            local installed = object(current.capability_installed)
+            if not installed or installed.record_digest ~= intent.grant_reuse_digest then
+                return failure("CONFLICT", "installed grant changed before no-widen activation")
+            end
+        end
         local operation_key = key(prefix, "apply-start")
         if not operation_key then return failure("INVALID", "activation receipt key is too long") end
         return activations.call(config.activations, config.actor_id, {operation = "begin_apply",
@@ -402,12 +452,12 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             if not recorded.ok then return recorded end
             return failure("UNCERTAIN", diagnostics, object(recorded.value))
         end
-        local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission)
+        local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
         if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
         if not matches then
-            local applied, apply_error = config.apply(config.overlay_owner, desired_entries, desired_admission)
+            local applied, apply_error = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
             if not applied then return uncertain(tostring(apply_error)) end
-            local observed, applied_observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission)
+            local observed, applied_observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
             if observed ~= true then
                 return uncertain(observed == nil and tostring(applied_observe_error)
                     or "overlay apply completed without an exact observed match")
@@ -436,10 +486,10 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
         if measurement_error then return measurement_error end
         local desired_entries, desired_admission, desired_error = desired_intent(config, intent)
         if not desired_entries then return desired_error :: Result end
-        local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission)
+        local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
         if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
         if matches then return transaction.success(intent, true) end
-        local restored, restore_error = config.apply(config.overlay_owner, desired_entries, desired_admission)
+        local restored, restore_error = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
         if restored then
             local result: Object = {}
             for field, value in pairs(intent) do result[field] = value end

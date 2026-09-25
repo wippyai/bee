@@ -11,6 +11,21 @@ entries:
   storage: bee.environment:workspace_environment
   variable: BEE_WORKSPACE_APP_BRIEF
   readonly: true
+- name: inspect
+  kind: env.variable
+  storage: bee.environment:workspace_environment
+  variable: BEE_WORKSPACE_APP_INSPECT
+  readonly: true
+- name: grant_evidence
+  kind: fs.directory
+  directory: evidence
+  auto_init: true
+- name: grant_evidence_policy
+  kind: security.policy
+  policy:
+    actions: [fs.get]
+    resources: [bee.workspace_app_probe:grant_evidence]
+    effect: allow
 - name: agent_policy
   kind: registry.entry
   meta:
@@ -83,6 +98,7 @@ entries:
     - funcs.call
     - security.policy.get
     - registry.get
+    - env.get
     - system.read
     - process.monitor
     - process.unmonitor
@@ -144,3 +160,31 @@ entries:
         - bee.security.credentials:credential_materialize_workspace_policy
         - bee.security.gateway:gateway_materialize_policy
         - bee.security.gateway:gateway_supervision_policy
+- name: inspect_grants
+  kind: process.lua
+  source: file://inspect.lua
+  method: main
+  modules: [registry, env, logger, time, fs, json]
+  imports:
+    catalog: bee.applications:catalog
+    workspace_applications: bee.governance:workspace_applications
+    capability_grants: bee.governance:capability_grants
+    capability_catalog: bee.governance:capability_catalog
+  security:
+    policies: [bee.workspace_app_probe:operator_policy, bee.workspace_app_probe:grant_evidence_policy]
+  meta:
+    command:
+      name: workspace-app-grants
+      security:
+        actor: {id: bee.workspace_app.operator}
+        policies: [bee.workspace_app_probe:operator_policy, bee.workspace_app_probe:grant_evidence_policy]
+- name: inspect_grants_service
+  kind: process.service
+  process: bee.workspace_app_probe:inspect_grants
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    restart: {max_attempts: 1}
+    security:
+      actor: {id: bee.workspace_app.operator}
+      policies: [bee.workspace_app_probe:operator_policy, bee.workspace_app_probe:grant_evidence_policy]

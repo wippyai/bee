@@ -152,6 +152,21 @@ local function define_tests()
             artifact_entries[2] = registry_entries[1]
             test.is_nil(admission.project(value))
         end)
+        test.it("measures a host-generated policy in the same atomic overlay", function()
+            local value = projection()
+            local id = "bee.governance.grants:policy." .. DIGEST
+            local binding = (value.bindings :: {{[string]: unknown}})[1]
+            binding.policies = {"bee:ordinary-policy", id}
+            value.overlay_ids = {[id] = true}
+            value.generated_policies = {{id = id, kind = "security.policy",
+                data = {policy = {actions = {"funcs.call"}, resources = {"bee.threads.service:get"},
+                    effect = "allow"}}}}
+            local projected = assert(admission.project(value))
+            test.eq(#projected.record.bindings[1].policies, 2)
+            value.generated_policies = nil
+            test.is_nil(admission.project(value))
+            test.is_true(admission.reserved(id))
+        end)
     end)
 end
 

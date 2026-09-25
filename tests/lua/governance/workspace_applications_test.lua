@@ -4,6 +4,9 @@
 local test = require("test")
 local profiles = require("activation_profiles")
 local naming = require("workspace_applications")
+local grants = require("capability_grants")
+local catalog = require("capability_catalog")
+local registry = require("registry")
 
 local WORKSPACE = string.rep("a", 32)
 local NODE = "node-local"
@@ -70,6 +73,28 @@ local function define_tests()
             test.eq(again.policy_digest, profile.policy_digest)
             local other = assert(profiles.select(config, WORKSPACE, NODE, "notes"))
             test.is_true(other.policy_digest ~= profile.policy_digest)
+        end)
+        test.it("derives the installed application allowance from its host grant record", function()
+            local identity = assert(naming.identity(WORKSPACE, "tally"))
+            local vocabulary = assert(catalog.decode(assert(registry.get("bee:capability_catalog"))))
+            local requested = assert(grants.propose(vocabulary, identity.overlay_owner, identity.definition_id, {{
+                id = "app.tally:threads", expected_kind = "security.policy", targets = {identity.definition_id},
+                capability_request = {capability = "threads.read", parameters = {scope = "owned"},
+                    catalog_revision = vocabulary.revision, template_revision = 1,
+                    target = identity.definition_id, path = ".security.policies +="}}}))
+            local installed = assert(grants.record(identity.overlay_owner, WORKSPACE,
+                identity.definition_id, requested, "approved-1", 1))
+            local configuration = assert(profiles.configuration(configured(), NODE))
+            local selected = assert(profiles.select(configuration, WORKSPACE, NODE, "tally", installed, vocabulary))
+            test.is_true(selected.grants[requested.policies[1].id :: string])
+            local binding = (selected.applications :: {Object})[1]
+            test.eq(#(binding.policies :: {string}), 2)
+            test.eq((binding.policies :: {string})[1], requested.policies[1].id)
+            test.eq((binding.policies :: {string})[2], "bee:ordinary_app_subsystem_boundary")
+            test.eq(binding.thread_access, requested.thread_access)
+            local denied = profiles.select(configuration, WORKSPACE, NODE, "tally",
+                {id = installed.id, kind = installed.kind, meta = installed.meta, data = {digest = "bad"}}, vocabulary)
+            test.is_nil(denied)
         end)
         test.it("grants nothing to another node's overlay or an ineligible name", function()
             local config = assert(profiles.configuration(configured(), NODE))

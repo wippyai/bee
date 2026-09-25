@@ -24,7 +24,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local selected = model.selected_row(state)
     local detail_rows = 0
     if detail and selected and detail.approval_id == selected.approval_id and height >= 12 then
-        detail_rows = math.floor(math.max(6, math.min(height - 8, state.technical and 14 or 8)))
+        detail_rows = math.floor(math.max(6, math.min(height - 8, state.technical and 16 or 14)))
     end
     local list_first = 3
     local list_last = height - 2 - detail_rows
@@ -49,9 +49,12 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local lines: {string} = {
             "Effect: " .. selected.effect .. "  target " .. selected.target,
             "Asked: " .. selected.prompt,
-            "Requester: " .. selected.requester_id .. "  owner " .. selected.owner_node .. "  policy " .. selected.policy,
-            "State: " .. state_label(selected) .. (selected.decider_id and (" by " .. selected.decider_id) or "") .. "  expires " .. selected.expires_at,
         }
+        for _, permission_line in ipairs(model.permission_lines(detail)) do
+            lines[#lines + 1] = permission_line
+        end
+        lines[#lines + 1] = "Requester: " .. selected.requester_id .. "  owner " .. selected.owner_node .. "  policy " .. selected.policy
+        lines[#lines + 1] = "State: " .. state_label(selected) .. (selected.decider_id and (" by " .. selected.decider_id) or "") .. "  expires " .. selected.expires_at
         if state.technical then
             lines[#lines + 1] = "Request " .. selected.approval_id .. "  revision " .. tostring(selected.revision) .. "  incarnation observed " .. tostring(selected.owner_incarnation)
             lines[#lines + 1] = "Digest " .. model.text(detail.proposal_digest, 80) .. "  kind " .. selected.request_kind

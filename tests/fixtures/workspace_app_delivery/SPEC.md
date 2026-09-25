@@ -12,3 +12,6 @@ here for my approval.
   window opens with the saved count.
 - It draws through the shared application frame and follows the Bee
   application style guide.
+- Request the host catalog capability `threads.read` with `scope: owned` using
+  a measured `ns.requirement` targeting `app.tally:app` at
+  `.security.policies +=`. The grant is reviewed during installation.

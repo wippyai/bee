@@ -338,6 +338,21 @@ function M.payload_lines(view: Object): {string}
     end
     return lines
 end
+function M.permission_lines(view: Object): {string}
+    local proposal = object(view.proposal)
+    local payload = object(proposal.payload)
+    local lines: {string} = {}
+    local function append(raw: unknown, prefix: string)
+        if type(raw) ~= "table" then return end
+        for _, value in ipairs(raw :: {unknown}) do
+            if #lines >= M.MAX_PAYLOAD_LINES then break end
+            if type(value) == "string" then lines[#lines + 1] = prefix .. M.text(value, M.LINE_LIMIT) end
+        end
+    end
+    append(payload.permission_changes, "Change: ")
+    append(payload.resolved_capabilities, "Capability: ")
+    return lines
+end
 function M.checkpoint(state: State): string
     return json.encode({selected = state.selected, technical = state.technical}) or "{}"
 end

@@ -8,6 +8,7 @@ local hash = require("hash")
 local bounds = require("bounds")
 local application_admission = require("application_admission")
 local capability_catalog = require("capability_catalog")
+local capability_grants = require("capability_grants")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -22,7 +23,8 @@ type Policy = {node_id: string, policy_digest: string, packages: {[string]: bool
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
     applied_databases: {[string]: unknown}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
     auto_start: boolean,
-    applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?}
+    applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?,
+    workspace_application: boolean?, base_policy_digest: string?}
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?)}
 
@@ -394,12 +396,63 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             requirements[#requirements + 1] = item
         end
     end
+    local capability_proposal: Object? = nil
+    local capability_installed: Object? = nil
+    local capability_review: Object? = nil
+    if policy.workspace_application then
+        local app_binding = policy.applications and object(policy.applications[1]) or nil
+        local app_id = app_binding and bounds.id(app_binding.definition_id) or nil
+        local owner = bounds.id(policy.overlay_owner)
+        local catalog_entry = current_raw["bee:capability_catalog"]
+        local vocabulary, catalog_error = capability_catalog.decode(catalog_entry)
+        if not app_id or not owner or not vocabulary or not sha(policy.base_policy_digest) then
+            return nil, nil, catalog_error or "workspace application capability profile is invalid"
+        end
+        local requested: {Object} = {}
+        for _, item in ipairs(requirements) do
+            if item.capability_request then requested[#requested + 1] = item end
+        end
+        local proposed, proposed_error = capability_grants.propose(vocabulary, owner, app_id, requested)
+        if not proposed then return nil, nil, proposed_error end
+        capability_proposal = proposed
+        local record_id = capability_grants.record_id(owner)
+        local prior = record_id and current_raw[record_id] or nil
+        if prior then
+            local decoded, decoded_error = capability_grants.decode(prior, owner, spec.workspace_id,
+                app_id, vocabulary)
+            if not decoded then return nil, nil, decoded_error end
+            capability_installed = decoded
+        end
+        local compared, compare_error = capability_grants.diff(vocabulary, capability_installed, proposed)
+        local resolved_lines, render_error = capability_catalog.render(vocabulary, proposed.capabilities)
+        if not compared or not resolved_lines then return nil, nil, compare_error or render_error end
+        capability_review = {resolved = resolved_lines, delta = compared.lines,
+            requires_approval = compared.requires_approval or prior == nil}
+        local selected_policies: {unknown} = table.create(16, 0)
+        for _, raw_id in ipairs(app_binding.policies :: {unknown}) do
+            if not capability_grants.reserved(raw_id) then selected_policies[#selected_policies + 1] = raw_id end
+        end
+        for _, generated in ipairs(proposed.policies) do
+            local generated_id = generated.id :: string
+            selected_policies[#selected_policies + 1] = generated_id
+            policy.grants[generated_id] = true
+        end
+        local prospective_binding: Object = {definition_id = app_id :: string,
+            policies = selected_policies, thread_access = proposed.thread_access}
+        policy.applications = {prospective_binding}
+        local prospective_bytes = canonical.encode({base_policy_digest = policy.base_policy_digest,
+            capability_digest = proposed.digest})
+        local prospective_digest = prospective_bytes and hash.sha256(prospective_bytes) or nil
+        if not prospective_digest then return nil, nil, "measure prospective capability policy" end
+        policy.policy_digest = prospective_digest
+    end
     -- The approval base is the external registry state that can affect this
     -- candidate. Keep the complete external context above for preflight and
     -- collision checks, but omit unrelated boot-local definitions and the
     -- selected overlay itself from this semantic digest. A missing relevant
     -- entry remains absent; when present, its measured definition is hashed.
     local relevant_ids: {[string]: boolean} = {}
+    if capability_proposal then relevant_ids["bee:capability_catalog"] = true end
     for _, raw in ipairs(candidate_entries) do
         local item = raw :: Object
         for _, reference in ipairs(item.references :: {string}) do relevant_ids[reference] = true end
@@ -429,7 +482,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     if not base_bytes then return nil, nil, "measure relevant registry base: " .. tostring(base_error or "unknown error") end
     local base_digest, base_measure_error = hash.sha256(base_bytes)
     if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
-    local context, context_error = policy_context(policy, captured, base_digest :: string, current, installed)
+    local context, context_error = policy_context(policy :: Policy, captured, base_digest :: string, current, installed)
     if not context then return nil, nil, context_error end
     if policy.applications then
         if policy.workspace_id ~= spec.workspace_id or policy.source_node ~= source
@@ -440,9 +493,15 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             overlay_owner = policy.overlay_owner, source_node = policy.source_node,
             source_workspace = policy.source_workspace, artifact_digest = spec.artifact_digest,
             bindings = policy.applications, artifact_entries = expected,
-            registry_entries = captured.entries, overlay_ids = captured.overlay_ids})
+            registry_entries = captured.entries, overlay_ids = captured.overlay_ids,
+            generated_policies = capability_proposal and capability_proposal.policies or nil})
         if not projection then return nil, nil, projection_error or "application admission projection is absent" end
         context.application_admission = projection
+    end
+    if capability_proposal then
+        context.capability_proposal = capability_proposal
+        context.capability_installed = capability_installed
+        context.capability_review = capability_review
     end
     return {destination_node = destination, source_node = source,
         base_revision = captured.revision, base_digest = base_digest,

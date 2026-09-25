@@ -165,6 +165,8 @@ entries:
     canonical: bee.sync:canonical
     application_admission: bee.governance:governed_application_admission
     workspace_applications: bee.governance:workspace_applications
+    capability_grants: bee.governance:capability_grants
+    capability_catalog: bee.governance:capability_catalog
 - name: workspace_applications
   kind: library.lua
   source: file://workspace_applications.lua

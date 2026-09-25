@@ -54,6 +54,22 @@ local function define_tests()
             for _, hit in ipairs(frame.hits) do if hit.kind == "approve" then approve = true end end
             test.is_true(approve)
         end)
+        test.it("shows catalog capability and delta on the ordinary approval screen", function()
+            local state = model.new({"ws-1"})
+            local item = request("grant-1", "pending", "Install Tally?")
+            local proposal = item.proposal :: Object
+            proposal.payload = {permission_changes = {"added: Read owned threads"},
+                resolved_capabilities = {"Read owned threads"}}
+            model.apply_inbox(state, "ws-1", {ok = true, error = nil, value = {
+                changes = {{seq = 1, approval_id = "grant-1", revision = 1, request = item}},
+                next_seq = 1, more = false}, replayed = false})
+            model.select(state, "grant-1")
+            model.apply_read(state, "grant-1", {ok = true, error = nil, value = item, replayed = false})
+            local frame = view.draw(100, 24, appearance.defaults(), state, model.rows(state), 0, "")
+            local visible = table.concat(frame.rows, "\n")
+            test.is_true(visible:find("Change: added: Read owned threads", 1, true) ~= nil)
+            test.is_true(visible:find("Capability: Read owned threads", 1, true) ~= nil)
+        end)
         test.it("offers no decision without an opened pending request or while one awaits the owner", function()
             local state = model.new({"ws-1"})
             model.apply_inbox(state, "ws-1", {ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "r1", revision = 1, request = request("r1", "pending", "x")}}, next_seq = 1, more = false}, replayed = false})

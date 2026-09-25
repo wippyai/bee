@@ -91,6 +91,9 @@ local function shifting_resolver(entry: {[string]: unknown}, world: {[string]: u
         if world.application_admission ~= nil then
             (context :: any).application_admission = world.application_admission
         end
+        for _, field in ipairs({"capability_proposal", "capability_installed", "capability_review"}) do
+            if world[field] ~= nil then (context :: any)[field] = world[field] end
+        end
         return candidate, context, nil
     end
     return value :: owner.Resolver
@@ -170,6 +173,96 @@ end
 
 local function define_tests()
     test.describe("Governance activation owner", function()
+        test.it("reuses a contained live grant without requesting a permission decision", function()
+            local workspace = "workspace-contained-grant"
+            local plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", workspace))
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local world: {[string]: unknown} = {revision = 4, digest = SHA,
+                capability_installed = {approval_id = "prior-approval", record_digest = SHA_B},
+                capability_review = {requires_approval = false, resolved = {"Read owned threads"}, delta = {}}}
+            local requests = 0
+            local executor = {}
+            function executor:call(_method: string, _request: unknown): (unknown?, unknown?)
+                requests = requests + 1
+                return nil, "reuse must not call Approvals"
+            end
+            local applied = false
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = shifting_resolver(entry, world), approvals = executor :: owner.Executor,
+                actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                    _intent: unknown): (boolean?, string?) return applied, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                    _intent: unknown): ({[string]: unknown}?, string?)
+                    applied = true
+                    return {changed = true}, nil
+                end}
+            local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-contained", receipt_key = "contained"}))
+            test.eq(prepared.phase, "authorized")
+            test.eq(prepared.approval_id, "prior-approval")
+            test.eq(prepared.grant_predecessor_digest, SHA_B)
+            test.eq(prepared.grant_reuse_digest, SHA_B)
+            test.eq(requests, 0)
+            test.eq(ok(owner.step(config, "intent-contained", "contained")).phase, "applying")
+            test.eq(ok(owner.step(config, "intent-contained", "contained")).outcome, "applied")
+            test.eq(requests, 0)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+        test.it("shows a widening delta and leaves a refused decision unapplied", function()
+            local workspace = "workspace-widened-grant"
+            local plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", workspace))
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local world: {[string]: unknown} = {revision = 4, digest = SHA,
+                capability_installed = {approval_id = "prior-approval", record_digest = SHA_B},
+                capability_review = {requires_approval = true, resolved = {"Read owned threads"},
+                    delta = {"widened: Read owned threads"}}}
+            local seen: {[string]: unknown}? = nil
+            local executor = {}
+            function executor:call(method: string, request: unknown): (unknown?, unknown?)
+                local input = request :: {[string]: unknown}
+                if method == "bee.approvals.binding:request" then
+                    seen = input.proposal :: {[string]: unknown}
+                    return {ok = true, value = {approval_id = "new-approval", proposal = seen,
+                        proposal_digest = assert(hash.sha256(assert(canonical.encode(seen)))),
+                        owner_incarnation = 3}}, nil
+                end
+                return {ok = false, error = {code = "DENIED", message = "person refused widening"}}, nil
+            end
+            local applied = false
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = shifting_resolver(entry, world), approvals = executor :: owner.Executor,
+                actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                    _intent: unknown): (boolean?, string?) return false, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                    _intent: unknown): ({[string]: unknown}?, string?)
+                    applied = true
+                    return {changed = true}, nil
+                end}
+            local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-widened", receipt_key = "widened"}))
+            test.eq(prepared.phase, "approval_bound")
+            local payload = (seen :: {[string]: unknown}).payload :: {[string]: unknown}
+            test.eq((payload.permission_changes :: {string})[1], "widened: Read owned threads")
+            test.eq((payload.resolved_capabilities :: {string})[1], "Read owned threads")
+            test.eq(ok(owner.step(config, "intent-widened", "widened")).phase, "consuming")
+            test.eq(owner.step(config, "intent-widened", "widened").code, "DENIED")
+            test.is_false(applied)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
         test.it("establishes only the approved desired version and ignores a newer selection", function()
             local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-owner")
             if not plans then error(tostring(plan_error)) end
@@ -182,8 +275,8 @@ local function define_tests()
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?): (boolean?, string?) return applied, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?): ({[string]: unknown}?, string?)
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied = true
                     return {changed = true}, nil
                 end}
@@ -219,8 +312,8 @@ local function define_tests()
                 resolver = shifting_resolver(entry, world), approvals = approvals(), actor_id = "host-a",
                 consumer_id = "destination-host", overlay_owner = "bee.governance:test-overlay",
                 approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?): (boolean?, string?) return false, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?): ({[string]: unknown}?, string?) return {changed = true}, nil end}
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return false, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?) return {changed = true}, nil end}
             local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-admission-drift", receipt_key = "admission-drift"}))
             test.eq(prepared.application_admission_digest, (world.application_admission :: {[string]: unknown}).digest)
@@ -246,14 +339,14 @@ local function define_tests()
                     resolver = shifting_resolver(entry, {revision = 4, digest = SHA, application_admission = frozen}),
                     approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                     overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                    matches = function(_overlay: string, entries: unknown, admission_blob: unknown?): (boolean?, string?)
+                    matches = function(_overlay: string, entries: unknown, admission_blob: unknown?, _intent: unknown): (boolean?, string?)
                         test.eq(#(entries :: {unknown}), 1)
                         local blob = admission_blob :: {[string]: unknown}
                         test.eq(blob.bytes, frozen.bytes)
                         test.eq(blob.digest, frozen.digest)
                         return applied, nil
                     end,
-                    apply = function(_overlay: string, entries: unknown, admission_blob: unknown?): ({[string]: unknown}?, string?)
+                    apply = function(_overlay: string, entries: unknown, admission_blob: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                         test.eq(#(entries :: {unknown}), 1)
                         local blob = admission_blob :: {[string]: unknown}
                         test.eq(blob.bytes, frozen.bytes)
@@ -289,8 +382,8 @@ local function define_tests()
                 resolver = shifting_resolver(entry, world), approvals = approvals(), actor_id = "host-a",
                 consumer_id = "destination-host", overlay_owner = "bee.governance:test-overlay",
                 approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?): (boolean?, string?) return false, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?): ({[string]: unknown}?, string?) return {changed = true}, nil end}
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return false, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?) return {changed = true}, nil end}
             local refused = owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-admission-owner", receipt_key = "admission-owner"})
             test.is_false(refused.ok)
@@ -313,8 +406,8 @@ local function define_tests()
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = lossy_approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?): (boolean?, string?) return applied, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?): ({[string]: unknown}?, string?)
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     if fail_restore then return nil, "overlay restore failed" end
                     applied = true
                     if first_apply then first_apply = false; return nil, "overlay reply was lost" end
@@ -359,8 +452,8 @@ local function define_tests()
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?): (boolean?, string?) return applied, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?): ({[string]: unknown}?, string?)
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
                     return {changed = true}, nil
                 end}
@@ -413,8 +506,8 @@ local function define_tests()
                 resolver = shifting_resolver(entry, world),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?): (boolean?, string?) return applied, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?): ({[string]: unknown}?, string?)
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
                     return {changed = true}, nil
                 end}
@@ -455,8 +548,8 @@ local function define_tests()
                 resolver = shifting_resolver(entry, world),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?): (boolean?, string?) return applied, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?): ({[string]: unknown}?, string?)
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
                     world.revision, world.digest = 5, SHA_B
                     return {changed = true}, nil
@@ -495,8 +588,8 @@ local function define_tests()
                     resolver = shifting_resolver(entry, world),
                     approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                     overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                    matches = function(_overlay: string, _entries: unknown, _admission: unknown?): (boolean?, string?) return applied, nil end,
-                    apply = function(_overlay: string, _entries: unknown, _admission: unknown?): ({[string]: unknown}?, string?)
+                    matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                    apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                         applied, apply_count = true, apply_count + 1
                         return {changed = true}, nil
                     end}
@@ -561,8 +654,8 @@ local function define_tests()
                 resolver = migration_resolver(entry, state), approvals = approvals(), actor_id = "host-a",
                 consumer_id = "destination-host", overlay_owner = "bee.governance:migration-overlay",
                 approval_policy = "local-install", migrations = effect,
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?): (boolean?, string?) return state.applied == true, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?): ({[string]: unknown}?, string?)
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return state.applied == true, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     test.is_true(state.executed == true)
                     test.is_true(state.staged ~= true)
                     state.applied = true

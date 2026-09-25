@@ -154,27 +154,58 @@ local function activation(value: unknown): (Object?, string?)
         result.application_admission_digest = hex(item.application_admission_digest)
         if not result.application_admission_digest then return nil, "activation application admission digest is malformed" end
     end
+    if item.grant_predecessor_digest ~= nil then
+        result.grant_predecessor_digest = hex(item.grant_predecessor_digest)
+        if not result.grant_predecessor_digest then return nil, "activation predecessor digest is malformed" end
+    end
     return result, nil
 end
 
-function M.activation_proposal(value: unknown): (Object?, string?)
-    local item, intent_error = activation(value)
-    if not item then return nil, intent_error end
-    return {kind = "operation", ref = "bee.governance:establish-overlay",
-        revision = item.authorization_digest, input_digest = item.authorization_digest,
-        payload = {workspace_id = item.workspace_id, overlay_owner = item.overlay_owner,
-            source_node = item.source_node, source_workspace = item.source_workspace,
-            version = item.version, artifact_digest = item.artifact_digest,
-            resolution_digest = item.resolution_digest, preflight_digest = item.preflight_digest,
-            application_admission_digest = item.application_admission_digest}}, nil
+local function review_lines(raw: unknown): ({string}?, string?)
+    if type(raw) ~= "table" then return nil, "capability review lines are invalid" end
+    local result: {string} = {}
+    if #raw > 24 then return nil, "capability review exceeds its bound" end
+    for index, line in ipairs(raw :: {unknown}) do
+        local shown = bounds.text(line, 512)
+        if not shown or shown == "" or shown:find("%c") then
+            return nil, "capability review line is invalid"
+        end
+        result[index] = shown
+    end
+    return result, nil
 end
 
-function M.request_activation(executor: Executor, value: unknown, policy_raw: unknown, key_raw: unknown): (Object?, string?)
+function M.activation_proposal(value: unknown, review_raw: unknown?): (Object?, string?)
+    local item, intent_error = activation(value)
+    if not item then return nil, intent_error end
+    local payload: Object = {workspace_id = item.workspace_id, overlay_owner = item.overlay_owner,
+        source_node = item.source_node, source_workspace = item.source_workspace,
+        version = item.version, artifact_digest = item.artifact_digest,
+        resolution_digest = item.resolution_digest, preflight_digest = item.preflight_digest,
+        application_admission_digest = item.application_admission_digest}
+    payload.grant_predecessor_digest = item.grant_predecessor_digest
+    if review_raw ~= nil then
+        local review = object(review_raw)
+        local resolved, resolved_error = review and review_lines(review.resolved) or nil
+        local delta, delta_error = review and review_lines(review.delta) or nil
+        if not resolved or not delta or type(review.requires_approval) ~= "boolean" then
+            return nil, resolved_error or delta_error or "capability review is invalid"
+        end
+        payload.resolved_capabilities = resolved
+        payload.permission_changes = delta
+    end
+    return {kind = "operation", ref = "bee.governance:establish-overlay",
+        revision = item.authorization_digest, input_digest = item.authorization_digest,
+        payload = payload}, nil
+end
+
+function M.request_activation(executor: Executor, value: unknown, policy_raw: unknown, key_raw: unknown,
+    review_raw: unknown?): (Object?, string?)
     local item, intent_error = activation(value)
     if not item then return nil, intent_error end
     local policy, key = bounds.id(policy_raw), bounds.id(key_raw)
     if not policy or not key then return nil, "approval policy and idempotency key are required" end
-    local proposal, proposal_error = M.activation_proposal(value)
+    local proposal, proposal_error = M.activation_proposal(value, review_raw)
     if not proposal then return nil, proposal_error end
     local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
         idempotency_key = key, request_kind = "permission", policy = policy, proposal = proposal,

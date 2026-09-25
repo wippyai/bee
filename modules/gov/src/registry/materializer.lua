@@ -7,6 +7,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
 local application_admission = require("application_admission")
+local capability_grants = require("capability_grants")
 
 local M = {}
 
@@ -140,19 +141,76 @@ end
 -- portable artifact.  Measure its bytes separately so adding it does not turn
 -- a valid 512-entry artifact into an invalid 513-entry artifact or alter the
 -- bytes that replication publishes.
-local function composed(raw: unknown, admission_raw: unknown): ({Entry}?, {Entry}?, string?, string?)
+local function composed(raw: unknown, admission_raw: unknown, generated_raw: unknown?): ({Entry}?, {Entry}?, string?, string?)
     local portable, artifact_digest, portable_error = desired(raw)
     if not portable or not artifact_digest then return nil, nil, nil, portable_error end
     local complete: {Entry} = table.create(#portable + (admission_raw == nil and 0 or 1), 0)
     for index, entry in ipairs(portable) do complete[index] = entry end
-    if admission_raw == nil then return portable, complete, artifact_digest, nil end
-    local blob = bounds.object(admission_raw)
-    if not blob or bounds.fields(blob, {"bytes", "digest"}) then
-        return nil, nil, nil, "application admission blob is invalid"
+    if admission_raw ~= nil then
+        local blob = bounds.object(admission_raw)
+        if not blob or bounds.fields(blob, {"bytes", "digest"}) then
+            return nil, nil, nil, "application admission blob is invalid"
+        end
+        local derived, derived_error = application_admission.entry(blob.bytes, blob.digest)
+        if not derived then return nil, nil, nil, derived_error end
+        complete[#complete + 1] = derived
     end
-    local derived, derived_error = application_admission.entry(blob.bytes, blob.digest)
-    if not derived then return nil, nil, nil, derived_error end
-    complete[#complete + 1] = derived
+    if generated_raw ~= nil then
+        local generated = bounds.object(generated_raw)
+        local policies = generated and generated.policies
+        local bindings = generated and generated.bindings
+        local record = generated and bounds.object(generated.record) or nil
+        if not generated or type(policies) ~= "table" or type(bindings) ~= "table"
+            or not record or not capability_grants.reserved(record.id)
+            or record.kind ~= "registry.entry" or #policies ~= #bindings or #policies > 8 then
+            return nil, nil, nil, "generated capability entries are invalid"
+        end
+        local policy_ids: {[string]: boolean} = {}
+        for _, raw_policy in ipairs(policies :: {unknown}) do
+            local policy = bounds.object(raw_policy)
+            local id = policy and bounds.id(policy.id) or nil
+            if not id or not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$")
+                or policy.kind ~= "security.policy" or policy_ids[id] then
+                return nil, nil, nil, "generated capability policy is invalid"
+            end
+            policy_ids[id] = true
+            complete[#complete + 1] = policy
+        end
+        local requirement_ids: {[string]: boolean} = {}
+        for _, raw_binding in ipairs(bindings :: {unknown}) do
+            local binding = bounds.object(raw_binding)
+            local requirement_id = binding and bounds.id(binding.requirement_id) or nil
+            local policy_id = binding and bounds.id(binding.policy_id) or nil
+            if not requirement_id or not policy_id or not policy_ids[policy_id]
+                or requirement_ids[requirement_id] then
+                return nil, nil, nil, "generated requirement binding is invalid"
+            end
+            local found = false
+            for index, entry in ipairs(complete) do
+                if entry.id == requirement_id then
+                    if entry.kind ~= "ns.requirement" then
+                        return nil, nil, nil, "capability binding target is not a requirement"
+                    end
+                    local original = bounds.object(entry.data)
+                    if not original or original.default ~= nil then
+                        return nil, nil, nil, "capability requirement already has a default"
+                    end
+                    local next_data: Entry = {}
+                    for key, value in pairs(original) do next_data[key] = value end
+                    next_data.default = policy_id
+                    local next_entry: Entry = {}
+                    for key, value in pairs(entry) do next_entry[key] = value end
+                    next_entry.data = next_data
+                    complete[index] = next_entry
+                    found = true
+                    break
+                end
+            end
+            if not found then return nil, nil, nil, "generated requirement is absent from artifact" end
+            requirement_ids[requirement_id] = true
+        end
+        complete[#complete + 1] = record
+    end
     return portable, complete, artifact_digest, nil
 end
 
@@ -203,15 +261,15 @@ function M.matches_with(open: Open, owner_raw: unknown, entries_raw: unknown): (
 end
 
 function M.reconcile_composed_with(open: Open, conflict: Conflict, owner_raw: unknown,
-    entries_raw: unknown, admission_raw: unknown): ({[string]: unknown}?, string?)
-    local portable, complete, artifact_digest, compose_error = composed(entries_raw, admission_raw)
+    entries_raw: unknown, admission_raw: unknown, generated_raw: unknown?): ({[string]: unknown}?, string?)
+    local portable, complete, artifact_digest, compose_error = composed(entries_raw, admission_raw, generated_raw)
     if not portable or not complete or not artifact_digest then return nil, compose_error end
     return reconcile_wanted_with(open, conflict, owner_raw, complete, artifact_digest, #portable)
 end
 
 function M.matches_composed_with(open: Open, owner_raw: unknown, entries_raw: unknown,
-    admission_raw: unknown): (boolean?, string?)
-    local _, complete, _, compose_error = composed(entries_raw, admission_raw)
+    admission_raw: unknown, generated_raw: unknown?): (boolean?, string?)
+    local _, complete, _, compose_error = composed(entries_raw, admission_raw, generated_raw)
     if not complete then return nil, compose_error end
     return matches_wanted_with(open, owner_raw, complete)
 end
@@ -236,13 +294,13 @@ function M.matches(owner: unknown, entries: unknown): (boolean?, string?)
 end
 
 function M.reconcile_composed(owner: unknown, entries: unknown,
-    admission_raw: unknown): ({[string]: unknown}?, string?)
-    return M.reconcile_composed_with(open, conflict, owner, entries, admission_raw)
+    admission_raw: unknown, generated_raw: unknown?): ({[string]: unknown}?, string?)
+    return M.reconcile_composed_with(open, conflict, owner, entries, admission_raw, generated_raw)
 end
 
 function M.matches_composed(owner: unknown, entries: unknown,
-    admission_raw: unknown): (boolean?, string?)
-    return M.matches_composed_with(open, owner, entries, admission_raw)
+    admission_raw: unknown, generated_raw: unknown?): (boolean?, string?)
+    return M.matches_composed_with(open, owner, entries, admission_raw, generated_raw)
 end
 
 return M

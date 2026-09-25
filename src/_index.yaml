@@ -166,7 +166,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.governance.activation_profiles
-    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications this node's agents author for their own workspace, applied only after the person approves each version in Approvals; remote artifacts cannot edit this entry
+    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications this node's agents author for their own workspace, with permission approval at first install or widening; remote artifacts cannot edit this entry
   data:
     profiles: []
     workspace_applications:

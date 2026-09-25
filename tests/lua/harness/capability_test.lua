@@ -56,9 +56,12 @@ local function define_tests()
             local _, ttl_big = capability.request(decoded, CONTEXT,
                 {capability = "workspace.files.read", parameters = {subpath = "docs"}, ttl_ms = capability.MAX_TTL_MS + 1, idempotency_key = "req-1"})
             test.eq(ttl_big, "ttl_ms must be between 1 and " .. tostring(capability.MAX_TTL_MS))
-            local _, no_key = capability.request(decoded, CONTEXT,
-                {capability = "workspace.files.read", parameters = {subpath = "docs"}})
-            test.eq(no_key, "idempotency_key is required")
+            local keyless = assert(capability.request(decoded, CONTEXT,
+                {capability = "workspace.files.read", parameters = {subpath = "docs"}}))
+            test.is_nil(keyless.idempotency_key)
+            local _, bad_key = capability.request(decoded, CONTEXT,
+                {capability = "workspace.files.read", parameters = {subpath = "docs"}, idempotency_key = ""})
+            test.eq(bad_key, "idempotency_key is not an identifier")
         end)
         test.it("words the approval in the catalog's own text", function()
             local decoded = fixture()
@@ -74,8 +77,9 @@ local function define_tests()
             local request = assert(capability.request(decoded, CONTEXT,
                 {capability = "workspace.files.read", parameters = {subpath = "docs"}, idempotency_key = "req-1"}))
             local proposal = capability.proposal(request)
-            test.eq(proposal.kind, "capability")
+            test.eq(proposal.kind, "attempt")
             test.eq(proposal.ref, "attempt-1")
+            test.eq(proposal.input_digest, request.parameters_digest)
             local payload = bounds.object(proposal.payload)
             if not payload then error("proposal payload") end
             test.eq(payload.thread_id, "thread-1")

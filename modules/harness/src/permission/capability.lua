@@ -17,9 +17,9 @@ M.DEFAULT_TTL_MS = 3600000
 M.MAX_PARAMETERS_BYTES = 16384
 type Object = {[string]: unknown}
 type Context = {thread_id: string, attempt_id: string, action_id: string}
-type Decoded = {capability: string, parameters: Object, ttl_ms: integer, idempotency_key: string}
+type Decoded = {capability: string, parameters: Object, ttl_ms: integer, idempotency_key: string?}
 type Request = {capability: string, template_revision: integer, parameters: Object, parameters_digest: string,
-    ttl_ms: integer, idempotency_key: string, operations: {Object}, wording: string,
+    ttl_ms: integer, idempotency_key: string?, operations: {Object}, wording: string,
     thread_id: string, attempt_id: string, action_id: string, grant_source: string?, grant_access: string?}
 local function digest_of(value: unknown): (string?, string?)
     local encoded, encode_error = canonical.encode(value)
@@ -58,8 +58,11 @@ function M.decode(raw: unknown): (Decoded?, string?)
         end
         ttl = declared
     end
-    local key = bounds.id(object.idempotency_key)
-    if not key then return nil, "idempotency_key is required" end
+    local key: string? = nil
+    if object.idempotency_key ~= nil then
+        key = bounds.id(object.idempotency_key)
+        if not key then return nil, "idempotency_key is not an identifier" end
+    end
     return {capability = name, parameters = parameters, ttl_ms = ttl, idempotency_key = key}, nil
 end
 local function context_of(raw: unknown): (Context?, string?)
@@ -129,8 +132,9 @@ function M.wording(request: Request): string
     return request.wording
 end
 -- proposal: the approval binds the attempt, the thread, the exact template
--- revision, the measured parameters and the TTL. The epoch is execution
--- fencing, never part of the proposal.
+-- revision, the measured parameters and the TTL. The kind is the approval
+-- owner's attempt proposal; the measured parameters travel as its input
+-- digest. The epoch is execution fencing, never part of the proposal.
 function M.proposal(request: Request): Object
     local payload: Object = {thread_id = request.thread_id, attempt_id = request.attempt_id, action_id = request.action_id,
         capability = request.capability, template_revision = request.template_revision,
@@ -138,7 +142,8 @@ function M.proposal(request: Request): Object
         wording = request.wording}
     local measured = digest_of(payload) or ""
     payload.proposal_digest = measured
-    return {kind = "capability", ref = request.attempt_id, action_id = request.action_id, revision = M.REVISION, payload = payload}
+    return {kind = "attempt", ref = request.attempt_id, action_id = request.action_id, revision = M.REVISION,
+        input_digest = request.parameters_digest, payload = payload}
 end
 local function keyed(prefix: string, request: Request): string
     local sum = hash.sha256(prefix .. "\n" .. request.thread_id .. "\n" .. request.attempt_id

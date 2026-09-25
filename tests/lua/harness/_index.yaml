@@ -1291,6 +1291,26 @@ entries:
     test: wippy.test:test
     capability: bee.harness.permission:capability
     bounds: bee.threads.records:bounds
+- name: elevation_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.binding:open, bee.gateway.binding:admit, bee.gateway.binding:request_capability, bee.gateway.binding:capability_status,
+      bee.threads.service:create, bee.threads.service:get, bee.threads.service:admit_action, bee.threads.service:prepare_attempt,
+      bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.resources.binding:revoke_all, bee.resources.binding:resolve, bee.resources.binding:list]
+    effect: allow
+- name: capability_elevation_test
+  kind: function.lua
+  source: file://capability_elevation_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, registry, time]
+  security:
+    policies: [bee.harness.catalog:elevation_client_policy]
+  imports:
+    test: wippy.test:test
+    principals: bee.test.principals:bound
 - name: permission_carrier_test
   kind: function.lua
   source: file://permission_carrier_test.lua

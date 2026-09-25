@@ -55,7 +55,7 @@ entries:
 - name: gateway_tool_read_policy
   kind: security.policy
   meta:
-    comment: The scope a bound subject runs thread_read, thread_wait and thread_sessions under; membership is still checked by the thread owner
+    comment: The scope a bound subject runs thread_read, thread_wait, thread_sessions and capability elevation under; membership is still checked by the thread owner and elevation writes only through a thread-bound approval
   policy:
     actions:
     - funcs.call
@@ -63,6 +63,8 @@ entries:
     - bee.threads.service:read_after
     - bee.threads.delivery:watch
     - bee.threads.service:get
+    - bee.gateway.binding:request_capability
+    - bee.gateway.binding:capability_status
     effect: allow
 - name: gateway_tool_message_policy
   kind: security.policy

@@ -289,6 +289,9 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
         return reply_result(reply, call_error)
     end
     if tool.name == "thread_read" then request.thread_id = binding.thread_id end
+    if tool.name == "request_capability" or tool.name == "capability_status" then
+        request.binding_id = binding.binding_id
+    end
     if tool.name == "thread_message" then
         request.kind = "message"
         request.thread_id = binding.thread_id
@@ -465,6 +468,8 @@ local function handle(): nil
     elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
     elseif tool.name == "launch_definitions" then arguments, argument_error = mcp.launch_definitions_arguments(parameters, binding.workspace_id)
     elseif tool.name == "capabilities" then arguments, argument_error = mcp.capabilities_arguments(parameters)
+    elseif tool.name == "request_capability" then arguments, argument_error = mcp.capability_arguments(parameters)
+    elseif tool.name == "capability_status" then arguments, argument_error = mcp.capability_status_arguments(parameters)
     elseif tool.name == "overlay" then arguments, argument_error = mcp.overlay_arguments(parameters)
     elseif tool.name == "docs" then arguments, argument_error = mcp.docs_arguments(parameters)
     elseif tool.name == "components" then arguments, argument_error = mcp.components_arguments(parameters)

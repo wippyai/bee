@@ -3,7 +3,7 @@
 local M = {}
 type Object = {[string]: unknown}
 type Template = {id: string, revision: integer, confirm: string, parameters: {[string]: string},
-    text: string, operations: {Object}, resources: {Object}}
+    text: string, policies: {Object}, resources: {Object}}
 type Catalog = {revision: integer, never: {[string]: boolean}, capabilities: {[string]: Template}}
 
 local function object(raw: unknown): Object?
@@ -81,11 +81,11 @@ function M.decode(raw: unknown): (Catalog?, string?)
         local row = object(raw_row)
         local id = row and identity(row.id) or nil
         local params = row and object(row.parameters) or nil
-        local operations = row and list(row.operations, 8) or nil
+        local policies = row and list(row.policies, 8) or nil
         local resources = row and list(row.resources, 8) or nil
-        if not row or not id or never[id] or capabilities[id] or not params or not operations or #operations == 0
+        if not row or not id or never[id] or capabilities[id] or not params or not policies or #policies == 0
             or not resources or not fields(row, {id = true, revision = true, confirm = true,
-                parameters = true, text = true, operations = true, resources = true})
+                parameters = true, text = true, policies = true, resources = true})
             or type(row.revision) ~= "number" or row.revision < 1 or row.revision ~= math.floor(row.revision)
             or (row.confirm ~= "standard" and row.confirm ~= "explicit") or not word(row.text, 512) then
             return nil, "capability template is malformed"
@@ -100,7 +100,7 @@ function M.decode(raw: unknown): (Catalog?, string?)
             parameter_count = parameter_count + 1
         end
         if parameter_count > 8 then return nil, "capability parameter schema exceeds bound" end
-        for _, raw_operation in ipairs(operations) do
+        for _, raw_operation in ipairs(policies) do
             local operation = object(raw_operation)
             if not operation or not fields(operation, {operation = true, resource = true, scope = true})
                 or not identity(operation.operation) or not word(operation.resource, 160)
@@ -122,7 +122,7 @@ function M.decode(raw: unknown): (Catalog?, string?)
         end
         capabilities[id] = {id = id, revision = row.revision :: integer,
             confirm = row.confirm :: string, parameters = schema, text = row.text :: string,
-            operations = operations :: {Object}, resources = resources :: {Object}}
+            policies = policies :: {Object}, resources = resources :: {Object}}
     end
     return {revision = body.revision :: integer, never = never, capabilities = capabilities}, nil
 end
@@ -216,7 +216,7 @@ function M.resolve(catalog: Catalog, id_raw: unknown, raw: unknown): ({Object}?,
     local parameters, error_message = M.normalize(catalog, id_raw, raw)
     if not template or not parameters then return nil, error_message end
     local result: {Object} = {}
-    for _, operation in ipairs(template.operations) do
+    for _, operation in ipairs(template.policies) do
         result[#result + 1] = {capability = id, template_revision = template.revision,
             operation = operation.operation, resource = expand(operation.resource, parameters),
             scope = expand(operation.scope, parameters), parameters = parameters}
@@ -227,6 +227,18 @@ end
 local function printable(value: unknown): string
     if type(value) == "table" then return table.concat(value :: {string}, ", ") end
     return tostring(value)
+end
+local function equal(left: unknown, right: unknown, depth: integer): boolean
+    if type(left) ~= type(right) then return false end
+    if type(left) ~= "table" then return left == right end
+    if depth > 8 then return false end
+    for key, value in pairs(left :: table) do
+        if not equal(value, (right :: table)[key], depth + 1) then return false end
+    end
+    for key in pairs(right :: table) do
+        if (left :: table)[key] == nil then return false end
+    end
+    return true
 end
 function M.render(catalog: Catalog, grants_raw: unknown): ({string}?, string?)
     local grants = list(grants_raw, 128)
@@ -242,12 +254,21 @@ function M.render(catalog: Catalog, grants_raw: unknown): ({string}?, string?)
         if not template or not params or grant.template_revision ~= template.revision then
             return nil, "capability grant meaning is unavailable"
         end
+        local expected, resolve_error = M.resolve(catalog, id, params)
+        if not expected then return nil, resolve_error end
+        local found = false
+        for _, operation in ipairs(expected) do
+            if operation.operation == grant.operation and operation.resource == grant.resource
+                and equal(operation.scope, grant.scope, 0) then found = true; break end
+        end
+        if not found then return nil, "capability grant differs from its host template" end
         local rendered = template.text:gsub("{([a-z_]+)}", function(key: string): string
             return printable(params[key])
         end)
         lines[#lines + 1] = rendered
         if id == "workspace.files.read" then reads[#reads + 1] = "Workspace files under " .. printable(params.subpath) end
         if id == "threads.read" then reads[#reads + 1] = "Owned thread content" end
+        if id == "app.database" then reads[#reads + 1] = "Application database " .. printable(params.name) end
         if id == "http.api" then egress[#egress + 1] = printable(params.origin) end
         if id == "contract.call" then egress[#egress + 1] = "app binding " .. printable(params.binding) end
         if id == "hive.expose" then egress[#egress + 1] = "Hive contract " .. printable(params.contract) end

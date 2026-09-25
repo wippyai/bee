@@ -211,7 +211,7 @@ entries:
       parameters: {subpath: relative_subpath}
       text: Read workspace files under {subpath}
       confirm: standard
-      operations:
+      policies:
       - {operation: files.read, resource: workspace, scope: {subpath: '$subpath'}}
       resources:
       - {kind: fs.directory, mode: readonly, source: verified_workspace_subroot}
@@ -220,7 +220,7 @@ entries:
       parameters: {name: name}
       text: Use an isolated application database named {name}
       confirm: standard
-      operations:
+      policies:
       - {operation: database.use, resource: '$name', scope: {name: '$name'}}
       resources:
       - {kind: db.sql.sqlite, mode: dedicated, source: host_app_database}
@@ -229,7 +229,7 @@ entries:
       parameters: {scope: owned_scope}
       text: Read owned threads
       confirm: standard
-      operations:
+      policies:
       - {operation: threads.read, resource: threads, scope: {scope: '$scope'}}
       resources: []
     - id: threads.message
@@ -237,7 +237,7 @@ entries:
       parameters: {scope: children_scope}
       text: Message child threads
       confirm: standard
-      operations:
+      policies:
       - {operation: threads.message, resource: threads, scope: {scope: '$scope'}}
       resources: []
     - id: agents.launch
@@ -245,7 +245,7 @@ entries:
       parameters: {definitions: definitions}
       text: Launch managed agents from {definitions}
       confirm: explicit
-      operations:
+      policies:
       - {operation: agents.launch, resource: managed_agents, scope: {definitions: '$definitions'}}
       resources: []
     - id: contract.call
@@ -253,7 +253,7 @@ entries:
       parameters: {binding: binding, methods: methods}
       text: Call app binding {binding} using {methods}
       confirm: explicit
-      operations:
+      policies:
       - {operation: contract.call, resource: '$binding', scope: {methods: '$methods'}}
       resources:
       - {kind: contract.binding, mode: caller, source: host_selected_binding}
@@ -262,7 +262,7 @@ entries:
       parameters: {origin: https_origin, methods: http_methods, path_prefix: url_path_prefix}
       text: Send HTTP requests to {origin} at {path_prefix} using {methods}
       confirm: explicit
-      operations:
+      policies:
       - {operation: http.request, resource: '$origin', scope: {methods: '$methods', path_prefix: '$path_prefix'}}
       resources:
       - {kind: http.client, mode: scoped, source: host_selected_origin}
@@ -271,7 +271,7 @@ entries:
       parameters: {contract: contract, methods: methods}
       text: Expose Hive contract {contract} using {methods}
       confirm: explicit
-      operations:
+      policies:
       - {operation: hive.expose, resource: '$contract', scope: {methods: '$methods'}}
       resources:
       - {kind: contract.binding, mode: hive, source: host_selected_contract}

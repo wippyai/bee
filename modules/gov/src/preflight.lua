@@ -6,7 +6,7 @@ local json = require("json")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
-    config_empty: {string}?, security_actor: boolean?, security_groups: boolean?}
+    config_empty: {string}?}
 type Artifact = {component: string, version: string, digest: string, dependencies: {string}, namespaces: {string}}
 type CapabilityRequest = {capability: string, parameters: {[string]: string | {string}}, reason: string,
     target: string, path: string, catalog_revision: integer, template_revision: integer}
@@ -252,11 +252,14 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
             or (item.security_groups ~= nil and type(item.security_groups) ~= "boolean") then
             return nil, "candidate entry is malformed"
         end
-        result[index] = {id = item.id :: string, kind = item.kind :: string, package = item.package :: string,
+        local entry: Entry = {id = item.id :: string, kind = item.kind :: string, package = item.package :: string,
             digest = item.digest :: string, references = references, auto_start = item.auto_start :: boolean,
             grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
-            config_empty = config_empty, security_actor = item.security_actor :: boolean?,
-            security_groups = item.security_groups :: boolean?}
+            config_empty = config_empty}
+        local measured = entry :: {[string]: unknown}
+        if item.security_actor ~= nil then measured.security_actor = item.security_actor end
+        if item.security_groups ~= nil then measured.security_groups = item.security_groups end
+        result[index] = entry
     end
     return result, nil
 end
@@ -445,7 +448,8 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if namespace and namespace_owners[namespace] ~= item.package then issue("NAMESPACE_OWNER", item.id, "entry namespace is not declared by its package", "include the exact child namespace in the package ownership manifest") end
         if not artifacts[item.package] then issue("UNKNOWN_OWNER", item.id, "entry is not owned by the measured package closure", "repair the ownership manifest") end
         if not context.kinds[item.kind] then issue("KIND_DENIED", item.id, "entry kind is outside host policy", "remove the entry or request host policy review") end
-        if item.security_actor or item.security_groups then
+        local selectors = item :: {[string]: unknown}
+        if selectors.security_actor == true or selectors.security_groups == true then
             issue("SECURITY_DENIED", item.id, "application content selects an actor or security groups",
                 "remove security.actor and security.groups; the host selects application identity")
         end
@@ -516,6 +520,14 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if requirements[item.id] then issue("DUPLICATE_REQUIREMENT", item.id, "ambiguous requirement identity", "resolve by full requirement identity") end
         requirements[item.id] = true
         if not artifacts[item.package] then issue("UNKNOWN_OWNER", item.id, "requirement is outside measured closure", "repair requirement ownership") end
+        local request = item.capability_request
+        if request and (item.value ~= nil or item.expected_kind ~= "security.policy"
+            or #item.targets ~= 1 or item.targets[1] ~= request.target
+            or request.path ~= ".security.policies +=" or not final[request.target]
+            or final[request.target].kind ~= "process.lua") then
+            issue("CAPABILITY_REQUEST_DENIED", item.id, "capability request does not target one app policy list",
+                "declare one policy append target on the owned application")
+        end
         local target = item.value and final[item.value] or nil
         if not target and not item.capability_request then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")
         elseif target and item.expected_kind and target.kind ~= item.expected_kind then issue("BINDING_KIND", item.id, "resource does not match declared kind", "select a resource of the declared kind") end

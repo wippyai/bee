@@ -1,6 +1,7 @@
 -- MIT. Host vocabulary is decoded before it can describe an app request.
 local test = require("test")
 local catalog = require("capability_catalog")
+local registry = require("registry")
 
 local function fixture(): {[string]: unknown}
     return {id = "bee:capability_catalog", kind = "registry.entry",
@@ -9,18 +10,33 @@ local function fixture(): {[string]: unknown}
                 {id = "workspace.files.read", revision = 1, confirm = "standard",
                     parameters = {subpath = "relative_subpath"},
                     text = "Read workspace files under {subpath}",
-                    operations = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
+                    policies = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
                     resources = {{kind = "fs.directory", mode = "readonly"}}},
                 {id = "http.api", revision = 1, confirm = "explicit",
                     parameters = {origin = "https_origin", methods = "http_methods", path_prefix = "url_path_prefix"},
                     text = "Send HTTP requests to {origin} at {path_prefix} using {methods}",
-                    operations = {{operation = "http.request", resource = "$origin",
+                    policies = {{operation = "http.request", resource = "$origin",
                         scope = {methods = "$methods", path_prefix = "$path_prefix"}}}, resources = {}}
             }}}
 end
 
 local function define_tests()
     test.describe("Capability catalog", function()
+        test.it("decodes the shipped host-owned catalog with all initial rows", function()
+            local shipped = assert(registry.get("bee:capability_catalog"))
+            local decoded = assert(catalog.decode(shipped))
+            local count = 0
+            for _ in pairs(decoded.capabilities) do count = count + 1 end
+            test.eq(count, 8)
+            test.is_true(decoded.never.credentials)
+            test.eq(decoded.capabilities["hive.expose"].confirm, "explicit")
+            local database = assert(catalog.resolve(decoded, "app.database", {name = "journal"}))
+            local api = assert(catalog.resolve(decoded, "http.api", {
+                origin = "https://api.example.com", methods = {"POST"}, path_prefix = "/upload"}))
+            local lines = assert(catalog.render(decoded, {database[1], api[1]}))
+            test.is_true(table.concat(lines, "\n"):find(
+                "Application database journal may be sent to https://api.example.com", 1, true) ~= nil)
+        end)
         test.it("decodes host templates and normalizes bounded request parameters", function()
             local decoded = assert(catalog.decode(fixture()))
             local normalized = assert(catalog.normalize(decoded, "workspace.files.read", {subpath = "docs/api"}))
@@ -61,6 +77,8 @@ local function define_tests()
             test.is_true(all:find("https://api.example.com", 1, true) ~= nil)
             test.is_true(all:find("Workspace files under docs may be sent to https://api.example.com", 1, true) ~= nil)
             test.is_nil(all:find("app reason", 1, true))
+            send[1].scope.path_prefix = "/private"
+            test.is_nil(catalog.render(decoded, {read[1], send[1]}))
         end)
     end)
 end

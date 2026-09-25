@@ -124,7 +124,7 @@ local function define_tests()
                 data = {revision = 1, never = {"exec"}, capabilities = {{id = "workspace.files.read",
                     revision = 1, confirm = "standard", parameters = {subpath = "relative_subpath"},
                     text = "Read workspace files under {subpath}",
-                    operations = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
+                    policies = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
                     resources = {}}}}}
             local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
                 data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
@@ -143,7 +143,8 @@ local function define_tests()
             test.eq(capability.target, "private.app:main")
             test.eq(capability.path, ".security.policies +=")
             local before_digest = facts.candidate.base_digest
-            local catalog_entry = captured.entries[#captured.entries]
+            local captured_state = captured :: Captured
+            local catalog_entry = captured_state.entries[#captured_state.entries]
             local catalog_data = catalog_entry.data :: Object
             local catalog_rows = catalog_data.capabilities :: {Object}
             catalog_rows[1].revision = 2
@@ -158,13 +159,11 @@ local function define_tests()
             request_meta.value_kind = "security.actor"
             changes(spec, {app, request})
             local wrong_kind = resolver.resolve_with(deps, spec)
-            if wrong_kind then error("accepted capability value_kind security.actor") end
             test.is_nil(wrong_kind)
             request_meta.value_kind = "security.policy"
             request_meta.parameters = {subpath = "docs/../private"}
             changes(spec, {app, request})
             local wrong_path = resolver.resolve_with(deps, spec)
-            if wrong_path then error("accepted capability subpath traversal") end
             test.is_nil(wrong_path)
         end)
         test.it("accepts the runtime's initial registry revision", function()

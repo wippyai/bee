@@ -83,19 +83,22 @@ local function define_tests()
         end)
         test.it("refuses app-shipped actor and group selectors on every entry kind", function()
             local candidate, context = fixture()
+            local entry = candidate.entries[1] :: {[string]: unknown}
             for _, kind in ipairs({"process.lua", "function.lua", "library.lua"}) do
                 candidate.entries[1].kind = kind
                 context.kinds[kind] = true
-                candidate.entries[1].security_actor = true
-                candidate.entries[1].security_groups = false
+                entry.security_actor = true
+                entry.security_groups = false
                 test.is_true(has(checked(candidate, context), "SECURITY_DENIED"))
-                candidate.entries[1].security_actor = false
-                candidate.entries[1].security_groups = true
+                entry.security_actor = false
+                entry.security_groups = true
                 test.is_true(has(checked(candidate, context), "SECURITY_DENIED"))
             end
         end)
         test.it("preserves capability requests in exact candidate bytes and rejects forged targets", function()
             local candidate, context = fixture()
+            candidate.entries[1].kind = "process.lua"
+            context.kinds["process.lua"] = true
             candidate.requirements[1].value = nil
             candidate.requirements[1].expected_kind = "security.policy"
             candidate.requirements[1].capability_request = {capability = "workspace.files.read",
@@ -106,6 +109,7 @@ local function define_tests()
             test.eq((decoded.requirements[1].capability_request :: preflight.CapabilityRequest).reason, "Show docs")
             test.is_true(checked(decoded, context).ready)
             candidate.requirements[1].capability_request.target = "other:run"
+            test.is_true(has(checked(candidate, context), "CAPABILITY_REQUEST_DENIED"))
             bytes = assert(canonical.encode(candidate, 1048576))
             test.is_nil(preflight.decode_candidate(bytes, assert(hash.sha256(bytes))))
         end)

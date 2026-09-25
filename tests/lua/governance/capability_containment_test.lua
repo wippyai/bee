@@ -58,6 +58,22 @@ local function define_tests()
             test.eq(#(compare({old}, {new}).changed :: {unknown}), 1)
             test.is_true(compare({old}, {new}).requires_approval)
         end)
+        test.it("contains HTTP methods and path prefixes only within one origin", function()
+            local old = grant("http.api", "http.request", "https://api.example.com",
+                {methods = {"GET", "POST"}, path_prefix = "/v1"}, 1)
+            local narrow = grant("http.api", "http.request", "https://api.example.com",
+                {methods = {"GET"}, path_prefix = "/v1/users"}, 1)
+            test.eq(#(compare({old}, {narrow}).narrowed :: {unknown}), 1)
+            test.eq(#(compare({narrow}, {old}).widened :: {unknown}), 1)
+            local sibling = grant("http.api", "http.request", "https://api.example.com",
+                {methods = {"GET"}, path_prefix = "/v11"}, 1)
+            test.eq(#(compare({old}, {sibling}).added :: {unknown}), 1)
+            local other_workspace = grant("workspace.files.read", "files.read", "workspace-2",
+                {subpath = "docs"}, 1)
+            local first_workspace = grant("workspace.files.read", "files.read", "workspace-1",
+                {subpath = "docs"}, 1)
+            test.eq(#(compare({first_workspace}, {other_workspace}).added :: {unknown}), 1)
+        end)
         test.it("rejects malformed sets before comparing", function()
             local bad = grant("http.api", "http.request", "https://one.example", {methods = {"GET", "GET"}}, 1)
             test.is_nil(containment.compare({bad}, {}))

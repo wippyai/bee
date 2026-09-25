@@ -193,7 +193,7 @@ end
 type HostPolicy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    migration_barrier: boolean}
+    migration_barrier: boolean, auto_start: boolean}
 local function stage_resolver(): destination.Resolver
     local policy_digest = assert(hash.sha256("replica-probe-destination-policy"))
     local resolved = overlay_resolver.new({overlay_owner = ACTIVATION_OVERLAY,
@@ -212,7 +212,7 @@ local function stage_resolver(): destination.Resolver
             return {node_id = "node-0", policy_digest = policy_digest,
                 packages = {[PACKAGE] = true}, namespaces = {["private.bee_demo"] = true},
                 kinds = {["function.lua"] = true}, databases = {}, grants = {}, modules = {},
-                applied = {}, migration_barrier = false}, nil
+                applied = {}, migration_barrier = false, auto_start = false}, nil
         end})
     return resolved :: destination.Resolver
 end

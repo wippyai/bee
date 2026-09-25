@@ -34,14 +34,14 @@ local function populated(): model.State
     local items: {Object} = {}
     for index = 1, 30 do
         items[index] = {workspace_id = string.format("%032x", index), label = index == 2 and "Legacy billing\27[2J" or ("Project " .. tostring(index)),
-            root_ref = "bee.environment:workspace_root", subpath = "legacy/" .. tostring(index), state = "active",
+            root_ref = "bee.env:workspace_root", subpath = "legacy/" .. tostring(index), state = "active",
             created_at = "2026-09-20T08:00:00.000Z", last_used_at = "2026-09-24T09:30:00.000Z"}
     end
     model.apply_page(state, ok({items = items, next_after = "cursor"}))
     model.move(state, 1)
     model.apply_inspect(state, state.selected, ok({live = true,
         applications = {{definition_id = "bee.settings:app", instance_id = "i-1", restart_policy = "automatic"}},
-        extensions = {{binding = "bee:resources_workspace_extension", title = "Resources", total = 1, items = {{label = "project", detail = "bee.environment:workspace_root · write"}}},
+        extensions = {{binding = "bee:resources_workspace_extension", title = "Resources", total = 1, items = {{label = "project", detail = "bee.env:workspace_root · write"}}},
             {binding = "bee:gateway_workspace_extension", title = "Agent sessions", total = 0, items = {}}}}))
     model.apply_threads(state, state.selected, ok({threads = {{thread_id = "t-1", title = "Migrate billing", state = "open"}}}))
     return state
@@ -91,7 +91,7 @@ local function define_tests()
             local detail = check(80, 24, state)
             test.contains(detail[6], "LEGACY BILLING")
             test.contains(detail[6], "Served")
-            test.not_nil(find(detail, "Folder   bee.environment:workspace_root/legacy/2"))
+            test.not_nil(find(detail, "Folder   bee.env:workspace_root/legacy/2"))
             test.not_nil(find(detail, "APPLICATIONS"))
             test.not_nil(find(detail, "bee.settings:app"))
             test.contains(detail[23], "Esc Back")
@@ -106,7 +106,7 @@ local function define_tests()
             test.not_nil(find(rows, "THREADS"))
             test.not_nil(find(rows, "Migrate billing"))
             test.not_nil(find(rows, "RESOURCES"))
-            test.not_nil(find(rows, "project · bee.environment:workspace_root · write"))
+            test.not_nil(find(rows, "project · bee.env:workspace_root · write"))
             test.not_nil(find(rows, "AGENT SESSIONS"))
             local title = find(rows, "LEGACY BILLING") or 0
             test.is_true(rows[title]:find("LEGACY BILLING", 1, true) > 42)
@@ -142,23 +142,23 @@ local function define_tests()
 
         test.it("draws the create flow's folder step at every size class", function()
             local form = creation.new()
-            folder_picker.apply_roots(form.picker, ok({roots = {{root_ref = "bee.environment:workspace_root", access = "write"}, {root_ref = "bee:archive", access = "read"}}}))
+            folder_picker.apply_roots(form.picker, ok({roots = {{root_ref = "bee.env:workspace_root", access = "write"}, {root_ref = "bee:archive", access = "read"}}}))
             for _, size in ipairs({{40, 12}, {80, 24}, {120, 36}, {160, 48}}) do
                 local rows = check(size[1], size[2], model.new(), form)
                 test.contains(rows[1], "NEW WORKSPACE")
-                test.not_nil(find(rows, "bee.environment:workspace_root"))
+                test.not_nil(find(rows, "bee.env:workspace_root"))
             end
             local roots = check(80, 24, model.new(), form)
             test.contains(roots[1], "Choose a root")
             test.contains(roots[2], "1 Folder")
-            test.not_nil(find(roots, "›bee.environment:workspace_root"))
+            test.not_nil(find(roots, "›bee.env:workspace_root"))
             test.contains(roots[23], "Enter Open")
             test.contains(roots[24], "U use folder")
             folder_picker.open(form.picker)
-            folder_picker.apply_folders(form.picker, ok({root_ref = "bee.environment:workspace_root", path = "", access = "write",
+            folder_picker.apply_folders(form.picker, ok({root_ref = "bee.env:workspace_root", path = "", access = "write",
                 folders = {{name = "alpha"}, {name = "beta", workspace_id = string.rep("b", 32)}}}))
             local rows = check(80, 24, model.new(), form)
-            test.contains(rows[1], "bee.environment:workspace_root")
+            test.contains(rows[1], "bee.env:workspace_root")
             local beta = find(rows, "beta")
             if not beta then error("beta row missing") end
             test.contains(rows[beta], "workspace")
@@ -170,11 +170,11 @@ local function define_tests()
 
         test.it("draws the details step with the new folder only under a writable root", function()
             local form = creation.new()
-            folder_picker.apply_roots(form.picker, ok({roots = {{root_ref = "bee.environment:workspace_root", access = "write"}}}))
+            folder_picker.apply_roots(form.picker, ok({roots = {{root_ref = "bee.env:workspace_root", access = "write"}}}))
             folder_picker.open(form.picker)
-            folder_picker.apply_folders(form.picker, ok({root_ref = "bee.environment:workspace_root", path = "", access = "write", folders = {{name = "alpha"}}}))
+            folder_picker.apply_folders(form.picker, ok({root_ref = "bee.env:workspace_root", path = "", access = "write", folders = {{name = "alpha"}}}))
             folder_picker.open(form.picker)
-            folder_picker.apply_folders(form.picker, ok({root_ref = "bee.environment:workspace_root", path = "alpha", access = "write", folders = {}}))
+            folder_picker.apply_folders(form.picker, ok({root_ref = "bee.env:workspace_root", path = "alpha", access = "write", folders = {}}))
             creation.use(form)
             for _, size in ipairs({{40, 12}, {80, 24}, {120, 36}, {160, 48}}) do check(size[1], size[2], model.new(), form) end
             local rows = check(80, 24, model.new(), form)
@@ -182,11 +182,11 @@ local function define_tests()
             test.contains(rows[2], "2 Details")
             test.not_nil(find(rows, "›Label       alpha"))
             test.not_nil(find(rows, "New folder"))
-            test.not_nil(find(rows, "Holds       bee.environment:workspace_root/alpha"))
+            test.not_nil(find(rows, "Holds       bee.env:workspace_root/alpha"))
             test.contains(rows[23], "Enter Create")
             creation.field(form, 1)
             creation.type_text(form, "api")
-            test.not_nil(find(check(80, 24, model.new(), form), "Holds       bee.environment:workspace_root/alpha/api"))
+            test.not_nil(find(check(80, 24, model.new(), form), "Holds       bee.env:workspace_root/alpha/api"))
             local fixed = creation.new()
             folder_picker.apply_roots(fixed.picker, ok({roots = {{root_ref = "bee:archive", access = "read"}}}))
             folder_picker.open(fixed.picker)

@@ -177,7 +177,7 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 		boot.WithSection("relay", map[string]any{"node_name": node}),
 		boot.WithSection("cluster", cluster),
 		boot.WithSection("override", map[string]any{
-			"bee.hive_host:supervisor_service:input": supervisorInput,
+			"bee.hive.service:supervisor_service:input": supervisorInput,
 		}),
 	), nil
 }

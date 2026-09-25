@@ -14,7 +14,7 @@ import (
 // owner's supervisor address by the rendezvous descriptor resolves it without
 // the cluster-wide name, which a raft-disabled owner never publishes.
 func TestOwnerSupervisorUsesPinnedAddress(t *testing.T) {
-	pinned := pid.PID{Node: "owner-node", Host: "bee.hive_host:supervisor_host", UniqID: "0x1"}
+	pinned := pid.PID{Node: "owner-node", Host: "bee.hive.service:supervisor_host", UniqID: "0x1"}
 	actor := &Actor{owner: "owner-node"}
 	actor.PinSupervisor(pinned)
 	got, err := actor.OwnerSupervisor(context.Background())
@@ -25,7 +25,7 @@ func TestOwnerSupervisorUsesPinnedAddress(t *testing.T) {
 		t.Fatalf("supervisor = %v, want %v", got, pinned)
 	}
 	// A pinned address for another node is refused before any lookup runs.
-	if _, ok := (&Actor{owner: "owner-node", pinned: pid.PID{Node: "other", Host: "bee.hive_host:supervisor_host", UniqID: "0x2"}}).pinnedSupervisor(); ok {
+	if _, ok := (&Actor{owner: "owner-node", pinned: pid.PID{Node: "other", Host: "bee.hive.service:supervisor_host", UniqID: "0x2"}}).pinnedSupervisor(); ok {
 		t.Fatal("pinned address for another node was accepted")
 	}
 	// An address on the wrong host is refused.
@@ -33,7 +33,7 @@ func TestOwnerSupervisorUsesPinnedAddress(t *testing.T) {
 		t.Fatal("pinned address on another host was accepted")
 	}
 	// A pinned address without an identity is refused.
-	if _, ok := (&Actor{owner: "owner-node", pinned: pid.PID{Node: "owner-node", Host: "bee.hive_host:supervisor_host"}}).pinnedSupervisor(); ok {
+	if _, ok := (&Actor{owner: "owner-node", pinned: pid.PID{Node: "owner-node", Host: "bee.hive.service:supervisor_host"}}).pinnedSupervisor(); ok {
 		t.Fatal("pinned address without an identity was accepted")
 	}
 }

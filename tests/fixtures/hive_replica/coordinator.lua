@@ -29,7 +29,7 @@ local CONTENT = string.rep(string.char(0, 1, 127, 128, 255) .. "Bee replica payl
 local VERSION_KEY = "binary-v1"
 local WORKER_KEY = "binary-worker-v1"
 local MISMATCH_KEY = "binary-wrong-source"
-local ACTIVATION_OVERLAY = "bee.replica_probe:activation_overlay"
+local ACTIVATION_OVERLAY = "bee.replica.probe:activation_overlay"
 -- This package does not exist on Hub. Its two versions are exact private
 -- authoring artifacts and differ only in immutable source bytes.
 local PACKAGE = "private/bee-demo"
@@ -40,7 +40,7 @@ local AGENT_WORKSPACE = "agent-app-source"
 local AGENT_PACKAGE = "bee.agent_app_demo/app"
 local AGENT_VERSION = "2.0.0"
 local AGENT_DEFINITION = "bee.agent_app_demo:app"
-local AGENT_OVERLAY = "bee.replica_probe:activation_overlay"
+local AGENT_OVERLAY = "bee.replica.probe:activation_overlay"
 local function object(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("expected object") end
     return value :: {[string]: unknown}
@@ -48,7 +48,7 @@ end
 type AgentScenario = {workspace_id: string, artifact_digest: string, source_node: string?,
     source_workspace_id: string?, source_version: string?}
 local function agent_scenario(): AgentScenario?
-    local entry = registry.get("bee.replica_probe:agent_scenario")
+    local entry = registry.get("bee.replica.probe:agent_scenario")
     if not entry then error("agent-artifact scenario entry is unavailable") end
     local data = object(entry.data)
     local workspace_id, artifact_digest = data.workspace_id, data.artifact_digest
@@ -74,7 +74,7 @@ local function agent_scenario(): AgentScenario?
     return {workspace_id = selected_workspace, artifact_digest = selected_digest}
 end
 local function exact_agent_artifact(scenario: AgentScenario): artifact.Artifact
-    local entry = registry.get("bee.replica_probe:agent_artifact")
+    local entry = registry.get("bee.replica.probe:agent_artifact")
     if not entry then error("source agent artifact entry is unavailable") end
     local encoded = object(entry.data).encoded
     if type(encoded) ~= "string" or encoded == "" then error("source agent artifact bytes are unavailable") end
@@ -111,10 +111,10 @@ local function descriptor(owner: string, key: string, content: string): version.
     return item
 end
 local function map_subject(subject: string, enabled: boolean)
-    local entry = registry.get("bee.hive_host.supervisor:principal_mappings")
+    local entry = registry.get("bee.hive.supervisor:principal_mappings")
     if not entry then error("principal mapping entry unavailable") end
     local mappings: {{[string]: unknown}} = {}
-    if enabled then mappings[1] = {issuer = "node-1", subject_id = subject, policies = {"bee.replica_probe:replica_policy"}} end
+    if enabled then mappings[1] = {issuer = "node-1", subject_id = subject, policies = {"bee.replica.probe:replica_policy"}} end
     entry.data = {mappings = mappings}
     local changes = registry.snapshot():changes()
     changes:update(entry)
@@ -186,7 +186,7 @@ local function application_descriptor(item: delivery.Delivery): version.Descript
     return result
 end
 local function governance_plans(): plan_store.Store
-    local result, err = plan_store.open("bee.governance:db", "node-0", "workspace-node-0")
+    local result, err = plan_store.open("bee.gov:db", "node-0", "workspace-node-0")
     if not result then error(tostring(err)) end
     return result
 end
@@ -221,12 +221,12 @@ local function required(result: {[string]: unknown}, operation: string): {[strin
     return object(result.value)
 end
 local function destination_call(request: {[string]: unknown}, operation: string): {[string]: unknown}
-    local raw, call_error = funcs.new():call("bee.governance.binding:destination_call", request)
+    local raw, call_error = funcs.new():call("bee.gov.binding:destination_call", request)
     if call_error then error(operation .. ": " .. tostring(call_error)) end
     return required(object(raw), operation)
 end
 local function configure_destination()
-    local profiles = assert(registry.get("bee:governance_activation_profiles"))
+    local profiles = assert(registry.get("bee.env:gov_activation_profiles"))
     local configured_profiles = type(profiles.data) == "table" and object(profiles.data).profiles or nil
     local approvals = assert(registry.get("bee:approver_policies"))
     local configured_approvals = type(approvals.data) == "table" and object(approvals.data).policies or nil
@@ -238,7 +238,7 @@ local function configure_destination()
             packages = {PACKAGE}, namespaces = {"private.bee_demo"}, kinds = {"function.lua"},
             databases = {}, grants = {}, modules = {},
         }}}}
-    approvals.data = {policies = {{name = "local-install", approvers = {"bee.replica_probe"}, max_ttl_ms = 60000}}}
+    approvals.data = {policies = {{name = "local-install", approvers = {"bee.replica.probe"}, max_ttl_ms = 60000}}}
     local changes = registry.snapshot():changes()
     assert(changes:update(profiles)); assert(changes:update(approvals)); assert(changes:apply())
 end
@@ -248,7 +248,7 @@ local function configure_agent_destination(scenario: AgentScenario)
     -- activation policy. Trusted fixture setup installs this policy in source
     -- so the same ordinary desktop composition can recover it after the
     -- headless coordinator exits.
-    local profiles = assert(registry.get("bee:governance_activation_profiles"))
+    local profiles = assert(registry.get("bee.env:gov_activation_profiles"))
     local approvals = assert(registry.get("bee:approver_policies"))
     local configured_profiles = object(profiles.data).profiles
     if type(configured_profiles) ~= "table" or #configured_profiles ~= 1 then
@@ -422,14 +422,14 @@ local function main(remote: string, source_destination_workspace: string?, sourc
     else configure_exports() end
     local policies = {}
 	for _, name in ipairs({"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.security.hive:hive_policy_exposure_policy",
-        "bee.security.hive:hive_dispatch_policy", "bee.replica_probe:names_policy", "bee.replica_probe:execute_policy"}) do
+        "bee.security.hive:hive_dispatch_policy", "bee.replica.probe:names_policy", "bee.replica.probe:execute_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error("load supervisor policy " .. name .. ": " .. tostring(policy_error)) end
         policies[#policies + 1] = policy
     end
     local function start(): string
         local pid = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-            :spawn_monitored("bee.hive_host.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {remote}})))
+            :spawn_monitored("bee.hive.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {remote}})))
         local deadline = time.now():add("60s")
         while time.now():before(deadline) do
             if client.supervisor() == pid then return pid end
@@ -636,7 +636,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             if agent.source_workspace_id then
                 local recovered: {[string]: unknown}? = nil
                 for attempt = 1, 4 do
-                    local raw, recovery_error = funcs.call("bee.governance.binding:destination_call", {operation = "recover",
+                    local raw, recovery_error = funcs.call("bee.gov.binding:destination_call", {operation = "recover",
                         workspace_id = agent.source_workspace_id, source_node = local_node,
                         source_workspace = AGENT_WORKSPACE,
                         receipt_key = "agent-source-hive-recovery-" .. tostring(attempt)})
@@ -663,7 +663,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                 local publish_error: unknown? = nil
                 while time.now():before(deadline) do
                     local raw
-                    raw, publish_error = funcs.call("bee.governance.binding:publication_call", {operation = "publish",
+                    raw, publish_error = funcs.call("bee.gov.binding:publication_call", {operation = "publish",
                         workspace_id = agent.source_workspace_id, component = AGENT_PACKAGE,
                         version = agent.source_version or AGENT_VERSION})
                     if not publish_error then

@@ -158,11 +158,11 @@ def detached():
             shutil.copytree(ROOT / "src", project / "src")
             shutil.copytree(ROOT / "modules", project / "modules")
             shutil.copytree(ROOT / "tests/fixtures/attachments", project / "src/probe")
-            broker = project / "src/applications/broker.lua"
+            broker = project / "src/apps/broker.lua"
             code = broker.read_text()
             bootstrap = 'if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end'
             assert code.count(bootstrap) == 1
-            code = code.replace(bootstrap, bootstrap + '\n    if ctx.get("bee.host_owner") == nil then assert(process.registry.register("bee.attachment_probe.host", nil, process.registry.LOCAL)) end')
+            code = code.replace(bootstrap, bootstrap + '\n    if ctx.get("bee.host_owner") == nil then assert(process.registry.register("bee.attachment.probe.host", nil, process.registry.LOCAL)) end')
             code = code.replace(bootstrap, bootstrap + '\n    local fail_renderer_once = ctx.get("bee.test.fail_renderer_once") == true')
             unbind = 'elseif req.op == "unbind" then'
             assert code.count(unbind) == 1
@@ -190,7 +190,7 @@ def detached():
             gate = 'op = "unbind", recipient ='
             assert code.count(gate) == 1
             connections.write_text(code.replace(gate, 'test_gate = request_id == "queued-render", ' + gate))
-            attachment = project / "src/applications/attachment.lua"
+            attachment = project / "src/apps/attachment.lua"
             code = attachment.read_text()
             anchor = "local _, err = view:revoke(previous.mount)"
             assert code.count(anchor) == 1
@@ -253,7 +253,7 @@ def detached():
             index.write_text(yaml.safe_dump(document, sort_keys=False))
             admission_index = project / "src/security/_index.yaml"
             admission = yaml.safe_load(admission_index.read_text())
-            next(e for e in admission["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "bee.attachment_probe:app", "policies": []})
+            next(e for e in admission["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "bee.attachment.probe:app", "policies": []})
             admission_index.write_text(yaml.safe_dump(admission, sort_keys=False))
             subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
             pack = project / "detached-deployment"

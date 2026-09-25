@@ -18,13 +18,13 @@ local THREAD = "gateway-thread"
 type Object = {[string]: unknown}
 local ADDRESS = ""
 local function endpoint(): string
-    local selected, err = funcs.call("bee.gateway.registry:address", {})
+    local selected, err = funcs.call("bee.gateway:address", {})
     -- Auto-start services become ready asynchronously. Wait only for the
     -- reported starting state; a failed or missing service is an immediate error.
     for _ = 1, 100 do
         if not err or not tostring(err):find("gateway listener is starting", 1, true) then break end
         time.sleep("20ms")
-        selected, err = funcs.call("bee.gateway.registry:address", {})
+        selected, err = funcs.call("bee.gateway:address", {})
     end
     assert(not err and type(selected) == "table", "gateway endpoint: " .. tostring(err))
     local address = (selected :: Object).address
@@ -166,12 +166,12 @@ local function prove_configuration_scope(address: string)
     assert(selected and not scope_error, "configuration scope: " .. tostring(scope_error))
     local executor, executor_error = funcs.new():with_scope(selected)
     assert(executor and not executor_error, "configuration caller scope: " .. tostring(executor_error))
-    local privileged_result, privileged_call_error = funcs.call("bee.gateway_probe:render_configuration", {address = address, action_id = "scope-render", privileged = true})
+    local privileged_result, privileged_call_error = funcs.call("bee.gateway.probe:render_configuration", {address = address, action_id = "scope-render", privileged = true})
     assert(not privileged_call_error and type(privileged_result) == "table", "privileged configuration control call failed")
     local privileged = privileged_result :: Object
     assert(privileged.placement_db_acquired == true, "privileged callee could not acquire placement database")
     assert(privileged.placement_executor_acquired == true, "privileged callee could not acquire placement executor")
-    local result, call_error = executor:call("bee.gateway_probe:render_configuration", {address = address, action_id = "scope-render"})
+    local result, call_error = executor:call("bee.gateway.probe:render_configuration", {address = address, action_id = "scope-render"})
     assert(result and not call_error, "configuration scope call: " .. tostring(call_error))
     assert(type(result) == "table", "configuration scope call returned a non-table")
     local value = result :: Object
@@ -196,16 +196,16 @@ local function prove_endpoint_call_scope()
     local scope = security.new_scope(policies)
     local actor = security.actor()
     assert(actor ~= nil, "probe actor missing")
-    for _, target in ipairs({"bee.gateway.registry:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance.binding:overlay_call", "bee.docs.binding:call"}) do
+    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.gov.binding:overlay_call", "bee.docs.binding:call"}) do
         assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
     end
     -- The docs tool reads the one embedded corpus and reaches no other volume.
     assert(scope:evaluate(actor, "fs.get", "bee:docs_corpus") == "allow", "docs corpus read is absent")
-    assert(scope:evaluate(actor, "fs.get", "bee.environment:workspace_root") ~= "allow", "docs policy reaches an unrelated filesystem")
+    assert(scope:evaluate(actor, "fs.get", "bee.env:workspace_root") ~= "allow", "docs policy reaches an unrelated filesystem")
     assert(scope:evaluate(actor, "registry.get", "bee.docs:corpus_ref") == "allow", "docs corpus reference is absent")
-    assert(scope:evaluate(actor, "registry.get", "bee.environment:workspace_root") ~= "allow", "docs policy reaches an unrelated registry entry")
-    assert(scope:evaluate(actor, "bee.governance.overlay.read", "any-overlay") == "allow", "overlay read is absent")
-    assert(scope:evaluate(actor, "bee.governance.overlay.write", "any-overlay") == "allow", "overlay write is absent")
+    assert(scope:evaluate(actor, "registry.get", "bee.env:workspace_root") ~= "allow", "docs policy reaches an unrelated registry entry")
+    assert(scope:evaluate(actor, "bee.gov.overlay.read", "any-overlay") == "allow", "overlay read is absent")
+    assert(scope:evaluate(actor, "bee.gov.overlay.write", "any-overlay") == "allow", "overlay write is absent")
     for _, target in ipairs({"bee.threads.service:create", "bee.gateway.binding:materialize", "bee.hub.binding:call", "arbitrary:operation"}) do
         assert(scope:evaluate(actor, "funcs.call", target) ~= "allow", "endpoint can invoke an unrelated operation")
     end
@@ -213,8 +213,8 @@ end
 local function configurable_surface(token_a: string)
     local configurable = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "configurable", attempt_id = "configurable-attempt",
         thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "measure_context"}, ttl_ms = 60000,
-        surface = {tools = {{name = "measure_context", operation = "bee.gateway_probe:context_tool", description = "Read scoped context",
-            policies = {"bee.gateway_probe:context_tool_policy", "bee.gateway_probe:replacement_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
+        surface = {tools = {{name = "measure_context", operation = "bee.gateway.probe:context_tool", description = "Read scoped context",
+            policies = {"bee.gateway.probe:context_tool_policy", "bee.gateway.probe:replacement_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
             traits = {{id = "research:measure", title = "Measure", prompt = "Collect a baseline", tools = {"measure_context"}},
                 {id = "research:compare", title = "Compare", prompt = "Compare measurements", tools = {"measure_context"}}},
             base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "project-a"}, dynamic_keys = {"experiment"}}}), "configurable admission")
@@ -237,8 +237,8 @@ local function configurable_surface(token_a: string)
     assert(spoofed.ok == false, "caller replaced reserved binding attribution")
     local peer = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "context-peer", attempt_id = "context-peer-attempt",
         thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"measure_context"}, ttl_ms = 60000,
-        surface = {tools = {{name = "measure_context", operation = "bee.gateway_probe:context_tool", description = "Read attribution",
-            policies = {"bee.gateway_probe:context_tool_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
+        surface = {tools = {{name = "measure_context", operation = "bee.gateway.probe:context_tool", description = "Read attribution",
+            policies = {"bee.gateway.probe:context_tool_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
             traits = {}, base_tools = {"measure_context"}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}}), "peer context admission")
     local peer_binding = tostring((peer.binding :: Object).binding_id)
     local peer_token = tostring(ok(materialize("context-peer-attempt", 1, peer_binding), "peer credential").token)
@@ -259,8 +259,8 @@ local function configurable_surface(token_a: string)
     assert(stale_selection.ok == false, "stale selection overwrote current state")
     local independent = tool("act-a", token_a, "session", {operation = "read"})
     assert(next((independent.value :: Object).context :: Object) == nil, "binding context leaked")
-    local left = funcs.async("bee.gateway_probe:concurrent_call", endpoint(), configurable_token, "left")
-    local right = funcs.async("bee.gateway_probe:concurrent_call", endpoint(), configurable_token, "right")
+    local left = funcs.async("bee.gateway.probe:concurrent_call", endpoint(), configurable_token, "left")
+    local right = funcs.async("bee.gateway.probe:concurrent_call", endpoint(), configurable_token, "right")
     assert(left and right, "concurrent calls did not start")
     local left_reply = left:response():receive()
     local right_reply = right:response():receive()
@@ -283,7 +283,7 @@ local function configurable_surface(token_a: string)
     local after_rotation = tool("configurable", configurable_token, "measure_context", {})
     assert(after_rotation.ok == true and (after_rotation.value :: Object).project == "project-a", "credential rotation lost fixed context or dispatch")
     assert((after_rotation.value :: Object).replacement_granted == false, "ungranted replacement action was allowed")
-    local policy_entry = registry.get("bee.gateway_probe:replacement_policy")
+    local policy_entry = registry.get("bee.gateway.probe:replacement_policy")
     if not policy_entry then error("replacement fixture policy missing") end
     policy_entry.data = {policy = {actions = {"bee.probe.replacement"}, resources = {"sentinel"}, effect = "allow"}}
     local changes = registry.snapshot():changes()
@@ -885,7 +885,7 @@ local function main()
     assert(type(drain_summary) == "table", "read the thread summary before the drain wait")
     local drain_cursor = tonumber((drain_summary :: Object).head_sequence)
     assert(drain_cursor and drain_cursor >= 4, "read the current head before the drain wait")
-    assert(process.spawn("bee.gateway_probe:drainer", "bee:workers", "400ms"), "spawn drainer")
+    assert(process.spawn("bee.gateway.probe:drainer", "bee:workers", "400ms"), "spawn drainer")
     local drain_started = time.now()
     local released = tool("act-d", token_d, "thread_wait", {after_sequence = drain_cursor, wait_ms = 4000})
     assert(released.ok == true and (released.value :: Object).status == "released" and (released.value :: Object).reason == "draining", "wait released by drain: " .. tostring(json.encode(released)))

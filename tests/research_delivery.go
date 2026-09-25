@@ -426,7 +426,7 @@ func stageMeasurement(repo, root string, entries []interface{}) error {
 		entry := raw.(map[string]interface{})
 		if entry["name"] == "mcp_http" {
 			security := entry["security"].(map[string]interface{})
-			security["policies"] = append(security["policies"].([]interface{}), "bee.research_measurement:tool_policy")
+			security["policies"] = append(security["policies"].([]interface{}), "bee.research.measurement:tool_policy")
 		}
 	}
 	gatewayBytes, err = yaml.Marshal(gateway)
@@ -488,10 +488,10 @@ func stageMeasurement(repo, root string, entries []interface{}) error {
 			return err
 		}
 	}
-	benchmark := map[string]interface{}{"version": "1.0", "namespace": "bee.research_benchmark_probe", "entries": []interface{}{
+	benchmark := map[string]interface{}{"version": "1.0", "namespace": "bee.research.benchmark.probe", "entries": []interface{}{
 		map[string]interface{}{"name": "canonical", "kind": "library.lua", "source": string(baseline)},
 		map[string]interface{}{"name": "corpus", "kind": "library.lua", "source": "file://corpus.lua"},
-		map[string]interface{}{"name": "measure", "kind": "library.lua", "source": "file://measure.lua", "modules": []string{"time"}, "imports": map[string]string{"corpus": "bee.research_benchmark_probe:corpus"}},
+		map[string]interface{}{"name": "measure", "kind": "library.lua", "source": "file://measure.lua", "modules": []string{"time"}, "imports": map[string]string{"corpus": "bee.research.benchmark.probe:corpus"}},
 	}}
 	encoded, err = yaml.Marshal(benchmark)
 	if err != nil {
@@ -546,7 +546,7 @@ func stageLiveMeasurement(root string) error {
 			if entry["name"] == "approver_policies" {
 				policy := entry
 				policy["policies"] = append(policy["policies"].([]interface{}), map[string]interface{}{
-					"name": "research-live-measurement", "approvers": []string{"bee.research_delivery.operator"}, "max_ttl_ms": 180000})
+					"name": "research-live-measurement", "approvers": []string{"bee.research.delivery.operator"}, "max_ttl_ms": 180000})
 				changed = true
 			}
 		}

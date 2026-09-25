@@ -13,7 +13,7 @@ local function reply(owner: string, request_id: string, id: string, instance_id:
     local result = contract.reply(request_id, "open")
     result.workspace_id = tostring(ctx.get("bee.workspace_id"))
     result.id, result.instance_id = id, instance_id
-    result.definition_id, result.title = "bee.workspace_hosts:delayed", "Delayed"
+    result.definition_id, result.title = "bee.workspace.hosts:delayed", "Delayed"
     assert(process.send(owner, "bee.app.reply", result))
 end
 

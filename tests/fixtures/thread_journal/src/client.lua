@@ -33,9 +33,9 @@ function M.decode(value: unknown): Reply?
     return {seq = receipt, rows = rows, error = error_text}
 end
 function M.call(owner: string, op: string, thread: string, key: string, kind: string, body: string, after: integer, capability: string?): Reply
-    local replies = assert(process.listen("bee.thread_demo.reply", {message = true}))
+    local replies = assert(process.listen("bee.thread.demo.reply", {message = true}))
     local timeout = assert(time.timer("3s"))
-    assert(process.send(owner, "bee.thread_demo.request", {version = 1, op = op, thread = thread, key = key, kind = kind, body = body, after = after, capability = capability or ""}))
+    assert(process.send(owner, "bee.thread.demo.request", {version = 1, op = op, thread = thread, key = key, kind = kind, body = body, after = after, capability = capability or ""}))
     local result: Reply = {seq = 0, rows = {}, error = "timeout"}
     while true do
         local selected = channel.select({replies:case_receive(), timeout:channel():case_receive()})

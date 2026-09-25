@@ -25,15 +25,15 @@ entries:
       policies: [bee.security.desktop:host_policy, bee.security.desktop:local_supervisor_spawn_policy, bee.security.desktop:workspace_host_manager_policy]
   meta:
     comment: Starts a node workspace host when a lease first asks for it, stops it after 15 minutes unleased, and keeps at most 64 live
-- name: governance_recovery_service
+- name: gov_recovery_service
   kind: process.service
-  process: bee.governance.service:recovery
+  process: bee.gov.service:recovery
   host: bee:workers
   lifecycle:
     auto_start: true
     security:
-      actor: {id: bee.governance.activation}
-      policies: [bee.governance.security:destination_service_policy]
+      actor: {id: bee.gov.activation}
+      policies: [bee.gov.security:destination_service_policy]
 - name: sync_exports
   kind: registry.entry
   meta:
@@ -121,15 +121,6 @@ entries:
       - {operation: hive.expose, resource: '$contract', scope: {methods: '$methods'}}
       resources:
       - {kind: contract.binding, mode: hive, source: host_selected_contract}
-- name: sync_distribution_policy
-  kind: security.policy
-  meta:
-    comment: Generic immutable feed delivery to connected non-client Hive members
-  policy:
-    actions: [db.get, registry.get, system.read, hive.invoke, process.registry.lookup,
-      process.listen, process.unlisten, process.send]
-    resources: '*'
-    effect: allow
 - name: sync_distribution_service
   kind: process.service
   process: bee.sync.service:distribution_worker
@@ -138,7 +129,7 @@ entries:
     auto_start: true
     security:
       actor: {id: bee.sync.distribution}
-      policies: [bee:sync_distribution_policy]
+      policies: [bee.security:sync_distribution_policy]
 - name: terminal
   kind: terminal.host
   hide_logs: true
@@ -152,29 +143,8 @@ entries:
   policies:
   - name: workspace-application-delivery
     approvers:
-    - definition_id: bee.inbox:app
+    - definition_id: bee.approvals.inbox:app
     max_ttl_ms: 600000
-- name: governance_publication_profiles
-  kind: registry.entry
-  meta:
-    type: bee.governance.publication_profiles
-    comment: Host-selected source workspaces and overlay owners available for immutable publication; workspace_applications publishes the overlays a workspace's own agents author under the app.<overlay_id> naming rule
-  data:
-    profiles: []
-    workspace_applications: true
-- name: governance_activation_profiles
-  kind: registry.entry
-  meta:
-    type: bee.governance.activation_profiles
-    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications this node's agents author for their own workspace, with permission approval at first install or widening; remote artifacts cannot edit this entry
-  data:
-    profiles: []
-    workspace_applications:
-      approval_policy: workspace-application-delivery
-      kinds: [process.lua, library.lua, ns.requirement]
-      modules: [tty, process, channel, json, time, uuid, base64, hash, funcs]
-      policies: [bee.security:ordinary_app_subsystem_boundary]
-      thread_access: none
 - name: credential_sources
   kind: registry.entry
   meta:
@@ -195,21 +165,21 @@ entries:
       provider: claude
       projection_kinds:
       - environment
-    - ref: bee.environment:machine_login_source
+    - ref: bee.env:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: codex
       projection_kinds:
       - file
       path: .codex/auth.json
-    - ref: bee.environment:machine_login_source
+    - ref: bee.env:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: claude
       projection_kinds:
       - file
       path: .claude/.credentials.json
-    - ref: bee.environment:machine_login_source
+    - ref: bee.env:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: agy
@@ -217,7 +187,7 @@ entries:
       - file
       path: .gemini/antigravity-cli/antigravity-oauth-token
       setup_path: .gemini/antigravity-cli/cache/onboarding.json
-    - ref: bee.environment:machine_login_source
+    - ref: bee.env:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: grok
@@ -227,7 +197,7 @@ entries:
       setup_path: .grok/config.toml
       setup_destination: .grok/.bee-global-config.toml
       setup_content_format: opaque
-    - ref: bee.environment:machine_login_source
+    - ref: bee.env:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: muse
@@ -315,7 +285,7 @@ entries:
     comment: Host-selected first-use roots keyed by definition-declared resource names
   data:
     roots:
-      project: bee.environment:workspace_root
+      project: bee.env:workspace_root
       session: bee.placement.native:root
     credentials:
       claude_api_key:
@@ -328,31 +298,31 @@ entries:
         provider: codex
         source:
           kind: fs_directory
-          ref: bee.environment:machine_login_source
+          ref: bee.env:machine_login_source
         optional: true
       muse_login:
         provider: muse
         source:
           kind: fs_directory
-          ref: bee.environment:machine_login_source
+          ref: bee.env:machine_login_source
         optional: true
       agy_login:
         provider: agy
         source:
           kind: fs_directory
-          ref: bee.environment:machine_login_source
+          ref: bee.env:machine_login_source
         optional: true
       grok_login:
         provider: grok
         source:
           kind: fs_directory
-          ref: bee.environment:machine_login_source
+          ref: bee.env:machine_login_source
         optional: true
       claude_login:
         provider: claude
         source:
           kind: fs_directory
-          ref: bee.environment:machine_login_source
+          ref: bee.env:machine_login_source
         optional: true
 - name: harness_activation
   kind: registry.entry
@@ -769,7 +739,7 @@ entries:
       names
   data:
     roots:
-    - root_ref: bee.environment:workspace_root
+    - root_ref: bee.env:workspace_root
       access: write
     - root_ref: bee.placement.native:root
       access: write

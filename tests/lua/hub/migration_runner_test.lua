@@ -30,7 +30,7 @@ local function define_tests()
             test.not_nil(default_result.migrations)
             if default_result.migrations then test.eq(default_result.migrations[1].status, "applied") end
             local custom_result = run_next(migration_runner.source(entries, {
-                "bee.governance.security:destination_service_policy", "bee.governance.security:destination_execution_policy",
+                "bee.gov.security:destination_service_policy", "bee.gov.security:destination_execution_policy",
             }), CUSTOM)
             test.not_nil(custom_result.migrations)
             if custom_result.migrations then test.eq(custom_result.migrations[1].status, "applied") end

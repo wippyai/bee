@@ -30,7 +30,7 @@ import (
 
 // ActorHost is the host of the physical client's actor. The owner's desktop
 // bridge admits native desktop calls only from this host.
-const ActorHost = "bee.hive_host.desktop:display_host"
+const ActorHost = "bee.hive.desktop:display_host"
 const actorSource = "bee.client:physical"
 
 // WithActor uses the standard process host, PID generator and topology lifecycle.

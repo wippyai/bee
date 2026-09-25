@@ -1,13 +1,6 @@
 version: '1.0'
 namespace: bee
 entries:
-- name: thread_waiter_policy
-  kind: security.policy.expr
-  policy:
-    actions: [process.registry.register, process.send]
-    resources: '*'
-    expression: 'action == "process.send" || resource == "bee.threads.waiter"'
-    effect: allow
 - name: thread_storage_policy
   kind: security.policy
   policy:
@@ -101,3 +94,5 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
+  - name: waiter_policies
+    value: [bee.security.threads:thread_waiter_policy]

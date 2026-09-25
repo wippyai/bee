@@ -133,7 +133,7 @@ func run(runtime string, manage bool) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
-	host, command := "bee.hub_inspect_probe:workers", "hub-inspect-probe"
+	host, command := "bee.hub.inspect.probe:workers", "hub-inspect-probe"
 	if manage {
 		host, command = "bee:hub_workers", "hub-manage-probe"
 		for _, check := range []struct {

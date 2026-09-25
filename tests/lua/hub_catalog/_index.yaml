@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.hub_catalog
+namespace: bee.hub.catalog
 entries:
 - name: catalog_test
   kind: function.lua

@@ -76,7 +76,7 @@ local function main()
     local changes, changes_error = initial:changes()
     assert(changes, tostring(changes_error))
     local staged, stage_error = changes:create({
-        id = "bee.hub_inspect_probe:must_not_publish",
+        id = "bee.hub.inspect.probe:must_not_publish",
         kind = "registry.entry",
         data = {value = "not-authorized"},
     })
@@ -90,7 +90,7 @@ local function main()
     local final, final_error = registry.snapshot()
     assert(final, tostring(final_error))
     assert(final:version():id() == initial_version, "inspection or denied publication changed registry history")
-    assert(not final:get("bee.hub_inspect_probe:must_not_publish"), "denied publication changed registry contents")
+    assert(not final:get("bee.hub.inspect.probe:must_not_publish"), "denied publication changed registry contents")
     logger:info("HUB_INSPECT_PASS digest=" .. result.digest)
 end
 

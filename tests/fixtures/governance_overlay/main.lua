@@ -2,8 +2,8 @@
 -- expansion, composed-base fencing, migration ordering or automatic cleanup.
 local registry = require("registry")
 local logger = require("logger")
-local OWNER = "bee.governance_overlay_probe:owner"
-local SUBJECT = "bee.governance_overlay_probe:subject"
+local OWNER = "bee.gov.overlay.probe:owner"
+local SUBJECT = "bee.gov.overlay.probe:subject"
 local function main()
     local base, base_error = registry.snapshot()
     assert(base, tostring(base_error))
@@ -49,7 +49,7 @@ local function main()
     local value = current:get(SUBJECT)
     assert(value and type(value.data) == "table" and value.data.value == "second", "rejected update changed effective entry")
     assert(current:version():id() == original, "overlay update created history")
-    local foreign = registry.overlay("bee.governance_overlay_probe:other")
+    local foreign = registry.overlay("bee.gov.overlay.probe:other")
     assert(foreign)
     local collision = foreign:changes()
     assert(collision)

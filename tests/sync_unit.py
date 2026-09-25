@@ -6,7 +6,7 @@ from workspace import RUNTIME, fixture_workspace
 
 
 with fixture_workspace(managed_gateway=True) as folder:
-    selected = {"bee.sync", "bee.approvals", "bee.inbox"}
+    selected = {"bee.sync", "bee.approvals", "bee.approvals.inbox"}
     count = 0
     for manifest in (folder / "src/tests").rglob("_index.yaml"):
         document = yaml.safe_load(manifest.read_text())

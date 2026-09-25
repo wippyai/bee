@@ -82,7 +82,7 @@ local TABLE_BARS: {string} = {
     " PROCESS                       STEPS              ",
     " bee.host:main                 ████████████    96 ",
     " bee.session:main              ██              16 ",
-    " bee.applications:broker       ████████▊       70 "}
+    " bee.apps:broker               ████████▊       70 "}
 local LINE: {string} = {
     " 90 ms ┤  ⢀⡴⠚⠉⠙⠲⣄            ⢀⡴⠚⠉⠙⢦⡀    ",
     "       │ ⣠⠏     ⠘⢦⡀         ⣰⠋     ⠙⢦   ",
@@ -254,7 +254,7 @@ local function define_tests()
             local rows = frame.new(50, 4, appearance.defaults())
             frame.table(rows, 1, 4, {columns = {{title = "Process", width = 0}, {title = "Steps", width = 12}, {title = "", width = 4, align = "right"}},
                 cells = {{"bee.host:main", viz.bar_cell(96, 96, 12), "96"}, {"bee.session:main", viz.bar_cell(16, 96, 12), "16"},
-                    {"bee.applications:broker", viz.bar_cell(70, 96, 12), "70"}}, kind = "row", selected = 0, offset = 0})
+                    {"bee.apps:broker", viz.bar_cell(70, 96, 12), "70"}}, kind = "row", selected = 0, offset = 0})
             golden(rows, TABLE_BARS)
 
             -- example: bins

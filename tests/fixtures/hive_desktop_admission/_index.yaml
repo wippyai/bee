@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.desktop_admission_probe
+namespace: bee.desktop.admission.probe
 entries:
 - name: policy
   kind: security.policy
@@ -11,7 +11,7 @@ entries:
   kind: security.policy
   policy:
     actions: [process.registry.register, process.registry.unregister, process.registry.register.eventual, process.registry.unregister.eventual]
-    resources: [bee.hive_host.supervisor, 'bee.hive_host.supervisor/*']
+    resources: [bee.hive.supervisor, 'bee.hive.supervisor/*']
     effect: allow
 - name: inspect
   kind: security.policy
@@ -23,7 +23,7 @@ entries:
   kind: security.policy
   policy:
     actions: [registry.get]
-    resources: [bee.hive_host:supervisor_service]
+    resources: [bee.hive.service:supervisor_service]
     effect: allow
 - name: client_policy
   kind: security.policy
@@ -41,7 +41,7 @@ entries:
       name: hive-desktop-admission-probe
       security:
         actor: {id: bee.desktop.probe}
-        policies: [bee.desktop_admission_probe:policy, bee.desktop_admission_probe:inspect, bee.desktop_admission_probe:service_grants]
+        policies: [bee.desktop.admission.probe:policy, bee.desktop.admission.probe:inspect, bee.desktop.admission.probe:service_grants]
 - name: client
   kind: process.lua
   source: file://client.lua
@@ -49,6 +49,6 @@ entries:
   modules: [process, time, channel, uuid]
   imports:
     types: bee.hive:types
-    protocol: bee.hive_host.desktop:protocol
+    protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
-    display: bee.hive_host.desktop:display
+    display: bee.hive.desktop:display

@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.hub_inspect_probe
+namespace: bee.hub.inspect.probe
 entries:
 - name: workers
   kind: process.host
@@ -31,12 +31,12 @@ entries:
   imports:
     inspect: bee.hub.binding:inspect
     catalog: bee.hub.binding:catalog
-    inventory: bee.hub.registry:inventory_reader
+    inventory: bee.hub:inventory_reader
     preview: bee.hub.binding:preview
   security:
-    policies: [bee.hub_inspect_probe:inspect_policy, bee.hub_inspect_probe:registry_read_policy, bee.hub_inspect_probe:catalog_policy]
+    policies: [bee.hub.inspect.probe:inspect_policy, bee.hub.inspect.probe:registry_read_policy, bee.hub.inspect.probe:catalog_policy]
   meta:
     command:
       name: hub-inspect-probe
       security:
-        actor: {id: bee.hub_inspect_probe}
+        actor: {id: bee.hub.inspect.probe}

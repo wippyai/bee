@@ -129,7 +129,7 @@ end
 -- a measurement, a production one does not.
 type Measured = {revision: string, kind: string, digest: string}
 local function measure_executable(path: string): Measured
-    local raw, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call("bee.placement.native:measure_executable", {path = path})
+    local raw, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call("bee.placement.native.binding:measure_executable", {path = path})
     if err then error("measure executable: " .. tostring(err)) end
     local reply = raw :: {ok: boolean, value: Object?}
     if reply.ok and reply.value then
@@ -390,7 +390,7 @@ local function define_tests()
             -- the runtime cannot close stdin; either is on record apart
             -- from input acceptance and exit.
             local evidence: {string} = {}
-            for _, item in ipairs(call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 64}).evidence :: {Object}) do evidence[#evidence + 1] = tostring(item.kind) end
+            for _, item in ipairs(call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64}).evidence :: {Object}) do evidence[#evidence + 1] = tostring(item.kind) end
             local input_phases: {string} = {}
             for _, payload in ipairs(payloads(records_of(thread_id), "bee.carrier.input")) do input_phases[#input_phases + 1] = tostring(payload.phase) end
             if count(evidence, "stdin.closed") == 1 then

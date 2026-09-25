@@ -49,7 +49,7 @@ entries:
   meta: {comment: Gateway address lookup reads only its listener link, endpoint reference, and selected endpoint configuration}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway:listener_ref, bee.gateway.registry:endpoint_ref]
+    resources: [bee.gateway:listener_ref, bee.gateway:endpoint_ref]
     effect: allow
 - name: supervisor_policy
   kind: security.policy
@@ -62,7 +62,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.gateway.registry:address]
+    resources: [bee.gateway:address]
     effect: allow
 - name: execute_policy
   kind: security.policy.expr
@@ -84,7 +84,7 @@ entries:
   meta: {comment: The MCP adapter reads only its component-owned links to the selected built-in tool policies}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway.registry:tool_read_policy_ref, bee.gateway.registry:tool_message_policy_ref, bee.gateway.registry:tool_inbox_policy_ref, bee.gateway.registry:tool_discover_policy_ref, bee.gateway.registry:tool_send_grant_policy_ref, bee.gateway.registry:tool_launch_policy_ref, bee.gateway.registry:tool_overlay_policy_ref, bee.gateway.registry:tool_docs_policy_ref, bee.gateway.registry:tool_components_policy_ref, bee.gateway.registry:tool_delivery_policy_ref, bee.gateway.registry:tool_publish_policy_ref, bee.gateway.registry:tool_application_open_policy_ref]
+    resources: [bee.gateway:tool_read_policy_ref, bee.gateway:tool_message_policy_ref, bee.gateway:tool_inbox_policy_ref, bee.gateway:tool_discover_policy_ref, bee.gateway:tool_send_grant_policy_ref, bee.gateway:tool_launch_policy_ref, bee.gateway:tool_overlay_policy_ref, bee.gateway:tool_docs_policy_ref, bee.gateway:tool_components_policy_ref, bee.gateway:tool_delivery_policy_ref, bee.gateway:tool_publish_policy_ref, bee.gateway:tool_application_open_policy_ref]
     effect: allow
 - name: access_call_policy
   kind: security.policy
@@ -98,7 +98,7 @@ entries:
   meta: {comment: Private per-binding approval access reads only its component-owned policy links}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway.registry:approval_request_policy_ref, bee.gateway.registry:approval_consume_policy_ref]
+    resources: [bee.gateway:approval_request_policy_ref, bee.gateway:approval_consume_policy_ref]
     effect: allow
 - name: access_policy_read_policy
   kind: security.policy

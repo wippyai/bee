@@ -59,7 +59,7 @@ local SHA_B = string.rep("b", 64)
 
 local function admission(artifact_digest: string, policy_digest: string, overlay_owner: string?, workspace_id: string?): {[string]: unknown}
     local measured, measure_error = application_admission.measure({schema_revision = application_admission.SCHEMA,
-        workspace_id = workspace_id or "workspace-owner", overlay_owner = overlay_owner or "bee.governance:test-overlay",
+        workspace_id = workspace_id or "workspace-owner", overlay_owner = overlay_owner or "bee.gov:test-overlay",
         source_node = "source-a", source_workspace = "app-a", artifact_digest = artifact_digest,
         policy_digest = policy_digest, bindings = {}})
     if not measured then error(tostring(measure_error)) end
@@ -175,8 +175,8 @@ local function define_tests()
     test.describe("Governance activation owner", function()
         test.it("reuses a contained live grant without requesting a permission decision", function()
             local workspace = "workspace-contained-grant"
-            local plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", workspace))
-            local activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", workspace))
+            local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
@@ -193,7 +193,7 @@ local function define_tests()
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world), approvals = executor :: owner.Executor,
                 actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
                 migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): (boolean?, string?) return applied, nil end,
@@ -217,8 +217,8 @@ local function define_tests()
         end)
         test.it("shows a widening delta and leaves a refused decision unapplied", function()
             local workspace = "workspace-widened-grant"
-            local plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", workspace))
-            local activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", workspace))
+            local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
@@ -242,7 +242,7 @@ local function define_tests()
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world), approvals = executor :: owner.Executor,
                 actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
                 migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): (boolean?, string?) return false, nil end,
@@ -264,9 +264,9 @@ local function define_tests()
             assert(plan_store.close(plans))
         end)
         test.it("establishes only the approved desired version and ignores a newer selection", function()
-            local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-owner")
+            local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-owner")
             if not plans then error(tostring(plan_error)) end
-            local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-owner")
+            local activations, activation_error = activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-owner")
             if not activations then error(tostring(activation_error)) end
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
@@ -274,7 +274,7 @@ local function define_tests()
             local applied = false
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied = true
@@ -301,8 +301,8 @@ local function define_tests()
         end)
         test.it("refuses application admission drift after approval binding", function()
             local workspace = "workspace-admission-drift"
-            local plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", workspace))
-            local activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", workspace))
+            local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
             local entry = {id = "demo:admission-drift", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
@@ -310,7 +310,7 @@ local function define_tests()
                 application_admission = admission(exact.digest, SHA, nil, workspace)}
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world), approvals = approvals(), actor_id = "host-a",
-                consumer_id = "destination-host", overlay_owner = "bee.governance:test-overlay",
+                consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
                 approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return false, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?) return {changed = true}, nil end}
@@ -326,8 +326,8 @@ local function define_tests()
         end)
         test.it("rebuilds the composed admission from immutable intent for apply and cold recovery", function()
             local workspace = "workspace-admission-recovery"
-            local plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", workspace))
-            local activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", workspace))
+            local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
             local entry = {id = "demo:admission-recovery", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
@@ -338,7 +338,7 @@ local function define_tests()
                 return {plans = plans, activations = activations,
                     resolver = shifting_resolver(entry, {revision = 4, digest = SHA, application_admission = frozen}),
                     approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                    overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                    overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                     matches = function(_overlay: string, entries: unknown, admission_blob: unknown?, _intent: unknown): (boolean?, string?)
                         test.eq(#(entries :: {unknown}), 1)
                         local blob = admission_blob :: {[string]: unknown}
@@ -371,16 +371,16 @@ local function define_tests()
         end)
         test.it("refuses an application admission for another overlay before storing or requesting approval", function()
             local workspace = "workspace-admission-owner"
-            local plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", workspace))
-            local activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", workspace))
+            local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
             local entry = {id = "demo:admission-owner", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
             local world: {[string]: unknown} = {revision = 4, digest = SHA,
-                application_admission = admission(exact.digest, SHA, "bee.governance:other-overlay", workspace)}
+                application_admission = admission(exact.digest, SHA, "bee.gov:other-overlay", workspace)}
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world), approvals = approvals(), actor_id = "host-a",
-                consumer_id = "destination-host", overlay_owner = "bee.governance:test-overlay",
+                consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
                 approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return false, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?) return {changed = true}, nil end}
@@ -393,9 +393,9 @@ local function define_tests()
             assert(plan_store.close(plans))
         end)
         test.it("reconciles lost consume and apply replies without following a newer plan", function()
-            local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-crash")
+            local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-crash")
             if not plans then error(tostring(plan_error)) end
-            local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-crash")
+            local activations, activation_error = activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-crash")
             if not activations then error(tostring(activation_error)) end
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
@@ -405,7 +405,7 @@ local function define_tests()
             local fail_restore = false
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = lossy_approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     if fail_restore then return nil, "overlay restore failed" end
@@ -441,9 +441,9 @@ local function define_tests()
         end)
 
         test.it("settles an in-flight effect before authorizing v2 and fences historical v1 recovery", function()
-            local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-version-fence")
+            local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-version-fence")
             if not plans then error(tostring(plan_error)) end
-            local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-version-fence")
+            local activations, activation_error = activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-version-fence")
             if not activations then error(tostring(activation_error)) end
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'stable'"}}
             local exact = assert(artifact.create({entry}))
@@ -451,7 +451,7 @@ local function define_tests()
             local apply_count = 0
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
@@ -492,9 +492,9 @@ local function define_tests()
         end)
 
         test.it("refuses an authorized apply when the composed base changed under review", function()
-            local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-refusal")
+            local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-composed-refusal")
             if not plans then error(tostring(plan_error)) end
-            local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-refusal")
+            local activations, activation_error = activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-composed-refusal")
             if not activations then error(tostring(activation_error)) end
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
@@ -505,7 +505,7 @@ local function define_tests()
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
@@ -534,9 +534,9 @@ local function define_tests()
         end)
 
         test.it("leaves an apply uncertain when the base moves during the apply", function()
-            local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-apply")
+            local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-composed-apply")
             if not plans then error(tostring(plan_error)) end
-            local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-apply")
+            local activations, activation_error = activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-composed-apply")
             if not activations then error(tostring(activation_error)) end
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
@@ -547,7 +547,7 @@ local function define_tests()
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
@@ -573,9 +573,9 @@ local function define_tests()
         end)
 
         test.it("reconciles an interrupted apply after a restart without duplicating it", function()
-            local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-restart")
+            local plans, plan_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-composed-restart")
             if not plans then error(tostring(plan_error)) end
-            local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-restart")
+            local activations, activation_error = activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-composed-restart")
             if not activations then error(tostring(activation_error)) end
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
@@ -587,7 +587,7 @@ local function define_tests()
                 return {plans = plan_handle, activations = activation_handle,
                     resolver = shifting_resolver(entry, world),
                     approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                    overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                    overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                     matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
                     apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
                         applied, apply_count = true, apply_count + 1
@@ -602,17 +602,17 @@ local function define_tests()
             test.eq(ok(owner.step(config_with(plans, activations), "intent-composed-restart", "composed-restart-v1")).phase, "applying")
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
-            local reopened_plans, reopen_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-restart")
+            local reopened_plans, reopen_error = plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-composed-restart")
             if not reopened_plans then error(tostring(reopen_error)) end
-            local reopened_activations, reopen_activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-restart")
+            local reopened_activations, reopen_activation_error = activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-composed-restart")
             if not reopened_activations then error(tostring(reopen_activation_error)) end
             local settled = ok(owner.recover(config_with(reopened_plans, reopened_activations), "composed-restart-v1"))
             test.eq(settled.outcome, "applied")
             test.eq(apply_count, 1)
             assert(activation_store.close(reopened_activations))
             assert(plan_store.close(reopened_plans))
-            local again_plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-restart"))
-            local again_activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-restart"))
+            local again_plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-composed-restart"))
+            local again_activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-composed-restart"))
             local replayed = ok(owner.recover(config_with(again_plans, again_activations), "composed-restart-v1"))
             test.eq(replayed.outcome, "applied")
             test.eq(apply_count, 1)
@@ -626,8 +626,8 @@ local function define_tests()
         end)
 
         test.it("completes captured migrations before exposing the application overlay", function()
-            local plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-migration-owner"))
-            local activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-migration-owner"))
+            local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", "workspace-migration-owner"))
+            local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", "workspace-migration-owner"))
             local entry = {id = "demo:001", kind = "function.lua",
                 meta = {type = "migration", target_db = "host:db", ordinal = 1},
                 data = {source = "return true", modules = {}}}
@@ -652,7 +652,7 @@ local function define_tests()
             }
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = migration_resolver(entry, state), approvals = approvals(), actor_id = "host-a",
-                consumer_id = "destination-host", overlay_owner = "bee.governance:migration-overlay",
+                consumer_id = "destination-host", overlay_owner = "bee.gov:migration-overlay",
                 approval_policy = "local-install", migrations = effect,
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return state.applied == true, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)

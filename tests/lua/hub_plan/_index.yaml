@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: tests.hub_plan
+namespace: tests.hub.plan
 entries:
 - name: plan_test
   kind: function.lua

@@ -4,7 +4,7 @@ local test = require("test")
 local sql = require("sql")
 local persist = require("persist")
 local migrations = require("migrations")
-local RESOURCE = "bee.window_native:upgrade_db"
+local RESOURCE = "bee.window.native:upgrade_db"
 local LEDGER = {table = "bee_window_native_schema_migrations", label = "window native"}
 type Row = {[string]: unknown}
 

@@ -220,7 +220,7 @@ local function records_of(thread_id: string): {Object}
     return all
 end
 local function evidence_kinds(attempt_id: string): {string}
-    local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 64})
+    local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64})
     local list: {string} = {}
     for _, item in ipairs(page.evidence :: {Object}) do list[#list + 1] = tostring(item.kind) end
     return list
@@ -360,7 +360,7 @@ local function define_tests()
                     end
                 end
                 local details: {string} = {}
-                local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 64})
+                local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64})
                 for _, item in ipairs(page.evidence :: {Object}) do
                     if item.kind == "configuration.materialized" then
                         details[#details + 1] = tostring(item.detail)

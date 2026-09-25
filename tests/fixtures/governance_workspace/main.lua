@@ -8,16 +8,16 @@ type Object = {[string]: unknown}
 
 local function principal(actor: string): funcs.Executor
     local policies = {
-        assert(security.policy("bee.governance_workspace_probe:call_policy")),
-        assert(security.policy("bee.governance_workspace_probe:read_policy")),
-        assert(security.policy("bee.governance_workspace_probe:write_policy")),
-        assert(security.policy("bee.governance_workspace_probe:caller_boundary")),
+        assert(security.policy("bee.gov.workspace.probe:call_policy")),
+        assert(security.policy("bee.gov.workspace.probe:read_policy")),
+        assert(security.policy("bee.gov.workspace.probe:write_policy")),
+        assert(security.policy("bee.gov.workspace.probe:caller_boundary")),
     }
     return funcs.new():with_actor(security.new_actor(actor)):with_scope(security.new_scope(policies))
 end
 
 local function isolated(client: funcs.Executor)
-    local raw, err = client:call("bee.governance_workspace_probe:authority_probe")
+    local raw, err = client:call("bee.gov.workspace.probe:authority_probe")
     assert(not err, tostring(err))
     local probe = bounds.object(raw)
     assert(probe, "missing caller authority probe")
@@ -25,14 +25,14 @@ local function isolated(client: funcs.Executor)
     assert(probe.scope_create == false, "caller gained scope creation")
     assert(probe.scope_lookup == false, "caller gained access to the private named scope")
     assert(probe.private_execute == false, "caller gained private execution")
-    local reply, backend_error = client:call("bee.governance.binding:workspace_backend_call", {operation = "list", workspace_id = "demo"})
+    local reply, backend_error = client:call("bee.gov.binding:workspace_backend_call", {operation = "list", workspace_id = "demo"})
     assert(not backend_error, tostring(backend_error))
     local denied = bounds.object(reply)
     assert(denied and denied.ok == false and denied.code == "DENIED", "direct backend call was admitted")
 end
 
 local function call(client: funcs.Executor, request: unknown): Object
-    local result, err = client:call("bee.governance.binding:overlay_call", request)
+    local result, err = client:call("bee.gov.binding:overlay_call", request)
     assert(not err, tostring(err))
     local decoded = bounds.object(result)
     assert(decoded, "malformed authoring result")

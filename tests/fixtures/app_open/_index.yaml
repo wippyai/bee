@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.app_open_probe
+namespace: bee.app.open.probe
 entries:
 - name: evidence
   kind: fs.directory
@@ -9,7 +9,7 @@ entries:
   kind: security.policy
   policy:
     actions: [fs.get]
-    resources: [bee.app_open_probe:evidence]
+    resources: [bee.app.open.probe:evidence]
     effect: allow
 - name: view_policy
   kind: security.policy
@@ -64,7 +64,7 @@ entries:
     command_names: []
     binding_ref: bee.driver.claude:binding
     profile_id: batch
-    policy_ref: bee.app_open_probe:managed_agent_policy
+    policy_ref: bee.app.open.probe:managed_agent_policy
     default_mode: batch
     allowed_overrides: [brief, thread]
     thread_policy: {kind: caller}
@@ -74,7 +74,7 @@ entries:
   kind: security.policy
   policy:
     actions: [process.registry.lookup]
-    resources: [bee.app_open_probe:operator]
+    resources: [bee.app.open.probe:operator]
     effect: allow
 - name: operator_policy
   kind: security.policy
@@ -87,7 +87,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.gateway.registry:address, bee.gateway.binding:open,
+    resources: [bee.gateway:address, bee.gateway.binding:open,
       bee.harness.launch:resolve, bee.harness.launch:start,
       bee.threads.service:create, bee.threads.service:get, bee.threads.service:leave,
       bee.threads.service:read_after]
@@ -116,8 +116,8 @@ entries:
     client: bee.application:client
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee.app_open_probe:view_policy, bee.app_open_probe:evidence_policy,
-      bee.app_open_probe:host_lookup_policy, bee.app_open_probe:operator_signal_policy]
+    policies: [bee.app.open.probe:view_policy, bee.app.open.probe:evidence_policy,
+      bee.app.open.probe:host_lookup_policy, bee.app.open.probe:operator_signal_policy]
 - name: operator
   kind: process.lua
   source: file://operator.lua
@@ -125,23 +125,23 @@ entries:
   modules: [process, channel, time, funcs, json, registry]
   imports:
     bounds: bee.threads.records:bounds
-    thread_binding: bee.applications:thread_binding
+    thread_binding: bee.apps:thread_binding
   security:
-    policies: [bee.app_open_probe:operator_policy, bee.app_open_probe:operator_call_policy,
+    policies: [bee.app.open.probe:operator_policy, bee.app.open.probe:operator_call_policy,
       bee.security.gateway:gateway_manage_policy,
-      bee.security.approvals:approval_decide_policy, bee.inbox:client_policy, bee.security.threads:thread_authority_client_policy,
+      bee.security.approvals:approval_decide_policy, bee.approvals.inbox:client_policy, bee.security.threads:thread_authority_client_policy,
       bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy,
       bee.harness.launch:agent_launch_execution_action_policy]
 - name: operator_service
   kind: process.service
-  process: bee.app_open_probe:operator
+  process: bee.app.open.probe:operator
   host: bee:workers
   lifecycle:
     auto_start: true
     security:
       actor: {id: bee.app_open.operator}
-      policies: [bee.app_open_probe:operator_policy, bee.app_open_probe:operator_call_policy,
+      policies: [bee.app.open.probe:operator_policy, bee.app.open.probe:operator_call_policy,
         bee.security.gateway:gateway_manage_policy,
-        bee.security.approvals:approval_decide_policy, bee.inbox:client_policy, bee.security.threads:thread_authority_client_policy,
+        bee.security.approvals:approval_decide_policy, bee.approvals.inbox:client_policy, bee.security.threads:thread_authority_client_policy,
         bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy,
         bee.harness.launch:agent_launch_execution_action_policy]

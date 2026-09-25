@@ -25,7 +25,7 @@ entries:
   meta:
     comment: Host-selected immutable Sync feeds; absent selection leaves distribution unwired
   targets:
-  - entry: bee.sync.registry:exports_ref
+  - entry: bee.sync:exports_ref
     path: .resource_ref
 - name: target_sender
   kind: ns.requirement
@@ -85,3 +85,12 @@ entries:
   imports:
     transaction: bee.persist:transaction
     version: bee.sync:version
+- name: exports_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked host export configuration; target_exports fills resource_ref
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]

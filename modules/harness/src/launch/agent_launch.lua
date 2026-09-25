@@ -9,7 +9,7 @@ M.MAX_WAIT_MS = 60000
 type Run = {thread_id: string, attempt_id: string}
 -- The action a caller's own scope must grant on a workspace other than its
 -- binding's before it may launch there.
-M.LAUNCH_ACTION = "bee.workspaces.launch"
+M.LAUNCH_ACTION = "bee.workspace.manager.launch"
 -- The action a host grants an application on a launch definition before the
 -- application may start it.
 M.APPLICATION_ACTION = "bee.harness.launch"

@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.governance.binding
+namespace: bee.gov.binding
 entries:
 - name: delivery_call
   kind: function.lua
@@ -8,40 +8,40 @@ entries:
   modules: [funcs, security, json, system]
   imports:
     bounds: bee.threads.records:bounds
-    publication_profiles: bee.governance:publication_profile_decoder
+    publication_profiles: bee.gov:publication_profile_decoder
     transaction: bee.persist:transaction
-    preflight: bee.governance:preflight
-    guide: bee.governance.traits:guide
-    protocol: bee.governance:delivery_protocol
-    resources: bee.governance.registry:staging_resources
-  security: {policies: [bee.governance.security:delivery_facade_policy, bee.governance.security:delivery_node_read_policy, bee.governance.security:publication_profiles_read_policy]}
+    preflight: bee.gov:preflight
+    guide: bee.gov.traits:guide
+    protocol: bee.gov:delivery_protocol
+    resources: bee.gov:staging_resources
+  security: {policies: [bee.gov.security:delivery_facade_policy, bee.gov.security:delivery_node_read_policy, bee.gov.security:publication_profiles_read_policy]}
 - name: publication_call
   kind: function.lua
   source: file://publication_method.lua
   method: handle
-  imports: {service: bee.governance.binding:publication_service}
-  security: {policies: [bee.governance.security:publication_service_policy]}
+  imports: {service: bee.gov.binding:publication_service}
+  security: {policies: [bee.gov.security:publication_service_policy]}
 - name: destination_call
   kind: function.lua
   source: file://destination_method.lua
   method: handle
   modules: [funcs, security]
   imports:
-    service: bee.governance.binding:destination_service
+    service: bee.gov.binding:destination_service
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
-  security: {policies: [bee.governance.security:destination_facade_policy]}
+  security: {policies: [bee.gov.security:destination_facade_policy]}
 - name: overlay_call
   kind: function.lua
   source: file://workspace_method.lua
   method: handle
   modules: [funcs, security]
   imports:
-    protocol: bee.governance:workspace_protocol
-    guide: bee.governance.traits:guide
+    protocol: bee.gov:workspace_protocol
+    guide: bee.gov.traits:guide
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
-  security: {policies: [bee.governance.security:overlay_facade_policy]}
+  security: {policies: [bee.gov.security:overlay_facade_policy]}
   meta:
     type: tool
     title: Overlay authoring
@@ -60,11 +60,11 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
-    approval: bee.governance.binding:approval
-    plan_store: bee.governance.persist:plan_store
+    approval: bee.gov.binding:approval
+    plan_store: bee.gov.persist:plan_store
     replicas: bee.sync.persist:replicas
-    delivery: bee.governance:delivery
-    preflight: bee.governance:preflight
+    delivery: bee.gov:delivery
+    preflight: bee.gov:preflight
     transaction: bee.persist:transaction
 - name: publisher
   kind: library.lua
@@ -72,7 +72,7 @@ entries:
   modules: [base64]
   imports:
     bounds: bee.threads.records:bounds
-    delivery: bee.governance:delivery
+    delivery: bee.gov:delivery
     replicas: bee.sync.persist:replicas
     sync: bee.sync.persist:store
     transaction: bee.persist:transaction
@@ -82,15 +82,16 @@ entries:
   modules: [registry, security, system, base64, json]
   imports:
     bounds: bee.threads.records:bounds
-    artifact: bee.governance:artifact
-    materializer: bee.governance.registry:materializer
-    application_admission: bee.governance:governed_application_admission
-    publication_profiles: bee.governance:publication_profile_decoder
-    publisher: bee.governance.binding:publisher
-    staging: bee.governance.persist:staging
-    activation_store: bee.governance.persist:activation_store
-    resources: bee.governance.registry:staging_resources
-    sync_resources: bee.sync.registry:resources
+    artifact: bee.gov:artifact
+    materializer: bee.gov:materializer
+    application_admission: bee.gov:governed_application_admission
+    publication_profiles: bee.gov:publication_profile_decoder
+    workspace_applications: bee.gov:workspace_applications
+    publisher: bee.gov.binding:publisher
+    staging: bee.gov.persist:staging
+    activation_store: bee.gov.persist:activation_store
+    resources: bee.gov:staging_resources
+    sync_resources: bee.sync:resources
     transaction: bee.persist:transaction
 - name: activation_owner
   kind: library.lua
@@ -99,14 +100,14 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     transaction: bee.persist:transaction
-    plan_store: bee.governance.persist:plan_store
-    activation_store: bee.governance.persist:activation_store
-    activation_measure: bee.governance:activation_measure
-    migration_work: bee.governance:migration_work
-    approval: bee.governance.binding:approval
-    preflight: bee.governance:preflight
-    artifact: bee.governance:artifact
-    application_admission: bee.governance:governed_application_admission
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    activation_measure: bee.gov:activation_measure
+    migration_work: bee.gov:migration_work
+    approval: bee.gov.binding:approval
+    preflight: bee.gov:preflight
+    artifact: bee.gov:artifact
+    application_admission: bee.gov:governed_application_admission
 - name: migration_effect
   kind: library.lua
   source: file://migration_effect.lua
@@ -115,8 +116,8 @@ entries:
     canonical: bee.sync:canonical
     hub_migrations: bee.hub:migrations
     migration_runner: bee.hub.binding:migration_runner
-    migration_work: bee.governance:migration_work
-    materializer: bee.governance.registry:materializer
+    migration_work: bee.gov:migration_work
+    materializer: bee.gov:materializer
 - name: destination_service
   kind: library.lua
   source: file://destination_service.lua
@@ -125,31 +126,31 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
     transaction: bee.persist:transaction
-    resources: bee.governance.registry:staging_resources
-    sync_resources: bee.sync.registry:resources
+    resources: bee.gov:staging_resources
+    sync_resources: bee.sync:resources
     replicas: bee.sync.persist:replicas
-    plan_store: bee.governance.persist:plan_store
-    activation_store: bee.governance.persist:activation_store
-    activation_owner: bee.governance.binding:activation_owner
-    hub_resolver: bee.governance.registry:hub_resolver
-    overlay_resolver: bee.governance.registry:overlay_resolver
-    delivery: bee.governance:delivery
-    destination: bee.governance.binding:destination
-    materializer: bee.governance.registry:materializer
-    migration_effect: bee.governance.binding:migration_effect
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    activation_owner: bee.gov.binding:activation_owner
+    hub_resolver: bee.gov:hub_resolver
+    overlay_resolver: bee.gov:overlay_resolver
+    delivery: bee.gov:delivery
+    destination: bee.gov.binding:destination
+    materializer: bee.gov:materializer
+    migration_effect: bee.gov.binding:migration_effect
     migration_runner: bee.hub.binding:migration_runner
-    activation_profiles: bee.governance:activation_profile_decoder
-    capability_grants: bee.governance:capability_grants
-    capability_catalog: bee.governance:capability_catalog
-    workspace_applications: bee.governance:workspace_applications
-    preflight: bee.governance:preflight
+    activation_profiles: bee.gov:activation_profile_decoder
+    capability_grants: bee.gov:capability_grants
+    capability_catalog: bee.gov:capability_catalog
+    workspace_applications: bee.gov:workspace_applications
+    preflight: bee.gov:preflight
 - name: destination_backend_call
   kind: function.lua
   source: file://destination_backend.lua
   method: call
   modules: [security]
   imports:
-    service: bee.governance.binding:destination_service
+    service: bee.gov.binding:destination_service
     transaction: bee.persist:transaction
   meta: {type: internal}
 - name: workspace_backend_call
@@ -158,8 +159,8 @@ entries:
   method: call
   modules: [security, system]
   imports:
-    protocol: bee.governance:workspace_protocol
-    staging: bee.governance.persist:staging
-    resources: bee.governance.registry:staging_resources
+    protocol: bee.gov:workspace_protocol
+    staging: bee.gov.persist:staging
+    resources: bee.gov:staging_resources
     transaction: bee.persist:transaction
   meta: {type: internal}

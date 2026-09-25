@@ -22,7 +22,7 @@ local ROOT_REF = "bee.placement.native:root"
 local WORKSPACE = "resource-restart"
 local ACTOR = "bee.test.resource_probe"
 local KEY = "restart-grant-key"
-local CRED_SOURCE = "bee.resource_probe:cred_key"
+local CRED_SOURCE = "bee.resourceprobe:cred_key"
 local SENTINEL = "probe-secret-4b8f2a"
 local function call(method: string, request: {[string]: unknown}): {[string]: unknown}
     local reply, err = funcs.new():call("bee.resources.binding:" .. method, request)
@@ -103,13 +103,13 @@ return {main = main}
 '''
 
 PROBE_INDEX = {
-    "version": "1.0", "namespace": "bee.resource_probe", "entries": [
+    "version": "1.0", "namespace": "bee.resourceprobe", "entries": [
         {"name": "main", "kind": "process.lua", "source": "file://main.lua", "method": "main",
          "modules": ["funcs", "registry", "fs", "json"],
          "meta": {"command": {"name": "resource-probe", "security": {"actor": {"id": "bee.test.resource_probe"}}}},
-         "security": {"policies": ["bee.resource_probe:probe_policy"]}},
+         "security": {"policies": ["bee.resourceprobe:probe_policy"]}},
         {"name": "cred_storage", "kind": "env.storage.memory"},
-        {"name": "cred_key", "kind": "env.variable", "storage": "bee.resource_probe:cred_storage",
+        {"name": "cred_key", "kind": "env.variable", "storage": "bee.resourceprobe:cred_storage",
          "variable": "BEE_PROBE_SECRET", "default": "probe-secret-4b8f2a"},
         {"name": "probe_policy", "kind": "security.policy", "policy": {
             "actions": ["funcs.call", "registry.get", "registry.apply", "registry.apply_version",
@@ -125,7 +125,7 @@ def main():
         shutil.copytree(ROOT / "modules", folder / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, folder / name)
-        probe = folder / "src/resource_probe"
+        probe = folder / "src/resourceprobe"
         probe.mkdir()
         (probe / "main.lua").write_text(PROBE)
         (probe / "_index.yaml").write_text(yaml.safe_dump(PROBE_INDEX))

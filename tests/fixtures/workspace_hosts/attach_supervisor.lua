@@ -13,7 +13,7 @@ local store = require("store")
 local catalog = require("catalog")
 local leases = require("leases")
 
-local ROOT = "bee.environment:workspace_root"
+local ROOT = "bee.env:workspace_root"
 local IDLE_MS = 600
 type Channel = channel.Channel
 
@@ -111,7 +111,7 @@ local function run()
     leases.release(external)
 
     -- A recipient attaches to the display through the relayed admission.
-    local recipient = tostring(assert(process.spawn("bee.workspace_hosts:attach_recipient", "bee:workers")))
+    local recipient = tostring(assert(process.spawn("bee.workspace.hosts:attach_recipient", "bee:workers")))
     local attach_id = "attach-" .. uuid.v7()
     assert(process.send(supervisor, "bee.retained.request", {version = 1, workspace_id = workspace_id, desktop_id = desktop_id,
         request_id = attach_id, recipient = recipient, op = "attach", mode = "observe"}))

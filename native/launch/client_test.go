@@ -336,11 +336,11 @@ func TestClientIntentGrammar(t *testing.T) {
 		{args: []string{"workspace", "list", "--archived", "--after", workspace + ":6162"}, want: clientIntent{
 			catalog: &workspaceCommand{verb: "list", archived: true, after: workspace + ":6162"}, refusal: workspaceRefusal}},
 		{args: []string{"workspace", "roots"}, want: clientIntent{catalog: &workspaceCommand{verb: "roots"}, refusal: workspaceRefusal}},
-		{args: []string{"workspace", "create", "Second desk", "bee.environment:workspace_root/work/second", "--new-folder"}, want: clientIntent{
-			catalog: &workspaceCommand{verb: "create", label: "Second desk", root: "bee.environment:workspace_root", path: "work/second", newFolder: true},
+		{args: []string{"workspace", "create", "Second desk", "bee.env:workspace_root/work/second", "--new-folder"}, want: clientIntent{
+			catalog: &workspaceCommand{verb: "create", label: "Second desk", root: "bee.env:workspace_root", path: "work/second", newFolder: true},
 			refusal: workspaceRefusal}},
-		{args: []string{"workspace", "create", "Root", "bee.environment:workspace_root"}, want: clientIntent{
-			catalog: &workspaceCommand{verb: "create", label: "Root", root: "bee.environment:workspace_root"}, refusal: workspaceRefusal}},
+		{args: []string{"workspace", "create", "Root", "bee.env:workspace_root"}, want: clientIntent{
+			catalog: &workspaceCommand{verb: "create", label: "Root", root: "bee.env:workspace_root"}, refusal: workspaceRefusal}},
 		{args: []string{"workspace", "archive", workspace}, want: clientIntent{catalog: &workspaceCommand{verb: "archive", id: workspace}, refusal: workspaceRefusal}},
 		{args: []string{"workspace", "restore", workspace}, want: clientIntent{catalog: &workspaceCommand{verb: "restore", id: workspace}, refusal: workspaceRefusal}},
 	} {
@@ -371,13 +371,13 @@ func TestClientIntentGrammar(t *testing.T) {
 		{"workspace", "archive", strings.ToUpper(workspace)},
 		{"workspace", "restore"},
 		{"workspace", "create", "Label"},
-		{"workspace", "create", "", "bee.environment:workspace_root/x"},
-		{"workspace", "create", "Two\nlines", "bee.environment:workspace_root/x"},
-		{"workspace", "create", strings.Repeat("x", 241), "bee.environment:workspace_root/x"},
-		{"workspace", "create", "Escape", "bee.environment:workspace_root/../outside"},
-		{"workspace", "create", "Empty", "bee.environment:workspace_root//x"},
+		{"workspace", "create", "", "bee.env:workspace_root/x"},
+		{"workspace", "create", "Two\nlines", "bee.env:workspace_root/x"},
+		{"workspace", "create", strings.Repeat("x", 241), "bee.env:workspace_root/x"},
+		{"workspace", "create", "Escape", "bee.env:workspace_root/../outside"},
+		{"workspace", "create", "Empty", "bee.env:workspace_root//x"},
 		{"workspace", "create", "Rootless", "/x"},
-		{"workspace", "create", "Here", "bee.environment:workspace_root", "--new-folder"},
+		{"workspace", "create", "Here", "bee.env:workspace_root", "--new-folder"},
 	} {
 		if _, err := parseClientIntent(bad); err == nil {
 			t.Fatalf("parseClientIntent(%q) accepted", bad)
@@ -388,7 +388,7 @@ func TestClientIntentGrammar(t *testing.T) {
 // Observing, attaching, selecting and listing act on a running Bee only: with
 // no owner they refuse promptly, start nothing and write nothing.
 func TestClientAttachOnlyIntentsNeverStartAnOwner(t *testing.T) {
-	for _, args := range [][]string{{"observe"}, {"client"}, {"desktops"}, {"workspace", "list"}, {"workspace", "create", "New", "bee.environment:workspace_root/new", "--new-folder"}} {
+	for _, args := range [][]string{{"observe"}, {"client"}, {"desktops"}, {"workspace", "list"}, {"workspace", "create", "New", "bee.env:workspace_root/new", "--new-folder"}} {
 		state := filepath.Join(t.TempDir(), "state")
 		owner := &fakeOwner{descriptor: fakeDescriptor(t)}
 		intent, err := parseClientIntent(args)

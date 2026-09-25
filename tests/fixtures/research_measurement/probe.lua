@@ -41,7 +41,7 @@ local function run(): Object
             profile_digest = "measure-profile-digest", placement_binding = "measure-placement", placement_attempt_id = "measure-placement-attempt", plan_digest = "measure-plan"}})
     local address: string? = nil
     for _ = 1, 100 do
-        local raw = funcs.call("bee.gateway.registry:address", {})
+        local raw = funcs.call("bee.gateway:address", {})
         local value = bounds.object(raw)
         if value and type(value.address) == "string" then address = value.address; break end
         time.sleep("20ms")
@@ -49,7 +49,7 @@ local function run(): Object
     if not address or not address:match("^127%.0%.0%.1:%d+$") then error("automatic loopback endpoint unavailable") end
     local admitted = call("bee.gateway.binding:admit", {subject = subject, action_id = ACTION, attempt_id = ATTEMPT,
         thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_message", "research_measure"}, ttl_ms = 60000,
-        surface = object(assert(registry.get("bee.research_measurement:surface")).data)})
+        surface = object(assert(registry.get("bee.research.measurement:surface")).data)})
     local binding_id = object(admitted.binding).binding_id
     local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = ATTEMPT, carrier_epoch = 1, binding_id = binding_id})
     local materialized = call("bee.gateway.binding:materialize", {attempt_id = ATTEMPT, carrier_epoch = 1, materialization_key = authorized.materialization_key})
@@ -75,7 +75,7 @@ local function run(): Object
     assert(inactive.error ~= nil, "inactive tool was exposed")
     assert(tool("session", {operation = "select", expected_revision = 1, active_traits = {"research:measure"}, context = {}}).ok == true)
     local results: Object = {}
-    local input = registry.get("bee.research_measurement:inputs")
+    local input = registry.get("bee.research.measurement:inputs")
     if not input then error("inputs missing") end
     local config = object(input.data)
     for _, label in ipairs({"baseline", "candidate"}) do

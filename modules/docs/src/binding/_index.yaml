@@ -9,7 +9,7 @@ entries:
   imports:
     protocol: bee.docs:protocol
     corpus: bee.docs:corpus
-    resources: bee.docs.registry:resources
+    resources: bee.docs:resources
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
   security:

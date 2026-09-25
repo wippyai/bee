@@ -20,7 +20,7 @@ entries:
     definition: bee.harness.launch:definitions
     carrier: bee.harness.carrier:machine
     placement_types: bee.placement:types
-    placement_resolver: bee.placement.registry:resolver
+    placement_resolver: bee.placement:resolver
     continuation: bee.harness.carrier:continuation
     interrupted: bee.harness.window:interrupted
     profiles: bee.harness.profiles:protocol
@@ -184,7 +184,7 @@ entries:
     agent_launch: bee.harness.launch:agent_launch
     definitions: bee.harness.launch:definitions
     caller_launch: bee.harness.launch:caller_launch
-    placement_resolver: bee.placement.registry:resolver
+    placement_resolver: bee.placement:resolver
   meta:
     type: internal
 - name: agent_call_facade_policy
@@ -214,7 +214,7 @@ entries:
     actions: [funcs.call]
     resources: [bee.harness.launch:start, bee.harness.launch:admit, bee.harness.launch:resolve, bee.harness.launch:setup, bee.harness.profiles:call,
       bee.threads.service:get, bee.threads.service:create, bee.resources.binding:grant, bee.credentials.binding:issue_projection, bee.threads.carrier:checkpoint,
-      bee.resources.binding:associate, bee.credentials.binding:define, bee.threads.delivery:watch, bee.placement.native:stop]
+      bee.resources.binding:associate, bee.credentials.binding:define, bee.threads.delivery:watch, bee.placement.native.binding:stop]
     effect: allow
 - name: agent_launch_execution_action_policy
   kind: security.policy.expr

@@ -125,7 +125,7 @@ func run() error {
 	// This host-authority fixture exercises singleton thread fencing. Production
 	// Settings allows independent display instances; select singleton explicitly
 	// only in this disposable composition to preserve the generic fencing proof.
-	settingsManifest := filepath.Join(root, "src", "apps", "settings", "_index.yaml")
+	settingsManifest := filepath.Join(root, "src", "settings", "_index.yaml")
 	settingsData, err := os.ReadFile(settingsManifest)
 	if err != nil {
 		return fmt.Errorf("read fixture Settings policy: %w", err)
@@ -149,7 +149,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(root, "src", "core", "applications", "broker.lua"), broker, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "src", "apps", "broker.lua"), broker, 0600); err != nil {
 			return err
 		}
 	}

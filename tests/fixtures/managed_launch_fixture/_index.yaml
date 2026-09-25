@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.fixture_terminal_launch
+namespace: bee.fixture.terminal.launch
 entries:
 - name: policy
   kind: registry.entry
@@ -32,7 +32,7 @@ entries:
     command_names: []
     binding_ref: bee.driver.claude:binding
     profile_id: window
-    policy_ref: bee.fixture_terminal_launch:policy
+    policy_ref: bee.fixture.terminal.launch:policy
     default_mode: window
     allowed_overrides:
     - brief
@@ -57,7 +57,7 @@ entries:
   security:
     policies:
     - bee.security.desktop:desktop_policy
-    - bee.fixture_terminal_launch:core_spawn_policy
+    - bee.fixture.terminal.launch:core_spawn_policy
     - bee.security.threads:thread_authority_client_policy
     - bee.security.threads:thread_lifecycle_client_policy
     - bee.security.threads:thread_create_policy
@@ -75,6 +75,6 @@ entries:
     resources:
     - bee.host:main
     - bee.session:main
-    - bee.applications:broker
+    - bee.apps:broker
     - bee.terminal:main
     effect: allow

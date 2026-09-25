@@ -15,21 +15,21 @@ local preflight = require("preflight")
 
 type Object = {[string]: unknown}
 
-local DESTINATION = "bee.delivery_review_probe:destination"
+local DESTINATION = "bee.delivery.review.probe:destination"
 local APPROVAL_POLICY = "local-delivery-review"
 local VERSION = "1.0.0"
 local READY_COMPONENT = "bee.delivery_review_ready/app"
 local READY_WORKSPACE = "delivery-review-ready"
 local READY_ENTRY = "bee.delivery_review_ready:probe"
-local READY_OVERLAY = "bee.delivery_review_probe:ready_overlay"
+local READY_OVERLAY = "bee.delivery.review.probe:ready_overlay"
 local BLOCKED_COMPONENT = "bee.delivery_review_blocked/app"
 local BLOCKED_WORKSPACE = "delivery-review-blocked"
 local BLOCKED_ENTRY = "bee.delivery_review_blocked:probe"
-local BLOCKED_OVERLAY = "bee.delivery_review_probe:blocked_overlay"
+local BLOCKED_OVERLAY = "bee.delivery.review.probe:blocked_overlay"
 local CONFIG_COMPONENT = "bee.delivery_review_config/app"
 local CONFIG_WORKSPACE = "delivery-review-config"
 local CONFIG_ENTRY = "bee.delivery_review_config:probe"
-local CONFIG_OVERLAY = "bee.delivery_review_probe:config_overlay"
+local CONFIG_OVERLAY = "bee.delivery.review.probe:config_overlay"
 local ABSENT_TARGET = "bee.delivery_review_absent:target"
 
 -- Executable, not a data descriptor: this is what the review surface's
@@ -112,7 +112,7 @@ local function config_entries(): {unknown}
 end
 
 local function configure(workspace_id: string, local_node: string)
-    local publication = assert(registry.get("bee:governance_publication_profiles"))
+    local publication = assert(registry.get("bee.env:gov_publication_profiles"))
     local publication_data = object(publication.data)
     publication_data.profiles = {
         {workspace_id = workspace_id, source_workspace = READY_WORKSPACE,
@@ -123,7 +123,7 @@ local function configure(workspace_id: string, local_node: string)
             component = CONFIG_COMPONENT, overlay_owner = CONFIG_OVERLAY}}
     publication.data = publication_data
 
-    local activation = assert(registry.get("bee:governance_activation_profiles"))
+    local activation = assert(registry.get("bee.env:gov_activation_profiles"))
     local activation_data = object(activation.data)
     activation_data.profiles = {
         {workspace_id = workspace_id, source_node = local_node, source_workspace = READY_WORKSPACE,
@@ -147,7 +147,7 @@ local function configure(workspace_id: string, local_node: string)
     local approver_data = object(approvers.data)
     local policies = approver_data.policies :: {unknown}
     policies[#policies + 1] = {name = APPROVAL_POLICY,
-        approvers = {{definition_id = "bee.inbox:app"}}, max_ttl_ms = 600000}
+        approvers = {{definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 600000}
     approver_data.policies = policies
     approvers.data = approver_data
 
@@ -160,35 +160,35 @@ local function configure(workspace_id: string, local_node: string)
 end
 
 local function author(source_workspace: string, entries: {unknown}): string
-    call_api("bee.governance.binding:overlay_call", {operation = "create", overlay_id = source_workspace,
+    call_api("bee.gov.binding:overlay_call", {operation = "create", overlay_id = source_workspace,
         expected_revision = 0, idempotency_key = "create-" .. source_workspace})
-    call_api("bee.governance.binding:overlay_call", {operation = "put", overlay_id = source_workspace,
+    call_api("bee.gov.binding:overlay_call", {operation = "put", overlay_id = source_workspace,
         expected_revision = 1, idempotency_key = "put-" .. source_workspace, path = "entries.json",
         content = json.encode(entries)})
-    local frozen = call_api("bee.governance.binding:overlay_call", {operation = "freeze",
+    local frozen = call_api("bee.gov.binding:overlay_call", {operation = "freeze",
         overlay_id = source_workspace, expected_revision = 2, idempotency_key = "freeze-" .. source_workspace})
     return digest_of(frozen.digest, source_workspace .. " frozen overlay digest")
 end
 
 local function stage(workspace_id: string, component: string, source_workspace: string, snapshot_digest: string): Object
-    local prepared = call_api("bee.governance.binding:publication_call", {operation = "prepare",
+    local prepared = call_api("bee.gov.binding:publication_call", {operation = "prepare",
         workspace_id = workspace_id, component = component, version = VERSION,
         snapshot_digest = snapshot_digest})
     local descriptor = object(prepared.descriptor)
-    local available = call_api("bee.governance.binding:destination_call", {operation = "available", workspace_id = workspace_id})
+    local available = call_api("bee.gov.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
     for _, raw in ipairs(available.versions :: {unknown}) do
         local item = object(raw)
         if item.key == descriptor.key and item.digest == descriptor.digest then found = true end
     end
     if not found then error(component .. " was not discoverable by the destination") end
-    local staged = call_api("bee.governance.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
+    local staged = call_api("bee.gov.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
         source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
         descriptor_digest = descriptor.digest, idempotency_key = "stage-" .. source_workspace})
     if staged.status ~= "staged" or staged.selected == true then
         error(component .. " did not stage as an unselected plan")
     end
-    return call_api("bee.governance.binding:destination_call", {operation = "get", workspace_id = workspace_id,
+    return call_api("bee.gov.binding:destination_call", {operation = "get", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = source_workspace, version = VERSION})
 end
 
@@ -235,7 +235,7 @@ local function main()
 
     -- The entry set a reviewer sees comes from the destination's read-only
     -- comparison of the reviewed candidate against the composed base.
-    local changes = call_api("bee.governance.binding:destination_call", {operation = "changes",
+    local changes = call_api("bee.gov.binding:destination_call", {operation = "changes",
         workspace_id = workspace_id, source_node = local_node, source_workspace = READY_WORKSPACE,
         version = VERSION})
     local added = changes.added :: {unknown}

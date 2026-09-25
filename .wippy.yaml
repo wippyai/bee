@@ -10,7 +10,7 @@ workspace:
     bee/persist: ./modules/persist
     bee/sync: ./modules/sync
     bee/hub: ./modules/hub
-    bee/governance: ./modules/gov
+    bee/gov: ./modules/gov
     bee/gateway: ./modules/gateway
     bee/threads: ./modules/threads
     bee/docs: ./modules/docs

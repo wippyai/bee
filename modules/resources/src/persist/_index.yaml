@@ -11,4 +11,4 @@ entries:
     persist: bee.persist:database
     transaction: bee.persist:transaction
     migrations: bee.resources.migrations:migrations
-    resources: bee.resources.registry:resources
+    resources: bee.resources:resources

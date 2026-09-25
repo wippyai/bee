@@ -13,20 +13,20 @@ local thread_binding = require("thread_binding")
 
 type Object = {[string]: unknown}
 
-local NAME = "bee.app_open_probe:operator"
-local SIGNAL = "bee.app_open_probe.operator.signal"
+local NAME = "bee.app.open.probe:operator"
+local SIGNAL = "bee.app.open.probe.operator.signal"
 local POLICY = "app-open-runtime"
 local THREAD = "open-probe-thread"
-local AGENT = "bee.app_open_probe:managed_agent"
+local AGENT = "bee.app.open.probe:managed_agent"
 local APPLICATION = "bee.app_journey_demo:app"
-local RESULT = "bee.app_open_probe.operator.result"
-local RECHECK = "bee.app_journey_probe.recheck"
-local RECHECK_RESULT = "bee.app_journey_probe.recheck.result"
-local CREDENTIALS = "bee.app_open_probe.credentials"
-local CREDENTIALS_GET = "bee.app_open_probe.credentials.get"
-local CREDENTIALS_RESULT = "bee.app_open_probe.credentials.result"
-local ACCESS_REVOKE = "bee.app_open_probe.access.revoke"
-local ACCESS_REVOKE_RESULT = "bee.app_open_probe.access.revoke.result"
+local RESULT = "bee.app.open.probe.operator.result"
+local RECHECK = "bee.app.journey.probe.recheck"
+local RECHECK_RESULT = "bee.app.journey.probe.recheck.result"
+local CREDENTIALS = "bee.app.open.probe.credentials"
+local CREDENTIALS_GET = "bee.app.open.probe.credentials.get"
+local CREDENTIALS_RESULT = "bee.app.open.probe.credentials.result"
+local ACCESS_REVOKE = "bee.app.open.probe.access.revoke"
+local ACCESS_REVOKE_RESULT = "bee.app.open.probe.access.revoke.result"
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -44,7 +44,7 @@ local function call(target: string, request: Object): (Object?, string?)
 end
 
 local function open_gateway()
-    local selected, address_error = funcs.call("bee.gateway.registry:address", {})
+    local selected, address_error = funcs.call("bee.gateway:address", {})
     local endpoint = object(selected)
     if address_error or not endpoint or type(endpoint.address) ~= "string" then
         error("resolve managed gateway: " .. tostring(address_error or "missing address"))

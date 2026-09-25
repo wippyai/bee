@@ -42,7 +42,7 @@ local function main()
     -- that the caller can request cancellation while they are spinning.
     local started = assert(process.listen("research.spin.started", {message = true}))
     for _ = 1, 3 do
-        local spinning, spin_error = funcs.async("bee.research_benchmark_probe:cpu_spin", caller)
+        local spinning, spin_error = funcs.async("bee.research.benchmark.probe:cpu_spin", caller)
         if not spinning then error(tostring(spin_error)) end
         local ready_timeout = time.after("1s")
         local ready = channel.select({started:case_receive(), ready_timeout:case_receive()})
@@ -59,7 +59,7 @@ local function main()
     -- A finite worker must complete four separately observed CPU chunks when
     -- its caller grants each continuation. This is the uncanceled control.
     local control_id = caller .. ":control"
-    local control, control_error = funcs.async("bee.research_benchmark_probe:spin", caller, control_id, 4)
+    local control, control_error = funcs.async("bee.research.benchmark.probe:spin", caller, control_id, 4)
     if not control then error(tostring(control_error)) end
     local control_response = control:response()
     local control_worker = ""
@@ -85,7 +85,7 @@ local function main()
     -- Cancel after its first chunk, allow the event to be handled, then send
     -- the continuation it would need to produce a second chunk.
     local cancel_id = caller .. ":cancel"
-    local spinning, spin_error = funcs.async("bee.research_benchmark_probe:spin", caller, cancel_id, 0)
+    local spinning, spin_error = funcs.async("bee.research.benchmark.probe:spin", caller, cancel_id, 0)
     if not spinning then error(tostring(spin_error)) end
     local first = progress_for(progress, cancel_id, "1s")
     if not first or first.chunk ~= 1 then spinning:cancel(); error("cancel probe did not report its first chunk") end
@@ -112,7 +112,7 @@ local function main()
     io.print("RESEARCH_SPIN_COOPERATIVE_CANCELLED chunks=1")
 
     -- Normal work after cancellation proves the caller and runtime remain live.
-    local pending, call_error = funcs.async("bee.research_benchmark_probe:benchmark")
+    local pending, call_error = funcs.async("bee.research.benchmark.probe:benchmark")
     if not pending then error(tostring(call_error)) end
     local response = pending:response()
     local deadline = time.after("5s")

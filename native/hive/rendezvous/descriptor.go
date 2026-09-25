@@ -40,7 +40,7 @@ type Descriptor struct {
 	PublicKey      string `json:"public_key"`
 	ClientRevision string `json:"client_revision,omitempty"`
 	// Supervisor is the owner's Hive supervisor process address
-	// ({node@bee.hive_host:supervisor_host|uniq}). A raft-disabled owner never
+	// ({node@bee.hive.service:supervisor_host|uniq}). A raft-disabled owner never
 	// publishes the cluster-wide name, so a local client addresses the
 	// supervisor directly. It is a hint: the client still verifies node, host
 	// and identity and the supervisor authenticates the sender.
@@ -120,7 +120,7 @@ func (d Descriptor) validate() error {
 	}
 	if d.Supervisor != "" {
 		address, err := pid.ParsePID(d.Supervisor)
-		if err != nil || address.Node != d.Node || address.Host != "bee.hive_host:supervisor_host" || address.UniqID == "" {
+		if err != nil || address.Node != d.Node || address.Host != "bee.hive.service:supervisor_host" || address.UniqID == "" {
 			return ErrDescriptor
 		}
 	}

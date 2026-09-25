@@ -59,11 +59,11 @@ local function run(address: string)
         value(call("bee.threads.service:admit_action", {thread_id = THREAD, idempotency_key = action, action_id = action,
             admitted = {request_id = action, principal_id = ACTOR, binding_ref = "b", binding_digest = "d", grant_refs = {}, budget_ref = "budget", input = {text = "test"}}}))
         value(call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = action .. "-prepare", action_id = action, attempt_id = action .. "-attempt",
-            prepared = {binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p", placement_binding = "bee.placement.native:binding", placement_attempt_id = action, plan_digest = "plan"}}))
+            prepared = {binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p", placement_binding = "bee.placement.native.binding:binding", placement_attempt_id = action, plan_digest = "plan"}}))
         local admitted = value(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD,
             owner_incarnation = 1, carrier_epoch = 1, workspace_id = WORKSPACE, tools = {"thread_read", "measure_context"}, ttl_ms = 60000,
-            surface = {tools = {{name = "measure_context", operation = "bee.gateway_probe:context_tool", description = "Read selected app state",
-                policies = {"bee.gateway_probe:context_tool_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
+            surface = {tools = {{name = "measure_context", operation = "bee.gateway.probe:context_tool", description = "Read selected app state",
+                policies = {"bee.gateway.probe:context_tool_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
                 traits = {{id = "research:measure", title = "Measure app", prompt = "Read selected app state", tools = {"measure_context"}}},
                 base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "approved-app"}, dynamic_keys = {"experiment"},
                 access = {policy = "mcp-test", traits = {"research:measure"}}}}))

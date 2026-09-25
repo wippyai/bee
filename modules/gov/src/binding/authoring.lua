@@ -8,7 +8,7 @@ local transaction = require("transaction")
 local M = {}
 type Result = transaction.Result
 function M.call(raw: unknown): Result
-    if not security.can("bee.governance.workspace.execute", "bee.governance.binding:workspace_backend_call") then
+    if not security.can("bee.gov.workspace.execute", "bee.gov.binding:workspace_backend_call") then
         return transaction.failure("DENIED", "workspace backend is not authorized")
     end
     local request, invalid = protocol.decode(raw)

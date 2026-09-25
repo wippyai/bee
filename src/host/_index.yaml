@@ -17,9 +17,9 @@ entries:
     connections: bee.host:clients
     inventory: bee.host:inventory
     transfer: bee.host:transfer
-    open_protocol: bee.applications:open_protocol
+    open_protocol: bee.apps:open_protocol
     binding_protocol: bee.host:binding_protocol
-    execution: bee.applications:execution
+    execution: bee.apps:execution
 - name: inventory
   kind: library.lua
   source: file://inventory.lua

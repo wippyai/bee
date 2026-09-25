@@ -3,7 +3,7 @@ local funcs = require("funcs")
 local test = require("test")
 
 local function call(request: unknown): {[string]: unknown}
-    local result, err = funcs.call("bee.governance.binding:destination_call", request)
+    local result, err = funcs.call("bee.gov.binding:destination_call", request)
     if type(result) ~= "table" then error(tostring(err or "destination call returned no result")) end
     return result :: {[string]: unknown}
 end

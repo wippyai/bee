@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.client_storage_probe
+namespace: bee.client.storage.probe
 entries:
 - name: bindings_policy
   kind: security.policy
@@ -23,7 +23,7 @@ entries:
     workspace_store: bee.storage:store
     state: bee.client:state
   security:
-    policies: [bee.client_storage_probe:broad_policy, bee.security.storage:workspace_storage_boundary]
+    policies: [bee.client.storage.probe:broad_policy, bee.security.storage:workspace_storage_boundary]
   meta:
     command:
       name: client-storage-denial
@@ -38,7 +38,7 @@ entries:
     workspace_store: bee.storage:store
     state: bee.client:state
   security:
-    policies: [bee.client_storage_probe:bindings_policy]
+    policies: [bee.client.storage.probe:bindings_policy]
   meta:
     command:
       name: client-storage-bindings
@@ -68,13 +68,13 @@ entries:
   kind: security.policy
   policy:
     actions: [bee.client.desktops.read]
-    resources: [bee.environment:client_db]
+    resources: [bee.env:client_db]
     effect: allow
 - name: desktop_allocate
   kind: security.policy
   policy:
     actions: [bee.client.desktops.allocate]
-    resources: [bee.environment:client_db]
+    resources: [bee.env:client_db]
     effect: allow
 - name: authority
   kind: process.lua
@@ -82,7 +82,7 @@ entries:
   method: main
   modules: [funcs, sql]
   security:
-    policies: [bee.client_storage_probe:desktop_calls, bee.client_storage_probe:desktop_read, bee.client_storage_probe:desktop_allocate]
+    policies: [bee.client.storage.probe:desktop_calls, bee.client.storage.probe:desktop_read, bee.client.storage.probe:desktop_allocate]
   meta:
     command:
       name: client-desktop-authority
@@ -93,7 +93,7 @@ entries:
   method: main
   modules: [funcs, sql]
   security:
-    policies: [bee.client_storage_probe:desktop_calls, bee.client_storage_probe:desktop_read]
+    policies: [bee.client.storage.probe:desktop_calls, bee.client.storage.probe:desktop_read]
   meta:
     command:
       name: client-desktop-reader
@@ -104,7 +104,7 @@ entries:
   method: main
   modules: [funcs, sql]
   security:
-    policies: [bee.client_storage_probe:desktop_calls]
+    policies: [bee.client.storage.probe:desktop_calls]
   meta:
     command:
       name: client-desktop-unauthorized

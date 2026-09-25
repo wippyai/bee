@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.research_probe
+namespace: bee.research.probe
 entries:
 - name: host_policy
   kind: security.policy
@@ -10,7 +10,7 @@ entries:
   method: main
   modules: [funcs, registry, process, channel, time, json, sql]
   imports: {bounds: bee.threads.records:bounds}
-  security: {policies: [bee.research_probe:host_policy]}
+  security: {policies: [bee.research.probe:host_policy]}
   meta:
     command:
       name: research-live-probe

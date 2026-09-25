@@ -15,7 +15,7 @@ def exercise(packed):
         shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
-        source = project / "src/apps/settings/app.lua"
+        source = project / "src/settings/app.lua"
         code = source.read_text()
         anchor = "            local data = event.value"
         assert anchor in code

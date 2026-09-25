@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: tests.hub_semver
+namespace: tests.hub.semver
 entries:
 - name: semver_test
   kind: function.lua

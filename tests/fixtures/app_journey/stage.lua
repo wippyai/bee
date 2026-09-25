@@ -48,7 +48,7 @@ local function workspace_value(operation: string, workspace_id: string, expected
         if offset ~= nil then request.offset = offset end
         if limit ~= nil then request.limit = limit end
     end
-    return call_api("bee.governance.binding:overlay_call", request)
+    return call_api("bee.gov.binding:overlay_call", request)
 end
 
 local function read_entries(): {Object}
@@ -95,9 +95,9 @@ end
 
 local function replacement_probe(): string
     return [[
-    local stale_results = assert(process.listen("bee.app_open_probe.credentials.result", {message = true}))
+    local stale_results = assert(process.listen("bee.app.open.probe.credentials.result", {message = true}))
     assert(operator, "replacement operator is unavailable")
-    assert(process.send(operator, "bee.app_open_probe.credentials.get", {instance_id = launch.instance_id}))
+    assert(process.send(operator, "bee.app.open.probe.credentials.get", {instance_id = launch.instance_id}))
     local stale: Object? = nil
     local stale_wait = time.after("2s")
     while true do
@@ -170,17 +170,17 @@ local function stage_version(workspace_id: string, workspace: string, version: s
     local frozen = workspace_value("freeze", workspace, next_revision, "freeze-" .. version, nil)
     local snapshot_digest = bounds.id(frozen.digest)
     if not snapshot_digest then error("workspace freeze omitted its digest") end
-    local published = call_api("bee.governance.binding:publication_call", {operation = "prepare", workspace_id = workspace_id,
+    local published = call_api("bee.gov.binding:publication_call", {operation = "prepare", workspace_id = workspace_id,
         component = COMPONENT, version = version, snapshot_digest = snapshot_digest})
     local descriptor = object(published.descriptor, "published descriptor")
-    local available = call_api("bee.governance.binding:destination_call", {operation = "available", workspace_id = workspace_id})
+    local available = call_api("bee.gov.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
     for _, raw in ipairs(available.versions :: {unknown}) do
         local item = object(raw, "available version")
         if item.key == descriptor.key and item.digest == descriptor.digest then found = true end
     end
     if not found then error("published replacement was not discoverable") end
-    local staged = call_api("bee.governance.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
+    local staged = call_api("bee.gov.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
         source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
         descriptor_digest = descriptor.digest, idempotency_key = "stage-" .. workspace})
     if staged.status ~= "staged" or staged.selected == true then error("replacement was not staged only") end
@@ -189,7 +189,7 @@ local function stage_version(workspace_id: string, workspace: string, version: s
 end
 
 local function main()
-    local activation = assert(registry.get("bee:governance_activation_profiles"))
+    local activation = assert(registry.get("bee.env:gov_activation_profiles"))
     local data = object(activation.data, "activation profiles")
     local first = object((data.profiles :: {unknown})[1], "initial activation profile")
     local workspace_id = bounds.id(first.workspace_id)

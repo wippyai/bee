@@ -12,7 +12,7 @@ from tui_smoke import Desktop  # noqa: E402
 
 def exercise():
     with tempfile.TemporaryDirectory(prefix="bee-timeline-") as directory:
-        ui = Desktop(directory, apps=("bee.timeline:app",))
+        ui = Desktop(directory, apps=("bee.threads.timeline:app",))
         try:
             ui.wait("TIMELINE", timeout=20)
             ui.pump(.5)

@@ -242,7 +242,7 @@ function M.prepare(raw_config: Config, raw: unknown): Result
         if not consuming then return failure("INTERNAL", "grant reuse has no consuming intent") end
         return activations.call(config.activations, config.actor_id, {operation = "record_consumption",
             intent_id = intent_id, expected_revision = consuming.revision, idempotency_key = record_key,
-            consumer_id = "bee.governance.grant_reuse", proposal_digest = prior_digest,
+            consumer_id = "bee.gov.grant_reuse", proposal_digest = prior_digest,
             effect_key = consuming.effect_key})
     end
     local bound, approval_error = approval.request_activation(config.approvals, intent,
@@ -340,7 +340,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             if not reuse_key then return failure("INVALID", "activation receipt key is too long") end
             return activations.call(config.activations, config.actor_id, {operation = "record_consumption",
                 intent_id = intent_id, expected_revision = intent.revision, idempotency_key = reuse_key,
-                consumer_id = "bee.governance.grant_reuse",
+                consumer_id = "bee.gov.grant_reuse",
                 proposal_digest = installed.record_digest, effect_key = intent.effect_key})
         end
         -- begin_consume was written only after the last current-selection

@@ -31,9 +31,9 @@ local function define_tests()
         end)
         test.it("discovers the production traits and overlay schema", function()
             for _, expected in ipairs({
-                {id = "bee.governance.traits:authoring_trait", tools = {"bee.governance.binding:overlay_call"}},
-                {id = "bee.governance.traits:application_delivery_trait", tools = {"bee.governance.binding:delivery_call"}},
-                {id = "bee.governance.traits:application_publish_trait", tools = {"bee.governance.binding:delivery_call"}},
+                {id = "bee.gov.traits:authoring_trait", tools = {"bee.gov.binding:overlay_call"}},
+                {id = "bee.gov.traits:application_delivery_trait", tools = {"bee.gov.binding:delivery_call"}},
+                {id = "bee.gov.traits:application_publish_trait", tools = {"bee.gov.binding:delivery_call"}},
                 {id = "bee.node.traits:metadata_trait", tools = {"bee.node.binding:describe", "bee.node.binding:update_metadata"}},
             }) do
                 local trait = entry(expected.id)
@@ -43,7 +43,7 @@ local function define_tests()
                 test.eq(#(data.tools :: {string}), #expected.tools)
                 for index, tool in ipairs(expected.tools) do test.eq((data.tools :: {string})[index], tool) end
             end
-            local overlay = entry("bee.governance.binding:overlay_call")
+            local overlay = entry("bee.gov.binding:overlay_call")
             local metadata = overlay.meta :: Object
             local encoded = metadata.input_schema
             if type(encoded) ~= "string" then error("overlay input schema is missing") end
@@ -64,7 +64,7 @@ local function define_tests()
         end)
         test.it("carries working directory, thread, placement and saved profile choices into a launch", function()
             local chosen = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k",
-                workdir = {root_ref = "bee.environment:workspace_root", path = "legacy/app"}, thread = {title = "Scan"}, placement = "native",
+                workdir = {root_ref = "bee.env:workspace_root", path = "legacy/app"}, thread = {title = "Scan"}, placement = "native",
                 saved_profile_id = "p", saved_profile_revision = 1}})
             if not chosen then error("launch arguments") end
             test.eq((chosen.workdir :: Object).path, "legacy/app")
@@ -201,11 +201,11 @@ local function define_tests()
             test.eq(workspace_tools[1].name, "overlay")
             local workspace_annotations = workspace_tools[1].annotations :: {[string]: unknown}
             test.eq(workspace_annotations.readOnlyHint, false)
-            test.eq(mcp.tool("overlay") and mcp.tool("overlay").operation, "bee.governance.binding:overlay_call")
+            test.eq(mcp.tool("overlay") and mcp.tool("overlay").operation, "bee.gov.binding:overlay_call")
             local delivery_tools = mcp.list({"delivery"}).tools :: {{[string]: unknown}}
             test.eq(#delivery_tools, 1)
             test.eq(delivery_tools[1].name, "delivery")
-            test.eq(mcp.tool("delivery") and mcp.tool("delivery").operation, "bee.governance.binding:delivery_call")
+            test.eq(mcp.tool("delivery") and mcp.tool("delivery").operation, "bee.gov.binding:delivery_call")
             local delivery_schema = delivery_tools[1].inputSchema :: {[string]: unknown}
             local delivery_required = delivery_schema.required :: {string}
             local delivery_properties = delivery_schema.properties :: {[string]: unknown}
@@ -257,7 +257,7 @@ local function define_tests()
             test.eq(authority_error, "unknown field registry")
             local publish_tools = mcp.list({"publish"}).tools :: {{[string]: unknown}}
             test.eq(#publish_tools, 1)
-            test.eq(mcp.tool("publish") and mcp.tool("publish").operation, "bee.governance.binding:delivery_call")
+            test.eq(mcp.tool("publish") and mcp.tool("publish").operation, "bee.gov.binding:delivery_call")
             local publish_schema = publish_tools[1].inputSchema :: {[string]: unknown}
             test.eq(#(publish_schema.required :: {string}), 2)
             local publish_request = mcp.publish_arguments({arguments = {workspace_id = "ws", source_overlay_id = "src", version = "1.0.1"}})

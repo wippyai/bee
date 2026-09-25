@@ -92,7 +92,7 @@ function M.reply(id: string, text: string, thread_id: string, record_id: string,
     return {message_id = id, message_kind = "reply", recipient_ids = {}, content = {text = text}, in_reply_to = {thread_id = thread_id, record_id = record_id}, outcome = outcome}
 end
 function M.prepared(): {[string]: unknown}
-    return {binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p", placement_binding = "bee.placement.native:binding", placement_attempt_id = "placement-1", plan_digest = "plan"}
+    return {binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p", placement_binding = "bee.placement.native.binding:binding", placement_attempt_id = "placement-1", plan_digest = "plan"}
 end
 function M.admitted(): {[string]: unknown}
     return {request_id = "q", principal_id = "alice", binding_ref = "b", binding_digest = "d", grant_refs = {}, budget_ref = "budget", input = {text = "go"}}

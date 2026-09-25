@@ -20,16 +20,16 @@ local M = {}
 type Result = transaction.Result
 type Object = {[string]: unknown}
 
-local PUBLICATION = "bee.governance.binding:publication_call"
-local DESTINATION = "bee.governance.binding:destination_call"
+local PUBLICATION = "bee.gov.binding:publication_call"
+local DESTINATION = "bee.gov.binding:destination_call"
 
 -- One delivery action per operation, checked against the caller's own actor
 -- before any owner facade runs.
 local ACTIONS: {[string]: string} = {
-    request = "bee.governance.delivery.manage",
-    status = "bee.governance.delivery.read",
-    publish = "bee.governance.delivery.publish",
-    preflight = "bee.governance.delivery.manage",
+    request = "bee.gov.delivery.manage",
+    status = "bee.gov.delivery.read",
+    publish = "bee.gov.delivery.publish",
+    preflight = "bee.gov.delivery.manage",
 }
 
 function M.required_action(raw: unknown): string?

@@ -17,7 +17,7 @@ entries:
     canonical: bee.sync:canonical
     database: bee.sync.persist:database
     transaction: bee.persist:transaction
-    resources: bee.sync.registry:resources
+    resources: bee.sync:resources
 - name: replicas
   kind: library.lua
   source: file://replicas.lua

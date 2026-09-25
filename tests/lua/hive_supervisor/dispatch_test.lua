@@ -45,7 +45,7 @@ local function call_scoped(policies: {string}, req: types.Request): types.Reply
         if not policy then error("policy " .. name .. ": " .. tostring(err)) end
         list[index] = policy
     end
-    local result, err = funcs.new():with_scope(security.new_scope(list)):call("bee.hive_host.supervisor:dispatch_probe", req)
+    local result, err = funcs.new():with_scope(security.new_scope(list)):call("bee.hive.supervisor:dispatch_probe", req)
     if err or type(result) ~= "table" then error("scoped call failed: " .. tostring(err)) end
     local reply, reply_err = types.decode_reply(result)
     if not reply then error("invalid reply envelope: " .. tostring(reply_err)) end

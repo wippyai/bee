@@ -21,8 +21,8 @@ local function main(phase_arg: unknown): AttackerReport
         phase_num = math.floor(phase_arg)
     end
 
-    local target: string = "bee.hive_admission:probe"
-    local host: string = "bee.hive_admission:supervisor_host"
+    local target: string = "bee.hive.admission:probe"
+    local host: string = "bee.hive.admission:supervisor_host"
     local results: {[string]: VariantResult} = {}
     local any_admitted: boolean = false
 

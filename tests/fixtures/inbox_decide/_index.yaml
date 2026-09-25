@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.inbox_decide_probe
+namespace: bee.approvals.inbox.decide.probe
 entries:
 - name: seed_policy
   kind: security.policy
@@ -20,10 +20,10 @@ entries:
   - system
   imports:
     canonical: bee.sync:canonical
-    artifact: bee.governance:artifact
-    plan_store: bee.governance.persist:plan_store
-    staging: bee.governance.registry:staging_resources
-    approval: bee.governance.binding:approval
+    artifact: bee.gov:artifact
+    plan_store: bee.gov.persist:plan_store
+    staging: bee.gov:staging_resources
+    approval: bee.gov.binding:approval
 - name: seed
   kind: process.lua
   source: file://seed.lua
@@ -34,10 +34,10 @@ entries:
   - system
   - logger
   imports:
-    helper: bee.inbox_decide_probe:helper
+    helper: bee.approvals.inbox.decide.probe:helper
   security:
     policies:
-    - bee.inbox_decide_probe:seed_policy
+    - bee.approvals.inbox.decide.probe:seed_policy
     - bee.security.approvals:approval_request_policy
     - bee.security.approvals:approval_consume_policy
   meta:
@@ -45,7 +45,7 @@ entries:
       name: inbox-decide-seed
       security:
         actor:
-          id: bee.inbox_decide_probe
+          id: bee.approvals.inbox.decide.probe
 - name: consume
   kind: process.lua
   source: file://consume.lua
@@ -55,10 +55,10 @@ entries:
   - security
   - logger
   imports:
-    helper: bee.inbox_decide_probe:helper
+    helper: bee.approvals.inbox.decide.probe:helper
   security:
     policies:
-    - bee.inbox_decide_probe:seed_policy
+    - bee.approvals.inbox.decide.probe:seed_policy
     - bee.security.approvals:approval_request_policy
     - bee.security.approvals:approval_consume_policy
   meta:
@@ -66,4 +66,4 @@ entries:
       name: inbox-decide-consume
       security:
         actor:
-          id: bee.inbox_decide_probe
+          id: bee.approvals.inbox.decide.probe

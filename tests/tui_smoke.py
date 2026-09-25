@@ -539,7 +539,7 @@ def process_manager(packed):
             assert hover_bg != ui.screen.buffer[line - 2][4].bg, ui.text()
             assert "Heap" not in ui.text(), "Hover launched an application"
             ui.key(b"\r")
-            ui.wait("Heap"); ui.wait("bee.applications:broker")
+            ui.wait("Heap"); ui.wait("bee.apps:broker")
             ui.pump(1.2)
             assert "permission denied" not in ui.text(), ui.text()
             ui.key(b"p"); ui.wait("Paused")
@@ -553,7 +553,7 @@ def process_manager(packed):
             # Service inventory may exceed the viewport; workers sorts last.
             ui.key(b"\x1b[F")
             ui.wait("bee:workers")
-            ui.key(b"\t"); ui.wait("bee.applications:broker")
+            ui.key(b"\t"); ui.wait("bee.apps:broker")
             ui.open_start(); ui.choose("Settings"); ui.wait("BEE SETTINGS")
             ui.open_start(); ui.choose("Process Manager"); ui.wait("Heap")
             # New supervised services can put Settings below the visible rows.

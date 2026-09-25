@@ -47,9 +47,9 @@ HOST_ENTRIES = {
         "thread_lifecycle_policy", "thread_carrier_policy", "thread_approval_policy",
         "thread_approval_client_policy", "thread_waiter_policy",
     },
-    "src/_index.yaml": {"approver_policies", "docs_corpus", "governance_publication_profiles",
-                         "governance_activation_profiles", "placement_path", "placement_host_files",
+    "src/_index.yaml": {"approver_policies", "docs_corpus", "placement_path", "placement_host_files",
                          "placement_executor", "placement_admitted_roots", "placement_resource_mode"},
+    "src/env/_index.yaml": {"gov_publication_profiles", "gov_activation_profiles"},
     "src/security/_index.yaml": {"ordinary_app_subsystem_boundary"},
     "src/security/placement/_index.yaml": {"placement_store_policy", "placement_exec_policy"},
     "src/security/docs/_index.yaml": {"docs_policy"},
@@ -61,7 +61,7 @@ def selected_host_entries():
     selected = {}
     for relative, names in HOST_ENTRIES.items():
         document = yaml.safe_load((ROOT / relative).read_text())
-        assert document["namespace"] == "bee" or document["namespace"].startswith("bee.security"), relative
+        assert document["namespace"] == "bee" or document["namespace"] == "bee.env" or document["namespace"].startswith("bee.security"), relative
         available = {entry["name"]: entry for entry in document["entries"]}
         assert names <= available.keys(), f"missing host entries in {relative}: {sorted(names - available.keys())}"
         selected[relative] = {
@@ -115,7 +115,7 @@ def write_gateway_host(folder, native):
             ("waiter_policies", ["bee.security.threads:thread_waiter_policy"]),
         )),
         dependency("dependency_application", "bee/application"),
-        dependency("dependency_sync", "bee/sync", (("target_db", "bee.sync:db"), ("target_exports", "bee:sync_exports"), ("target_sender", "bee.gateway_probe:sync_sender"))),
+        dependency("dependency_sync", "bee/sync", (("target_db", "bee.sync:db"), ("target_exports", "bee:sync_exports"), ("target_sender", "bee.gateway.probe:sync_sender"))),
         dependency("dependency_approvals", "bee/approvals", (
             ("target_db", "bee.approvals:db"),
             ("target_policies", "bee:approver_policies"),
@@ -125,10 +125,10 @@ def write_gateway_host(folder, native):
                                  "bee.security.threads:thread_approval_policy", "bee.security.threads:thread_approval_client_policy"]),
         )),
         dependency("dependency_hub", "bee/hub", (("process_host", "bee:workers"),)),
-        dependency("dependency_governance", "bee/governance", (
-            ("target_db", "bee.governance:db"),
-            ("target_publication_profiles", "bee:governance_publication_profiles"),
-            ("target_activation_profiles", "bee:governance_activation_profiles"),
+        dependency("dependency_governance", "bee/gov", (
+            ("target_db", "bee.gov:db"),
+            ("target_publication_profiles", "bee.env:gov_publication_profiles"),
+            ("target_activation_profiles", "bee.env:gov_activation_profiles"),
             ("target_approval_request_policy", "bee.security.approvals:approval_request_policy"),
             ("target_approval_consume_policy", "bee.security.approvals:approval_consume_policy"),
         )),
@@ -199,7 +199,7 @@ def write_workspace_config(folder):
 
 def add_custom_tool_policies(folder):
     """Give the endpoint exactly the fixture's non-builtin surface policies."""
-    policies = ("bee.gateway_probe:context_tool_policy", "bee.gateway_probe:replacement_policy")
+    policies = ("bee.gateway.probe:context_tool_policy", "bee.gateway.probe:replacement_policy")
     api = folder / "modules" / "gateway" / "src" / "api" / "_index.yaml"
     api_document = yaml.safe_load(api.read_text())
     endpoint = next(entry for entry in api_document["entries"] if entry["name"] == "mcp_http")

@@ -20,12 +20,12 @@ local function refused(code: string, message: string): caller.Reply
 end
 
 local function roots(): caller.Reply
-    return ok({roots = {{root_ref = "bee.environment:workspace_root", access = "write"}, {root_ref = "bee:archive", access = "read"},
+    return ok({roots = {{root_ref = "bee.env:workspace_root", access = "write"}, {root_ref = "bee:archive", access = "read"},
         {root_ref = "\27[2J", access = "write"}, "junk"}})
 end
 
 local function listing(path: string, folders: {Object}, extra: Object?): caller.Reply
-    local value: Object = {root_ref = "bee.environment:workspace_root", path = path, access = "write", folders = folders}
+    local value: Object = {root_ref = "bee.env:workspace_root", path = path, access = "write", folders = folders}
     for key, item in pairs(extra or {}) do value[key] = item end
     return ok(value)
 end
@@ -47,7 +47,7 @@ local function define_tests()
             test.is_true(folder_picker.open(form.picker))
             local first = folder_picker.folders_intent(form.picker)
             test.eq(first and first.target, "bee.workspace.catalog:folders")
-            test.eq(first and first.request.root_ref, "bee.environment:workspace_root")
+            test.eq(first and first.request.root_ref, "bee.env:workspace_root")
             test.eq(first and first.request.path, "")
             test.eq(first and first.request.limit, folder_picker.PAGE)
             folder_picker.apply_folders(form.picker, listing("", {{name = "alpha"}, {name = "beta", workspace_id = HELD}}))
@@ -70,10 +70,10 @@ local function define_tests()
             local intent = creation.intent(form)
             test.eq(intent and intent.target, "bee.workspace.catalog:create")
             test.eq(intent and intent.request.label, "gamma")
-            test.eq(intent and intent.request.root_ref, "bee.environment:workspace_root")
+            test.eq(intent and intent.request.root_ref, "bee.env:workspace_root")
             test.eq(intent and intent.request.subpath, "beta/gamma")
             test.eq(intent and intent.request.create_directory, true)
-            local created = creation.apply_created(form, ok({workspace_id = ID, label = "gamma", root_ref = "bee.environment:workspace_root",
+            local created = creation.apply_created(form, ok({workspace_id = ID, label = "gamma", root_ref = "bee.env:workspace_root",
                 subpath = "beta/gamma", state = "active", created_at = "2026-09-24T00:00:00.000Z", last_used_at = "2026-09-24T00:00:00.000Z"}))
             test.eq(created and created.workspace_id, ID)
         end)

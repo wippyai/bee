@@ -23,7 +23,7 @@ local function stop_once_supervised(attempt_id: string): Channel<StopResult>
             supervised = selected.channel == replies and selected.ok
         end
         process.unlisten(replies)
-        local reply, call_error = funcs.call("bee.placement.native:stop", {attempt_id = attempt_id, mode = "cooperative"})
+        local reply, call_error = funcs.call("bee.placement.native.binding:stop", {attempt_id = attempt_id, mode = "cooperative"})
         local accepted = false
         if type(reply) == "table" then accepted = (reply :: {[string]: unknown}).ok == true end
         stopped:send({ok = call_error == nil and accepted, error = tostring(call_error or "")})

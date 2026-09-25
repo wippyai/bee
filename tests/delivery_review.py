@@ -148,7 +148,7 @@ def exercise_responsive():
         delay_destination(project, "available")
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True, timeout=300)
 
-        ui = Desktop(folder, project=project, apps=("bee.overlays:app",))
+        ui = Desktop(folder, project=project, apps=("bee.gov.overlays:app",))
         ui.observed_frames = []
         try:
             deadline = time.monotonic() + COLD_BOOT
@@ -196,7 +196,7 @@ def exercise():
         evidence = seed(project, folder)
         assert evidence["workspace_id"] == workspace_id, evidence
 
-        ui = Desktop(folder, project=project, apps=("bee.overlays:app",))
+        ui = Desktop(folder, project=project, apps=("bee.gov.overlays:app",))
         try:
             ui.wait("OVERLAYS", timeout=COLD_BOOT)
             ui.window_control("□")
@@ -260,7 +260,7 @@ def exercise():
             ui.wait("APPROVALS", timeout=COLD_BOOT)
             ui.window_control("□")
             ui.pump(.4)
-            ui.wait("bee.governance:establish-overlay", timeout=COLD_BOOT)
+            ui.wait("bee.gov:establish-overlay", timeout=COLD_BOOT)
             ui.key(b"j")
             ui.key(b"o")
             ui.wait("Asked:", timeout=20)
@@ -282,7 +282,7 @@ def exercise():
                 ui.wait("Activation " + phase, timeout=20)
             ui.wait("settled  applied", timeout=20)
             ui.wait("consumed  proposal", timeout=20)
-            ui.wait("Receipt  overlay bee.delivery_review_probe:ready_overlay", timeout=20)
+            ui.wait("Receipt  overlay bee.delivery.review.probe:ready_overlay", timeout=20)
             ui.wait("Receipt  artifact " + evidence["ready_artifact_digest"][:12], timeout=20)
             ui.quit()
         finally:

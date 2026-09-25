@@ -21,7 +21,7 @@ local function main(run_name: string?)
     if run_name == "parallel" then
         local events = assert(process.events())
         for i = 1, 4 do
-            assert(process.spawn_monitored("bee.journal_probe:main", "bee:workers", "parallel-" .. tostring(i)))
+            assert(process.spawn_monitored("bee.journalprobe:main", "bee:workers", "parallel-" .. tostring(i)))
         end
         local finished = 0
         while finished < 4 do
@@ -127,15 +127,15 @@ def main():
         shutil.copytree(ROOT / "modules", folder / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, folder / name)
-        probe = folder / "src/probe"
+        probe = folder / "src/journalprobe"
         probe.mkdir()
         (probe / "main.lua").write_text(PROBE)
         (probe / "_index.yaml").write_text(yaml.safe_dump({
-            "version": "1.0", "namespace": "bee.journal_probe", "entries": [{
+            "version": "1.0", "namespace": "bee.journalprobe", "entries": [{
                 "name": "main", "kind": "process.lua", "source": "file://main.lua", "method": "main",
                 "modules": ["sql", "contract", "process"], "imports": {"journal": "bee.threads:client"},
                 "meta": {"command": {"name": "journal-probe", "security": {"actor": {"id": "journal-test"}}}},
-                "security": {"policies": ["bee.security.threads:thread_read_client_policy", "bee.security.threads:thread_write_client_policy", "bee.journal_probe:spawn_policy"]},
+                "security": {"policies": ["bee.security.threads:thread_read_client_policy", "bee.security.threads:thread_write_client_policy", "bee.journalprobe:spawn_policy"]},
             }, {"name": "spawn_policy", "kind": "security.policy", "policy": {
                 "actions": ["process.spawn", "process.spawn.monitored", "process.host", "process.monitor"],
                 "resources": "*", "effect": "allow"}}]}))
@@ -176,19 +176,19 @@ def main():
 
         # Durable subscription lifecycle across restarts. The command actor
         # can call the contracts and create only this fixture's thread.
-        lifecycle = folder / "src/lifecycle_probe"
+        lifecycle = folder / "src/lifecycleprobe"
         lifecycle.mkdir()
         (lifecycle / "main.lua").write_text(LIFECYCLE_PROBE)
         (lifecycle / "_index.yaml").write_text(yaml.safe_dump({
-            "version": "1.0", "namespace": "bee.lifecycle_probe", "entries": [{
+            "version": "1.0", "namespace": "bee.lifecycleprobe", "entries": [{
                 "name": "main", "kind": "process.lua", "source": "file://main.lua", "method": "main",
                 "modules": ["contract", "uuid", "io"],
                 "imports": {},
                 "meta": {"command": {"name": "lifecycle-probe", "security": {"actor": {"id": "lifecycle-test"}}}},
-                "security": {"policies": ["bee.security.threads:thread_authority_client_policy", "bee.security.threads:thread_delivery_client_policy", "bee.lifecycle_probe:create_policy"]},
+                "security": {"policies": ["bee.security.threads:thread_authority_client_policy", "bee.security.threads:thread_delivery_client_policy", "bee.lifecycleprobe:create_policy"]},
             }, {"name": "create_policy", "kind": "security.policy", "policy": {
                 "actions": ["bee.threads.create"], "resources": ["lifecycle-thread"], "effect": "allow"}}]}))
-        subprocess.run([str(RUNTIME), "lint", "--ns", "bee.lifecycle_probe"], cwd=folder, check=True)
+        subprocess.run([str(RUNTIME), "lint", "--ns", "bee.lifecycleprobe"], cwd=folder, check=True)
         lifecycle_db = folder / "lifecycle.db"
         lifecycle_env = database_environment(folder, BEE_THREADS_DB=str(lifecycle_db))
 

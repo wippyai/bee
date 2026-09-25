@@ -27,7 +27,7 @@ import (
 // around a test-owned command entry. Only the command entry and the named
 // Codex profile are test-owned.
 const liveCodexProbeIndex = `version: '1.0'
-namespace: bee.live_codex_profile
+namespace: bee.livecodexprofile
 entries:
 - name: host_policy
   kind: security.policy
@@ -37,12 +37,12 @@ entries:
   lifecycle: {auto_start: true}
 - name: token
   kind: env.variable
-  storage: bee.live_codex_profile:environment
+  storage: bee.livecodexprofile:environment
   variable: BEE_LIVE_CODEX_TOKEN
   readonly: true
 - name: config_profile
   kind: env.variable
-  storage: bee.live_codex_profile:environment
+  storage: bee.livecodexprofile:environment
   variable: BEE_LIVE_CODEX_PROFILE
   readonly: true
 - name: main
@@ -51,11 +51,11 @@ entries:
   method: main
   modules: [funcs, process, channel, time, json, sql, uuid, env]
   imports: {bounds: bee.threads.records:bounds}
-  security: {policies: [bee.live_codex_profile:host_policy]}
+  security: {policies: [bee.livecodexprofile:host_policy]}
   meta:
     command:
       name: live-codex-profile
-      security: {actor: {id: bee.live_codex_profile.probe}}
+      security: {actor: {id: bee.livecodexprofile.probe}}
 `
 
 const liveCodexProbeMain = `-- SPDX-License-Identifier: MIT
@@ -87,18 +87,18 @@ local function call(target: string, request: unknown): Object
     return result
 end
 local function main()
-    local actor = "bee.live_codex_profile.probe"
+    local actor = "bee.livecodexprofile.probe"
     local definition = "bee.driver.codex:named_batch"
-    local config_profile = env.get("bee.live_codex_profile:config_profile")
+    local config_profile = env.get("bee.livecodexprofile:config_profile")
     if type(config_profile) ~= "string" or config_profile == "" then config_profile = "ds-flash" end
-    local token = env.get("bee.live_codex_profile:token")
+    local token = env.get("bee.livecodexprofile:token")
     if type(token) ~= "string" or token == "" then error("missing probe token") end
     local workspace_id = "live-codex-profile"
     local thread_id = "live-codex-profile-thread"
     -- A listener must exist before admission mints a gateway binding.
     local listener: Object? = nil
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway.registry:address", {})
+        local raw, address_error = funcs.call("bee.gateway:address", {})
         if not address_error then listener = bounds.object(raw) end
         if listener and type(listener.address) == "string" then break end
         time.sleep("100ms")
@@ -262,11 +262,11 @@ func liveCodexCheck() error {
 			return err
 		}
 	}
-	index := filepath.Join(root, "src/live_codex_profile/_index.yaml")
+	index := filepath.Join(root, "src/livecodexprofile/_index.yaml")
 	if err = liveCodexWrite(index, liveCodexProbeIndex); err != nil {
 		return err
 	}
-	if err = liveCodexWrite(filepath.Join(root, "src/live_codex_profile/main.lua"), liveCodexProbeMain); err != nil {
+	if err = liveCodexWrite(filepath.Join(root, "src/livecodexprofile/main.lua"), liveCodexProbeMain); err != nil {
 		return err
 	}
 	// The inherited Codex home and the host executable are read through this
@@ -284,7 +284,7 @@ func liveCodexCheck() error {
 	if err = liveCodexSetVariable(root, "src/driver/codex/_index.yaml", "executable", "BEE_LIVE_CODEX_EXECUTABLE"); err != nil {
 		return err
 	}
-	if err = liveCodexSetVariable(root, "src/environment/_index.yaml", "machine_home", "BEE_LIVE_CODEX_HOME"); err != nil {
+	if err = liveCodexSetVariable(root, "src/env/_index.yaml", "machine_home", "BEE_LIVE_CODEX_HOME"); err != nil {
 		return err
 	}
 	overrides := map[string]string{"BEE_LIVE_CODEX_EXECUTABLE": codex, "BEE_LIVE_CODEX_HOME": home,

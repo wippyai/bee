@@ -63,11 +63,11 @@ entries:
   security:
     policies:
     - bee.hub:migration_runner_test_policy
-    - bee.governance.security:destination_service_policy
-    - bee.governance.security:destination_execution_policy
+    - bee.gov.security:destination_service_policy
+    - bee.gov.security:destination_execution_policy
   imports:
     test: wippy.test:test
-    effect: bee.governance.binding:migration_effect
+    effect: bee.gov.binding:migration_effect
     migration_runner: bee.hub.binding:migration_runner
 - name: migration_runner_test
   kind: function.lua
@@ -84,8 +84,8 @@ entries:
     - bee.hub.security:worker_policy
     - bee.hub.security:worker_host_policy
     - bee.hub.security:migration_context_policy
-    - bee.governance.security:destination_service_policy
-    - bee.governance.security:destination_execution_policy
+    - bee.gov.security:destination_service_policy
+    - bee.gov.security:destination_execution_policy
   imports:
     test: wippy.test:test
     migration_runner: bee.hub.binding:migration_runner
@@ -105,7 +105,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    host_resources: bee.hub.registry:host_resources
+    host_resources: bee.hub:host_resources
 - name: inspect_test
   kind: function.lua
   source: file://inspect_test.lua
@@ -116,5 +116,5 @@ entries:
     inspect: bee.hub.binding:inspect
     inspection: bee.hub:inspection
     inventory: bee.hub:inventory
-    installed: bee.hub.registry:inventory_reader
+    installed: bee.hub:inventory_reader
     preview: bee.hub.binding:preview

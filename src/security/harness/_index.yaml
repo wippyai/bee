@@ -105,7 +105,7 @@ entries:
   meta:
     comment: Lets a managed agent launch into a workspace other than its binding's; the host attaches it to the launch tool only for agents it trusts to act across workspaces
   policy:
-    actions: [bee.workspaces.launch]
+    actions: [bee.workspace.manager.launch]
     resources: '*'
     effect: allow
 - name: agent_call_policy

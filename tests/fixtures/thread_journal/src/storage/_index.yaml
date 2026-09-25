@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.thread_demo.storage
+namespace: bee.thread.demo.storage
 entries:
 - name: store
   kind: library.lua

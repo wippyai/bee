@@ -398,14 +398,14 @@ function M.main(fail_commit: boolean?)
     end
     local host = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
         :with_context({["bee.host_owner"] = owner, ["bee.test.fail_renderer_once"] = true,
-            ["bee.test.fail_transfer_commit"] = fail_commit == true}):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.environment:workspace_root", subpath = ""})))
+            ["bee.test.fail_transfer_commit"] = fail_commit == true}):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""})))
     local started = assert(ready:receive())
     assert(started:from() == host)
     local boot: unknown = started:payload():data()
     if type(boot) ~= "table" then error("Invalid host boot") end
     local workspace_id = contract.workspace_id(boot.workspace_id)
     if not workspace_id then error("Invalid workspace ID") end
-    local policy, policy_error = security.policy("bee.attachment_probe:client_policy")
+    local policy, policy_error = security.policy("bee.attachment.probe:client_policy")
     if not policy then error(tostring(policy_error)) end
     local scope = security.new_scope({policy})
     local display_ids: {[string]: string} = {}
@@ -449,12 +449,12 @@ function M.main(fail_commit: boolean?)
         assert(process.send(host, "bee.host.client", {version = 1, request_id = id, op = "detach", workspace_id = workspace_id, recipient = pid}))
         result(id, pid, "")
     end
-    local first = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment_probe:client", "bee:workers", owner, host, workspace_id, "A", fail_commit)))
+    local first = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment.probe:client", "bee:workers", owner, host, workspace_id, "A", fail_commit)))
     status(first, "ready")
     admit("first", first, true, "")
     local first_view = status(first, "opened")
     if not first_view then error("Missing first view") end
-    local second = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment_probe:client", "bee:workers", owner, host, workspace_id, "B", fail_commit)))
+    local second = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment.probe:client", "bee:workers", owner, host, workspace_id, "B", fail_commit)))
     status(second, "ready")
     admit("same-recipient-display-conflict", first, true, "identity_conflict", display_ids[second])
     admit("duplicate-display-conflict", second, true, "identity_conflict", display_ids[first])
@@ -468,7 +468,7 @@ function M.main(fail_commit: boolean?)
         assert(message:from() == pid and message:payload():data() == phase, "Unexpected renderer status")
     end
     local function renderer(): string
-        local pid = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment_probe:renderer", "bee:workers", owner, first)))
+        local pid = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment.probe:renderer", "bee:workers", owner, first)))
         renderer_status(pid, "ready")
         return pid
     end
@@ -514,7 +514,7 @@ function M.main(fail_commit: boolean?)
     assert(process.send(first, "bee.client.command", "stale")); status(first, "stale")
     assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "inventory-open", op = "open", workspace_id = workspace_id,
-        definition_id = "bee.attachment_probe:app", arguments = {"inventory"}}))
+        definition_id = "bee.attachment.probe:app", arguments = {"inventory"}}))
     local third = reply("inventory-open", "open")
     assert(third.error_code == "")
     assert(process.send(second, "bee.client.command", "inventory-three")); status(second, "inventory-three")

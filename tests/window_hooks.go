@@ -116,7 +116,7 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 	patches := []struct{ path, from, to string }{
 		{"src/_index.yaml", "address: 127.0.0.1:0", "address: " + endpointAddress},
 		{"modules/gateway/src/security/_index.yaml", `resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$"`, `resource == "http://` + endpointAddress + `/ready"`},
-		{"src/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window_hooks_fixture:binding\n"},
+		{"src/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window.hooks.fixture:binding\n"},
 		{"src/_index.yaml", "hide_logs: true", "hide_logs: false"},
 	}
 	for _, patch := range patches {
@@ -133,7 +133,7 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 		}
 	}
 
-	compositionFile := filepath.Join(tempDir, "src", "_index.yaml")
+	compositionFile := filepath.Join(tempDir, "src", "deps", "_index.yaml")
 	gatewayBytes, err = os.ReadFile(compositionFile)
 	if err != nil {
 		return "", err

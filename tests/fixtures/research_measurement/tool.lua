@@ -79,14 +79,14 @@ local function run(raw: unknown): Object
     local bound = binding()
     local actor = security.actor()
     if not bound or not actor then return fail("DENIED", "authenticated MCP binding required") end
-    local input = registry.get("bee.research_measurement:inputs")
+    local input = registry.get("bee.research.measurement:inputs")
     local config = input and bounds.object(input.data) or nil
     if not config then return fail("UNAVAILABLE", "host experiment inputs missing") end
     local source_digest = label == "baseline" and config.baseline_sha256 or config.candidate_sha256
     if type(source_digest) ~= "string" or #source_digest ~= 64 or not source_digest:match("^[0-9a-f]+$") then
         return fail("INVALID", "host source digest is invalid")
     end
-    local entry_id = label == "baseline" and "bee.research_benchmark_probe:canonical" or "bee.research.demo:canonical"
+    local entry_id = label == "baseline" and "bee.research.benchmark.probe:canonical" or "bee.research.demo:canonical"
     local entry = registry.get(entry_id)
     local entry_data = entry and bounds.object(entry.data) or nil
     local source = entry_data and entry_data.source or nil
@@ -97,7 +97,7 @@ local function run(raw: unknown): Object
     if not message_id then return fail("INVALID", tostring(hash_error)) end
     local cached, lookup_error = previous(bound, MEASUREMENT_ACTOR, message_id)
     if cached or lookup_error then return cached or lookup_error or fail("INVALID", "lookup failed") end
-    local target = label == "baseline" and "bee.research_measurement:measure" or "bee.research.demo:measure"
+    local target = label == "baseline" and "bee.research.measurement:measure" or "bee.research.demo:measure"
     local pending, start_error = funcs.async(target, label)
     if not pending then return fail("UNAVAILABLE", tostring(start_error)) end
     local response = pending:response()

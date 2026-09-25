@@ -157,7 +157,7 @@ child cannot be scrubbed.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.credentials` | `persist/broker`: the seven operations and the store opened through `bee.persist`; `registry/sources`: host allowlist, provider destinations, linked references; contract `contract` with binding `local` |
+| `bee.credentials` | `persist/broker`: the seven operations and the store opened through `bee.persist`; root `sources`: host allowlist, provider destinations, linked references; contract `contract` with binding `local` |
 
 Actions: `bee.credentials.manage` (define, list, revoke any, revoke_all;
 `bee.security.credentials:credential_manage_policy`), `bee.credentials.issue` (issue for oneself;

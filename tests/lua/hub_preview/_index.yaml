@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.hub_preview
+namespace: bee.hub.preview
 entries:
 - name: preview_test
   kind: function.lua

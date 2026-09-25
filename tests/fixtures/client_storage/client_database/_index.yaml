@@ -3,10 +3,10 @@ namespace: bee.client.db
 entries:
 - name: left
   kind: db.sql.sqlite
-  file: ${env:bee:client_db_path}.left
+  file: ${env:bee.env:client_db_path}.left
 - name: right
   kind: db.sql.sqlite
-  file: ${env:bee:client_db_path}.right
+  file: ${env:bee.env:client_db_path}.right
 - name: forbidden
   kind: db.sql.sqlite
-  file: ${env:bee:client_db_path}.forbidden
+  file: ${env:bee.env:client_db_path}.forbidden

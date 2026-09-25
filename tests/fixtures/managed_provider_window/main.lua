@@ -53,7 +53,7 @@ local function run(provider: string, definition: string, marker: string, title: 
     if not boundary then error(tostring(boundary_error)) end
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-        :with_scope(scope):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
     assert(catalogs:receive():from() == broker)
     local request = assert(json.encode({request_id = provider .. "-request", definition_ref = definition, brief = "",
         thread_id = thread}))
@@ -146,10 +146,10 @@ local function run(provider: string, definition: string, marker: string, title: 
 end
 
 local function run_all()
-    local expected = assert(registry.get("bee.managed_provider_fixture:expectation"))
+    local expected = assert(registry.get("bee.managed.provider.fixture:expectation"))
     local data = expected.data :: {[string]: unknown}
-    run("claude", "bee.managed_provider_fixture:definition_claude", tostring(data.claude_marker), "Open Claude Code window", "managed_claude_thread")
-    run("codex", "bee.managed_provider_fixture:definition_codex", tostring(data.codex_marker), "Open Codex CLI window", "managed_codex_thread")
+    run("claude", "bee.managed.provider.fixture:definition_claude", tostring(data.claude_marker), "Open Claude Code window", "managed_claude_thread")
+    run("codex", "bee.managed.provider.fixture:definition_codex", tostring(data.codex_marker), "Open Codex CLI window", "managed_codex_thread")
 end
 
 M.run = run_all

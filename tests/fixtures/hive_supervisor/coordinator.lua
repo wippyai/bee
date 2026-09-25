@@ -12,7 +12,7 @@ local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 local function main(remote: string)
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
-        "bee.security.hive:hive_dispatch_policy", "bee.hive_probe:names_policy", "bee.hive_probe:execute_policy"}) do
+        "bee.security.hive:hive_dispatch_policy", "bee.hive.probe:names_policy", "bee.hive.probe:execute_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error("load supervisor policy " .. name .. ": " .. tostring(policy_error)) end
         policies[#policies + 1] = policy
@@ -20,7 +20,7 @@ local function main(remote: string)
     local events = assert(process.events())
     local function start(): string
         local spawned, spawn_error = process.with_options({}):with_scope(security.new_scope(policies))
-            :spawn_monitored("bee.hive_host.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {remote}})
+            :spawn_monitored("bee.hive.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {remote}})
         local pid = tostring(assert(spawned, tostring(spawn_error)))
         local deadline = time.now():add("5s")
         while time.now():before(deadline) do
@@ -50,7 +50,7 @@ local function main(remote: string)
         if command == "identity" then
             assert(io.print("BEE_HIVE_SUPERVISOR identity " .. tostring(process.pid())))
         elseif command:match("^feed%-") or command:match("^enroll%-") or command:match("^approval%-") or command == "revoke" then
-            local answer, err = funcs.new():call("bee.feed_probe:handle", {command = command, remote = remote})
+            local answer, err = funcs.new():call("bee.feed.probe:handle", {command = command, remote = remote})
             if err or type(answer) ~= "string" then error("feed fixture: " .. tostring(err)) end
             assert(io.print("BEE_HIVE_SUPERVISOR " .. answer))
         elseif command == "probe" then

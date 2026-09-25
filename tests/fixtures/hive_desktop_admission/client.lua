@@ -147,7 +147,7 @@ local function main(execution: string, scenario: string?, parent: string?)
     if not observer_detached then error("observer detach failed: " .. tostring(observer_error)) end
     local held, held_error = process.listen("bee.desktop.fixture.held", {message = true})
     if not held then error(tostring(held_error)) end
-    local holder, holder_error = process.spawn_monitored("bee.desktop_admission_probe:client", "bee.hive_host.desktop:display_host", execution, "hold", tostring(process.pid()))
+    local holder, holder_error = process.spawn_monitored("bee.desktop.admission.probe:client", "bee.hive.desktop:display_host", execution, "hold", tostring(process.pid()))
     if not holder then error(tostring(holder_error)) end
     local function held_reply(expected: string)
         local selected = channel.select({held:case_receive(), time.after("10s"):case_receive()})

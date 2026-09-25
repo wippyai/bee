@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.hive_remote
+namespace: bee.hive.remote
 entries:
 - name: client_policy
   kind: security.policy
@@ -31,7 +31,7 @@ entries:
       name: hive-remote-host
       security:
         actor: {id: bee.remote.supervisor}
-        policies: [bee.security.desktop:desktop_policy, bee.hive_remote:core_spawn_policy, bee.security.storage:workspace_storage_policy, bee.hive_remote:inspect]
+        policies: [bee.security.desktop:desktop_policy, bee.hive.remote:core_spawn_policy, bee.security.storage:workspace_storage_policy, bee.hive.remote:inspect]
 - name: client_actor
   kind: process.lua
   source: file://client.lua
@@ -49,7 +49,7 @@ entries:
       name: hive-remote-client
       security:
         actor: {id: bee.remote.client}
-        policies: [bee.security.desktop:desktop_policy, bee.hive_remote:core_spawn_policy, bee.security.desktop:client_spawn_policy, bee.security.storage:client_storage_policy, bee.hive_remote:controller_spawn_policy, bee.hive_remote:client_policy, bee.hive_remote:inspect]
+        policies: [bee.security.desktop:desktop_policy, bee.hive.remote:core_spawn_policy, bee.security.desktop:client_spawn_policy, bee.security.storage:client_storage_policy, bee.hive.remote:controller_spawn_policy, bee.hive.remote:client_policy, bee.hive.remote:inspect]
 - name: core_spawn_policy
   kind: security.policy
   meta: {test_support: true}
@@ -60,6 +60,6 @@ entries:
     resources:
     - bee.host:main
     - bee.session:main
-    - bee.applications:broker
+    - bee.apps:broker
     - bee.terminal:main
     effect: allow

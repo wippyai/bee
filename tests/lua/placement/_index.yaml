@@ -35,8 +35,8 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.placement.native:prepare, bee.placement.native:start, bee.placement.native:status, bee.placement.native:stop,
-      bee.placement.native:reconcile, bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach,
+    resources: [bee.placement.native.binding:prepare, bee.placement.native.binding:start, bee.placement.native.binding:status, bee.placement.native.binding:stop,
+      bee.placement.native.binding:reconcile, bee.placement.native.binding:cleanup, bee.placement.native.binding:evidence, bee.placement.native.binding:attach,
       bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:revoke,
       bee.placement.native:fixture_stop_materialization]
     effect: allow
@@ -45,7 +45,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call, fs.get, fs.write]
-    resources: [bee.placement.native:stop, bee.credentials:codex_login_fixture]
+    resources: [bee.placement.native.binding:stop, bee.credentials:codex_login_fixture]
     effect: allow
 - name: fixture_stop_materialization
   kind: function.lua
@@ -204,13 +204,13 @@ entries:
     grok_launch: bee.driver.grok:launch
     configuration_protocol: bee.driver:configuration
     test: wippy.test:test
-    service: bee.placement.native:service
-    identity: bee.placement.native:identity
-    store: bee.placement.native:store
-    materialization: bee.placement.native:materialization
+    service: bee.placement.native.service:service
+    identity: bee.placement.native.service:identity
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
     request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
-    homes: bee.placement.native:homes
+    homes: bee.placement.native.service:homes
     quote: bee.driver.kit:quote
     types: bee.placement:types
 - name: provider_configuration_test
@@ -222,9 +222,9 @@ entries:
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
-    service: bee.placement.native:service
-    store: bee.placement.native:store
-    homes: bee.placement.native:homes
+    service: bee.placement.native.service:service
+    store: bee.placement.native.persist:store
+    homes: bee.placement.native.service:homes
     quote: bee.driver.kit:quote
     configuration_protocol: bee.driver:configuration
 - name: fixture_builder_read_policy
@@ -247,7 +247,7 @@ entries:
   meta: {type: test_support}
   modules: [security, ctx, env, exec]
   imports:
-    store: bee.placement.native:store
+    store: bee.placement.native.persist:store
 - name: fixture_builder_build
   kind: function.lua
   source: file://fixture_instruction_builder.lua
@@ -255,7 +255,7 @@ entries:
   meta: {type: test_support}
   modules: [security, ctx, env, exec]
   imports:
-    store: bee.placement.native:store
+    store: bee.placement.native.persist:store
   security:
     policies: [bee.placement.native:fixture_builder_read_policy]
 - name: instruction_builder_policy
@@ -291,9 +291,9 @@ entries:
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
-    service: bee.placement.native:service
-    store: bee.placement.native:store
-    homes: bee.placement.native:homes
+    service: bee.placement.native.service:service
+    store: bee.placement.native.persist:store
+    homes: bee.placement.native.service:homes
     quote: bee.driver.kit:quote
     configuration_protocol: bee.driver:configuration
     canonical: bee.threads.records:canonical

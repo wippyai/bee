@@ -1,5 +1,5 @@
 organization: bee
-module: governance
+module: gov
 type: library
 version: 0.1.0-dev
 description: Governed overlay authoring, approval-bound activation, and recovery for Bee

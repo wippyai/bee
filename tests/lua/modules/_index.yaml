@@ -9,7 +9,7 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
-    model: bee.modules:model
+    model: bee.hub.modules:model
 - name: view_test
   kind: function.lua
   source: file://view_test.lua
@@ -18,10 +18,10 @@ entries:
   modules: [tty]
   imports:
     test: wippy.test:test
-    model: bee.modules:model
-    view: bee.modules:view
+    model: bee.hub.modules:model
+    view: bee.hub.modules:view
     appearance: bee.application:appearance
-    contents: bee.modules:contents
+    contents: bee.hub.modules:contents
 - name: contents_test
   kind: function.lua
   source: file://contents_test.lua
@@ -30,4 +30,4 @@ entries:
   modules: [base64]
   imports:
     test: wippy.test:test
-    contents: bee.modules:contents
+    contents: bee.hub.modules:contents

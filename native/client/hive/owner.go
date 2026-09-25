@@ -5,7 +5,7 @@ package hive
 
 import "context"
 
-// The owner operation of the owner supervisor (src/hive_host/supervisor/owner_stop.lua).
+// The owner operation of the owner supervisor (src/hive/supervisor/owner_stop.lua).
 const (
 	OwnerService = "bee.hive.owner"
 	OwnerStop    = "bee.hive.owner:stop"

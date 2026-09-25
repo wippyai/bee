@@ -13,7 +13,7 @@ local resources = require("resources")
 local recovery = require("recovery")
 local extensions = require("extensions")
 
-local EXECUTE = "bee.workspaces.execute"
+local EXECUTE = "bee.workspace.manager.execute"
 local BACKEND = "bee.workspace.catalog:backend"
 local HOST_PREFIX = "bee.workspace.host/"
 

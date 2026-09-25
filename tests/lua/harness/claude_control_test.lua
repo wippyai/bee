@@ -148,7 +148,7 @@ end
 -- admit the approver and the project root.
 type Measured = {revision: string, kind: string, digest: string}
 local function measure_executable(path: string): Measured
-    local raw, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call("bee.placement.native:measure_executable", {path = path})
+    local raw, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call("bee.placement.native.binding:measure_executable", {path = path})
     if err then error("measure executable: " .. tostring(err)) end
     local reply = raw :: {ok: boolean, value: Object?}
     if reply.ok and reply.value then
@@ -358,7 +358,7 @@ local function define_tests()
                 settlement.effects = marker_count(marker)
                 shell("rm -f " .. PROJECT .. "/" .. marker)
                 local evidence: {string} = {}
-                for _, item in ipairs(call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 64}).evidence :: {Object}) do evidence[#evidence + 1] = tostring(item.kind) end
+                for _, item in ipairs(call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64}).evidence :: {Object}) do evidence[#evidence + 1] = tostring(item.kind) end
                 local input_phases: {string} = {}
                 for _, item in ipairs(records) do
                     local body = item.body :: Object
@@ -493,7 +493,7 @@ local function define_tests()
                 local first = spawn_faulted(launch_request, "open", "write_intended", nil)
                 decide(await_request(workspace), "approved")
                 await_carrier(first, "write_intended")
-                call("bee.placement.native:stop", {attempt_id = attempt_id, mode = "forced"})
+                call("bee.placement.native.binding:stop", {attempt_id = attempt_id, mode = "forced"})
                 time.sleep("1500ms")
                 local settlement = settlement_of(await_carrier(spawn_faulted(launch_request, "resume", nil, nil), "lost runner"), "lost runner")
                 local effects = finish(marker)
@@ -513,12 +513,12 @@ local function define_tests()
                 await_carrier(first, "write_dispatched")
                 -- The runner itself is lost, so no remembered acceptance
                 -- survives; the child is then stopped through placement.
-                local status = call("bee.placement.native:status", {attempt_id = attempt_id})
+                local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
                 local runner = tostring((status.attempt :: Object).runner or "")
                 if runner == "" then error("no runner recorded for the attempt") end
                 assert(process.terminate(runner))
                 time.sleep("500ms")
-                call("bee.placement.native:stop", {attempt_id = attempt_id, mode = "forced"})
+                call("bee.placement.native.binding:stop", {attempt_id = attempt_id, mode = "forced"})
                 time.sleep("1500ms")
                 local settlement = settlement_of(await_carrier(spawn_faulted(launch_request, "resume", nil, nil), "lost after dispatch"), "lost after dispatch")
                 local effects = finish(marker)
@@ -557,7 +557,7 @@ local function define_tests()
                 local paused = spawn_faulted(launch_request, "open", "permission_requested", nil)
                 local view = await_request(workspace)
                 await_carrier(paused, "permission_requested")
-                call("bee.placement.native:stop", {attempt_id = attempt_id, mode = "forced"})
+                call("bee.placement.native.binding:stop", {attempt_id = attempt_id, mode = "forced"})
                 time.sleep("1500ms")
                 local settlement = settlement_of(await_carrier(spawn_faulted(launch_request, "resume", nil, nil), "ended attempt"), "ended attempt")
                 test.neq(settlement.outcome, "succeeded")

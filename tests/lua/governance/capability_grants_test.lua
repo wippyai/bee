@@ -3,8 +3,9 @@ local test = require("test")
 local catalog = require("capability_catalog")
 local grants = require("capability_grants")
 local registry = require("registry")
+local hash = require("hash")
 
-local OWNER = "bee.governance.workspace_applications:workspace-1.notes"
+local OWNER = "bee.gov.apps:workspace-1.notes"
 local APP = "app.notes:app"
 
 local function vocabulary(): unknown
@@ -26,7 +27,7 @@ local function define_tests()
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "threads.read")
             test.eq(#proposed.policies, 1)
-            test.is_true(proposed.policies[1].id:find("^bee%.governance%.grants:policy%." ) ~= nil)
+            test.is_true(proposed.policies[1].id:find("^bee%.gov%.grants:policy%." ) ~= nil)
             test.eq(proposed.policies[1].kind, "security.policy")
             test.eq(proposed.bindings[1].requirement_id, "app.notes:request")
             test.eq(proposed.bindings[1].policy_id, proposed.policies[1].id)
@@ -65,6 +66,19 @@ local function define_tests()
             local policies = changed.policies :: {{[string]: unknown}}
             policies[1].data = {policy = {actions = {"registry.overlay.apply"}, resources = "*", effect = "allow"}}
             test.is_nil(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
+        end)
+        test.it("reads approval-bound grants installed before the namespace rename", function()
+            local old_owner = "bee.governance.workspace_applications:workspace-1.notes"
+            local proposed = assert(grants.propose(vocabulary(), old_owner, APP,
+                {request("threads.read", {scope = "owned"})}, true))
+            local record = assert(grants.record(old_owner, "workspace-1", APP, proposed,
+                "approval-old", 1, nil, nil, true))
+            test.eq(record.id, "bee.governance.grants:record." .. assert(hash.sha256(old_owner)))
+            test.is_true(grants.reserved(record.id))
+            local decoded = assert(grants.decode(record, old_owner, "workspace-1", APP, vocabulary()))
+            test.eq((decoded.policies :: {{[string]: unknown}})[1].id, proposed.policies[1].id)
+            record.id = "bee.governance.grants:record." .. string.rep("0", 64)
+            test.is_nil(grants.decode(record, old_owner, "workspace-1", APP, vocabulary()))
         end)
         test.it("refuses unimplemented materialization and foreign app targets", function()
             test.is_nil(grants.propose(vocabulary(), OWNER, APP,

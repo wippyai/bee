@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.replica_probe
+namespace: bee.replica.probe
 entries:
 - name: desktop_protocol
   kind: library.lua
@@ -10,19 +10,19 @@ entries:
 - name: agent_scenario
   kind: registry.entry
   meta:
-    type: bee.replica_probe.agent_scenario
+    type: bee.replica.probe.agent_scenario
     comment: Empty by default; the opt-in agent-artifact Hive acceptance supplies its destination identity and immutable digest.
   data: {workspace_id: '', artifact_digest: '', source_node: '', source_workspace_id: '', source_version: ''}
 - name: agent_artifact
   kind: registry.entry
   meta:
-    type: bee.replica_probe.agent_artifact
+    type: bee.replica.probe.agent_artifact
     comment: Source-only encoded retained agent artifact; destination receives no artifact bytes through fixture configuration.
   data: {encoded: ''}
 - name: controller_policy
   kind: security.policy
   policy:
-    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.cancel, process.monitor, process.context, process.security, security.scope.create, security.policy.get, funcs.call, registry.get, registry.apply, registry.preview, registry.overlay.get, db.get, bee.governance.delivery.read, bee.governance.delivery.manage, bee.governance.delivery.publish, bee.governance.delivery.activate, bee.approvals.decide]
+    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.cancel, process.monitor, process.context, process.security, security.scope.create, security.policy.get, funcs.call, registry.get, registry.apply, registry.preview, registry.overlay.get, db.get, bee.gov.delivery.read, bee.gov.delivery.manage, bee.gov.delivery.publish, bee.gov.delivery.activate, bee.approvals.decide]
     resources: '*'
     effect: allow
 - name: names_policy
@@ -30,14 +30,14 @@ entries:
   policy:
     actions: [process.registry.register, process.registry.unregister, process.registry.register.eventual,
       process.registry.unregister.eventual, process.registry.lookup]
-    resources: [bee.hive_host.supervisor, 'bee.hive_host.supervisor/*']
+    resources: [bee.hive.supervisor, 'bee.hive.supervisor/*']
     effect: allow
 - name: execute_policy
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.hive_host.supervisor:execute, bee.hive_host.supervisor:admit_policy,
-      bee.hive_host.supervisor:admit_replica, bee.hive_host.supervisor:advertise]
+    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_policy,
+      bee.hive.supervisor:admit_replica, bee.hive.supervisor:advertise]
     effect: allow
 - name: replica_policy
   kind: security.policy
@@ -56,25 +56,25 @@ entries:
   source: file://coordinator.lua
   method: main
   modules: [process, security, time, channel, io, system, funcs, registry, hash, base64, json]
-  security: {policies: [bee.replica_probe:controller_policy]}
+  security: {policies: [bee.replica.probe:controller_policy]}
   imports:
     types: bee.hive:types
     client: bee.hive:client
-    sender: bee.hive:replica_sender
+    sender: bee.hive.service:replica_sender
     replicas: bee.sync.persist:replicas
     version: bee.sync:version
     canonical: bee.sync:canonical
-    artifact: bee.governance:artifact
-    delivery: bee.governance:delivery
-    destination: bee.governance.binding:destination
-    plan_store: bee.governance.persist:plan_store
-    materializer: bee.governance.registry:materializer
-    overlay_resolver: bee.governance.registry:overlay_resolver
-    publisher: bee.governance.binding:publisher
+    artifact: bee.gov:artifact
+    delivery: bee.gov:delivery
+    destination: bee.gov.binding:destination
+    plan_store: bee.gov.persist:plan_store
+    materializer: bee.gov:materializer
+    overlay_resolver: bee.gov:overlay_resolver
+    publisher: bee.gov.binding:publisher
     sync: bee.sync.persist:store
   meta:
     command:
       name: hive-replica-probe
       security:
-        actor: {id: bee.replica_probe}
-        policies: [bee.replica_probe:controller_policy, bee.replica_probe:inspect_policy]
+        actor: {id: bee.replica.probe}
+        policies: [bee.replica.probe:controller_policy, bee.replica.probe:inspect_policy]

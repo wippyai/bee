@@ -90,3 +90,7 @@ entries:
       list: bee.resources.binding:list
       describe: bee.resources.binding:describe
       search: bee.resources.binding:search
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry, env, system]

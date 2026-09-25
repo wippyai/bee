@@ -118,7 +118,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     if chosen.expected_placement_binding and request.placement_binding_ref ~= chosen.expected_placement_binding then
         return fail(db, "attempt uses another placement binding", nil)
     end
-    if request.placement_binding_ref and request.placement_binding_ref ~= "bee.placement.native:binding" then
+    if request.placement_binding_ref and request.placement_binding_ref ~= "bee.placement.native.binding:binding" then
         return fail(db, "native window cannot use a non-native placement binding", nil)
     end
     if chosen.generation and (row.attachment_generation ~= chosen.generation or row.recipient ~= process.pid()) then

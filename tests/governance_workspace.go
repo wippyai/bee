@@ -46,7 +46,7 @@ entries:
 // The production governance namespace also contains delivery and activation
 // services whose host-selected dependencies deliberately are not present here.
 const governanceIndex = `version: '1.0'
-namespace: bee.governance
+namespace: bee.gov
 entries:
 - name: workspace
   kind: library.lua
@@ -60,9 +60,9 @@ entries:
   imports: {canonical: bee.sync:canonical}
 - name: target_db
   kind: ns.requirement
-  default: bee.governance:db
+  default: bee.gov:db
   targets:
-  - entry: bee.governance:database_ref
+  - entry: bee.gov:database_ref
     path: .resource_ref
 - name: database_ref
   kind: registry.entry
@@ -71,13 +71,13 @@ entries:
   lifecycle: {auto_start: true}
 - name: db_path
   kind: env.variable
-  storage: bee.governance:environment
+  storage: bee.gov:environment
   variable: BEE_GOVERNANCE_DB
   default: .wippy/governance.db
   readonly: true
 - name: db
   kind: db.sql.sqlite
-  file: ${env:bee.governance:db_path}
+  file: ${env:bee.gov:db_path}
   lifecycle: {auto_start: true}
 - name: workspace_protocol
   kind: library.lua
@@ -87,29 +87,29 @@ entries:
 `
 
 const governanceBindingIndex = `version: '1.0'
-namespace: bee.governance.binding
+namespace: bee.gov.binding
 entries:
 - name: overlay_call
   kind: function.lua
   source: file://workspace_method.lua
   method: handle
   modules: [funcs, security]
-  imports: {protocol: bee.governance:workspace_protocol, guide: bee.governance.traits:guide, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
-  security: {policies: [bee.governance.security:overlay_facade_policy]}
+  imports: {protocol: bee.gov:workspace_protocol, guide: bee.gov.traits:guide, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
+  security: {policies: [bee.gov.security:overlay_facade_policy]}
 - name: workspace_backend_call
   kind: function.lua
   source: file://authoring.lua
   method: call
   modules: [security, system]
   imports:
-    protocol: bee.governance:workspace_protocol
-    staging: bee.governance.persist:staging
-    resources: bee.governance.registry:staging_resources
+    protocol: bee.gov:workspace_protocol
+    staging: bee.gov.persist:staging
+    resources: bee.gov:staging_resources
     transaction: bee.persist:transaction
 `
 
 const governancePersistIndex = `version: '1.0'
-namespace: bee.governance.persist
+namespace: bee.gov.persist
 entries:
 - name: staging
   kind: library.lua
@@ -118,14 +118,14 @@ entries:
   imports:
     database: bee.persist:database
     transaction: bee.persist:transaction
-    migrations: bee.governance.migrations:schema
-    protocol: bee.governance:workspace_protocol
-    workspace: bee.governance:workspace
+    migrations: bee.gov.migrations:schema
+    protocol: bee.gov:workspace_protocol
+    workspace: bee.gov:workspace
     bounds: bee.threads.records:bounds
 `
 
 const governanceMigrationsIndex = `version: '1.0'
-namespace: bee.governance.migrations
+namespace: bee.gov.migrations
 entries:
 - name: schema
   kind: library.lua
@@ -133,7 +133,7 @@ entries:
 `
 
 const governanceRegistryIndex = `version: '1.0'
-namespace: bee.governance.registry
+namespace: bee.gov.registry
 entries:
 - name: staging_resources
   kind: library.lua
@@ -143,38 +143,38 @@ entries:
 `
 
 const governanceTraitsIndex = `version: '1.0'
-namespace: bee.governance.traits
+namespace: bee.gov.traits
 entries:
 - name: guide
   kind: library.lua
   source: file://guide.lua
   modules: [json]
-  imports: {preflight: bee.governance:preflight}
+  imports: {preflight: bee.gov:preflight}
 `
 
 const governanceSecurityIndex = `version: '1.0'
-namespace: bee.governance.security
+namespace: bee.gov.security
 entries:
 - name: staging_policy
   kind: security.policy
   groups: [workspace_execution_scope]
   policy:
     actions: [db.get, registry.get, system.read]
-    resources: [bee.governance:db, bee.governance:database_ref, node]
+    resources: [bee.gov:db, bee.gov:database_ref, node]
     effect: allow
 - name: workspace_execution_policy
   kind: security.policy
   groups: [workspace_execution_scope]
   policy:
-    actions: [bee.governance.workspace.execute]
-    resources: [bee.governance.binding:workspace_backend_call]
+    actions: [bee.gov.workspace.execute]
+    resources: [bee.gov.binding:workspace_backend_call]
     effect: allow
 - name: overlay_facade_policy
   kind: security.policy.expr
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.governance.security:workspace_execution_scope") || (action == "funcs.call" && resource == "bee.governance.binding:workspace_backend_call")'
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.gov.security:workspace_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:workspace_backend_call")'
     actions: [funcs.security, security.policy_group.get, funcs.call]
-    resources: [security, bee.governance.security:workspace_execution_scope, bee.governance.binding:workspace_backend_call]
+    resources: [security, bee.gov.security:workspace_execution_scope, bee.gov.binding:workspace_backend_call]
     effect: allow
 `
 
@@ -223,6 +223,9 @@ entries:
 - name: sync_exports
   kind: registry.entry
   data: {exports: []}
+- name: approver_policies
+  kind: registry.entry
+  data: {policies: []}
 `
 	if err := os.WriteFile(filepath.Join(root, "src", "_index.yaml"), []byte(rootIndex), 0600); err != nil {
 		return fmt.Errorf("write governance host composition: %w", err)
@@ -236,7 +239,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_sender
-    value: bee.governance_workspace_probe:sender
+    value: bee.gov.workspace.probe:sender
   - name: target_exports
     value: bee:sync_exports
 - name: dependency_hub
@@ -246,11 +249,38 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
-- name: dependency_governance
+- name: dependency_threads
   kind: ns.dependency
-  component: bee/governance
+  component: bee/threads
   version: 0.1.0-dev
   parameters:
+  - name: process_host
+    value: bee:workers
+  - name: waiter_policies
+    value: [bee.security.threads:thread_waiter_policy]
+- name: dependency_approvals
+  kind: ns.dependency
+  component: bee/approvals
+  version: 0.1.0-dev
+  parameters:
+  - name: target_policies
+    value: bee:approver_policies
+  - name: process_host
+    value: bee:workers
+  - name: authority_policies
+    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
+  - name: worker_policies
+    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy,
+      bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]
+- name: dependency_governance
+  kind: ns.dependency
+  component: bee/gov
+  version: 0.1.0-dev
+  parameters:
+  - name: target_publication_profiles
+    value: bee.env:gov_publication_profiles
+  - name: target_activation_profiles
+    value: bee.env:gov_activation_profiles
   - name: target_approval_request_policy
     value: bee.security.approvals:approval_request_policy
   - name: target_approval_consume_policy
@@ -262,31 +292,41 @@ entries:
 	if err := os.WriteFile(filepath.Join(root, "src", "deps", "_index.yaml"), []byte(depsIndex), 0600); err != nil {
 		return fmt.Errorf("write governance dependencies: %w", err)
 	}
-	securityApprovalsIndex := `version: '1.0'
-namespace: bee.security.approvals
+	envIndex := `version: '1.0'
+namespace: bee.env
 entries:
-- name: approval_request_policy
-  kind: security.policy
-  policy: {actions: [bee.approvals.request], resources: '*', effect: allow}
-- name: approval_consume_policy
-  kind: security.policy
-  policy: {actions: [bee.approvals.consume], resources: '*', effect: allow}
+- name: gov_publication_profiles
+  kind: registry.entry
+  meta: {type: bee.gov.publication_profiles}
+  data: {profiles: []}
+- name: gov_activation_profiles
+  kind: registry.entry
+  meta: {type: bee.gov.activation_profiles}
+  data: {profiles: []}
 `
-	if err := os.MkdirAll(filepath.Join(root, "src", "security", "approvals"), 0700); err != nil {
-		return fmt.Errorf("create approval security namespace: %w", err)
+	if err := os.MkdirAll(filepath.Join(root, "src", "env"), 0700); err != nil {
+		return fmt.Errorf("create governance host environment namespace: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "src", "security", "approvals", "_index.yaml"), []byte(securityApprovalsIndex), 0600); err != nil {
-		return fmt.Errorf("write governance approval policies: %w", err)
+	if err := os.WriteFile(filepath.Join(root, "src", "env", "_index.yaml"), []byte(envIndex), 0600); err != nil {
+		return fmt.Errorf("write governance host profiles: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "src", "security"), 0700); err != nil {
+		return fmt.Errorf("create host security namespace: %w", err)
+	}
+	for _, name := range []string{"approvals", "threads"} {
+		if err := copyTree(filepath.Join(root, "src", "security", name), filepath.Join("src", "security", name)); err != nil {
+			return fmt.Errorf("stage %s host policies: %w", name, err)
+		}
 	}
 
 	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
-	for _, name := range []string{"approvals", "governance", "hub", "persist", "sync", "threads"} {
+	for _, name := range []string{"approvals", "gov", "hub", "persist", "sync", "threads"} {
 		lock += "  - name: bee/" + name + "\n    version: 0.1.0-dev\n"
 	}
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write runtime lock: %w", err)
 	}
-	config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/governance: ./modules/gov\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+	config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/gov: ./modules/gov\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
 	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write bounded shutdown config: %w", err)
 	}
@@ -300,7 +340,7 @@ func boot(runtime, root, phase string) error {
 	output, err := runCommand(ctx, root, runtime, []string{
 		"BEE_GOVERNANCE_DB=" + database,
 		"GOMAXPROCS=2",
-	}, "run", "--verbose", "--host", "bee.governance_workspace_probe:workers", "--", "governance-workspace-probe", phase)
+	}, "run", "--verbose", "--host", "bee.gov.workspace.probe:workers", "--", "governance-workspace-probe", phase)
 	marker := "GOVERNANCE_WORKSPACE_" + strings.ToUpper(phase) + "_BOOT_PASS"
 	if err != nil {
 		return fmt.Errorf("%s boot: %w\n%s", phase, err, output)

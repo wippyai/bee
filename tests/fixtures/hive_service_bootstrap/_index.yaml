@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.hive_service_bootstrap
+namespace: bee.hive.service.bootstrap
 entries:
 - name: probe_policy
   kind: security.policy
@@ -29,4 +29,4 @@ entries:
       name: hive-service-probe
       security:
         actor: {id: bee.hive.probe}
-        policies: [bee.hive_service_bootstrap:probe_policy, bee.hive_service_bootstrap:probe_inspect_policy]
+        policies: [bee.hive.service.bootstrap:probe_policy, bee.hive.service.bootstrap:probe_inspect_policy]

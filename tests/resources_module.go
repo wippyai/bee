@@ -122,8 +122,8 @@ var resourcesModuleProbeActions = []string{
 
 var resourcesModuleForbidden = []string{
 	"bee.desktop", "bee.terminal", "bee.harness", "bee.harness.catalog", "bee.harness.carrier",
-	"bee.harness.launch", "bee.harness.permission", "bee.hive", "bee.hive_host.supervisor", "bee.hive.telemetry",
-	"bee.hive_host.desktop", "bee.session", "bee.applications", "bee.client", "bee.launch", "bee.driver",
+	"bee.harness.launch", "bee.harness.permission", "bee.hive", "bee.hive.supervisor", "bee.hive.telemetry",
+	"bee.hive.desktop", "bee.session", "bee.apps", "bee.client", "bee.launch", "bee.driver",
 }
 
 func resourcesModuleCommandEnvironment(overrides []string) []string {
@@ -246,6 +246,19 @@ func resourcesModuleProbeIndex(namespace, command, actor string, modules []strin
 	}
 }
 
+func resourcesModuleThreadHost(root, folder string, entries []map[string]interface{}) ([]map[string]interface{}, error) {
+	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "threads"), filepath.Join(root, "src", "security", "threads")); err != nil {
+		return nil, err
+	}
+	return append(entries,
+		map[string]interface{}{"name": "workers", "kind": "process.host", "host": map[string]interface{}{"workers": 2, "max_processes": 8}, "lifecycle": map[string]interface{}{"auto_start": true}},
+		map[string]interface{}{"name": "dependency_threads", "kind": "ns.dependency", "component": "bee/threads", "version": "0.1.0-dev", "parameters": []map[string]interface{}{
+			{"name": "process_host", "value": "bee:workers"},
+			{"name": "waiter_policies", "value": []string{"bee.security.threads:thread_waiter_policy"}},
+		}},
+	), nil
+}
+
 func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	for _, name := range []string{"resources", "persist", "threads"} {
 		if err := resourcesModuleCopyDir(filepath.Join(folder, "modules", name), filepath.Join(root, "modules", name)); err != nil {
@@ -263,9 +276,16 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	}
 	hostEntries := make([]map[string]interface{}, 0, 1)
 	hostEntries = append(hostEntries, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
+	hostEntries, err := resourcesModuleThreadHost(root, folder, hostEntries)
+	if err != nil {
+		return err
+	}
+	hostEntries = append(hostEntries, map[string]interface{}{"name": "dependency_resources", "kind": "ns.dependency", "component": "bee/resources", "version": "0.1.0-dev", "parameters": []map[string]interface{}{
+		{"name": "target_roots", "value": "bee:resource_roots"},
+	}})
 	if !dropRoots {
 		hostEntries = append(hostEntries, map[string]interface{}{"name": "resource_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.resource_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}, {"root_ref": "bee.placement.native:unrelated_env_root", "access": "write"}}}})
-		if err := resourcesModuleWrite(folder, filepath.Join("src", "placement", "_index.yaml"), resourcesModuleIndex{
+		if err := resourcesModuleWrite(folder, filepath.Join("src", "placement", "native", "_index.yaml"), resourcesModuleIndex{
 			Version: "1.0", Namespace: "bee.placement.native", Entries: []map[string]interface{}{
 				{"name": "environment", "kind": "env.storage.os", "lifecycle": map[string]interface{}{"auto_start": true}},
 				{"name": "root_path", "kind": "env.variable", "storage": "bee.placement.native:environment", "variable": "BEE_PLACEMENT_ROOT", "default": ".wippy/placement", "readonly": true},
@@ -280,7 +300,7 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	if err := resourcesModuleWrite(folder, filepath.Join("src", "host", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee", Entries: hostEntries}); err != nil {
 		return err
 	}
-	if err := resourcesModuleWrite(folder, filepath.Join("src", "probe", "_index.yaml"), resourcesModuleProbeIndex("bee.res_probe", "res-probe", "bee.test.rmod", []string{"funcs", "security"})); err != nil {
+	if err := resourcesModuleWrite(folder, filepath.Join("src", "probe", "_index.yaml"), resourcesModuleProbeIndex("bee.probe", "res-probe", "bee.test.rmod", []string{"funcs", "security"})); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(folder, "src", "probe", "main.lua"), []byte(resourcesProbe), 0600); err != nil {
@@ -305,6 +325,10 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 		return err
 	}
 	hostEntries := make([]map[string]interface{}, 0, 4)
+	hostEntries, err := resourcesModuleThreadHost(root, folder, hostEntries)
+	if err != nil {
+		return err
+	}
 	// The host selects the placement binding recorded on projection receipts
 	// without admitting placement execution into this closure.
 	hostEntries = append(hostEntries,
@@ -335,7 +359,7 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 	if err := resourcesModuleWrite(folder, filepath.Join("src", "host", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee", Entries: hostEntries}); err != nil {
 		return err
 	}
-	if err := resourcesModuleWrite(folder, filepath.Join("src", "probe", "_index.yaml"), resourcesModuleProbeIndex("bee.cred_probe", "cred-probe", "bee.test.cmod", []string{"funcs", "security", "json"})); err != nil {
+	if err := resourcesModuleWrite(folder, filepath.Join("src", "probe", "_index.yaml"), resourcesModuleProbeIndex("bee.probe", "cred-probe", "bee.test.cmod", []string{"funcs", "security", "json"})); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(folder, "src", "probe", "main.lua"), []byte(credentialsProbe), 0600); err != nil {
@@ -395,7 +419,7 @@ func resourcesModuleCheckClosure(namespaces map[string]struct{}, identities map[
 		}
 	}
 	for identity := range identities {
-		if strings.HasPrefix(identity, "bee.placement.native:runner") {
+		if strings.HasPrefix(identity, "bee.placement.native.service:runner") {
 			return fmt.Errorf("module pulled in placement execution %s", identity)
 		}
 	}

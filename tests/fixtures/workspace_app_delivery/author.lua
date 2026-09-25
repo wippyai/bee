@@ -16,7 +16,7 @@ local bounds = require("bounds")
 
 type Object = {[string]: unknown}
 
-local DEFINITION = "bee.workspace_app_probe:agent"
+local DEFINITION = "bee.workspace.app.probe:agent"
 local THREAD = "workspace-app-authoring"
 local ACTOR = "bee.workspace_app.operator"
 
@@ -54,7 +54,7 @@ end
 
 local function listener_ready()
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway.registry:address", {})
+        local raw, address_error = funcs.call("bee.gateway:address", {})
         local address = not address_error and bounds.object(raw) or nil
         if address and type(address.address) == "string" then return end
         time.sleep("100ms")
@@ -111,8 +111,8 @@ local function agent_report(): Object?
 end
 
 local function main()
-    local workspace_id = required("bee.workspace_app_probe:workspace")
-    local brief = required("bee.workspace_app_probe:brief")
+    local workspace_id = required("bee.workspace.app.probe:workspace")
+    local brief = required("bee.workspace.app.probe:brief")
     bind(workspace_id)
     listener_ready()
     local plan = call("bee.harness.launch:resolve", {definition_ref = DEFINITION})

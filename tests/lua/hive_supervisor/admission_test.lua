@@ -22,7 +22,7 @@ local function request(): types.Request
             expires_at = "2026-09-08T12:00:30.000Z"}, delegation_refs = {}, deadline = "2026-09-08T12:00:30.000Z"}
     return value
 end
-local PEER: peers.Peer = {node_id = "alpha", pid = "{alpha@bee.hive_host:supervisor_host|s1}",
+local PEER: peers.Peer = {node_id = "alpha", pid = "{alpha@bee.hive.service:supervisor_host|s1}",
     supervisor_incarnation = "alpha-inc", established_at = 0, answer_on_retry = false}
 local function rejected(value: unknown, expected: string, sender: string?)
     local result, fault = admission.accept("beta", PEER, sender or PEER.pid, value, now())
@@ -40,7 +40,7 @@ local function define_tests()
             local absent, fault = admission.accept("beta", nil, PEER.pid, request(), now())
             test.is_nil(absent)
             test.eq(fault and fault.code, "DENIED")
-            rejected(request(), "DENIED", "{alpha@bee.hive_host:supervisor_host|s2}")
+            rejected(request(), "DENIED", "{alpha@bee.hive.service:supervisor_host|s2}")
             local stale = request(); stale.caller_incarnation = "retired"
             rejected(stale, "DENIED")
         end)

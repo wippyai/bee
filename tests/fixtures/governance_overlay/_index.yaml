@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.governance_overlay_probe
+namespace: bee.gov.overlay.probe
 entries:
 - name: workers
   kind: process.host
@@ -9,7 +9,7 @@ entries:
   kind: security.policy
   policy:
     actions: [registry.get, registry.overlay.get, registry.overlay.apply, registry.overlay.create.registry.entry, registry.overlay.update.registry.entry, registry.overlay.delete.registry.entry]
-    resources: 'bee.governance_overlay_probe:*'
+    resources: 'bee.gov.overlay.probe:*'
     effect: allow
 - name: main
   kind: process.lua
@@ -17,9 +17,9 @@ entries:
   method: main
   modules: [registry, logger]
   security:
-    policies: [bee.governance_overlay_probe:policy]
+    policies: [bee.gov.overlay.probe:policy]
   meta:
     command:
       name: governance-overlay-probe
       security:
-        actor: {id: bee.governance_overlay_probe}
+        actor: {id: bee.gov.overlay.probe}

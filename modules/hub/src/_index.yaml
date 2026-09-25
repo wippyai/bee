@@ -61,3 +61,13 @@ entries:
   source: file://migration_work.lua
   modules: [hash]
   imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical, plan: bee.hub:plan, migrations: bee.hub:migrations}
+- name: inventory_reader
+  kind: library.lua
+  source: file://inventory_reader.lua
+  modules: [registry]
+  imports: {inventory: bee.hub:inventory}
+- name: host_resources
+  kind: library.lua
+  source: file://host_resources.lua
+  modules: [registry]
+  imports: {bounds: bee.threads.records:bounds}

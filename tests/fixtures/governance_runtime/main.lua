@@ -9,7 +9,7 @@ local function main()
     local first, first_error = reviewed:changes()
     assert(first, tostring(first_error))
     local staged, stage_error = first:update({
-        id = "bee.governance_probe:subject", kind = "registry.entry",
+        id = "bee.gov.probe:subject", kind = "registry.entry",
         data = {value = "reviewed"},
     })
     assert(staged, tostring(stage_error))
@@ -17,7 +17,7 @@ local function main()
     local intervening, intervening_error = reviewed:changes()
     assert(intervening, tostring(intervening_error))
     local prepared, prepare_error = intervening:update({
-        id = "bee.governance_probe:subject", kind = "registry.entry",
+        id = "bee.gov.probe:subject", kind = "registry.entry",
         data = {value = "intervening"},
     })
     assert(prepared, tostring(prepare_error))
@@ -38,7 +38,7 @@ local function main()
     local current, current_error = registry.snapshot()
     assert(current, tostring(current_error))
     assert(current:version():id() == committed:id(), "rejected apply changed registry version")
-    local subject, subject_error = current:get("bee.governance_probe:subject")
+    local subject, subject_error = current:get("bee.gov.probe:subject")
     assert(subject, tostring(subject_error))
     assert(type(subject.data) == "table" and subject.data.value == "intervening", "rejected apply changed the entry")
     logger:info("GOVERNANCE_STALE_APPLY_REFUSED")

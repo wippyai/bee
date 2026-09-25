@@ -42,13 +42,13 @@ MARKER = "AGENT APP READY"
 UPDATE_MARKER = "AGENT APP UPDATED"
 DELIVERY = "Overlays"
 APPROVALS = "Approvals"
-OVERLAY_OWNER = "bee.agent_app_probe:activation_overlay"
+OVERLAY_OWNER = "bee.agent.app.probe:activation_overlay"
 SOURCE_WORKSPACE = "agent-app-source"
 AUTHORING_THREAD = "agent-app-authoring"
 ADMITTED_TOOLS = ["app_docs", "overlay", "thread_message", "thread_read"]
 ACTIVE_TRAITS = ["app:author", "app:read"]
 MATERIAL = {"contract": "tests/fixtures/agent_app/CONTRACT.md", "client": "modules/application/src/client.lua",
-            "example": "src/apps/timeline/app.lua", "view": "src/apps/timeline/view.lua"}
+            "example": "src/threads/timeline/app.lua", "view": "src/threads/timeline/view.lua"}
 
 
 def evidence_root():
@@ -75,13 +75,13 @@ def configure_source_node(project):
 def configure_continuous_source(project, workspace_id):
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") != "1":
         return
-    governance_path = project / "src/_index.yaml"
+    governance_path = project / "src/env/_index.yaml"
     governance = yaml.safe_load(governance_path.read_text())
-    publication = next(item for item in governance["entries"] if item["name"] == "governance_publication_profiles")
+    publication = next(item for item in governance["entries"] if item["name"] == "gov_publication_profiles")
     publication["data"] = {"profiles": [{"workspace_id": workspace_id,
         "source_workspace": SOURCE_WORKSPACE, "component": "bee.agent_app_demo/app",
         "overlay_owner": OVERLAY_OWNER}]}
-    activation = next(item for item in governance["entries"] if item["name"] == "governance_activation_profiles")
+    activation = next(item for item in governance["entries"] if item["name"] == "gov_activation_profiles")
     activation["data"] = {"profiles": [{"workspace_id": workspace_id, "source_node": "node-1",
         "source_workspace": SOURCE_WORKSPACE, "component": "bee.agent_app_demo/app", "resolver": "overlay",
         "overlay_owner": OVERLAY_OWNER, "approval_policy": "local-agent-app-delivery", "parameters": [],
@@ -96,7 +96,7 @@ def configure_continuous_source(project, workspace_id):
     approvals = yaml.safe_load(approvals_path.read_text())
     policies = next(item for item in approvals["entries"] if item["name"] == "approver_policies")
     policies["policies"] = [{"name": "local-agent-app-delivery",
-                             "approvers": [{"definition_id": "bee.inbox:app"}],
+                             "approvers": [{"definition_id": "bee.approvals.inbox:app"}],
                              "max_ttl_ms": 600000}]
     approvals_path.write_text(yaml.safe_dump(approvals, sort_keys=False))
 
@@ -235,7 +235,7 @@ def admit_docs_tool(project):
     index = project / "modules/gateway/src/api/_index.yaml"
     document = yaml.safe_load(index.read_text())
     endpoint = next(entry for entry in document["entries"] if entry["name"] == "mcp_http")
-    endpoint["security"]["policies"].append("bee.agent_app_probe:docs_policy")
+    endpoint["security"]["policies"].append("bee.agent.app.probe:docs_policy")
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
@@ -545,7 +545,7 @@ def review_and_apply(folder, project, staged, change, exercise_app, evidence, ph
         ui.window_control("□")
         ui.pump(.4)
         ui.key(b"r")
-        ui.wait("bee.governance:establish-overlay", timeout=COLD_BOOT)
+        ui.wait("bee.gov:establish-overlay", timeout=COLD_BOOT)
         started = time.monotonic()
         approval_boundary = open_activation_approval(ui, staged, proposed.group(1))
         record_seconds(folder, evidence, "local_ui_seconds", phase + ".open_exact_approval", started)
@@ -665,7 +665,7 @@ def exercise():
         # The replica fixture supplies an enrolled supervisor explicitly.
         # Keep the real Hive sender in bee.hive and disable only the protected
         # service entry for this fixture's explicitly managed supervisor.
-        hive_host_index = project / "src/hive_host/_index.yaml"
+        hive_host_index = project / "src/hive/service/_index.yaml"
         hive_host = yaml.safe_load(hive_host_index.read_text())
         service = next(item for item in hive_host["entries"] if item["name"] == "supervisor_service")
         service["lifecycle"]["auto_start"] = False
@@ -683,7 +683,7 @@ def exercise():
     configure_source_node(project)
     stage_material(project)
     set_variable(project, "modules/driver-agy/src/_index.yaml", "executable", "BEE_AGENT_APP_AGY")
-    set_variable(project, "src/environment/_index.yaml", "machine_home", "BEE_AGENT_APP_HOME")
+    set_variable(project, "src/env/_index.yaml", "machine_home", "BEE_AGENT_APP_HOME")
     admit_docs_tool(project)
     assert_overlay_authority(project)
     write_inputs(project)

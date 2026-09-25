@@ -22,7 +22,7 @@ entries:
   version: '*'
 - name: dependency_governance
   kind: ns.dependency
-  component: bee/governance
+  component: bee/gov
   version: '*'
 - name: dependency_docs
   kind: ns.dependency
@@ -47,7 +47,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected endpoint configuration; it describes a destination and never grants a caller network authority}
   targets:
-  - entry: bee.gateway.registry:endpoint_ref
+  - entry: bee.gateway:endpoint_ref
     path: .resource_ref
   - entry: bee.gateway.security:address_policy
     path: .policy.resources +=
@@ -62,7 +62,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected approval request policy for exact per-binding MCP access proposals; an absent link fails closed}
   targets:
-  - entry: bee.gateway.registry:approval_request_policy_ref
+  - entry: bee.gateway:approval_request_policy_ref
     path: .resource_ref
   - entry: bee.gateway.security:access_policy_read_policy
     path: .policy.resources +=
@@ -70,7 +70,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected approval consume policy for exact per-binding MCP access effects; an absent link fails closed}
   targets:
-  - entry: bee.gateway.registry:approval_consume_policy_ref
+  - entry: bee.gateway:approval_consume_policy_ref
     path: .resource_ref
   - entry: bee.gateway.security:access_policy_read_policy
     path: .policy.resources +=
@@ -78,7 +78,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected bound-thread read policy for the built-in MCP tools}
   targets:
-  - entry: bee.gateway.registry:tool_read_policy_ref
+  - entry: bee.gateway:tool_read_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -88,7 +88,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected bound-thread message policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway.registry:tool_message_policy_ref
+  - entry: bee.gateway:tool_message_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -99,7 +99,7 @@ entries:
   meta: {comment: Host-selected owner call policy for the action inbox tools}
   default: bee.gateway.security:inbox_call_policy
   targets:
-  - entry: bee.gateway.registry:tool_inbox_policy_ref
+  - entry: bee.gateway:tool_inbox_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -110,7 +110,7 @@ entries:
   meta: {comment: Host-selected scope for peers an action may discover}
   default: bee.gateway.security:discover_none_policy
   targets:
-  - entry: bee.gateway.registry:tool_discover_policy_ref
+  - entry: bee.gateway:tool_discover_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -121,7 +121,7 @@ entries:
   meta: {comment: Host-selected exact workspace/node/action send grant; default denies all addresses}
   default: bee.gateway.security:send_none_policy
   targets:
-  - entry: bee.gateway.registry:tool_send_grant_policy_ref
+  - entry: bee.gateway:tool_send_grant_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -131,7 +131,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected managed-launch policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway.registry:tool_launch_policy_ref
+  - entry: bee.gateway:tool_launch_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -141,7 +141,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected governed-overlay policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway.registry:tool_overlay_policy_ref
+  - entry: bee.gateway:tool_overlay_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -151,7 +151,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected offline-documentation policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway.registry:tool_docs_policy_ref
+  - entry: bee.gateway:tool_docs_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -161,7 +161,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected component-inspection policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway.registry:tool_components_policy_ref
+  - entry: bee.gateway:tool_components_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -171,7 +171,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected delivery policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway.registry:tool_delivery_policy_ref
+  - entry: bee.gateway:tool_delivery_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -181,7 +181,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected publication policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway.registry:tool_publish_policy_ref
+  - entry: bee.gateway:tool_publish_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -191,7 +191,7 @@ entries:
   kind: ns.requirement
   meta: {comment: Host-selected admitted-application open policy for the built-in MCP tool}
   targets:
-  - entry: bee.gateway.registry:tool_application_open_policy_ref
+  - entry: bee.gateway:tool_application_open_policy_ref
     path: .resource_ref
   - entry: bee.gateway.api:mcp_http
     path: .security.policies +=
@@ -253,8 +253,8 @@ entries:
     message: bee.threads.records:message
     arguments: bee.application:arguments
     agent_protocol: bee.application:agent_protocol
-    workspace_protocol: bee.governance:workspace_protocol
-    delivery_protocol: bee.governance:delivery_protocol
+    workspace_protocol: bee.gov:workspace_protocol
+    delivery_protocol: bee.gov:delivery_protocol
     docs_protocol: bee.docs:protocol
 - name: surface
   kind: library.lua
@@ -264,3 +264,60 @@ entries:
     catalog: bee.gateway:catalog
     context: bee.gateway:context
     mcp: bee.gateway:mcp
+- name: endpoint_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host endpoint configuration; target_endpoint fills resource_ref}
+- name: approval_request_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host approval request policy; an absent link fails closed}
+- name: approval_consume_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host approval consume policy; an absent link fails closed}
+- name: tool_read_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in bound-thread read tools}
+- name: tool_message_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in bound-thread message tool}
+- name: tool_inbox_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for action inbox owner calls}
+- name: tool_discover_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for workspace peer discovery}
+- name: tool_send_grant_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked exact host send grant policy for action addresses}
+- name: tool_launch_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in managed-launch tool}
+- name: tool_overlay_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in governed-overlay tool}
+- name: tool_docs_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in offline-documentation tool}
+- name: tool_components_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in component-inspection tool}
+- name: tool_delivery_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in delivery tool}
+- name: tool_publish_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in publication tool}
+- name: tool_application_open_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in admitted-application open tool}
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules: [registry, funcs, env]
+  imports: {address_value: bee.gateway:address_value}
+- name: address
+  kind: function.lua
+  source: file://address_method.lua
+  method: handle
+  modules: [registry, system]
+  imports: {configuration: bee.gateway:configuration}
+  security: {policies: [bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy]}

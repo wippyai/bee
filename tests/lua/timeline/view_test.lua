@@ -15,7 +15,7 @@ local function message(sequence: integer, text: string): Object
         kind = "message", producer_id = "bee.test.alice", source = "bee", body = {message_id = "m" .. tostring(sequence), message_kind = "request", sender_id = "bee.test.alice", recipient_ids = {}, content = {text = text}}}
 end
 local function attached(): model.State
-    local state = model.new("bee.timeline.i1")
+    local state = model.new("bee.threads.timeline.i1")
     model.open(state, "t-1", nil)
     model.apply_get(state, ok({summary = {thread_id = "t-1", title = "Review \27[2Jrun", state = "open", head_sequence = 30, owner_id = "bee.test.alice"}, membership = {}}))
     model.apply_attach(state, ok({subscription_id = "s-1", after_sequence = 0, lease_generation = 1, owner_incarnation = 2, owner_authority = "auth", closed = false}))
@@ -32,7 +32,7 @@ local function define_tests()
             local state = attached()
             model.select(state, 12)
             model.toggle_technical(state)
-            local picking = model.new("bee.timeline.i2")
+            local picking = model.new("bee.threads.timeline.i2")
             model.apply_list(picking, ok({threads = {{thread_id = "t-1", title = "One \27[31m", state = "open", head_sequence = 3, owner_id = "bee.test.alice"}}}))
             for _, subject in ipairs({state, picking}) do
                 for _, width in ipairs({1, 20, 40, 80, 120}) do
@@ -85,7 +85,7 @@ local function define_tests()
             test.is_true(technical:find("Cursor 30 of 30  lease 1  owner incarnation 2", 1, true) ~= nil)
         end)
         test.it("shows an unavailable owner, a required resume and unshown records without inventing rows", function()
-            local state = model.new("bee.timeline.i1")
+            local state = model.new("bee.threads.timeline.i1")
             model.open(state, "t-1", nil)
             model.apply_attach(state, {ok = false, error = {code = "DENIED", message = "caller is not a member of the thread"}, value = nil, replayed = false})
             local text = table.concat(view.draw(120, 20, appearance.defaults(), state, 0, "").rows, "\n")
@@ -103,7 +103,7 @@ local function define_tests()
             test.is_true(marked:find("earlier records through 5 not shown", 1, true) ~= nil)
         end)
         test.it("states an empty or unavailable thread list with its next action and no column caption", function()
-            local empty = model.new("bee.timeline.i4")
+            local empty = model.new("bee.threads.timeline.i4")
             model.apply_list(empty, ok({threads = {}}))
             local rows: {string} = {}
             for index, row in ipairs(view.draw(100, 20, appearance.defaults(), empty, 0, "").rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
@@ -117,7 +117,7 @@ local function define_tests()
             test.is_true(failed:find("R retries the thread owner", 1, true) ~= nil)
         end)
         test.it("aligns the thread list into columns and marks the selected thread", function()
-            local state = model.new("bee.timeline.i5")
+            local state = model.new("bee.threads.timeline.i5")
             model.apply_list(state, ok({threads = {{thread_id = "t-1", title = "One", state = "open", head_sequence = 3, owner_id = "bee.test.alice"},
                 {thread_id = "t-2", title = "Second thread", state = "closed", head_sequence = 120, owner_id = "bee.test.bob"}}}))
             model.pick(state, "t-2")
@@ -132,7 +132,7 @@ local function define_tests()
             test.eq(rows[4]:sub(-4), "120 ")
         end)
         test.it("disables stale picker actions while the thread list is unavailable", function()
-            local state = model.new("bee.timeline.i3")
+            local state = model.new("bee.threads.timeline.i3")
             model.apply_list(state, ok({threads = {{thread_id = "t-1", title = "One", state = "open", head_sequence = 3, owner_id = "bee.test.alice"}}, next_after = "page-2"}))
             state.picker.unavailable = "the owner cannot be reached"
             local frame = view.draw(100, 20, appearance.defaults(), state, 0, "")

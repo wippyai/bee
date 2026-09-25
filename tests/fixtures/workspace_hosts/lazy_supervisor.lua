@@ -17,7 +17,7 @@ local decode = require("decode")
 local recovery = require("recovery")
 local leases = require("leases")
 
-local ROOT = "bee.environment:workspace_root"
+local ROOT = "bee.env:workspace_root"
 local IDLE_MS = 600
 type Object = {[string]: unknown}
 type Channel = channel.Channel

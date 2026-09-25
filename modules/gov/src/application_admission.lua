@@ -14,8 +14,11 @@ M.MAX_BINDINGS = 64
 M.MAX_POLICIES = 16
 M.MAX_BYTES = 65536
 M.MAX_POLICY_BYTES = 262144
-M.NAMESPACE = "bee.governance"
+M.NAMESPACE = "bee.gov"
 M.RESERVED_PREFIX = M.NAMESPACE .. ":admission."
+local PRIOR_ADMISSION_PREFIX = "bee.governance:admission."
+local PRIOR_GRANTS_PREFIX = "bee.governance.grants:"
+local PRIOR_WORKSPACE_OWNER_PREFIX = "bee.governance.workspace_applications:"
 
 type Object = {[string]: unknown}
 type ThreadAccess = "none" | "observe_post"
@@ -141,7 +144,16 @@ function M.id(owner_raw: unknown): (string?, string?)
     if not owner then return nil, "application admission overlay owner is invalid" end
     local digest, digest_error = hash.sha256(owner)
     if not digest then return nil, tostring(digest_error or "measure application admission owner") end
-    return M.RESERVED_PREFIX .. digest, nil
+    -- An admission installed under the prior workspace owner is a measured
+    -- registry identity. Keep it when reconstructing an immutable activation.
+    local prefix = owner:sub(1, #PRIOR_WORKSPACE_OWNER_PREFIX) == PRIOR_WORKSPACE_OWNER_PREFIX
+        and PRIOR_ADMISSION_PREFIX or M.RESERVED_PREFIX
+    return prefix .. digest, nil
+end
+function M.prior_id(owner_raw: unknown): string?
+    local owner = bounds.id(owner_raw)
+    local digest = owner and hash.sha256(owner) or nil
+    return digest and PRIOR_ADMISSION_PREFIX .. digest or nil
 end
 
 -- Admission records live under an owner-derived private identity.  Treat the
@@ -149,7 +161,9 @@ end
 -- must never get to claim a present or future admission identity.
 function M.reserved(raw: unknown): boolean
     return type(raw) == "string" and ((raw :: string):sub(1, #M.RESERVED_PREFIX) == M.RESERVED_PREFIX
-        or (raw :: string):sub(1, #"bee.governance.grants:") == "bee.governance.grants:")
+        or (raw :: string):sub(1, #"bee.gov.grants:") == "bee.gov.grants:"
+        or (raw :: string):sub(1, #PRIOR_ADMISSION_PREFIX) == PRIOR_ADMISSION_PREFIX
+        or (raw :: string):sub(1, #PRIOR_GRANTS_PREFIX) == PRIOR_GRANTS_PREFIX)
 end
 
 -- Decode the immutable byte handoff exactly as it was measured.  JSON only
@@ -238,7 +252,8 @@ function M.project(raw: unknown): (Measurement?, string?)
         for index = 1, generated_count do
             local entry = bounds.object(generated_rows[index])
             local id = entry and registry_id(entry.id) or nil
-            if not entry or not id or not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$")
+            if not entry or not id or (not id:match("^bee%.gov%.grants:policy%.[0-9a-f]+$")
+                and not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$"))
                 or generated[id] or entry.kind ~= "security.policy" then
                 return nil, "generated application policy is invalid"
             end

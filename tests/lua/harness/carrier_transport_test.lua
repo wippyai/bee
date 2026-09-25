@@ -14,7 +14,7 @@ local function plan(mode: string, protocol: string): machine.Plan
             executables = {}, environment = {}, host_environment = {}, allow_host_home = false, gateway_tools = {}, agent_launch = {}, gateway_ttl_ms = 1000, gateway_hooks = {}, fixture = true, allowed_overrides = {}}
     local placement_request_value: placement_types.LaunchRequest = {idempotency_key = "key", owner_id = "actor", owner_incarnation = 1, action_id = "action", attempt_id = "attempt",
             binding_ref = "binding", policy_ref = "policy", profile_id = "window", binding_digest = "binding-digest", profile_digest = "profile-digest",
-            placement_binding_ref = "bee.placement.native:binding", placement_binding_digest = string.rep("a", 64),
+            placement_binding_ref = "bee.placement.native.binding:binding", placement_binding_digest = string.rep("a", 64),
             launch = launch, resources = {}, environment = {}, environment_refs = {}, projections = {}, required_cleanup = "direct_process",
             required_exit_observation = "eof_gated", timeouts = {start_ms = 1000, stop_grace_ms = 100, drain_ms = 100, retain_ms = 100}}
     local profile_value: classify.Profile = {id = "window", mode = mode, protocol = protocol, protocol_revision = "1", supported = true, private_home = true,
@@ -29,12 +29,12 @@ local function plan(mode: string, protocol: string): machine.Plan
         profile = profile_value,
         launch = launch,
         policy = policy_value,
-        placement_binding = {binding_id = "bee.placement.native:binding", binding_digest = string.rep("a", 64), placement_kind = "native", methods = {
-            prepare = "bee.placement.native:prepare", start = "bee.placement.native:start", status = "bee.placement.native:status",
-            stop = "bee.placement.native:stop", reconcile = "bee.placement.native:reconcile", cleanup = "bee.placement.native:cleanup",
-            evidence = "bee.placement.native:evidence", attach = "bee.placement.native:attach",
-            capabilities = "bee.placement.native:capabilities", measure_executable = "bee.placement.native:measure_executable",
-            close_stdin = "bee.placement.native:close_stdin"}},
+        placement_binding = {binding_id = "bee.placement.native.binding:binding", binding_digest = string.rep("a", 64), placement_kind = "native", methods = {
+            prepare = "bee.placement.native.binding:prepare", start = "bee.placement.native.binding:start", status = "bee.placement.native.binding:status",
+            stop = "bee.placement.native.binding:stop", reconcile = "bee.placement.native.binding:reconcile", cleanup = "bee.placement.native.binding:cleanup",
+            evidence = "bee.placement.native.binding:evidence", attach = "bee.placement.native.binding:attach",
+            capabilities = "bee.placement.native.binding:capabilities", measure_executable = "bee.placement.native.binding:measure_executable",
+            close_stdin = "bee.placement.native.binding:close_stdin"}},
         plan_digest = "plan-digest",
         placement_request = placement_request_value,
         exit_codes_trustworthy = false, prepare_target = "prepare", normalize_target = "normalize",
@@ -202,7 +202,7 @@ local function define_tests()
                         test.eq(input.text, "Open Codex window")
                     end
                     if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
-                    if target == "bee.placement.native:prepare" then
+                    if target == "bee.placement.native.binding:prepare" then
                         return {ok = true, value = {notice = {code = "LOGIN_REQUIRED", provider = "codex", command = "codex login"}}}, nil
                     end
                     return {ok = true, value = {}}, nil
@@ -218,13 +218,13 @@ local function define_tests()
             test.is_nil(prepared.gateway_binding)
             test.eq(prepared.notice and prepared.notice.code, "LOGIN_REQUIRED")
             test.eq(prepared.notice and prepared.notice.command, "codex login")
-            test.eq(table.concat(calls, ","), "bee.threads.service:admit_action,bee.threads.service:prepare_attempt,bee.threads.carrier:claim,bee.placement.native:prepare")
+            test.eq(table.concat(calls, ","), "bee.threads.service:admit_action,bee.threads.service:prepare_attempt,bee.threads.carrier:claim,bee.placement.native.binding:prepare")
         end)
         test.it("rejects a malformed placement login notice", function()
             local io: machine.IO = {
                 call = function(target: string, value: unknown): (unknown, string?)
                     if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
-                    if target == "bee.placement.native:prepare" then
+                    if target == "bee.placement.native.binding:prepare" then
                         return {ok = true, value = {notice = {code = "LOGIN_REQUIRED", provider = "codex", command = "codex login\nextra"}}}, nil
                     end
                     return {ok = true, value = {}}, nil
@@ -264,7 +264,7 @@ local function define_tests()
             local prepared, err = machine.prepare_attempt(io, selected)
             if not prepared then error(tostring(err)) end
             test.eq(calls[#calls], "example.placement:prepare")
-            test.is_nil(table.concat(calls, ","):find("bee.placement.native:prepare", 1, true))
+            test.is_nil(table.concat(calls, ","):find("bee.placement.native.binding:prepare", 1, true))
         end)
         test.it("refuses window and nonstructured profiles before opening or claiming an attempt", function()
             local calls = 0

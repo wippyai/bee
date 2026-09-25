@@ -57,4 +57,4 @@ entries:
     authority: bee.resources.persist:authority
     migrations: bee.resources.migrations:migrations
     persist: bee.persist:database
-    resources: bee.resources.registry:resources
+    resources: bee.resources:resources

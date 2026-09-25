@@ -446,7 +446,7 @@ end
 -- The workspace extension methods: what one workspace holds here and which
 -- of its resources match a name prefix, for a caller the workspace catalog
 -- lets read that workspace.
-M.READ_WORKSPACE = "bee.workspaces.read"
+M.READ_WORKSPACE = "bee.workspace.manager.read"
 M.MAX_DESCRIBED = 50
 local function described(row: Row): {[string]: unknown}
     local subpath = text(row.subpath) or ""

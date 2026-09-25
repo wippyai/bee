@@ -426,7 +426,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
     }
     if not private_home then
-        placement_request.environment_refs.HOME = "bee.environment:machine_home"
+        placement_request.environment_refs.HOME = "bee.env:machine_home"
     end
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
         placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil

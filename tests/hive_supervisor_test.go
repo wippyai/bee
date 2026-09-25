@@ -40,7 +40,7 @@ func stageHiveSupervisorDesktop(t *testing.T, source string) {
 	if err := yaml.Unmarshal(data, &manifest); err != nil {
 		t.Fatalf("decode Hive desktop fixture manifest: %v", err)
 	}
-	if manifest.Namespace != "bee.hive_host.desktop" {
+	if manifest.Namespace != "bee.hive.desktop" {
 		t.Fatalf("Hive desktop fixture namespace = %q", manifest.Namespace)
 	}
 	wanted := map[string]bool{"protocol": true, "catalog": true, "owner": true, "host_policy": true, "catalog_call_policy": true}
@@ -80,6 +80,11 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	sourceSnapshot := filepath.Join(root, "source")
 	fixtureSnapshot := filepath.Join(root, "fixture")
 	if err := os.CopyFS(filepath.Join(sourceSnapshot, "hive"), os.DirFS(filepath.Join(repository, "src/hive"))); err != nil {
+		t.Fatal(err)
+	}
+	// The manager is an application; this isolated supervisor composition has
+	// no application dependency or desktop app lifecycle.
+	if err := os.RemoveAll(filepath.Join(sourceSnapshot, "hive", "manager")); err != nil {
 		t.Fatal(err)
 	}
 	// The staged supervisor boots the production service declaration, so it
@@ -235,7 +240,7 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	coordinator = []byte(strings.Replace(string(coordinator), `funcs.new():call("bee.feed_probe:handle", {command = command, remote = remote})`, `require("feed_logic").handle({command = command, remote = remote})`, 1))
+	coordinator = []byte(strings.Replace(string(coordinator), `funcs.new():call("bee.feed.probe:handle", {command = command, remote = remote})`, `require("feed_logic").handle({command = command, remote = remote})`, 1))
 	if err := os.WriteFile(coordinatorPath, coordinator, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -244,8 +249,8 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixtureText := strings.Replace(string(fixtureBytes), "    types: bee.hive:types", "    feed_logic: bee.feed_probe:logic\n    types: bee.hive:types", 1)
-	fixtureText = strings.Replace(fixtureText, "bee.hive_probe:name_injection_policy]", "bee.hive_probe:name_injection_policy, bee.feed_probe:policy, bee.feed_probe:enrollment_policy]", 1)
+	fixtureText := strings.Replace(string(fixtureBytes), "    types: bee.hive:types", "    feed_logic: bee.feed.probe:logic\n    types: bee.hive:types", 1)
+	fixtureText = strings.Replace(fixtureText, "bee.hive.probe:name_injection_policy]", "bee.hive.probe:name_injection_policy, bee.feed.probe:policy, bee.feed.probe:enrollment_policy]", 1)
 	if err := os.WriteFile(fixtureManifest, []byte(fixtureText), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +294,10 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 		t.Fatal(err)
 	}
 	dependency := "- name: dependency_approvals\n  kind: ns.dependency\n  component: bee/approvals\n" +
-		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee:approver_policies\n"
+		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee:approver_policies\n" +
+		"  - name: process_host\n    value: bee:workers\n" +
+		"  - name: authority_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]\n" +
+		"  - name: worker_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy, bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]\n"
 	if err := os.WriteFile(stagedRoot, append(staged, []byte(dependency)...), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +406,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 			verbosity = "--verbose"
 		}
 		args := []string{"run", verbosity}
-		args = append(args, "--override", "bee.hive_host:supervisor_service:lifecycle.auto_start=false")
+		args = append(args, "--override", "bee.hive.service:supervisor_service:lifecycle.auto_start=false")
 		if feeds {
 			for _, service := range []string{"bee.approvals.service:worker_service", "bee.threads:owner_service", "bee.threads.delivery:waiter_service"} {
 				args = append(args, "--override", service+":lifecycle.auto_start=false")

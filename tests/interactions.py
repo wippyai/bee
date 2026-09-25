@@ -14,7 +14,7 @@ def exercise(packed):
         shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
-        source = project / "src/apps/settings/app.lua"
+        source = project / "src/settings/app.lua"
         code = source.read_text().replace('    local announced = false', '''    local answers = assert(process.listen("bee.application.query.result", {message = true}))
     local probes = assert(process.listen("bee.test.query.probe", {message = true}))
     local query_id = ""
@@ -50,7 +50,7 @@ def exercise(packed):
         source.write_text(code)
         # Give the fixture app the exact opaque presentation ID so this proves
         # sender authorization, rather than relying on an unguessable ID.
-        broker_source = project / "src/applications/broker.lua"
+        broker_source = project / "src/apps/broker.lua"
         broker_code = broker_source.read_text()
         broker_anchor = '        process.send(owner, "bee.interaction.state", {version = 1, items = items, shutdown = shutdown_dialog and interaction.wire(shutdown_dialog) or nil})'
         assert broker_anchor in broker_code

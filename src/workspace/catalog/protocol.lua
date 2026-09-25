@@ -13,9 +13,9 @@ type Request = {operation: string, create: Create?, workspace_id: string?, label
     limit: integer?, folders: Folders?}
 
 local M = {}
-M.READ = "bee.workspaces.read"
-M.MANAGE = "bee.workspaces.manage"
-M.BROWSE = "bee.workspaces.browse"
+M.READ = "bee.workspace.manager.read"
+M.MANAGE = "bee.workspace.manager.manage"
+M.BROWSE = "bee.workspace.manager.browse"
 M.CATALOG = "catalog"
 M.DEFAULT_PAGE = 50
 M.OPERATIONS = {"create", "read", "list", "search", "rename", "archive", "restore", "inspect", "search_within", "roots", "folders"}

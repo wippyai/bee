@@ -44,6 +44,11 @@ entries:
   kind: library.lua
   source: file://sync_sender.lua
   imports: {transaction: bee.persist:transaction, version: bee.sync:version}
+`
+
+const savedProfilesSecurityIndex = `version: '1.0'
+namespace: bee.security.harness
+entries:
 - name: profile_store_policy
   kind: security.policy
   policy:
@@ -180,6 +185,9 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesWrite(filepath.Join(root, "src", "_index.yaml"), savedProfilesRootIndex); err != nil {
 		return err
 	}
+	if err := savedProfilesWrite(filepath.Join(root, "src", "security", "harness", "_index.yaml"), savedProfilesSecurityIndex); err != nil {
+		return fmt.Errorf("write profile storage policy: %w", err)
+	}
 	if err := savedProfilesWrite(filepath.Join(root, "src", "harness", "_index.yaml"), savedProfilesHarnessIndex); err != nil {
 		return fmt.Errorf("write harness index: %w", err)
 	}
@@ -228,7 +236,7 @@ func savedProfilesSetup(root, source string) error {
 func savedProfilesBoot(runtime, root, phase, expectedNode string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	args := []string{"run", "--verbose", "--host", "bee.saved_profiles_probe:workers", "--", "saved-profiles-probe", phase}
+	args := []string{"run", "--verbose", "--host", "bee.saved.profiles.probe:workers", "--", "saved-profiles-probe", phase}
 	if expectedNode != "" {
 		args = append(args, expectedNode)
 	}

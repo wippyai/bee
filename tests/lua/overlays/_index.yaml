@@ -9,9 +9,9 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
-    model: bee.overlays:model
+    model: bee.gov.overlays:model
     caller: bee.application:caller
-    preflight: bee.governance:preflight
+    preflight: bee.gov:preflight
 - name: view_test
   kind: function.lua
   source: file://view_test.lua
@@ -20,7 +20,7 @@ entries:
   modules: [tty]
   imports:
     test: wippy.test:test
-    model: bee.overlays:model
-    view: bee.overlays:view
+    model: bee.gov.overlays:model
+    view: bee.gov.overlays:view
     appearance: bee.application:appearance
-    preflight: bee.governance:preflight
+    preflight: bee.gov:preflight

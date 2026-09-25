@@ -19,7 +19,7 @@ local function admitted_title(workspace_id: string): string?
 end
 
 local function main()
-    local workspace_id = bounds.id(env.get("bee.app_journey_probe:destination_workspace"))
+    local workspace_id = bounds.id(env.get("bee.app.journey.probe:destination_workspace"))
     if not workspace_id then error("destination workspace identity is unavailable") end
     local entry: unknown = nil
     local title: string? = nil

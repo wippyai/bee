@@ -1,0 +1,46 @@
+version: '1.0'
+namespace: bee.host.processes
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  - time
+  - uuid
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    probe: bee.host.processes:probe
+    view: bee.host.processes:view
+    client: bee.application:client
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Process Manager
+      icon: P
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: inspection
+- name: probe
+  kind: library.lua
+  source: file://probe.lua
+  modules:
+  - system
+  imports:
+    viz: bee.application:viz
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    probe: bee.host.processes:probe
+    text: bee.application:text
+    viz: bee.application:viz

@@ -18,7 +18,7 @@ local function base(operation: string, revision: integer, key: string): {[string
 end
 local function prepare(): {[string]: unknown}
     local input = base("prepare_activation", 0, "prepare-1")
-    input.overlay_owner = "bee.governance:overlay"
+    input.overlay_owner = "bee.gov:overlay"
     input.source_node, input.source_workspace, input.version = "source-a", "source-w", "v1"
     input.plan_digest = string.rep("a", 64)
     input.plan_revision, input.selection_revision = 4, 2
@@ -49,18 +49,18 @@ end
 local function define_tests()
     test.describe("Governance activation store", function()
         test.it("keeps immutable facts and separates authorized from observed state", function()
-            local state, open_error = store.open("bee.governance:activation_test_db", "node-a", "workspace-a")
+            local state, open_error = store.open("bee.gov:activation_test_db", "node-a", "workspace-a")
             if not state then error(tostring(open_error)) end
             local prepared = ok(store.call(state, "actor-a", prepare()))
             test.eq(prepared.phase, "prepared")
             test.eq(prepared.revision, 1)
             test.is_true(type(prepared.effect_key) == "string")
             test.is_true(type(prepared.authorization_digest) == "string")
-            test.eq(prepared.overlay_owner, "bee.governance:overlay")
+            test.eq(prepared.overlay_owner, "bee.gov:overlay")
             test.is_nil(prepared.application_admission_bytes)
             test.is_nil(prepared.application_admission_digest)
             local altered = prepare()
-            altered.idempotency_key, altered.overlay_owner = "prepare-altered", "bee.governance:other"
+            altered.idempotency_key, altered.overlay_owner = "prepare-altered", "bee.gov:other"
             test.eq(store.call(state, "actor-a", altered).code, "CONFLICT")
             local bound = base("bind_approval", 1, "bind-1")
             bound.approval_id, bound.approval_proposal_digest, bound.approval_owner_incarnation = "approval-1", string.rep("d", 64), 8
@@ -74,7 +74,7 @@ local function define_tests()
             test.eq(consumed.phase, "authorized")
             test.eq(consumed.desired_intent_id, "intent-v1")
             test.eq(consumed.observed_intent_id, nil)
-            local desired = ok(store.desired(state, "bee.governance:overlay"))
+            local desired = ok(store.desired(state, "bee.gov:overlay"))
             test.eq(desired.intent_id, "intent-v1")
             test.eq(desired.phase, "authorized")
             local applying = ok(store.call(state, "actor-a", base("begin_apply", 4, "apply-1")))
@@ -97,7 +97,7 @@ local function define_tests()
             assert(store.close(state))
         end)
         test.it("persists optional application admission bytes and rejects partial evidence", function()
-            local state, open_error = store.open("bee.governance:activation_test_db", "node-a", "workspace-admission")
+            local state, open_error = store.open("bee.gov:activation_test_db", "node-a", "workspace-admission")
             if not state then error(tostring(open_error)) end
             local input = prepare()
             input.intent_id, input.idempotency_key = "intent-admission", "admission-prepare"
@@ -112,7 +112,7 @@ local function define_tests()
             test.is_true(prepared.authorization_digest ~= changed_prepared.authorization_digest)
             test.is_true(prepared.effect_key ~= changed_prepared.effect_key)
             assert(store.close(state))
-            local reopened = assert(store.open("bee.governance:activation_test_db", "node-a", "workspace-admission"))
+            local reopened = assert(store.open("bee.gov:activation_test_db", "node-a", "workspace-admission"))
             local restored = ok(store.get(reopened, "intent-admission"))
             test.eq(restored.application_admission_bytes, input.application_admission.bytes)
             test.eq(restored.application_admission_digest, input.application_admission.digest)
@@ -121,13 +121,13 @@ local function define_tests()
             local partial = prepare()
             partial.intent_id, partial.idempotency_key = "intent-partial", "admission-partial"
             partial.application_admission = {bytes = "only bytes"}
-            local partial_store = assert(store.open("bee.governance:activation_test_db", "node-a", "workspace-partial"))
+            local partial_store = assert(store.open("bee.gov:activation_test_db", "node-a", "workspace-partial"))
             local refused = store.call(partial_store, "actor-a", partial)
             test.eq(refused.code, "INVALID")
             assert(store.close(partial_store))
         end)
         test.it("persists the exact predecessor digest for grant reuse", function()
-            local state = assert(store.open("bee.governance:activation_test_db", "node-a", "workspace-reuse"))
+            local state = assert(store.open("bee.gov:activation_test_db", "node-a", "workspace-reuse"))
             local input = prepare()
             input.intent_id, input.idempotency_key = "intent-reuse", "reuse-prepare"
             input.grant_predecessor_digest = string.rep("b", 64)
@@ -145,17 +145,17 @@ local function define_tests()
                 approval_owner_incarnation = 1, grant_reuse_digest = string.rep("c", 64)}
             test.eq(store.call(state, "actor-a", changed).code, "INVALID")
             assert(store.close(state))
-            local reopened = assert(store.open("bee.governance:activation_test_db", "node-a", "workspace-reuse"))
+            local reopened = assert(store.open("bee.gov:activation_test_db", "node-a", "workspace-reuse"))
             test.eq(ok(store.get(reopened, "intent-reuse")).grant_reuse_digest, string.rep("b", 64))
             test.eq(ok(store.get(reopened, "intent-reuse")).grant_predecessor_digest, string.rep("b", 64))
             assert(store.close(reopened))
         end)
         test.it("fences stale revisions, receipt actors and changed retries", function()
-            local state, open_error = store.open("bee.governance:activation_test_db", "node-a", "workspace-a")
+            local state, open_error = store.open("bee.gov:activation_test_db", "node-a", "workspace-a")
             if not state then error(tostring(open_error)) end
             local status = ok(store.call(state, "reader", {operation = "activation_status", intent_id = "intent-v1"}))
             test.eq(status.phase, "settled")
-            test.eq(ok(store.desired(state, "bee.governance:overlay")).intent_id, "intent-v1")
+            test.eq(ok(store.desired(state, "bee.gov:overlay")).intent_id, "intent-v1")
             local stale = base("begin_apply", 4, "stale")
             local stale_result = store.call(state, "actor-a", stale)
             test.eq(stale_result.code, "CONFLICT")
@@ -179,7 +179,7 @@ local function define_tests()
             assert(store.close(state))
         end)
         test.it("keeps independent desired versions for two application overlays", function()
-            local state, open_error = store.open("bee.governance:activation_test_db", "node-a", "workspace-multi")
+            local state, open_error = store.open("bee.gov:activation_test_db", "node-a", "workspace-multi")
             if not state then error(tostring(open_error)) end
             local function authorize(intent_id: string, overlay_owner: string, source_workspace: string, prefix: string)
                 local input = {operation = "prepare_activation", intent_id = intent_id,
@@ -209,7 +209,7 @@ local function define_tests()
             assert(store.close(state))
         end)
         test.it("records exact partial migration progress before overlay settlement", function()
-            local state, open_error = store.open("bee.governance:activation_test_db", "node-a", "workspace-migrations")
+            local state, open_error = store.open("bee.gov:activation_test_db", "node-a", "workspace-migrations")
             if not state then error(tostring(open_error)) end
             local input = prepare()
             input.intent_id, input.idempotency_key = "intent-migrations", "migrations-prepare"

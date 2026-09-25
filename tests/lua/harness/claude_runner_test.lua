@@ -212,7 +212,7 @@ local function records_of(thread_id: string): {Object}
     return all
 end
 local function evidence_of(attempt_id: string): {Object}
-    local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 64})
+    local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64})
     return page.evidence :: {Object}
 end
 local function define_tests()

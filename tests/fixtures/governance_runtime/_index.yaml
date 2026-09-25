@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.governance_probe
+namespace: bee.gov.probe
 entries:
 - name: workers
   kind: process.host
@@ -20,9 +20,9 @@ entries:
   method: main
   modules: [registry, logger]
   security:
-    policies: [bee.governance_probe:policy]
+    policies: [bee.gov.probe:policy]
   meta:
     command:
       name: governance-runtime-probe
       security:
-        actor: {id: bee.governance_probe}
+        actor: {id: bee.gov.probe}

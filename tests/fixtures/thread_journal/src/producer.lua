@@ -24,6 +24,6 @@ local function main(owner: string, thread: string, run: string)
     assert(tiny.width >= 1 and tiny.height >= 1)
     emit("tiny", "test.case.passed", '{"run":' .. encode(run) .. ',"name":"minimum screen bounds"}')
     emit("finish", "test.run.finished", '{"run":' .. encode(run) .. ',"passed":2}')
-    assert(process.send(owner, "bee.thread_demo.request", {version = 1, op = "producer_done", thread = thread}))
+    assert(process.send(owner, "bee.thread.demo.request", {version = 1, op = "producer_done", thread = thread}))
 end
 return {main = main}

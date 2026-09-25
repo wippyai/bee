@@ -97,7 +97,7 @@ return {handle = handle}
 def exercise(project, packed, pack):
     with tempfile.TemporaryDirectory(prefix="bee-modules-ui-") as directory:
         (Path(directory) / ".wippy").mkdir()
-        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.modules:app",))
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules:app",))
         try:
             ui.wait("MODULES", timeout=20)
             ui.wait("Preview fixture", timeout=10)
@@ -276,7 +276,7 @@ def exercise_real_facade(project, packed, pack):
     baseline = yaml.safe_load(((pack if packed else project) / "wippy.lock").read_text())["modules"]
     with tempfile.TemporaryDirectory(prefix="bee-modules-real-hub-") as directory:
         ui = Desktop(directory, packed=packed, project=project, deployment=pack,
-                     apps=("bee.modules:app",))
+                     apps=("bee.hub.modules:app",))
         try:
             def click(label):
                 for y, line in enumerate(ui.screen.display, 1):
@@ -378,7 +378,7 @@ def exercise_authored_publication(project, packed, pack):
     """Prove Modules sends explicit prepare then publish requests through Governance."""
     with tempfile.TemporaryDirectory(prefix="bee-modules-authored-") as directory:
         ui = Desktop(directory, packed=packed, project=project, deployment=pack,
-                     apps=("bee.modules:app",))
+                     apps=("bee.hub.modules:app",))
         try:
             ui.wait("MODULES", timeout=20)
             ui.key(b"a")

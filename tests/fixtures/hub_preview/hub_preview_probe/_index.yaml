@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.hub_preview_probe
+namespace: bee.hub.preview.probe
 entries:
 - name: workers
   kind: process.host
@@ -25,9 +25,9 @@ entries:
   imports:
     preview: bee.hub.binding:preview
   security:
-    policies: [bee.hub_preview_probe:inspect_policy, bee.hub_preview_probe:registry_read_policy]
+    policies: [bee.hub.preview.probe:inspect_policy, bee.hub.preview.probe:registry_read_policy]
   meta:
     command:
       name: hub-preview-probe
       security:
-        actor: {id: bee.hub_preview_probe}
+        actor: {id: bee.hub.preview.probe}

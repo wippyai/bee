@@ -11,7 +11,7 @@ local appearance = require("appearance")
 local M = {}
 function M.guest(owner: string, host: string, workspace_id: string)
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "forged", op = "open",
-        workspace_id = workspace_id, definition_id = "bee.attachment_probe:app"}))
+        workspace_id = workspace_id, definition_id = "bee.attachment.probe:app"}))
     assert(process.send(owner, "bee.host.guest_sent", {}))
 end
 function M.main()
@@ -31,7 +31,7 @@ function M.main()
     local scope = security.new_scope(policies)
     local function start(expected_records: integer): (string, string)
         local host = tostring(assert(process.with_options({}):with_scope(scope):with_context({["bee.host_owner"] = owner})
-            :spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.environment:workspace_root", subpath = ""})))
+            :spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""})))
         local message = assert(ready:receive())
         assert(message:from() == host)
         local data: unknown = message:payload():data()
@@ -58,7 +58,7 @@ function M.main()
     end
     local function request(id: string, op: string, recipient: string?)
         assert(process.send(host, "bee.app.request", {version = 1, request_id = id, op = op,
-            workspace_id = workspace_id, definition_id = op == "open" and "bee.attachment_probe:app" or "",
+            workspace_id = workspace_id, definition_id = op == "open" and "bee.attachment.probe:app" or "",
             recipient = recipient or ""}))
     end
     local function stop(id: string)
@@ -70,7 +70,7 @@ function M.main()
         end
     end
     local guest = tostring(assert(process.with_options({}):spawn_monitored(
-        "bee.attachment_probe:host_guest", "bee:workers", owner, host, workspace_id)))
+        "bee.attachment.probe:host_guest", "bee:workers", owner, host, workspace_id)))
     assert(guest_sent:receive():from() == guest)
     request("open", "open")
     local opened = reply("open", "open")
@@ -127,7 +127,7 @@ function M.manual()
     local host_scope = security.new_scope(policies)
     local function start(expected_records: integer): (string, string)
         local host = tostring(assert(process.with_options({}):with_scope(host_scope):with_context({["bee.host_owner"] = owner})
-            :spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.environment:workspace_root", subpath = ""})))
+            :spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""})))
         local message = assert(ready:receive())
         assert(message:from() == host)
         local data: unknown = message:payload():data()
@@ -157,7 +157,7 @@ function M.manual()
         end
     end
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "manual-open", op = "open", workspace_id = workspace_id,
-        definition_id = "bee.attachment_probe:app"}))
+        definition_id = "bee.attachment.probe:app"}))
     local opened = reply("manual-open", "open")
     assert(opened.error_code == "")
     local checkpoint = assert(checkpoints:receive())
@@ -168,7 +168,7 @@ function M.manual()
     if not record or record.id ~= opened.id or record.instance_id ~= opened.instance_id then error("Manual checkpoint identity changed") end
     stop("manual-stop-first")
 
-    local database = assert(persistence.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
+    local database = assert(persistence.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""}))
     local manual_record: recovery.Record = {id = record.id, instance_id = record.instance_id, definition_id = record.definition_id,
         thread_id = record.thread_id, resume_schema = record.resume_schema, restart_policy = "manual", resume_state = record.resume_state,
         window = record.window}
@@ -181,16 +181,16 @@ function M.manual()
     assert(database:close())
 
     host, workspace_id = start(1)
-    database = assert(persistence.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
+    database = assert(persistence.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""}))
     local fenced = assert(database.assignments:get({view_id = opened.id, instance_id = opened.instance_id}))
     assert(fenced.intent and fenced.intent.request_id == "manual-recovered-transfer", "Manual checkpoint settled before restore")
     assert(database.assignments:get({view_id = "lost-view", instance_id = "lost-instance"}) == nil,
         "Checkpoint-absent assignment survived host restart")
     assert(database:close())
 
-    local client_policy = assert(security.policy("bee.attachment_probe:client_policy"))
+    local client_policy = assert(security.policy("bee.attachment.probe:client_policy"))
     local source = tostring(assert(process.with_options({}):with_scope(security.new_scope({client_policy}))
-        :spawn_monitored("bee.attachment_probe:client", "bee:workers", owner, host, workspace_id, "A", false, "bee.attachment_probe:app", true)))
+        :spawn_monitored("bee.attachment.probe:client", "bee:workers", owner, host, workspace_id, "A", false, "bee.attachment.probe:app", true)))
     local source_ready = assert(statuses:receive())
     local source_ready_data: unknown = source_ready:payload():data()
     assert(source_ready:from() == source and type(source_ready_data) == "table" and source_ready_data.phase == "ready")
@@ -209,7 +209,7 @@ function M.manual()
     assert(fenced_bind:from() == source and type(fenced_bind_data) == "table" and fenced_bind_data.phase == "prepared-bind")
     assert(process.send(source, "bee.client.command", "exit"))
     local client = tostring(assert(process.with_options({}):with_scope(security.new_scope({client_policy}))
-        :spawn_monitored("bee.attachment_probe:client", "bee:workers", owner, host, workspace_id, "B", false, "bee.attachment_probe:app")))
+        :spawn_monitored("bee.attachment.probe:client", "bee:workers", owner, host, workspace_id, "B", false, "bee.attachment.probe:app")))
     local ready_client = assert(statuses:receive())
     local ready_data: unknown = ready_client:payload():data()
     assert(ready_client:from() == client and type(ready_data) == "table" and ready_data.phase == "ready")
@@ -231,7 +231,7 @@ function M.manual()
         or restored_data.view.id ~= opened.id or restored_data.view.instance_id ~= opened.instance_id then
         error("Manual restore did not bind the exact prepared identity on its target display")
     end
-    database = assert(persistence.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
+    database = assert(persistence.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""}))
     local settled = assert(database.assignments:get({view_id = opened.id, instance_id = opened.instance_id}))
     local receipt = assert(database.assignments:receipt("manual-recovered-transfer"))
     assert(settled.assignment.display_id == string.rep("b", 32) and settled.assignment.revision == 2 and not settled.intent

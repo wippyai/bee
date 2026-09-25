@@ -34,7 +34,7 @@ local function main()
     local binding = assert(contract.open("bee.threads:local"))
     local denied = binding:read_after({thread = "isolation", after = 0, actor = "someone-else"})
     assert(type(denied) == "table" and #denied.events == 3, "actor in payload changed identity")
-    for _, id in ipairs({"bee.threads.records:types", "bee.threads.service:types", "bee.threads.persist:migrations"}) do
+    for _, id in ipairs({"bee.threads.records:types", "bee.threads.service:types", "bee.threads.migrations:migrations"}) do
         local slice = assert(registry.get(id), id .. " missing")
         assert(slice.kind == "library.lua", id .. " kind")
     end

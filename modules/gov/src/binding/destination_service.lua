@@ -29,10 +29,10 @@ local capability_catalog = require("capability_catalog")
 local workspace_applications = require("workspace_applications")
 
 local M = {}
-M.BACKEND = "bee.governance.binding:destination_backend_call"
-M.EXECUTE = "bee.governance.delivery.execute"
-M.SCOPE = "bee.governance.security:destination_execution_scope"
-local ACTOR = "bee.governance.activation"
+M.BACKEND = "bee.gov.binding:destination_backend_call"
+M.EXECUTE = "bee.gov.delivery.execute"
+M.SCOPE = "bee.gov.security:destination_execution_scope"
+local ACTOR = "bee.gov.activation"
 type Object = {[string]: unknown}
 type Set = {[string]: boolean}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
@@ -73,12 +73,25 @@ local function load(): (Configuration?, string?)
 end
 
 local function selected(config: Configuration, workspace_id: string, source_node: string,
-    source_workspace: string): (Profile?, string?)
+    source_workspace: string, activation_store: activations.Store?): (Profile?, string?)
     local installed: unknown = nil
     local vocabulary: capability_catalog.Catalog? = nil
+    local owner_hint: string? = nil
     if source_node == config.node_id then
         local workspace_identity = workspace_applications.identity(workspace_id, source_workspace)
-        local id = workspace_identity and capability_grants.record_id(workspace_identity.overlay_owner) or nil
+        local prior_owner = workspace_applications.prior_owner(workspace_id, source_workspace)
+        if prior_owner then
+            local prior_id = capability_grants.prior_record_id(prior_owner)
+            if (prior_id and registry.get(prior_id)) then owner_hint = prior_owner end
+            if activation_store then
+                local desired = activations.desired(activation_store, prior_owner)
+                if desired.ok then owner_hint = prior_owner
+                elseif desired.code ~= "NOT_FOUND" then return nil, desired.message end
+            end
+        end
+        local owner = owner_hint or (workspace_identity and workspace_identity.overlay_owner)
+        local id = owner and (owner_hint and capability_grants.prior_record_id(owner)
+            or capability_grants.record_id(owner)) or nil
         if id then
             installed = registry.get(id)
             if installed then
@@ -86,7 +99,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
                 local decoded, catalog_error = capability_catalog.decode(raw_catalog)
                 if not decoded then return nil, catalog_error end
                 vocabulary = decoded
-                local record, record_error = capability_grants.decode(installed, workspace_identity.overlay_owner,
+                local record, record_error = capability_grants.decode(installed, owner,
                     workspace_id, workspace_identity.definition_id, decoded)
                 if not record then return nil, record_error end
                 local live, live_error = capability_grants.live(record,
@@ -96,7 +109,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
         end
     end
     return activation_profiles.select(config, workspace_id, source_node, source_workspace,
-        installed, vocabulary)
+        installed, vocabulary, owner_hint)
 end
 
 local function migration_binding(profile_value: Profile, target: string): (DatabaseBinding?, string?)
@@ -186,10 +199,12 @@ end
 
 local function generated_install(profile_value: Profile, intent_raw: unknown): (Object?, string?)
     local identity = workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
-    if not identity or identity.overlay_owner ~= profile_value.overlay_owner
+    local prior_owner = workspace_applications.prior_owner(profile_value.workspace_id, profile_value.source_workspace)
+    local uses_prior = prior_owner ~= nil and prior_owner == profile_value.overlay_owner
+    if not identity or (identity.overlay_owner ~= profile_value.overlay_owner and not uses_prior)
         or identity.component ~= profile_value.component then return nil, nil end
     local intent = bounds.object(intent_raw)
-    if not intent or intent.overlay_owner ~= identity.overlay_owner
+    if not intent or intent.overlay_owner ~= profile_value.overlay_owner
         or intent.workspace_id ~= profile_value.workspace_id
         or not bounds.id(intent.approval_id) or not bounds.id(intent.version) then
         return nil, "capability activation identity is invalid"
@@ -203,14 +218,15 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     for _, requirement in ipairs(candidate.requirements) do
         if requirement.capability_request then requested[#requested + 1] = requirement end
     end
-    local proposed, proposed_error = capability_grants.propose(vocabulary, identity.overlay_owner,
-        identity.definition_id, requested)
+    local proposed, proposed_error = capability_grants.propose(vocabulary, profile_value.overlay_owner,
+        identity.definition_id, requested, uses_prior)
     if not proposed then return nil, proposed_error end
-    local record_id = capability_grants.record_id(identity.overlay_owner)
+    local record_id = uses_prior and capability_grants.prior_record_id(profile_value.overlay_owner)
+        or capability_grants.record_id(profile_value.overlay_owner)
     local prior_raw = record_id and registry.get(record_id) or nil
     local prior: Object? = nil
     if prior_raw then
-        local decoded, decoded_error = capability_grants.decode(prior_raw, identity.overlay_owner,
+        local decoded, decoded_error = capability_grants.decode(prior_raw, profile_value.overlay_owner,
             profile_value.workspace_id, identity.definition_id, vocabulary)
         if not decoded then return nil, decoded_error end
         local live, live_error = capability_grants.live(decoded,
@@ -242,9 +258,9 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         end
         if prior then revision = (prior.revision :: integer) + 1 end
     end
-    local record, record_error = capability_grants.record(identity.overlay_owner,
+    local record, record_error = capability_grants.record(profile_value.overlay_owner,
         profile_value.workspace_id, identity.definition_id, proposed, approval_id, revision,
-        intent.artifact_digest, intent.version)
+        intent.artifact_digest, intent.version, uses_prior)
     if not record then return nil, record_error end
     return {policies = proposed.policies, bindings = proposed.bindings, record = record}, nil
 end
@@ -256,10 +272,12 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     local workspace_identity = workspace_applications.identity(profile_value.workspace_id,
         profile_value.source_workspace)
     local base_digest: string? = nil
-    if workspace_identity and workspace_identity.overlay_owner == profile_value.overlay_owner
+    if workspace_identity and (workspace_identity.overlay_owner == profile_value.overlay_owner
+        or workspace_applications.prior_owner(profile_value.workspace_id,
+            profile_value.source_workspace) == profile_value.overlay_owner)
         and workspace_identity.component == profile_value.component then
         local base, base_error = activation_profiles.select(config, profile_value.workspace_id,
-            profile_value.source_node, profile_value.source_workspace)
+            profile_value.source_node, profile_value.source_workspace, nil, nil, profile_value.overlay_owner)
         if not base then return nil, base_error end
         base_digest = base.policy_digest
     end
@@ -317,7 +335,7 @@ local function plan_changes(plan_store: plans.Store, activation_store: activatio
     if not reviewed then return failure("INTERNAL", tostring(candidate_error or "decode the reviewed candidate")) end
     local config, config_error = load()
     if not config then return failure("BLOCKED", config_error or "activation configuration is unavailable") end
-    local chosen, profile_error = selected(config, workspace_id, source_node, source_workspace)
+    local chosen, profile_error = selected(config, workspace_id, source_node, source_workspace, activation_store)
     if not chosen then return failure("BLOCKED", profile_error or "destination host has no activation profile for this source") end
     local owner_node = bounds.id(plan.owner_node)
     if not owner_node then return failure("INTERNAL", "plan store returned no owner") end
@@ -422,9 +440,9 @@ local MANAGES: Set = {stage = true, review = true, select = true}
 function M.required_action(raw: unknown): string?
     local operation = bounds.id(raw)
     if not operation or not OPERATIONS[operation] then return nil end
-    if READS[operation] then return "bee.governance.delivery.read" end
-    if MANAGES[operation] then return "bee.governance.delivery.manage" end
-    return "bee.governance.delivery.activate"
+    if READS[operation] then return "bee.gov.delivery.read" end
+    if MANAGES[operation] then return "bee.gov.delivery.manage" end
+    return "bee.gov.delivery.activate"
 end
 
 local function exact(request: Object, fields: {string}): string?
@@ -529,7 +547,7 @@ function M.call(raw: unknown): Result
                     elseif not application then result = failure("INVALID", "replica is not an application version")
                     else
                         local chosen, profile_error = selected(config, workspace_id, application.value.source_node,
-                            application.value.source_workspace)
+                            application.value.source_workspace, activation_store)
                         if not chosen then result = failure("BLOCKED", profile_error or "activation profile is unavailable")
                         else
                             local resolved = destination_resolver(chosen, node_id, workspace_id, activation_store)
@@ -601,7 +619,7 @@ function M.call(raw: unknown): Result
         local chosen: Profile? = nil
         local profile_error: string? = nil
         if config and source_node and source_workspace then
-            chosen, profile_error = selected(config, workspace_id, source_node, source_workspace)
+            chosen, profile_error = selected(config, workspace_id, source_node, source_workspace, activation_store)
         end
         local composed: any = nil
         local compose_error: string? = nil
@@ -663,7 +681,7 @@ function M.recover_all(): (boolean, string?)
                 close(plan_store, activation_store)
                 return false, "desired activation intent is malformed"
             end
-            local chosen = selected(config, workspace_id, source_node, source_workspace)
+            local chosen = selected(config, workspace_id, source_node, source_workspace, activation_store)
             if not chosen or chosen.overlay_owner ~= overlay_owner then break end
             local composed, compose_error = owner_config(config, chosen, plan_store, activation_store)
             if not composed then

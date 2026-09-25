@@ -3,7 +3,7 @@ local funcs = require("funcs")
 local test = require("test")
 
 local function call(request: unknown): {[string]: unknown}
-    local result, err = funcs.call("bee.governance.binding:overlay_call", request)
+    local result, err = funcs.call("bee.gov.binding:overlay_call", request)
     if type(result) ~= "table" then error(tostring(err or "overlay call returned no result")) end
     return result :: {[string]: unknown}
 end

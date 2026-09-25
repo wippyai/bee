@@ -70,7 +70,7 @@ func TestNativeControlBodyRequiresObjectRoot(t *testing.T) {
 func TestActorDeliversNormalizedSupervisorReply(t *testing.T) {
 	actor := &Actor{owner: "owner", inbox: make(chan Message, 1)}
 	proc := &nativeActor{actor: actor}
-	sender := pid.PID{Node: "owner", Host: "bee.hive_host:supervisor_host", UniqID: "one"}
+	sender := pid.PID{Node: "owner", Host: "bee.hive.service:supervisor_host", UniqID: "one"}
 	pkg := relay.NewPackage(sender, pid.PID{}, "bee.hive.reply", payload.NewPayload(map[string]any{"request_id": "one", "ok": true}, payload.Golang))
 	var output process.StepOutput
 	if err := proc.Step([]process.Event{{Type: process.EventMessage, Data: pkg}}, &output); err != nil {

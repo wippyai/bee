@@ -21,7 +21,7 @@ M.MAX_ITEMS = 50
 M.MAX_QUERY = 120
 M.SWITCHED = "Switching this display"
 -- A new workspace is made by the Workspaces viewer, opened on its create flow.
-M.CREATE_APPLICATION = "bee.workspaces:app"
+M.CREATE_APPLICATION = "bee.workspace.manager:app"
 M.CREATE_ARGUMENT = "create"
 local NONE: Response = {close = false, page = nil, switch = nil, create = false}
 function M.new(current: string): Menu

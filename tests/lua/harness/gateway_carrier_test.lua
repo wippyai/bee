@@ -210,13 +210,13 @@ local function report(thread_id: string, attempt_id: string?): Object
     end
     local kinds: {string} = {}
     if attempt_id then
-        local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 128})
+        local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
         for _, item in ipairs(page.evidence :: {Object}) do kinds[#kinds + 1] = tostring(item.kind) end
     end
     error("no gateway report in thread " .. thread_id .. "; placement evidence: " .. table.concat(kinds, ","))
 end
 local function evidence_kinds(attempt_id: string): ({string}, {string})
-    local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 128})
+    local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
     local names: {string} = {}
     local details: {string} = {}
     for index, item in ipairs(page.evidence :: {Object}) do
@@ -398,7 +398,7 @@ local function define_tests()
             -- materialized into the environment.
             local outcome = run_carrier(request(thread_id, attempt_id, {}, "absent-directory"), "open", nil)
             test.is_nil(outcome.value)
-            if not tostring(outcome.error):find("bee.placement.native:start", 1, true) then error("unexpected refusal: " .. tostring(outcome.error)) end
+            if not tostring(outcome.error):find("bee.placement.native.binding:start", 1, true) then error("unexpected refusal: " .. tostring(outcome.error)) end
             -- The runner held the materialization key and the token when it
             -- refused; neither reaches the carrier's error nor the records.
             no_secret_in(tostring(outcome.error), "carrier error")
@@ -409,7 +409,7 @@ local function define_tests()
             expect_detail(details, "start refused", true)
             expect_evidence(names, details, "child.exited", false)
             no_token_in(details)
-            local status = call("bee.placement.native:status", {attempt_id = attempt_id})
+            local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
             test.eq((status.attempt :: Object).execution_state, "exited")
             local binding = binding_of(attempt_id, 1)
             test.eq(binding.valid, false)
@@ -459,7 +459,7 @@ local function define_tests()
             test.eq(lost.reason, "binding is revoked")
             -- The child holds until the enforcement path stops it, so it
             -- presents its token again only after the retirement.
-            call("bee.placement.native:reconcile", {attempt_id = attempt_id})
+            call("bee.placement.native.binding:reconcile", {attempt_id = attempt_id})
             local resumed = run_carrier(launch, "resume", nil)
             if not resumed.value then error("resumed carrier failed: " .. tostring(resumed.error)) end
             local seen = report(thread_id)
@@ -536,7 +536,7 @@ local function define_tests()
             act(attempt_id)
             -- Force the real enforcement path instead of racing the periodic
             -- sweeper. The fixture must still report an actual HTTP denial.
-            call("bee.placement.native:reconcile", {attempt_id = attempt_id})
+            call("bee.placement.native.binding:reconcile", {attempt_id = attempt_id})
             local resumed = run_carrier(launch, "resume", nil)
             if not resumed.value then error("resumed carrier failed: " .. tostring(resumed.error)) end
             local seen = report(thread_id, attempt_id)
@@ -808,7 +808,7 @@ local function define_tests()
             local live = binding_of(attempt_id, 1)
             test.eq(live.valid, true)
             call("bee.gateway.binding:revoke", {binding_id = live.binding_id})
-            call("bee.placement.native:reconcile", {attempt_id = attempt_id})
+            call("bee.placement.native.binding:reconcile", {attempt_id = attempt_id})
             continue_carrier(pid)
             local outcome = await_carrier(pid, "revoked carrier")
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end

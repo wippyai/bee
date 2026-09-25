@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.feed_probe
+namespace: bee.feed.probe
 entries:
 - name: logic
   kind: library.lua
@@ -8,12 +8,12 @@ entries:
   imports:
     client: bee.hive:client
     types: bee.hive:types
-    principals: bee.hive_host.supervisor:principals
+    principals: bee.hive.supervisor:principals
 - name: policy
   kind: security.policy
   policy:
     actions: [registry.get, funcs.call]
-    resources: [bee.hive_host.supervisor:principal_mappings, bee.feed_probe:handle, bee:approver_policies, bee.approvals.binding:request]
+    resources: [bee.hive.supervisor:principal_mappings, bee.feed.probe:handle, bee:approver_policies, bee.approvals.binding:request]
     effect: allow
 - name: enrollment_policy
   kind: security.policy
@@ -25,7 +25,7 @@ entries:
   kind: security.policy
   policy:
     actions: [hive.invoke, funcs.call, bee.node.read, bee.approvals.decide]
-    resources: [bee.node.binding:describe, bee.node.binding:snapshot, bee.node.binding:read_after, bee.node.binding:update_metadata, bee.hive_host.supervisor:invoke_check, node-0, node-1, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, feed-workspace]
+    resources: [bee.node.binding:describe, bee.node.binding:snapshot, bee.node.binding:read_after, bee.node.binding:update_metadata, bee.hive.supervisor:invoke_check, node-0, node-1, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, feed-workspace]
     effect: allow
 - name: write_policy
   kind: security.policy
@@ -39,8 +39,8 @@ entries:
   method: handle
   modules: [registry, funcs]
   security:
-    policies: [bee.feed_probe:policy, bee.feed_probe:enrollment_policy]
+    policies: [bee.feed.probe:policy, bee.feed.probe:enrollment_policy]
   imports:
     client: bee.hive:client
     types: bee.hive:types
-    principals: bee.hive_host.supervisor:principals
+    principals: bee.hive.supervisor:principals

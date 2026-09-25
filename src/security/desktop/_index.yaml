@@ -131,7 +131,7 @@ entries:
     - process.spawn
     - process.spawn.monitored
     resources:
-    - bee.applications:broker
+    - bee.apps:broker
     effect: allow
 - name: desktop_catalog_policy
   kind: security.policy
@@ -149,7 +149,7 @@ entries:
     - bee.client.desktops.read
     - bee.client.desktops.allocate
     resources:
-    - bee.environment:client_db
+    - bee.env:client_db
     effect: allow
 - name: retained_supervisor_spawn_policy
   kind: security.policy

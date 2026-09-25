@@ -12,10 +12,10 @@ function M.main()
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local controller_status = assert(process.listen("bee.controller.status", {message = true}))
-    local database = assert(store.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
+    local database = assert(store.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""}))
     local workspace_id = assert(database:identity())
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee.security.desktop:broker_policy", "bee.security:core_spawn_boundary", "bee.attachment_probe:naming_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:broker_policy", "bee.security:core_spawn_boundary", "bee.attachment.probe:naming_policy"}) do
         local policy, err = security.policy(name)
         if err then error(tostring(err)) end
         policies[#policies + 1] = policy
@@ -23,9 +23,9 @@ function M.main()
     local broker = tostring(assert(process.with_options({}):with_context({
         ["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id,
     }):with_scope(security.new_scope(policies)):spawn_monitored(
-        "bee.applications:broker", "bee:workers", owner, appearance.defaults())))
+        "bee.apps:broker", "bee:workers", owner, appearance.defaults())))
     assert(catalogs:receive():from() == broker)
-    local endpoint = "bee.attachment_probe.host"
+    local endpoint = "bee.attachment.probe.host"
     assert(process.registry.lookup(endpoint) == broker)
     local function reply(id: string, op: string): decode.Reply
         while true do
@@ -102,7 +102,7 @@ function M.main()
     command(neighbor, "printf 'BEE_STILL_LIVE_%s\\n' \"$$\"")
     wait_for(neighbor, "BEE_STILL_LIVE_" .. neighbor_pid)
     local consumer = tostring(assert(process.with_options({}):spawn_monitored(
-        "bee.attachment_probe:controller", "bee:workers", owner)))
+        "bee.attachment.probe:controller", "bee:workers", owner)))
     local function consumer_status(expected: string)
         local message = assert(controller_status:receive())
         assert(message:from() == consumer and message:payload():data() == expected)

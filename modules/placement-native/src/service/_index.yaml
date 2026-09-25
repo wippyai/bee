@@ -1,0 +1,110 @@
+version: '1.0'
+namespace: bee.placement.native.service
+entries:
+- name: executable
+  kind: library.lua
+  source: file://executable.lua
+  modules: [fs, hash]
+  imports:
+    resources: bee.placement.native:resources
+    types: bee.placement:types
+- name: capability
+  kind: library.lua
+  source: file://capability.lua
+  modules: [exec]
+  imports:
+    types: bee.placement:types
+    resources: bee.placement.native:resources
+- name: homes
+  kind: library.lua
+  source: file://homes.lua
+  modules: [fs, hash]
+  imports:
+    formats: bee.credentials:formats
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    resources: bee.placement.native:resources
+- name: identity
+  kind: library.lua
+  source: file://identity.lua
+  modules: [exec]
+  imports:
+    resources: bee.placement.native:resources
+- name: service
+  kind: library.lua
+  source: file://service.lua
+  modules: [process, channel, time, security, uuid, json, funcs, registry]
+  imports:
+    gateway_configuration: bee.gateway:configuration
+    configuration: bee.driver:configuration
+    preferences: bee.driver:preferences
+    resolver: bee.driver:resolver
+    placement_resolver: bee.placement:resolver
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    types: bee.placement:types
+    request: bee.placement:request
+    transitions: bee.placement:transitions
+    store: bee.placement.native.persist:store
+    executable: bee.placement.native.service:executable
+    resources: bee.placement.native:resources
+    capability: bee.placement.native.service:capability
+    homes: bee.placement.native.service:homes
+    identity: bee.placement.native.service:identity
+    protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+- name: materialization
+  kind: library.lua
+  source: file://materialization.lua
+  modules: [env, fs, funcs, sql, process, hash]
+  imports:
+    store: bee.placement.native.persist:store
+    resources: bee.placement.native:resources
+    homes: bee.placement.native.service:homes
+    configuration: bee.placement.native:configuration
+    types: bee.placement:types
+- name: runner
+  kind: process.lua
+  source: file://runner.lua
+  method: main
+  modules: [process, channel, time, exec, funcs]
+  imports:
+    materialization: bee.placement.native.service:materialization
+    store: bee.placement.native.persist:store
+    executable: bee.placement.native.service:executable
+    resources: bee.placement.native:resources
+    identity: bee.placement.native.service:identity
+    protocol: bee.placement.native:protocol
+    quote: bee.driver.kit:quote
+    types: bee.placement:types
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_runner_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_materialize_policy]
+- name: window
+  kind: library.lua
+  source: file://window.lua
+  modules: [process, exec, tty, security, funcs]
+  imports:
+    protocol: bee.placement.native:protocol
+    store: bee.placement.native.persist:store
+    resources: bee.placement.native:resources
+    materialization: bee.placement.native.service:materialization
+    executable: bee.placement.native.service:executable
+    quote: bee.driver.kit:quote
+    service: bee.placement.native.service:service
+    bounds: bee.threads.records:bounds
+    identity: bee.placement.native.service:identity
+- name: sweeper
+  kind: process.lua
+  source: file://sweeper.lua
+  method: main
+  modules: [process, channel, time]
+  imports:
+    service: bee.placement.native.service:service
+- name: sweeper_service
+  kind: process.service
+  process: bee.placement.native.service:sweeper
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.placement.sweeper}
+      policies: []

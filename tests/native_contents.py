@@ -11,7 +11,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-contents-") as directory:
     root = Path(directory)
     project, state = root / "project", root / "state"
     project.mkdir()
-    ui = NativeDesktop(binary, project, state, application="bee.modules:app")
+    ui = NativeDesktop(binary, project, state, application="bee.hub.modules:app")
     try:
         def click_text(text):
             for y, row in enumerate(ui.screen.display, 1):

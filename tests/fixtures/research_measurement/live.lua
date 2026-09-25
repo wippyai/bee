@@ -31,7 +31,7 @@ local function call(target: string, request: Object): Object
 end
 local function wait_for_live_inputs()
     for _ = 1, 300 do
-        local raw, address_error = funcs.call("bee.gateway.registry:address", {})
+        local raw, address_error = funcs.call("bee.gateway:address", {})
         local address = not address_error and bounds.object(raw) or nil
         local candidate = registry.get("bee.research.demo:measure")
         if address and type(address.address) == "string" and address.address:match("^127%.0%.0%.1:%d+$")
@@ -136,7 +136,7 @@ local function observe_approval(actor: string, action_id: string, attempt_id: st
     return next_cursor, approved
 end
 local function measurements(thread_id: string, action_id: string, attempt_id: string): Object
-    local entry = registry.get("bee.research_measurement:inputs")
+    local entry = registry.get("bee.research.measurement:inputs")
     local config = entry and bounds.object(entry.data) or nil
     if not config then error("host measurement inputs are missing") end
     local baseline_digest = valid_digest(config.baseline_sha256)

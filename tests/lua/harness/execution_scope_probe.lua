@@ -2,7 +2,7 @@
 local sql = require("sql")
 local function run(): {[string]: boolean}
     local access: {[string]: boolean} = {}
-    for _, resource in ipairs({"bee.environment:workspace_db", "bee.environment:client_db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db"}) do
+    for _, resource in ipairs({"bee.env:workspace_db", "bee.env:client_db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db"}) do
         local db = sql.get(resource)
         access[resource] = db ~= nil
         if db then db:release() end

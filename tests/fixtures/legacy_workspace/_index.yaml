@@ -13,7 +13,7 @@ entries:
   - time
   - uuid
   imports:
-    command: bee.applications:command
+    command: bee.apps:command
     contract: bee.protocol:application
     arguments: bee.application:arguments
     interaction: bee.application:interaction
@@ -36,7 +36,7 @@ entries:
   - time
   - uuid
   imports:
-    command: bee.applications:command
+    command: bee.apps:command
     contract: bee.protocol:application
     arguments: bee.application:arguments
     interaction: bee.application:interaction
@@ -57,6 +57,6 @@ entries:
     resources:
     - bee.host:main
     - bee.session:main
-    - bee.applications:broker
+    - bee.apps:broker
     - bee.terminal:main
     effect: allow

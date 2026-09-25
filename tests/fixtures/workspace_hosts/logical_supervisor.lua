@@ -16,7 +16,7 @@ local decode = require("decode")
 local recovery = require("recovery")
 
 local NODE = "bee.workspace.db:node"
-local ROOT = "bee.environment:workspace_root"
+local ROOT = "bee.env:workspace_root"
 type Object = {[string]: unknown}
 type Channel = channel.Channel
 type Hosts = {ready: Channel<process.Message>, replies: Channel<process.Message>,
@@ -29,7 +29,7 @@ end
 
 local function host_scope(): security.Scope
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.workspace_hosts:node_storage_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.workspace.hosts:node_storage_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
     return security.new_scope(policies)
@@ -134,7 +134,7 @@ local function saved_applications(workspace_id: string): integer
 end
 
 local function resources(actor: security.Actor, grants: {string}): funcs.Executor
-    local policies: {security.Policy} = {assert(security.policy("bee.workspace_hosts:resource_call_policy"))}
+    local policies: {security.Policy} = {assert(security.policy("bee.workspace.hosts:resource_call_policy"))}
     for _, name in ipairs(grants) do policies[#policies + 1] = assert(security.policy(name)) end
     return funcs.new():with_actor(actor):with_scope(security.new_scope(policies))
 end

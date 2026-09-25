@@ -6,7 +6,10 @@
 local M = {}
 
 M.NAMESPACE_ROOT = "app"
-M.OWNER_PREFIX = "bee.governance.workspace_applications:"
+M.OWNER_PREFIX = "bee.gov.apps:"
+-- This measured owner remains in activation and grant records made by the
+-- previous release. Existing work resumes under its original owner.
+local PRIOR_OWNER_PREFIX = "bee.governance.workspace_applications:"
 M.APPLICATION_NAME = "app"
 M.MAX_NAME = 48
 
@@ -37,6 +40,11 @@ function M.identity(workspace_raw: unknown, source_workspace: unknown): (Identit
     return {name = name, namespace = namespace, component = namespace,
         definition_id = namespace .. ":" .. M.APPLICATION_NAME,
         overlay_owner = M.OWNER_PREFIX .. workspace_raw .. "." .. name}, nil
+end
+
+function M.prior_owner(workspace_raw: unknown, source_workspace: unknown): string?
+    local identity = M.identity(workspace_raw, source_workspace)
+    return identity and PRIOR_OWNER_PREFIX .. (workspace_raw :: string) .. "." .. identity.name or nil
 end
 
 -- The overlay a workspace-application component was published from.

@@ -1,0 +1,110 @@
+version: '1.0'
+namespace: bee.placement.native.binding
+entries:
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.placement:placement
+    methods:
+      prepare: bee.placement.native.binding:prepare
+      start: bee.placement.native.binding:start
+      status: bee.placement.native.binding:status
+      stop: bee.placement.native.binding:stop
+      reconcile: bee.placement.native.binding:reconcile
+      cleanup: bee.placement.native.binding:cleanup
+      evidence: bee.placement.native.binding:evidence
+      attach: bee.placement.native.binding:attach
+      capabilities: bee.placement.native.binding:capabilities
+      measure_executable: bee.placement.native.binding:measure_executable
+      close_stdin: bee.placement.native.binding:close_stdin
+  meta:
+    type: placement
+    placement_kind: native
+- name: prepare
+  kind: function.lua
+  source: file://prepare_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: start
+  kind: function.lua
+  source: file://start_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: status
+  kind: function.lua
+  source: file://status_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: stop
+  kind: function.lua
+  source: file://stop_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: capabilities
+  kind: function.lua
+  source: file://capabilities_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: measure_executable
+  kind: function.lua
+  source: file://measure_executable_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: close_stdin
+  kind: function.lua
+  source: file://close_stdin_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: reconcile
+  kind: function.lua
+  source: file://reconcile_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: cleanup
+  kind: function.lua
+  source: file://cleanup_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: evidence
+  kind: function.lua
+  source: file://evidence_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: attach
+  kind: function.lua
+  source: file://attach_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]

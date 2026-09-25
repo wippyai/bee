@@ -46,7 +46,7 @@ local function define_tests()
             test.eq(before.placement_attempt_id, "container-attempt")
             harness.value(carrier:call("carrier_claim", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1"}))
             local point = checkpoint(1)
-            point.placement_binding = "bee.placement.native:binding"
+            point.placement_binding = "bee.placement.native.binding:binding"
             point.placement_binding_digest = string.rep("b", 64)
             point.placement_attempt_id = "another-attempt"
             harness.value(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1, expected_revision = 0, checkpoint = point, records = {}}))
@@ -54,7 +54,7 @@ local function define_tests()
             test.eq(after.placement_binding, before.placement_binding)
             test.eq(after.placement_binding_digest, before.placement_binding_digest)
             test.eq(after.placement_attempt_id, before.placement_attempt_id)
-            test.eq(after.checkpoint.placement_binding, "bee.placement.native:binding")
+            test.eq(after.checkpoint.placement_binding, "bee.placement.native.binding:binding")
             test.eq(harness.code(runner:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"})), "DENIED")
         end)
         test.it("fences earlier carriers by epoch and advances revisions only from the expected one", function()

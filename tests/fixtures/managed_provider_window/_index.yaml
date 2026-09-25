@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.managed_provider_fixture
+namespace: bee.managed.provider.fixture
 entries:
 - name: policy_claude
   kind: registry.entry
@@ -34,7 +34,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {sandbox: read-only}
-    provider_ref: bee.managed_provider_fixture:codex_provider
+    provider_ref: bee.managed.provider.fixture:codex_provider
 - name: definition_claude
   kind: registry.entry
   meta:
@@ -47,7 +47,7 @@ entries:
     command_names: []
     binding_ref: bee.driver.claude:binding
     profile_id: window
-    policy_ref: bee.managed_provider_fixture:policy_claude
+    policy_ref: bee.managed.provider.fixture:policy_claude
     default_mode: window
     allowed_overrides:
     - brief
@@ -73,7 +73,7 @@ entries:
     command_names: []
     binding_ref: bee.driver.codex:binding
     profile_id: window
-    policy_ref: bee.managed_provider_fixture:policy_codex
+    policy_ref: bee.managed.provider.fixture:policy_codex
     default_mode: window
     allowed_overrides:
     - brief
@@ -116,7 +116,7 @@ entries:
   security:
     policies:
     - bee.security.desktop:desktop_policy
-    - bee.managed_provider_fixture:core_spawn_policy
+    - bee.managed.provider.fixture:core_spawn_policy
     - bee.security.threads:thread_authority_client_policy
     - bee.security.threads:thread_lifecycle_client_policy
     - bee.security.threads:thread_create_policy
@@ -141,6 +141,6 @@ entries:
     resources:
     - bee.host:main
     - bee.session:main
-    - bee.applications:broker
+    - bee.apps:broker
     - bee.terminal:main
     effect: allow

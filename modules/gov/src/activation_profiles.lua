@@ -208,9 +208,13 @@ end
 -- One eligible local overlay's profile, built as host configuration and
 -- decoded by the same rules as an explicit row.
 local function instantiate(rule: Template, workspace_id: string, source_node: string,
-    source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?): (DecodedProfile?, Object?, string?)
+    source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?,
+    owner_hint: string?): (DecodedProfile?, Object?, string?)
     local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace)
     if not identity then return nil, nil, identity_error end
+    if owner_hint and owner_hint == workspace_applications.prior_owner(workspace_id, source_workspace) then
+        identity.overlay_owner = owner_hint
+    end
     local policies: {unknown} = empty_list()
     for index, policy in ipairs(rule.policies) do policies[index] = policy end
     local allowed: {unknown} = empty_list()
@@ -280,7 +284,7 @@ end
 
 local function missing(workspace_id: string, source_node: string, source_workspace: string): string
     return "this workspace has no activation profile for overlay " .. source_workspace .. " from node "
-        .. source_node .. "; a host adds one to bee:governance_activation_profiles"
+        .. source_node .. "; a host adds one to bee.env:gov_activation_profiles"
         .. " (workspace " .. workspace_id .. ")"
 end
 
@@ -331,14 +335,14 @@ end
 -- authored. The refusal names what a host configures.
 function M.select_decoded(configuration: DecodedConfiguration, workspace_id: string, source_node: string,
     source_workspace: string, node_id: string, installed_raw: unknown?,
-    vocabulary: capability_catalog.Catalog?): (DecodedProfile?, string?)
+    vocabulary: capability_catalog.Catalog?, owner_hint: string?): (DecodedProfile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
     local rule = configuration.workspace_applications
     if rule and source_node == node_id then
         local item, _, instantiate_error = instantiate(rule, workspace_id, source_node, source_workspace,
-            installed_raw, vocabulary)
+            installed_raw, vocabulary, owner_hint)
         return item, instantiate_error
     end
     return nil, missing(workspace_id, source_node, source_workspace)
@@ -346,14 +350,15 @@ end
 
 -- The measured form of select_decoded, for the destination owner.
 function M.select(configuration: Configuration, workspace_id: string, source_node: string,
-    source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?): (Profile?, string?)
+    source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?,
+    owner_hint: string?): (Profile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
     local rule = configuration.workspace_applications
     if rule and source_node == configuration.node_id then
         local item, policy, instantiate_error = instantiate(rule, workspace_id, source_node, source_workspace,
-            installed_raw, vocabulary)
+            installed_raw, vocabulary, owner_hint)
         if not item or not policy then return nil, instantiate_error end
         return measure(item, policy, configuration.node_id)
     end

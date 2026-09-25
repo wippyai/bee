@@ -98,13 +98,13 @@ func strictLint(runtime, root string, environment []string) error {
 func runProbe(runtime, root, commandName string, environment []string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	return runCommand(ctx, root, environment, runtime, "run", "--verbose", "--host", "bee.governance_overlay_probe:workers", "--", commandName)
+	return runCommand(ctx, root, environment, runtime, "run", "--verbose", "--host", "bee.gov.overlay.probe:workers", "--", commandName)
 }
 
 func runComposedProbe(runtime, root string, environment []string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	return runCommand(ctx, root, environment, runtime, "run", "--verbose", "--host", "bee.governance_overlay_composed_probe:workers", "--", "governance-overlay-composed-probe")
+	return runCommand(ctx, root, environment, runtime, "run", "--verbose", "--host", "bee.gov.overlay.composed.probe:workers", "--", "governance-overlay-composed-probe")
 }
 
 func linesWithMarker(output []byte, marker string) string {

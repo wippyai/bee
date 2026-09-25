@@ -59,7 +59,7 @@ func admissionCommand(runtime, directory string, arguments ...string) ([]byte, e
 
 func runAdmission() error {
 	runtimeFlag := flag.String("runtime", ".wippy/bin/bee-wippy", "native runtime to verify")
-	host := flag.String("host", "bee.hive_admission:terminal", "fixture command host")
+	host := flag.String("host", "bee.hive.admission:terminal", "fixture command host")
 	flag.Parse()
 	runtime, err := filepath.Abs(*runtimeFlag)
 	if err != nil {

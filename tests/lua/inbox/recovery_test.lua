@@ -36,7 +36,7 @@ local function scope(names: {string}): security.Scope
     return security.new_scope(policies)
 end
 local function caller(id: string, grants: {string}): funcs.Executor
-    local names: {string} = {"bee.inbox:client_test_policy"}
+    local names: {string} = {"bee.approvals.inbox:client_test_policy"}
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return funcs.new():with_actor(security.new_actor(id)):with_scope(scope(names))
 end

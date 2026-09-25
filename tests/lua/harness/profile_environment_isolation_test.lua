@@ -91,7 +91,7 @@ end
 local function await_receipt(thread_id: string, attempt_id: string): {[string]: unknown}
     for _ = 1, 600 do
         local observed, status = pcall(function(): {[string]: unknown}
-            return call("bee.placement.native:status", {attempt_id = attempt_id})
+            return call("bee.placement.native.binding:status", {attempt_id = attempt_id})
         end)
         if observed and count(records(thread_id), "receipt") == 1 then
             local result = status :: {[string]: unknown}
@@ -205,11 +205,11 @@ local function define_tests()
                     test.eq(((checkpoint.checkpoint :: {[string]: unknown}).terminal :: {[string]: unknown}).answer, "pong")
                     test.eq((status.attempt :: {[string]: unknown}).attempt_id, started.attempt_id)
                     local thread_json = assert(json.encode(page(tostring(started.thread_id))))
-                    local evidence = call("bee.placement.native:evidence", {attempt_id = tostring(started.attempt_id), limit = 64})
+                    local evidence = call("bee.placement.native.binding:evidence", {attempt_id = tostring(started.attempt_id), limit = 64})
                     local evidence_json = assert(json.encode(evidence))
                     test.is_true(not thread_json:find("launch%-sentinel%-2b3c4d", 1, false))
                     test.is_true(not evidence_json:find("launch%-sentinel%-2b3c4d", 1, false))
-                    local cleaned = call("bee.placement.native:cleanup", {attempt_id = tostring(started.attempt_id)})
+                    local cleaned = call("bee.placement.native.binding:cleanup", {attempt_id = tostring(started.attempt_id)})
                     test.eq(cleaned.cleanup_state, "complete")
                 end
             end)
@@ -217,8 +217,8 @@ local function define_tests()
             -- failed assertion a best-effort exit/cleanup path before fixtures
             -- are restored for the next suite.
             for _, attempt_id in ipairs(attempts) do
-                pcall(function() call("bee.placement.native:stop", {attempt_id = attempt_id, mode = "forced"}) end)
-                pcall(function() call("bee.placement.native:cleanup", {attempt_id = attempt_id}) end)
+                pcall(function() call("bee.placement.native.binding:stop", {attempt_id = attempt_id, mode = "forced"}) end)
+                pcall(function() call("bee.placement.native.binding:cleanup", {attempt_id = attempt_id}) end)
             end
             local restored, restore_error = pcall(function()
                 for _, item in ipairs(original) do item.entry.data = item.data end

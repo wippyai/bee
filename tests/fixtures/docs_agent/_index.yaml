@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.docs_agent
+namespace: bee.docs.agent
 entries:
 - name: volume
   kind: process.lua
@@ -12,7 +12,7 @@ entries:
       security:
         actor: {id: bee.test.docs_volume}
   security:
-    policies: [bee.docs_agent:volume_policy]
+    policies: [bee.docs.agent:volume_policy]
 - name: volume_policy
   kind: security.policy
   policy:
@@ -31,7 +31,7 @@ entries:
       security:
         actor: {id: bee.test.docs_agent}
   security:
-    policies: [bee.docs_agent:policy, bee.security.gateway:gateway_manage_policy, bee.security.threads:thread_authority_client_policy,
+    policies: [bee.docs.agent:policy, bee.security.gateway:gateway_manage_policy, bee.security.threads:thread_authority_client_policy,
       bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy]
 - name: policy
   kind: security.policy
@@ -39,6 +39,6 @@ entries:
     comment: The fixture agent reaches only the managed listener and the gateway admission/authority calls the gateway probe already uses
   policy:
     actions: [funcs.call, http_client.private_ip, http_client.request, registry.get, bee.gateway.admit, bee.gateway.materialize]
-    resources: [bee.gateway.registry:address, bee.gateway.binding:admit, bee.gateway.binding:revoke, bee.gateway.binding:authorize_materialization,
+    resources: [bee.gateway:address, bee.gateway.binding:admit, bee.gateway.binding:revoke, bee.gateway.binding:authorize_materialization,
       bee.gateway.binding:materialize, bee:gateway_endpoint, 127.0.0.1, '*']
     effect: allow

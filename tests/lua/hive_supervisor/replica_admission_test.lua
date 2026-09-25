@@ -44,7 +44,7 @@ local function request(source: string, descriptor_owner: string): types.Request
 end
 
 local function call(value: types.Request): types.Reply
-    local result, err = funcs.call("bee.hive_host.supervisor:admit_replica", value)
+    local result, err = funcs.call("bee.hive.supervisor:admit_replica", value)
     if err then error(tostring(err)) end
     return result :: types.Reply
 end

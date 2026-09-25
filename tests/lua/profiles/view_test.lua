@@ -12,7 +12,7 @@ end
 local calls: {string} = {}
 local function ask(target: string, request: Object): caller.Reply
     calls[#calls + 1] = target
-    if target == "bee.workspace.catalog:roots" then return ok({roots = {{root_ref = "bee.environment:workspace_root", access = "write"}}}) end
+    if target == "bee.workspace.catalog:roots" then return ok({roots = {{root_ref = "bee.env:workspace_root", access = "write"}}}) end
     if target == "bee.workspace.catalog:folders" then
         local path = tostring(request.path)
         local folders = path == "" and {{name = "legacy"}} or {}
@@ -58,14 +58,14 @@ local function define_tests()
             view.input(s, key("enter"), drawn)
             test.not_nil(s.browsing)
             drawn = view.draw(60, 16, appearance.defaults(), s)
-            test.is_true(table.concat(drawn.rows, "\n"):find("bee.environment:workspace_root", 1, true) ~= nil)
+            test.is_true(table.concat(drawn.rows, "\n"):find("bee.env:workspace_root", 1, true) ~= nil)
             view.input(s, key("enter"), drawn)
             view.input(s, key("enter"), drawn)
             test.eq(s.browsing and s.browsing.path, "legacy")
             view.input(s, key("rune", "u"), drawn)
             test.is_nil(s.browsing)
             test.eq(s.form.draft.workdir and s.form.draft.workdir.path, "legacy")
-            test.eq(s.form.draft.workdir and s.form.draft.workdir.root_ref, "bee.environment:workspace_root")
+            test.eq(s.form.draft.workdir and s.form.draft.workdir.root_ref, "bee.env:workspace_root")
             -- Then the thread: the new one first, then this Agent's threads.
             view.input(s, key("tab"), drawn)
             view.input(s, key("enter"), drawn)

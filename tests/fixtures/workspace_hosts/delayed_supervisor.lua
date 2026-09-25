@@ -13,10 +13,10 @@ local persistence = require("persistence")
 local function spawn_host(owner: string): string
     local host_policy = assert(security.policy("bee.security.desktop:host_policy"))
     local spawn_policy = assert(security.policy("bee.security.desktop:host_spawn_policy"))
-    local storage_policy = assert(security.policy("bee.workspace_hosts:first_storage_policy"))
+    local storage_policy = assert(security.policy("bee.workspace.hosts:first_storage_policy"))
     local scope = security.new_scope({host_policy, spawn_policy, storage_policy})
     return tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner})
-        :with_scope(scope):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.environment:workspace_root", subpath = ""}, "bee.workspace.db:first")))
+        :with_scope(scope):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""}, "bee.workspace.db:first")))
 end
 
 local function main()
@@ -37,7 +37,7 @@ local function main()
     end
 
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "origin-open", op = "open",
-        workspace_id = workspace_id, definition_id = "bee.workspace_hosts:delayed"}))
+        workspace_id = workspace_id, definition_id = "bee.workspace.hosts:delayed"}))
     local origin_id, origin_instance = "", ""
     deadline = time.after("10s")
     while origin_id == "" do
@@ -52,7 +52,7 @@ local function main()
         end
     end
 
-    local database = assert(persistence.open("bee.workspace.db:first", {root_ref = "bee.environment:workspace_root", subpath = ""}))
+    local database = assert(persistence.open("bee.workspace.db:first", {root_ref = "bee.env:workspace_root", subpath = ""}))
     local claimed = assert(database.assignments:claim({view_id = origin_id, instance_id = origin_instance, display_id = "display-late"}))
     assert(claimed.display_id == "display-late")
 
@@ -65,7 +65,7 @@ local function main()
         access_approval_id = "delayed-approval", access_proposal_digest = string.rep("a", 64),
         surface_revision = 1, surface_digest = string.rep("b", 64)}
     local request = {version = 1, workspace_id = workspace_id, request_id = "late-open",
-        definition_id = "bee.workspace_hosts:delayed", arguments = {}, caller_token = token,
+        definition_id = "bee.workspace.hosts:delayed", arguments = {}, caller_token = token,
         origin_view = {view_id = origin_id, instance_id = origin_instance}, provenance = provenance}
     assert(process.send(host, "bee.host.application", request))
     local uncertain = false

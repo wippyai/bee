@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.timeline
+namespace: bee.threads.timeline
 entries:
 - name: format_test
   kind: function.lua
@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    format: bee.timeline:format
+    format: bee.threads.timeline:format
     record: bee.threads.records:record
 - name: policy_test
   kind: function.lua
@@ -18,7 +18,7 @@ entries:
   modules: [security]
   imports:
     test: wippy.test:test
-    model: bee.timeline:model
+    model: bee.threads.timeline:model
 - name: model_test
   kind: function.lua
   source: file://model_test.lua
@@ -27,7 +27,7 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
-    model: bee.timeline:model
+    model: bee.threads.timeline:model
 - name: view_test
   kind: function.lua
   source: file://view_test.lua
@@ -36,8 +36,8 @@ entries:
   modules: [tty]
   imports:
     test: wippy.test:test
-    model: bee.timeline:model
-    view: bee.timeline:view
+    model: bee.threads.timeline:model
+    view: bee.threads.timeline:view
     appearance: bee.application:appearance
 - name: surface_test
   kind: function.lua
@@ -49,8 +49,8 @@ entries:
     policies: [bee.threads:client_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy]
   imports:
     test: wippy.test:test
-    model: bee.timeline:model
-    view: bee.timeline:view
+    model: bee.threads.timeline:model
+    view: bee.threads.timeline:view
     caller: bee.application:caller
     appearance: bee.application:appearance
     harness: bee.threads:harness

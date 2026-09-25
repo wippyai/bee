@@ -13,8 +13,8 @@ type Binding = {database_id: string, table_prefix: string?}
 type Bindings = {[string]: Binding}
 type PolicyIds = {string}
 local PRIVATE_POLICIES = {
-    "bee.governance.security:destination_service_policy",
-    "bee.governance.security:destination_execution_policy",
+    "bee.gov.security:destination_service_policy",
+    "bee.gov.security:destination_execution_policy",
 }
 
 local function staging_owner(overlay_owner: string): (string?, string?)

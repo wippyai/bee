@@ -50,7 +50,7 @@ def run():
         database = project / "src/local_database"
         database.mkdir()
         (database / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "bee.client.db", "entries": [
-            {"name": "local", "kind": "db.sql.sqlite", "file": "${env:bee.environment:workspace_db_path}.client"},
+            {"name": "local", "kind": "db.sql.sqlite", "file": "${env:bee.env:workspace_db_path}.client"},
         ]}, sort_keys=False))
         index = project / "src/client/_index.yaml"
         document = yaml.safe_load(index.read_text())
@@ -65,7 +65,7 @@ def run():
         application_entry["meta"] = {"command": {"name": "local-application-probe", "short": "Explicit argument acceptance",
             "security": entry["meta"]["command"]["security"]}}
         index.write_text(yaml.safe_dump(document, sort_keys=False))
-        index = project / "src/apps/console/_index.yaml"
+        index = project / "src/console/_index.yaml"
         document = yaml.safe_load(index.read_text())
         next(e for e in document["entries"] if e["name"] == "app")["meta"]["application"]["commands"].append({
             "name": "local-proof", "fullscreen": True,
@@ -242,7 +242,7 @@ def run():
                             end
 ''')
         client_file.write_text(replay_code)
-        settings_index = project / "src/apps/settings/_index.yaml"
+        settings_index = project / "src/settings/_index.yaml"
         original_settings = settings_index.read_text()
         settings = yaml.safe_load(original_settings)
         next(e for e in settings["entries"] if e["name"] == "app")["meta"]["application"]["restart_policy"] = "manual"

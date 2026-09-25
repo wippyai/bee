@@ -33,7 +33,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_sender
-    value: bee.sync_probe:sender
+    value: bee.sync.probe:sender
   - name: target_exports
     value: bee:sync_exports
 - name: dependency_node
@@ -42,7 +42,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_db
-    value: bee.sync_probe:node_db
+    value: bee.sync.probe:node_db
 - name: sync_exports
   kind: registry.entry
   data: {exports: []}
@@ -90,7 +90,7 @@ workspace:
         environment = database_environment(folder)
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=folder, check=True, timeout=60, env=environment)
         for phase in ("FIRST", "SECOND"):
-            result = subprocess.run([str(RUNTIME), "run", "--verbose", "--host", "bee.sync_probe:workers", "--", "sync-probe"],
+            result = subprocess.run([str(RUNTIME), "run", "--verbose", "--host", "bee.sync.probe:workers", "--", "sync-probe"],
                 cwd=folder, env=environment, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True, timeout=40)
             marker = "NODE_SYNC_" + phase + "_BOOT_PASS"

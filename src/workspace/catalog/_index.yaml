@@ -23,7 +23,7 @@ entries:
     store: bee.storage:store
     catalog: bee.storage:catalog
     protocol: bee.workspace.catalog:protocol
-    resources: bee.resources.registry:resources
+    resources: bee.resources:resources
     recovery: bee.workspace:recovery
     extensions: bee.workspace.catalog:extensions
   meta: {type: internal}
@@ -109,7 +109,7 @@ entries:
   kind: contract.definition
   meta:
     title: Workspace catalog
-    comment: The node's logical workspaces. Reads need bee.workspaces.read, changes bee.workspaces.manage; every reply is {ok, error {code, message}, value}
+    comment: The node's logical workspaces. Reads need bee.workspace.manager.read, changes bee.workspace.manager.manage; every reply is {ok, error {code, message}, value}
   methods:
   - name: create
     description: Add a workspace for a folder under a host-admitted root, or make a new folder under a write-admitted root with create_directory
@@ -196,7 +196,7 @@ entries:
   kind: contract.definition
   meta:
     title: Workspace extension
-    comment: A component attaches per-workspace data and search to the workspace catalog and its viewer by binding this contract; the catalog finds every binding and calls it under its execution scope. A binding answers only callers holding bee.workspaces.read on the workspace, with the reply envelope {ok, error {code, message}, value}.
+    comment: A component attaches per-workspace data and search to the workspace catalog and its viewer by binding this contract; the catalog finds every binding and calls it under its execution scope. A binding answers only callers holding bee.workspace.manager.read on the workspace, with the reply envelope {ok, error {code, message}, value}.
   methods:
   - name: describe
     description: What the component holds for one workspace, as a titled list of at most 50 items and the total

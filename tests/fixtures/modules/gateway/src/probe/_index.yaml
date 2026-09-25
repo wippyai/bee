@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.gateway_probe
+namespace: bee.gateway.probe
 entries:
 - name: access_probe
   kind: library.lua
@@ -24,7 +24,7 @@ entries:
   modules: [ctx, security]
 - name: context_tool_policy
   kind: security.policy
-  policy: {actions: [funcs.call], resources: [bee.gateway_probe:context_tool], effect: allow}
+  policy: {actions: [funcs.call], resources: [bee.gateway.probe:context_tool], effect: allow}
 - name: replacement_policy
   kind: security.policy
   policy: {actions: [bee.probe.replacement], resources: [other], effect: allow}
@@ -34,7 +34,7 @@ entries:
 - name: main
   kind: process.lua
   source: file://main.lua
-  imports: {access_probe: bee.gateway_probe:access_probe}
+  imports: {access_probe: bee.gateway.probe:access_probe}
   method: main
   modules: [funcs, http_client, json, time, process, registry, security, base64]
   meta:
@@ -43,12 +43,12 @@ entries:
       security:
         actor: {id: bee.test.gateway}
   security:
-    policies: [bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.gateway_probe:replacement_admin, bee.gateway_probe:policy, bee.gateway_probe:configuration_caller_policy, bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.security.gateway:gateway_materialize_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_carrier_policy]
+    policies: [bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.gateway.probe:replacement_admin, bee.gateway.probe:policy, bee.gateway.probe:configuration_caller_policy, bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.security.gateway:gateway_materialize_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_carrier_policy]
 - name: policy
   kind: security.policy
   policy:
     actions: [funcs.call, http_client.private_ip, http_client.request, process.spawn, process.host, registry.get, bee.threads.lifecycle, bee.threads.carrier]
-    resources: [bee.gateway.binding:open, bee.gateway.binding:admit, bee.gateway.binding:revoke, bee.gateway.binding:drain, bee.gateway.binding:ready, bee.gateway.binding:materialize, bee.gateway.binding:reissue, bee.gateway.binding:revoke_attempt, bee.gateway.binding:check, bee.gateway.binding:authorize_materialization, bee.gateway.binding:hook_queue, bee.gateway.binding:hook_claim, bee.gateway.binding:hook_ack, bee.gateway.binding:hook_reject, bee.threads.carrier:claim, bee.threads.carrier:commit, bee:gateway_endpoint, 127.0.0.1, '*', bee.gateway_probe:drainer, bee:workers]
+    resources: [bee.gateway.binding:open, bee.gateway.binding:admit, bee.gateway.binding:revoke, bee.gateway.binding:drain, bee.gateway.binding:ready, bee.gateway.binding:materialize, bee.gateway.binding:reissue, bee.gateway.binding:revoke_attempt, bee.gateway.binding:check, bee.gateway.binding:authorize_materialization, bee.gateway.binding:hook_queue, bee.gateway.binding:hook_claim, bee.gateway.binding:hook_ack, bee.gateway.binding:hook_reject, bee.threads.carrier:claim, bee.threads.carrier:commit, bee:gateway_endpoint, 127.0.0.1, '*', bee.gateway.probe:drainer, bee:workers]
     effect: allow
 - name: configuration_caller_policy
   kind: security.policy
@@ -71,4 +71,4 @@ entries:
   method: main
   modules: [funcs, time]
   security:
-    policies: [bee.gateway_probe:policy, bee.security.gateway:gateway_manage_policy]
+    policies: [bee.gateway.probe:policy, bee.security.gateway:gateway_manage_policy]

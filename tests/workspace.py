@@ -90,7 +90,7 @@ def database_environment(directory, **overrides):
             **{f"BEE_{name.upper()}_DB": str(root / f"{name}.db") for name in names}, **overrides}
 
 
-CLASSIC_ROOT = "bee.environment:workspace_root"
+CLASSIC_ROOT = "bee.env:workspace_root"
 
 
 def retain_test_suites(tests, suites):

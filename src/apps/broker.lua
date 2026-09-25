@@ -61,6 +61,7 @@ local function main(owner: string, initial_preferences: unknown)
     if not workspace_id then
         error("Invalid workspace identity bootstrap")
     end
+    assert(process.set_options({upgradable = true}))
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local shutdown_requests = assert(process.listen("bee.application.shutdown", {message = true}))
     local close_replies = assert(process.listen("bee.application.close.reply", {message = true}))
@@ -75,6 +76,7 @@ local function main(owner: string, initial_preferences: unknown)
     local persisted = assert(process.listen("bee.application.persisted", {message = true}))
     local binding_results = assert(process.listen("bee.application.binding.result", {message = true}))
     local binding_recovery = assert(process.listen("bee.application.binding.recovery", {message = true}))
+    local replace_acks = assert(process.listen("bee.application.replace_ack", {message = true}))
     local thread_requests = assert(process.listen("bee.application.thread.request", {message = true}))
     local checkpoint_waiters: {[string]: Checkpoint} = {}
     local events = assert(process.events())
@@ -963,11 +965,22 @@ local function main(owner: string, initial_preferences: unknown)
         end
     end
     local running = true
+    local replace_requested = false
+    local replace_acked = false
+    local replace_deadline = 0
+    local replace_started = 0
     while running do
         local selected = channel.select({requests:case_receive(), app_ready:case_receive(), titles:case_receive(), queries:case_receive(), answers:case_receive(), close_replies:case_receive(), shutdown_requests:case_receive(), appearance_requests:case_receive(),
-            appearance_states:case_receive(), controls:case_receive(), checkpoints:case_receive(), persisted:case_receive(), binding_results:case_receive(), binding_recovery:case_receive(), thread_requests:case_receive(), events:case_receive(), ticks:case_receive()})
+            appearance_states:case_receive(), controls:case_receive(), checkpoints:case_receive(), persisted:case_receive(), binding_results:case_receive(), binding_recovery:case_receive(), replace_acks:case_receive(), thread_requests:case_receive(), events:case_receive(), ticks:case_receive()})
         if not selected.ok then break end
-        if selected.channel == thread_requests then
+        if selected.channel == replace_acks then
+            local message = selected.value
+            local data: unknown = message:payload():data()
+            if tostring(message:from()) == owner and type(data) == "table" and data.version == 1
+                and data.schema == 1 and data.workspace_id == workspace_id and data.broker == tostring(process.pid()) then
+                if data.accepted == true then replace_acked = true; replace_deadline = now() + 5 end
+            end
+        elseif selected.channel == thread_requests then
             local message = selected.value
             handle_thread_request(tostring(message:from()), message:payload():data())
         elseif selected.channel == binding_results then
@@ -1021,6 +1034,10 @@ local function main(owner: string, initial_preferences: unknown)
         elseif selected.channel == events then
             local event = selected.value
             if event.kind == process.event.CANCEL or (event.kind == process.event.EXIT and tostring(event.from) == owner) then break end
+            if event.kind == process.event.OUTDATED then
+                replace_requested = true
+                replace_started = now()
+            end
             if event.kind == process.event.EXIT then
                 local item = find_pid(tostring(event.from))
                 local replacement: Replacement? = nil
@@ -1036,6 +1053,16 @@ local function main(owner: string, initial_preferences: unknown)
                 end
             end
         elseif selected.channel == ticks then
+            if replace_requested and not replace_acked then
+                if now() - replace_started >= 10 then
+                    process.send(owner, "bee.application.replace_failed", {version = 1, schema = 1,
+                        workspace_id = workspace_id, broker = tostring(process.pid()), reason = "drain_timeout"})
+                    replace_requested = false
+                else
+                    process.send(owner, "bee.application.replacing", {version = 1, schema = 1,
+                        workspace_id = workspace_id, broker = tostring(process.pid())})
+                end
+            end
             refresh_admission()
             for _, raw_coordinator in pairs(coordinators) do
                 local coordinator: BindingCoordinator = raw_coordinator
@@ -1561,6 +1588,20 @@ local function main(owner: string, initial_preferences: unknown)
                     "Workspace cleanup timed out; some process exits or writes remain unacknowledged"), true)
             end
         end
+        if replace_acked then
+            local writes = false
+            for _ in pairs(checkpoint_waiters) do writes = true; break end
+            if not writes then break end
+            if now() >= replace_deadline then
+                for id, waiter in pairs(checkpoint_waiters) do
+                    process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1,
+                        request_id = waiter.request_id, error_code = "uncertain",
+                        error = "Broker replacement ended before checkpoint persistence was acknowledged"})
+                    checkpoint_waiters[id] = nil
+                end
+                break
+            end
+        end
     end
     ticker:stop()
     -- Owner loss and CANCEL are the emergency path; normal shutdown has already
@@ -1580,6 +1621,7 @@ local function main(owner: string, initial_preferences: unknown)
     process.unlisten(appearance_states); process.unlisten(controls)
     process.unlisten(checkpoints); process.unlisten(persisted)
     process.unlisten(binding_results); process.unlisten(binding_recovery)
+    process.unlisten(replace_acks)
     process.unlisten(thread_requests)
 end
 return {main = main}

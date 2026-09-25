@@ -171,6 +171,7 @@ entries:
     - process.spawn.monitored
     resources:
     - bee.launch:retained
+    - bee.launch:owner
     effect: allow
 - name: owner_command_stop_policy
   kind: security.policy.expr

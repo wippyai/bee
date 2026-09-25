@@ -17,6 +17,32 @@ function M.new(workspace_id: string): State
     if not contract.workspace_id(workspace_id) then error("Invalid question workspace") end
     return {workspace_id = workspace_id, revision = 0, items = {}, selections = {}, dispatched = {}}
 end
+function M.restore(value: unknown, workspace_id: string): State?
+    if type(value) ~= "table" or value.workspace_id ~= workspace_id or type(value.revision) ~= "number"
+        or value.revision < 0 or value.revision > 9007199254740990
+        or value.revision ~= math.floor(value.revision) or type(value.selections) ~= "table"
+        or type(value.dispatched) ~= "table" then return nil end
+    local items = interaction.snapshot({version = 1, items = value.items})
+    if not items then return nil end
+    local selections: {[string]: Selection} = {}
+    local count = 0
+    for connection_id, selection in pairs(value.selections) do
+        if type(connection_id) ~= "string" or type(selection) ~= "table" then return nil end
+        local decoded = protocol.selection({version = 1, workspace_id = selection.workspace_id,
+            connection_id = selection.connection_id, revision = selection.revision, targets = selection.targets})
+        if not decoded or decoded.workspace_id ~= workspace_id or decoded.connection_id ~= connection_id then return nil end
+        count = count + 1
+        if count > 8 then return nil end
+        selections[connection_id] = decoded
+    end
+    local dispatched: {[string]: boolean} = {}
+    for request_id, sent in pairs(value.dispatched) do
+        if type(request_id) ~= "string" or sent ~= true then return nil end
+        dispatched[request_id] = true
+    end
+    return {workspace_id = workspace_id, revision = math.floor(value.revision), items = items,
+        selections = selections, dispatched = dispatched}
+end
 -- Caller authentication and the admitted client's control permission are checked
 -- by bee.host:clients before this owner-local model is entered.
 function M.select(state: State, connection_id: string, data: unknown): boolean

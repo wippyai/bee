@@ -63,8 +63,11 @@ for test registrations and fixture dependencies. Do not add a local runtime
 binary or legacy source to production, and do not edit registry tables directly
 to work around source loading.
 
-The desktop client may replace only its presenter with F12. Workspace, broker,
-session, host or application changes require the owning process lifecycle and
+The desktop client may replace its presenter with F12. The session can pick up
+changed code with a same-PID handoff; on an incompatible checkpoint, its client
+restarts the session from the committed layout while retaining the desktop and
+applications. See [process handoff](process-handoff.md). Workspace, broker,
+host or application changes still require the owning process lifecycle and
 recovery path. Preferences and opted-in application checkpoints persist in the
 workspace database. Settings opts in to checkpointing; a dead native Terminal
 does not become a portable checkpoint. See

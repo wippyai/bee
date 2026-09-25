@@ -50,6 +50,15 @@ local function define_tests()
             test.is_nil(display.target("node-1", "bad", TARGET.workspace_id, TARGET.desktop_id, "control"))
             test.is_nil(display.target("node-1", TARGET.owner_execution, TARGET.workspace_id, TARGET.desktop_id, "mirror"))
         end)
+        test.it("accepts a reissued mount only for the same session and recipient", function()
+            local recipient = "{node-2@bee.hive.desktop:display_host|agent}"
+            local target = assert(display.target("node-1", TARGET.owner_execution, TARGET.workspace_id, TARGET.desktop_id, "control"))
+            local previous = assert(display.receipt(receipt(), target, recipient))
+            test.not_nil(display.reissued(receipt({mount_ref = "mount-2"}), previous, target, recipient))
+            test.is_nil(display.reissued(receipt({mount_ref = "mount-1"}), previous, target, recipient))
+            test.is_nil(display.reissued(receipt({session_id = "session-2", mount_ref = "mount-2"}), previous, target, recipient))
+            test.is_nil(display.reissued(receipt({recipient = "other", mount_ref = "mount-2"}), previous, target, recipient))
+        end)
     end)
 end
 

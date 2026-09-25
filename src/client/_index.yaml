@@ -26,6 +26,11 @@ entries:
     contract: bee.protocol:application
     interaction: bee.application:interaction
     arguments: bee.application:arguments
+- name: handoff
+  kind: library.lua
+  source: file://handoff.lua
+  imports:
+    contract: bee.protocol:application
 - name: inbox
   kind: library.lua
   source: file://inbox.lua
@@ -60,6 +65,7 @@ entries:
     assignment_layout: bee.client:assignments
     inbox: bee.client:inbox
     lifecycle: bee.client:lifecycle
+    handoff: bee.client:handoff
     interaction: bee.application:interaction
     physical: bee.terminal:display
     appearance: bee.application:appearance

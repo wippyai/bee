@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Verify the retained owner composes the existing Lua supervisor in source and portable launches.
+// Verify retained owner composition and supervised definition replacement.
 package main
 
 import (
@@ -122,15 +122,15 @@ entries:
 - name: probe_policy
   kind: security.policy.expr
   policy:
-    expression: '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.launch:owner") || (action == "process.host" && resource == "bee:terminal") || (action == "process.cancel" && resource matches "^\\{[^}]+@bee:terminal\\|0x[0-9a-f]+\\}$") || action == "process.context" || action == "process.security" || action == "security.policy.get" || action == "security.scope.create"'
-    actions: [process.spawn, process.spawn.monitored, process.host, process.cancel, process.context, process.security, security.policy.get, security.scope.create]
+    expression: '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.launch:owner") || (action == "process.host" && resource == "bee:terminal") || (action == "process.cancel" && resource matches "^\\{[^}]+@bee:terminal\\|0x[0-9a-f]+\\}$") || action == "process.context" || action == "process.security" || action == "security.policy.get" || action == "security.scope.create" || action == "registry.get" || action == "registry.snapshot" || action == "registry.apply"'
+    actions: [process.spawn, process.spawn.monitored, process.host, process.cancel, process.context, process.security, security.policy.get, security.scope.create, registry.get, registry.snapshot, registry.apply]
     resources: ['*']
     effect: allow
 - name: main
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, security, channel, time, io]
+  modules: [process, security, channel, time, io, registry]
   imports:
     decode: bee.protocol:decode
   security:
@@ -149,6 +149,7 @@ local security = require("security")
 local channel = require("channel")
 local time = require("time")
 local io = require("io")
+local registry = require("registry")
 local decode = require("decode")
 
 local function main()
@@ -156,14 +157,16 @@ local function main()
     if not events then error(tostring(events_error)) end
     local started, started_error = process.listen("bee.retained_owner_probe.ready", {message = true})
     if not started then error(tostring(started_error)) end
+    local workspace_ready = assert(process.listen("bee.retained_owner_probe.workspace_ready", {message = true}))
+    local controllers = assert(process.listen("bee.retained_owner_probe.controller_ready", {message = true}))
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:retained_owner_spawn_policy", "bee.security.desktop:retained_owner_name_policy", "bee.security.desktop:retained_owner_node_policy", "bee.security.desktop:owner_command_stop_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error(tostring(policy_error)) end
         policies[#policies + 1] = policy
     end
-    local owner, owner_error = process.with_options({}):with_scope(security.new_scope(policies))
-        :spawn_monitored("bee.launch:owner", "bee:terminal", tostring(process.pid()))
+    local owner, owner_error = process.with_options({}):with_context({["bee.owner_probe"] = tostring(process.pid())})
+        :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:owner", "bee:terminal")
     if not owner then error(tostring(owner_error)) end
     local startup_guard = time.after("120s")
     local selected = channel.select({started:case_receive(), events:case_receive(), startup_guard:case_receive()})
@@ -171,6 +174,28 @@ local function main()
         error("Retained owner did not register its command before cancellation")
     end
     process.unlisten(started)
+    local live = channel.select({workspace_ready:case_receive(), events:case_receive(), startup_guard:case_receive()})
+    assert(live.ok and live.channel == workspace_ready and tostring(live.value:from()) == tostring(owner),
+        "Retained workspace did not become ready")
+    local old = channel.select({controllers:case_receive(), events:case_receive(), startup_guard:case_receive()})
+    assert(old.ok and old.channel == controllers and tostring(old.value:from()) == tostring(owner),
+        "Owner controller did not become ready")
+    local old_value: unknown = old.value:payload():data()
+    assert(type(old_value) == "table" and type(old_value.pid) == "string")
+    for revision = 1, 3 do
+        local definition = assert(registry.get("bee.launch:owner"))
+        definition.meta.handoff_probe = "owner-definition-changed-" .. tostring(revision)
+        local changes = assert(registry.snapshot()):changes()
+        changes:update(definition)
+        assert(changes:apply())
+        local changed = channel.select({controllers:case_receive(), events:case_receive(), time.after("10s"):case_receive()})
+        assert(changed.ok and changed.channel == controllers and tostring(changed.value:from()) == tostring(owner),
+            "Owner controller did not replace after definition change")
+        local new_value: unknown = changed.value:payload():data()
+        assert(type(new_value) == "table" and type(new_value.pid) == "string" and new_value.pid ~= old_value.pid,
+            "Owner controller kept its outdated definition")
+        old_value = new_value
+    end
     assert(io.print("BEE_RETAINED_OWNER_STOPPING"))
     local stopped, stopped_error = process.cancel(owner, "retained owner acceptance")
     if not stopped then error(tostring(stopped_error)) end
@@ -229,14 +254,33 @@ func writeProbe(root string) error {
 		return err
 	}
 	code := string(owner)
-	entry := "local function main()"
+	entry := "local function main(controller_owner: string?, controller_checkpoint: unknown?)"
 	registration := "    if not stops then error(stops_error) end"
-	if strings.Count(code, entry) != 1 || strings.Count(code, registration) != 1 {
+	controllerReady := "                    if not resumed then error(\"Owner controller did not validate its checkpoint\") end"
+	workspaceReady := "                    checkpoint = handoff.pack(self, value.workspace_id, value.desktop_id)"
+	if strings.Count(code, entry) != 1 || strings.Count(code, registration) != 1 || strings.Count(code, controllerReady) != 1 || strings.Count(code, workspaceReady) != 1 {
 		return fmt.Errorf("retained owner probe injection point changed")
 	}
-	code = strings.Replace(code, entry, "local function main(probe_pid: string?)", 1)
-	code = strings.Replace(code, registration, registration+"\n    if probe_pid then assert(process.send(probe_pid, \"bee.retained_owner_probe.ready\", {})) end", 1)
+	code = strings.Replace(code, entry, entry+"\n    local probe_pid = ctx.get(\"bee.owner_probe\")", 1)
+	code = strings.Replace(code, registration, registration+"\n    if type(probe_pid) == \"string\" then assert(process.send(probe_pid, \"bee.retained_owner_probe.ready\", {})) end", 1)
+	code = strings.Replace(code, controllerReady, controllerReady+"\n                    if type(probe_pid) == \"string\" then assert(process.send(probe_pid, \"bee.retained_owner_probe.controller_ready\", {pid = controller_pid})) end", 1)
+	code = strings.Replace(code, workspaceReady, workspaceReady+"\n                    if type(probe_pid) == \"string\" then assert(process.send(probe_pid, \"bee.retained_owner_probe.workspace_ready\", {})) end", 1)
 	return os.WriteFile(ownerPath, []byte(code), 0600)
+}
+
+func injectOwnerFallback(root string) error {
+	path := filepath.Join(root, "src", "launch", "owner.lua")
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	anchor := "                    spawn_controller(resume)"
+	if strings.Count(string(contents), anchor) != 1 {
+		return fmt.Errorf("retained owner fallback injection point changed")
+	}
+	code := strings.Replace(string(contents), anchor,
+		"                    if resume and replacement_failures == 0 then resume.version = 2 end\n"+anchor, 1)
+	return os.WriteFile(path, []byte(code), 0600)
 }
 
 func run() error {
@@ -296,6 +340,12 @@ func run() error {
 	if err := stop(runtime, root); err != nil {
 		return fmt.Errorf("retained owner source: %w", err)
 	}
+	if err := injectOwnerFallback(root); err != nil {
+		return err
+	}
+	if err := stop(runtime, root); err != nil {
+		return fmt.Errorf("retained owner incompatible checkpoint fallback: %w", err)
+	}
 	deployment, err := filepath.Abs(filepath.Join("dist", "portable-deployment"))
 	if err != nil {
 		return err
@@ -331,5 +381,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println("Retained owner: source cancellation, desktop admission and source-free portable deployment boot the Lua workspace/desktop supervisor cleanly")
+	fmt.Println("Retained owner: definition replacement and incompatible checkpoint fallback keep the workspace live; source and packed owner boot")
 }

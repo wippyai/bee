@@ -52,6 +52,31 @@ local function define_tests()
             process.unlisten(requests); process.unlisten(relayed)
         end)
     end)
+    test.describe("Retained replacement readiness", function()
+        test.it("waits for the matching host render result when the client presents first", function()
+            local self = tostring(process.pid())
+            local notices = assert(process.listen("bee.retained.replaced", {message = true}))
+            local display = tostring(assert(process.spawn("bee.launch:switch_relay", "bee:workers", self)))
+            local state = desktop_lifecycle.new(self, "host", "route", WORKSPACE, DESKTOP, desktops.new())
+            desktop_lifecycle.adopt(state, DESKTOP,
+                {pid = display, database = "bee.env:client_db"} :: desktops.Desktop, "connection-1")
+            local child = state.children[DESKTOP]
+            child.phase, child.pending, child.ready, child.restarts = "render", "render-1", false, 1
+            test.is_true(desktop_lifecycle.receive(state, "presented", display, {version = 1,
+                workspace_id = WORKSPACE, display_id = DESKTOP, connection_id = "connection-2",
+                renderer = "presenter", generation = "generation-2"}))
+            quiet(notices, "replacement readiness before host render")
+            test.is_true(desktop_lifecycle.receive(state, "result", "route", {version = 1,
+                workspace_id = WORKSPACE, request_id = "render-1", op = "render", recipient = display,
+                connection_id = "connection-2", error_code = "", error = ""}))
+            local notice = next_message(notices, "replacement readiness"):payload():data() :: {[string]: unknown}
+            test.eq(notice.display_id, DESKTOP)
+            test.eq(notice.pid, display)
+            test.eq(notice.schema, 1)
+            process.terminate(display)
+            process.unlisten(notices)
+        end)
+    end)
 end
 local cases = test.run_cases(define_tests)
 return {run = function(options: unknown) return cases(options) end}

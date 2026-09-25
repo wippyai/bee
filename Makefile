@@ -226,7 +226,7 @@ check-shard-modules: hub-migration-service-check modules-app-check modules-updat
 check-shard-services: threads threads-module harness-module resources-module gateway-check gateway-readiness-check governance-workspace-check saved-profiles-check thread-storage-check resources-check
 check-shard-services-storage: workspace-storage-check
 check-shard-services-client-storage: client-storage-check
-check-shard-services-workspace: workspace-hosts-check
+check-shard-services-workspace: workspace-hosts-check leased-host-fallback-check
 check-shard-windows: window-native-check managed-window-app-check window-hooks-check window-recovery-check
 check-shard-window-failure: managed-window-failure-check
 check-shard-desktop-shell: desktop-shell-start-check
@@ -236,7 +236,7 @@ check-shard-desktop-shell-close: desktop-shell-close-confirmation-check
 check-shard-desktop-shell-control: desktop-shell-control-delivery-check
 check-shard-desktop-shell-recovery: desktop-shell-recovery-check
 check-shard-desktop-terminal: desktop-terminal-check
-check-shard-desktop-client: desktop-client-core-check
+check-shard-desktop-client: desktop-client-core-check session-fallback-check session-upgrade-check session-upgrade-fallback-check client-upgrade-check retained-client-upgrade-check retained-client-fallback-check broker-upgrade-check host-upgrade-check retained-host-fallback-check retained-broker-fallback-check
 check-shard-desktop-client-launch: desktop-client-launch-check
 check-shard-desktop-client-recovery: desktop-client-recovery-check
 check-shard-desktop-delivery: desktop-delivery-inbox-check
@@ -297,6 +297,46 @@ desktop-terminal-check:
 desktop-client-check: desktop-client-core-check desktop-client-launch-check desktop-client-recovery-check
 desktop-client-core-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/client_desktop.py
+.PHONY: session-fallback-check
+check: session-fallback-check
+session-fallback-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(session_failure=True)'
+.PHONY: session-upgrade-check
+check: session-upgrade-check
+session-upgrade-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(session_upgrade=True)'
+.PHONY: client-upgrade-check
+check: client-upgrade-check
+client-upgrade-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(client_upgrade=True)'
+.PHONY: retained-client-upgrade-check
+check: retained-client-upgrade-check
+retained-client-upgrade-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(command="retained-client-upgrade-probe")'
+.PHONY: retained-client-fallback-check
+check: retained-client-fallback-check
+retained-client-fallback-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(command="retained-client-fallback-probe", client_upgrade_fallback=True)'
+.PHONY: broker-upgrade-check
+check: broker-upgrade-check
+broker-upgrade-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(broker_upgrade=True)'
+.PHONY: host-upgrade-check
+check: host-upgrade-check
+host-upgrade-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(host_upgrade=True)'
+.PHONY: retained-host-fallback-check
+check: retained-host-fallback-check
+retained-host-fallback-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(command="retained-host-fallback-probe", host_upgrade_fallback=True)'
+.PHONY: retained-broker-fallback-check
+check: retained-broker-fallback-check
+retained-broker-fallback-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(command="retained-broker-fallback-probe", broker_upgrade_fallback=True)'
+.PHONY: session-upgrade-fallback-check
+check: session-upgrade-fallback-check
+session-upgrade-fallback-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(failed_session_upgrade=True)'
 desktop-client-launch-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
 desktop-client-recovery-check:
@@ -412,13 +452,19 @@ check: retained-owner-check
 check: hive-supervisor-check
 
 .PHONY: workspace-hosts-check
-workspace-hosts-check:
+workspace-hosts-check: leased-host-upgrade-check
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/workspace_hosts.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))" --delayed
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))" --logical
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))" --lazy
+.PHONY: leased-host-upgrade-check
+leased-host-upgrade-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))" --attach
+.PHONY: leased-host-fallback-check
+check: leased-host-fallback-check
+leased-host-fallback-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))" --attach-fallback
 
 .PHONY: hive-supervisor-check
 hive-supervisor-check:

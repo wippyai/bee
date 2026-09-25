@@ -21,8 +21,19 @@ local function main(owner: string)
     while true do
         local frame = view:snapshot()
         if frame then assert(output:present(frame.rows)) end
-        local selected = channel.select({input:case_receive(), events:case_receive(), time.after("10ms"):case_receive()})
-        if selected.channel == input and selected.ok then
+        local selected = channel.select({input:case_receive(), events:case_receive(), configure:case_receive(), time.after("10ms"):case_receive()})
+        if selected.channel == configure and selected.ok then
+            local update = selected.value
+            if tostring(update:from()) == owner then
+                local next_mount: unknown = update:payload():data()
+                if type(next_mount) == "table" and type(next_mount.mount) == "string" then
+                    local next_view = assert(tty.attach(next_mount.mount))
+                    view:close()
+                    view = next_view
+                    assert(process.send(owner, "physical.ready", {}))
+                end
+            end
+        elseif selected.channel == input and selected.ok then
             local event = input_decode.decode(selected.value)
             -- The physical display's close belongs to this attachment only.
             -- Forwarding it would close the retained desktop behind the mount.

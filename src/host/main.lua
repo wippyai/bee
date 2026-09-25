@@ -19,6 +19,8 @@ local transfer = require("transfer")
 local open_protocol = require("open_protocol")
 local binding_protocol = require("binding_protocol")
 local execution = require("execution")
+local handoff = require("handoff")
+type Channel = channel.Channel
 
 -- The broker gives its applications 8 s to stop what they own before it
 -- terminates them; its own stop outlasts that.
@@ -26,8 +28,9 @@ local BROKER_STOP_GRACE = "10s"
 
 -- The owner selects which catalog workspace this host serves; the host never
 -- infers it from the database it opens.
-local function main(owner: string, workspace: unknown, database_resource: string?)
+local function main(owner: string, workspace: unknown, database_resource: string?, checkpoint: unknown?)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
+    assert(process.set_options({upgradable = true}))
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
@@ -44,10 +47,13 @@ local function main(owner: string, workspace: unknown, database_resource: string
     local transfer_requests = assert(process.listen("bee.host.transfer", {message = true}))
     local open_requests = assert(process.listen("bee.host.application", {message = true}))
     local broker_ready = assert(process.listen("bee.app.ready", {message = true}))
+    local broker_replacements = assert(process.listen("bee.application.replacing", {message = true}))
+    local broker_replace_failures = assert(process.listen("bee.application.replace_failed", {message = true}))
+    local upgrade_acks = assert(process.listen("bee.host.upgrade_ack", {message = true}))
     local binding_requests = assert(process.listen("bee.application.binding.request", {message = true}))
     local binding_recovered = assert(process.listen("bee.application.binding.recovered", {message = true}))
     local events = assert(process.events())
-    assert(process.monitor(owner))
+    if checkpoint == nil then assert(process.monitor(owner)) end
     local database, database_error = persistence.open(database_resource, workspace)
     if not database then error(tostring(database_error)) end
     local host_registry_name = ""
@@ -71,8 +77,16 @@ local function main(owner: string, workspace: unknown, database_resource: string
     local fresh_workspace = database.saved == nil
     local workspace_id = database.workspace_id
     host_registry_name = "bee.workspace.host/" .. workspace_id
-    local registered, register_error = process.registry.register(host_registry_name)
-    if not registered then database:close(); error("Register workspace host: " .. tostring(register_error)) end
+    local existing_host = process.registry.lookup(host_registry_name)
+    if existing_host and tostring(existing_host) ~= tostring(process.pid()) then
+        database:close(); error("Workspace host name belongs to another process")
+    end
+    if not existing_host then
+        local registered, register_error = process.registry.register(host_registry_name)
+        if not registered then database:close(); error("Register workspace host: " .. tostring(register_error)) end
+    end
+    local resumed = checkpoint and handoff.decode(checkpoint, owner, workspace_id) or nil
+    if checkpoint and not resumed then database:close(); error("Incompatible workspace host checkpoint") end
     local empty_tabs: {string} = {}
     local empty_records: {recovery.Record} = {}
     local snapshot: recovery.Snapshot = {version = 1,
@@ -101,31 +115,49 @@ local function main(owner: string, workspace: unknown, database_resource: string
         snapshot = reconciled
     end
     local live_inventory = inventory.new(workspace_id)
+    if resumed then
+        live_inventory = {workspace_id = workspace_id, catalog_revision = resumed.catalog_revision,
+            views_revision = resumed.views_revision, catalog = resumed.catalog, views = resumed.views}
+    end
     local broker_policy, broker_error = security.policy("bee.security.desktop:broker_policy")
     if not broker_policy then database:close(); error(tostring(broker_error)) end
     local boundary, boundary_error = security.policy("bee.security:core_spawn_boundary")
     if not boundary then database:close(); error(tostring(boundary_error)) end
     local self = tostring(process.pid())
-    local broker = tostring(assert(process.with_options({}):with_context({
-        ["bee.workspace_owner"] = self, ["bee.workspace_id"] = workspace_id,
-    }):with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored(
-        "bee.apps:broker", "bee:workers", self, snapshot.desktop.preferences)))
-    local broker_started = false
-    local broker_recovery_requested = false
+    local broker_scope = security.new_scope({broker_policy, boundary})
+    local function spawn_broker(): (string?, string?)
+        local pid, err = process.with_options({}):with_context({
+            ["bee.workspace_owner"] = self, ["bee.workspace_id"] = workspace_id,
+        }):with_scope(broker_scope):spawn_monitored("bee.apps:broker", "bee:workers", self, snapshot.desktop.preferences)
+        return pid and tostring(pid) or nil, err and tostring(err) or nil
+    end
+    local broker = resumed and resumed.broker or tostring(assert(spawn_broker()))
+    local broker_started = resumed ~= nil
+    local broker_recovery_requested = resumed ~= nil
     local restoring = ""
     local restore_queue: {recovery.Record} = {}
-    for _, record in ipairs(snapshot.applications) do
-        if record.restart_policy == "automatic" then restore_queue[#restore_queue + 1] = record end
+    if not resumed then
+        for _, record in ipairs(snapshot.applications) do
+            if record.restart_policy == "automatic" then restore_queue[#restore_queue + 1] = record end
+        end
     end
-    local ready = false
+    local ready = resumed ~= nil
+    local host_upgrading = false
+    local upgrade_deadline: Channel<time.Time>? = nil
     local stopping = false
     local fatal: string? = nil
     local broker_exited = false
+    local broker_replacing = false
+    local broker_replacements_done = 0
     local client_connections = connections.new(owner, broker, workspace_id, connections.assignment_access(
         function(value: unknown) return database.assignments:get(value) end,
         function() return database.assignments:reconcile() end,
         function(value: unknown) return database.assignments:claim(value) end
     ))
+    if resumed then
+        connections.resume(client_connections, resumed.admitted, resumed.count,
+            resumed.assignment_revision, live_inventory, resumed.questions)
+    end
     -- Keys are internal broker request IDs, never caller receipt IDs.  This
     -- keeps transfer replies out of the ordinary client-route namespace.
     local pending_transfers: {[string]: {request: transfer.Request, source: string, caller: string, receipt: string}} = {}
@@ -211,7 +243,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
         return true
     end
     local function restore_next()
-        if restoring ~= "" or stopping then return end
+        if restoring ~= "" or stopping or broker_replacing then return end
         -- Installed overlays may become available after the first catalog.
         -- Keep their saved records pending without delaying other applications.
         local selected: integer? = nil
@@ -231,7 +263,12 @@ local function main(owner: string, workspace: unknown, database_resource: string
             if not ready and broker_started then
                 resolve_prepared_intents()
                 ready = true
-                deliver("bee.host.ready", {version = 1, workspace_id = workspace_id, fresh = fresh_workspace, saved = snapshot})
+                if broker_replacements_done > 0 then
+                    broker_replacing = false
+                    connections.broker_replaced(client_connections, broker)
+                    deliver("bee.host.broker_replaced", {version = 1, schema = 1, workspace_id = workspace_id, broker = broker})
+                    broker_replacements_done = 0
+                else deliver("bee.host.ready", {version = 1, workspace_id = workspace_id, fresh = fresh_workspace, saved = snapshot}) end
             end
         end
     end
@@ -286,11 +323,49 @@ local function main(owner: string, workspace: unknown, database_resource: string
         if not reply then error("Workspace binding store returned an invalid binding") end
         assert(process.send(broker, "bee.application.binding.result", reply))
     end
+    local function broker_drained(): boolean
+        if restoring ~= "" or next(pending_opens) ~= nil or next(pending_transfers) ~= nil
+            or next(client_connections.changes) ~= nil or next(client_connections.appearance_routes) ~= nil then return false end
+        for _, route in pairs(client_connections.routes) do if not route.completed then return false end end
+        return true
+    end
+    if resumed then
+        deliver("bee.host.upgraded", {version = 1, schema = 1, workspace_id = workspace_id, broker = broker})
+    end
     local function run()
         while true do
+            if host_upgrading and not broker_replacing and broker_drained() then
+                local saved = handoff.pack(owner, workspace_id, broker, live_inventory,
+                    client_connections.admitted, client_connections.count, client_connections.assignment_revision,
+                    client_connections.questions)
+                if not handoff.decode(saved, owner, workspace_id) then error("Cannot checkpoint workspace host") end
+                local request_id = uuid.v7()
+                assert(process.send(owner, "bee.host.upgrading", {version = 1, schema = 1,
+                    workspace_id = workspace_id, request_id = request_id, broker = broker}))
+                local deadline = time.after("3s")
+                local acknowledged = false
+                while true do
+                    local response = channel.select({upgrade_acks:case_receive(), deadline:case_receive()})
+                    if not response.ok or response.channel == deadline then break end
+                    local message = response.value
+                    local value: unknown = message:payload():data()
+                    if tostring(message:from()) == owner and type(value) == "table"
+                        and value.version == 1 and value.schema == 1 and value.workspace_id == workspace_id
+                        and value.request_id == request_id then acknowledged = true; break end
+                end
+                if acknowledged then
+                    database:close()
+                    process.upgrade("", owner, workspace, database_resource, saved)
+                else
+                    host_upgrading, ready, upgrade_deadline = false, true, nil
+                    deliver("bee.host.upgrade_failed", {version = 1, schema = 1,
+                        workspace_id = workspace_id, reason = "owner_ack_timeout"})
+                end
+            end
             local cases = {requests:case_receive(), open_requests:case_receive(), replies:case_receive(), catalogs:case_receive(),
-                checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(), transfer_requests:case_receive(),
+                checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(), transfer_requests:case_receive(), broker_replacements:case_receive(), broker_replace_failures:case_receive(),
                 selections:case_receive(), client_answers:case_receive(), appearance_changes:case_receive(), client_appearance:case_receive(), broker_ready:case_receive(), binding_requests:case_receive(), binding_recovered:case_receive(), events:case_receive()}
+            if upgrade_deadline then cases[#cases + 1] = upgrade_deadline:case_receive() end
             local next_expiry: number? = nil
             for _, pending in pairs(pending_opens) do
                 if pending.expires and (not next_expiry or pending.expires < next_expiry) then next_expiry = pending.expires end
@@ -304,7 +379,11 @@ local function main(owner: string, workspace: unknown, database_resource: string
             local expired = open_timer and selected.channel == open_timer:channel()
             if open_timer then open_timer:stop(); open_timer = nil end
             if not selected.ok then break end
-            if expired then
+            if upgrade_deadline and selected.channel == upgrade_deadline then
+                host_upgrading, ready, upgrade_deadline = false, true, nil
+                deliver("bee.host.upgrade_failed", {version = 1, schema = 1,
+                    workspace_id = workspace_id, reason = "drain_timeout"})
+            elseif expired then
                 local now = time.now():unix_nano() / 1000000000
                 for request_id, pending in pairs(pending_opens) do
                     if pending.expires and now >= pending.expires then
@@ -326,9 +405,29 @@ local function main(owner: string, workspace: unknown, database_resource: string
             elseif selected.channel == events then
                 local event = selected.value
                 if event.kind == process.event.CANCEL then break end
+                if event.kind == process.event.OUTDATED then
+                    host_upgrading, ready = true, false
+                    upgrade_deadline = time.after("5s")
+                end
                 if event.kind == process.event.EXIT and tostring(event.from) == broker then
                     broker_exited = true
-                    fatal = "Workspace broker exited: " .. (decode.exit_error(event.result) or "without completing cleanup"); break
+                    if not broker_replacing or stopping or broker_replacements_done >= 2 then
+                        fatal = "Workspace broker exited: " .. (decode.exit_error(event.result) or "without completing cleanup"); break
+                    end
+                    local next_broker, spawn_error = spawn_broker()
+                    if not next_broker then fatal = "Replace workspace broker: " .. tostring(spawn_error); break end
+                    broker = next_broker
+                    client_connections.broker = broker
+                    broker_replacements_done = broker_replacements_done + 1
+                    broker_replacing = false
+                    broker_exited = false
+                    broker_started, broker_recovery_requested, ready = false, false, false
+                    restoring = ""
+                    restore_queue = {}
+                    for _, record in ipairs(snapshot.applications) do
+                        if record.restart_policy == "automatic" then restore_queue[#restore_queue + 1] = record end
+                    end
+                    live_inventory = inventory.empty(live_inventory)
                 end
                 if event.kind == process.event.EXIT and tostring(event.from) == owner then break end
                 if event.kind == process.event.EXIT then
@@ -337,7 +436,23 @@ local function main(owner: string, workspace: unknown, database_resource: string
             else
                 local message = selected.value
                 local data: unknown = message:payload():data()
-                if selected.channel == catalogs and message:from() == broker then
+                if selected.channel == broker_replacements then
+                    local accepted = tostring(message:from()) == broker and not broker_replacing and not stopping
+                        and broker_replacements_done < 2 and broker_drained()
+                        and type(data) == "table" and data.version == 1 and data.schema == 1
+                        and data.workspace_id == workspace_id and data.broker == broker
+                    if accepted then broker_replacing, ready = true, false end
+                    if tostring(message:from()) == broker then
+                        process.send(broker, "bee.application.replace_ack", {version = 1, schema = 1,
+                            workspace_id = workspace_id, broker = broker, accepted = accepted})
+                    end
+                elseif selected.channel == broker_replace_failures and tostring(message:from()) == broker then
+                    if type(data) == "table" and data.version == 1 and data.schema == 1
+                        and data.workspace_id == workspace_id and data.broker == broker and data.reason == "drain_timeout" then
+                        deliver("bee.host.broker_replace_failed", {version = 1, schema = 1,
+                            workspace_id = workspace_id, reason = "drain_timeout"})
+                    end
+                elseif selected.channel == catalogs and message:from() == broker then
                     if type(data) == "table" and data.version == 1 then
                         local next_inventory = inventory.set_catalog(live_inventory, data.items)
                         if not next_inventory then error("Invalid broker catalog") end
@@ -652,7 +767,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
     process.registry.unregister(host_registry_name)
     -- A cancelled broker runs its application cleanup before it exits.
     if not broker_exited then execution.stop({broker}, events, BROKER_STOP_GRACE) end
-    for _, subscription in ipairs({requests, open_requests, replies, catalogs, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, selections, client_answers, appearance_changes, client_appearance, broker_ready, binding_requests, binding_recovered}) do
+    for _, subscription in ipairs({requests, open_requests, replies, catalogs, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, broker_replacements, broker_replace_failures, upgrade_acks, selections, client_answers, appearance_changes, client_appearance, broker_ready, binding_requests, binding_recovered}) do
         process.unlisten(subscription)
     end
     if not completed then error(run_error) end

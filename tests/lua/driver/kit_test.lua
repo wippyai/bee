@@ -56,6 +56,14 @@ local function define_tests()
             for _, piece in ipairs(pieces) do test.not_nil(observation.decode(piece)) end
             test.is_nil(events.usage(nil, "many", nil))
             test.eq(events.usage(nil, nil, 3).cached_tokens, 3)
+            -- A payload beyond the record bound stays valid JSON: it names
+            -- how large the omitted payload was instead of cutting it.
+            local large = events.extension("k8", "claude.system.status", "stream-json-2",
+                '{"padding":"' .. string.rep("x", events.MAX_TEXT_BYTES * 2) .. '"}')
+            local decoded, decode_error = observation.decode(large)
+            if not decoded then error(tostring(decode_error)) end
+            local payload = large.data.payload_json :: string
+            test.eq(payload, '{"omitted_bytes":' .. tostring(events.MAX_TEXT_BYTES * 2 + 14) .. '}')
         end)
         test.it("decodes stream-json envelopes and reports undecodable frames", function()
             local decoder = stream_json.new()

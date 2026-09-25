@@ -49,8 +49,12 @@ end
 function M.notice(event_key: string, level: string, code: string, text: string): Observation
     return {type = "notice", event_key = event_key, data = {type = "notice", level = level, code = code, content = content(text:sub(1, M.MAX_TEXT_BYTES))}}
 end
+-- A payload beyond the record bound is replaced by a JSON object naming its
+-- size; a cut payload would no longer be JSON.
 function M.extension(event_key: string, event_name: string, event_revision: string, payload_json: string): Observation
-    return {type = "extension", event_key = event_key, data = {type = "extension", event_name = event_name, event_revision = event_revision, payload_json = payload_json:sub(1, M.MAX_TEXT_BYTES)}}
+    local payload = payload_json
+    if #payload > M.MAX_TEXT_BYTES then payload = '{"omitted_bytes":' .. tostring(#payload_json) .. '}' end
+    return {type = "extension", event_key = event_key, data = {type = "extension", event_name = event_name, event_revision = event_revision, payload_json = payload}}
 end
 -- Usage as the records contract expects it; unknown counters stay absent.
 function M.usage(input_tokens: unknown, output_tokens: unknown, cached_tokens: unknown): {[string]: unknown}?

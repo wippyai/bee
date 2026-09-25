@@ -64,10 +64,46 @@ local function decode_grant(value: unknown, index: integer): (types.ResourceGran
     if not purpose then return nil, "resources[" .. tostring(index) .. "].purpose is not one placement knows" end
     return {name = name, grant_ref = grant_ref, root_ref = root_ref, subpath = subpath, access = access :: types.Access, purpose = purpose :: types.Purpose}, nil
 end
+local function decode_files(value: unknown, field: string, nonempty: boolean): ({driver_types.RequiredFile}?, string?)
+    if type(value) ~= "table" then return nil, field .. " must be a list" end
+    local raw = value :: {unknown}
+    if #raw > M.MAX_REQUIRED_FILES or (nonempty and #raw == 0) then
+        if nonempty then return nil, field .. " must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " paths" end
+        return nil, field .. " exceeds " .. tostring(M.MAX_REQUIRED_FILES) .. " entries"
+    end
+    local files: {driver_types.RequiredFile} = {}
+    local seen: {[string]: boolean} = {}
+    for index, item in ipairs(raw) do
+        local entry = bounds.object(item)
+        if not entry then return nil, field .. "[" .. tostring(index) .. "] must be an object" end
+        local entry_field = bounds.fields(entry, {"variable", "path", "default_directory"})
+        if entry_field then return nil, field .. "[" .. tostring(index) .. "]: " .. entry_field end
+        local variable = bounds.id(entry.variable)
+        if not variable or not variable:match(ENVIRONMENT_NAME) then
+            return nil, field .. "[" .. tostring(index) .. "].variable must be an environment name"
+        end
+        local path = bounds.text(entry.path, M.MAX_REQUIRED_PATH_BYTES)
+        if not path or not safe_relative(path) then
+            return nil, field .. "[" .. tostring(index) .. "].path must be a safe relative path"
+        end
+        local directory: string? = nil
+        if entry.default_directory ~= nil then
+            directory = bounds.text(entry.default_directory, M.MAX_REQUIRED_PATH_BYTES)
+            if not directory or not safe_relative(directory) then
+                return nil, field .. "[" .. tostring(index) .. "].default_directory must be a safe relative path"
+            end
+        end
+        local identity = variable .. "/" .. path
+        if seen[identity] then return nil, field .. " repeats " .. identity end
+        seen[identity] = true
+        files[index] = {variable = variable, path = path, default_directory = directory}
+    end
+    return files, nil
+end
 function M.launch(value: unknown): (driver_types.Launch?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch must be an object" end
-    local unknown_field = bounds.fields(object, {"executable", "argv", "stdin", "stdin_eof", "session_end", "environment", "working_directory_ref", "home_ref", "required_files", "readiness"})
+    local unknown_field = bounds.fields(object, {"executable", "argv", "stdin", "stdin_eof", "session_end", "environment", "working_directory_ref", "home_ref", "required_files", "login", "readiness"})
     if unknown_field then return nil, "launch: " .. unknown_field end
     local executable = bounds.text(object.executable, M.MAX_ARGUMENT_BYTES)
     if not executable or executable == "" or executable:find("\0", 1, true) then return nil, "launch.executable must be nonempty text" end
@@ -104,35 +140,23 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     -- checks existence only; it never reads contents and never copies one.
     local required: {driver_types.RequiredFile} = {}
     if object.required_files ~= nil then
-        if type(object.required_files) ~= "table" then return nil, "launch.required_files must be a list" end
-        local raw_required = object.required_files :: {unknown}
-        if #raw_required > M.MAX_REQUIRED_FILES then return nil, "launch.required_files exceeds " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
-        local seen: {[string]: boolean} = {}
-        for index, item in ipairs(raw_required) do
-            local entry = bounds.object(item)
-            if not entry then return nil, "launch.required_files[" .. tostring(index) .. "] must be an object" end
-            local entry_field = bounds.fields(entry, {"variable", "path", "default_directory"})
-            if entry_field then return nil, "launch.required_files[" .. tostring(index) .. "]: " .. entry_field end
-            local variable = bounds.id(entry.variable)
-            if not variable or not variable:match(ENVIRONMENT_NAME) then
-                return nil, "launch.required_files[" .. tostring(index) .. "].variable must be an environment name"
-            end
-            local path = bounds.text(entry.path, M.MAX_REQUIRED_PATH_BYTES)
-            if not path or not safe_relative(path) then
-                return nil, "launch.required_files[" .. tostring(index) .. "].path must be a safe relative path"
-            end
-            local directory: string? = nil
-            if entry.default_directory ~= nil then
-                directory = bounds.text(entry.default_directory, M.MAX_REQUIRED_PATH_BYTES)
-                if not directory or not safe_relative(directory) then
-                    return nil, "launch.required_files[" .. tostring(index) .. "].default_directory must be a safe relative path"
-                end
-            end
-            local identity = variable .. "/" .. path
-            if seen[identity] then return nil, "launch.required_files repeats " .. identity end
-            seen[identity] = true
-            required[index] = {variable = variable, path = path, default_directory = directory}
-        end
+        local files, files_error = decode_files(object.required_files, "launch.required_files", false)
+        if not files then return nil, files_error end
+        required = files
+    end
+    local login: driver_types.LoginEvidence? = nil
+    if object.login ~= nil then
+        local declared = bounds.object(object.login)
+        if not declared then return nil, "launch.login must be an object" end
+        local login_field = bounds.fields(declared, {"provider", "command", "files"})
+        if login_field then return nil, "launch.login: " .. login_field end
+        local provider = bounds.id(declared.provider)
+        if not provider then return nil, "launch.login.provider must be an identifier" end
+        local command = bounds.line(declared.command, 128)
+        if not command or command == "" then return nil, "launch.login.command must be a bounded single line" end
+        local files, files_error = decode_files(declared.files, "launch.login.files", true)
+        if not files then return nil, files_error end
+        login = {provider = provider, command = command, files = files}
     end
     local readiness = bounds.text(object.readiness, 256)
     if not readiness or readiness == "" then return nil, "launch.readiness must be nonempty text" end
@@ -150,6 +174,7 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     end
     local launch: driver_types.Launch = {executable = executable, argv = argv, stdin = stdin, stdin_eof = stdin_eof, session_end = session_end, environment = names, working_directory_ref = working, home_ref = home, readiness = readiness}
     if #required > 0 then launch.required_files = required end
+    launch.login = login
     return launch, nil
 end
 local function decode_environment(value: unknown, field: string, values: boolean): ({[string]: string}?, string?)

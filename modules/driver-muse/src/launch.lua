@@ -77,7 +77,8 @@ function M.specification(request: Request): types.Launch
             argv[#argv + 1] = "--"
             argv[#argv + 1] = request.brief
         end
-        return {executable = "muse", argv = argv, environment = environment, readiness = "terminal:attached"}
+        return {executable = "muse", argv = argv, environment = environment, readiness = "terminal:attached",
+            login = {provider = "muse", command = "muse", files = {{variable = "HOME", path = ".config/muse/auth.json"}}}}
     end
     local argv: {string} = {"exec", "--json", "--approval-mode", request.approval_mode}
     if request.model then

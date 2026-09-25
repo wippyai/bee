@@ -56,6 +56,9 @@ type Binding = {
 -- by the user's home plus a default directory. Placement checks existence
 -- only; the driver never reads the file's contents.
 type RequiredFile = {variable: string, path: string, default_directory: string?}
+-- Evidence is checked by placement in the selected provider home. Paths are
+-- alternatives: any existing file is enough. The command is display text.
+type LoginEvidence = {provider: string, command: string, files: {RequiredFile}}
 type Launch = {
     executable: string,
     -- Arguments only. Placement prepends the separately selected executable.
@@ -69,6 +72,7 @@ type Launch = {
     working_directory_ref: string?,
     home_ref: string?,
     required_files: {RequiredFile}?,
+    login: LoginEvidence?,
     readiness: string,
 }
 -- What a normalizer reports when the protocol says the turn is over.

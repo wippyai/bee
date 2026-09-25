@@ -9,18 +9,15 @@ local muse = require("muse_launch")
 local function define_tests()
     test.describe("Provider window login declarations", function()
         local cases = {
-            {driver = codex, provider = "codex", command = "codex login", variable = "CODEX_HOME", directory = ".codex", path = "auth.json"},
-            {driver = claude, provider = "claude", command = "claude", variable = "CLAUDE_CONFIG_DIR", directory = ".claude", path = ".credentials.json"},
-            {driver = agy, provider = "agy", command = "agy", variable = "HOME", path = ".gemini/antigravity-cli/antigravity-oauth-token"},
-            {driver = grok, provider = "grok", command = "grok", variable = "GROK_HOME", directory = ".grok", path = "auth.json"},
-            {driver = muse, provider = "muse", command = "muse", variable = "HOME", path = ".config/muse/auth.json"},
+            {launch = codex.specification(assert(codex.decode({profile_id = "window", brief = ""}))), provider = "codex", command = "codex login", variable = "CODEX_HOME", directory = ".codex", path = "auth.json"},
+            {launch = claude.specification(assert(claude.decode({profile_id = "window", brief = ""}))), provider = "claude", command = "claude", variable = "CLAUDE_CONFIG_DIR", directory = ".claude", path = ".credentials.json"},
+            {launch = agy.specification(assert(agy.decode({profile_id = "window", brief = ""}))), provider = "agy", command = "agy", variable = "HOME", path = ".gemini/antigravity-cli/antigravity-oauth-token"},
+            {launch = grok.specification(assert(grok.decode({profile_id = "window", brief = ""}))), provider = "grok", command = "grok", variable = "GROK_HOME", directory = ".grok", path = "auth.json"},
+            {launch = muse.specification(assert(muse.decode({profile_id = "window", brief = ""}))), provider = "muse", command = "muse", variable = "HOME", path = ".config/muse/auth.json"},
         }
         for _, case in ipairs(cases) do
             test.it(case.provider .. " declares its window login evidence", function()
-                local request, err = case.driver.decode({profile_id = "window", brief = ""})
-                if not request then error(tostring(err)) end
-                local launch = case.driver.specification(request)
-                local login = launch.login
+                local login = case.launch.login
                 if not login then error("missing login declaration") end
                 test.eq(login.provider, case.provider)
                 test.eq(login.command, case.command)

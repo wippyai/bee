@@ -97,7 +97,8 @@ function M.specification(request: Request): types.Launch
     end
     local environment: {string} = {}
     if request.profile_id == "window" then
-        return {executable = "codex", argv = argv, environment = environment, required_files = required_files, readiness = "terminal:attached"}
+        return {executable = "codex", argv = argv, environment = environment, required_files = required_files, readiness = "terminal:attached",
+            login = {provider = "codex", command = "codex login", files = {{variable = "CODEX_HOME", default_directory = ".codex", path = "auth.json"}}}}
     end
     -- The brief goes in on stdin and Codex reads it until end of file, so
     -- the launch requires a placement that can close stdin after writing.

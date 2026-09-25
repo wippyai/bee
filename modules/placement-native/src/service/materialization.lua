@@ -58,6 +58,50 @@ function M.required_file_missing(request: types.LaunchRequest): string?
     end
     return nil
 end
+-- The warning is advisory. An evidence file may be created by the provider's
+-- sign-in flow after prepare, so this examines existence only at prepare time.
+-- All declared paths are already decoded as safe relative paths.
+function M.login_notice(request: types.LaunchRequest, selected_home: string,
+    is_file: (string) -> boolean?, projected_login_present: boolean?): types.LoginNotice?
+    local login = request.launch.login
+    if request.profile_id ~= "window" or not login then return nil end
+    if projected_login_present == true then return nil end
+    if selected_home:sub(1, 1) ~= "/" then return nil end
+    for _, file in ipairs(login.files) do
+        local directory = request.environment[file.variable]
+        if directory == "" then directory = nil end
+        if file.variable == "HOME" then directory = selected_home end
+        if not directory then
+            directory = selected_home
+            if file.default_directory then directory = directory .. "/" .. file.default_directory end
+        end
+        -- A relative override depends on the eventual working directory and
+        -- cannot be diagnosed from this home without guessing.
+        if directory:sub(1, 1) ~= "/" or directory:find("[%z\r\n]") then return nil end
+        local present = is_file(directory .. "/" .. file.path)
+        if present == nil or present == true then return nil end
+    end
+    return {code = "LOGIN_REQUIRED", provider = login.provider, command = login.command}
+end
+function M.prepare_login_notice(request: types.LaunchRequest, private_home: string,
+    projected_login_present: boolean?): types.LoginNotice?
+    if request.profile_id ~= "window" or not request.launch.login then return nil end
+    local selected_home = private_home
+    if request.environment_refs.HOME == "bee:machine_home" then
+        local resolved, err = env.get("bee:machine_home")
+        if err or type(resolved) ~= "string" then return nil end
+        selected_home = resolved
+    end
+    local host_files = resources.host_files()
+    local volume = host_files and fs.get(host_files) or nil
+    if not volume then return nil end
+    return M.login_notice(request, selected_home, function(path: string): boolean?
+        local info, stat_error = volume:stat(path)
+        if info then return info.type == "file" and info.is_dir ~= true end
+        if stat_error and stat_error:kind() == errors.NOT_FOUND then return false end
+        return nil
+    end, projected_login_present)
+end
 -- Native placement selects either its private home or the host's user home.
 -- Arbitrary HOME values remain refused; an admitted gateway owns its tokens.
 -- Check before intent and again when materializing a retained request.

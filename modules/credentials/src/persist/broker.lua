@@ -631,9 +631,27 @@ function M.check(value: unknown): Reply
         return fail("DENIED", "caller is not a materializer admitted in workspace " .. workspace_id)
     end
     local refused = holds(db, projection, object.subject :: string, object.audience :: string, object.attempt_id :: string)
+    -- A file projection may seed a retained home after placement prepare.
+    -- Report only its source's existence; no login bytes are opened here.
+    local source_present: boolean? = nil
+    if not refused and projection.projection_kind == "file" then
+        local definition = definition_of(db, workspace_id, text(projection.name) or "")
+        if definition then
+            local path = file_binding(definition, workspace_id, object.audience :: string)
+            local source_ref = bounds.id(definition.source_ref)
+            local volume = source_ref and fs.get(source_ref) or nil
+            if path and volume then
+                local info, stat_error = volume:stat("/" .. path)
+                if info then source_present = info.type == "file" and info.is_dir ~= true
+                elseif stat_error and stat_error:kind() == errors.NOT_FOUND then source_present = false end
+            end
+        end
+    end
     db:release()
     if refused then return refused end
-    return succeed(projection_view(projection))
+    local result = projection_view(projection)
+    result.source_present = source_present
+    return succeed(result)
 end
 -- materialize: the authorized materializer receives the bytes once, in a
 -- reply nothing persists; each generation key is accepted once, so a lost

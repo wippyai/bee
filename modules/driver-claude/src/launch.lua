@@ -137,7 +137,8 @@ function M.specification(request: Request): types.Launch
             argv[#argv + 1] = "--"
             argv[#argv + 1] = request.brief
         end
-        return {executable = "claude", argv = argv, environment = environment, readiness = "terminal:attached"}
+        return {executable = "claude", argv = argv, environment = environment, readiness = "terminal:attached",
+            login = {provider = "claude", command = "claude", files = {{variable = "CLAUDE_CONFIG_DIR", default_directory = ".claude", path = ".credentials.json"}}}}
     end
     if not request.permission_exchange then
         argv[#argv + 1] = "--"

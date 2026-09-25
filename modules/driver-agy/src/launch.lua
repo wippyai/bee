@@ -201,6 +201,7 @@ function M.specification(request: Request): types.Launch
             argv = argv,
             environment = environment,
             readiness = "terminal:attached",
+            login = {provider = "agy", command = "agy", files = {{variable = "HOME", path = ".gemini/antigravity-cli/antigravity-oauth-token"}}},
         }
     end
 

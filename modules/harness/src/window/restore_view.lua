@@ -34,6 +34,18 @@ function M.unresumable(width: integer, height: integer, preferences: appearance.
     if height >= 8 then frame.footer(painter, "", "Enter or Esc closes it") end
     return {rows = frame.rows(painter)}
 end
+function M.login(width: integer, height: integer, preferences: appearance.Preferences,
+    notice: {code: "LOGIN_REQUIRED", provider: string, command: string}): {rows: {string}}
+    local painter = frame.new(width, height, preferences)
+    local provider = notice.provider:sub(1, 1):upper() .. notice.provider:sub(2)
+    frame.header(painter, "AGENT")
+    frame.line(painter, 3, provider .. " login needed", painter.theme.text)
+    frame.line(painter, 5, "No saved login was found in this provider home.", painter.theme.text)
+    frame.line(painter, 7, "Sign in: " .. notice.command, painter.theme.accent)
+    frame.line(painter, 8, "You can continue to the provider's sign-in screen.", painter.theme.muted)
+    if height >= 9 then frame.footer(painter, "", "Enter opens " .. provider .. " · Esc closes") end
+    return {rows = frame.rows(painter)}
+end
 
 function M.reviewable(width: integer, height: integer): boolean
     return width >= MIN_REVIEW_WIDTH and height >= MIN_REVIEW_HEIGHT

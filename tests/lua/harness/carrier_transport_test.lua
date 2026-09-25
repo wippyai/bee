@@ -97,6 +97,9 @@ local function define_tests()
                         test.eq(input.text, "Open Codex window")
                     end
                     if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
+                    if target == "bee.placement.native:prepare" then
+                        return {ok = true, value = {notice = {code = "LOGIN_REQUIRED", provider = "codex", command = "codex login"}}}, nil
+                    end
                     return {ok = true, value = {}}, nil
                 end,
                 send = function(target: string, topic: string, value: unknown) error("unexpected transport send") end,
@@ -108,7 +111,27 @@ local function define_tests()
             if not prepared then error(tostring(err)) end
             test.eq(prepared.epoch, 7)
             test.is_nil(prepared.gateway_binding)
+            test.eq(prepared.notice and prepared.notice.code, "LOGIN_REQUIRED")
+            test.eq(prepared.notice and prepared.notice.command, "codex login")
             test.eq(table.concat(calls, ","), "bee.threads.service:admit_action,bee.threads.service:prepare_attempt,bee.threads.carrier:claim,bee.placement.native:prepare")
+        end)
+        test.it("rejects a malformed placement login notice", function()
+            local io: machine.IO = {
+                call = function(target: string, value: unknown): (unknown, string?)
+                    if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
+                    if target == "bee.placement.native:prepare" then
+                        return {ok = true, value = {notice = {code = "LOGIN_REQUIRED", provider = "codex", command = "codex login\nextra"}}}, nil
+                    end
+                    return {ok = true, value = {}}, nil
+                end,
+                send = function(target: string, topic: string, value: unknown) error("unexpected transport send") end,
+                self_pid = function(): string return "test" end,
+                now_ms = function(): integer return 0 end,
+                key = function(): string return "key" end,
+            }
+            local prepared, err = machine.prepare_attempt(io, plan("window", "pty"))
+            test.is_nil(prepared)
+            test.eq(err, "placement prepare returned an invalid notice")
         end)
         test.it("dispatches preparation through the selected placement binding", function()
             local selected: machine.Plan = plan("window", "pty")

@@ -287,6 +287,61 @@ local function main(value: unknown, constructors: {[string]: Open})
         process.unlisten(states)
         output:close()
     end
+    local function show_login(notice: {code: "LOGIN_REQUIRED", provider: string, command: string}): boolean
+        local output = assert(tty.surface())
+        local width, height = tty.screen_size()
+        local preferences = appearance.defaults()
+        local states = assert(process.listen("bee.appearance.state", {message = true}))
+        local dirty = true
+        client.title(launch, notice.provider .. " · Login needed")
+        process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
+        while true do
+            if dirty then
+                local frame = restore_view.login(width, height, preferences, notice)
+                assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+                dirty = false
+            end
+            local event = channel.select({input:case_receive(), lifecycle:case_receive(), closes:case_receive(), states:case_receive()})
+            if not event.ok then break end
+            if event.channel == lifecycle then
+                if event.value.kind == process.event.CANCEL then break end
+            elseif event.channel == closes then
+                local close = client.close_request(launch, tostring(event.value:from()), event.value:payload():data())
+                if close then
+                    client.close_reply(launch, close.request_id, {action = "accept"})
+                    break
+                end
+            elseif event.channel == states then
+                if event.value:from() == launch.broker_pid then
+                    local payload: unknown = event.value:payload():data()
+                    local decoded = appearance.decode(payload)
+                    if decoded and type(payload) == "table" and payload.version == 1 then
+                        preferences = decoded
+                        dirty = true
+                    end
+                end
+            else
+                local data = input_event.decode(event.value)
+                if data then
+                    if data.type == "close" then break end
+                    if data.type == "resize" or data.type == "start" then
+                        width, height = data.width, data.height
+                        dirty = true
+                    elseif data.type == "key" and data.action == "press" then
+                        if data.key_type == "enter" or data.key_type == "return" then
+                            process.unlisten(states)
+                            output:close()
+                            return true
+                        end
+                        if data.key_type == "escape" or data.key_type == "esc" or (data.ctrl and data.key == "q") then break end
+                    end
+                end
+            end
+        end
+        process.unlisten(states)
+        output:close()
+        return false
+    end
     if selected then
         local choice, choice_error, picker_cancelled, pending_activation = picker.run(launch, input, lifecycle, closes)
         if picker_cancelled then
@@ -610,6 +665,12 @@ local function main(value: unknown, constructors: {[string]: Open})
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
+    if prepared.notice and not show_login(prepared.notice) then
+        settle_failure(admitted :: admission.Admitted, prepared.epoch, "the login notice was closed before the provider started",
+            prepared.gateway_binding, true, true)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+        return
+    end
     local gateway = plan.gateway
     local state = hooks.new({
         thread_id = admitted.thread_id,
@@ -689,7 +750,8 @@ local function main(value: unknown, constructors: {[string]: Open})
     local published_activity: string? = nil
     local published_title: string? = nil
     local function publish_title()
-        local suffix = published_activity and " · " .. published_activity or ""
+        local suffix = prepared.notice and " · Login needed" or ""
+        if published_activity then suffix = suffix .. " · " .. published_activity end
         if checkpoint_error then suffix = suffix .. " · Save unconfirmed" end
         local title = text.bound(admitted.plan.title, 77 - #suffix) .. suffix
         if title ~= published_title and client.title(launch, title) then published_title = title end

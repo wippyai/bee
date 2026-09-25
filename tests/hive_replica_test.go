@@ -249,25 +249,36 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		project, state := folder, folder
 		externalDestination := agent != nil && i == 0
 		if externalDestination {
-			project, state = agent.destinationFolder, agent.destinationFolder
-			if info, err := os.Stat(filepath.Join(project, "src")); err != nil || !info.IsDir() {
+			state = agent.destinationFolder
+			if info, err := os.Stat(filepath.Join(state, "src")); err != nil || !info.IsDir() {
 				t.Fatalf("destination desktop project disappeared before Hive staging: %v", err)
 			}
+			for _, name := range []string{"src", "modules"} {
+				if err := os.CopyFS(filepath.Join(project, name), os.DirFS(filepath.Join(state, name))); err != nil {
+					t.Fatal(err)
+				}
+			}
 		} else if agent != nil && i == 1 && agent.sourceProject != "" {
-			project, state = agent.sourceProject, agent.sourceState
+			state = agent.sourceState
+			for _, name := range []string{"src", "modules"} {
+				if err := os.CopyFS(filepath.Join(project, name), os.DirFS(filepath.Join(agent.sourceProject, name))); err != nil {
+					t.Fatal(err)
+				}
+			}
 		} else if err := os.CopyFS(filepath.Join(project, "src"), os.DirFS(filepath.Join(repository, "src"))); err != nil {
 			t.Fatal(err)
 		}
 		// This acceptance owns the supervisor lifecycle and supplies the
-		// enrolled peer list directly. The default local service stays
-		// declared in the composed Hive module but never starts here; the
-		// launch override below keeps it out of this deliberately explicit
-		// composition. The real Hive sender still comes from the composed
-		// module that the root Sync dependency injects into distribution.
+		// enrolled peer list directly. The host service is declared in the root
+		// composition and the launch override below keeps it out of this explicit
+		// fixture. The real Hive sender remains in the composed Hive module.
 		for _, name := range moduleNames {
-			module := name
-			if err := os.CopyFS(filepath.Join(project, "modules", module), os.DirFS(filepath.Join(repository, "modules", module))); err != nil {
-				t.Fatal(err)
+			if !externalDestination && !(agent != nil && i == 1 && agent.sourceProject != "") {
+				if err := os.CopyFS(filepath.Join(project, "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
 			}
 		}
 		if i == 0 && agent == nil {
@@ -378,6 +389,13 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		}
 		if err := os.WriteFile(filepath.Join(project, ".wippy.yaml"), data, 0600); err != nil {
 			t.Fatal(err)
+		}
+		if externalDestination {
+			// The recovered desktop must rejoin the same node identity that
+			// applied its overlay, while retaining its full desktop source.
+			if err := os.WriteFile(filepath.Join(state, ".wippy.yaml"), data, 0600); err != nil {
+				t.Fatal(err)
+			}
 		}
 		lintArgs := []string{"lint", "--json"}
 		if agent != nil {

@@ -15,6 +15,7 @@ local mcp = require("mcp")
 local catalog = require("catalog")
 local context = require("context")
 local sessions = require("sessions")
+local remote = require("remote")
 local bounds = require("bounds")
 local sends = require("sends")
 type Object = {[string]: unknown}
@@ -217,6 +218,10 @@ local function list_directory(binding: gateway.Binding, executor: funcs.Executor
     return reply_result({ok = true, value = {peers = page.items, next_cursor = page.next_cursor,
         eof = page.eof, truncated = not page.eof}}, nil)
 end
+-- The exact local action address an inbox operation targets, or the refusal
+-- naming why it is not ours. A local address resolves among the bound
+-- workspace's sessions; a remote address is handed to the host-selected remote
+-- resolver, which the destination owner re-checks when the send arrives.
 local function inbox_target(binding: gateway.Binding, address: unknown): (sessions.Candidate?, Object?)
     local object = bounds.object(address)
     local node_id = object and bounds.id(object.node_id)
@@ -227,6 +232,29 @@ local function inbox_target(binding: gateway.Binding, address: unknown): (sessio
     for _, item in ipairs(candidates) do if item.action_id == action_id then return item, nil end end
     return nil, refused("NOT_FOUND", "action address is not in this workspace")
 end
+-- A remote session_send names a node-qualified address: the host-selected
+-- resolver answers the thread and workspace it names on its own node, and the
+-- gateway sends there with the same body it would send locally. The remote
+-- owner authenticates the forwarded principal and re-checks every grant, so
+-- resolution is discovery, not authority; an unconfigured or unknown address is
+-- reported as not found.
+local function remote_send(binding: gateway.Binding, tool: mcp.Tool, request: Object, executor: funcs.Executor): Object
+    local object = bounds.object(request.address)
+    local node_id = object and bounds.id(object.node_id)
+    local action_id = object and bounds.id(object.action_id)
+    if not node_id or not action_id then return refused("NOT_FOUND", "address must name a node and action") end
+    local resolved, resolve_error = remote.resolve({node_id = node_id, action_id = action_id})
+    if not resolved then return refused("NOT_FOUND", resolve_error or "remote address is not resolvable") end
+    local digest, digest_error = sends.payload_digest({message_id = request.message_id, content = request.content})
+    if not digest then return refused("INVALID_ARGUMENT", tostring(digest_error)) end
+    local body: Object = {thread_id = resolved.thread_id, target_action_id = action_id, sender_thread_id = binding.thread_id,
+        sender_action_id = binding.action_id, node_id = node_id, workspace_id = resolved.workspace_id,
+        grant_epoch = request.grant_epoch, idempotency_key = request.idempotency_key, message_id = request.message_id,
+        content = request.content, payload_digest = digest}
+    if tool.name == "session_reply" then body.in_reply_to = request.in_reply_to; body.outcome = request.outcome end
+    local reply, call_error = executor:call(tool.operation, body)
+    return reply_result(reply, call_error)
+end
 local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?): Object
     local executor, failure = subject_executor(binding, tool, values, runtime)
     if not executor then return failure :: Object end
@@ -234,6 +262,10 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
     if tool.name == "session_directory" then return list_directory(binding, executor, request) end
     if tool.name == "capabilities" then return capabilities(binding) end
     if tool.name == "session_send" or tool.name == "session_reply" then
+        local address = bounds.object(request.address)
+        if address and bounds.id(address.node_id) and bounds.id(address.node_id) ~= local_node() then
+            return remote_send(binding, tool, request, executor)
+        end
         local target, missing = inbox_target(binding, request.address)
         if not target then return missing :: Object end
         local digest, digest_err = sends.payload_digest({message_id = request.message_id, content = request.content})

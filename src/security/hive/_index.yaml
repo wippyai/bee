@@ -105,6 +105,7 @@ entries:
     - bee.threads.service:send
     - bee.threads.service:send_status
     - bee.threads.service:inbox_describe
+    - bee.threads.service:inbox_resolve
     - bee.threads.service:inbox_send
     - bee.threads.service:inbox_reply
     - bee.threads.service:notify
@@ -123,6 +124,7 @@ entries:
     - bee.threads.service:send
     - bee.threads.service:send_status
     - bee.threads.service:inbox_describe
+    - bee.threads.service:inbox_resolve
     - bee.threads.service:inbox_send
     - bee.threads.service:inbox_reply
     - bee.threads.service:notify

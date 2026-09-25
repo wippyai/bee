@@ -287,6 +287,12 @@ entries:
   method: describe
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: inbox_resolve
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: resolve
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: inbox_send
   kind: function.lua
   source: file://inbox_method.lua

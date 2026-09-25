@@ -33,10 +33,12 @@ local OWNER_SERVICE_BY_OPERATION: {[string]: string} = {
     ["bee.threads.service:inbox_reply"] = "bee.threads",
     ["bee.threads.service:notify"] = "bee.threads",
     ["bee.threads.delivery:watch"] = "bee.threads.delivery",
+    ["bee.threads.service:inbox_resolve"] = "bee.threads",
 }
 -- Every forwarded thread operation, by reference. Each is owned by the
 -- service its namespace names; a request may not choose another owner.
 M.OPERATIONS = {["bee.threads.service:send"] = true, ["bee.threads.service:send_status"] = true,
+    ["bee.threads.service:inbox_resolve"] = true,
     ["bee.threads.service:inbox_describe"] = true, ["bee.threads.service:inbox_send"] = true,
     ["bee.threads.service:inbox_reply"] = true, ["bee.threads.service:notify"] = true,
     ["bee.threads.delivery:watch"] = true}
@@ -51,6 +53,7 @@ local fields_by_operation: {[string]: {string}} = {
     -- target action, epoch and the reply's own correlation.
     ["bee.threads.service:inbox_reply"] = {"thread_id", "target_action_id", "sender_thread_id", "sender_action_id", "node_id", "workspace_id",
         "grant_epoch", "idempotency_key", "message_id", "content", "payload_digest", "in_reply_to", "outcome", "caller_node_id"},
+    ["bee.threads.service:inbox_resolve"] = {"action_id", "node_id", "caller_node_id"},
     -- A cross-node notice registers the mapped principal's watch on a thread it
     -- is a member of on this node; membership is still the owner's decision.
     ["bee.threads.service:notify"] = {"thread_id", "idempotency_key", "target_thread_id", "target_action_id", "watcher_action_id", "caller_node_id"},

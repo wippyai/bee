@@ -40,7 +40,7 @@ func stageHiveSupervisorDesktop(t *testing.T, source string) {
 	if err := yaml.Unmarshal(data, &manifest); err != nil {
 		t.Fatalf("decode Hive desktop fixture manifest: %v", err)
 	}
-	if manifest.Namespace != "bee.hive.desktop" {
+	if manifest.Namespace != "bee.hive_host.desktop" {
 		t.Fatalf("Hive desktop fixture namespace = %q", manifest.Namespace)
 	}
 	wanted := map[string]bool{"protocol": true, "catalog": true, "owner": true, "host_policy": true, "catalog_call_policy": true}
@@ -398,7 +398,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 			verbosity = "--verbose"
 		}
 		args := []string{"run", verbosity}
-		args = append(args, "--override", "bee.hive:supervisor_service:lifecycle.auto_start=false")
+		args = append(args, "--override", "bee.hive_host:supervisor_service:lifecycle.auto_start=false")
 		if feeds {
 			for _, service := range []string{"bee.approvals.service:worker_service", "bee.threads:owner_service", "bee.threads.delivery:waiter_service"} {
 				args = append(args, "--override", service+":lifecycle.auto_start=false")

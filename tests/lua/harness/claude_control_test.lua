@@ -77,7 +77,7 @@ local function read_all(stream): string
     return content
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -121,7 +121,7 @@ end
 local endpoint_handle: any = nil
 local endpoint_executor: any = nil
 local function start_endpoint(record: string, command: string): string
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
     assert(proc:start())
@@ -192,7 +192,7 @@ local function prepare_host(claude: string, port: string, ttl_ms: integer)
         list[#list + 1] = {name = APPROVER_POLICY, approvers = {APPROVER}, max_ttl_ms = 60000}
         apply(policies_entry)
     end
-    local roots = registry.get("bee.placement.native:admitted_roots")
+    local roots = registry.get("bee:placement_admitted_roots")
     if not roots then error("admitted roots entry") end
     local root_list = (roots.data :: Object).roots :: {Object}
     local admitted = false

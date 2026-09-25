@@ -15,7 +15,7 @@ def add_workspace(binary, folder, state, label, subpath):
     """Create one more catalog workspace in a new folder under the node's folder with bee workspace create."""
     env = {key: value for key, value in os.environ.items() if key not in STATE_ENVIRONMENT | {'BEE_RUNTIME', 'USER'}}
     env.update(HOME=str(folder), PATH=f'{folder}/bin:/usr/bin:/bin', XDG_CONFIG_HOME=str(folder / '.config'))
-    created = subprocess.run([str(binary), '--state', str(state), 'workspace', 'create', label, 'bee:workspace_root/' + subpath,
+    created = subprocess.run([str(binary), '--state', str(state), 'workspace', 'create', label, 'bee.environment:workspace_root/' + subpath,
                               '--new-folder'], cwd=folder, env=env, capture_output=True, text=True, timeout=120)
     assert created.returncode == 0, created.stdout + created.stderr
     line = created.stdout.strip().splitlines()[-1]

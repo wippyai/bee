@@ -93,10 +93,10 @@ local function restore_host()
     end
 end
 local function prepare_host()
-    for _, ref in ipairs({"bee:resource_roots", "bee.placement.native:resource_mode", "bee.placement.native:admitted_roots", "bee:harness_setup", "bee:credential_sources"}) do
+    for _, ref in ipairs({"bee:resource_roots", "bee:placement_resource_mode", "bee:placement_admitted_roots", "bee:harness_setup", "bee:credential_sources"}) do
         remember(ref)
     end
-    local mode = assert(registry.get("bee.placement.native:resource_mode"))
+    local mode = assert(registry.get("bee:placement_resource_mode"))
     mode.data = {mode = "host_configured"}
     apply(mode)
     local roots = assert(registry.get("bee:resource_roots"))
@@ -108,7 +108,7 @@ local function prepare_host()
         available[#available + 1] = {root_ref = ROOT, access = "write"}
         apply(roots)
     end
-    local admitted_roots = assert(registry.get("bee.placement.native:admitted_roots"))
+    local admitted_roots = assert(registry.get("bee:placement_admitted_roots"))
     local admitted_data = admitted_roots.data :: Object
     local admitted = admitted_data.roots :: {Object}
     local present = false

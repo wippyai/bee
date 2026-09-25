@@ -27,7 +27,7 @@ local function define_tests()
             local relayed = assert(process.listen("bee.test.switch.relayed", {message = true}))
             local display = tostring(assert(process.spawn("bee.launch:switch_relay", "bee:workers", self)))
             local state = desktop_lifecycle.new(self, "host", "route", WORKSPACE, DESKTOP, desktops.new())
-            local resource = {pid = display, database = "bee:client_db"} :: desktops.Desktop
+            local resource = {pid = display, database = "bee.environment:client_db"} :: desktops.Desktop
             desktop_lifecycle.adopt(state, DESKTOP, resource, "connection-1")
             local handled = desktop_lifecycle.switch(state, display, {version = 1, workspace_id = WORKSPACE, desktop_id = DESKTOP,
                 request_id = "switch-1", target_workspace_id = TARGET})

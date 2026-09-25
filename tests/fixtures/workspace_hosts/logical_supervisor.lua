@@ -16,7 +16,7 @@ local decode = require("decode")
 local recovery = require("recovery")
 
 local NODE = "bee.workspace.db:node"
-local ROOT = "bee:workspace_root"
+local ROOT = "bee.environment:workspace_root"
 type Object = {[string]: unknown}
 type Channel = channel.Channel
 type Hosts = {ready: Channel<process.Message>, replies: Channel<process.Message>,

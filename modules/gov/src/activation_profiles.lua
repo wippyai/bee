@@ -262,7 +262,7 @@ end
 
 local function missing(workspace_id: string, source_node: string, source_workspace: string): string
     return "this workspace has no activation profile for overlay " .. source_workspace .. " from node "
-        .. source_node .. "; a host adds one to bee.governance:activation_profiles"
+        .. source_node .. "; a host adds one to bee:governance_activation_profiles"
         .. " (workspace " .. workspace_id .. ")"
 end
 

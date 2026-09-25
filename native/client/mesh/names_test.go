@@ -18,12 +18,12 @@ import (
 
 func TestActorDiscoversOwnerThroughRuntimeNames(t *testing.T) {
 	ctx, dir, _, _, descriptor := localOwner(t)
-	expected := pid.PID{Node: descriptor.Node, Host: "bee.hive:supervisor_host", UniqID: "fixture-owner"}
+	expected := pid.PID{Node: descriptor.Node, Host: "bee.hive_host:supervisor_host", UniqID: "fixture-owner"}
 	names := topapi.GetEventualRegistry(ctx)
 	if names == nil {
 		t.Fatal("owner missing runtime registry")
 	}
-	if _, err := names.Register("bee.hive.supervisor/"+descriptor.Node, expected); err != nil {
+	if _, err := names.Register("bee.hive_host.supervisor/"+descriptor.Node, expected); err != nil {
 		t.Fatal(err)
 	}
 	var retired *Actor

@@ -111,7 +111,7 @@ local function descriptor(owner: string, key: string, content: string): version.
     return item
 end
 local function map_subject(subject: string, enabled: boolean)
-    local entry = registry.get("bee.hive.supervisor:principal_mappings")
+    local entry = registry.get("bee.hive_host.supervisor:principal_mappings")
     if not entry then error("principal mapping entry unavailable") end
     local mappings: {{[string]: unknown}} = {}
     if enabled then mappings[1] = {issuer = "node-1", subject_id = subject, policies = {"bee.replica_probe:replica_policy"}} end
@@ -226,7 +226,7 @@ local function destination_call(request: {[string]: unknown}, operation: string)
     return required(object(raw), operation)
 end
 local function configure_destination()
-    local profiles = assert(registry.get("bee.governance:activation_profiles"))
+    local profiles = assert(registry.get("bee:governance_activation_profiles"))
     local configured_profiles = type(profiles.data) == "table" and object(profiles.data).profiles or nil
     local approvals = assert(registry.get("bee:approver_policies"))
     local configured_approvals = type(approvals.data) == "table" and object(approvals.data).policies or nil
@@ -248,7 +248,7 @@ local function configure_agent_destination(scenario: AgentScenario)
     -- activation policy. Trusted fixture setup installs this policy in source
     -- so the same ordinary desktop composition can recover it after the
     -- headless coordinator exits.
-    local profiles = assert(registry.get("bee.governance:activation_profiles"))
+    local profiles = assert(registry.get("bee:governance_activation_profiles"))
     local approvals = assert(registry.get("bee:approver_policies"))
     local configured_profiles = object(profiles.data).profiles
     if type(configured_profiles) ~= "table" or #configured_profiles ~= 1 then
@@ -421,7 +421,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
     end
     local function start(): string
         local pid = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-            :spawn_monitored("bee.hive.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {remote}})))
+            :spawn_monitored("bee.hive_host.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {remote}})))
         local deadline = time.now():add("60s")
         while time.now():before(deadline) do
             if client.supervisor() == pid then return pid end

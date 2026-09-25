@@ -7,7 +7,7 @@ entries:
     actions:
     - db.get
     resources:
-    - bee:workspace_db
+    - bee.environment:workspace_db
     effect: allow
 - name: workspace_storage_boundary
   kind: security.policy
@@ -17,8 +17,8 @@ entries:
     actions:
     - db.get
     resources:
-    - bee:workspace_db
-    - bee:client_db
+    - bee.environment:workspace_db
+    - bee.environment:client_db
     - bee.client.db:*
     - bee.workspace.db:*
     effect: deny
@@ -28,7 +28,7 @@ entries:
     actions:
     - db.get
     resources:
-    - bee:client_db
+    - bee.environment:client_db
     effect: allow
 - name: workspace_catalog_read_policy
   kind: security.policy
@@ -71,7 +71,7 @@ entries:
     comment: The catalog backend's store, the host's admitted roots and its own execution
   policy:
     actions: [db.get, registry.get, bee.workspaces.execute]
-    resources: [bee:workspace_db, bee.resources:roots_ref, bee:resource_roots, bee.workspace.catalog:backend]
+    resources: [bee.environment:workspace_db, bee.resources:roots_ref, bee:resource_roots, bee.workspace.catalog:backend]
     effect: allow
 - name: workspace_catalog_volume_policy
   kind: security.policy

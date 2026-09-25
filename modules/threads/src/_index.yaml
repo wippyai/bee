@@ -25,6 +25,13 @@ entries:
     path: .host
   - entry: bee.threads.delivery:waiter_service
     path: .host
+- name: waiter_policies
+  kind: ns.requirement
+  meta:
+    comment: Host-selected policy grants for the delivery waiter
+  targets:
+  - entry: bee.threads.delivery:waiter_service
+    path: .lifecycle.security.policies
 - name: database_ref
   kind: registry.entry
   meta:
@@ -380,7 +387,6 @@ entries:
 - name: owner_service
   kind: process.service
   process: bee.threads:owner
-  host: bee:workers
   lifecycle:
     auto_start: true
     restart:

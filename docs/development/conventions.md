@@ -19,7 +19,8 @@ host wiring lives in the app root or beside its component.
 | `src/_index.yaml` | Host composition, resources and protected admission wiring |
 | `src/deps` | One `bee.deps:<module>` dependency per composed module with the host-selected requirement parameters |
 | `src/security`, `src/security/<area>` | Host-selected app policies as `bee.security` and `bee.security.<area>` |
-| `src/environment` | Host environment, workspace and client stores |
+| `src/environment` | Host environment, workspace and client stores as `bee.environment` |
+| `src/hive_host` | App-owned Hive supervisor, desktop bridge and open workspaces operation as `bee.hive_host` |
 | `src/workspace` | Workspace persistence, application checkpoints, workspace identity and the node catalog operations and extension contract |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
 | `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
@@ -44,7 +45,18 @@ host wiring lives in the app root or beside its component.
 
 The app never writes into a module namespace; it overrides module entries
 only through `bee.deps` requirement parameters. Module requirement defaults
-never point at app ids.
+never point at app ids. Module `process.service` entries take their host and
+policy grants through requirements (`process_host`, per-service policy lists);
+their entries keep empty underlays the host fills.
+
+`bee.harness.host:environment` is not composed: Bee's native host component
+registers it at boot (`native/launch/component.go`) with the `home`, `cwd`
+and `self` facts plus executable discovery, so module defaults may reference
+it in every composition, including isolated module tests.
+
+A module-owned `fs.directory` with a project-relative path must set
+`base: project`; without it the runtime resolves the path against the owning
+module's resource root instead of the project.
 
 Registry IDs are public identities independent of file paths. `main.lua` is an
 actor entry point, `app.lua` a default app entry point and `view.lua` a

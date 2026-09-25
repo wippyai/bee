@@ -68,13 +68,13 @@ entries:
   kind: security.policy
   policy:
     actions: [bee.client.desktops.read]
-    resources: [bee:client_db]
+    resources: [bee.environment:client_db]
     effect: allow
 - name: desktop_allocate
   kind: security.policy
   policy:
     actions: [bee.client.desktops.allocate]
-    resources: [bee:client_db]
+    resources: [bee.environment:client_db]
     effect: allow
 - name: authority
   kind: process.lua

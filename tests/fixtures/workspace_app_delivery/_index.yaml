@@ -3,12 +3,12 @@ namespace: bee.workspace_app_probe
 entries:
 - name: workspace
   kind: env.variable
-  storage: bee:workspace_environment
+  storage: bee.environment:workspace_environment
   variable: BEE_WORKSPACE_APP_WORKSPACE
   readonly: true
 - name: brief
   kind: env.variable
-  storage: bee:workspace_environment
+  storage: bee.environment:workspace_environment
   variable: BEE_WORKSPACE_APP_BRIEF
   readonly: true
 - name: agent_policy

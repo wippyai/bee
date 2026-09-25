@@ -8,8 +8,8 @@ local function state(node: string, other: string): State
     if not value then error(tostring(err)) end
     return value
 end
-local apid = "{alpha@bee.hive:supervisor_host|a1}"
-local bpid = "{beta@bee.hive:supervisor_host|b1}"
+local apid = "{alpha@bee.hive_host:supervisor_host|a1}"
+local bpid = "{beta@bee.hive_host:supervisor_host|b1}"
 local function define_tests()
     test.describe("Peer recovery review", function()
         test.it("bounds handshake duration and rejects a backwards clock", function()

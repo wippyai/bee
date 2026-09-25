@@ -203,7 +203,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                     client_policies[#client_policies + 1] = assert(security.policy(name))
                 end
                 local started, start_error = desktops.start(retained,
-                    {host = host, workspace_id = workspace_id, database = "bee:client_db", width = 100, height = 32,
+                    {host = host, workspace_id = workspace_id, database = "bee.environment:client_db", width = 100, height = 32,
                         application = initial_application, options = {version = 1, quit_mode = "supervisor",
                             legacy_desktop = value.desktop, inherit_appearance = value.fresh, node_defaults = true, hive_supervisor = retained_owner}}, security.new_scope(client_policies))
                 if not started then error(tostring(start_error)) end

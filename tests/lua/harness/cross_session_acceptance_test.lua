@@ -73,10 +73,10 @@ local function admit_root()
         available[#available + 1] = {root_ref = ROOT, access = "write"}
         apply(catalog_roots)
     end
-    local mode = assert(registry.get("bee.placement.native:resource_mode"))
+    local mode = assert(registry.get("bee:placement_resource_mode"))
     mode.data = {mode = "host_configured"}
     apply(mode)
-    local entry = assert(registry.get("bee.placement.native:admitted_roots"))
+    local entry = assert(registry.get("bee:placement_admitted_roots"))
     local roots = (entry.data :: Object).roots :: {Object}
     for _, root in ipairs(roots) do
         if root.root_ref == ROOT then return end

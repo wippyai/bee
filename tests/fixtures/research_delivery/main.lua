@@ -149,7 +149,7 @@ local function main()
     local VERSION = "1.0.0"
     local local_node = assert(system.node.id())
 
-    local pub_entry = assert(registry.get("bee.governance:publication_profiles"))
+    local pub_entry = assert(registry.get("bee:governance_publication_profiles"))
     local pub_data = object(pub_entry.data) or {}
     pub_data.profiles = {
         {
@@ -163,7 +163,7 @@ local function main()
 
     -- 3 host activation profile narrow namespace bee.research.demo,
     --   allowed kinds library.lua/process.lua, explicit approval policy and overlay owner.
-    local act_entry = assert(registry.get("bee.governance:activation_profiles"))
+    local act_entry = assert(registry.get("bee:governance_activation_profiles"))
     local act_data = object(act_entry.data) or {}
     act_data.profiles = {
         {

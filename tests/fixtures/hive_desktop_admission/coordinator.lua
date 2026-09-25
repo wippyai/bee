@@ -14,7 +14,7 @@ local function main(node: string)
     if node == "node-0" then
         -- The supervisor runs under the host service's own grants; the fixture
         -- adds only the registration of its names.
-        local service = registry.get("bee.hive:supervisor_service")
+        local service = registry.get("bee.hive_host:supervisor_service")
         local data: unknown = service and service.data
         local lifecycle: unknown = type(data) == "table" and data.lifecycle or nil
         local grant: unknown = type(lifecycle) == "table" and lifecycle.security or nil
@@ -32,7 +32,7 @@ local function main(node: string)
             policies[#policies + 1] = policy
         end
         local pid, err = process.with_options({}):with_scope(security.new_scope(policies)):spawn_monitored(
-            "bee.hive.supervisor:main", "bee.hive:supervisor_host", {configured_nodes = {}, desktop = {
+            "bee.hive_host.supervisor:main", "bee.hive_host:supervisor_host", {configured_nodes = {}, desktop = {
                 execution = EXECUTION, expires_at = time.now():add("120s"):utc():format("2006-01-02T15:04:05.000Z07:00"),
                 allowed_nodes = {"node-1", "node-2"}, application = "bee.console:app"}})
         if not pid then error(tostring(err)) end
@@ -55,7 +55,7 @@ local function main(node: string)
             local policy, err = security.policy("bee.desktop_admission_probe:client_policy")
             if not policy then error(tostring(err)) end
             local child, spawn_error = process.with_options({}):with_scope(security.new_scope({policy}))
-                :spawn_monitored("bee.desktop_admission_probe:client", "bee.hive.desktop:display_host", EXECUTION, command)
+                :spawn_monitored("bee.desktop_admission_probe:client", "bee.hive_host.desktop:display_host", EXECUTION, command)
             if not child then error(tostring(spawn_error)) end
             local timeout = time.after("45s")
             while true do

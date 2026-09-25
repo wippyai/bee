@@ -14,7 +14,7 @@ entries:
     - bee.resources:db
     - bee.resources:database_ref
     - bee.resources:roots_ref
-    - bee.placement.native:admitted_roots
+    - bee:placement_admitted_roots
     - node
     - '*'
     effect: allow

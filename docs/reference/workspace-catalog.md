@@ -163,7 +163,7 @@ never stops the host, and its displays quit through their own lifecycle. A
 supervisor selected by the folder's root (classic mode and `bee start`) still
 spawns and owns its host.
 
-The desktop bridge in the Hive supervisor (`src/hive/desktop`) composes the
+The desktop bridge in the Hive supervisor (`src/hive_host/desktop`) composes the
 folder workspace when the host selects it (`desktop.folder`, default true) and
 starts a leased supervisor for any other workspace a client attaches to, at
 most 32 at once; the workspace's last detach stops that supervisor and so
@@ -221,7 +221,7 @@ The command joins the owner as an enrolled local client and calls service
 an enrolled local client of its own node and only while the host grants it
 `bee.workspaces.command` on the operation (`bee.security.hive:workspace_command_policy`,
 selected for the supervisor service). It runs the command on its worker
-`bee.hive.supervisor:workspace_command`, which again requires that grant from
+`bee.hive_host.supervisor:workspace_command`, which again requires that grant from
 its caller and calls the catalog operation under the policies the host attaches
 to the worker (`bee.security.storage:workspace_catalog_read_policy`,
 `bee.security.storage:workspace_catalog_manage_policy`, `bee.security.hive:workspace_command_catalog_policy`);
@@ -246,14 +246,14 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   it; otherwise it shows a workspace picker (one catalog page, `/` label
   search, PgUp/PgDn paging, Enter to open). Ctrl+] detaches and returns to the
   picker; Ctrl+Q leaves.
-- **Hive member**: `bee.hive:workspaces` is an open Hive operation that
+- **Hive member**: `bee.hive_host:workspaces` is an open Hive operation that
   pages a node's catalog (`{label?, after?, limit?}` to `{node_id, workspaces,
   next_after?}`, each row with whether a host serves it); the Hive app lists and
   searches the selected node's workspaces through it. A Hive display client
   from a node the host admits (`desktop.allowed_nodes`) attaches to any of the
   node's workspaces by identity through the bridge's lease path. The Hive
   Manager's Control and Observe open the selected workspace of another node as
-  a remote view in its window: a view process (`bee.hive.desktop:viewer`) on
+  a remote view in its window: a view process (`bee.hive_host.desktop:viewer`) on
   the display client host lists the owner's displays naming no execution,
   attaches through that node's bridge (control reuses a display without a
   controller and allocates one only after definite `DESKTOP_CONTROLLED`
@@ -269,7 +269,7 @@ Today a node's bridge admits a native display client only from a node its host
 grant names (`desktop.allowed_nodes`) or, with `local_clients`, from a node its
 local enrollment lists. Native launch configures `allowed_nodes` empty, so a
 peer that joined the hive through `bee hive invite` and `bee hive join` reaches
-the node's open operations (such as `bee.hive:workspaces`) but not its
+the node's open operations (such as `bee.hive_host:workspaces`) but not its
 desktops, and the Hive Manager's remote view is refused there. The proposal:
 the owner's enrollment already writes `{nodes, peers}` from its pinned peer keys;
 the bridge would admit display clients from a pinned peer only when the joining

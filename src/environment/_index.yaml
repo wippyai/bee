@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee
+namespace: bee.environment
 entries:
 - name: workspace_environment
   kind: env.storage.os
@@ -7,18 +7,18 @@ entries:
     auto_start: true
 - name: workspace_db_path
   kind: env.variable
-  storage: bee:workspace_environment
+  storage: bee.environment:workspace_environment
   variable: BEE_WORKSPACE_DB
   default: .wippy/workspace.db
   readonly: true
 - name: workspace_db
   kind: db.sql.sqlite
-  file: ${env:bee:workspace_db_path}
+  file: ${env:bee.environment:workspace_db_path}
   lifecycle:
     auto_start: true
 - name: client_db
   kind: db.sql.sqlite
-  file: ${env:bee:workspace_db_path}.client
+  file: ${env:bee.environment:workspace_db_path}.client
   lifecycle:
     auto_start: true
 - name: workspace_root
@@ -33,7 +33,7 @@ entries:
   readonly: true
 - name: machine_login_source
   kind: fs.directory
-  directory: ${env:bee:machine_home}
+  directory: ${env:bee.environment:machine_home}
   base: project
   mode: '0500'
   auto_init: false

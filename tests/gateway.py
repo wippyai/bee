@@ -102,8 +102,8 @@ def write_gateway_host(folder, native):
         dependency("dependency_hub", "bee/hub", (("process_host", "bee:workers"),)),
         dependency("dependency_governance", "bee/governance", (
             ("target_db", "bee.governance:db"),
-            ("target_publication_profiles", "bee.governance:publication_profiles"),
-            ("target_activation_profiles", "bee.governance:activation_profiles"),
+            ("target_publication_profiles", "bee:governance_publication_profiles"),
+            ("target_activation_profiles", "bee:governance_activation_profiles"),
             ("target_approval_request_policy", "bee:approval_request_policy"),
             ("target_approval_consume_policy", "bee:approval_consume_policy"),
         )),
@@ -127,8 +127,8 @@ def write_gateway_host(folder, native):
         # This tiny resource pair preserves the configuration renderer's
         # scope-only proof without bringing native placement implementation
         # into the component fixture.
-        {"name": "placement_store_policy", "kind": "security.policy", "policy": {"actions": ["db.get", "exec.get"], "resources": ["bee.placement.native:db", "bee.placement.native:executor"], "effect": "allow"}},
-        {"name": "placement_exec_policy", "kind": "security.policy", "policy": {"actions": ["exec.get"], "resources": ["bee.placement.native:executor"], "effect": "allow"}},
+        {"name": "placement_store_policy", "kind": "security.policy", "policy": {"actions": ["db.get", "exec.get"], "resources": ["bee.placement.native:db", "bee:placement_executor"], "effect": "allow"}},
+        {"name": "placement_exec_policy", "kind": "security.policy", "policy": {"actions": ["exec.get"], "resources": ["bee:placement_executor"], "effect": "allow"}},
     ]
     entries.extend(selected_host_entries())
     if native:

@@ -32,7 +32,7 @@ entries:
     - bee.hive.telemetry:presence
     - bee.hive.telemetry:stats
     - bee.hive.telemetry:catalog_list
-    - bee.hive:workspaces
+    - bee.hive_host:workspaces
     - bee.threads:capabilities
     effect: allow
 - name: hive_policy_exposure_policy
@@ -63,8 +63,8 @@ entries:
     - funcs.call
     resources:
     - node
-    - bee.hive.supervisor:principal_mappings
-    - bee.hive.supervisor:invoke_check
+    - bee.hive_host.supervisor:principal_mappings
+    - bee.hive_host.supervisor:invoke_check
     - bee.node.binding:describe
     - bee.node.binding:update_metadata
     - bee.node.binding:snapshot
@@ -103,7 +103,7 @@ entries:
     resources:
     - bee.threads.service:send
     - bee.threads.service:send_status
-    - bee.hive.supervisor:invoke_check
+    - bee.hive_host.supervisor:invoke_check
     effect: allow
 - name: hive_thread_exposure_policy
   kind: security.policy
@@ -135,7 +135,7 @@ entries:
     - bee.hive.telemetry:presence
     - bee.hive.telemetry:stats
     - bee.hive.telemetry:catalog_list
-    - bee.hive:workspaces
+    - bee.hive_host:workspaces
     - bee.threads:capabilities
     effect: allow
 - name: hive_supervisor_spawn_deny
@@ -150,7 +150,7 @@ entries:
     - process.host
     resources:
     - bee.hive:supervisor
-    - bee.hive:supervisor_host
+    - bee.hive_host:supervisor_host
     effect: deny
 - name: hive_names_policy
   kind: security.policy
@@ -165,8 +165,8 @@ entries:
     - process.registry.unregister
     - process.registry.unregister.eventual
     resources:
-    - bee.hive.supervisor
-    - 'bee.hive.supervisor/*'
+    - bee.hive_host.supervisor
+    - 'bee.hive_host.supervisor/*'
     effect: allow
 - name: hive_advertise_policy
   kind: security.policy
@@ -185,9 +185,9 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.hive.supervisor:execute
-    - bee.hive.supervisor:admit_policy
-    - bee.hive.supervisor:advertise
+    - bee.hive_host.supervisor:execute
+    - bee.hive_host.supervisor:admit_policy
+    - bee.hive_host.supervisor:advertise
     effect: allow
 - name: hive_owner_stop_policy
   kind: security.policy
@@ -222,7 +222,7 @@ entries:
     - funcs.call
     - bee.workspaces.command
     resources:
-    - bee.hive.supervisor:workspace_command
+    - bee.hive_host.supervisor:workspace_command
     - bee.workspace:create
     - bee.workspace:list
     - bee.workspace:archive
@@ -242,4 +242,12 @@ entries:
     - bee.workspace.catalog:archive
     - bee.workspace.catalog:restore
     - bee.workspace.catalog:roots
+    effect: allow
+- name: workspaces_policy
+  kind: security.policy
+  meta:
+    comment: The workspaces operation reads the catalog through its owner operations
+  policy:
+    actions: [funcs.call]
+    resources: [bee.workspace.catalog:list, bee.workspace.catalog:search]
     effect: allow

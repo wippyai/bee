@@ -7,8 +7,8 @@ local M = {}
 type State = {configured_nodes: {[string]: boolean}}
 -- ENTRY is the host-owned registry entry. A host overlay replaces its data with
 -- the nodes it admits; discovery and membership never write it.
-M.ENTRY = "bee.hive.supervisor:enrollment_nodes"
-M.TYPE = "bee.hive.supervisor_enrollment"
+M.ENTRY = "bee.hive_host.supervisor:enrollment_nodes"
+M.TYPE = "bee.hive_host.supervisor_enrollment"
 -- nodes are local clients of this owner: they reach the desktop bridge and the
 -- invite operations. peers are nodes of this node's hive: they establish a
 -- supervisor session and reach only the operations the exposure levels admit.

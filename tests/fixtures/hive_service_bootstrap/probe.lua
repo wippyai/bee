@@ -57,7 +57,7 @@ local function main(remote: string)
             assert(io.print("BEE_HIVE_SERVICE probe_passed"))
         elseif command == "verify-security" then
             -- 1. Deny spawning supervisor on protected supervisor host
-            local p_pid, p_err = process.spawn("bee.hive.supervisor:main", types.SUPERVISOR_HOST)
+            local p_pid, p_err = process.spawn("bee.hive_host.supervisor:main", types.SUPERVISOR_HOST)
             if p_pid ~= nil or p_err == nil then
                 error("ordinary application was able to spawn on supervisor host: " .. tostring(p_pid))
             end

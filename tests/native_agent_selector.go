@@ -1207,7 +1207,7 @@ func readRecoveryWorkspace(state string) (recoveryWorkspace, error) {
 	var encoded string
 	if err := db.QueryRow(`SELECT state.value FROM workspace_state AS state
         JOIN workspaces AS catalog ON catalog.workspace_id = state.workspace_id
-        WHERE catalog.root_ref = 'bee:workspace_root' AND catalog.subpath = '' AND catalog.state = 'active'`).Scan(&encoded); err != nil {
+        WHERE catalog.root_ref = 'bee.environment:workspace_root' AND catalog.subpath = '' AND catalog.state = 'active'`).Scan(&encoded); err != nil {
 		return recoveryWorkspace{}, err
 	}
 	var snapshot recoveryWorkspace

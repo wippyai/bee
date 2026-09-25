@@ -52,12 +52,11 @@ entries:
 - name: waiter_service
   kind: process.service
   process: bee.threads.delivery:waiter
-  host: bee:workers
   lifecycle:
     auto_start: true
     security:
       actor: {id: bee.threads.waiter}
-      policies: [bee.security.threads:thread_waiter_policy]
+      policies: []
     restart:
       max_attempts: 10
 - name: claim

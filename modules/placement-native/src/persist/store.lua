@@ -154,7 +154,7 @@ function M.private_home(row: Row): (boolean?, string?)
     end
     local selected = request.environment_refs.HOME
     if selected == nil then return true, nil end
-    if selected == "bee:machine_home" then return false, nil end
+    if selected == "bee.environment:machine_home" then return false, nil end
     return nil, "retained placement request has an unsupported HOME selection"
 end
 local function rollback(tx: sql.Transaction)

@@ -20,7 +20,6 @@ entries:
   kind: ns.requirement
   meta:
     comment: The read-only documentation filesystem selected by the host
-  default: bee:docs_corpus
   targets:
   - entry: bee.docs:corpus_ref
     path: .resource_ref

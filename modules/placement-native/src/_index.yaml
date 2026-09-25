@@ -47,7 +47,8 @@ entries:
 - name: target_root
   kind: ns.requirement
   meta:
-    comment: Filesystem root that holds attempt homes and retained sessions; the host supplies bee:placement_root, whose volume mount the host owns
+    comment: Filesystem root that holds attempt homes and retained sessions; the module default resolves against the project and the host replaces it
+  default: bee.placement.native:root
   targets:
   - entry: bee.placement.native:root_ref
     path: .resource_ref
@@ -60,11 +61,17 @@ entries:
     path: .host_ref
   - entry: bee.placement.native:sweeper_service
     path: .host
+- name: sweeper_policies
+  kind: ns.requirement
+  meta:
+    comment: Host-selected policy grants for the supervision sweeper
+  targets:
+  - entry: bee.placement.native:sweeper_service
+    path: .lifecycle.security.policies
 - name: target_executor
   kind: ns.requirement
   meta:
     comment: Host-selected native executor; a launch request never selects it
-  default: bee.placement.native:executor
   targets:
   - entry: bee.placement.native:executor_ref
     path: .resource_ref
@@ -72,7 +79,6 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected read-only filesystem for executable measurement
-  default: bee.placement.native:host_files
   targets:
   - entry: bee.placement.native:host_files_ref
     path: .resource_ref
@@ -80,7 +86,6 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected admissible resource roots; a launch request cannot choose this policy
-  default: bee.placement.native:admitted_roots
   targets:
   - entry: bee.placement.native:admitted_roots_ref
     path: .resource_ref
@@ -88,7 +93,6 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected placement resource mode; a launch request cannot choose it
-  default: bee.placement.native:resource_mode
   targets:
   - entry: bee.placement.native:resource_mode_ref
     path: .resource_ref
@@ -259,12 +263,11 @@ entries:
 - name: sweeper_service
   kind: process.service
   process: bee.placement.native:sweeper
-  host: bee:workers
   lifecycle:
     auto_start: true
     security:
       actor: {id: bee.placement.sweeper}
-      policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.placement:placement_sweeper_policy, bee.security.gateway:gateway_supervision_policy]
+      policies: []
 - name: binding
   kind: contract.binding
   contracts:
@@ -388,41 +391,16 @@ entries:
   variable: BEE_PLACEMENT_ROOT
   default: .wippy/placement
   readonly: true
-- name: path
-  kind: env.variable
-  storage: bee.placement.native:environment
-  variable: PATH
-  default: /usr/local/bin:/usr/bin:/bin
-  readonly: true
 - name: db
   kind: db.sql.sqlite
   file: ${env:bee.placement.native:db_path}
   lifecycle:
     auto_start: true
-- name: host_files
+- name: root
   kind: fs.directory
   meta:
-    comment: The host filesystem as one volume for executable measurement; this entry requests readonly access
-  directory: /
-  auto_init: false
-  readonly: true
-- name: executor
-  kind: exec.native
-  meta:
-    comment: Children start with a clean environment; PATH comes from the host, everything else from the admitted request
-  default_env:
-    PATH: ${env:bee.placement.native:path}
-- name: admitted_roots
-  kind: registry.entry
-  meta:
-    type: bee.placement_roots
-    comment: fs.directory entries a launch may name as resource roots on this host with the widest access allowed; host policy, not a delegated grant
-  data:
-    roots: []
-- name: resource_mode
-  kind: registry.entry
-  meta:
-    type: bee.placement_resource_mode
-    comment: host_configured or granted; selected by the host, never by a request
-  data:
-    mode: granted
+    comment: Module-owned attempt-home default resolving against the project; the host replaces it through target_root
+  directory: ${env:bee.placement.native:root_path}
+  base: project
+  auto_init: true
+  mode: '0700'

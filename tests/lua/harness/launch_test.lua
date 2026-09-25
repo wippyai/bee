@@ -97,7 +97,7 @@ local function carrier_io(): machine.IO
     }
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -140,7 +140,7 @@ local function prepare_host(workspace: string)
         roots[#roots + 1] = {root_ref = ROOT, access = "write"}
         apply(roots_entry)
     end
-    local native_roots = registry.get("bee.placement.native:admitted_roots")
+    local native_roots = registry.get("bee:placement_admitted_roots")
     if not native_roots then error("native admitted roots") end
     local native_data = native_roots.data :: {[string]: unknown}
     local admitted = native_data.roots :: {{[string]: unknown}}
@@ -156,7 +156,7 @@ local function prepare_host(workspace: string)
     setup_data.roots = {project = ROOT, session = ROOT}
     setup_data.credentials = {anthropic = {provider = "claude", source = {kind = "env_variable", ref = SOURCE}}}
     apply(setup_entry)
-    local mode_entry = registry.get("bee.placement.native:resource_mode")
+    local mode_entry = registry.get("bee:placement_resource_mode")
     if not mode_entry then error("resource mode") end
     local mode_data = mode_entry.data :: {[string]: unknown}
     mode_data.mode = "granted"
@@ -204,7 +204,7 @@ local function with_overrides(definition_overrides: {string}, policy_overrides: 
     if not ok then error(tostring(failure)) end
 end
 local function restore_host()
-    local mode_entry = registry.get("bee.placement.native:resource_mode")
+    local mode_entry = registry.get("bee:placement_resource_mode")
     if not mode_entry then error("resource mode") end
     local mode_data = mode_entry.data :: {[string]: unknown}
     mode_data.mode = "host_configured"

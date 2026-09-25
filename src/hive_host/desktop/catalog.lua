@@ -30,7 +30,7 @@ M.CATALOG_LIST = "bee.workspace.catalog:list"
 M.CATALOG_SEARCH = "bee.workspace.catalog:search"
 M.LIST_DESKTOPS = "bee.client:list_desktops"
 M.ALLOCATE_DESKTOP = "bee.client:allocate_desktop"
-M.CLIENT_DATABASE = "bee:client_db"
+M.CLIENT_DATABASE = "bee.environment:client_db"
 function M.new(): State return {} end
 local function answer(recipient: string, reply: types.Reply)
     process.send(recipient, types.TOPIC_REPLY, reply)

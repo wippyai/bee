@@ -50,7 +50,7 @@ def run():
         database = project / "src/local_database"
         database.mkdir()
         (database / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "bee.client.db", "entries": [
-            {"name": "local", "kind": "db.sql.sqlite", "file": "${env:bee:workspace_db_path}.client"},
+            {"name": "local", "kind": "db.sql.sqlite", "file": "${env:bee.environment:workspace_db_path}.client"},
         ]}, sort_keys=False))
         index = project / "src/client/_index.yaml"
         document = yaml.safe_load(index.read_text())

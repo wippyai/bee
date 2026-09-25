@@ -154,6 +154,27 @@ entries:
     approvers:
     - definition_id: bee.inbox:app
     max_ttl_ms: 600000
+- name: governance_publication_profiles
+  kind: registry.entry
+  meta:
+    type: bee.governance.publication_profiles
+    comment: Host-selected source workspaces and overlay owners available for immutable publication; workspace_applications publishes the overlays a workspace's own agents author under the app.<overlay_id> naming rule
+  data:
+    profiles: []
+    workspace_applications: true
+- name: governance_activation_profiles
+  kind: registry.entry
+  meta:
+    type: bee.governance.activation_profiles
+    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications this node's agents author for their own workspace, applied only after the person approves each version in Approvals; remote artifacts cannot edit this entry
+  data:
+    profiles: []
+    workspace_applications:
+      approval_policy: workspace-application-delivery
+      kinds: [process.lua, library.lua, ns.requirement]
+      modules: [tty, process, channel, json, time, uuid, base64, hash]
+      policies: [bee.security:ordinary_app_subsystem_boundary]
+      thread_access: none
 - name: credential_sources
   kind: registry.entry
   meta:
@@ -174,21 +195,21 @@ entries:
       provider: claude
       projection_kinds:
       - environment
-    - ref: bee:machine_login_source
+    - ref: bee.environment:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: codex
       projection_kinds:
       - file
       path: .codex/auth.json
-    - ref: bee:machine_login_source
+    - ref: bee.environment:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: claude
       projection_kinds:
       - file
       path: .claude/.credentials.json
-    - ref: bee:machine_login_source
+    - ref: bee.environment:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: agy
@@ -196,7 +217,7 @@ entries:
       - file
       path: .gemini/antigravity-cli/antigravity-oauth-token
       setup_path: .gemini/antigravity-cli/cache/onboarding.json
-    - ref: bee:machine_login_source
+    - ref: bee.environment:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: grok
@@ -206,7 +227,7 @@ entries:
       setup_path: .grok/config.toml
       setup_destination: .grok/.bee-global-config.toml
       setup_content_format: opaque
-    - ref: bee:machine_login_source
+    - ref: bee.environment:machine_login_source
       workspace_id: '*'
       audience: '*'
       provider: muse
@@ -294,8 +315,8 @@ entries:
     comment: Host-selected first-use roots keyed by definition-declared resource names
   data:
     roots:
-      project: bee:workspace_root
-      session: bee:placement_root
+      project: bee.environment:workspace_root
+      session: bee.placement.native:root
     credentials:
       claude_api_key:
         provider: claude
@@ -307,31 +328,31 @@ entries:
         provider: codex
         source:
           kind: fs_directory
-          ref: bee:machine_login_source
+          ref: bee.environment:machine_login_source
         optional: true
       muse_login:
         provider: muse
         source:
           kind: fs_directory
-          ref: bee:machine_login_source
+          ref: bee.environment:machine_login_source
         optional: true
       agy_login:
         provider: agy
         source:
           kind: fs_directory
-          ref: bee:machine_login_source
+          ref: bee.environment:machine_login_source
         optional: true
       grok_login:
         provider: grok
         source:
           kind: fs_directory
-          ref: bee:machine_login_source
+          ref: bee.environment:machine_login_source
         optional: true
       claude_login:
         provider: claude
         source:
           kind: fs_directory
-          ref: bee:machine_login_source
+          ref: bee.environment:machine_login_source
         optional: true
 - name: harness_activation
   kind: registry.entry
@@ -723,34 +744,41 @@ entries:
       - high
     profile_instructions: true
     prepare_options: {}
-- name: governance_publication_profiles
-  kind: registry.entry
+- name: placement_path
+  kind: env.variable
   meta:
-    type: bee.governance.publication_profiles
-    comment: Host-selected source workspaces and overlay owners available for immutable publication; workspace_applications publishes the overlays a workspace's own agents author under the app.<overlay_id> naming rule
-  data:
-    profiles: []
-    workspace_applications: true
-- name: governance_activation_profiles
-  kind: registry.entry
-  meta:
-    type: bee.governance.activation_profiles
-    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications this node's agents author for their own workspace, applied only after the person approves each version in Approvals; remote artifacts cannot edit this entry
-  data:
-    profiles: []
-    workspace_applications:
-      approval_policy: workspace-application-delivery
-      kinds: [process.lua, library.lua, ns.requirement]
-      modules: [tty, process, channel, json, time, uuid, base64, hash]
-      policies: [bee:ordinary_app_subsystem_boundary]
-      thread_access: none
-- name: placement_root
+    comment: Host-selected executable search path for native placement children
+  storage: bee.placement.native:environment
+  variable: PATH
+  default: /usr/local/bin:/usr/bin:/bin
+  readonly: true
+- name: placement_host_files
   kind: fs.directory
   meta:
-    comment: Host-selected placement root holding attempt homes and retained sessions; the host owns this volume mount
-  directory: ${env:bee.placement.native:root_path}
-  auto_init: true
-  mode: '0700'
+    comment: The host filesystem as one volume for executable measurement; this entry requests readonly access
+  directory: /
+  auto_init: false
+  readonly: true
+- name: placement_executor
+  kind: exec.native
+  meta:
+    comment: Children start with a clean environment; PATH comes from the host, everything else from the admitted request
+  default_env:
+    PATH: ${env:bee:placement_path}
+- name: placement_admitted_roots
+  kind: registry.entry
+  meta:
+    type: bee.placement_roots
+    comment: fs.directory entries a launch may name as resource roots on this host with the widest access allowed; host policy, not a delegated grant
+  data:
+    roots: []
+- name: placement_resource_mode
+  kind: registry.entry
+  meta:
+    type: bee.placement_resource_mode
+    comment: host_configured or granted; selected by the host, never by a request
+  data:
+    mode: granted
 - name: resource_roots
   kind: registry.entry
   meta:
@@ -759,9 +787,9 @@ entries:
       names
   data:
     roots:
-    - root_ref: bee:workspace_root
+    - root_ref: bee.environment:workspace_root
       access: write
-    - root_ref: bee:placement_root
+    - root_ref: bee.placement.native:root
       access: write
 - name: resources_workspace_extension
   kind: contract.binding

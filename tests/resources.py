@@ -18,7 +18,7 @@ PROBE = r'''
 local funcs = require("funcs")
 local registry = require("registry")
 local fs = require("fs")
-local ROOT_REF = "bee:placement_root"
+local ROOT_REF = "bee.placement.native:root"
 local WORKSPACE = "resource-restart"
 local ACTOR = "bee.test.resource_probe"
 local KEY = "restart-grant-key"
@@ -39,7 +39,7 @@ local function credential(method: string, request: {[string]: unknown}): {[strin
     return value.value :: {[string]: unknown}
 end
 local function admit()
-    local roots_entry = registry.get("bee.placement.native:admitted_roots")
+    local roots_entry = registry.get("bee:placement_admitted_roots")
     assert(roots_entry, "admitted roots entry")
     local roots = (roots_entry.data :: {[string]: unknown}).roots :: {{[string]: unknown}}
     local has_root = false

@@ -64,7 +64,7 @@ local function define_tests()
         end)
         test.it("carries working directory, thread, placement and saved profile choices into a launch", function()
             local chosen = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k",
-                workdir = {root_ref = "bee:workspace_root", path = "legacy/app"}, thread = {title = "Scan"}, placement = "native",
+                workdir = {root_ref = "bee.environment:workspace_root", path = "legacy/app"}, thread = {title = "Scan"}, placement = "native",
                 saved_profile_id = "p", saved_profile_revision = 1}})
             if not chosen then error("launch arguments") end
             test.eq((chosen.workdir :: Object).path, "legacy/app")

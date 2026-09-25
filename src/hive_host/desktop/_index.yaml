@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.hive.desktop
+namespace: bee.hive_host.desktop
 entries:
 - name: display_host
   kind: process.host
@@ -18,7 +18,7 @@ entries:
   modules: [funcs, process, channel]
   imports:
     types: bee.hive:types
-    protocol: bee.hive.desktop:protocol
+    protocol: bee.hive_host.desktop:protocol
     bounds: bee.hive:bounds
     contract: bee.protocol:application
 - name: owner
@@ -26,10 +26,10 @@ entries:
   source: file://owner.lua
   modules: [process, security, channel, time, uuid, funcs]
   imports:
-    protocol: bee.hive.desktop:protocol
+    protocol: bee.hive_host.desktop:protocol
     types: bee.hive:types
     retained: bee.launch:retained_protocol
-    catalog: bee.hive.desktop:catalog
+    catalog: bee.hive_host.desktop:catalog
     workspaces: bee.storage:binding
 - name: display
   kind: library.lua
@@ -38,7 +38,7 @@ entries:
   imports:
     bounds: bee.hive:bounds
     client: bee.hive:client
-    protocol: bee.hive.desktop:protocol
+    protocol: bee.hive_host.desktop:protocol
     contract: bee.protocol:application
     delivery: bee.terminal:delivery
     input: bee.protocol:input
@@ -47,16 +47,16 @@ entries:
   source: file://display_command.lua
   method: command
   imports:
-    display: bee.hive.desktop:display
+    display: bee.hive_host.desktop:display
     arguments: bee.application:arguments
   meta:
     command:
       name: bee-display
-      host: bee.hive.desktop:display_host
+      host: bee.hive_host.desktop:display_host
       short: Attach a terminal to an admitted Hive desktop
       security:
         actor: {id: bee.desktop.display}
-        policies: [bee.hive.desktop:display_policy]
+        policies: [bee.hive_host.desktop:display_policy]
 - name: display_policy
   kind: security.policy
   policy:
@@ -87,7 +87,7 @@ entries:
     types: bee.hive:types
     bounds: bee.hive:bounds
     contract: bee.protocol:application
-    display: bee.hive.desktop:display
+    display: bee.hive_host.desktop:display
 - name: viewer
   kind: process.lua
   source: file://viewer.lua
@@ -96,9 +96,9 @@ entries:
   imports:
     types: bee.hive:types
     client: bee.hive:client
-    protocol: bee.hive.desktop:protocol
+    protocol: bee.hive_host.desktop:protocol
     contract: bee.protocol:application
-    display: bee.hive.desktop:display
-    remote: bee.hive.desktop:remote
+    display: bee.hive_host.desktop:display
+    remote: bee.hive_host.desktop:remote
     delivery: bee.terminal:delivery
     input: bee.protocol:input

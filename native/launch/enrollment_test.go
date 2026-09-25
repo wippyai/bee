@@ -355,7 +355,7 @@ func liveOwner(t *testing.T, state string, ctx context.Context) context.Context 
 		t.Fatal(err)
 	}
 	names := topologysys.NewPIDRegistry()
-	if _, err := names.Register("bee.hive.supervisor", pid.PID{Node: ownerNodeName(state), Host: "bee.hive:supervisor_host", UniqID: "0x0000e"}); err != nil {
+	if _, err := names.Register("bee.hive_host.supervisor", pid.PID{Node: ownerNodeName(state), Host: "bee.hive_host:supervisor_host", UniqID: "0x0000e"}); err != nil {
 		t.Fatal(err)
 	}
 	return topapi.WithRegistry(ctx, names)
@@ -513,8 +513,8 @@ func TestEnrollmentPublisherListsClientsOnlyAfterTheSupervisorIsPublished(t *tes
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	supervisor := pid.PID{Node: ownerNodeName(state), Host: "bee.hive:supervisor_host", UniqID: "0x0000e"}
-	if _, err := names.Register("bee.hive.supervisor", supervisor); err != nil {
+	supervisor := pid.PID{Node: ownerNodeName(state), Host: "bee.hive_host:supervisor_host", UniqID: "0x0000e"}
+	if _, err := names.Register("bee.hive_host.supervisor", supervisor); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(5 * time.Second)

@@ -13,7 +13,7 @@ local store = require("store")
 local catalog = require("catalog")
 local leases = require("leases")
 
-local ROOT = "bee:workspace_root"
+local ROOT = "bee.environment:workspace_root"
 local IDLE_MS = 600
 type Channel = channel.Channel
 

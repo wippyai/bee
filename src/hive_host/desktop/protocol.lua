@@ -19,12 +19,12 @@ M.MAX_CURSOR = 2200
 -- A display command is a native client role, but its host is deliberately
 -- separate from the retained owner and ordinary terminal applications. The
 -- owner still checks the caller node against its explicit admission grant.
-M.CLIENT_HOST = "bee.hive.desktop:display_host"
+M.CLIENT_HOST = "bee.hive_host.desktop:display_host"
 -- A remote view presents another node's workspace in a local application
 -- window. It runs on the display client host; its parent exchanges these
 -- topics with it: one state (attached or failed), then frames one way and
 -- input, resize and close the other.
-M.VIEWER = "bee.hive.desktop:viewer"
+M.VIEWER = "bee.hive_host.desktop:viewer"
 M.VIEW_STATE = "bee.hive.viewer.state"
 M.VIEW_FRAME = "bee.hive.viewer.frame"
 M.VIEW_INPUT = "bee.hive.viewer.input"

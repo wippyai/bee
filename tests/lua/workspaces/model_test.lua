@@ -12,7 +12,7 @@ local function id(index: integer): string
 end
 
 local function row(index: integer, label: string?): Object
-    return {workspace_id = id(index), label = label or ("Project " .. tostring(index)), root_ref = "bee:workspace_root",
+    return {workspace_id = id(index), label = label or ("Project " .. tostring(index)), root_ref = "bee.environment:workspace_root",
         subpath = "legacy/" .. tostring(index), state = "active", created_at = "2026-09-24T00:00:00.000Z", last_used_at = "2026-09-24T01:00:00.000Z"}
 end
 
@@ -110,7 +110,7 @@ local function define_tests()
             local selected = state.selected
             model.apply_inspect(state, selected, ok({workspace = row(1), live = true,
                 applications = {{definition_id = "bee.settings:app", instance_id = "i-1", restart_policy = "automatic"}},
-                extensions = {{binding = "bee:resources_workspace_extension", title = "Resources", total = 3, items = {{label = "docs", detail = "bee:workspace_root · read"}}},
+                extensions = {{binding = "bee:resources_workspace_extension", title = "Resources", total = 3, items = {{label = "docs", detail = "bee.environment:workspace_root · read"}}},
                     {binding = "bee:broken", title = "Broken", total = 0, items = {}, error = "refused\27[31m"}}}))
             local detail = state.detail
             if not detail then error("detail") end

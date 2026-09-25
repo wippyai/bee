@@ -14,9 +14,9 @@ local function define_tests()
 
         test.it("a desktop bridge exists only when the supervisor input configures desktop admission", function()
             test.is_false(ownership.desktop_bridge(nil))
-            test.is_false(ownership.desktop_bridge({process = "bee.hive.supervisor:main", input = {{configured_nodes = {}}}}),
+            test.is_false(ownership.desktop_bridge({process = "bee.hive_host.supervisor:main", input = {{configured_nodes = {}}}}),
                 "the supervisor service alone was taken for a desktop bridge")
-            test.is_true(ownership.desktop_bridge({process = "bee.hive.supervisor:main",
+            test.is_true(ownership.desktop_bridge({process = "bee.hive_host.supervisor:main",
                 input = {{configured_nodes = {}, desktop = {execution = "e", expires_at = "t", allowed_nodes = {}, local_clients = true}}}}))
             test.is_false(ownership.desktop_bridge({input = "desktop"}))
         end)

@@ -21,6 +21,8 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
+  - name: waiter_policies
+    value: [bee.security.threads:thread_waiter_policy]
 - name: hub
   kind: ns.dependency
   component: bee/hub
@@ -135,17 +137,22 @@ entries:
   - name: target_db
     value: bee.placement.native:db
   - name: target_root
-    value: bee:placement_root
+    value: bee.placement.native:root
   - name: process_host
     value: bee:workers
+  - name: sweeper_policies
+    value: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy,
+      bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy,
+      bee.security.credentials:credential_materialize_policy, bee.security.placement:placement_sweeper_policy,
+      bee.security.gateway:gateway_supervision_policy]
   - name: target_executor
-    value: bee.placement.native:executor
+    value: bee:placement_executor
   - name: target_host_files
-    value: bee.placement.native:host_files
+    value: bee:placement_host_files
   - name: target_admitted_roots
-    value: bee.placement.native:admitted_roots
+    value: bee:placement_admitted_roots
   - name: target_resource_mode
-    value: bee.placement.native:resource_mode
+    value: bee:placement_resource_mode
 - name: harness
   kind: ns.dependency
   component: bee/harness
@@ -164,6 +171,13 @@ entries:
     value: bee.approvals:db
   - name: target_policies
     value: bee:approver_policies
+  - name: process_host
+    value: bee:workers
+  - name: authority_policies
+    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
+  - name: worker_policies
+    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy,
+      bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]
 - name: driver
   kind: ns.dependency
   component: bee/driver

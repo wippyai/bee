@@ -12,13 +12,13 @@ local function define_tests()
             local events = assert(process.events())
             local policies: {security.Policy} = {}
             for _, name in ipairs({"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
-                "bee.security.hive:hive_dispatch_policy", "bee.hive.supervisor:execute_policy", "bee.hive.supervisor:local_name_policy"}) do
+                "bee.security.hive:hive_dispatch_policy", "bee.hive_host.supervisor:execute_policy", "bee.hive_host.supervisor:local_name_policy"}) do
                 local policy, err = security.policy(name)
                 if not policy then error(tostring(err)) end
                 policies[#policies + 1] = policy
             end
             local supervisor = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-                :spawn_monitored("bee.hive.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {}})))
+                :spawn_monitored("bee.hive_host.supervisor:main", types.SUPERVISOR_HOST, {configured_nodes = {}})))
             local handle = assert(client.open())
             local ok, err = pcall(function()
                 local timeout = time.now():add("3s")

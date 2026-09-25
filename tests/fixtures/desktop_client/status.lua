@@ -78,7 +78,7 @@ local function main()
     end
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
         "bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"})):spawn_monitored(
-            "bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""})))
+            "bee.host:main", "bee:workers", owner, {root_ref = "bee.environment:workspace_root", subpath = ""})))
     local host_ready = assert(hosts:receive())
     assert(tostring(host_ready:from()) == host)
     local ready: unknown = host_ready:payload():data()

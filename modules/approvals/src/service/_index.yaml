@@ -1,6 +1,29 @@
 version: '1.0'
 namespace: bee.approvals.service
 entries:
+- name: process_host
+  kind: ns.requirement
+  meta:
+    comment: Process host that runs the approval authority and outbox worker
+  targets:
+  - entry: bee.approvals.service:authority_service
+    path: .host
+  - entry: bee.approvals.service:worker_service
+    path: .host
+- name: authority_policies
+  kind: ns.requirement
+  meta:
+    comment: Host-selected policy grants for the approval authority
+  targets:
+  - entry: bee.approvals.service:authority_service
+    path: .lifecycle.security.policies
+- name: worker_policies
+  kind: ns.requirement
+  meta:
+    comment: Host-selected policy grants for the approval outbox worker
+  targets:
+  - entry: bee.approvals.service:worker_service
+    path: .lifecycle.security.policies
 - name: worker
   kind: process.lua
   source: file://worker.lua
@@ -19,18 +42,16 @@ entries:
 - name: authority_service
   kind: process.service
   process: bee.approvals.service:authority
-  host: bee:workers
   lifecycle:
     auto_start: true
     security:
       actor: {id: bee.approvals.authority}
-      policies: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
+      policies: []
 - name: worker_service
   kind: process.service
   process: bee.approvals.service:worker
-  host: bee:workers
   lifecycle:
     auto_start: true
     security:
       actor: {id: bee.approvals.outbox}
-      policies: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy, bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]
+      policies: []

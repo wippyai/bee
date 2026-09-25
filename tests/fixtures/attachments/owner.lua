@@ -36,7 +36,7 @@ local function run_probe(mode: string?)
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
-    local database = assert(store.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local database = assert(store.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local workspace_id = assert(database:identity())
     local broker_policy, policy_error = security.policy("bee.security.desktop:broker_policy")
     if policy_error then error(tostring(policy_error)) end

@@ -947,9 +947,9 @@
       "topic": "approvals"
     },
     {
-      "bytes": 7589,
+      "bytes": 7649,
       "id": "docs/storage",
-      "sha256": "e2280883d12bdd18bde15f68a5af0f67d0d466128634e890c8fe21fab155ed5b",
+      "sha256": "cf2146b42b1b4c1a1d9ebdfd67cbcbf9477b2ce126087f8e641fb849300a4577",
       "source": "docs/reference/storage.md",
       "title": "Workspace storage",
       "topic": "storage"
@@ -971,17 +971,17 @@
       "topic": "threads"
     },
     {
-      "bytes": 20568,
+      "bytes": 20593,
       "id": "docs/workspace_catalog",
-      "sha256": "2db610fb49ad505fa474ff12c9bedec4f0801b78afca9ebdb6eee094de1f4f26",
+      "sha256": "af9373dfb8b5cd6d2d7ee95bad6d6a0d240deb9d0b030041ec7c98256b8e1f92",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
     },
     {
-      "bytes": 5363,
+      "bytes": 5387,
       "id": "docs/workspace_state",
-      "sha256": "d5e62ffbc6c2fd05e25051bcf68c6b72caa2e9fd903f8b21ad3ca95cef41f3cb",
+      "sha256": "48d9d06f216f2d40ce779fd92312d0738bbd4123d6c5685ce60b94066adebf67",
       "source": "docs/reference/workspace-state.md",
       "title": "Workspace state and application restoration",
       "topic": "storage"
@@ -1131,9 +1131,9 @@
       "topic": "component"
     },
     {
-      "bytes": 18107,
+      "bytes": 18112,
       "id": "component/placement:native",
-      "sha256": "4566c693b2bdbe1f2fe2a90535186e257f85792c62de302a1fd124ef69b29a97",
+      "sha256": "1ae63999c01d976859741bb297d106e605d43b78157f7ac177d959e8c6a604ed",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"

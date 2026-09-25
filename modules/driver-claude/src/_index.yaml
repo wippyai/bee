@@ -58,7 +58,7 @@ entries:
     auto_start: true
 - name: config_home
   kind: env.variable
-  storage: bee.driver.claude:environment
+  storage: bee.harness.host:environment
   variable: CLAUDE_CONFIG_DIR
   default: ''
   readonly: true

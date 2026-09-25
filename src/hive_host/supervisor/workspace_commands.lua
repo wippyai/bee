@@ -8,7 +8,7 @@ local bounds = require("bounds")
 local types = require("types")
 local M = {}
 M.SERVICE = "bee.workspace"
-M.WORKER = "bee.hive.supervisor:workspace_command"
+M.WORKER = "bee.hive_host.supervisor:workspace_command"
 -- The host-named permission a caller of the worker needs for each command;
 -- the host grants it to its supervisor, which serves only enrolled local clients.
 M.ACTION = "bee.workspaces.command"

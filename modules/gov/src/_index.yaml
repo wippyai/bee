@@ -123,8 +123,7 @@ entries:
     preflight: bee.governance:preflight
 - name: target_publication_profiles
   kind: ns.requirement
-  default: bee.governance:publication_profiles
-  meta: {comment: Host-selected publication profiles; the retained default preserves configured local data}
+  meta: {comment: Host-selected publication profiles; the host supplies bee:governance_publication_profiles}
   targets:
   - entry: bee.governance.registry:publication_profiles_ref
     path: .resource_ref
@@ -132,8 +131,7 @@ entries:
     path: .policy.resources
 - name: target_activation_profiles
   kind: ns.requirement
-  default: bee.governance:activation_profiles
-  meta: {comment: Host-selected activation profiles; the retained default preserves configured local data}
+  meta: {comment: Host-selected activation profiles; the host supplies bee:governance_activation_profiles}
   targets:
   - entry: bee.governance.registry:activation_profiles_ref
     path: .resource_ref

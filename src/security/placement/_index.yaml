@@ -25,10 +25,10 @@ entries:
     - bee.placement.native:resource_mode_ref
     - custom
     - security
-    - bee.placement.native:admitted_roots
-    - bee:placement_root
-    - bee.placement.native:host_files
-    - bee.placement.native:executor
+    - bee:placement_admitted_roots
+    - bee.placement.native:root
+    - bee:placement_host_files
+    - bee:placement_executor
     - cwd
     effect: allow
 - name: placement_exec_policy

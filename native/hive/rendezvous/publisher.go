@@ -27,19 +27,24 @@ func Publisher(directory, execution, launch string, localAlias bool) (boot.Compo
 			if membership == nil {
 				return errors.New("Bee rendezvous requires a running native cluster")
 			}
-			descriptor, err := Capture(membership.LocalNode(), execution)
-			if err != nil {
-				return err
-			}
+			node := membership.LocalNode()
+			var descriptor Descriptor
+			var captureErr error
 			if localAlias {
+				endpoint, parseErr := netip.ParseAddrPort(node.Addr)
+				if parseErr != nil {
+					return ErrDescriptor
+				}
 				loopback := netip.MustParseAddr("127.0.0.1")
-				if endpoint, err := netip.ParseAddrPort(descriptor.Gossip); err == nil && endpoint.Addr().Is6() {
+				if endpoint.Addr().Is6() {
 					loopback = netip.IPv6Loopback()
 				}
-				descriptor, err = CaptureLocal(membership.LocalNode(), execution, loopback, loopback)
-				if err != nil {
-					return err
-				}
+				descriptor, captureErr = CaptureLocal(node, execution, loopback, loopback)
+			} else {
+				descriptor, captureErr = Capture(node, execution)
+			}
+			if captureErr != nil {
+				return captureErr
 			}
 			descriptor.Launch = launch
 			descriptor.ClientRevision = ClientRevision

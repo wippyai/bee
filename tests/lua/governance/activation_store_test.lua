@@ -246,6 +246,77 @@ local function define_tests()
             test.is_nil(database.table_prefix)
             assert(store.close(state))
         end)
+        test.it("reverts one applied generation and retains the compensating migration", function()
+            local state, open_error = store.open("bee.gov:activation_test_db", "node-a", "workspace-rollback")
+            if not state then error(tostring(open_error)) end
+            local function apply_generation(intent_id: string, version: string, artifact: string): {[string]: unknown}
+                local input = prepare()
+                input.intent_id, input.idempotency_key, input.version = intent_id, intent_id .. "-prepare", version
+                input.artifact = blob(artifact)
+                local prepared = ok(store.call(state, "actor-a", input))
+                ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = intent_id,
+                    expected_revision = prepared.revision, idempotency_key = intent_id .. "-bind",
+                    approval_id = "approval-" .. intent_id, approval_proposal_digest = string.rep("d", 64),
+                    approval_owner_incarnation = 1}))
+                ok(store.call(state, "actor-a", {operation = "begin_consume", intent_id = intent_id,
+                    expected_revision = 2, idempotency_key = intent_id .. "-consume"}))
+                local authorized = ok(store.call(state, "actor-a", {operation = "record_consumption", intent_id = intent_id,
+                    expected_revision = 3, idempotency_key = intent_id .. "-record", consumer_id = "host",
+                    proposal_digest = string.rep("d", 64), effect_key = prepared.effect_key}))
+                local applying = ok(store.call(state, "actor-a", {operation = "begin_apply", intent_id = intent_id,
+                    expected_revision = authorized.revision, idempotency_key = intent_id .. "-apply"}))
+                return ok(store.call(state, "actor-a", {operation = "record_outcome", intent_id = intent_id,
+                    expected_revision = applying.revision, idempotency_key = intent_id .. "-applied",
+                    outcome = "applied", diagnostics = version .. " applied"}))
+            end
+            apply_generation("intent-gen-1", "v1", "artifact-v1")
+            local second = apply_generation("intent-gen-2", "v2", "artifact-v2")
+            test.eq(second.observed_intent_id, "intent-gen-2")
+            local baseline = ok(store.baseline(state, "bee.gov:overlay"))
+            test.eq(baseline.intent_id, "intent-gen-1")
+            test.eq(baseline.artifact_digest, blob("artifact-v1").digest)
+            local compensation = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-receipt@1",
+                rows = {{id = "demo:001", target_db = "demo:db", module = "demo/app", status = "applied"}}})))
+            local reverted = ok(store.call(state, "actor-a", {operation = "revert_activation",
+                overlay_owner = "bee.gov:overlay", expected_revision = second.slot_revision,
+                idempotency_key = "rollback-1", compensation = compensation, diagnostics = "boot failed on v2"}))
+            test.eq(reverted.intent_id, "intent-gen-1")
+            test.eq(reverted.desired_intent_id, "intent-gen-1")
+            test.eq(reverted.observed_intent_id, nil)
+            test.eq(reverted.reverted_from_intent_id, "intent-gen-2")
+            test.eq(reverted.compensation_digest, compensation.digest)
+            local replayed = ok(store.call(state, "actor-a", {operation = "revert_activation",
+                overlay_owner = "bee.gov:overlay", expected_revision = second.slot_revision,
+                idempotency_key = "rollback-1", compensation = compensation, diagnostics = "boot failed on v2"}))
+            test.eq(replayed.reverted_from_intent_id, "intent-gen-2")
+            assert(store.close(state))
+        end)
+        test.it("refuses a revert without a retained baseline generation", function()
+            local state = assert(store.open("bee.gov:activation_test_db", "node-a", "workspace-rollback-empty"))
+            local input = prepare()
+            input.intent_id, input.idempotency_key = "intent-only", "only-prepare"
+            local prepared = ok(store.call(state, "actor-a", input))
+            ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = "intent-only",
+                expected_revision = prepared.revision, idempotency_key = "only-bind",
+                approval_id = "approval-only", approval_proposal_digest = string.rep("d", 64),
+                approval_owner_incarnation = 1}))
+            ok(store.call(state, "actor-a", {operation = "begin_consume", intent_id = "intent-only",
+                expected_revision = 2, idempotency_key = "only-consume"}))
+            local authorized = ok(store.call(state, "actor-a", {operation = "record_consumption", intent_id = "intent-only",
+                expected_revision = 3, idempotency_key = "only-record", consumer_id = "host",
+                proposal_digest = string.rep("d", 64), effect_key = prepared.effect_key}))
+            local applying = ok(store.call(state, "actor-a", {operation = "begin_apply", intent_id = "intent-only",
+                expected_revision = authorized.revision, idempotency_key = "only-apply"}))
+            local applied = ok(store.call(state, "actor-a", {operation = "record_outcome", intent_id = "intent-only",
+                expected_revision = applying.revision, idempotency_key = "only-applied", outcome = "applied",
+                diagnostics = "first and only generation"}))
+            test.eq(store.baseline(state, "bee.gov:overlay").code, "NOT_FOUND")
+            local refused = store.call(state, "actor-a", {operation = "revert_activation",
+                overlay_owner = "bee.gov:overlay", expected_revision = applied.slot_revision,
+                idempotency_key = "rollback-none", compensation = blob("none"), diagnostics = "nothing to revert to"})
+            test.eq(refused.code, "CONFLICT")
+            assert(store.close(state))
+        end)
     end)
 end
 return test.run_cases(define_tests)

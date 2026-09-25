@@ -23,6 +23,7 @@ local function reply_op(value: unknown): contract.ReplyOp?
     if value == "closing" then return "closing" end
     if value == "quit" then return "quit" end
     if value == "shutdown" then return "shutdown" end
+    if value == "fence" then return "fence" end
     return nil
 end
 function M.reply(value: unknown): Reply?

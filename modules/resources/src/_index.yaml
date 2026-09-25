@@ -68,7 +68,7 @@ entries:
   - name: revoke
     description: End one grant
   - name: revoke_all
-    description: Advance the workspace authorization epoch so every earlier grant stops resolving
+    description: Advance the workspace authorization epoch so every earlier grant stops resolving, reporting the fenced live attempts for eager stops
   - name: resolve
     description: Re-check a grant for the placement that admitted the subject and audience, and return the exact resource scope
   - name: list

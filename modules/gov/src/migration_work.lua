@@ -438,6 +438,58 @@ function M.database(raw_work: unknown, target_raw: unknown): (Object?, string?)
     return found, nil
 end
 
+-- forward_only: prove a compensating migration set advances a target ledger
+-- instead of rewriting it. Applied migrations are immutable and forward-only,
+-- so a revert may not re-run or renumber an applied migration: every
+-- compensating migration targets a database it does not already occupy and
+-- carries an ordinal strictly greater than the highest applied ordinal for
+-- that target. Pure: it reads no database and changes nothing.
+function M.forward_only(applied: unknown, migrations: unknown): (boolean, string?)
+    if type(applied) ~= "table" then return false, "applied migration evidence must be a table" end
+    if type(migrations) ~= "table" then return false, "compensating migrations must be a table" end
+    local highest: {[string]: integer} = {}
+    local occupied: {[string]: boolean} = {}
+    for key, raw in pairs(applied :: {[string]: unknown}) do
+        if type(key) ~= "string" then return false, "applied migration keys must be strings" end
+        local row = object(raw)
+        if not row then return false, "applied migration evidence is malformed" end
+        local target, ordinal = registry_id(row.target_db), row.ordinal
+        if not target or type(ordinal) ~= "number" or ordinal ~= math.floor(ordinal) or ordinal < 1 then
+            return false, "applied migration evidence is malformed"
+        end
+        local id = registry_id(row.id)
+        if not id then return false, "applied migration evidence is malformed" end
+        local target_key = target :: string
+        local seen = highest[target_key]
+        if seen == nil or ordinal > seen then highest[target_key] = ordinal end
+        occupied[target_key .. "\n" .. id] = true
+    end
+    local previous_target, previous_ordinal, previous_id = "", 0, ""
+    for index, raw in ipairs(migrations :: {unknown}) do
+        local item = object(raw)
+        if not item then return false, "compensating migration " .. tostring(index) .. " is malformed" end
+        local id, target, ordinal = registry_id(item.id), registry_id(item.target_db), item.ordinal
+        if not id or not target or type(ordinal) ~= "number" or ordinal ~= math.floor(ordinal) or ordinal < 1 then
+            return false, "compensating migration identity is invalid"
+        end
+        if occupied[target .. "\n" .. id] then
+            return false, "compensating migration re-runs an applied migration: " .. id
+        end
+        local target_key = target :: string
+        local floor = highest[target_key]
+        if floor ~= nil and ordinal <= floor then
+            return false, "compensating migration does not move forward on " .. target .. ": " .. id
+        end
+        if target < previous_target
+            or (target == previous_target and (ordinal < previous_ordinal
+                or (ordinal == previous_ordinal and id <= previous_id))) then
+            return false, "compensating migrations are duplicated or out of order"
+        end
+        previous_target, previous_ordinal, previous_id = target, ordinal, id
+    end
+    return true, nil
+end
+
 function M.verify(raw: unknown, candidate: preflight.Candidate, artifact_raw: unknown,
     context: preflight.Context): (boolean, string?)
     local supplied = object(raw)

@@ -282,6 +282,24 @@ local function define_tests()
             test.eq(reported.resource_authority, "granted")
             test.eq(reported.transfer, false)
         end)
+        test.it("reports the fenced attempts when the epoch advances", function()
+            local workspace = fresh("fence")
+            value(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "", allowed_access = "write"}))
+            local first = value(call(user, "grant", {workspace_id = workspace, name = "project", access = "read", purpose = "project",
+                audience = USER, attempt_id = "attempt-1"}))
+            local second = value(call(user, "grant", {workspace_id = workspace, name = "project", access = "read", purpose = "session",
+                audience = USER, attempt_id = "attempt-2"}))
+            value(call(placement, "resolve", {grant_id = first.grant_id, subject = USER, audience = USER, attempt_id = "attempt-1"}))
+            local advanced = value(call(manager, "revoke_all", {workspace_id = workspace}))
+            local fenced = advanced.fenced_attempts :: {unknown}
+            test.eq(#fenced, 2)
+            local seen: {[string]: boolean} = {}
+            for _, attempt in ipairs(fenced) do seen[tostring(attempt)] = true end
+            test.is_true(seen["attempt-1"])
+            test.is_true(seen["attempt-2"])
+            test.eq(code(call(placement, "resolve", {grant_id = first.grant_id, subject = USER, audience = USER, attempt_id = "attempt-1"})), "REVOKED")
+            test.eq(code(call(placement, "resolve", {grant_id = second.grant_id, subject = USER, audience = USER, attempt_id = "attempt-2"})), "REVOKED")
+        end)
     end)
 end
 return test.run_cases(define_tests)

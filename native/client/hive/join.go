@@ -19,6 +19,10 @@ const (
 	JoinInvites = "bee.hive.join:invites"
 	JoinRevoke  = "bee.hive.join:revoke"
 	JoinPeers   = "bee.hive.join:peers"
+	// Holdings is a peer node's own open holdings operation, read through the
+	// local supervisor's existing forwarding route.
+	HoldingsService   = "bee.hive.api"
+	HoldingsOperation = "bee.hive.api:holdings"
 	JoinRedeem  = "bee.hive.join:redeem"
 )
 
@@ -48,6 +52,22 @@ type Peer struct {
 type PeerView struct {
 	Node  string `json:"node_id"`
 	Peers []Peer `json:"peers"`
+}
+
+// WorkspaceHoldings is one live workspace a node holds: its identity, the host
+// phase and the number of leases keeping it live. It is a read model only.
+type WorkspaceHoldings struct {
+	WorkspaceID string `json:"workspace_id"`
+	Phase       string `json:"phase"`
+	LeaseCount  int    `json:"lease_count"`
+}
+
+// HoldingsPage is one bounded page of a node's live workspace holdings.
+type HoldingsPage struct {
+	NodeID     string              `json:"node_id"`
+	Workspaces []WorkspaceHoldings `json:"workspaces"`
+	HasMore    bool                `json:"has_more"`
+	NextAfter  string              `json:"next_after,omitempty"`
 }
 
 // Join calls the invite operations of one owner supervisor.
@@ -154,6 +174,30 @@ func (j *Join) Peers(ctx context.Context) (PeerView, error) {
 		return PeerView{}, ErrProtocol
 	}
 	return PeerView{Node: value.Node, Peers: peers}, nil
+}
+
+// Holdings reads one bounded page of the named node's live workspace holdings
+// through the local supervisor's forwarding route. The page is the node's own
+// answer; a node that cannot be reached or refuses is an error, never an empty
+// page. It grants nothing.
+func (j *Join) Holdings(ctx context.Context, node string) (HoldingsPage, error) {
+	var value struct {
+		NodeID     string          `json:"node_id"`
+		Workspaces json.RawMessage `json:"workspaces"`
+		HasMore    bool            `json:"has_more"`
+		NextAfter  string          `json:"next_after"`
+	}
+	if !identifier(node) {
+		return HoldingsPage{}, errors.New("peer node is not an identifier")
+	}
+	if err := callService(ctx, j.client, Owner{Node: node, Service: HoldingsService}, HoldingsOperation, struct{}{}, &value); err != nil {
+		return HoldingsPage{}, err
+	}
+	workspaces, err := list[WorkspaceHoldings](value.Workspaces)
+	if err != nil {
+		return HoldingsPage{}, ErrProtocol
+	}
+	return HoldingsPage{NodeID: value.NodeID, Workspaces: workspaces, HasMore: value.HasMore, NextAfter: value.NextAfter}, nil
 }
 
 // Redeem consumes invite id for node when secret matches. Only the owner's

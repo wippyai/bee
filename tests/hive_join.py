@@ -47,8 +47,14 @@ class Nodes:
 
     def peers(self, name):
         lines = self.bee(name, 'peers').stdout.splitlines()
-        assert lines[0].startswith('NODE ') and lines[1].split() == ['PEER', 'SESSION'], lines
-        return lines[0].split()[1], dict(line.split() for line in lines[2:])
+        assert lines[0].startswith('NODE ') and lines[1].split() == ['PEER', 'SESSION', 'WORKSPACES'], lines
+        rows = [line.split() for line in lines[2:]]
+        # Every peer carries a session and, when established, a live workspace
+        # count (or "unavailable" when its holdings read failed).
+        for row in rows:
+            assert len(row) in (2, 3), row
+            assert row[1] in ('none', 'pending', 'established'), row
+        return lines[0].split()[1], {row[0]: row[1] for row in rows}, {row[0]: (row[2] if len(row) > 2 else '') for row in rows}
 
     def stop(self, name):
         state = self.state(name)
@@ -74,7 +80,7 @@ class Nodes:
         deadline = time.monotonic() + seconds
         seen = None
         while time.monotonic() < deadline:
-            _, sessions = self.peers(name)
+            _, sessions, _ = self.peers(name)
             seen = sessions.get(peer)
             if seen == want:
                 return
@@ -104,8 +110,8 @@ def run(binary):
         ports_b = {b['gossip'], b['transport'], b['join']}
         assert len(ports_a | ports_b) == 6, f'nodes share a port: {ports_a} {ports_b}'
 
-        assert nodes.peers('a') == (node_a, {node_b: 'established'}), nodes.peers('a')
-        assert nodes.peers('b') == (node_b, {node_a: 'established'}), nodes.peers('b')
+        assert nodes.peers('a')[:2] == (node_a, {node_b: 'established'}), nodes.peers('a')
+        assert nodes.peers('b')[:2] == (node_b, {node_a: 'established'}), nodes.peers('b')
         records = nodes.bee('a', 'invites').stdout.splitlines()[1:]
         assert len(records) == 1 and records[0].split()[1] == 'used' and records[0].split()[3] == node_b, records
 
@@ -133,10 +139,10 @@ def run(binary):
             time.sleep(0.5)
         assert node_b not in nodes.peers('a')[1], nodes.peers('a')
         nodes.stop('b')
-        _, sessions = nodes.peers('b')
+        _, sessions, _ = nodes.peers('b')
         assert sessions.get(node_a) != 'established', sessions
         time.sleep(10)
-        _, sessions = nodes.peers('b')
+        _, sessions, _ = nodes.peers('b')
         assert sessions.get(node_a) in ('none', 'pending'), f'a retired node was admitted again: {sessions}'
         assert node_b not in nodes.peers('a')[1], nodes.peers('a')
     finally:

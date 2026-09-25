@@ -68,6 +68,35 @@ func TestJoinDecodesTheSupervisorInviteOperations(t *testing.T) {
 	}
 }
 
+func TestJoinReadsAPeersHoldingsThroughItsOwnNode(t *testing.T) {
+	join, s := joinFixture(t)
+	answer(s, map[string]any{"node_id": "node-b", "has_more": true, "next_after": strings.Repeat("b", 32),
+		"workspaces": []any{map[string]any{"workspace_id": strings.Repeat("a", 32), "phase": "ready", "lease_count": 2}}}, nil)
+	page, err := join.Holdings(callContext(t), "node-b")
+	if err != nil || page.NodeID != "node-b" || !page.HasMore || page.NextAfter != strings.Repeat("b", 32) {
+		t.Fatalf("holdings = %+v, %v", page, err)
+	}
+	if len(page.Workspaces) != 1 || page.Workspaces[0].Phase != "ready" || page.Workspaces[0].LeaseCount != 2 {
+		t.Fatalf("holdings workspaces = %+v", page.Workspaces)
+	}
+	// An empty page is {} from the Lua exporter, and a short node is refused
+	// before any call.
+	answer(s, map[string]any{"node_id": "node-b", "has_more": false, "workspaces": map[string]any{}}, nil)
+	if empty, err := join.Holdings(callContext(t), "node-b"); err != nil || len(empty.Workspaces) != 0 {
+		t.Fatalf("empty holdings = %+v, %v", empty, err)
+	}
+	if _, err := join.Holdings(callContext(t), "x"); err == nil {
+		t.Fatal("a short node was accepted")
+	}
+	// A workspaces value that is not a list is refused, on a fresh fixture so
+	// the refusal cannot be mistaken for a missing reply.
+	malformed, malformedServer := joinFixture(t)
+	answer(malformedServer, map[string]any{"node_id": "node-b", "has_more": false, "workspaces": "nope"}, nil)
+	if _, err := malformed.Holdings(callContext(t), "node-b"); !errors.Is(err, ErrProtocol) {
+		t.Fatalf("malformed holdings accepted: %v", err)
+	}
+}
+
 func TestJoinCallsNameTheJoinServiceOfTheOwner(t *testing.T) {
 	join, s := joinFixture(t)
 	done := make(chan wireCall, 1)

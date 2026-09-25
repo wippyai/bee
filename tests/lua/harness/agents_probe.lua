@@ -3,6 +3,7 @@
 local agents = require("agents")
 local agent_protocol = require("agent_protocol")
 local function handle(request: {[string]: unknown}): {[string]: unknown}
+    local launch = request.launch :: agent_protocol.Launch
     local run: any, fault: any
     if request.as_run == true then
         run, fault = agents.run(launch)

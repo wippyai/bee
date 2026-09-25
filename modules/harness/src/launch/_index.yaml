@@ -185,7 +185,7 @@ entries:
   kind: function.lua
   source: file://agent_call_backend.lua
   method: handle
-  modules: [funcs, security, registry]
+  modules: [funcs, security, registry, time]
   imports:
     agent_protocol: bee.application:agent_protocol
     bounds: bee.threads.records:bounds
@@ -221,7 +221,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.harness.launch:start, bee.harness.launch:admit, bee.harness.launch:resolve, bee.harness.launch:setup, bee.harness.profiles:call,
-      bee.threads.service:get, bee.threads.service:create, bee.resources.binding:grant, bee.credentials.binding:issue_projection, bee.threads.carrier:checkpoint,
+      bee.threads.service:get, bee.threads.service:create, bee.threads.service:receipt, bee.resources.binding:grant, bee.credentials.binding:issue_projection, bee.threads.carrier:checkpoint,
       bee.resources.binding:associate, bee.credentials.binding:define, bee.threads.delivery:watch, bee.placement.native.binding:stop]
     effect: allow
 - name: agent_launch_execution_action_policy
@@ -230,8 +230,8 @@ entries:
   meta:
     comment: The membership, grant and projection actions the called owner operations check again in this scope, plus the registry and process-host access launch admission and start require; setup, grants and projections stay in the workspace the launching actor is bound to
   policy:
-    expression: 'action == "registry.get" || action == "registry.snapshot" || action == "process.spawn" || action == "process.spawn.monitored" || action == "process.host" || action == "process.context" || action == "process.monitor" || action == "bee.threads.create" || action == "bee.threads.observe" || ((action == "bee.harness.setup" || action == "bee.resources.grant" || action == "bee.credentials.issue") && resource != "" && resource == actor.meta.workspace_id) || (action == "bee.harness.profiles.read" && resource != "" && resource == actor.meta.workspace_id && resource == meta.workspace_id)'
-    actions: [registry.get, registry.snapshot, process.spawn, process.spawn.monitored, process.host, process.context, process.monitor, bee.harness.setup, bee.threads.create, bee.threads.observe, bee.resources.grant, bee.credentials.issue, bee.harness.profiles.read]
+    expression: 'action == "registry.get" || action == "registry.snapshot" || action == "process.spawn" || action == "process.spawn.monitored" || action == "process.host" || action == "process.context" || action == "process.monitor" || action == "bee.threads.create" || action == "bee.threads.observe" || action == "bee.threads.lifecycle" || ((action == "bee.harness.setup" || action == "bee.resources.grant" || action == "bee.credentials.issue") && resource != "" && resource == actor.meta.workspace_id) || (action == "bee.harness.profiles.read" && resource != "" && resource == actor.meta.workspace_id && resource == meta.workspace_id)'
+    actions: [registry.get, registry.snapshot, process.spawn, process.spawn.monitored, process.host, process.context, process.monitor, bee.harness.setup, bee.threads.create, bee.threads.observe, bee.threads.lifecycle, bee.resources.grant, bee.credentials.issue, bee.harness.profiles.read]
     resources: '*'
     effect: allow
 - name: setup_execution_policy

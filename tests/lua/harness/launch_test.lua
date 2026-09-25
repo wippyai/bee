@@ -1266,7 +1266,7 @@ local function define_tests()
             test.eq(run_val.brief, "ping function")
             test.eq(run_val.idempotency_key, run_key)
             test.is_true(run_val.state == "starting" or run_val.state == "running" or run_val.state == "ended")
-            local receipt = bounds.object(run_val.receipt)
+            local receipt = type(run_val.receipt) == "table" and (run_val.receipt :: {[string]: unknown}) or nil
             test.not_nil(receipt)
             test.eq(receipt and receipt.scope, "attempt")
             test.eq(receipt and receipt.thread_id, run_val.thread_id)

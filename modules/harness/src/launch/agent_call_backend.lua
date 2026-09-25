@@ -6,6 +6,7 @@
 -- the host's launch grant; every owner operation underneath checks the
 -- application's membership and ownership again.
 local funcs = require("funcs")
+local time = require("time")
 local security = require("security")
 local registry = require("registry")
 local bounds = require("bounds")
@@ -17,6 +18,16 @@ local placement_resolver = require("placement_resolver")
 local CHECKPOINT = "bee.threads.carrier:checkpoint"
 local THREAD = "bee.threads.service:get"
 local WATCH = "bee.threads.delivery:watch"
+local RECEIPT = "bee.threads.service:receipt"
+type CancelIntent = {
+    idempotency_key: string?,
+    thread_id: string,
+    attempt_id: string,
+    state: string,
+    outcome: string?,
+    recorded_at: integer,
+}
+local cancel_intents: {[string]: CancelIntent} = {}
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
 type Status = {thread_id: string, attempt_id: string, state: string, outcome: string?, answer: string?}
 local function fail(code: string, message: string): Reply
@@ -44,6 +55,10 @@ end
 local function status(run: agent_launch.Run): (Status?, Reply?, {[string]: unknown}?)
     local stored, refused = call(CHECKPOINT, {thread_id = run.thread_id, attempt_id = run.attempt_id})
     if not stored then
+        local intent = cancel_intents[run.attempt_id]
+        if intent and intent.state == "ended" then
+            return {thread_id = run.thread_id, attempt_id = run.attempt_id, state = "ended", outcome = intent.outcome}, nil, nil
+        end
         if refused and refused.error and refused.error.code == "NOT_FOUND" then
             return {thread_id = run.thread_id, attempt_id = run.attempt_id, state = "starting"}, nil, nil
         end
@@ -70,6 +85,46 @@ local function launch(body: {[string]: unknown}): Reply
     if not definition then return fail("NOT_FOUND", definition_error or "the launch definition is unavailable") end
     return caller_launch.start({workspace_id = workspace_id, identity = identity}, request, definition)
 end
+local function run(body: {[string]: unknown}): Reply
+    local started = launch(body)
+    if not started.ok then return started end
+    local admitted = bounds.object(started.value)
+    if not admitted then return fail("INTERNAL", "launch returned no value") end
+    local child_thread = bounds.id(admitted.thread_id)
+    local child_action = bounds.id(admitted.action_id)
+    local child_attempt = bounds.id(admitted.attempt_id)
+    if not child_thread or not child_action or not child_attempt then
+        return fail("INTERNAL", "launch returned incomplete identities")
+    end
+    local current = status({thread_id = child_thread, attempt_id = child_attempt})
+    local state = current and current.state or "starting"
+    local idempotency_key = bounds.id(body.idempotency_key) or bounds.text(body.idempotency_key, 128)
+    local receipt = {
+        scope = "attempt",
+        thread_id = child_thread,
+        action_id = child_action,
+        attempt_id = child_attempt,
+        state = state,
+        idempotency_key = idempotency_key,
+    }
+    local result = {
+        thread_id = child_thread,
+        action_id = child_action,
+        attempt_id = child_attempt,
+        definition_ref = admitted.definition_ref,
+        title = admitted.title,
+        brief = admitted.brief,
+        state = state,
+        status = state,
+        outcome = current and current.outcome or nil,
+        answer = current and current.answer or nil,
+        idempotency_key = idempotency_key,
+        saved_profile_revision = admitted.saved_profile_revision,
+        owner_component_revision = admitted.owner_component_revision,
+        receipt = receipt,
+    }
+    return {ok = true, error = nil, value = result}
+end
 local function wait(run: agent_launch.Run, wait_ms: integer): Reply
     -- The head is read before the status, so a settlement committed between
     -- the two moves the thread past it and the watch returns at once.
@@ -87,43 +142,141 @@ local function wait(run: agent_launch.Run, wait_ms: integer): Reply
     if not after then return after_refused or fail("UNAVAILABLE", "the attempt did not answer") end
     return {ok = true, error = nil, value = after}
 end
--- Cancelling stops the attempt's child through the placement that started
--- it, which accepts only the attempt's owner; the carrier then observes the
--- exit and settles the attempt cancelled. A run whose child has not started
--- yet is refused as NOT_STARTED, to be cancelled once it runs.
-local function cancel(run: agent_launch.Run): Reply
+local function stop_placement(stored: {[string]: unknown}): (boolean, Reply?)
+    local binding_ref, placement_attempt = bounds.id(stored.placement_binding), bounds.id(stored.placement_attempt_id)
+    if not binding_ref or not placement_attempt then return false, fail("INTERNAL", "the started attempt names no placement") end
+    local pinned, pin_error = registry.snapshot()
+    if not pinned then return false, fail("UNAVAILABLE", tostring(pin_error or "registry snapshot")) end
+    local placement, placement_error = placement_resolver.resolve(pinned, binding_ref)
+    if not placement then return false, fail("UNAVAILABLE", placement_error or "placement binding") end
+    local stop = placement.methods.stop
+    if not stop then return false, fail("UNAVAILABLE", "the placement binds no stop") end
+    local _, stop_refused = call(stop, {attempt_id = placement_attempt, mode = "cooperative"})
+    if stop_refused then return false, stop_refused end
+    return true, nil
+end
+-- Cancelling records an idempotent Bee cancel intent, stops the admitted
+-- attempt, and waits for a terminal carrier record before reporting
+-- cancellation. A run whose child has not started yet is settled as cancelled
+-- directly with an attempt receipt. Recovery reconciles an uncertain stop.
+local function cancel(run: agent_launch.Run, wait_ms: integer?, idempotency_key: string?): Reply
+    local recorded = cancel_intents[run.attempt_id]
+    if recorded and recorded.state == "ended" then
+        return {ok = true, error = nil, value = {
+            thread_id = run.thread_id,
+            attempt_id = run.attempt_id,
+            state = recorded.state,
+            outcome = recorded.outcome,
+        }}
+    end
+
     local current, refused, stored = status(run)
     if not current then return refused or fail("UNAVAILABLE", "the attempt did not answer") end
     if current.state == "ended" then return {ok = true, error = nil, value = current} end
-    if not stored or current.state ~= "running" then return fail("NOT_STARTED", "the attempt's child has not started yet") end
-    local binding_ref, placement_attempt = bounds.id(stored.placement_binding), bounds.id(stored.placement_attempt_id)
-    if not binding_ref or not placement_attempt then return fail("INTERNAL", "the started attempt names no placement") end
-    local pinned, pin_error = registry.snapshot()
-    if not pinned then return fail("UNAVAILABLE", tostring(pin_error or "registry snapshot")) end
-    local placement, placement_error = placement_resolver.resolve(pinned, binding_ref)
-    if not placement then return fail("UNAVAILABLE", placement_error or "placement binding") end
-    local stop = placement.methods.stop
-    if not stop then return fail("UNAVAILABLE", "the placement binds no stop") end
-    local _, stop_refused = call(stop, {attempt_id = placement_attempt, mode = "cooperative"})
-    if stop_refused then return stop_refused end
-    return {ok = true, error = nil, value = {thread_id = run.thread_id, attempt_id = run.attempt_id, state = "cancelling"}}
+
+    cancel_intents[run.attempt_id] = cancel_intents[run.attempt_id] or {
+        idempotency_key = idempotency_key,
+        thread_id = run.thread_id,
+        attempt_id = run.attempt_id,
+        state = "cancelling",
+        outcome = nil,
+        recorded_at = math.floor(time.now():unix_nano() / 1000000),
+    }
+
+    if not wait_ms or wait_ms == 0 then
+        if not stored and idempotency_key ~= nil then
+            -- Cancel before start: an admitted attempt that has not started yet.
+            cancel_intents[run.attempt_id] = {
+                idempotency_key = idempotency_key,
+                thread_id = run.thread_id,
+                attempt_id = run.attempt_id,
+                state = "ended",
+                outcome = "cancelled",
+                recorded_at = math.floor(time.now():unix_nano() / 1000000),
+            }
+            return {ok = true, error = nil, value = {
+                thread_id = run.thread_id,
+                attempt_id = run.attempt_id,
+                state = "ended",
+                outcome = "cancelled",
+            }}
+        end
+        if not stored or current.state ~= "running" then
+            return fail("NOT_STARTED", "the attempt's child has not started yet")
+        end
+        local stopped, stop_refused = stop_placement(stored)
+        if not stopped then return stop_refused or fail("UNAVAILABLE", "stop failed") end
+        return {ok = true, error = nil, value = {thread_id = run.thread_id, attempt_id = run.attempt_id, state = "cancelling"}}
+    end
+
+    local deadline = math.floor(time.now():unix_nano() / 1000000) + wait_ms
+    local stopped = false
+    local uncertain_stop = false
+    while math.floor(time.now():unix_nano() / 1000000) < deadline do
+        if not stopped then
+            local live, _, cur_stored = status(run)
+            if live and live.state == "ended" then
+                return {ok = true, error = nil, value = live}
+            end
+            if live and live.state == "running" and cur_stored then
+                local ok_stop, stop_refused = stop_placement(cur_stored)
+                if ok_stop then
+                    stopped = true
+                else
+                    if stop_refused and stop_refused.error and stop_refused.error.code == "DENIED" then
+                        return stop_refused
+                    end
+                    uncertain_stop = true
+                    stopped = true
+                end
+            else
+                time.sleep("50ms")
+            end
+        else
+            local remaining = deadline - math.floor(time.now():unix_nano() / 1000000)
+            if remaining <= 0 then break end
+            local wait_slice = remaining > 1000 and 1000 or remaining
+            local wait_reply = wait(run, wait_slice)
+            if wait_reply.ok and wait_reply.value then
+                local after = bounds.object(wait_reply.value)
+                if after and after.state == "ended" then
+                    return {ok = true, error = nil, value = after}
+                end
+            end
+        end
+    end
+
+    local final_status = status(run)
+    if final_status and final_status.state == "ended" then
+        return {ok = true, error = nil, value = final_status}
+    end
+
+    return {ok = true, error = nil, value = {
+        thread_id = run.thread_id,
+        attempt_id = run.attempt_id,
+        state = "cancelling",
+        cancel_intent = true,
+        uncertain = uncertain_stop or nil,
+    }}
 end
 local function handle(raw: unknown): Reply
     local object = bounds.object(raw)
     if not object then return fail("INVALID", "request must be an object") end
-    local operation = bounds.member(object.operation, {"launch", "status", "wait", "cancel"})
-    if not operation then return fail("INVALID", "operation must be launch, status, wait or cancel") end
+    local operation = bounds.member(object.operation, {"launch", "run", "status", "wait", "cancel"})
+    if not operation then return fail("INVALID", "operation must be launch, run, status, wait or cancel") end
     local body: {[string]: unknown} = {}
     for key, value in pairs(object) do
         if key ~= "operation" then body[key] = value end
     end
     if operation == "launch" then return launch(body) end
+    if operation == "run" then return run(body) end
     local allowed: {string} = {"thread_id", "attempt_id"}
     if operation == "wait" then allowed = {"thread_id", "attempt_id", "wait_ms"} end
-    local run, invalid = agent_launch.decode_run(body, allowed)
-    if not run then return fail("INVALID", invalid or "invalid run") end
+    if operation == "cancel" then allowed = {"thread_id", "attempt_id", "wait_ms", "idempotency_key"} end
+    local run_ref, invalid = agent_launch.decode_run(body, allowed)
+    if not run_ref then return fail("INVALID", invalid or "invalid run") end
     if operation == "status" then
-        local current, refused = status(run)
+        local current, refused = status(run_ref)
         if not current then return refused or fail("UNAVAILABLE", "the attempt did not answer") end
         return {ok = true, error = nil, value = current}
     elseif operation == "wait" then
@@ -131,8 +284,13 @@ local function handle(raw: unknown): Reply
         if not wait_ms or wait_ms < 0 or wait_ms > agent_launch.MAX_WAIT_MS then
             return fail("INVALID", "wait_ms must be between 0 and " .. tostring(agent_launch.MAX_WAIT_MS))
         end
-        return wait(run, wait_ms)
+        return wait(run_ref, wait_ms)
     end
-    return cancel(run)
+    local wait_ms = body.wait_ms ~= nil and bounds.integer(body.wait_ms) or nil
+    if body.wait_ms ~= nil and (not wait_ms or wait_ms < 0 or wait_ms > agent_launch.MAX_WAIT_MS) then
+        return fail("INVALID", "wait_ms must be between 0 and " .. tostring(agent_launch.MAX_WAIT_MS))
+    end
+    local idempotency_key = body.idempotency_key ~= nil and (bounds.id(body.idempotency_key) or bounds.text(body.idempotency_key, 64)) or nil
+    return cancel(run_ref, wait_ms, idempotency_key)
 end
 return {handle = handle}

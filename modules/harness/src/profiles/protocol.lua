@@ -8,13 +8,13 @@ M.MAX_OPTIONS = 9
 type Workdir = {root_ref: string, path: string}
 type Thread = {thread_id: string}
 type Profile = {title: string, definition_ref: string, options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string,
-    workdir: Workdir?, thread: Thread?}
+    workdir: Workdir?, thread: Thread?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?}
 type Request = {operation: string, workspace_id: string, profile_id: string, profile: Profile?, expected_revision: integer, idempotency_key: string, after_key: string, expected_cursor: integer?, limit: integer}
 
 function M.profile(value: unknown): (Profile?, string?)
     local object = bounds.object(value)
     if not object then return nil, "profile must be an object" end
-    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "workdir", "thread"})
+    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "workdir", "thread", "agent_ref", "owner_component_revision", "owner_revision", "spec_digest"})
     if extra then return nil, extra end
     local title = bounds.line(object.title, 80)
     if not title or title:match("^%s*$") then return nil, "title must contain 1 to 80 printable bytes" end
@@ -65,8 +65,28 @@ function M.profile(value: unknown): (Profile?, string?)
         if not thread_id then return nil, "thread.thread_id must be an identifier" end
         thread = {thread_id = thread_id}
     end
+    local agent_ref: string? = nil
+    if object.agent_ref ~= nil then
+        agent_ref = bounds.id(object.agent_ref)
+        if not agent_ref then return nil, "agent_ref must be an identifier" end
+    end
+    local owner_component_revision: integer? = nil
+    local rev_raw = object.owner_component_revision ~= nil and object.owner_component_revision or object.owner_revision
+    if rev_raw ~= nil then
+        local count = bounds.count(rev_raw)
+        if not count or count < 1 then return nil, "owner_component_revision must be a positive integer" end
+        owner_component_revision = count
+    end
+    local spec_digest: string? = nil
+    if object.spec_digest ~= nil then
+        local digest = bounds.text(object.spec_digest, 64)
+        if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
+            return nil, "spec_digest must be a lowercase SHA-256 hex digest"
+        end
+        spec_digest = digest
+    end
     return {title = title, definition_ref = definition_ref, options = options, mcp_tools = tools, instructions = instructions,
-        workdir = workdir, thread = thread}, nil
+        workdir = workdir, thread = thread, agent_ref = agent_ref, owner_component_revision = owner_component_revision, spec_digest = spec_digest}, nil
 end
 -- agent_preferences: narrow a saved profile to one resolved agent closure.
 -- The host agent model mapping owns the model option, and the profile may

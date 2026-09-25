@@ -84,7 +84,7 @@ local function define_tests()
             test.eq(aliased.owner_component_revision, 2)
         end)
         test.it("refuses malformed agent reference, owner component revision or spec digest", function()
-            local _, bad_ref = protocol.profile({title = "P", definition_ref = "bee:codex", agent_ref = "not an id!"})
+            local _, bad_ref = protocol.profile({title = "P", definition_ref = "bee:codex", agent_ref = "bad\0ref"})
             test.eq(bad_ref, "agent_ref must be an identifier")
 
             for _, bad_rev in ipairs({0, -1, 1.5, "1", math.huge}) do
@@ -136,7 +136,7 @@ local function define_tests()
         test.it("refuses cross-workspace or invalid workspace identities", function()
             local _, bad_ws = protocol.decode({
                 operation = "get",
-                workspace_id = "not a valid id!",
+                workspace_id = "bad\0workspace",
                 profile_id = "profile"
             })
             test.eq(bad_ws, "workspace_id must be an identifier")

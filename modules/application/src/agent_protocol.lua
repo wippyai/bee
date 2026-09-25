@@ -18,14 +18,15 @@ type Thread = {thread_id: string?, title: string?}
 -- workspace_id names the workspace to launch into; absent, it is the caller's
 -- own. A saved profile selects preferences for its own definition_ref.
 type Launch = {definition_ref: string, brief: string, idempotency_key: string, workspace_id: string?,
-    saved_profile_id: string?, saved_profile_revision: integer?, workdir: Workdir?, thread: Thread?, placement: string?}
+    saved_profile_id: string?, saved_profile_revision: integer?, workdir: Workdir?, thread: Thread?, placement: string?,
+    agent_ref: string?, owner_component_revision: integer?, spec_digest: string?}
 local function fields(value: unknown, allowed: {string}): string?
     return bounds.fields(value, allowed)
 end
 function M.decode(value: unknown): (Launch?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown = fields(object, {"definition_ref", "brief", "idempotency_key", "workspace_id", "saved_profile_id", "saved_profile_revision", "workdir", "thread", "placement"})
+    local unknown = fields(object, {"definition_ref", "brief", "idempotency_key", "workspace_id", "saved_profile_id", "saved_profile_revision", "workdir", "thread", "placement", "agent_ref", "owner_component_revision", "owner_revision", "spec_digest", "expected_spec_digest"})
     if unknown then return nil, unknown end
     local definition_ref = bounds.id(object.definition_ref)
     if not definition_ref then return nil, "definition_ref is not an identifier" end
@@ -84,7 +85,29 @@ function M.decode(value: unknown): (Launch?, string?)
         placement = bounds.member(object.placement, M.PLACEMENTS)
         if not placement then return nil, "placement must be native or docker" end
     end
+    local agent_ref: string? = nil
+    if object.agent_ref ~= nil then
+        agent_ref = bounds.id(object.agent_ref)
+        if not agent_ref then return nil, "agent_ref is not an identifier" end
+    end
+    local owner_component_revision: integer? = nil
+    local rev_raw = object.owner_component_revision ~= nil and object.owner_component_revision or object.owner_revision
+    if rev_raw ~= nil then
+        local count = bounds.count(rev_raw)
+        if not count or count < 1 then return nil, "owner_component_revision must be a positive integer" end
+        owner_component_revision = count
+    end
+    local spec_digest: string? = nil
+    local digest_raw = object.spec_digest ~= nil and object.spec_digest or object.expected_spec_digest
+    if digest_raw ~= nil then
+        local digest = bounds.text(digest_raw, 64)
+        if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
+            return nil, "spec_digest must be a lowercase SHA-256 hex digest"
+        end
+        spec_digest = digest
+    end
     return {definition_ref = definition_ref, brief = brief, idempotency_key = idempotency_key, workspace_id = workspace_id,
-        saved_profile_id = saved_profile_id, saved_profile_revision = saved_profile_revision, workdir = workdir, thread = thread, placement = placement}, nil
+        saved_profile_id = saved_profile_id, saved_profile_revision = saved_profile_revision, workdir = workdir, thread = thread, placement = placement,
+        agent_ref = agent_ref, owner_component_revision = owner_component_revision, spec_digest = spec_digest}, nil
 end
 return M

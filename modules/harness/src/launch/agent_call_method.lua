@@ -23,13 +23,13 @@ local function handle(raw: unknown): {[string]: unknown}
     local bound = current and bounds.id(current:meta().workspace_id)
     if not bound then return fail("UNAUTHENTICATED", "the call is not bound to a workspace") end
     local requested: string? = nil
-    if object.operation == "launch" then
+    if object.operation == "launch" or object.operation == "run" then
         local body: {[string]: unknown} = {}
         for key, value in pairs(object) do
             if key ~= "operation" then body[key] = value end
         end
         local request, invalid = agent_protocol.decode(body)
-        if not request then return fail("INVALID", invalid or "invalid launch request") end
+        if not request then return fail("INVALID", invalid or ("invalid " .. tostring(object.operation) .. " request")) end
         if not security.can(agent_launch.APPLICATION_ACTION, request.definition_ref) then
             return fail("LAUNCH_NOT_PERMITTED", "this application may not launch " .. request.definition_ref)
         end

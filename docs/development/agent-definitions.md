@@ -9,9 +9,10 @@ future behavior.
 Source citations use paths from the Bee repository root. `../framework` and
 `../dataflow` are sibling Wippy repositories; `../../kickside/main` is the
 Kickside reference tree. Line numbers refer to the surveyed source trees.
-The section "Implemented: framework closure and CLI admission" describes the
-implemented Bee contract in present tense; every other non-survey section
-remains a proposal.
+The sections "Implemented: framework closure and CLI admission",
+"Implemented: workspace agent selection", and "Implemented: agent run as a
+function and cancellation contract" describe the implemented Bee contract in
+present tense; every other non-survey section remains a proposal.
 
 ## Implemented: framework closure and CLI admission
 
@@ -60,6 +61,60 @@ trait keeps its prompt with those aliases. The alias carries no authority;
 the host supplies one policy list per function id, and selection still
 refuses any tool outside the admitted ceiling. The function still executes
 under a host-selected scope.
+
+## Implemented: workspace agent selection
+
+A workspace stores the selected framework agent reference (`agent_ref`), the
+owner-issued component revision (`owner_component_revision`) and the computed
+spec digest (`spec_digest`) in workspace-keyed state (`bee:saved_profiles`).
+Selection, validation and saving execute under the caller's workspace authority;
+access across workspaces is refused without explicit cross-workspace authority
+(`DENIED`, `CROSS_WORKSPACE_FORBIDDEN`).
+
+`bee.harness.profiles:protocol` (`modules/harness/src/profiles/protocol.lua`)
+resolves the referenced agent through `bee.harness.launch:agent_resolver` from
+a single pinned registry snapshot, computing the 64-hex SHA-256 digest of the
+canonical spec and its trait, tool, delegate and contract closure. Saving a
+profile records that `spec_digest` alongside the owner component revision.
+Admission re-verifies the component revision and spec digest before granting
+any resources or projecting credentials; a concurrent edit or mismatched
+revision returns `CONFLICT`, requiring replanning. Both the saved profile
+revision and the owner component revision are pinned in the attempt plan and
+returned in durable attempt identities. The wire decoder `agent_protocol.decode`
+(`modules/application/src/agent_protocol.lua`) and `agent_launch.decode_launch`
+validate these optional fields at the typed boundary.
+
+## Implemented: agent run as a function and cancellation contract
+
+A managed agent can be executed as an ordinary function through the
+application facade `bee.harness.launch:agent_call`
+(`modules/harness/src/launch/agent_call_method.lua`,
+`modules/harness/src/launch/agent_call_backend.lua`) and the Lua application
+library `agents` (`modules/application/src/agents.lua`).
+
+1. **Prompt durable receipts:** `operation = "run"` (`agents.run`) starts an
+   admitted child and returns a durable receipt promptly:
+   `scope = "attempt"`, `thread_id`, `action_id`, `attempt_id`, `state`,
+   `status`, `idempotency_key`, and the nested attempt `receipt`. An idempotent
+   replay with the same key returns the identical attempt receipt.
+2. **Lifecycle operations:** Standard `status`, `wait` and `cancel` operations
+   accept the attempt and thread identifiers. `wait` observes thread records
+   up to a bounded `wait_ms`.
+3. **Idempotent cancellation and carrier settlement:** `operation = "cancel"`
+   (`agents.cancel`) records an idempotent Bee cancel intent.
+   - An attempt cancelled before start (admitted without a running carrier) is
+     settled directly as cancelled with `state = "ended"` and `outcome = "cancelled"`.
+   - When `wait_ms` is provided, cancellation requests placement stop and
+     waits up to `wait_ms` for the terminal carrier record before reporting
+     settlement.
+   - When called without `wait_ms` on a child that has not started yet,
+     cancellation returns typed `NOT_STARTED` to allow retry loops until running.
+4. **Dataflow `func` node contract:** A durable Dataflow `func` node invokes
+   `operation = "run"`, checkpoints the durable receipt and deterministic
+   idempotency key before bounded waits, observes terminal status via `wait`,
+   and triggers cancellation with an idempotent intent that awaits terminal
+   carrier records. Recovery reconciles an uncertain stop under the attempt's
+   fenced epoch without requiring an agent-specific node type.
 
 ## Current state informing the proposal
 
@@ -304,7 +359,15 @@ deliberate migration; no applied migration is edited.
    or can they wrap a small Bee execution contract with domain-specific output?
 3. How should a workspace select a user agent supplied by a resolver while
    pinning both component state revision and the resulting framework spec?
+   (Answered by the implemented workspace agent selection: stored `agent_ref`,
+   `owner_component_revision` and `spec_digest` in workspace state, resolved
+   under workspace authority from one snapshot, re-verified before admission,
+   and pinned in the attempt plan.)
 4. Which image identity and attestation evidence must Docker admission pin,
    including multi-platform manifests and image updates?
 5. What is the exact cancellation and checkpoint handshake between a durable
    Dataflow function node, the Bee attempt and the native Wippy driver?
+   (Answered by the implemented function run lifecycle: `run` returns a durable
+   receipt promptly, checkpointed by Dataflow before bounded waits; `cancel`
+   records an idempotent Bee cancel intent, stops the attempt, and waits for a
+   terminal carrier record; recovery reconciles uncertain stops.)

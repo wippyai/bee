@@ -298,12 +298,15 @@ desktop-client-check: desktop-client-core-check desktop-client-launch-check desk
 desktop-client-core-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/client_desktop.py
 .PHONY: session-fallback-check
+check: session-fallback-check
 session-fallback-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(session_failure=True)'
 .PHONY: session-upgrade-check
+check: session-upgrade-check
 session-upgrade-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(session_upgrade=True)'
 .PHONY: session-upgrade-fallback-check
+check: session-upgrade-fallback-check
 session-upgrade-fallback-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(failed_session_upgrade=True)'
 desktop-client-launch-check:

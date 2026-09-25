@@ -352,6 +352,11 @@ local function define_tests()
             decoded.profile_id = "window"
             test.is_nil(materialization.login_notice(decoded, "/owner", exists, true))
             test.eq(#checked, 3)
+            -- A retained login projection cannot satisfy a provider whose
+            -- own home override points outside the retained home.
+            decoded.environment.CODEX_HOME = "/other"
+            local projected_elsewhere = materialization.login_notice(decoded, "/owner", exists, true)
+            test.eq(projected_elsewhere and projected_elsewhere.code, "LOGIN_REQUIRED")
             test.is_nil(materialization.login_notice(decoded, "/owner", function(path: string): boolean? return nil end))
         end)
         test.it("checks all five provider layouts in the home selected for each window", function()

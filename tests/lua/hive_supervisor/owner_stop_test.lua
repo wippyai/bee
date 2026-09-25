@@ -33,6 +33,11 @@ local function define_tests()
             test.is_true(owner_stop.stops({alone = true}, "client-a", {["client-a"] = true}))
             test.is_false(owner_stop.stops({alone = true}, "client-a", {["client-a"] = true, ["client-b"] = true}))
         end)
+        test.it("accepts the forwarded stop only from this node's supervisor", function()
+            test.is_true(owner_stop.from_supervisor("{node@bee.hive:supervisor_host|0x1}", "{node@bee.hive:supervisor_host|0x1}"))
+            test.is_false(owner_stop.from_supervisor("{node@bee:workers|0x2}", "{node@bee.hive:supervisor_host|0x1}"))
+            test.is_false(owner_stop.from_supervisor("{node@bee.hive:supervisor_host|0x1}", nil))
+        end)
     end)
 end
 

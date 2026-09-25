@@ -9,15 +9,15 @@ local io = require("io")
 local system = require("system")
 local logger = require("logger")
 local leases = require("leases")
-
-local SUPERVISOR = "bee.hive.supervisor"
+local owner_stop = require("owner_stop")
+local types = require("types")
 
 local function main()
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
     -- The node serves once its host manager and Hive supervisor run.
     local deadline = time.after("10s")
-    while not process.registry.lookup(leases.MANAGER) or not process.registry.lookup(SUPERVISOR) do
+    while not process.registry.lookup(leases.MANAGER) or not process.registry.lookup(types.SUPERVISOR_NAME) do
         local selected = channel.select({time.after("50ms"):case_receive(), deadline:case_receive(), events:case_receive()})
         if selected.channel == deadline then error("The node's host manager or Hive supervisor did not start") end
         if selected.channel == events and selected.value.kind == process.event.CANCEL then return end
@@ -28,12 +28,26 @@ local function main()
     if not node or node == "" or not seed or seed == "" then
         node, seed = "local", "-"
     end
+    -- The runtime waits on this command; a stop from the local supervisor
+    -- ends it after requesting the runtime's graceful shutdown.
+    local stops, stops_error = process.listen(owner_stop.TOPIC, {message = true})
+    if not stops then error(tostring(stops_error)) end
+    local named, name_error = process.registry.register(owner_stop.COMMAND)
+    if not named then error("Register daemon command: " .. tostring(name_error)) end
     logger:info("Bee daemon ready", {node = node})
     assert(io.print("BEE_DAEMON_READY " .. node .. " " .. seed .. " " .. self))
     while true do
-        local selected = channel.select({events:case_receive()})
-        if not selected.ok or selected.value.kind == process.event.CANCEL then return end
+        local selected = channel.select({events:case_receive(), stops:case_receive()})
+        if not selected.ok or (selected.channel == events and selected.value.kind == process.event.CANCEL) then break end
+        if selected.channel == stops and owner_stop.from_supervisor(tostring(selected.value:from()),
+            process.registry.lookup(types.SUPERVISOR_NAME)) then
+            local exited, exit_error = system.exit(0)
+            if not exited then error("Daemon stop: " .. tostring(exit_error)) end
+            break
+        end
     end
+    process.registry.unregister(owner_stop.COMMAND)
+    process.unlisten(stops)
 end
 
 return {main = main}

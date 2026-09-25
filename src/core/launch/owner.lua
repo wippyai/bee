@@ -11,6 +11,8 @@ local ownership = require("ownership")
 local registry = require("registry")
 local decode = require("decode")
 local workspaces = require("workspaces")
+local owner_stop = require("owner_stop")
+local types = require("types")
 
 local function main()
     local supervisor = ""
@@ -23,6 +25,12 @@ local function main()
     if not owner_name or not bridge_name then error("Invalid retained workspace selection") end
     local ready, ready_error = process.listen("bee.retained.ready", {message = true})
     if not ready then error(tostring(ready_error)) end
+    -- The runtime waits on this command; a stop from the local supervisor
+    -- ends it after requesting the runtime's graceful shutdown.
+    local stops, stops_error = process.listen(owner_stop.TOPIC, {message = true})
+    if not stops then error(tostring(stops_error)) end
+    local command_named, command_error = process.registry.register(owner_stop.COMMAND)
+    if not command_named then error("Register owner command: " .. tostring(command_error)) end
     local function run()
         local bridged = false
         local events, events_error = process.events()
@@ -62,12 +70,18 @@ local function main()
         local announced = false
         local deadline = time.after("10s")
         while true do
-            local cases = {ready:case_receive(), events:case_receive()}
+            local cases = {ready:case_receive(), events:case_receive(), stops:case_receive()}
             if not announced then cases[#cases + 1] = deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Retained owner channel closed") end
             if selected.channel == deadline then error("Retained workspace startup timed out") end
-            if selected.channel == events then
+            if selected.channel == stops then
+                if owner_stop.from_supervisor(tostring(selected.value:from()), process.registry.lookup(types.SUPERVISOR_NAME)) then
+                    local exited, exit_error = system.exit(0)
+                    if not exited then error("Owner stop: " .. tostring(exit_error)) end
+                    return
+                end
+            elseif selected.channel == events then
                 local event = selected.value
                 if event.kind == process.event.CANCEL then return end
                 if event.kind == process.event.EXIT and tostring(event.from) == supervisor then
@@ -100,6 +114,8 @@ local function main()
     local ok, err = pcall(run)
     if supervisor ~= "" then process.terminate(supervisor) end
     if registered then process.registry.unregister(owner_name) end
+    process.registry.unregister(owner_stop.COMMAND)
+    process.unlisten(stops)
     process.unlisten(ready)
     if not ok then error(err) end
 end

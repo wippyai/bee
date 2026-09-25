@@ -33,7 +33,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash, system]
+  modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash]
   security: {policies: [bee:hive_policy_exposure_policy]}
   imports:
     types: bee.hive:types

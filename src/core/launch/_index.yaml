@@ -95,6 +95,8 @@ entries:
     ownership: bee.launch:ownership
     decode: bee.protocol:decode
     workspaces: bee.storage:binding
+    owner_stop: bee.hive.supervisor:owner_stop
+    types: bee.hive:types
   meta:
     comment: Retained workspace owner selected by the native launch host under the runtime state lock
     command:
@@ -103,7 +105,7 @@ entries:
       short: Run the retained Bee workspace owner
       security:
         actor: {id: bee.local}
-        policies: [bee:desktop_policy, bee:retained_owner_spawn_policy, bee:retained_owner_name_policy, bee:retained_owner_node_policy]
+        policies: [bee:desktop_policy, bee:retained_owner_spawn_policy, bee:retained_owner_name_policy, bee:retained_owner_node_policy, bee:owner_command_stop_policy]
 - name: daemon
   kind: process.lua
   source: file://daemon.lua
@@ -111,6 +113,8 @@ entries:
   modules: [process, channel, time, io, system, logger]
   imports:
     leases: bee.application:host_leases
+    owner_stop: bee.hive.supervisor:owner_stop
+    types: bee.hive:types
   meta:
     comment: The node daemon selected by the native launch host under the runtime state lock; it composes no folder workspace
     command:
@@ -119,7 +123,7 @@ entries:
       short: Run the node's services without a folder workspace
       security:
         actor: {id: bee.local}
-        policies: [bee:retained_owner_node_policy]
+        policies: [bee:retained_owner_node_policy, bee:owner_command_stop_policy]
 - name: hosts
   kind: library.lua
   source: file://hosts.lua

@@ -97,6 +97,11 @@ app-dashboard-check:
 # review in Overlays, approval in Approvals, apply, open from Start, restore.
 workspace-app-delivery-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/workspace_app_delivery.py
+# Explicit live-provider proof of the same journey: the installed, logged-in
+# Claude Code builds the application from the spec; consumes inference.
+.PHONY: workspace-app-delivery-live-check
+workspace-app-delivery-live-check:
+	BEE_WORKSPACE_APP_PROVIDER=claude BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/workspace_app_delivery.py
 .PHONY: delivery-review-check
 # What a person approves: the destination's own verdict, the diagnostics that
 # block it, the entry set the plan changes, and the approval and activation

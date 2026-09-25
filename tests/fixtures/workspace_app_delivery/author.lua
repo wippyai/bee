@@ -67,10 +67,10 @@ local function await_exit(pid: string)
     if not monitored then error(tostring(monitor_error)) end
     local events = process.events()
     if not events then error("process events unavailable") end
-    local deadline = time.after("300s")
+    local deadline = time.after("1200s")
     while true do
         local selected = channel.select({events:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then error("managed attempt exceeded 300s") end
+        if not selected.ok or selected.channel == deadline then error("managed attempt exceeded 1200s") end
         local event = selected.value
         if event.kind == process.event.EXIT and tostring(event.from) == pid then
             if event.result and event.result.error then error("managed carrier failed: " .. tostring(event.result.error)) end
@@ -80,8 +80,9 @@ local function await_exit(pid: string)
 end
 
 -- The scripted agent writes its report as one stderr line; the carrier keeps
--- stderr on the bound thread as a stream observation.
-local function agent_report(): Object
+-- stderr on the bound thread as a stream observation. A live provider writes
+-- none, and its work is judged by the staged plan alone.
+local function agent_report(): Object?
     local cursor = 0
     for _ = 1, 64 do
         local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = cursor, limit = 64})
@@ -106,7 +107,7 @@ local function agent_report(): Object
         if not next_cursor or next_cursor <= cursor then error("invalid thread page progress") end
         cursor = next_cursor
     end
-    error("the agent left no report on " .. THREAD)
+    return nil
 end
 
 local function main()
@@ -122,7 +123,8 @@ local function main()
     local started = call("bee.harness.launch:start", {request_id = "workspace-app-author",
         definition_ref = DEFINITION, workspace_id = workspace_id, thread_id = THREAD, brief = brief})
     await_exit(tostring(started.carrier))
-    io.print("WORKSPACE_APP_AUTHORED " .. tostring(json.encode(agent_report())))
+    local report = agent_report()
+    io.print("WORKSPACE_APP_AUTHORED " .. (report and tostring(json.encode(report)) or "{}"))
 end
 
 return {main = main}

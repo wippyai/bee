@@ -135,6 +135,10 @@ receipts. A fixture-enabled Claude structured carrier can insert an identified
 item between turns through its fenced stdin controller. Shipped production
 policies leave that path disabled pending executable acceptance. The gateway
 does not type into a PTY or forward inbox messages across Hive.
+`session_send` and `session_inbox` expose the persisted `delivery_status`:
+`waiting_for_restart` when the target has no live attempt and `undeliverable`
+when its action has ended. These statuses do not change the item's receipt
+`state` or grant an automatic restart.
 
 delivery and publish take their destination `workspace_id` from the binding:
 an omitted `workspace_id` is the binding's own workspace, a request naming any

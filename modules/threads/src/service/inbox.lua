@@ -56,6 +56,31 @@ local function target(tx: sql.Transaction, thread_id: string, action_id: string)
     if not owner then return nil, nil, refused end
     return head, owner, nil
 end
+local function delivery_block(tx: sql.Transaction, thread_id: string, action_id: string): (string?, Result?)
+    local action, action_err = reader.action(tx, thread_id, action_id)
+    if action_err or not action then return nil, storage(action_err or "read target action") end
+    if action.state == "ended" then return "undeliverable", nil end
+    local live, live_err = reader.running_attempt(tx, thread_id, action_id)
+    if live_err then return nil, storage(live_err) end
+    if not live then return "waiting_for_restart", nil end
+    return nil, nil
+end
+local function delivery_status(item: InboxRow): string
+    local state = tostring(item.state)
+    if state == "acknowledged" or state == "replied" then return state end
+    return type(item.delivery_block) == "string" and item.delivery_block :: string or state
+end
+-- Lifecycle receipts and inbox status commit in the same owner transaction.
+-- A late carrier can no longer claim a settled attempt; an unacknowledged
+-- item keeps its receipt state but tells senders what delivery now needs.
+function M.attempt_ended(tx: sql.Transaction, thread_id: string, action_id: string): Result?
+    return execute(tx, "UPDATE bee_thread_inbox_items SET delivery_block = 'waiting_for_restart' " ..
+        "WHERE thread_id = ? AND action_id = ? AND state NOT IN ('acknowledged','replied')", {thread_id, action_id})
+end
+function M.action_ended(tx: sql.Transaction, thread_id: string, action_id: string): Result?
+    return execute(tx, "UPDATE bee_thread_inbox_items SET delivery_block = 'undeliverable' " ..
+        "WHERE thread_id = ? AND action_id = ? AND state NOT IN ('acknowledged','replied')", {thread_id, action_id})
+end
 local function own_action(tx: sql.Transaction, actor: string, thread_id: string, action_id: string): (reader.Head?, Result?)
     local head, principal_id, refused = target(tx, thread_id, action_id)
     if not head then return nil, refused end
@@ -149,10 +174,10 @@ function M.describe(db: sql.DB, actor: string, request: unknown): Result
             if not attempt or attempt.action_id ~= action_id then return failure("NOT_FOUND", "attempt is not on target action") end
             state = attempt.state
         end
-        local latest, latest_err = rows(tx, "SELECT state, inbox_sequence FROM bee_thread_inbox_items WHERE thread_id = ? AND action_id = ? ORDER BY inbox_sequence DESC LIMIT 1", {thread_id, action_id})
+        local latest, latest_err = rows(tx, "SELECT state, delivery_block, inbox_sequence FROM bee_thread_inbox_items WHERE thread_id = ? AND action_id = ? ORDER BY inbox_sequence DESC LIMIT 1", {thread_id, action_id})
         if not latest then return latest_err or storage("read latest inbox state") end
         return transaction.success({node_id = node_id, action_id = action_id, grant_epoch = current, attempt_state = state,
-            delivery_state = latest[1] and latest[1].state or "empty", last_inbox_sequence = latest[1] and latest[1].inbox_sequence or 0,
+            delivery_state = latest[1] and delivery_status(latest[1]) or "empty", last_inbox_sequence = latest[1] and latest[1].inbox_sequence or 0,
             sendable = access.may_send(resource)}, false)
     end)
 end
@@ -190,6 +215,8 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
         if node_id ~= node() then return failure("NOT_FOUND", "destination node is not local: " .. node_id .. "/" .. node()) end
         if not head.workspace_id or head.workspace_id ~= access.workspace() then return failure("DENIED", "sender and recipient workspaces differ") end
         if not access.may_send(address(head.workspace_id, node_id, target_action)) then return failure("DENIED", "no host send grant for address") end
+        local blocked, block_err = delivery_block(tx, mutation.thread_id, target_action)
+        if block_err then return block_err end
         local source, source_err = own_action(tx, actor, sender_thread, sender_action)
         if not source then return source_err or failure("DENIED", "sender action unavailable") end
         local replayed, replay_err = authority.replay(tx, actor, is_reply and "inbox_reply" or "inbox_send", mutation)
@@ -237,21 +264,22 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
         if not recorded then return failure("INTERNAL", recorded_err or "inbox record invalid") end
         local committed, commit_err = authority.commit_record(tx, head, "message", actor, "bee", recorded, {}, nil, nil, 0)
         if not committed then return commit_err or failure("INTERNAL", "commit failed") end
-        local insert_err = execute(tx, "INSERT INTO bee_thread_inbox_items (thread_id, action_id, inbox_sequence, record_id, payload_digest, sender_actor, sender_action_id, sender_node_id, sender_thread_id, message_id, state, in_reply_to_thread_id, in_reply_to_record_id) " ..
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?, ?)",
+        local insert_err = execute(tx, "INSERT INTO bee_thread_inbox_items (thread_id, action_id, inbox_sequence, record_id, payload_digest, sender_actor, sender_action_id, sender_node_id, sender_thread_id, message_id, state, delivery_block, in_reply_to_thread_id, in_reply_to_record_id) " ..
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?, ?, ?)",
             {mutation.thread_id, target_action, sequence, committed.record_id, digest, actor, sender_action, node_id, sender_thread, message_id,
-                decoded.in_reply_to and decoded.in_reply_to.thread_id or sql.NULL, decoded.in_reply_to and decoded.in_reply_to.record_id or sql.NULL})
+                blocked or sql.NULL, decoded.in_reply_to and decoded.in_reply_to.thread_id or sql.NULL, decoded.in_reply_to and decoded.in_reply_to.record_id or sql.NULL})
         if insert_err then return insert_err end
         local advance_err = execute(tx, "UPDATE bee_thread_inbox_epochs SET next_sequence = ? WHERE thread_id = ? AND action_id = ?",
             {sequence + 1, mutation.thread_id, target_action})
         if advance_err then return advance_err end
         if original then
-            local update_err = execute(tx, "UPDATE bee_thread_inbox_items SET state = 'replied', reply_thread_id = ?, reply_record_id = ? WHERE thread_id = ? AND record_id = ?",
+            local update_err = execute(tx, "UPDATE bee_thread_inbox_items SET state = 'replied', delivery_block = NULL, reply_thread_id = ?, reply_record_id = ? WHERE thread_id = ? AND record_id = ?",
                 {mutation.thread_id, committed.record_id, original.thread_id, original.record_id})
             if update_err then return update_err end
         end
         return authority.remember(tx, actor, is_reply and "inbox_reply" or "inbox_send", mutation,
-            {record_id = committed.record_id, thread_sequence = committed.sequence, inbox_sequence = sequence, payload_digest = digest, state = "committed"})
+            {record_id = committed.record_id, thread_sequence = committed.sequence, inbox_sequence = sequence, payload_digest = digest, state = "committed",
+                delivery_status = blocked or "committed"})
     end)
 end
 function M.send(db: sql.DB, actor: string, request: unknown): Result return send(db, actor, request, false) end
@@ -282,7 +310,7 @@ function M.list(db: sql.DB, actor: string, request: unknown): Result
             if not decoded then return failure("INTERNAL", decode_err or "stored inbox record is corrupt") end
             local body = decoded.body :: Object
             local view: Object = {thread_id = thread_id, inbox_sequence = item.inbox_sequence, record_id = item.record_id, thread_sequence = decoded.sequence,
-                payload_digest = item.payload_digest, state = item.state, sender_action_id = item.sender_action_id,
+                payload_digest = item.payload_digest, state = item.state, delivery_status = delivery_status(item), sender_action_id = item.sender_action_id,
                 sender_node_id = item.sender_node_id, sender_thread_id = item.sender_thread_id, message_id = item.message_id,
                 content = body.content, message_kind = body.message_kind}
             if body.in_reply_to then view.in_reply_to = body.in_reply_to end
@@ -313,7 +341,7 @@ function M.ack(db: sql.DB, actor: string, request: unknown): Result
         if not item then return failure("NOT_FOUND", "inbox item does not exist") end
         local state = tostring(item.state)
         if state ~= "acknowledged" and state ~= "replied" then
-            local update_err = execute(tx, "UPDATE bee_thread_inbox_items SET state = 'acknowledged' WHERE thread_id = ? AND action_id = ? AND inbox_sequence = ?",
+            local update_err = execute(tx, "UPDATE bee_thread_inbox_items SET state = 'acknowledged', delivery_block = NULL WHERE thread_id = ? AND action_id = ? AND inbox_sequence = ?",
                 {mutation.thread_id, action_id, sequence})
             if update_err then return update_err end
             state = "acknowledged"
@@ -367,7 +395,7 @@ function M.offer(db: sql.DB, actor: string, request: unknown): Result
         local same_carrier = item.offer_attempt_id == attempt_id and tonumber(item.offer_carrier_epoch) == carrier_epoch
         local dispatch = not same_carrier or item.state == "committed"
         if dispatch then
-            local changed = execute(tx, "UPDATE bee_thread_inbox_items SET state = 'offered', offer_attempt_id = ?, offer_carrier_epoch = ?, " ..
+            local changed = execute(tx, "UPDATE bee_thread_inbox_items SET state = 'offered', delivery_block = NULL, offer_attempt_id = ?, offer_carrier_epoch = ?, " ..
                 "offer_count = offer_count + 1, offered_at = ?, transport_accepted_at = NULL WHERE thread_id = ? AND action_id = ? AND inbox_sequence = ?",
                 {attempt_id, carrier_epoch, transaction.now(), thread_id, action_id, item.inbox_sequence})
             if changed then return changed end

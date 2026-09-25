@@ -36,6 +36,7 @@ local function define_tests()
             local sent = harness.value(a:call("inbox_send", request))
             test.eq(sent.inbox_sequence, 1)
             test.eq(sent.state, "committed")
+            test.eq(sent.delivery_status, "waiting_for_restart")
             local replay = a:call("inbox_send", request)
             test.is_true(replay.replayed)
             test.eq(harness.value(replay).record_id, sent.record_id)
@@ -57,6 +58,7 @@ local function define_tests()
             test.eq(#inbox.items, 1)
             test.eq(inbox.items[1].record_id, sent.record_id)
             test.eq(inbox.items[1].payload_digest, request.payload_digest)
+            test.eq(inbox.items[1].delivery_status, "waiting_for_restart")
             local acknowledged = harness.value(b:call("inbox_ack", {thread_id = b_thread, action_id = "action-b", inbox_sequence = 1,
                 idempotency_key = harness.key()}))
             test.eq(acknowledged.state, "acknowledged")
@@ -71,6 +73,17 @@ local function define_tests()
             local a_inbox = harness.value(a:call("inbox_list", {thread_id = a_thread, action_id = "action-a", after_sequence = 0}))
             test.eq(a_inbox.items[1].in_reply_to.record_id, sent.record_id)
             test.eq(harness.value(b:call("inbox_list", {thread_id = b_thread, action_id = "action-b", after_sequence = 0})).items[1].state, "replied")
+            local queued_content = {text = "queued before the target ended"}
+            local queued = harness.value(a:call("inbox_send", {thread_id = b_thread, target_action_id = "action-b", sender_thread_id = a_thread,
+                sender_action_id = "action-a", node_id = node_id, grant_epoch = 2, idempotency_key = harness.key(), message_id = "queued-1",
+                content = queued_content, payload_digest = assert(sends.payload_digest({message_id = "queued-1", content = queued_content}))}))
+            test.eq(queued.delivery_status, "waiting_for_restart")
+            harness.value(b:call("receipt", {thread_id = b_thread, action_id = "action-b", idempotency_key = harness.key(),
+                receipt = {scope = "action", outcome = "succeeded", evidence_refs = {}}}))
+            local terminated = harness.value(b:call("inbox_list", {thread_id = b_thread, action_id = "action-b", after_sequence = 1}))
+            test.eq(terminated.items[1].record_id, queued.record_id)
+            test.eq(terminated.items[1].delivery_status, "undeliverable")
+            test.eq(harness.value(b:call("inbox_list", {thread_id = b_thread, action_id = "action-b", after_sequence = 0})).items[1].delivery_status, "replied")
             local c_id = "bee.application:" .. WORKSPACE .. ":window-c"
             local c = harness.principal(c_id, {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.threads:inbox_send_test_policy"}, WORKSPACE)
             local c_thread = harness.thread(c, "C")
@@ -79,7 +92,10 @@ local function define_tests()
             local class_send = harness.value(c:call("inbox_send", {thread_id = b_thread, target_action_id = "action-b", sender_thread_id = c_thread,
                 sender_action_id = "action-c", node_id = node_id, grant_epoch = 2, idempotency_key = harness.key(), message_id = "class-1",
                 content = class_content, payload_digest = assert(sends.payload_digest({message_id = "class-1", content = class_content}))}))
-            test.eq(class_send.inbox_sequence, 2)
+            test.eq(class_send.inbox_sequence, 3)
+            test.eq(class_send.delivery_status, "undeliverable")
+            local ended_item = harness.value(b:call("inbox_list", {thread_id = b_thread, action_id = "action-b", after_sequence = 1}))
+            test.eq(ended_item.items[1].delivery_status, "undeliverable")
         end)
         test.it("offers one ordered item under a carrier epoch and redelivers its identity after a crash", function()
             local grants = {"bee:thread_create_policy", "bee:thread_lifecycle_policy", "bee:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
@@ -141,6 +157,47 @@ local function define_tests()
             test.eq(late.record_id, next_item.record_id)
             test.eq(late.state, "acknowledged")
             test.eq(harness.value(target:call("inbox_offer", offer)).empty, true)
+        end)
+        test.it("records restart status when a live attempt settles with an unacknowledged item", function()
+            local grants = {"bee:thread_create_policy", "bee:thread_lifecycle_policy", "bee:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
+            local sender = harness.principal("restart-sender", grants, WORKSPACE)
+            local target = harness.principal("restart-target", grants, WORKSPACE)
+            local sender_thread = harness.thread(sender, "sender")
+            local target_thread = harness.thread(target, "target")
+            harness.value(sender:call("admit_action", {thread_id = sender_thread, idempotency_key = harness.key(),
+                action_id = "sender", admitted = admitted("restart-sender")}))
+            harness.value(target:call("admit_action", {thread_id = target_thread, idempotency_key = harness.key(),
+                action_id = "target", admitted = admitted("restart-target")}))
+            harness.value(target:call("prepare_attempt", {thread_id = target_thread, idempotency_key = harness.key(), action_id = "target",
+                attempt_id = "target-attempt", prepared = harness.prepared()}))
+            harness.value(target:call("start_attempt", {thread_id = target_thread, idempotency_key = harness.key(), action_id = "target",
+                attempt_id = "target-attempt", started = {execution_kind = "process", execution_ref = "target-attempt", owner_epoch = 1}}))
+            harness.value(target:call("inbox_accept", {thread_id = target_thread, action_id = "target", sender_id = "restart-sender",
+                allow = true, expected_epoch = 0, idempotency_key = harness.key()}))
+            local native = system.node.id()
+            local content = {text = "wait for a new turn"}
+            local sent = harness.value(sender:call("inbox_send", {thread_id = target_thread, target_action_id = "target",
+                sender_thread_id = sender_thread, sender_action_id = "sender", node_id = native and native ~= "" and native or "local",
+                grant_epoch = 1, idempotency_key = harness.key(), message_id = "restart-1", content = content,
+                payload_digest = assert(sends.payload_digest({message_id = "restart-1", content = content}))}))
+            test.eq(sent.delivery_status, "committed")
+            local epoch = harness.value(target:call("carrier_claim", {thread_id = target_thread, attempt_id = "target-attempt",
+                idempotency_key = harness.key()})).carrier_epoch
+            local offered = harness.value(target:call("inbox_offer", {thread_id = target_thread, action_id = "target",
+                attempt_id = "target-attempt", carrier_epoch = epoch}))
+            test.eq(offered.record_id, sent.record_id)
+            harness.value(target:call("inbox_transport", {thread_id = target_thread, action_id = "target", attempt_id = "target-attempt",
+                carrier_epoch = epoch, inbox_sequence = sent.inbox_sequence, record_id = sent.record_id}))
+            harness.value(target:call("receipt", {thread_id = target_thread, action_id = "target", attempt_id = "target-attempt",
+                carrier_epoch = epoch, idempotency_key = harness.key(), receipt = {scope = "attempt", outcome = "succeeded", evidence_refs = {}}}))
+            local waiting = harness.value(target:call("inbox_list", {thread_id = target_thread, action_id = "target", after_sequence = 0}))
+            test.eq(waiting.items[1].record_id, sent.record_id)
+            test.eq(waiting.items[1].state, "transport_accepted")
+            test.eq(waiting.items[1].delivery_status, "waiting_for_restart")
+            harness.value(target:call("receipt", {thread_id = target_thread, action_id = "target", idempotency_key = harness.key(),
+                receipt = {scope = "action", outcome = "succeeded", evidence_refs = {}}}))
+            local ended = harness.value(target:call("inbox_list", {thread_id = target_thread, action_id = "target", after_sequence = 0}))
+            test.eq(ended.items[1].delivery_status, "undeliverable")
         end)
     end)
 end

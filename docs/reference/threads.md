@@ -189,6 +189,14 @@ carrier reoffers the same record ID and digest. `inbox_transport` records that
 the transport accepted the offered input under that fence. An agent's own
 `inbox_ack` or correlated reply advances it to `acknowledged` or `replied`.
 Transport acceptance does not claim delivery to a running model.
+Each item also reports a persisted `delivery_status`. A send to an action with
+no live attempt records `waiting_for_restart`; a send to an ended action records
+`undeliverable`. These statuses leave the committed record and inbox sequence
+intact. An attempt receipt marks outstanding items `waiting_for_restart`; an
+action receipt marks them `undeliverable`. A later admitted carrier offer clears
+the restart blocker. The raw
+receipt `state` still follows `committed`, `offered`, `transport_accepted`, then
+`acknowledged` or `replied`.
 
 `inbox_reply` commits a reply in the original sender's action inbox and marks
 the referenced request `replied` in the same local transaction. Its explicit
@@ -347,7 +355,9 @@ the head column and its index and attributes existing threads whose owner is
 an application principal (`bee.application:<workspace_id>:<instance_id>`) to
 that workspace; every other existing thread stays node-level.
 Migration 11 (`action_inbox`) adds acceptance epochs, rules and ordered inbox
-items without changing prior records.
+items without changing prior records. Migration 12 (`action_inbox_push`) adds
+fenced offer and transport receipt fields. Migration 13
+(`action_inbox_delivery_status`) records restart and ended-action blockers.
 Applied migrations and their checksums are immutable. The owner keeps all
 table access behind typed contract methods; callers do not query another
 subsystem's tables or reset the database to bypass a migration failure.

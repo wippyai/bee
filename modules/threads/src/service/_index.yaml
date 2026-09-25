@@ -73,6 +73,7 @@ entries:
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
+    inbox: bee.threads.service:inbox
 - name: create
   kind: function.lua
   source: file://create_method.lua

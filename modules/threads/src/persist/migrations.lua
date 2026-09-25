@@ -495,6 +495,11 @@ ALTER TABLE bee_thread_inbox_items ADD COLUMN offer_count INTEGER NOT NULL DEFAU
 ALTER TABLE bee_thread_inbox_items ADD COLUMN offered_at TEXT;
 ALTER TABLE bee_thread_inbox_items ADD COLUMN transport_accepted_at TEXT;
 ]]
+-- Delivery blockers are distinct from receipt progression: a queued item
+-- keeps its committed state and identity until an admitted controller offers it.
+local ACTION_INBOX_DELIVERY_STATUS_SQL = [[
+ALTER TABLE bee_thread_inbox_items ADD COLUMN delivery_block TEXT CHECK(delivery_block IN ('waiting_for_restart','undeliverable'));
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -508,6 +513,7 @@ local list: {Migration} = {
     {id = 10, name = "workspace_attribution", sql = WORKSPACE_SQL, rebuild = false},
     {id = 11, name = "action_inbox", sql = ACTION_INBOX_SQL, rebuild = false},
     {id = 12, name = "action_inbox_push", sql = ACTION_INBOX_PUSH_SQL, rebuild = false},
+    {id = 13, name = "action_inbox_delivery_status", sql = ACTION_INBOX_DELIVERY_STATUS_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

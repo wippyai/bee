@@ -96,6 +96,7 @@ local function main(mode: string?)
     local saved_clients = assert(process.listen("bee.client.saved", {message = true}))
     local host_questions = assert(process.listen("bee.interaction.state", {message = true}))
     local session_restarted = assert(process.listen("bee.client.session_restarted", {message = true}))
+    local client_replacements = assert(process.listen("bee.client.replace", {message = true}))
     local events, event_error = process.events()
     if not events then error(tostring(event_error)) end
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
@@ -133,7 +134,7 @@ local function main(mode: string?)
             end
         end
     end
-    local function start(label: string, width: integer, launch: boolean): (string, tty.Viewport)
+    local function start(label: string, width: integer, launch: boolean): (string, tty.Viewport, desktops.Desktop)
         local selection: desktops.Selection = {host = host, workspace_id = workspace_id,
             database = "bee.client.db:" .. (shared_store and label == "right" and "left" or label), width = width, height = 32,
             application = launch and "bee.console:app" or nil,
@@ -175,10 +176,10 @@ local function main(mode: string?)
         -- A title precedes the attachment. Wait for real PTY output before input.
         if not launch and mode == "transfer-source-save-failure" and label == "left" then
             wait_text(screen, "No applications open")
-            return client, screen
+            return client, screen, desktop
         end
         wait_text(screen, "bash-")
-        if not launch and mode == "transfer-target-save-failure" then return client, screen end
+        if not launch and mode == "transfer-target-save-failure" then return client, screen, desktop end
         if launch then
             command(screen, "bee_desktop=" .. label .. "; printf 'DESKTOP_%s_OK\\n' \"$bee_desktop\"")
             wait_text(screen, "DESKTOP_" .. label .. "_OK")
@@ -190,10 +191,89 @@ local function main(mode: string?)
             command(screen, "printf 'RESUMED_%s_OK\\n' \"$bee_desktop\"")
             wait_text(screen, "RESUMED_" .. label .. "_OK")
         end
-        return client, screen
+        return client, screen, desktop
     end
-    local left, left_screen = start("left", 100, true)
-    local right, right_screen = start("right", 120, true)
+    local left, left_screen, left_resource = start("left", 100, true)
+    local right, right_screen, right_resource = start("right", 120, true)
+    if mode == "client-upgrade" then
+        command(left_screen, "printf 'CLIENT_BEFORE_left_%s_END\\n' \"$$\"")
+        wait_text(left_screen, "CLIENT_BEFORE_left_")
+        local before = table.concat(assert(left_screen:snapshot()).rows, "\n")
+        local left_shell = assert(before:match("CLIENT_BEFORE_left_(%d+)_END"))
+        command(right_screen, "printf 'CLIENT_BEFORE_right_%s_END\\n' \"$$\"")
+        wait_text(right_screen, "CLIENT_BEFORE_right_")
+        before = table.concat(assert(right_screen:snapshot()).rows, "\n")
+        local right_shell = assert(before:match("CLIENT_BEFORE_right_(%d+)_END"))
+        local entry = assert(registry.get("bee.client:main"))
+        entry.meta.handoff_probe = "client-definition-changed"
+        local changes = assert(registry.snapshot()):changes()
+        changes:update(entry)
+        assert(changes:apply())
+        local replacing: {[string]: boolean} = {}
+        local deadline = time.after("10s")
+        while not replacing[left] or not replacing[right] do
+            local selected = channel.select({client_replacements:case_receive(), deadline:case_receive()})
+            assert(selected.ok and selected.channel == client_replacements, "Desktop client definition change did not request replacement")
+            local message = selected.value
+            local sender = tostring(message:from())
+            assert(sender == left or sender == right, "Unexpected client replacement")
+            local value: unknown = message:payload():data()
+            assert(type(value) == "table" and value.version == 1 and value.workspace_id == workspace_id
+                and value.owner == owner and value.host == host and type(value.connection_id) == "string")
+            assert(process.send(sender, "bee.client.replace_ack", {version = 1, workspace_id = workspace_id,
+                display_id = value.display_id}))
+            replacing[sender] = true
+        end
+        local exited: {[string]: boolean} = {}
+        while not exited[left] or not exited[right] do
+            local selected = channel.select({events:case_receive(), deadline:case_receive()})
+            assert(selected.ok and selected.channel == events, "Client did not drain before replacement")
+            local event = selected.value
+            if event.kind == process.event.EXIT then
+                local pid = tostring(event.from)
+                assert(pid == left or pid == right, "Unexpected process exited during client replacement")
+                assert(not decode.exit_error(event.result), "Client replacement exited with a failure")
+                exited[pid] = true
+            end
+        end
+        local released: {[string]: boolean} = {}
+        while not released[left] or not released[right] do
+            local selected = channel.select({results:case_receive(), deadline:case_receive()})
+            assert(selected.ok and selected.channel == results, "Host did not release replaced clients")
+            local message = selected.value
+            assert(tostring(message:from()) == host)
+            local value: unknown = message:payload():data()
+            if type(value) == "table" and value.op == "detach" and (value.recipient == left or value.recipient == right) then
+                assert(value.error_code == "", "Host could not release replaced client: " .. tostring(value.error))
+                released[value.recipient] = true
+            end
+        end
+        local function replace(old: string, resource: desktops.Desktop, label: string): string
+            local fresh = assert(desktops.restart(retained_desktops, resource))
+            local ready = assert(clients:receive())
+            assert(tostring(ready:from()) == fresh)
+            local identity = assert(launch_protocol.ready(ready:payload():data(), workspace_id, false))
+            assert(process.send(host, "bee.host.client", {version = 1, request_id = "upgrade-admit-" .. label,
+                op = "admit", workspace_id = workspace_id, recipient = fresh,
+                display_id = identity.client_id,
+                permissions = {open = true, close = true, control = true, appearance = label == "left"}}))
+            result("upgrade-admit-" .. label)
+            local selected = assert(renderers:receive())
+            assert(tostring(selected:from()) == fresh)
+            local value: unknown = selected:payload():data()
+            assert(type(value) == "table" and type(value.renderer) == "string")
+            assert(process.send(host, "bee.host.client", {version = 1, request_id = "upgrade-render-" .. label,
+                op = "render", workspace_id = workspace_id, recipient = fresh, renderer = value.renderer}))
+            result("upgrade-render-" .. label)
+            return fresh
+        end
+        left = replace(left, left_resource, "left")
+        right = replace(right, right_resource, "right")
+        command(left_screen, "printf 'CLIENT_UPGRADE_left_%s_END\\n' \"$$\"")
+        wait_text(left_screen, "CLIENT_UPGRADE_left_" .. left_shell .. "_END")
+        command(right_screen, "printf 'CLIENT_UPGRADE_right_%s_END\\n' \"$$\"")
+        wait_text(right_screen, "CLIENT_UPGRADE_right_" .. right_shell .. "_END")
+    end
     if mode == "session-upgrade" or mode == "session-failed-upgrade" then
         local entry = assert(registry.get("bee.session:main"))
         entry.meta.handoff_probe = "desktop-definition-changed"

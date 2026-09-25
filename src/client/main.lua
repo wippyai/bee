@@ -25,6 +25,7 @@ local assignment_layout = require("assignment_layout")
 local physical = require("physical")
 local inbox = require("inbox")
 local lifecycle = require("lifecycle")
+local handoff = require("handoff")
 local interaction = require("interaction")
 local command = require("command")
 local retained_protocol = require("retained_protocol")
@@ -81,6 +82,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local appearance_requests = listen("bee.client.appearance.request")
         local supervisor_controls = listen("bee.client.control")
         local switch_answers = listen(retained_protocol.TOPIC_SWITCHED)
+        local replace_acks = listen("bee.client.replace_ack")
         if not owner_monitored then
             local monitored, owner_error = process.monitor(owner)
             if not monitored then error("Monitor client owner: " .. tostring(owner_error)) end
@@ -123,6 +125,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local transfer_pending_count = 0
         local connection_id, renderer_generation = "", ""
         local bindings: {[string]: Binding} = {}
+        local render_ready_pending = false
+        local render_binding_failed = false
         local active = false
         local paused = false
         local waiting_presenter = false
@@ -389,6 +393,14 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 connection_id = connection_id, renderer_generation = renderer_generation,
                 id = target.view_id, instance_id = target.instance_id})
         end
+        local function announce_rendered()
+            if not render_ready_pending or render_binding_failed or not active or views_revision < 0
+                or next(bindings) ~= nil then return end
+            render_ready_pending = false
+            send(owner, "bee.client.rendered", {version = 1, workspace_id = workspace_id,
+                display_id = database.client_id, connection_id = connection_id,
+                renderer = presenter, generation = renderer_generation})
+        end
         local function include_view(view_id: string, instance_id: string, title: string, icon: string?): string
             local existing = tab(view_id, instance_id)
             if existing and not retired[existing] then
@@ -440,6 +452,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             end
             reconcile_assignments()
             publish_bindings()
+            announce_rendered()
         end
         local updates = assert(display.view:updates())
         local function spawn_presenter()
@@ -595,6 +608,24 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 elseif selected.channel == events then
                     local event = selected.value
                     if event.kind == process.event.CANCEL then break end
+                    if event.kind == process.event.OUTDATED then
+                        if connection_id == "" or saved_for_exit then error("Client cannot replace before admission or during exit") end
+                        save_before_exit()
+                        local checkpoint = handoff.pack(owner, host, workspace_id, database.client_id,
+                            connection_id, renderer_generation, controls_apps)
+                        if not handoff.decode(checkpoint, owner, host, workspace_id) then error("Cannot checkpoint client replacement") end
+                        send(owner, "bee.client.replace", checkpoint)
+                        local deadline = time.after("3s")
+                        while true do
+                            local answer = channel.select({replace_acks:case_receive(), deadline:case_receive()})
+                            if not answer.ok or answer.channel == deadline then error("Client replacement was not acknowledged") end
+                            local message = answer.value
+                            local data: unknown = message:payload():data()
+                            if tostring(message:from()) == owner and type(data) == "table" and data.version == 1
+                                and data.workspace_id == workspace_id and data.display_id == database.client_id then break end
+                        end
+                        break
+                    end
                     if event.kind == process.event.EXIT then
                         local exited = tostring(event.from)
                         local failure = decode.exit_error(event.result)
@@ -836,11 +867,13 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 if retired_view then retired_view:close(); retired_view = nil end
                                 publish()
                                 publish_questions()
+                                render_ready_pending, render_binding_failed = true, false
                                 for _, view in ipairs(live) do
                                     local key = tab(view.view_id, view.instance_id)
                                     local target = key and targets[key] or nil
                                     if target then bind(target) end
                                 end
+                                announce_rendered()
                                 if not initial_opened and initial_application and initial_application ~= "" then
                                     initial_opened = true
                                     initial_request = uuid.v7()
@@ -914,7 +947,11 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                             and ((reply.op ~= "attached" and reply.op ~= "bind") or (binding and binding.generation == renderer_generation)) then
                             local key = tab(reply.id, reply.instance_id)
                             if not key and binding then key = binding.tab_id end
-                            if reply.op == "bind" then bindings[reply.request_id] = nil end
+                            if reply.op == "bind" then
+                                bindings[reply.request_id] = nil
+                                if reply.error_code ~= "" then render_binding_failed = true end
+                                announce_rendered()
+                            end
                             local route = pending[reply.request_id]
                             if not key and route and route.tab_id ~= "" then key = route.tab_id end
                             if route and (reply.op == route.op or (route.op == "open" and reply.op == "focus")) then
@@ -1025,6 +1062,7 @@ end
 local function main(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown)
     if owner == "" or ctx.get("bee.client_owner") ~= owner or not contract.workspace_id(workspace_id)
         or host == "" or host == owner then error("Untrusted client bootstrap") end
+    assert(process.set_options({upgradable = true}))
     return run_client(owner, host, workspace_id, database_resource, initial_application, options, false)
 end
 -- Private terminal entry. The spawn boundary protects this constructor; it never

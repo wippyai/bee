@@ -6,14 +6,16 @@ local tty = require("tty")
 local time = require("time")
 local channel = require("channel")
 local logger = require("logger")
+local registry = require("registry")
 local log = logger:named("bee.retained_probe")
-local function main()
+local function main(mode: string?)
     local owner = tostring(process.pid())
     local ready = assert(process.listen("bee.retained.ready", {message = true}))
     local replies = assert(process.listen("bee.retained.result", {message = true}))
     local launches = assert(process.listen("bee.retained.launched", {message = true}))
     local catalogs = assert(process.listen("bee.retained.desktops_result", {message = true}))
     local activated = assert(process.listen("bee.retained.activated", {message = true}))
+    local replaced_clients = assert(process.listen("bee.retained.replaced", {message = true}))
     local boots = assert(process.listen("physical.boot", {message = true}))
     local displays = assert(process.listen("physical.ready", {message = true}))
     local events = assert(process.events())
@@ -157,13 +159,69 @@ local function main()
     wait_text(extra_screen, "$ ")
     command(extra_screen, "bee_extra=separate; printf 'OWNER_EXTRA_%s_OK\\n' \"$bee_extra\"")
     wait_text(extra_screen, "OWNER_EXTRA_separate_OK")
+    local extra_shell = ""
+    if mode == "client-upgrade" then
+        command(first_screen, "printf 'RETAINED_BEFORE_FIRST_%s_END\\n' \"$$\"")
+        wait_text(first_screen, "RETAINED_BEFORE_FIRST_")
+        local first_before = table.concat(assert(first_screen:snapshot()).rows, "\n")
+        local first_shell = assert(first_before:match("RETAINED_BEFORE_FIRST_(%d+)_END"))
+        command(extra_screen, "printf 'RETAINED_BEFORE_EXTRA_%s_END\\n' \"$$\"")
+        wait_text(extra_screen, "RETAINED_BEFORE_EXTRA_")
+        local extra_before = table.concat(assert(extra_screen:snapshot()).rows, "\n")
+        extra_shell = assert(extra_before:match("RETAINED_BEFORE_EXTRA_(%d+)_END"))
+        local entry = assert(registry.get("bee.client:main"))
+        entry.meta.handoff_probe = "retained-client-definition-changed"
+        local changes = assert(registry.snapshot()):changes()
+        changes:update(entry)
+        assert(changes:apply())
+        local updated: {[string]: boolean} = {}
+        local timeout = time.after("12s")
+        while not updated[desktop_id] or not updated[extra_id] do
+            local selected = channel.select({replaced_clients:case_receive(), events:case_receive(), timeout:case_receive()})
+            assert(selected.ok and selected.channel ~= timeout, "Retained clients did not reattach after definition change")
+            if selected.channel == events then
+                local event = selected.value
+                assert(tostring(event.from) ~= supervisor, "Retained supervisor exited during client replacement")
+            else
+                local message = selected.value
+                assert(tostring(message:from()) == supervisor)
+                local value: unknown = message:payload():data()
+                assert(type(value) == "table" and value.version == 1 and value.schema == 1
+                    and value.workspace_id == workspace_id and type(value.pid) == "string")
+                updated[value.display_id] = true
+                local changed_id: string = value.display_id :: string
+                local recipient = changed_id == desktop_id and first or extra
+                local mount, code = request(recipient, "attach", "control", changed_id)
+                assert(code == "", "Physical grant reissue failed: " .. code)
+                assert(process.send(recipient, "physical.configure", {mount = mount}))
+                assert(tostring(assert(displays:receive()):from()) == recipient)
+            end
+        end
+        command(first_screen, "printf 'RETAINED_UPGRADE_FIRST_%s_END\\n' \"$$\"")
+        wait_text(first_screen, "RETAINED_UPGRADE_FIRST_" .. first_shell .. "_END")
+        command(extra_screen, "printf 'RETAINED_UPGRADE_EXTRA_%s_END\\n' \"$$\"")
+        wait_text(extra_screen, "RETAINED_UPGRADE_EXTRA_" .. extra_shell .. "_END")
+    end
     local before_rejoin = assert(extra_screen:snapshot()).rows[1]
     assert(extra_screen:send({type = "key", key = "f12", key_type = "f12", action = "press"}))
     local replaced = false
-    for _ = 1, 500 do
-        local frame = extra_screen:snapshot()
-        if frame and frame.rows[1] ~= before_rejoin and table.concat(frame.rows, "\n"):find("OWNER_EXTRA_separate_OK", 1, true) then replaced = true; break end
-        time.sleep("10ms")
+    if mode == "client-upgrade" then
+        local selected = channel.select({replaced_clients:case_receive(), time.after("5s"):case_receive()})
+        if selected.ok and selected.channel == replaced_clients then
+            local message = selected.value
+            local value: unknown = message:payload():data()
+            replaced = tostring(message:from()) == supervisor and type(value) == "table"
+                and value.display_id == extra_id and value.workspace_id == workspace_id
+        end
+        assert(replaced, "Replaced client presenter did not become ready after F12")
+        command(extra_screen, "printf 'RETAINED_F12_%s_END\\n' \"$$\"")
+        wait_text(extra_screen, "RETAINED_F12_" .. extra_shell .. "_END")
+    else
+        for _ = 1, 500 do
+            local frame = extra_screen:snapshot()
+            if frame and frame.rows[1] ~= before_rejoin and table.concat(frame.rows, "\n"):find("OWNER_EXTRA_separate_OK", 1, true) then replaced = true; break end
+            time.sleep("10ms")
+        end
     end
     assert(replaced, "Additional desktop presenter was not replaced")
     assert(extra_screen:send({type = "key", key = "q", key_type = "runes", action = "press", ctrl = true}))
@@ -250,11 +308,11 @@ local function main()
     third_screen:close()
     log:info("RETAINED_SUPERVISOR_PROBE_COMPLETE")
 end
-local function checked_main()
-    local ok, failure = pcall(main)
+local function checked_main(mode: string?)
+    local ok, failure = pcall(main, mode)
     if not ok then
         log:error("RETAINED_SUPERVISOR_PROBE_FAILURE", {error = tostring(failure)})
         error(failure)
     end
 end
-return {main = checked_main}
+return {main = checked_main, client_upgrade = function() checked_main("client-upgrade") end}

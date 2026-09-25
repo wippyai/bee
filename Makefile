@@ -236,7 +236,7 @@ check-shard-desktop-shell-close: desktop-shell-close-confirmation-check
 check-shard-desktop-shell-control: desktop-shell-control-delivery-check
 check-shard-desktop-shell-recovery: desktop-shell-recovery-check
 check-shard-desktop-terminal: desktop-terminal-check
-check-shard-desktop-client: desktop-client-core-check session-fallback-check session-upgrade-check session-upgrade-fallback-check
+check-shard-desktop-client: desktop-client-core-check session-fallback-check session-upgrade-check session-upgrade-fallback-check client-upgrade-check retained-client-upgrade-check
 check-shard-desktop-client-launch: desktop-client-launch-check
 check-shard-desktop-client-recovery: desktop-client-recovery-check
 check-shard-desktop-delivery: desktop-delivery-inbox-check
@@ -305,6 +305,14 @@ session-fallback-check:
 check: session-upgrade-check
 session-upgrade-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(session_upgrade=True)'
+.PHONY: client-upgrade-check
+check: client-upgrade-check
+client-upgrade-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(client_upgrade=True)'
+.PHONY: retained-client-upgrade-check
+check: retained-client-upgrade-check
+retained-client-upgrade-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(command="retained-client-upgrade-probe")'
 .PHONY: session-upgrade-fallback-check
 check: session-upgrade-fallback-check
 session-upgrade-fallback-check:

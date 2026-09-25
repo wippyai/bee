@@ -85,6 +85,8 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         local launch_pending: {id: string, desktop_id: string, client: string}? = nil
         local copy_pending: {id: string, recipient: string, mount: string, desktop_id: string, client: string}? = nil
         local hosts, ready = listen("bee.host.ready"), listen("bee.client.ready")
+        local replacements = listen("bee.client.replace")
+        local presented_clients = listen("bee.client.rendered")
         local renderers, results = listen("bee.client.renderer"), listen("bee.host.client_result")
         local quits, answers = listen("bee.client.quit"), listen("bee.client.shutdown_answer")
         local questions, replies = listen("bee.interaction.state"), listen("bee.app.reply")
@@ -223,7 +225,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 elseif rendering then deferred_renderer = nil; primary_renderer(rendering) end
             end
             local current_storage = storage_pending
-            local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
+            local cases = {hosts:case_receive(), ready:case_receive(), replacements:case_receive(), presented_clients:case_receive(), results:case_receive(),
                 answers:case_receive(), questions:case_receive(), replies:case_receive(),
                 saved:case_receive(), exit_ready:case_receive(), events:case_receive(), copy_results:case_receive(), launch_results:case_receive()}
             if phase == "running" or retained_displays then
@@ -299,9 +301,12 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 local sender = tostring(message:from())
                 local data: unknown = message:payload():data()
                 local topic = selected.channel == ready and "ready" or selected.channel == results and "result"
-                    or selected.channel == renderers and "renderer" or selected.channel == quits and "quit"
+                    or selected.channel == renderers and "renderer" or selected.channel == presented_clients and "presented" or selected.channel == quits and "quit"
                     or selected.channel == saved and "saved" or selected.channel == exit_ready and "finished" or ""
-                if retained_displays and topic ~= "" and desktop_lifecycle.receive(retained_displays, topic, sender, data) then
+                if retained_displays and selected.channel == replacements
+                    and desktop_lifecycle.request_replace(retained_displays, sender, data) then
+                    -- The retained display replaces its client after host revocation.
+                elseif retained_displays and topic ~= "" and desktop_lifecycle.receive(retained_displays, topic, sender, data) then
                     -- This retained display owns its lifecycle message.
                 elseif selected.channel == activations and sender == retained_owner and retained_displays and announced then
                     desktop_lifecycle.activate(retained_displays, data)
@@ -440,10 +445,11 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                         end
                     elseif request and selected_desktop then
                         if copy_pending and copy_pending.recipient == request.recipient and copy_pending.desktop_id == requested_id then copy_pending = nil end
+                        local already_monitored = has_attachment(request.recipient)
                         local result: attachments.Result
                         if request.op == "attach" then result = attachments.attach(selected_desktop.grants, request.recipient, request.mode)
                         else result = attachments.detach(selected_desktop.grants, request.recipient) end
-                        if result.error_code == "" and request.op == "attach" then
+                        if result.error_code == "" and request.op == "attach" and not already_monitored then
                             local monitored, monitor_error = process.monitor(request.recipient)
                             if not monitored then
                                 local removed = attachments.detach(selected_desktop.grants, request.recipient)

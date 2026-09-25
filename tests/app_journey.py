@@ -559,7 +559,7 @@ def revoke_crash_recovery(project, source_root, report, destination):
     no test switch or timing branch.
     """
     shutil.copytree(source_root, destination)
-    host = project / "src/core/host/main.lua"
+    host = project / "src/host/main.lua"
     original = host.read_text()
     anchor = "            value, operation_error = database.thread_bindings:begin_revoke(request.value)\n"
     assert original.count(anchor) == 1

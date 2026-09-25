@@ -125,7 +125,7 @@ def acknowledged_layout():
         shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
-        session = project / "src/core/session/main.lua"
+        session = project / "src/session/main.lua"
         code = session.read_text()
         anchor = 'if desktop ~= before or command.op == "snapshot" or command.op == "place" then send_scene() end'
         assert code.count(anchor) == 1

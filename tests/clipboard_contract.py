@@ -13,7 +13,7 @@ with tempfile.TemporaryDirectory(prefix="bee-clipboard-contract-") as temporary:
     folder = Path(temporary)
     source = folder / "src"
     source.mkdir()
-    shutil.copy2(ROOT / "src/core/client/clipboard.lua", source)
+    shutil.copy2(ROOT / "src/client/clipboard.lua", source)
     shutil.copy2(ROOT / "tests/lua/client/clipboard_test.lua", source)
     document = {
         "version": "1.0", "namespace": "bee.client", "entries": [

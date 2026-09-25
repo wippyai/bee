@@ -50,7 +50,7 @@ def exercise(packed):
         source.write_text(code)
         # Give the fixture app the exact opaque presentation ID so this proves
         # sender authorization, rather than relying on an unguessable ID.
-        broker_source = project / "src/core/applications/broker.lua"
+        broker_source = project / "src/applications/broker.lua"
         broker_code = broker_source.read_text()
         broker_anchor = '        process.send(owner, "bee.interaction.state", {version = 1, items = items, shutdown = shutdown_dialog and interaction.wire(shutdown_dialog) or nil})'
         assert broker_anchor in broker_code

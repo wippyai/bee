@@ -184,7 +184,7 @@ def stamp_presenter(project):
     alone cannot prove that a new presenter produced the frame. The fixture-only
     PID suffix is the same probe used by the desktop lifecycle acceptance.
     """
-    presenter = project / "src/core/terminal/main.lua"
+    presenter = project / "src/terminal/main.lua"
     source = presenter.read_text()
     label = '"Workspace " .. names.label(workspace_id)'
     assert source.count(label) == 1, "unexpected terminal presenter label anchor"

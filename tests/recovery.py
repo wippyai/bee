@@ -103,7 +103,7 @@ def run(packed):
         index.write_text(yaml.safe_dump(doc, sort_keys=False))
         # Same authenticated broker, wrong workspace: the owner must not remove
         # its real view when a foreign reply arrives immediately after open.
-        broker = project / "src/core/applications/broker.lua"
+        broker = project / "src/applications/broker.lua"
         code = broker.read_text()
         send = '        assert(process.send(owner, "bee.app.reply", reply))'
         assert code.count(send) == 1

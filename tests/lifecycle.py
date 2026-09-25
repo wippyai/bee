@@ -102,7 +102,7 @@ def run():
                     ui.close()
         # Retry the same operation identity. First launch is root-generated;
         # every later presenter open uses one fixed request ID in this fixture.
-        presenter = project / "src/core/terminal/main.lua"
+        presenter = project / "src/terminal/main.lua"
         text = presenter.read_text()
         anchor = 'request_id = uuid.v7(), op = op, workspace_id = workspace_id,\n            definition_id'
         assert text.count(anchor) == 1, "Presenter retry injection point changed"
@@ -158,7 +158,7 @@ def detached():
             shutil.copytree(ROOT / "src", project / "src")
             shutil.copytree(ROOT / "modules", project / "modules")
             shutil.copytree(ROOT / "tests/fixtures/attachments", project / "src/probe")
-            broker = project / "src/core/applications/broker.lua"
+            broker = project / "src/applications/broker.lua"
             code = broker.read_text()
             bootstrap = 'if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end'
             assert code.count(bootstrap) == 1
@@ -185,12 +185,12 @@ def detached():
                         end
 ''')
             broker.write_text(code)
-            connections = project / "src/core/host/clients.lua"
+            connections = project / "src/host/clients.lua"
             code = connections.read_text()
             gate = 'op = "unbind", recipient ='
             assert code.count(gate) == 1
             connections.write_text(code.replace(gate, 'test_gate = request_id == "queued-render", ' + gate))
-            attachment = project / "src/core/applications/attachment.lua"
+            attachment = project / "src/applications/attachment.lua"
             code = attachment.read_text()
             anchor = "local _, err = view:revoke(previous.mount)"
             assert code.count(anchor) == 1
@@ -225,7 +225,7 @@ def detached():
                 end
                 local _, err = revoke_removed_observer()""")
             attachment.write_text(code)
-            host_main = project / "src/core/host/main.lua"
+            host_main = project / "src/host/main.lua"
             code = host_main.read_text()
             anchor = 'if not database then error(tostring(database_error)) end'
             assert code.count(anchor) == 1

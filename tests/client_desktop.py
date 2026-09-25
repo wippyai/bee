@@ -37,7 +37,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         executor["default_env"]["HOME"] = str(shell_home)
         console.write_text(yaml.safe_dump(manifest, sort_keys=False))
         if _transfer_failure in ("source", "target"):
-            client = project / "src/core/client/main.lua"
+            client = project / "src/client/main.lua"
             code = client.read_text()
             anchor = "            local committed, err = store.write(database, next_layout)\n"
             assert code.count(anchor) == 1
@@ -162,13 +162,13 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             # The disposable presenter copy stamps each frame with its PID.
             # This lets the fixture distinguish an F12 replacement from the
             # retained output of the viewport it replaced.
-            presenter = project / "src/core/terminal/main.lua"
+            presenter = project / "src/terminal/main.lua"
             source = presenter.read_text()
             label = '"Workspace " .. names.label(workspace_id)'
             assert source.count(label) == 1, "unexpected terminal presenter label anchor"
             presenter.write_text(source.replace(label, label + ' .. " " .. tostring(process.pid()):sub(-12)', 1))
         if primary_render_delay:
-            lifecycle = project / "src/core/launch/desktop_lifecycle.lua"
+            lifecycle = project / "src/launch/desktop_lifecycle.lua"
             code = lifecycle.read_text().replace('local M = {}', 'local M = {}\nlocal probe_held_renderer = false', 1)
             anchor = '    child.pending, child.phase, child.deadline = uuid.v7(), "render", time.after("10s")\n'
             assert code.count(anchor) == 1
@@ -202,7 +202,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
 ''', 1)
             fixture.write_text(code)
         if primary_exit:
-            client = project / "src/core/client/main.lua"
+            client = project / "src/client/main.lua"
             code = client.read_text()
             anchor = '                    if selected.channel == copy_results and sender == presenter then\n'
             assert code.count(anchor) == 1
@@ -240,7 +240,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             assert anchor in code
             fixture.write_text(code.replace(anchor, injection + anchor, 1))
         if copy_exit:
-            client = project / "src/core/client/main.lua"
+            client = project / "src/client/main.lua"
             code = client.read_text()
             anchor = '                    if selected.channel == copy_results and sender == presenter then\n'
             assert code.count(anchor) == 1
@@ -280,7 +280,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             assert anchor in code
             fixture.write_text(code.replace(anchor, injection + anchor, 1))
         if launch_exit:
-            client = project / "src/core/client/main.lua"
+            client = project / "src/client/main.lua"
             code = client.read_text()
             anchor = '                            if launch_pending and reply.request_id == launch_pending.request_id and (reply.op == "open" or reply.op == "focus") then\n'
             assert code.count(anchor) == 1
@@ -308,11 +308,11 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             assert anchor in code
             fixture.write_text(code.replace(anchor, injection + anchor, 1))
         if storage_delay:
-            operations = project / "src/core/client/desktop_storage.lua"
+            operations = project / "src/client/desktop_storage.lua"
             code = operations.read_text().replace('local security = require("security")', 'local security = require("security")\nlocal time = require("time")')
             code = code.replace('function M.allocate(value: unknown): Reply', 'function M.allocate(value: unknown): Reply\n    if type(value) == "table" and value.desktop_id == string.rep("c", 32) then time.sleep("6s") end')
             operations.write_text(code)
-            manifest = project / "src/core/client/_index.yaml"
+            manifest = project / "src/client/_index.yaml"
             values = yaml.safe_load(manifest.read_text())
             for entry in values["entries"]:
                 if entry.get("source") == "file://desktop_storage.lua": entry["modules"].append("time")

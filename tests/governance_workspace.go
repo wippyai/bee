@@ -266,7 +266,7 @@ func migrationLedger(root string) (string, error) {
 	expected := []string{"governance_workspace_staging", "governance_received_plans",
 		"governance_plan_approval_proposal", "governance_plan_approval_incarnation",
 		"governance_activation_intents", "governance_component_slots", "governance_activation_migrations",
-		"governance_activation_application_admission"}
+		"governance_activation_application_admission", "governance_workspace_append"}
 	rows := strings.Split(ledger, "\n")
 	if len(rows) != len(expected) {
 		return "", fmt.Errorf("unexpected governance migration ledger: %q", ledger)

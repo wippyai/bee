@@ -16,11 +16,10 @@ Keep desktop responsibilities in the `src/` component folders (`src/host`,
 `src/client`, `src/launch` and their siblings, one namespace per folder),
 public application helpers and appearance values in
 `modules/application/src`, and standalone applications in `src/apps`.
-Use the [UI brand book](../guides/ui.md), the
-[application visual style](../guides/app-style.md) and the runnable UI Guide for
-presentation and interaction rules. Applications draw through
-`bee.application:frame` and chart with `bee.application:viz`; the UI Guide and
-the System Monitor are their reference applications. Apps use
+Use the [UI brand book](../guides/ui.md) and
+[application visual style](../guides/app-style.md) for presentation and
+interaction rules. The offline toolkit reference gives compact, tested examples
+for `bee.application:frame` and `bee.application:viz`. Apps use
 public contracts such as `bee.application:client` and `bee.threads:client`;
 they do not import private broker or store modules.
 

@@ -193,10 +193,9 @@ detail as a second page and Esc returns.
 Several independent measurements. `frame.grid(work, columns, rows)` with the
 column and row counts from section 3; each cell is a `frame.panel` holding one
 visualization. The most important panel is first in reading order. Stat tiles
-(`viz.tiles`) take the first three work rows above the grid. **System
-Monitor** (`src/apps/monitor/`, Tools → Learn) is this archetype; the toolkit
-document in the agent corpus shows its exact screens at all three size
-classes.
+(`viz.tiles`) take the first three work rows above the grid. The toolkit
+document in the agent corpus shows tested visualization calls and compact
+examples for composing them into a screen.
 
 ```
  SYSTEM                                             Live · 1s · 3 alerts

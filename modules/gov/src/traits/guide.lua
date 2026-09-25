@@ -410,8 +410,8 @@ function M.visual_style(): string
         .. " Chart with the visualization kit bee.application:viz, imported as viz = \"bee.application:viz\":"
         .. " viz.sparkline, viz.line (area too), viz.bars, viz.columns, viz.stacked, viz.histogram, viz.heatmap,"
         .. " viz.waffle, viz.gauge, viz.progress, viz.tiles, viz.bar_cell, viz.timeline and viz.graph, with viz.series"
-        .. " rings and a viz.cadence for live data. The runnable dashboard reference is System Monitor,"
-        .. " src/apps/monitor/ (Tools → Learn); the toolkit document shows every kit call with an example and its screen."
+        .. " rings and a viz.cadence for live data. Compose a dashboard from those calls; the toolkit document"
+        .. " shows every kit call with a tested example and its screen."
 end
 
 -- Where the platform documentation lives and how to look things up with the
@@ -431,8 +431,8 @@ function M.platform_documentation(): string
         .. " contracts (application, threads, hive, placement and subscriptions, gateway, carrier, storage,"
         .. " UI) and the terminal toolkit. For an application that works across every node, search the "
         .. table.concat(M.CROSS_NODE_TOPICS, ", ") .. " topics for hive, subscriptions and placement and read the"
-        .. " matches. The authored UI rules are in docs/guides/ui.md, and the canonical runnable"
-        .. " UI Guide source is src/apps/stylebook/ (Tools → Learn), built on bee.application:frame. For"
+        .. " matches. The authored UI rules are in docs/guides/ui.md, and the toolkit reference gives compact"
+        .. " examples built on bee.application:frame. For"
         .. " a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
         .. " topics for the toolkit, layout, styles and input. Read the guide once, then look every"
         .. " question up in the corpus rather than guessing a signature."

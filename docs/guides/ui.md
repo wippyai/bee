@@ -9,13 +9,10 @@ brand; every other appearance preserves the same semantic roles.
 Every Bee application, bundled or agent-built, draws through the shared
 application frame, `bee.application:frame`. The exact placement, color, state
 and breakpoint rules, with one layout per application archetype, are in
-[Application visual style](app-style.md); read it before drawing. Two runnable
-references live under **Tools → Learn**: **UI Guide** (`src/apps/stylebook/`)
-demonstrates every frame component, and **System Monitor**
-(`src/apps/monitor/`) is a live dashboard composed from the frame and the
-visualization kit `bee.application:viz` at the three size classes.
-Application authors should copy their process/view split, resize behavior and
-interaction shapes rather than their literal sample content.
+[Application visual style](app-style.md); read it before drawing. The offline
+toolkit reference gives compact examples of the frame and the visualization
+kit `bee.application:viz`, with each chart example taken from a test. Use those
+calls with application-owned state and actions.
 
 ## Semantic palette
 

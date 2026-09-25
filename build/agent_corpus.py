@@ -35,8 +35,8 @@ Selection rule, stated once and enforced by this table:
     of that package's contract.
   * toolkit: one generated reference to Bee's terminal toolkit (tty plus the
     appearance, frame, visualization kit and application client libraries
-    Bee's own apps use), with every kit call's example and screen taken from
-    the golden tests that prove them.
+    Bee's own apps use), with visualization examples taken from their golden
+    tests and compact frame examples.
 
 `--local` rebuilds every document generated from this repository and keeps
 the committed runtime pages byte for byte (their digests are re-verified), so
@@ -322,11 +322,6 @@ def lua_type_definitions(source: str) -> list[str]:
 
 def toolkit_reference() -> bytes:
     """Bee's terminal toolkit, composed from the sources that define it."""
-    guide = (ROOT / "modules/gov/src/traits/guide.lua").read_text()
-    source_match = re.search(r"M[.]SOURCE = \[==\[(.*?)\]==\]", guide, re.DOTALL)
-    if not source_match:
-        raise SystemExit("modules/gov/src/traits/guide.lua has no bounded M.SOURCE example")
-    guide_source = source_match.group(1).strip()
     client = (ROOT / "modules/application/src/client.lua").read_text()
     appearance = (ROOT / "modules/application/src/appearance.lua").read_text()
     frame = (ROOT / "modules/application/src/frame.lua").read_text()
@@ -345,18 +340,8 @@ def toolkit_reference() -> bytes:
     gallery = []
     for names, text in examples:
         gallery += ["### " + ", ".join(f"`viz.{name}`" for name in names), "", text, ""]
-    monitor_screens = [text for names, text in proven_examples(ROOT / "tests/lua/monitor/view_test.lua")
-                       if names == ["System Monitor"]]
-    if len(monitor_screens) != 1:
-        raise SystemExit("tests/lua/monitor/view_test.lua has no System Monitor example")
-    monitor_manifest = (ROOT / "src/apps/monitor/_index.yaml").read_text().rstrip()
-    monitor_app = (ROOT / "src/apps/monitor/app.lua").read_text().rstrip()
-    monitor_view = (ROOT / "src/apps/monitor/view.lua").read_text().rstrip()
-    stylebook_manifest = (ROOT / "src/apps/stylebook/_index.yaml").read_text().rstrip()
-    stylebook_app = (ROOT / "src/apps/stylebook/app.lua").read_text().rstrip()
-    stylebook_view = (ROOT / "src/apps/stylebook/view.lua").read_text().rstrip()
     apps = sorted((ROOT / "src/apps").glob("*/view.lua"))
-    calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance + frame + viz + guide_source
+    calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance + frame + viz
                                   + "".join(p.read_text() for p in apps))))
     sections = [
         "# Bee terminal toolkit",
@@ -477,84 +462,51 @@ def toolkit_reference() -> bytes:
         "Read `docs/reference/applications.md` in this corpus for the full record,",
         "including negotiated close, shell queries and appearance.",
         "",
-        "## Minimal authored application",
-        "",
-        "This is the exact inline source returned by Governance's read-only authoring",
-        "guide in this Bee revision. It draws through the application frame and",
-        "demonstrates semantic appearance, bounded responsive rows, keyboard/mouse",
-        "parity and correlated checkpoint receipts.",
-        "",
-        "```lua",
-        guide_source,
-        "```",
-        "",
         "## Toolkit names in this Bee revision",
         "",
-        "`tty` members this repository's client, appearance, frame, guide and views call:",
+        "`tty` members this repository's client, shared toolkit and bundled views call:",
         "",
         "```",
         " ".join(calls),
         "```",
         "",
-        "The native module reference is the `tty`, `appearance` and `filesystem` pages",
-        "under `runtime/lua/` and `runtime/system/` in this corpus. The guide example in",
-        "`modules/gov/src/traits/guide.lua` is the minimal working application.",
+        "The runtime module pages retained with this toolkit cover process, channel,",
+        "contract, registry, time, JSON, security, UUID, filesystem, SQL, HTTP client",
+        "and TTY APIs.",
         "",
-        "## Canonical UI Guide source",
+        "## Compact frame example",
         "",
-        "These are the exact files used by Bee's runnable **Tools → Learn → UI Guide**",
-        "in this revision. It demonstrates every frame component: header, tabs, an aligned",
-        "table with a marked selection, button roles and the status and key-hint footer.",
-        "Copy its process/view split, resize handling and keyboard/mouse parity as a",
-        "starting point; keep application-specific state and actions in the authored app.",
-        "",
-        "### Registry manifest (`src/apps/stylebook/_index.yaml`)",
-        "",
-        "```yaml",
-        stylebook_manifest,
-        "```",
-        "",
-        "### Process (`src/apps/stylebook/app.lua`)",
+        "Compose a screen from the shared frame. The painter records mouse hits while",
+        "drawing, and the returned rows can be presented after each resize or input event.",
         "",
         "```lua",
-        stylebook_app,
+        "local frame = require(\"frame\")",
+        "local painter = frame.new(width, height, preferences)",
+        "frame.header(painter, \"TASKS\", \"3 open\")",
+        "frame.tabs(painter, 2, {{kind = \"all\", label = \"All\"}, {kind = \"mine\", label = \"Mine\"}}, \"all\")",
+        "frame.table(painter, 4, height - 2, {",
+        "    columns = {{title = \"Task\", width = 0}, {title = \"State\", width = 12}},",
+        "    cells = {{\"Billing\", \"Ready\"}, {\"Sync\", \"Waiting\"}},",
+        "    kind = \"task\", selected = 1, offset = 0,",
+        "})",
+        "frame.actions(painter, height - 1, {{kind = \"open\", label = \"Open\", key = \"Enter\", enabled = true, primary = true}})",
+        "frame.footer(painter, \"3 tasks\", frame.hints({{key = \"Enter\", verb = \"open\"}, {key = \"Esc\", verb = \"close\"}}))",
+        "local rows, hits = frame.rows(painter), painter.hits",
         "```",
         "",
-        "### Pure view (`src/apps/stylebook/view.lua`)",
+        "Resolve mouse input with `frame.hit(hits, x, y)`. Keep state and actions in",
+        "the application, not the pure view.",
+        "",
+        "## Compact lifecycle example",
+        "",
+        "Present the first frame before reporting readiness. Recompute it from model",
+        "state whenever input or a resize arrives.",
         "",
         "```lua",
-        stylebook_view,
-        "```",
-        "",
-        "",
-        "## Canonical dashboard: System Monitor",
-        "",
-        "**Tools → Learn → System Monitor** is the reference dashboard: stat tiles, then",
-        "a grid of titled panels whose count follows the size class (2x2 from 80x24, 3x2",
-        "from 120x36, 4x2 from 160x48), each panel one kit call over live runtime",
-        "statistics, and a panel whose source fails shows its own empty state. Compose a",
-        "dashboard the same way: `frame.layout`, `viz.tiles`, `frame.grid`, then one",
-        "`frame.panel` and one kit call per cell. These are its exact screens at the",
-        "three size classes from `tests/lua/monitor/view_test.lua`:",
-        "",
-        monitor_screens[0],
-        "",
-        "### Registry manifest (`src/apps/monitor/_index.yaml`)",
-        "",
-        "```yaml",
-        monitor_manifest,
-        "```",
-        "",
-        "### Process (`src/apps/monitor/app.lua`)",
-        "",
-        "```lua",
-        monitor_app,
-        "```",
-        "",
-        "### Pure view (`src/apps/monitor/view.lua`)",
-        "",
-        "```lua",
-        monitor_view,
+        "local output = assert(tty.surface())",
+        "local rows = draw(width, height, preferences)",
+        "assert(output:present(rows))",
+        "client.ready(launch)",
         "```",
         "",
     ]
@@ -631,7 +583,7 @@ def build(local: bool = False) -> int:
     for identity, topic, payload, source in component_documents():
         record(identity, topic, payload, source)
     record("toolkit", "terminal", toolkit_reference(),
-           "generated: modules/application/src, src/apps, modules/gov/src/traits/guide.lua, tests/lua/frame, tests/lua/monitor")
+           "generated: modules/application/src, src/apps, tests/lua/frame")
 
     total = sum(document["bytes"] for document in documents)
     if total > MAX_CORPUS_BYTES:

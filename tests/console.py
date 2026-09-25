@@ -2,13 +2,12 @@
 from pathlib import Path
 import os
 import re
-import time
 import shutil
 import subprocess
 import tempfile
 import yaml
-from processes import lookup
-from tui_smoke import Desktop, ROOT, RUNTIME
+from processes import ProcessHandle
+from tui_smoke import DESKTOP_HANG_SECONDS, Desktop, ROOT, RUNTIME
 from workspace import pack_deployment
 
 PROBE = '''
@@ -75,6 +74,7 @@ def exercise(packed, theme="honey"):
         if packed:
             pack_deployment(project, pack)
         ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.console:app", "bee.console:app"))
+        shell = None
         try:
             ui.wait("Terminal")
             ui.key(b"printf 'SHELL_%s\\n' READY\r")
@@ -96,6 +96,7 @@ def exercise(packed, theme="honey"):
             ui.key(b"bee_marker=keep; printf 'PID=%s\\n' $$\r")
             ui.wait("PID=")
             native_pid = int(re.search(r"PID=(\d+)", ui.text()).group(1))
+            shell = ProcessHandle(native_pid)
             ui.key(b"\x1b[24~")
             ui.key(b"printf 'STATE_%s\\n' $bee_marker\r")
             ui.wait("STATE_keep")
@@ -140,12 +141,11 @@ def exercise(packed, theme="honey"):
             ui.key(b"printf 'CANCEL_%s\\n' $bee_marker\r")
             ui.wait("CANCEL_keep")
             elapsed = ui.quit(confirm=True)
-            deadline = time.monotonic() + 1
-            while lookup(native_pid) is not None and time.monotonic() < deadline:
-                time.sleep(.02)
-            assert lookup(native_pid) is None, "Native shell leaked after workspace exit"
+            assert shell.exited(DESKTOP_HANG_SECONDS), "Native shell leaked after workspace exit"
             print(f"Terminal {'pack' if packed else 'source'} ({theme}): command, wrapped-input resize/erase, interrupt, rejoin, independent PTYs, registry/TTY denial; exit {elapsed:.3f}s")
         finally:
+            if shell is not None:
+                shell.close()
             ui.close()
 
 def command_handlers(packed):

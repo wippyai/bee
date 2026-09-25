@@ -105,6 +105,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             if target.workspace_id ~= workspace_id then error("This client bootstrap requires one workspace") end
         end
         local targets: {[string]: state.Target} = {}
+        local pending_views: {[string]: {title: string, icon: string?}} = {}
         local retired: {[string]: string} = {}
         local removals: {[string]: string} = {}
         local pending: {[string]: {op: string, tab_id: string}} = {}
@@ -306,6 +307,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             local committed, err = store.write(database, next_layout)
             if not committed then error(tostring(err)) end
             layout = next_layout
+            for _, window in ipairs(layout.scene.windows) do pending_views[window.id] = nil end
             if fullscreen_pending ~= "" then
                 for _, window in ipairs(layout.scene.windows) do
                     if window.id == fullscreen_pending and window.mode == "fullscreen" then
@@ -389,10 +391,14 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         end
         local function include_view(view_id: string, instance_id: string, title: string, icon: string?): string
             local existing = tab(view_id, instance_id)
-            if existing and not retired[existing] then return existing end
+            if existing and not retired[existing] then
+                if not state.target(layout, existing) then pending_views[existing] = {title = title, icon = icon} end
+                return existing
+            end
             local key, err = hash.sha256(workspace_id .. "\0" .. instance_id .. "\0" .. view_id)
             if not key then error(tostring(err)) end
             targets[key] = {tab_id = key, workspace_id = workspace_id, view_id = view_id, instance_id = instance_id}
+            pending_views[key] = {title = title, icon = icon}
             retired[key] = nil
             send(session, "bee.desktop.command", {version = 1, op = "add", id = key, workspace_id = workspace_id,
                 instance_id = instance_id, title = title, icon = icon})
@@ -486,17 +492,20 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             -- yet reflected in its durable projection when the old session died.
             for key, target in pairs(targets) do
                 if not retired[key] and not state.target(layout, key) then
-                    local replayed = false
-                    for _, view in ipairs(live) do
-                        if view.view_id == target.view_id and view.instance_id == target.instance_id then
-                            send(session, "bee.desktop.command", {version = 1, op = "add", id = key,
-                                workspace_id = workspace_id, instance_id = target.instance_id,
-                                title = view.title, icon = view.icon})
-                            replayed = true
-                            break
+                    local description = pending_views[key]
+                    if not description then
+                        for _, view in ipairs(live) do
+                            if view.view_id == target.view_id and view.instance_id == target.instance_id then
+                                description = {title = view.title, icon = view.icon}
+                                break
+                            end
                         end
                     end
-                    if not replayed then log:warn("Pending desktop tab has no live view to restore", {workspace_id = workspace_id, tab_id = key}) end
+                    if description then
+                        send(session, "bee.desktop.command", {version = 1, op = "add", id = key,
+                            workspace_id = workspace_id, instance_id = target.instance_id,
+                            title = description.title, icon = description.icon})
+                    else log:warn("Pending desktop tab has no accepted description to restore", {workspace_id = workspace_id, tab_id = key}) end
                 end
             end
             if fullscreen_pending ~= "" then
@@ -979,6 +988,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 if ack.error_code ~= "" then error("Session rejected target removal") end
                                 if retired[key] == ack.request_id and not state.target(layout, key) then
                                     targets[key], retired[key] = nil, nil
+                                    pending_views[key] = nil
                                 end
                                 removals[ack.request_id] = nil
                             else

@@ -12,7 +12,8 @@ readiness. The PID and client relationship remain the same.
 If the new session rejects the checkpoint or exits during upgrade, its client
 spawns a replacement session from the last committed client layout. The client
 keeps its presenter, host attachment and application executions. It replays
-pending tab removal and initial fullscreen work and reports pending appearance
+accepted tabs even when the view inventory has not arrived, pending tab
+removal and initial fullscreen work, and reports pending appearance
 requests as uncertain rather than silently retrying them. It reports
 `bee.client.session_restarted` after the replacement publishes its first scene.
 Recovery is bounded to two session replacements per client lifetime.

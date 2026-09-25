@@ -247,9 +247,12 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             code = code.replace(anchor, '        local function run()\n            local probe_session_exited = false\n            send(owner, "bee.client.ready",', 1)
             anchor = '                                reply.id = key or ""\n                                send(presenter, "bee.app.reply", reply)\n'
             assert code.count(anchor) == 1
-            code = code.replace(anchor, anchor + '''                                if database_resource == "bee.client.db:left" and reply.op == "open" and reply.error_code == ""
+            code = code.replace(anchor, anchor + '''                                if database_resource == "bee.client.db:left" and bootstrap.legacy_desktop ~= nil
+                                    and reply.op == "open" and reply.error_code == ""
                                     and not probe_session_exited then
                                     probe_session_exited = true
+                                    -- Simulate the open reply outrunning the view inventory.
+                                    live = {}
                                     process.terminate(session)
                                 end
 ''', 1)

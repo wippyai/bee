@@ -45,9 +45,11 @@ local function code(reply: Object): string
     assert(reply.ok == false, "expected a refusal")
     return tostring((reply.error :: Object).code)
 end
-local function admit(action: string, ttl: integer?, carrier_epoch: integer?, tools: {string}?): (string, string)
-    local value = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD, owner_incarnation = 1,
-        carrier_epoch = carrier_epoch or 1, tools = tools or {"thread_read", "thread_wait"}, ttl_ms = ttl or 60000}), "admit " .. action)
+local function admit(action: string, ttl: integer?, carrier_epoch: integer?, tools: {string}?, workspace_id: string?): (string, string)
+    local request: Object = {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD, owner_incarnation = 1,
+        carrier_epoch = carrier_epoch or 1, tools = tools or {"thread_read", "thread_wait"}, ttl_ms = ttl or 60000}
+    if workspace_id ~= nil then request.workspace_id = workspace_id end
+    local value = ok(call("bee.gateway.binding:admit", request), "admit " .. action)
     local binding_id = tostring((value.binding :: Object).binding_id)
     assert(value.token == nil, "admit must not return token bytes")
     local authorized = ok(call("bee.gateway.binding:authorize_materialization", {attempt_id = action .. "-attempt", carrier_epoch = carrier_epoch or 1, binding_id = binding_id}), "authorize " .. action)
@@ -73,6 +75,87 @@ local function tool(action: string, token: string, name: string, arguments: Obje
     local text: unknown = json.decode(tostring(content.text))
     assert(type(text) == "table", name .. " returned no reply")
     return text :: Object
+end
+-- The real-harness MCP contract: tools/list validity, per-operation effects in
+-- annotations, schema-valid calls, cursor paging, structured results with the
+-- normalized error shape, and the authoring path of guide index, section,
+-- example and bounded docs windows.
+local function prove_mcp_contract(token: string)
+    local init_status, init = rpc("act-a", token, "initialize")
+    assert(init_status == 200 and init, "contract initialize")
+    local capabilities = (init.result :: Object).capabilities :: Object
+    assert((capabilities.tools :: Object).listChanged == true, "tool list changes with trait selection")
+    local _, catalog = rpc("act-a", token, "tools/list")
+    assert(catalog, "contract tools/list")
+    local entries = (catalog.result :: Object).tools :: {Object}
+    local seen: {[string]: boolean} = {}
+    for _, entry in ipairs(entries) do
+        local name = tostring(entry.name)
+        seen[name] = true
+        local schema = entry.inputSchema :: Object
+        assert(type(schema) == "table" and type(schema.properties) == "table", name .. " inputSchema properties object")
+        assert(type(entry.outputSchema) == "table", name .. " outputSchema")
+        local annotations = entry.annotations :: Object
+        assert(type(annotations.readOnlyHint) == "boolean", name .. " annotations")
+    end
+    assert(seen.thread_read and seen.thread_wait, "admitted tools listed")
+    local contract_token, _ = admit("contract-action", nil, 1, {"thread_sessions", "capabilities", "overlay", "docs", "delivery", "components"},
+        string.rep("c", 32))
+    local _, contract_list = rpc("contract-action", contract_token, "tools/list")
+    local contracts = (contract_list.result :: Object).tools :: {Object}
+    local by_name: {[string]: Object} = {}
+    for _, entry in ipairs(contracts) do by_name[tostring(entry.name)] = entry end
+    local delivery = by_name.delivery
+    assert(delivery and (delivery.annotations :: Object).readOnlyHint == false, "delivery stages versions, never read-only")
+    local operations = (((delivery.inputSchema :: Object).properties :: Object).operation :: Object).enum :: {string}
+    local preflighted = false
+    for _, operation in ipairs(operations) do if operation == "preflight" then preflighted = true end end
+    assert(preflighted, "delivery preflight without staging")
+    local overlay = by_name.overlay
+    assert(overlay and (overlay.annotations :: Object).readOnlyHint == false, "overlay mixes reads and writes")
+    assert((((overlay.inputSchema :: Object).properties :: Object).section :: Object).pattern ~= nil, "guide sections in schema")
+    local components = by_name.components
+    local request_schema = (((components.inputSchema :: Object).properties :: Object).request :: Object)
+    assert(type((request_schema.properties :: Object).component) == "table", "components per-operation fields")
+    assert(type(((components.inputSchema :: Object).examples :: {unknown})[1]) == "table", "components examples")
+    -- The authoring path: a bare guide read is the short index with sections
+    -- and no example; one section reads alone; the example is explicit.
+    local index = tool("contract-action", contract_token, "overlay", {operation = "guide"})
+    assert(type((index.value :: Object).document) == "string", "guide index")
+    assert(#((index.value :: Object).sections :: {unknown}) >= 8, "guide section list")
+    assert((index.value :: Object).example == nil, "guide index carries no example")
+    local section = tool("contract-action", contract_token, "overlay", {operation = "guide", section = "delivery"})
+    assert((section.value :: Object).section == "delivery" and type((section.value :: Object).text) == "string", "guide section")
+    local example = tool("contract-action", contract_token, "overlay", {operation = "guide", include_example = true})
+    assert(type(((example.value :: Object).example :: Object).entries_json) == "string", "guide example on request")
+    -- Docs windows honor the offset after section selection.
+    local first = tool("contract-action", contract_token, "docs", {operation = "read", id = "toolkit", section = "lifecycle", limit = 400})
+    local continued = tool("contract-action", contract_token, "docs", {operation = "read", id = "toolkit", section = "lifecycle", offset = 100, limit = 400})
+    assert((continued.value :: Object).offset == (first.value :: Object).offset + 100, "docs section paging")
+    -- Session discovery pages with stable cursors to a complete end.
+    local sessions = tool("contract-action", contract_token, "thread_sessions", {limit = 1})
+    local sessions_value = sessions.value :: Object
+    assert(type(sessions_value.sessions) == "table" and #sessions_value.sessions <= 1, "session page")
+    assert(sessions_value.eof ~= nil, "session page end marker")
+    -- The capability report names the admitted surface before authoring.
+    local report = tool("contract-action", contract_token, "capabilities", {})
+    local report_value = report.value :: Object
+    assert(type(report_value.thread_id) == "string", "capability thread")
+    assert(type(report_value.tools) == "table" and type(report_value.launch) == "table", "capability tools and launch")
+    assert(type((report_value.authoring :: Object).preflight_operation) == "string", "capability authoring path")
+    -- A delivery without its frozen digest is refused before anything stages;
+    -- a delivery for an unknown overlay fails in the normalized tool shape.
+    local _, missing_digest = rpc("contract-action", contract_token, "tools/call", {name = "delivery", arguments = {operation = "request",
+        source_overlay_id = "missing", version = "0.0.0"}})
+    assert(missing_digest and (missing_digest.error :: Object).code == -32602, "delivery digest required")
+    local _, refused = rpc("contract-action", contract_token, "tools/call", {name = "delivery", arguments = {operation = "request",
+        source_overlay_id = "missing", version = "0.0.0", snapshot_digest = string.rep("0", 64)}})
+    assert(refused and refused.result, "delivery refusal")
+    local content = ((refused.result :: Object).content :: {Object})[1]
+    local fault: unknown = json.decode(tostring(content.text))
+    assert(type(fault) == "table" and (fault :: Object).ok == false, "delivery refusal shape")
+    local structured = (refused.result :: Object).structuredContent :: Object
+    assert(type(structured) == "table" and (structured.error :: Object).code ~= nil, "delivery refusal structured error")
 end
 local function record(text: string)
     ok(call("bee.threads.service:record", {thread_id = THREAD, idempotency_key = key(), kind = "message",
@@ -313,6 +396,7 @@ local function main()
     assert(status == 200 and init and (init.result :: Object).protocolVersion ~= nil, "initialize")
     local _, listed = rpc("act-a", token_a, "tools/list")
     assert(listed and #((listed.result :: Object).tools :: {unknown}) == 4, "two admitted tools and MCP controls advertised")
+    prove_mcp_contract(token_a)
     access_probe.run(ADDRESS)
     configurable_surface(token_a)
     local page = tool("act-a", token_a, "thread_read", {cursor = 0})

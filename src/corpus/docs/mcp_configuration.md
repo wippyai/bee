@@ -60,26 +60,36 @@ direct call. The gateway does not rewrite a running harness's system prompt.
 ## Built-in tools
 
 `overlay` reaches the public `bee.governance.binding:overlay_call` facade. `guide`
-returns the destination's authoring contract and minimal example without naming
-or granting an overlay. `create`, `list`, `read`, `put`, `append`, `remove` and `freeze`
-operate only on the caller's overlay identity. They use `overlay_id`; a
-caller-supplied `workspace_id` is refused. Inline file text is bounded to
-65,536 bytes, canonical padded base64 to 87,384 bytes (65,536 decoded), and a
-complete MCP JSON request to 524,288 bytes.
-`list` without an ID enumerates only the caller's overlays. `append` uses an
-exact byte offset, expected overlay revision and fresh idempotency key. The
-owner computes the assembled SHA-256 digest; `read` pages up to 16,384 decoded
-bytes.
+names no overlay: without `section` it returns the short index with the
+section list, with `section` one section, and with `include_example` the
+minimal worked example with its entries JSON inline. `create`, `list files
+in`, `read`, `put`, `append`, `remove` and `freeze` operate only on the
+caller's overlay identity. They use `overlay_id`; a caller-supplied
+`workspace_id` is refused. Inline file text is bounded to 65,536 bytes,
+canonical padded base64 to 87,384 bytes (65,536 decoded), and a complete MCP
+JSON request to 524,288 bytes.
+`list` without an ID enumerates only the caller's overlays; with one it lists
+that overlay's files. `append` uses an exact byte offset, expected overlay
+revision and fresh idempotency key. The owner computes the assembled SHA-256
+digest; `read` pages up to 16,384 decoded bytes.
 
 `components` is the managed-agent read-only Hub view. It permits `catalog`,
 `details`, `inspect`, `state`, `files`, `read_file`, `installed`,
-`installed_source` and `plan`.
+`installed_source` and `plan`, each with its own required fields, bounds and
+examples in the tool schema.
 The nested request retains Hub's exact component, version, resource and path
 decoders. It cannot apply a package, change registry state, activate an overlay
 or grant package permissions.
-`inspect` and `state` require a Hub artifact; use `installed_source` for the
-effective Lua source of a locally installed development version. See the
-[Hub inspection guide](../hub.md).
+`inspect` and `state` require an exact Hub artifact version; use
+`installed_source` for the effective Lua source of a locally installed
+development version, and `installed` (which takes no request body) for the
+effective inventory. `read_file` windows are capped at 16,384 bytes with
+`next_offset`. See the [Hub inspection guide](../hub.md).
+
+Read `capabilities` before authoring: it reports the admitted tools with
+their policies, the trait catalog, the bound workspace and thread, and launch
+rights. `launch_definitions` lists the caller's admitted launch definitions
+with placements, overrides and saved profile IDs and revisions.
 
 `thread_launch` starts a definition from the caller's launch-policy allow-list
 in the caller's workspace or in an optional `workspace_id`. It accepts a
@@ -114,10 +124,12 @@ placement binding is installed.
 running agent coordinate with another the way two interactive coding sessions
 hand work to each other, for any harness:
 
-- `thread_sessions` lists the running sessions of the caller's workspace whose
-  threads the bound subject may read, the caller included (`self`). A session
-  is the live gateway binding of an action; each entry has its address
-  (`session`, the action ID), attempt, thread and thread title.
+- `thread_sessions` pages the running sessions of the caller's workspace whose
+  threads the bound subject may read, the caller included (`self`), in stable
+  action order over a complete scan. A session is the live gateway binding of
+  an action; each entry has its address (`session`, the action ID), attempt,
+  thread and thread title. Pass `cursor`/`limit`; the reply names
+  `next_cursor` (absent at the end) with `eof`.
 - A session address is an action ID, an attempt ID, or a thread ID that holds
   exactly one running session. An ambiguous thread is refused and lists the
   actions to choose from.
@@ -140,9 +152,10 @@ Sessions started with `thread_launch` on the caller's thread share it and its
 subject and reach each other through these tools.
 
 Independent Agent windows have separate application actors and threads. For
-them, `session_directory` lists only live workspace peers the host permits
-the caller to discover, with a host-assigned name, exact `{node_id, action_id}`
-address, current `grant_epoch`, attempt state and latest inbox delivery state.
+them, `session_directory` pages only live workspace peers the host permits
+the caller to discover, with the same cursor paging, with a host-assigned
+name, exact `{node_id, action_id}` address, current `grant_epoch`, attempt
+state and latest inbox delivery state.
 The directory does not grant reading or sending. The names of newly admitted
 live actions are unique within a workspace; use the exact address for a send.
 
@@ -170,14 +183,18 @@ window agents end turns the way stream agents report them. Inbox addresses on
 another Hive node cannot yet be sent to: Hive forwards only the thread owner's
 `send` and `send_status`, and bindings, reads and waits stay node-local.
 
-`delivery` requests delivery of a frozen artifact and reads a staged version's
-review, selection and activation state; its destination defaults to the
-session's own workspace. An overlay named by the workspace-application rule
-(overlay `todo`, namespace `app.todo`, application `app.todo:app`) is admitted
-by the shipped host profiles, so an installed agent can deliver an application
-to its workspace without host configuration. `publish` publishes only the exact
-locally reviewed and applied version, and can require an approved trait. Neither
-tool writes an overlay or makes an approval decision.
+`delivery` checks a frozen artifact without staging it (`preflight`, which
+needs the frozen `snapshot_digest`), requests delivery of a frozen artifact
+(`request`, which stages it and reads the destination's preflight verdict),
+and reads a staged version's review, selection and activation state
+(`status`); its destination defaults to the session's own workspace. Check a
+candidate with `preflight` before `request`. An overlay named by the
+workspace-application rule (overlay `todo`, namespace `app.todo`,
+application `app.todo:app`) is admitted by the shipped host profiles, so an
+installed agent can deliver an application to its workspace without host
+configuration. `publish` publishes only the exact locally reviewed and
+applied version, and can require an approved trait. Neither tool writes an
+overlay or makes an approval decision.
 
 ## Trait configuration
 

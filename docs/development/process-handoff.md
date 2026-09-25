@@ -33,3 +33,9 @@ native viewports and a client owns the physical terminal surface; their runtime
 handles cannot be treated as serialized state or as authorization. The other
 RSI design slices, including service reconciliation, rollback and native
 cutover, are also proposals rather than callable operations.
+
+The retained owner currently runs as a `terminal.host` command. The pinned
+runtime delivers `OUTDATED` through `process.host` schedulers, so opting that
+command into upgrades would not receive definition-change events. An owner
+handoff first needs a supervised process boundary that receives invalidation
+and can restart an incompatible checkpoint without dropping its desktops.

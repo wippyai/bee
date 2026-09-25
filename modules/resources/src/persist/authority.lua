@@ -307,8 +307,11 @@ function M.grant(value: unknown): Reply
     if not stored then return fail("STORAGE", "read grant") end
     return succeed(grant_view(stored))
 end
--- revoke: the subject or a manager ends a grant; revoke_all advances the
--- workspace's authorization epoch so every earlier grant stops resolving.
+-- revoke: the subject or a manager ends a grant; the returned view names
+-- the fenced attempt, subject and thread for propagation. revoke_all
+-- advances the workspace's authorization epoch so every earlier grant
+-- stops resolving, and reports the fenced attempts for eager stops; the
+-- epoch itself remains the fence when live grants exceed the bound.
 function M.revoke(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
@@ -362,10 +365,21 @@ function M.revoke_all(value: unknown): Reply
         db:release()
         return fail("STORAGE", epoch_error or "epoch")
     end
+    local live, live_error = db:query("SELECT DISTINCT attempt_id FROM bee_resource_grants WHERE workspace_id = ? AND revoked_at IS NULL AND expires_at > ? AND attempt_id IS NOT NULL LIMIT ?",
+        {workspace_id, stamp(now_ms()), M.MAX_LIST})
+    if live_error or not live then
+        db:release()
+        return fail("STORAGE", "read fenced attempts")
+    end
+    local fenced: {string} = {}
+    for _, row in ipairs(live) do
+        local attempt = text((row :: Row).attempt_id)
+        if attempt then fenced[#fenced + 1] = attempt end
+    end
     local _, upsert_error = db:execute("INSERT INTO bee_resource_epochs (workspace_id, epoch) VALUES (?, ?) ON CONFLICT(workspace_id) DO UPDATE SET epoch = excluded.epoch", {workspace_id, epoch + 1})
     db:release()
     if upsert_error then return fail("STORAGE", "advance authorization epoch") end
-    return succeed({workspace_id = workspace_id, authorization_epoch = epoch + 1})
+    return succeed({workspace_id = workspace_id, authorization_epoch = epoch + 1, fenced_attempts = fenced})
 end
 -- resolve: a placement asks with the subject and audience it admitted
 -- itself; every binding of the grant is re-checked against the present.

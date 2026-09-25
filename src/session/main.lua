@@ -33,12 +33,13 @@ local function main(owner: string, width: integer, height: integer, preferences:
     if not restored then assert(process.monitor(owner)) end
     local desktop = state.new(width, height, appearance.decode(preferences))
     if initial ~= nil then
-        local restored = decode.desktop(initial)
-        if not restored then error("Invalid session layout bootstrap") end
-        for _, window in ipairs(restored.scene.windows) do
+        local initial_desktop = decode.desktop(initial)
+        if not initial_desktop then error("Invalid session layout bootstrap") end
+        for _, window in ipairs(initial_desktop.scene.windows) do
             if window.workspace_id ~= workspace_id then error("Foreign session layout bootstrap") end
         end
-        desktop = {scene = restored.scene, tabs = restored.tabs, preferences = restored.preferences}
+        desktop = {scene = initial_desktop.scene, tabs = initial_desktop.tabs,
+            preferences = initial_desktop.preferences}
         desktop = state.reduce(desktop, {version = 1, op = "screen", width = width, height = height})
     end
     if restored then

@@ -4,10 +4,15 @@ entries:
 - name: ownership
   kind: library.lua
   source: file://ownership.lua
+- name: owner_handoff
+  kind: library.lua
+  source: file://owner_handoff.lua
+  imports:
+    contract: bee.protocol:application
 - name: desktop_lifecycle
   kind: library.lua
   source: file://desktop_lifecycle.lua
-  modules: [process, security, channel, time, uuid]
+  modules: [process, security, channel, time, uuid, logger]
   imports:
     desktops: bee.client:desktops
     attachments: bee.client:attachments
@@ -90,13 +95,14 @@ entries:
   kind: process.lua
   source: file://owner.lua
   method: main
-  modules: [process, channel, security, time, logger, io, system, registry]
-  imports:
+  modules: [process, channel, security, time, logger, io, system, registry, ctx, uuid]
+  imports: &owner_imports
     retained: bee.launch:retained_protocol
     ownership: bee.launch:ownership
     decode: bee.protocol:decode
     workspaces: bee.storage:binding
     command_stop: bee.launch:command_stop
+    owner_handoff: bee.launch:owner_handoff
   meta:
     comment: Retained workspace owner selected by the native launch host under the runtime state lock
     command:

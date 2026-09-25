@@ -97,7 +97,9 @@ A person reviews the staged plan in Start › Tools › Overlays, selects and
 prepares it there, approves the request in Start › Tools › Approvals, and lets
 Overlays step the activation owner until it settles; the application then
 appears in the Start menu. `make workspace-app-delivery-check` proves this path
-on the unmodified composition.
+on the unmodified composition with a scripted agent, and
+`make workspace-app-delivery-live-check` proves it with the installed Claude
+Code building the application from its written spec.
 
 ## Limits
 

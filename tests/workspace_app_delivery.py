@@ -14,13 +14,16 @@ spec says, including its saved count after a restart.
 The far end of the launch is the scripted protocol agent
 (tests/fixtures/harness/gateway_client.go, mode spec): it writes the answer a
 model would write, tests/fixtures/workspace_app_delivery/tally.lua, so the
-proof needs no provider account. BEE_RUNTIME names the runtime;
-BEE_WORKSPACE_APP_EVIDENCE overrides the retained evidence directory.
+proof needs no provider account. BEE_WORKSPACE_APP_PROVIDER=claude runs the
+installed Claude Code at that end instead; it reads the spec and the guide and
+writes the application itself, consuming inference. BEE_RUNTIME names the
+runtime; BEE_WORKSPACE_APP_EVIDENCE overrides the retained evidence directory.
 """
 import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -41,6 +44,13 @@ TITLE = "Tally"
 DEFINITION_ID = "app.tally:app"
 APPROVAL_POLICY = "workspace-application-delivery"
 SHIPPED = ["src/governance/_index.yaml", "src/approvals/host/_index.yaml"]
+PROVIDER = os.environ.get("BEE_WORKSPACE_APP_PROVIDER", "scripted")
+# A live agent is told only how to use its tools; the spec is the person's.
+LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another agent. Read the overlay tool's "
+              "guide operation first and follow it. Author the application below in your own overlay, freeze it, "
+              "then call the delivery tool with operation request, version 1.0.0 and the frozen snapshot_digest. "
+              "If delivery names a diagnostic, repair it, freeze again and request delivery with version 1.0.1, "
+              "1.0.2 and so on. Stop when delivery reports ready.\n\n")
 
 
 def answer_entries():
@@ -69,9 +79,25 @@ def compose(folder):
     index = project / "src/workspace_app_probe/_index.yaml"
     document = yaml.safe_load(index.read_text())
     policy = next(entry for entry in document["entries"] if entry["name"] == "agent_policy")["data"]
-    policy["executables"] = {"claude": str(ROOT / "tests/fixtures/harness/bin/claude")}
-    policy["environment"]["BEE_FIXTURE_AUTHOR_ENTRIES"] = str(answer)
-    policy["environment"]["BEE_FIXTURE_STREAM"] = str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
+    if PROVIDER == "claude":
+        executable = shutil.which("claude")
+        assert executable, "BEE_WORKSPACE_APP_PROVIDER=claude needs an installed, logged-in Claude Code"
+        policy["executables"] = {"claude": str(Path(executable).resolve())}
+        policy["environment"] = {}
+        policy["environment_refs"] = {"CLAUDE_CONFIG_DIR": "bee.driver.claude:config_home"}
+        policy["allow_host_home"] = True
+        policy["prepare_options"] = {"permission_mode": "dontAsk", "max_turns": 32}
+        policy["required_exit_observation"] = "independent"
+        policy["required_cleanup"] = "process_group"
+        policy["stop_grace_ms"] = 5000
+        policy["drain_ms"] = 5000
+        policy.pop("runner_drain_ms", None)
+        policy["fixture"] = False
+    else:
+        assert PROVIDER == "scripted", PROVIDER
+        policy["executables"] = {"claude": str(ROOT / "tests/fixtures/harness/bin/claude")}
+        policy["environment"]["BEE_FIXTURE_AUTHOR_ENTRIES"] = str(answer)
+        policy["environment"]["BEE_FIXTURE_STREAM"] = str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
     index.write_text(yaml.safe_dump(document, sort_keys=False))
     subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true",
                     "--set", "lua.type_system.strict=true"], cwd=project, check=True, timeout=300)
@@ -81,11 +107,13 @@ def compose(folder):
 def author(project, folder):
     """The managed agent's attempt, started by the host with the spec as brief."""
     workspace_id = classic_workspace(folder / "workspace.db")
+    spec = (FIXTURE / "SPEC.md").read_text()
+    brief = LIVE_BRIEF + spec if PROVIDER == "claude" else spec
     result = subprocess.run([str(RUNTIME), "run", "--verbose", "workspace-app-author",
                              "--set", f"registry.history_path={folder}/registry.db"],
-                            cwd=project, capture_output=True, text=True, timeout=420,
+                            cwd=project, capture_output=True, text=True, timeout=1500,
                             env=database_environment(folder, BEE_WORKSPACE_APP_WORKSPACE=workspace_id,
-                                                     BEE_WORKSPACE_APP_BRIEF=(FIXTURE / "SPEC.md").read_text()))
+                                                     BEE_WORKSPACE_APP_BRIEF=brief))
     output = result.stdout + result.stderr
     (folder / "author.log").write_text(output)
     assert result.returncode == 0, output[-6000:]
@@ -112,6 +140,15 @@ def assert_authored(report):
     assert report["status_selected"] is not True, report
 
 
+def staged_version(folder):
+    """The version the agent's last delivery request staged for its overlay."""
+    with sqlite3.connect(f"file:{folder / 'governance.db'}?mode=ro", uri=True) as db:
+        rows = db.execute("SELECT version FROM bee_governance_plans WHERE source_workspace = ? ORDER BY rowid",
+                          (SOURCE,)).fetchall()
+    assert rows, "the agent staged no version of " + SOURCE
+    return rows[-1][0]
+
+
 def evidence_root():
     selected = os.environ.get("BEE_WORKSPACE_APP_EVIDENCE")
     root = Path(selected) if selected else ROOT / ".wippy/evidence" / time.strftime("workspace-app-%Y%m%d-%H%M%S")
@@ -131,13 +168,16 @@ def exercise():
         first.close()
 
     report = author(project, folder)
-    assert_authored(report)
+    if PROVIDER == "scripted":
+        assert_authored(report)
 
     ui = Desktop(folder, project=project)
     try:
         ui.wait("No applications open", timeout=COLD_BOOT)
         ui.pump(.5)
-        apply_staged_in_ui(ui, {"workspace": SOURCE, "version": VERSION, "approval_policy": APPROVAL_POLICY}, folder)
+        version = staged_version(folder)
+        assert PROVIDER != "scripted" or version == VERSION, version
+        apply_staged_in_ui(ui, {"workspace": SOURCE, "version": version, "approval_policy": APPROVAL_POLICY}, folder)
         open_catalog_app(ui, TITLE, COLD_BOOT)
         ui.wait("TALLY", timeout=20)
         ui.wait("Tally: 0", timeout=20)

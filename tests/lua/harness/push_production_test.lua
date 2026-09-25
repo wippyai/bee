@@ -114,7 +114,7 @@ end
 type Measured = {revision: string, kind: string, digest: string}
 local function measure_executable(path: string): Measured
     local actor = security.new_actor(ACTOR)
-    local raw, err = funcs.new():with_actor(actor):with_scope(scope()):call("bee.placement.native:measure_executable", {path = path})
+    local raw, err = funcs.new():with_actor(actor):with_scope(scope()):call("bee.placement.native.binding:measure_executable", {path = path})
     if err then error("measure executable: " .. tostring(err)) end
     local reply = raw :: {ok: boolean, value: Object?}
     if reply.ok and reply.value then

@@ -168,7 +168,7 @@ def stage_replacement(project, folder):
     return evidence
 
 
-def apply_staged_in_ui(ui, staged, root):
+def apply_staged_in_ui(ui, staged, root, expected_capability=None):
     """Review, approve and apply one exact staged plan through the UI."""
     ui.open_start()
     ui.choose("Tools")
@@ -215,6 +215,9 @@ def apply_staged_in_ui(ui, staged, root):
         ui.key(b"j")
     else:
         raise AssertionError("exact replacement approval is absent\n" + ui.text())
+    if expected_capability:
+        ui.wait("Change: added: " + expected_capability, timeout=20)
+        ui.wait("Capability: " + expected_capability, timeout=20)
     ui.key(b"a")
     ui.wait("Approve this request?", timeout=20)
     ui.key(b"\t")

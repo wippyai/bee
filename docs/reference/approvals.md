@@ -113,6 +113,14 @@ state refreshes the owner's record and is never resubmitted. A lost answer is
 recovered by reading the same request. The app's presentation cannot write
 grants or bypass owner policy.
 
+For workspace application installation, the detail pane also displays the
+catalog-resolved capability set, the added or widened permission changes, and
+combined data-flow lines. Narrowed and removed permissions are shown when a
+new review is needed for another change. The host generates these lines from
+its catalog; the app's request reason is not treated as approval wording.
+A contained upgrade reuses the live installed grant without creating another
+permission request, while widening creates a request for the new delta.
+
 Presentation uses explicit requester, destination, scope, status and deadline
 labels; color is only a secondary status cue. A pending network answer must
 not look committed. The first intended remote use is a destination-owned

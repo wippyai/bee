@@ -60,15 +60,15 @@ local function policy(grant: Object, id: string): (Object?, string?)
         return nil, "capability has no installed enforcement in this slice"
     end
     return {id = id, kind = "security.policy", meta = {comment = "Host-generated owned thread read grant"},
-        policy = {actions = {"funcs.call"},
+        data = {policy = {actions = {"funcs.call"},
             resources = {"bee.threads.service:get", "bee.threads.service:list",
-                "bee.threads.service:read_after"}, effect = "allow"}}, nil
+                "bee.threads.service:read_after"}, effect = "allow"}}}, nil
 end
 
 function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unknown,
     requirements_raw: unknown): (Proposal?, string?)
     local owner, app = bounds.id(owner_raw), bounds.id(app_raw)
-    local rows = list(requirements_raw, 128)
+    local rows = list(requirements_raw, 8)
     if not owner or not app or not rows then return nil, "capability proposal identity is invalid" end
     local capacity: integer = #rows > 0 and #rows or 1
     local capabilities: {Object} = table.create(capacity, 0)
@@ -118,17 +118,24 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
 end
 
 function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
-    proposal: Proposal, approval_raw: unknown, revision_raw: unknown): (Object?, string?)
+    proposal: Proposal, approval_raw: unknown, revision_raw: unknown,
+    artifact_raw: unknown?, version_raw: unknown?): (Object?, string?)
     local owner, workspace, app = bounds.id(owner_raw), bounds.id(workspace_raw), bounds.id(app_raw)
     local approval_id, revision = bounds.id(approval_raw), bounds.count(revision_raw)
     local id = M.record_id(owner)
     if not owner or not workspace or not app or not approval_id or not revision or revision < 1
         or not id or not sha(proposal.digest) then return nil, "capability grant record is invalid" end
+    local artifact_digest = artifact_raw == nil and nil or sha(artifact_raw)
+    local version = version_raw == nil and nil or bounds.id(version_raw)
+    if (artifact_raw ~= nil and not artifact_digest) or (version_raw ~= nil and not version) then
+        return nil, "capability grant artifact identity is invalid"
+    end
     return {id = id, kind = "registry.entry", meta = {type = M.SCHEMA},
         data = {schema_revision = M.SCHEMA, overlay_owner = owner, workspace_id = workspace,
             application = app, capabilities = proposal.capabilities, bindings = proposal.bindings,
             policies = proposal.policies, thread_access = proposal.thread_access,
-            digest = proposal.digest, approval_id = approval_id, revision = revision}}, nil
+            digest = proposal.digest, approval_id = approval_id, revision = revision,
+            artifact_digest = artifact_digest, version = version}}, nil
 end
 
 function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
@@ -142,6 +149,7 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
         or data.schema_revision ~= M.SCHEMA or data.overlay_owner ~= owner
         or data.workspace_id ~= workspace_raw or data.application ~= app_raw
         or not bounds.id(data.approval_id) or not bounds.count(data.revision)
+        or data.revision < 1
         or not sha(data.digest) or data.thread_access ~= "none" then
         return nil, "installed capability grant record is malformed"
     end
@@ -168,7 +176,42 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
     if not resolved or resolved.digest ~= data.digest then
         return nil, resolve_error or "installed capability digest differs from host templates"
     end
-    return data, nil
+    if data.artifact_digest ~= nil and not sha(data.artifact_digest) then
+        return nil, "installed grant artifact digest is invalid"
+    end
+    if data.version ~= nil and not bounds.id(data.version) then
+        return nil, "installed grant version is invalid"
+    end
+    local measured_record = digest(data)
+    if not measured_record then return nil, "measure installed grant record" end
+    local copy: Object = {}
+    for field, value in pairs(data) do copy[field] = value end
+    copy.record_digest = measured_record
+    return copy, nil
+end
+
+-- A registry record is live only while its generated policies and requirement
+-- defaults are installed beside it. An orphaned record cannot authorize reuse.
+function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
+    for _, raw_policy in ipairs(record.policies :: {unknown}) do
+        local expected = bounds.object(raw_policy)
+        local id = expected and bounds.id(expected.id) or nil
+        local current = id and bounds.object(lookup(id)) or nil
+        if not expected or not current then return false, "installed grant policy is absent" end
+        local clean: Object = {}
+        for key, value in pairs(current) do if key ~= "registry" then clean[key] = value end end
+        if digest(clean) ~= digest(expected) then return false, "installed grant policy differs from approval" end
+    end
+    for _, raw_binding in ipairs(record.bindings :: {unknown}) do
+        local binding = bounds.object(raw_binding)
+        local requirement = binding and bounds.object(lookup(binding.requirement_id :: string)) or nil
+        local data = requirement and bounds.object(requirement.data) or nil
+        if not requirement or requirement.kind ~= "ns.requirement" or not data
+            or data.default ~= binding.policy_id then
+            return false, "installed requirement binding differs from approval"
+        end
+    end
+    return true, nil
 end
 
 function M.diff(vocabulary: catalog.Catalog, installed: Object?, proposal: Proposal): (Object?, string?)

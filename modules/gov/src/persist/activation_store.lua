@@ -87,7 +87,8 @@ local function authorization_digest(store: Store, input: Request, artifact: Blob
         plan_revision = input.plan_revision, selection_revision = input.selection_revision,
         artifact_digest = artifact.digest, resolution_digest = resolution.digest, preflight_digest = preflight.digest,
         migration_work_digest = work.digest,
-        application_admission_digest = admission and admission.digest or nil})
+        application_admission_digest = admission and admission.digest or nil,
+        grant_predecessor_digest = input.grant_predecessor_digest})
     if not encoded then return nil end
     return digest(encoded)
 end
@@ -104,7 +105,7 @@ local function cas_result(result: unknown, err: unknown, action: string): Result
     return nil
 end
 local function load(tx: sql.Transaction, store: Store, intent_id: string): (Object?, Result?)
-    return one(tx, "SELECT i.*, e.revision, e.phase, e.approval_id, e.approval_proposal_digest, e.approval_owner_incarnation, e.consumed_consumer_id, e.consumed_proposal_digest, e.consumed_effect_key, e.outcome, e.diagnostics, e.migrations_completed, e.migration_receipt_bytes, e.migration_receipt_digest, e.updated_at AS execution_updated_at FROM bee_governance_activation_intents i JOIN bee_governance_activation_execution e ON e.owner_node = i.owner_node AND e.workspace_id = i.workspace_id AND e.intent_id = i.intent_id WHERE i.owner_node = ? AND i.workspace_id = ? AND i.intent_id = ?", {store.node, store.workspace, intent_id}, "activation intent")
+    return one(tx, "SELECT i.*, e.revision, e.phase, e.approval_id, e.approval_proposal_digest, e.approval_owner_incarnation, e.grant_reuse_digest, e.consumed_consumer_id, e.consumed_proposal_digest, e.consumed_effect_key, e.outcome, e.diagnostics, e.migrations_completed, e.migration_receipt_bytes, e.migration_receipt_digest, e.updated_at AS execution_updated_at FROM bee_governance_activation_intents i JOIN bee_governance_activation_execution e ON e.owner_node = i.owner_node AND e.workspace_id = i.workspace_id AND e.intent_id = i.intent_id WHERE i.owner_node = ? AND i.workspace_id = ? AND i.intent_id = ?", {store.node, store.workspace, intent_id}, "activation intent")
 end
 local function slot(tx: sql.Transaction, store: Store, overlay_owner: string, create: boolean): (Object?, Result?)
     local row, err = one(tx, "SELECT * FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ?", {store.node, store.workspace, overlay_owner}, "activation slot")
@@ -124,8 +125,10 @@ local function view(store: Store, row: Object, current_slot: Object?): Object
         migration_work_bytes = row.migration_work_bytes, migration_work_digest = row.migration_work_digest,
         application_admission_bytes = row.application_admission_bytes,
         application_admission_digest = row.application_admission_digest,
+        grant_predecessor_digest = row.grant_predecessor_digest,
         effect_key = row.effect_key, revision = row.revision, phase = row.phase,
         approval_id = row.approval_id, approval_proposal_digest = row.approval_proposal_digest,
+        grant_reuse_digest = row.grant_reuse_digest,
         approval_owner_incarnation = row.approval_owner_incarnation, consumed_consumer_id = row.consumed_consumer_id,
         consumed_proposal_digest = row.consumed_proposal_digest, consumed_effect_key = row.consumed_effect_key,
         outcome = row.outcome, diagnostics = row.diagnostics,
@@ -196,7 +199,7 @@ local function decode(raw: unknown): (Request?, string?)
     local result: Request = {operation = operation, intent_id = intent_id, expected_revision = expected, idempotency_key = key}
     if operation == "prepare_activation" then
         if expected ~= 0 then return nil, "prepare_activation requires expected_revision zero" end
-        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "overlay_owner", "source_node", "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact", "resolution", "preflight", "migration_work", "application_admission"})
+        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "overlay_owner", "source_node", "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact", "resolution", "preflight", "migration_work", "application_admission", "grant_predecessor_digest"})
         if extra then return nil, extra end
         result.overlay_owner = id(value.overlay_owner)
         result.source_node, result.source_workspace, result.version = id(value.source_node), id(value.source_workspace), id(value.version)
@@ -211,14 +214,23 @@ local function decode(raw: unknown): (Request?, string?)
         result.artifact_digest = artifact.digest
         result.artifact, result.resolution, result.preflight, result.migration_work = artifact, resolution, preflight, work
         result.application_admission = admission
+        result.grant_predecessor_digest = value.grant_predecessor_digest == nil
+            and nil or hex_digest(value.grant_predecessor_digest)
+        if value.grant_predecessor_digest ~= nil and not result.grant_predecessor_digest then
+            return nil, "grant predecessor digest is invalid"
+        end
         return result, nil
     end
     if operation == "bind_approval" then
-        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "approval_id", "approval_proposal_digest", "approval_owner_incarnation"})
+        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "approval_id", "approval_proposal_digest", "approval_owner_incarnation", "grant_reuse_digest"})
         if extra then return nil, extra end
         result.approval_id, result.approval_proposal_digest = id(value.approval_id), hex_digest(value.approval_proposal_digest)
         result.approval_owner_incarnation = count(value.approval_owner_incarnation, true)
+        result.grant_reuse_digest = value.grant_reuse_digest == nil and nil or hex_digest(value.grant_reuse_digest)
         if not result.approval_id or not result.approval_proposal_digest or not result.approval_owner_incarnation then return nil, "approval identity is invalid" end
+        if value.grant_reuse_digest ~= nil and result.grant_reuse_digest ~= result.approval_proposal_digest then
+            return nil, "grant reuse digest is invalid"
+        end
     elseif operation == "begin_consume" then
         local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key"})
         if extra then return nil, extra end
@@ -275,7 +287,7 @@ function M.prepare(store: Store, actor: string, input: Request): Result
         local effect_key = effect_bytes and digest(effect_bytes)
         if not effect_key then return failure("INTERNAL", "measure activation effect key") end
         local admission = input.application_admission :: Blob?
-        local _, insert_error = tx:execute("INSERT INTO bee_governance_activation_intents (owner_node, workspace_id, intent_id, actor_id, overlay_owner, source_node, source_workspace, version, plan_digest, plan_revision, selection_revision, artifact_bytes, artifact_digest, resolution_bytes, resolution_digest, preflight_bytes, preflight_digest, migration_work_bytes, migration_work_digest, application_admission_bytes, application_admission_digest, authorization_digest, effect_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, input.intent_id, actor, input.overlay_owner, input.source_node, input.source_workspace, input.version, input.plan_digest, input.plan_revision, input.selection_revision, input.artifact.bytes, input.artifact.digest, input.resolution.bytes, input.resolution.digest, input.preflight.bytes, input.preflight.digest, input.migration_work.bytes, input.migration_work.digest, admission and admission.bytes or nil, admission and admission.digest or nil, authorized, effect_key})
+        local _, insert_error = tx:execute("INSERT INTO bee_governance_activation_intents (owner_node, workspace_id, intent_id, actor_id, overlay_owner, source_node, source_workspace, version, plan_digest, plan_revision, selection_revision, artifact_bytes, artifact_digest, resolution_bytes, resolution_digest, preflight_bytes, preflight_digest, migration_work_bytes, migration_work_digest, application_admission_bytes, application_admission_digest, grant_predecessor_digest, authorization_digest, effect_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, input.intent_id, actor, input.overlay_owner, input.source_node, input.source_workspace, input.version, input.plan_digest, input.plan_revision, input.selection_revision, input.artifact.bytes, input.artifact.digest, input.resolution.bytes, input.resolution.digest, input.preflight.bytes, input.preflight.digest, input.migration_work.bytes, input.migration_work.digest, admission and admission.bytes or nil, admission and admission.digest or nil, input.grant_predecessor_digest, authorized, effect_key})
         if insert_error then return storage(insert_error, "prepare activation") end
         local _, execution_error = tx:execute("INSERT INTO bee_governance_activation_execution (owner_node, workspace_id, intent_id, revision, phase, updated_at) VALUES (?, ?, ?, 1, 'prepared', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, input.intent_id})
         if execution_error then return storage(execution_error, "create activation execution") end
@@ -295,7 +307,7 @@ function M.bind_approval(store: Store, actor: string, input: Request): Result
     local measured = request_digest(input) :: string
     return transition(store, actor, input, {prepared = true}, function(tx, row)
         local next_revision = (row.revision :: number) + 1
-        local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'approval_bound', approval_id = ?, approval_proposal_digest = ?, approval_owner_incarnation = ?, revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {input.approval_id, input.approval_proposal_digest, input.approval_owner_incarnation, next_revision, store.node, store.workspace, row.intent_id, row.revision})
+        local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'approval_bound', approval_id = ?, approval_proposal_digest = ?, approval_owner_incarnation = ?, grant_reuse_digest = ?, revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {input.approval_id, input.approval_proposal_digest, input.approval_owner_incarnation, input.grant_reuse_digest, next_revision, store.node, store.workspace, row.intent_id, row.revision})
         local update_error = cas_result(updated, err, "bind activation approval")
         if update_error then return update_error :: Result end
         local changed, changed_error = load(tx, store, row.intent_id :: string)

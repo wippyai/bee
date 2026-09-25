@@ -231,9 +231,15 @@ beside its explicit rows, and the publication configuration a matching
 explicit row for a source, or else instantiates the rule for an overlay this
 node authored whose name `workspace_applications` accepts: component and
 namespace `app.<overlay_id>`, the application `app.<overlay_id>:app`, the
-rule's approval policy, kinds, modules, admission policies and thread access,
+rule's approval policy, kinds, modules, base admission policies and thread access,
 and a private overlay owner per destination workspace. The instance is
-measured into the policy digest exactly like an explicit row. The instance
+measured into the policy digest exactly like an explicit row. A live host grant
+record adds generated policy IDs to `allow.grants` and the application's
+admission binding; its recorded thread access also selects the application
+binding. Activation writes the generated policies, requirement defaults, grant
+record and admission in one registry overlay transaction. It reuses a contained
+live grant after measuring and checking a later artifact, while widening
+requests a new permission approval. The instance
 sets `allow.auto_start: false`, and preflight refuses any entry declaring
 `lifecycle.auto_start` under such a policy (`AUTO_START_DENIED`); an explicit
 row admits auto start unless it sets that field to `false`. Availability

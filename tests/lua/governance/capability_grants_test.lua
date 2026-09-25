@@ -38,6 +38,13 @@ local function define_tests()
             local first = assert(grants.record(OWNER, "workspace-1", APP, proposed,
                 "approval-first", 1))
             local decoded = assert(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
+            local installed_entries: {[string]: unknown} = {}
+            installed_entries[proposed.policies[1].id :: string] = proposed.policies[1]
+            installed_entries["app.notes:request"] = {kind = "ns.requirement",
+                data = {default = proposed.policies[1].id}}
+            test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
+            installed_entries[proposed.policies[1].id :: string] = nil
+            test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
             local same = assert(grants.diff(vocabulary(), decoded, proposed))
             test.is_false(same.requires_approval)
             local empty = assert(grants.propose(vocabulary(), OWNER, APP, {}))
@@ -49,11 +56,14 @@ local function define_tests()
             test.eq(#widening.added, 1)
             test.is_true(table.concat(widening.lines, "\n"):find("Read owned threads", 1, true) ~= nil)
             local changed = first.data :: {[string]: unknown}
+            changed.revision = 0
+            test.is_nil(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
+            changed.revision = 1
             changed.digest = string.rep("0", 64)
             test.is_nil(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
             changed.digest = proposed.digest
             local policies = changed.policies :: {{[string]: unknown}}
-            policies[1].policy = {actions = {"registry.overlay.apply"}, resources = "*", effect = "allow"}
+            policies[1].data = {policy = {actions = {"registry.overlay.apply"}, resources = "*", effect = "allow"}}
             test.is_nil(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
         end)
         test.it("refuses unimplemented materialization and foreign app targets", function()

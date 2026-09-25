@@ -8,6 +8,7 @@ entries:
   imports:
     artifact: bee.governance:artifact
     application_admission: bee.governance:governed_application_admission
+    capability_grants: bee.governance:capability_grants
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
 - name: hub_resolver
@@ -29,6 +30,7 @@ entries:
     bounds: bee.threads.records:bounds
     application_admission: bee.governance:governed_application_admission
     capability_catalog: bee.governance:capability_catalog
+    capability_grants: bee.governance:capability_grants
 - name: staging_resources
   kind: library.lua
   source: file://staging_resources.lua

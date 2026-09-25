@@ -56,6 +56,9 @@ entries:
   imports:
     contract: bee.protocol:application
     activation_profiles: bee.governance:activation_profile_decoder
+    capability_grants: bee.governance:capability_grants
+    capability_catalog: bee.governance:capability_catalog
+    workspace_applications: bee.governance:workspace_applications
     governed_admission: bee.governance:governed_application_admission
 - name: interactions
   kind: library.lua

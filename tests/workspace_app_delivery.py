@@ -57,12 +57,16 @@ def answer_entries():
     """The entries.json a model writes for SPEC.md."""
     return [{"id": DEFINITION_ID, "kind": "process.lua",
              "data": {"source": (FIXTURE / "tally.lua").read_text(), "method": "main",
-                      "modules": ["tty", "process", "channel", "json"],
+                      "modules": ["tty", "process", "channel", "json", "funcs"],
                       "imports": {"client": "bee.application:client", "appearance": "bee.application:appearance",
                                   "frame": "bee.application:frame"}},
              "meta": {"type": "bee.application", "application": {
                  "api_version": 1, "lifetime": "view", "revision": "1", "title": TITLE,
-                 "instance_policy": "singleton", "resume_schema": "tally.v1", "restart_policy": "automatic"}}}]
+                 "instance_policy": "singleton", "resume_schema": "tally.v1", "restart_policy": "automatic"}}},
+            {"id": "app.tally:threads_read", "kind": "ns.requirement",
+             "meta": {"value_kind": "security.policy", "capability": "threads.read",
+                      "parameters": {"scope": "owned"}, "reason": "Read threads owned by this application"},
+             "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}}]
 
 
 def compose(folder):
@@ -171,13 +175,16 @@ def exercise():
     if PROVIDER == "scripted":
         assert_authored(report)
 
+    os.environ["BEE_WORKSPACE_APP_WORKSPACE"] = classic_workspace(folder / "workspace.db")
+    os.environ["BEE_WORKSPACE_APP_INSPECT"] = "1"
     ui = Desktop(folder, project=project)
     try:
         ui.wait("No applications open", timeout=COLD_BOOT)
         ui.pump(.5)
         version = staged_version(folder)
         assert PROVIDER != "scripted" or version == VERSION, version
-        apply_staged_in_ui(ui, {"workspace": SOURCE, "version": version, "approval_policy": APPROVAL_POLICY}, folder)
+        apply_staged_in_ui(ui, {"workspace": SOURCE, "version": version, "approval_policy": APPROVAL_POLICY},
+                           folder, expected_capability="Read owned threads")
         open_catalog_app(ui, TITLE, COLD_BOOT)
         ui.wait("TALLY", timeout=20)
         ui.wait("Tally: 0", timeout=20)
@@ -193,9 +200,18 @@ def exercise():
             ui.key(b"\r")
             ui.wait(f"Tally: {count}", timeout=20)
         ui.wait("Saved: 3", timeout=20)
+        grant_evidence = project / "evidence/grant.json"
+        deadline = time.monotonic() + 35
+        while not grant_evidence.exists() and time.monotonic() < deadline:
+            ui.pump(.1)
+        assert grant_evidence.exists(), "installed grant scope was not verified"
+        grant = json.loads(grant_evidence.read_text())
+        assert grant["capability"] == "threads.read" and len(grant["policies"]) == 2, grant
         ui.quit()
     finally:
         ui.close()
+        os.environ.pop("BEE_WORKSPACE_APP_INSPECT", None)
+        os.environ.pop("BEE_WORKSPACE_APP_WORKSPACE", None)
 
     restarted = Desktop(folder, project=project)
     try:
@@ -205,7 +221,8 @@ def exercise():
     finally:
         restarted.close()
     print("Workspace application: a managed agent authored " + DEFINITION_ID + " from its written spec on the "
-          "shipped host profiles, the person approved it in Approvals, and it opened from Start, counted, reset "
+          "shipped host profiles, the person saw the threads.read capability in Approvals, and the installed "
+          "scope contained its one generated policy; it called the Threads owner, opened from Start, counted, reset "
           "and restored its saved count")
 
 

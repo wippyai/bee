@@ -46,15 +46,21 @@ An agent-authored app may declare a measured capability request through an
 and `security.policy` value kind. It must append to the app entry's
 `.security.policies +=` target. The destination resolver validates the request
 against the protected host catalog and retains it in the immutable preflight
-candidate. A request does not select a grant or alter the broker's admission
-binding. App content that supplies `security.actor` or `security.groups` is
+candidate. A request by itself grants no authority. App content that supplies
+`security.actor` or `security.groups` is
 refused by preflight on every entry kind.
 
-The catalog's policy and resource expansions, semantic grant comparison and
-host-authored human wording are pure values for future install review. Installing
-those grants, reusing an approval on a contained upgrade, and enforcing them at
-service boundaries remain proposals; the current application authority below
-is still selected by the host's existing admission binding.
+The host resolves the requested set and presents its catalog wording and
+changes against the installed grant in Approvals. An approved install writes
+host-owned policy entries, requirement defaults and a grant record in one
+registry transaction. The workspace application profile derives its allowed
+policies and admission binding from that live record. A contained upgrade
+reuses the installed approval after measurement and preflight, and installs
+only the new version's requested subset. A widening requires a new decision;
+refusal leaves the installed grant in place. This slice installs only
+`threads.read` with owned scope. File and database provisioning, contract
+gateways, runtime agent elevation and active revocation fencing remain later
+work.
 
 The broker accepts a governed record only for its own workspace while the
 current normalized host profile selects the same source, owner, bindings and

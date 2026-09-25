@@ -126,6 +126,30 @@ local function define_tests()
             test.eq(refused.code, "INVALID")
             assert(store.close(partial_store))
         end)
+        test.it("persists the exact predecessor digest for grant reuse", function()
+            local state = assert(store.open("bee.governance:activation_test_db", "node-a", "workspace-reuse"))
+            local input = prepare()
+            input.intent_id, input.idempotency_key = "intent-reuse", "reuse-prepare"
+            input.grant_predecessor_digest = string.rep("b", 64)
+            local prepared = ok(store.call(state, "actor-a", input))
+            test.eq(prepared.grant_predecessor_digest, string.rep("b", 64))
+            local bound = {operation = "bind_approval", intent_id = "intent-reuse",
+                expected_revision = prepared.revision, idempotency_key = "reuse-bind",
+                approval_id = "prior-approval", approval_proposal_digest = string.rep("b", 64),
+                approval_owner_incarnation = 1, grant_reuse_digest = string.rep("b", 64)}
+            local reused = ok(store.call(state, "actor-a", bound))
+            test.eq(reused.grant_reuse_digest, string.rep("b", 64))
+            local changed = {operation = "bind_approval", intent_id = "intent-other",
+                expected_revision = 1, idempotency_key = "reuse-invalid",
+                approval_id = "prior-approval", approval_proposal_digest = string.rep("b", 64),
+                approval_owner_incarnation = 1, grant_reuse_digest = string.rep("c", 64)}
+            test.eq(store.call(state, "actor-a", changed).code, "INVALID")
+            assert(store.close(state))
+            local reopened = assert(store.open("bee.governance:activation_test_db", "node-a", "workspace-reuse"))
+            test.eq(ok(store.get(reopened, "intent-reuse")).grant_reuse_digest, string.rep("b", 64))
+            test.eq(ok(store.get(reopened, "intent-reuse")).grant_predecessor_digest, string.rep("b", 64))
+            assert(store.close(reopened))
+        end)
         test.it("fences stale revisions, receipt actors and changed retries", function()
             local state, open_error = store.open("bee.governance:activation_test_db", "node-a", "workspace-a")
             if not state then error(tostring(open_error)) end

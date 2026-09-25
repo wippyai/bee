@@ -3,6 +3,9 @@ local registry = require("registry")
 local system = require("system")
 local contract = require("contract")
 local activation_profiles = require("activation_profiles")
+local capability_grants = require("capability_grants")
+local capability_catalog = require("capability_catalog")
+local workspace_applications = require("workspace_applications")
 local governed_admission = require("governed_admission")
 local M = {}
 type Object = {[string]: unknown}
@@ -99,8 +102,21 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
     local evidence: {string} = {}
     for _, item in ipairs(records) do
         local record = item.record
+        local identity = workspace_applications.identity(workspace_id, record.source_workspace)
+        local grant_id = identity and identity.overlay_owner == record.overlay_owner
+            and capability_grants.record_id(record.overlay_owner) or nil
+        local installed = grant_id and lookup(grant_id) or nil
+        local vocabulary: capability_catalog.Catalog? = nil
+        if installed then
+            vocabulary = capability_catalog.decode(lookup("bee:capability_catalog"))
+            local grant = vocabulary and capability_grants.decode(installed, record.overlay_owner,
+                workspace_id, identity.definition_id, vocabulary) or nil
+            local live = grant and capability_grants.live(grant, lookup) or false
+            if not live then installed = nil; vocabulary = nil end
+        end
         local profile = activation_profiles.select_decoded(configuration,
-            workspace_id, record.source_node, record.source_workspace, node_id)
+            workspace_id, record.source_node, record.source_workspace, node_id,
+            installed, vocabulary)
         if profile and profile.overlay_owner == record.overlay_owner and profile.applications then
             local artifacts: {Object} = {}
             local policies: {Object} = {}

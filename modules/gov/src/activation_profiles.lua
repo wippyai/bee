@@ -4,6 +4,8 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local application_admission = require("application_admission")
 local workspace_applications = require("workspace_applications")
+local capability_grants = require("capability_grants")
+local capability_catalog = require("capability_catalog")
 
 local M = {}
 local MAX_PROFILES = 64
@@ -206,18 +208,34 @@ end
 -- One eligible local overlay's profile, built as host configuration and
 -- decoded by the same rules as an explicit row.
 local function instantiate(rule: Template, workspace_id: string, source_node: string,
-    source_workspace: string): (DecodedProfile?, Object?, string?)
+    source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?): (DecodedProfile?, Object?, string?)
     local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace)
     if not identity then return nil, nil, identity_error end
     local policies: {unknown} = empty_list()
     for index, policy in ipairs(rule.policies) do policies[index] = policy end
+    local allowed: {unknown} = empty_list()
+    local access = rule.thread_access
+    if installed_raw ~= nil then
+        if not vocabulary then return nil, nil, "host capability catalog is unavailable" end
+        local installed, installed_error = capability_grants.decode(installed_raw,
+            identity.overlay_owner, workspace_id, identity.definition_id, vocabulary)
+        if not installed then return nil, nil, installed_error end
+        for _, raw_policy in ipairs(installed.policies :: {unknown}) do
+            local entry = bounds.object(raw_policy)
+            local id = entry and bounds.id(entry.id) or nil
+            if not id then return nil, nil, "installed grant policy is invalid" end
+            allowed[#allowed + 1] = id
+            policies[#policies + 1] = id
+        end
+        access = installed.thread_access :: string
+    end
     return profile({workspace_id = workspace_id, source_node = source_node, source_workspace = identity.name,
         component = identity.component, overlay_owner = identity.overlay_owner,
         approval_policy = rule.approval_policy, resolver = "overlay", parameters = empty_list(),
         allow = {packages = {identity.component}, namespaces = {identity.namespace}, kinds = rule.kinds,
-            databases = empty_list(), grants = empty_list(), modules = rule.modules, auto_start = false},
+            databases = empty_list(), grants = allowed, modules = rule.modules, auto_start = false},
         applications = {{definition_id = identity.definition_id, policies = policies,
-            thread_access = rule.thread_access}}})
+            thread_access = access}}})
 end
 
 local function decoded(raw: unknown): (DecodedConfiguration?, {Object}?, string?)
@@ -312,13 +330,15 @@ end
 -- row, or else the workspace-applications rule for an overlay this node
 -- authored. The refusal names what a host configures.
 function M.select_decoded(configuration: DecodedConfiguration, workspace_id: string, source_node: string,
-    source_workspace: string, node_id: string): (DecodedProfile?, string?)
+    source_workspace: string, node_id: string, installed_raw: unknown?,
+    vocabulary: capability_catalog.Catalog?): (DecodedProfile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
     local rule = configuration.workspace_applications
     if rule and source_node == node_id then
-        local item, _, instantiate_error = instantiate(rule, workspace_id, source_node, source_workspace)
+        local item, _, instantiate_error = instantiate(rule, workspace_id, source_node, source_workspace,
+            installed_raw, vocabulary)
         return item, instantiate_error
     end
     return nil, missing(workspace_id, source_node, source_workspace)
@@ -326,13 +346,14 @@ end
 
 -- The measured form of select_decoded, for the destination owner.
 function M.select(configuration: Configuration, workspace_id: string, source_node: string,
-    source_workspace: string): (Profile?, string?)
+    source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?): (Profile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
     local rule = configuration.workspace_applications
     if rule and source_node == configuration.node_id then
-        local item, policy, instantiate_error = instantiate(rule, workspace_id, source_node, source_workspace)
+        local item, policy, instantiate_error = instantiate(rule, workspace_id, source_node, source_workspace,
+            installed_raw, vocabulary)
         if not item or not policy then return nil, instantiate_error end
         return measure(item, policy, configuration.node_id)
     end

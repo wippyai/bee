@@ -148,7 +148,8 @@ end
 -- whole prefix as reserved, including malformed suffixes: a portable artifact
 -- must never get to claim a present or future admission identity.
 function M.reserved(raw: unknown): boolean
-    return type(raw) == "string" and (raw :: string):sub(1, #M.RESERVED_PREFIX) == M.RESERVED_PREFIX
+    return type(raw) == "string" and ((raw :: string):sub(1, #M.RESERVED_PREFIX) == M.RESERVED_PREFIX
+        or (raw :: string):sub(1, #"bee.governance.grants:") == "bee.governance.grants:")
 end
 
 -- Decode the immutable byte handoff exactly as it was measured.  JSON only
@@ -198,7 +199,8 @@ function M.project(raw: unknown): (Measurement?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "application admission projection must be an object" end
     local extra = bounds.fields(value, {"workspace_id", "overlay_owner", "source_node", "source_workspace",
-        "artifact_digest", "bindings", "artifact_entries", "registry_entries", "overlay_ids"})
+        "artifact_digest", "bindings", "artifact_entries", "registry_entries", "overlay_ids",
+        "generated_policies"})
     if extra then return nil, "application admission projection: " .. extra end
     local bindings, bindings_error = M.bindings(value.bindings)
     if not bindings then return nil, bindings_error end
@@ -228,6 +230,21 @@ function M.project(raw: unknown): (Measurement?, string?)
         if not entry or not id or captured[id] then return nil, "application registry entry is invalid or duplicated" end
         captured[id] = entry
     end
+    local generated: {[string]: Object} = {}
+    if value.generated_policies ~= nil then
+        local generated_rows, generated_count, generated_error = dense(value.generated_policies,
+            "generated application policies", M.MAX_POLICIES)
+        if not generated_rows or generated_count == nil then return nil, generated_error end
+        for index = 1, generated_count do
+            local entry = bounds.object(generated_rows[index])
+            local id = entry and registry_id(entry.id) or nil
+            if not entry or not id or not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$")
+                or generated[id] or entry.kind ~= "security.policy" then
+                return nil, "generated application policy is invalid"
+            end
+            generated[id] = entry
+        end
+    end
     local selected_policies: {[string]: boolean} = {}
     for _, selected in ipairs(bindings) do
         local definition = artifacts[selected.definition_id]
@@ -237,7 +254,9 @@ function M.project(raw: unknown): (Measurement?, string?)
         end
         for _, policy in ipairs(selected.policies) do
             if artifacts[policy] then return nil, "application policy is supplied by the candidate: " .. policy end
-            if overlay_ids[policy] then return nil, "application policy belongs to the selected overlay: " .. policy end
+            if overlay_ids[policy] and not generated[policy] then
+                return nil, "application policy belongs to the selected overlay: " .. policy
+            end
             selected_policies[policy] = true
         end
     end
@@ -247,7 +266,7 @@ function M.project(raw: unknown): (Measurement?, string?)
     if capacity < 1 then capacity = 1 end
     local policies: {Object} = table.create(capacity, 0)
     for policy in pairs(selected_policies) do
-        local definition = captured[policy]
+        local definition = generated[policy] or captured[policy]
         if not definition or (definition.kind ~= "security.policy" and definition.kind ~= "security.policy.expr") then
             return nil, "application policy is not an external security policy: " .. policy
         end

@@ -125,6 +125,35 @@ local function define_tests()
             if not result then error(tostring(result_error)) end
             test.is_false(result.changed == true)
         end)
+        test.it("writes policy, requirement default and grant record in one overlay generation", function()
+            local state: State = {entries = {}, generation = 1, conflicts = 0}
+            local policy_id = "bee.governance.grants:policy." .. string.rep("a", 64)
+            local portable = {{id = "app.notes:app", kind = "process.lua",
+                meta = {type = "bee.application"}, data = {source = "return true"}},
+                {id = "app.notes:threads", kind = "ns.requirement",
+                    meta = {capability = "threads.read", value_kind = "security.policy"},
+                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
+            local generated = {policies = {{id = policy_id, kind = "security.policy",
+                data = {policy = {actions = {"funcs.call"}, resources = {"bee.threads.service:get"}, effect = "allow"}}}},
+                bindings = {{requirement_id = "app.notes:threads", policy_id = policy_id}},
+                record = {id = "bee.governance.grants:record." .. string.rep("b", 64),
+                    kind = "registry.entry", data = {digest = string.rep("c", 64)}}}
+            local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.governance:overlay", portable, nil, generated))
+            test.eq(applied.entries, 2)
+            test.eq(applied.overlay_entries, 4)
+            test.eq(state.generation, 2)
+            test.eq((state.entries["app.notes:threads"].data :: {[string]: unknown}).default, policy_id)
+            test.not_nil(state.entries[policy_id])
+            test.not_nil(state.entries[generated.record.id])
+            test.is_true(materializer.matches_composed_with(api(state), "bee.governance:overlay",
+                portable, nil, generated))
+            local narrowed = {policies = {}, bindings = {}, record = generated.record}
+            assert(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.governance:overlay", portable, nil, narrowed))
+            test.is_nil(state.entries[policy_id])
+            test.is_nil((state.entries["app.notes:threads"].data :: {[string]: unknown}).default)
+        end)
 
         test.it("measures and reconciles an overlay entry near the 256 KiB artifact limit", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}

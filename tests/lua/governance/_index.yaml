@@ -56,11 +56,14 @@ entries:
   kind: function.lua
   source: file://workspace_applications_test.lua
   method: run
+  modules: [registry]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     activation_profiles: bee.governance:activation_profile_decoder
     workspace_applications: bee.governance:workspace_applications
+    capability_grants: bee.governance:capability_grants
+    capability_catalog: bee.governance:capability_catalog
 - name: publication_service_test
   kind: function.lua
   source: file://publication_service_test.lua

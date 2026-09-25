@@ -388,6 +388,14 @@ INSERT INTO bee_governance_receipts_v9 SELECT * FROM bee_governance_receipts;
 DROP TABLE bee_governance_receipts;
 ALTER TABLE bee_governance_receipts_v9 RENAME TO bee_governance_receipts;
 ]]
+-- A contained upgrade records the exact live grant record used for reuse.
+-- It remains distinct from a consumed approval proposal during recovery.
+local ACTIVATION_GRANT_REUSE_SQL = [[
+ALTER TABLE bee_governance_activation_intents ADD COLUMN grant_predecessor_digest TEXT
+  CHECK(grant_predecessor_digest IS NULL OR length(grant_predecessor_digest) = 64);
+ALTER TABLE bee_governance_activation_execution ADD COLUMN grant_reuse_digest TEXT
+  CHECK(grant_reuse_digest IS NULL OR length(grant_reuse_digest) = 64);
+]]
 
 
 function M.all(): {Migration}
@@ -401,6 +409,7 @@ function M.all(): {Migration}
         {id = 7, name = "governance_activation_migrations", sql = ACTIVATION_MIGRATIONS_SQL, rebuild = false},
         {id = 8, name = "governance_activation_application_admission", sql = ACTIVATION_APPLICATION_ADMISSION_SQL, rebuild = false},
         {id = 9, name = "governance_workspace_append", sql = WORKSPACE_APPEND_SQL, rebuild = false},
+        {id = 10, name = "governance_activation_grant_reuse", sql = ACTIVATION_GRANT_REUSE_SQL, rebuild = false},
     }
 end
 

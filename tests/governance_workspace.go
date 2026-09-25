@@ -213,10 +213,72 @@ func setup(root string) error {
 	if err := copyTree(filepath.Join(root, "src", "governance_workspace_probe"), "tests/fixtures/governance_workspace"); err != nil {
 		return fmt.Errorf("copy governance fixture: %w", err)
 	}
-	rootIndex := "version: '1.0'\nnamespace: bee\nentries:\n- name: dependency_sync\n  kind: ns.dependency\n  component: bee/sync\n  version: 0.1.0-dev\n  parameters:\n  - name: target_sender\n    value: bee.governance_workspace_probe:sender\n  - name: target_exports\n    value: bee:sync_exports\n- name: dependency_hub\n  kind: ns.dependency\n  component: bee/hub\n  version: 0.1.0-dev\n  parameters:\n  - name: process_host\n    value: bee:workers\n- name: dependency_governance\n  kind: ns.dependency\n  component: bee/governance\n  version: 0.1.0-dev\n  parameters:\n  - name: target_approval_request_policy\n    value: bee.security.approvals:approval_request_policy\n  - name: target_approval_consume_policy\n    value: bee.security.approvals:approval_consume_policy\n- name: workers\n  kind: process.host\n  host: {workers: 2, max_processes: 8}\n  lifecycle: {auto_start: true}\n- name: sync_exports\n  kind: registry.entry\n  data: {exports: []}\n- name: approval_request_policy\n  kind: security.policy\n  policy: {actions: [bee.approvals.request], resources: '*', effect: allow}\n- name: approval_consume_policy\n  kind: security.policy\n  policy: {actions: [bee.approvals.consume], resources: '*', effect: allow}\n"
+	rootIndex := `version: '1.0'
+namespace: bee
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+- name: sync_exports
+  kind: registry.entry
+  data: {exports: []}
+`
 	if err := os.WriteFile(filepath.Join(root, "src", "_index.yaml"), []byte(rootIndex), 0600); err != nil {
 		return fmt.Errorf("write governance host composition: %w", err)
 	}
+	depsIndex := `version: '1.0'
+namespace: bee.deps
+entries:
+- name: dependency_sync
+  kind: ns.dependency
+  component: bee/sync
+  version: 0.1.0-dev
+  parameters:
+  - name: target_sender
+    value: bee.governance_workspace_probe:sender
+  - name: target_exports
+    value: bee:sync_exports
+- name: dependency_hub
+  kind: ns.dependency
+  component: bee/hub
+  version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
+- name: dependency_governance
+  kind: ns.dependency
+  component: bee/governance
+  version: 0.1.0-dev
+  parameters:
+  - name: target_approval_request_policy
+    value: bee.security.approvals:approval_request_policy
+  - name: target_approval_consume_policy
+    value: bee.security.approvals:approval_consume_policy
+`
+	if err := os.MkdirAll(filepath.Join(root, "src", "deps"), 0700); err != nil {
+		return fmt.Errorf("create dependency namespace: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "deps", "_index.yaml"), []byte(depsIndex), 0600); err != nil {
+		return fmt.Errorf("write governance dependencies: %w", err)
+	}
+	securityApprovalsIndex := `version: '1.0'
+namespace: bee.security.approvals
+entries:
+- name: approval_request_policy
+  kind: security.policy
+  policy: {actions: [bee.approvals.request], resources: '*', effect: allow}
+- name: approval_consume_policy
+  kind: security.policy
+  policy: {actions: [bee.approvals.consume], resources: '*', effect: allow}
+`
+	if err := os.MkdirAll(filepath.Join(root, "src", "security", "approvals"), 0700); err != nil {
+		return fmt.Errorf("create approval security namespace: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "security", "approvals", "_index.yaml"), []byte(securityApprovalsIndex), 0600); err != nil {
+		return fmt.Errorf("write governance approval policies: %w", err)
+	}
+
 	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
 	for _, name := range []string{"approvals", "governance", "hub", "persist", "sync", "threads"} {
 		lock += "  - name: bee/" + name + "\n    version: 0.1.0-dev\n"
@@ -266,7 +328,8 @@ func migrationLedger(root string) (string, error) {
 	expected := []string{"governance_workspace_staging", "governance_received_plans",
 		"governance_plan_approval_proposal", "governance_plan_approval_incarnation",
 		"governance_activation_intents", "governance_component_slots", "governance_activation_migrations",
-		"governance_activation_application_admission", "governance_workspace_append"}
+		"governance_activation_application_admission", "governance_workspace_append",
+		"governance_activation_grant_reuse"}
 	rows := strings.Split(ledger, "\n")
 	if len(rows) != len(expected) {
 		return "", fmt.Errorf("unexpected governance migration ledger: %q", ledger)

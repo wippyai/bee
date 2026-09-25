@@ -24,6 +24,9 @@ local materializer = require("materializer")
 local migration_effect = require("migration_effect")
 local migration_runner = require("migration_runner")
 local activation_profiles = require("activation_profiles")
+local capability_grants = require("capability_grants")
+local capability_catalog = require("capability_catalog")
+local workspace_applications = require("workspace_applications")
 
 local M = {}
 M.BACKEND = "bee.governance.binding:destination_backend_call"
@@ -47,7 +50,8 @@ type ResolverPolicy = {node_id: string, policy_digest: string, packages: Set,
     namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, applied: {[string]: unknown}, applied_databases: {[string]: unknown},
     migration_barrier: boolean, auto_start: boolean, applications: {Object}?, workspace_id: string?, overlay_owner: string?,
-    source_node: string?, source_workspace: string?}
+    source_node: string?, source_workspace: string?, workspace_application: boolean?,
+    base_policy_digest: string?}
 type Resolver = {resolve: (Resolver, unknown) -> (unknown?, unknown?, string?)}
 
 local function failure(code: string, message: string): Result
@@ -70,7 +74,29 @@ end
 
 local function selected(config: Configuration, workspace_id: string, source_node: string,
     source_workspace: string): (Profile?, string?)
-    return activation_profiles.select(config, workspace_id, source_node, source_workspace)
+    local installed: unknown = nil
+    local vocabulary: capability_catalog.Catalog? = nil
+    if source_node == config.node_id then
+        local workspace_identity = workspace_applications.identity(workspace_id, source_workspace)
+        local id = workspace_identity and capability_grants.record_id(workspace_identity.overlay_owner) or nil
+        if id then
+            installed = registry.get(id)
+            if installed then
+                local raw_catalog = registry.get("bee:capability_catalog")
+                local decoded, catalog_error = capability_catalog.decode(raw_catalog)
+                if not decoded then return nil, catalog_error end
+                vocabulary = decoded
+                local record, record_error = capability_grants.decode(installed, workspace_identity.overlay_owner,
+                    workspace_id, workspace_identity.definition_id, decoded)
+                if not record then return nil, record_error end
+                local live, live_error = capability_grants.live(record,
+                    function(entry_id: string): unknown return registry.get(entry_id) end)
+                if not live then return nil, live_error end
+            end
+        end
+    end
+    return activation_profiles.select(config, workspace_id, source_node, source_workspace,
+        installed, vocabulary)
 end
 
 local function migration_binding(profile_value: Profile, target: string): (DatabaseBinding?, string?)
@@ -91,7 +117,7 @@ local function approval_executor(): (unknown?, string?)
 end
 
 local function destination_resolver(profile_value: Profile, node_id: string, workspace_id: string,
-    activation_store: activations.Store?): unknown
+    activation_store: activations.Store?, base_policy_digest: string?): unknown
     local function selected_root(spec_raw: unknown): (ResolverRoot?, string?)
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id or spec.workspace_id ~= workspace_id
@@ -141,6 +167,8 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
             applications = profile_value.applications, workspace_id = profile_value.workspace_id,
             overlay_owner = profile_value.overlay_owner, source_node = profile_value.source_node,
             source_workspace = profile_value.source_workspace,
+            workspace_application = base_policy_digest ~= nil,
+            base_policy_digest = base_policy_digest,
             applied = applied, applied_databases = applied_databases, migration_barrier = true,
             auto_start = profile_value.auto_start}, nil
     end
@@ -156,11 +184,87 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
         root = selected_root, policy = selected_policy})
 end
 
+local function generated_install(profile_value: Profile, intent_raw: unknown): (Object?, string?)
+    local identity = workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
+    if not identity or identity.overlay_owner ~= profile_value.overlay_owner
+        or identity.component ~= profile_value.component then return nil, nil end
+    local intent = bounds.object(intent_raw)
+    if not intent or intent.overlay_owner ~= identity.overlay_owner
+        or intent.workspace_id ~= profile_value.workspace_id
+        or not bounds.id(intent.approval_id) or not bounds.id(intent.version) then
+        return nil, "capability activation identity is invalid"
+    end
+    local candidate, candidate_error = preflight.decode_candidate(intent.resolution_bytes,
+        intent.resolution_digest)
+    if not candidate then return nil, candidate_error end
+    local vocabulary, catalog_error = capability_catalog.decode(registry.get("bee:capability_catalog"))
+    if not vocabulary then return nil, catalog_error end
+    local requested: {Object} = {}
+    for _, requirement in ipairs(candidate.requirements) do
+        if requirement.capability_request then requested[#requested + 1] = requirement end
+    end
+    local proposed, proposed_error = capability_grants.propose(vocabulary, identity.overlay_owner,
+        identity.definition_id, requested)
+    if not proposed then return nil, proposed_error end
+    local record_id = capability_grants.record_id(identity.overlay_owner)
+    local prior_raw = record_id and registry.get(record_id) or nil
+    local prior: Object? = nil
+    if prior_raw then
+        local decoded, decoded_error = capability_grants.decode(prior_raw, identity.overlay_owner,
+            profile_value.workspace_id, identity.definition_id, vocabulary)
+        if not decoded then return nil, decoded_error end
+        local live, live_error = capability_grants.live(decoded,
+            function(id: string): unknown return registry.get(id) end)
+        if not live then return nil, live_error end
+        prior = decoded
+    end
+    local approval_id = bounds.id(intent.approval_id)
+    local revision: integer = 1
+    local installed_same = prior and prior.artifact_digest == intent.artifact_digest
+        and prior.version == intent.version
+    if installed_same then
+        if prior.digest ~= proposed.digest or prior.approval_id ~= approval_id then
+            return nil, "installed grant differs from the activated intent"
+        end
+        revision = prior.revision :: integer
+    else
+        if (prior and prior.record_digest or nil) ~= intent.grant_predecessor_digest then
+            return nil, "installed grant changed since permission review"
+        end
+        local compared, compare_error = capability_grants.diff(vocabulary, prior, proposed)
+        if not compared then return nil, compare_error end
+        if prior and not compared.requires_approval then
+            if intent.grant_reuse_digest ~= prior.record_digest or approval_id ~= prior.approval_id then
+                return nil, "contained upgrade has no matching installed grant reuse"
+            end
+        elseif intent.grant_reuse_digest ~= nil then
+            return nil, "widening cannot reuse an installed grant"
+        end
+        if prior then revision = (prior.revision :: integer) + 1 end
+    end
+    local record, record_error = capability_grants.record(identity.overlay_owner,
+        profile_value.workspace_id, identity.definition_id, proposed, approval_id, revision,
+        intent.artifact_digest, intent.version)
+    if not record then return nil, record_error end
+    return {policies = proposed.policies, bindings = proposed.bindings, record = record}, nil
+end
+
 local function owner_config(config: Configuration, profile_value: Profile, plan_store: plans.Store,
     activation_store: activations.Store): (owner.Config?, string?)
     local executor, executor_error = approval_executor()
     if not executor then return nil, executor_error end
-    local resolved = destination_resolver(profile_value, activation_store.node, profile_value.workspace_id, activation_store)
+    local workspace_identity = workspace_applications.identity(profile_value.workspace_id,
+        profile_value.source_workspace)
+    local base_digest: string? = nil
+    if workspace_identity and workspace_identity.overlay_owner == profile_value.overlay_owner
+        and workspace_identity.component == profile_value.component then
+        local base, base_error = activation_profiles.select(config, profile_value.workspace_id,
+            profile_value.source_node, profile_value.source_workspace)
+        if not base then return nil, base_error end
+        base_digest = base.policy_digest
+    end
+    local resolved = destination_resolver(profile_value, activation_store.node,
+        profile_value.workspace_id, activation_store, base_digest)
     local migration_adapter = {
         matches = migration_effect.matches, prepare = migration_effect.prepare,
         clear = migration_effect.clear, cleared = migration_effect.cleared,
@@ -172,10 +276,14 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     return {plans = plan_store, activations = activation_store, resolver = resolved :: owner.Resolver,
         approvals = executor :: owner.Executor, actor_id = ACTOR, consumer_id = ACTOR,
         overlay_owner = profile_value.overlay_owner, approval_policy = profile_value.approval_policy,
-        apply = function(overlay_owner: string, entries: unknown, admission: unknown?): ({[string]: unknown}?, string?)
-            return materializer.reconcile_composed(overlay_owner, entries, admission)
-        end, matches = function(overlay_owner: string, entries: unknown, admission: unknown?): (boolean?, string?)
-            return materializer.matches_composed(overlay_owner, entries, admission)
+        apply = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): ({[string]: unknown}?, string?)
+            local generated, generated_error = generated_install(profile_value, intent)
+            if generated_error then return nil, generated_error end
+            return materializer.reconcile_composed(overlay_owner, entries, admission, generated)
+        end, matches = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): (boolean?, string?)
+            local generated, generated_error = generated_install(profile_value, intent)
+            if generated_error then return nil, generated_error end
+            return materializer.matches_composed(overlay_owner, entries, admission, generated)
         end, migrations = migration_adapter}, nil
 end
 
@@ -300,7 +408,7 @@ local function close(plan_store: plans.Store?, activation_store: activations.Sto
     if plan_store then plans.close(plan_store) end
 end
 
-local function identity(request: Object): (string?, string?, string?)
+local function request_identity(request: Object): (string?, string?, string?)
     return bounds.id(request.source_node), bounds.id(request.source_workspace), bounds.id(request.version)
 end
 
@@ -439,13 +547,13 @@ function M.call(raw: unknown): Result
         if exact(request, {}) then result = failure("INVALID", "list has unknown fields")
         else result = plans.call(plan_store, actor_id, {operation = "list"}) end
     elseif operation == "get" then
-        local source_node, source_workspace, version = identity(request)
+        local source_node, source_workspace, version = request_identity(request)
         if exact(request, {"source_node", "source_workspace", "version"})
             or not source_node or not source_workspace or not version then result = failure("INVALID", "plan identity is invalid")
         else result = plans.call(plan_store, actor_id, {operation = "get", source_node = source_node,
             source_workspace = source_workspace, version = version}) end
     elseif operation == "changes" then
-        local source_node, source_workspace, version = identity(request)
+        local source_node, source_workspace, version = request_identity(request)
         if exact(request, {"source_node", "source_workspace", "version"}) then
             result = failure("INVALID", "plan identity is invalid")
         elseif not source_node or not source_workspace or not version then
@@ -454,7 +562,7 @@ function M.call(raw: unknown): Result
             result = plan_changes(plan_store, activation_store, actor_id, workspace_id, source_node, source_workspace, version)
         end
     elseif operation == "review" or operation == "select" then
-        local source_node, source_workspace, version = identity(request)
+        local source_node, source_workspace, version = request_identity(request)
         local fields = {"source_node", "source_workspace", "version", "expected_revision", "idempotency_key"}
         if operation == "review" then fields[#fields + 1] = "review_status"; fields[#fields + 1] = "review_reason" end
         if exact(request, fields) or not source_node or not source_workspace or not version then
@@ -481,7 +589,7 @@ function M.call(raw: unknown): Result
             return failure("INVALID", "activation request has unknown fields")
         end
         local config, config_error = load()
-        local source_node, source_workspace = identity(request)
+        local source_node, source_workspace = request_identity(request)
         local intent: Object? = nil
         if operation == "step" then
             local current = activations.get(activation_store, request.intent_id)

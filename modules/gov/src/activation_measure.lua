@@ -154,7 +154,12 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         entries = entries, candidate = durable_candidate, artifact = artifact_blob, resolution = resolution_blob,
         migration_work = {bytes = work.bytes, digest = work.digest},
         preflight = preflight_blob, application_admission = admission,
-        application_admission_digest = admission and admission.digest or nil, report = durable_report}, nil
+        application_admission_digest = admission and admission.digest or nil, report = durable_report,
+        capability_proposal = (context :: any).capability_proposal,
+        capability_installed = (context :: any).capability_installed,
+        capability_review = (context :: any).capability_review,
+        grant_predecessor_digest = (context :: any).capability_installed
+            and (context :: any).capability_installed.record_digest or nil}, nil
 end
 
 return M

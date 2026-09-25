@@ -39,10 +39,8 @@ Linux and macOS, amd64 and arm64:
 curl -fsSL https://bee.wippy.ai/install.sh | sh
 ```
 
-The installer follows GitHub's latest release link, which skips releases marked
-as prereleases. The current alpha is selected because GitHub marks it as a
-regular release. Use `--version VERSION` to select a specific release. The
-installer verifies the archive's SHA-256 checksum and puts `bee` in
+The installer takes the latest release, or the one `--version VERSION` names.
+It verifies the archive's SHA-256 checksum and puts `bee` in
 `~/.local/bin`. Archives are also on
 [GitHub Releases](https://github.com/wippyai/bee/releases).
 

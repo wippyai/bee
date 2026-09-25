@@ -364,9 +364,15 @@ on the destination's own reply, so an unknown outcome settles nothing and
 the lease lapses. Its transport is host-selected through the `sender`
 requirement: the bundled host links `bee.hive.service:inbox_sender`, and a
 composition that links no sender leaves due rows queued and reports each
-delivery unknown. The gateway still answers a remote session_send address as
-not found, because routing a remote address there needs a destination action
-resolution the gateway does not hold; that is a follow-up.
+delivery unknown. `session_send` and `session_reply` also
+accept a node-qualified remote address: the gateway asks a host-selected
+remote resolver (the bundled host links `bee.hive.service:remote_sessions`,
+which performs the destination owner's `inbox_resolve`) for the thread and
+workspace the address names, and sends there with the same body it would send
+locally. Resolution is discovery, not authority: the destination owner
+authenticates the forwarded principal and re-checks workspace, send grant,
+target action and epoch when the send arrives, and a composition that links no
+resolver answers a remote address as not found.
 
 ## Carrier and projections
 

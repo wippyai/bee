@@ -189,6 +189,25 @@ local function define_tests()
             -- Only the row's sender settles it.
             test.eq(harness.code(owner:call("inbox_outbox_settle", {outbox_id = tostring(row.outbox_id), delivered = true})), "NOT_FOUND")
         end)
+        test.it("resolves a node-qualified action to its thread for a forwarded sender", function()
+            both()
+            -- A distinct action identity keeps the resolution unambiguous.
+            local dest_thread = harness.thread(owner, "Resolvable session")
+            harness.value(owner:call("admit_action", {thread_id = dest_thread, idempotency_key = harness.key(), action_id = "resolve-target", admitted = admitted_for("owner-node-b")}))
+            harness.value(owner:call("inbox_accept", {thread_id = dest_thread, action_id = "resolve-target", sender_id = ALPHA_ACTOR, allow = true,
+                expected_epoch = 0, idempotency_key = harness.key()}))
+            local address = {action_id = "resolve-target", node_id = local_node()}
+            local resolved = value(admitted(forwarded("bee.threads.service:inbox_resolve", address, ALPHA)))
+            test.eq(resolved.thread_id, dest_thread)
+            test.eq(resolved.action_id, "resolve-target")
+            test.eq(resolved.workspace_id, WORKSPACE)
+            test.eq(resolved.grant_epoch, 1)
+            -- A mapped principal resolves an action the host send policy admits;
+            -- an unmapped principal is denied, and an unknown action is not found.
+            test.eq(code(admitted(forwarded("bee.threads.service:inbox_resolve", address, subject("a9")))), "DENIED")
+            test.eq(code(admitted(forwarded("bee.threads.service:inbox_resolve",
+                {action_id = "no-such-action", node_id = local_node()}, ALPHA))), "NOT_FOUND")
+        end)
         test.it("looks up a node-qualified action through admission and denies strangers", function()
             local _, dest_thread = threads()
             both()

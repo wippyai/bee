@@ -64,6 +64,9 @@ local fields_by_operation: {[string]: {string}} = {
 }
 M.FIELDS = fields_by_operation
 M.RESERVED = {"actor", "actor_id", "principal", "principal_id", "principal_ref", "scope", "policies", "owner_id"}
+-- Operations whose payload deliberately carries no thread: an address
+-- resolution answers with the thread, it never receives one.
+M.THREADLESS_OPERATIONS = {["bee.threads.service:inbox_resolve"] = true}
 M.INVOKE_CHECK = "bee.hive.supervisor:invoke_check"
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 type Object = {[string]: unknown}
@@ -90,11 +93,20 @@ function M.admit(local_node: string, request: types.Request, mappings: principal
     if not fields then return nil, types.fault("UNSUPPORTED_CAPABILITY", "operation " .. request.operation_ref .. " has no payload contract") end
     local unknown_field = bounds.fields(request.input, fields)
     if unknown_field then return nil, types.fault("INVALID_ARGUMENT", "input: " .. unknown_field) end
-    -- The owner reference binds the destination thread: the resource it
-    -- names is the thread the payload addresses, before anything runs.
-    local thread_id = bounds.id(request.input.thread_id)
-    if not thread_id then return nil, types.fault("INVALID_ARGUMENT", "input.thread_id is not an identifier") end
-    if request.owner_ref.resource_ref ~= thread_id then return nil, types.fault("INVALID_ARGUMENT", "owner resource_ref must name the thread the payload addresses") end
+    -- The owner reference binds the destination thread: the resource it names
+    -- is the thread the payload addresses, before anything runs. An address
+    -- resolution has no thread yet — resolving one is its whole purpose — so
+    -- it binds the owner resource to nothing and answers with the thread it
+    -- found; every other operation names its thread here.
+    if M.THREADLESS_OPERATIONS[request.operation_ref] then
+        if request.owner_ref.resource_ref ~= nil then
+            return nil, types.fault("INVALID_ARGUMENT", "an address resolution binds no owner resource")
+        end
+    else
+        local thread_id = bounds.id(request.input.thread_id)
+        if not thread_id then return nil, types.fault("INVALID_ARGUMENT", "input.thread_id is not an identifier") end
+        if request.owner_ref.resource_ref ~= thread_id then return nil, types.fault("INVALID_ARGUMENT", "owner resource_ref must name the thread the payload addresses") end
+    end
     local digest, digest_error = types.digest(request.input)
     if not digest or digest ~= request.input_digest then return nil, types.fault("INVALID_ARGUMENT", "input digest mismatch: " .. tostring(digest_error)) end
     local deadline, deadline_error = time.parse(FORMAT, request.deadline)

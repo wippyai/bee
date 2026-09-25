@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 25388,
+      "bytes": 25808,
       "id": "docs/threads",
-      "sha256": "ca8b315cba0debd8bfa40df05fb0dcfda273f23098babce85751a0a1c0fb3073",
+      "sha256": "40e0b03d6e804b7d5056398a5a94a96d0bf771eb148c356d2abfd27a0c0d1229",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -355,9 +355,9 @@
       "topic": "component"
     },
     {
-      "bytes": 5264,
+      "bytes": 5764,
       "id": "component/gateway",
-      "sha256": "4480becea41c730cdb1405daf098e3f98e338f801cf603a6323616bb4597c16f",
+      "sha256": "1fdfd8e6e16695ac96cc2e88c7f8eeb41685f56ff28781b3aad83be6dd791728",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -443,9 +443,9 @@
       "topic": "component"
     },
     {
-      "bytes": 7471,
+      "bytes": 8364,
       "id": "component/threads",
-      "sha256": "80d606a00c3cd9f4b480d1500bc7eadeca2cf019b8dd031d777b4072d4030435",
+      "sha256": "6ee899c2bb00a6099be50ef50a6a41f2c8ec4ccb8a98161c1ed66e71df577f80",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -462,7 +462,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 563385,
+    "bytes": 565198,
     "documents": 57
   }
 }

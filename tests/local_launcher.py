@@ -30,7 +30,7 @@ def run():
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "modules", project / "modules")
-        presenter = project / "src/core/terminal/main.lua"
+        presenter = project / "src/terminal/main.lua"
         code = presenter.read_text()
         anchor = 'local action = bindings.action('
         assert code.count(anchor) == 1
@@ -52,7 +52,7 @@ def run():
         (database / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "bee.client.db", "entries": [
             {"name": "local", "kind": "db.sql.sqlite", "file": "${env:bee:workspace_db_path}.client"},
         ]}, sort_keys=False))
-        index = project / "src/core/client/_index.yaml"
+        index = project / "src/client/_index.yaml"
         document = yaml.safe_load(index.read_text())
         entry = next(e for e in document["entries"] if e["name"] == "local")
         entry["meta"] = {"command": {"name": "local-client-probe", "short": "Local entry acceptance", "security": {
@@ -210,7 +210,7 @@ def run():
 
         # Manual recovery belongs to the host, even when the client has discarded
         # its old tab. Opening from Start must receive the saved state and IDs.
-        client_file = project / "src/core/client/main.lua"
+        client_file = project / "src/client/main.lua"
         client_code = client_file.read_text()
         send_anchor = '        local function send(recipient: string, topic: string, value: unknown)\n'
         reply_anchor = '                            reply = result.reply\n'
@@ -306,13 +306,13 @@ def run():
         # Lose the acknowledgement, not the host operation. Explicit retry must
         # reconcile a completed renderer transition without restarting the PTY.
         presenter.write_text(code)
-        clients = project / "src/core/host/clients.lua"
+        clients = project / "src/host/clients.lua"
         host_code = clients.read_text()
         anchor = 'local function result(state: State, id: string, op: string, recipient: string, connection_id: string, code: string, message: string)\n'
         assert host_code.count(anchor) == 1
         clients.write_text(host_code.replace(anchor, 'local dropped_render = false\n' + anchor
             + '    if op == "render" and id ~= "" and not dropped_render then dropped_render = true; return end\n'))
-        supervisor = project / "src/core/launch/supervisor.lua"
+        supervisor = project / "src/launch/supervisor.lua"
         supervisor_code = supervisor.read_text()
         anchor = 'if next_phase ~= "running" then deadline = time.after("10s") end'
         assert supervisor_code.count(anchor) == 1
@@ -402,8 +402,8 @@ def public_migration():
             shutil.copy2(ROOT / name, project / name)
         # The removed combined actor is historical test data, never production.
         legacy = ROOT / "tests/fixtures/legacy_workspace"
-        shutil.copy2(legacy / "main.lua", project / "src/core/workspace/main.lua")
-        index = project / "src/core/workspace/_index.yaml"
+        shutil.copy2(legacy / "main.lua", project / "src/workspace/main.lua")
+        index = project / "src/workspace/_index.yaml"
         document = yaml.safe_load(index.read_text())
         document["entries"].extend(yaml.safe_load((legacy / "_index.yaml").read_text())["entries"])
         next(e for e in document["entries"] if e["name"] == "main")["meta"] = {"command": {

@@ -50,7 +50,7 @@ func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
 	if err := yaml.Unmarshal(source, &manifest); err != nil {
 		t.Fatalf("decode Hive host service: %v", err)
 	}
-	if manifest.Namespace != "bee.hive.host" {
+	if manifest.Namespace != "bee.hive" {
 		t.Fatalf("Hive service namespace = %q", manifest.Namespace)
 	}
 	var service *hiveServiceEntry
@@ -190,9 +190,9 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 
 		// Replace only the default service input with the trusted peer selected by
 		// this native fixture. The service declaration and its lifecycle policies
-		// remain the production host composition.
+		// remain the production module composition.
 		peerNode := fmt.Sprintf("node-%d", 1-i)
-		servicePath := filepath.Join(srcDir, "hive/host/_index.yaml")
+		servicePath := filepath.Join(folder, "modules", "hive", "src", "_index.yaml")
 		serviceManifest, err := os.ReadFile(servicePath)
 		if err != nil {
 			t.Fatal(err)

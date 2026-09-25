@@ -14,7 +14,7 @@ local function main(node: string)
     if node == "node-0" then
         -- The supervisor runs under the host service's own grants; the fixture
         -- adds only the registration of its names.
-        local service = registry.get("bee.hive.host:supervisor_service")
+        local service = registry.get("bee.hive:supervisor_service")
         local data: unknown = service and service.data
         local lifecycle: unknown = type(data) == "table" and data.lifecycle or nil
         local grant: unknown = type(lifecycle) == "table" and lifecycle.security or nil

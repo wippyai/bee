@@ -320,7 +320,8 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 		map[string]interface{}{"name": "dependency_credentials", "kind": "ns.dependency", "component": "bee/credentials", "version": "0.1.0-dev",
 			"parameters": []map[string]interface{}{{"name": "target_materializer", "value": "bee:module_materializer"}}},
 	)
-	sources, err := resourcesModuleNamed(root, "credentials/host", "credential_sources")
+	// credential_sources is host wiring owned by the app root.
+	sources, err := resourcesModuleNamed(root, "", "credential_sources")
 	if err != nil {
 		return err
 	}

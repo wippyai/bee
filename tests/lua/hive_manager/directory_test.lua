@@ -89,7 +89,7 @@ local function define_tests()
                 lookup = function(): (string?, string?) return "{local@bee.hive:supervisor_host|1}", nil end,
                 membership = function(): (unknown, unknown) return {}, nil end,
                 call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
-                    test.eq(_owner.service_id, "bee.hive.host")
+                    test.eq(_owner.service_id, "bee.hive")
                     test.eq(_target.operation_ref, directory.WORKSPACES)
                     return types.reply_error("read", types.fault("DENIED", "not admitted"))
                 end,
@@ -125,7 +125,7 @@ local function define_tests()
                 call = function(owner: types.OwnerRef, target: types.Target, input: Object, _options: {timeout: string?}): types.Reply
                     asked[#asked + 1] = input
                     test.eq(owner.node_id, "selected")
-                    test.eq(owner.service_id, "bee.hive.host")
+                    test.eq(owner.service_id, "bee.hive")
                     test.eq(target.operation_ref, directory.WORKSPACES)
                     return types.reply_ok("read", {node_id = "selected", workspaces = {{workspace_id = workspace, label = "Main", served = true}},
                         next_after = "cursor-2"})

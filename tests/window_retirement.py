@@ -8,7 +8,7 @@ from workspace import fixture_workspace, pack_fixture
 
 def exercise(packed):
     with fixture_workspace(unit_tests=False) as project, tempfile.TemporaryDirectory(prefix="bee-window-retirement-") as directory:
-        delivery = project / "src/core/terminal/delivery.lua"
+        delivery = project / "src/terminal/delivery.lua"
         source = delivery.read_text()
         source = source.replace("local M = {}", 'local first_view = ""\nlocal fail_first = false\nlocal M = {}', 1)
         anchor = 'function M.attach(id: string, mount: string, observer: boolean?): (boolean, string?)\n'
@@ -19,7 +19,7 @@ def exercise(packed):
         source = source.replace(anchor, anchor + '    if id == first_view and fail_first then return nil, "Injected view failure" end\n', 1)
         delivery.write_text(source)
         # A host inventory can remove a window independently of a close reply.
-        presenter = project / "src/core/terminal/main.lua"
+        presenter = project / "src/terminal/main.lua"
         source = presenter.read_text()
         anchor = 'if reply and decode.belongs(reply, workspace_id) then'
         assert source.count(anchor) == 1

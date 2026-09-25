@@ -587,7 +587,7 @@ def main():
         # their identity while fencing all three as cleanup-complete tombstones.
         migration4 = folder / "migration4-bindings"
         migration4.mkdir()
-        store_source = (ROOT / "src/core/storage/store.lua").read_text()
+        store_source = (ROOT / "src/storage/store.lua").read_text()
 
         def migration_body(constant):
             body = re.search(rf"local {constant} = \[\[(.*?)\]\]", store_source, re.S).group(1)
@@ -653,7 +653,7 @@ return {main = main}
         # Upgrade a real migration-1 database. The old SQL/checksum must stay exact.
         legacy = folder / "legacy"
         legacy.mkdir()
-        sql = re.search(r"local STATE_TABLE_SQL = \[\[(.*?)\]\]", (ROOT / "src/core/storage/store.lua").read_text(), re.S).group(1)
+        sql = re.search(r"local STATE_TABLE_SQL = \[\[(.*?)\]\]", (ROOT / "src/storage/store.lua").read_text(), re.S).group(1)
         # Lua long strings discard the initial newline.
         sql = sql.removeprefix("\n")
         digest = hashlib.sha256(("workspace_state_v1\n" + sql).encode()).hexdigest()
@@ -665,7 +665,7 @@ return {main = main}
             db.execute("INSERT INTO workspace_state VALUES (1, 1, 7, ?, 'before')", ('{"version":1,"probe":"legacy"}',))
         # Open only: prove migration leaves the envelope and generation untouched.
         (probe / "main.lua").write_text('local storage = require("store")\nlocal function main() local s = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""})); assert(s:identity()); s:close() end\nreturn {main = main}\n')
-        store_file = project / "src/core/storage/store.lua"
+        store_file = project / "src/storage/store.lua"
         healthy_store = store_file.read_text()
         seed = "VALUES (1, lower(hex(randomblob(16))))"
         assert healthy_store.count(seed) == 1
@@ -734,7 +734,7 @@ def client_storage():
 
         # Seed the actual v1 schema and preserve a populated default layout.
         # The fixed checksum prevents this proof from accepting edits to v1 SQL.
-        v1_sql = re.search(r"local SCHEMA = \[\[(.*?)\]\]", (ROOT / "src/core/client/store.lua").read_text(), re.S).group(1).removeprefix("\n")
+        v1_sql = re.search(r"local SCHEMA = \[\[(.*?)\]\]", (ROOT / "src/client/store.lua").read_text(), re.S).group(1).removeprefix("\n")
         v1_checksum = hashlib.sha256(("client_layout_v1\n" + v1_sql).encode()).hexdigest()
         assert v1_checksum == "f35f913f50cfd4b0dbe6c8b448a063f2de35be2c2a469c04b26f7720faa029e6"
         for packed in (False, True):
@@ -830,7 +830,7 @@ def client_storage():
             probe(interrupted, "seed", packed)
         # A failed first migration must not leave a ledger claiming success or a
         # half-created identity. Only this disposable staged source is changed.
-        staged_store = project / "src/core/client/store.lua"
+        staged_store = project / "src/client/store.lua"
         healthy = staged_store.read_text()
         staged_store.write_text(healthy.replace("INSERT INTO client_state", "INVALID MIGRATION;\nINSERT INTO client_state", 1))
         failed_migration = root / "failed-migration"

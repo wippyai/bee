@@ -60,7 +60,7 @@ entries:
   imports:
     types: bee.hive:types
     client: bee.hive:client
-    sender: bee.hive.host:replica_sender
+    sender: bee.hive:replica_sender
     replicas: bee.sync.persist:replicas
     version: bee.sync:version
     canonical: bee.sync:canonical

@@ -12,7 +12,7 @@ M.MAX_NODES = 64
 -- One page of a node's workspaces, and its cursor bound.
 M.PAGE = 50
 M.MAX_CURSOR_BYTES = 2200
-M.WORKSPACES = "bee.hive.host:workspaces"
+M.WORKSPACES = "bee.hive:workspaces"
 M.MAX_ADDRESS_BYTES = 200
 M.MAX_LABEL_BYTES = 120
 type Reply = types.Reply
@@ -154,7 +154,7 @@ function M.live(live: Live): Directory
         local input: {[string]: unknown} = {limit = M.PAGE}
         if query.label then input.label = query.label end
         if query.after then input.after = query.after end
-        local reply = live.call({node_id = node, service_id = "bee.hive.host"}, {operation_ref = M.WORKSPACES}, input, {timeout = live.timeout})
+        local reply = live.call({node_id = node, service_id = "bee.hive"}, {operation_ref = M.WORKSPACES}, input, {timeout = live.timeout})
         if not reply.ok then
             local fault = reply.error
             return unavailable(fault and (fault.code .. ": " .. fault.message) or "Workspace catalog unavailable")

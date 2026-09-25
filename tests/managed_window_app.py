@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 with workspace.fixture_workspace(unit_tests=False) as folder:
     shutil.copytree(ROOT / "tests/fixtures/managed_window_app", folder / "src/tests/managed_window_app")
-    host = folder / "src/harness/host/_index.yaml"
+    host = folder / "src/_index.yaml"
     document = yaml.safe_load(host.read_text())
     activation = next(entry for entry in document["entries"] if entry["name"] == "harness_activation")
     activation["data"]["bindings"].append("bee.managed_window_fixture:binding")

@@ -50,7 +50,7 @@ def run(packed, cases=CASES):
             shutil.copytree(ROOT / "modules", project / "modules")
             for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                 shutil.copy2(ROOT / name, project / name)
-            actor = project / "src/core" / owner / ("supervisor.lua" if owner == "launch" else "main.lua")
+            actor = project / "src" / owner / ("supervisor.lua" if owner == "launch" else "main.lua")
             source = actor.read_text()
             recipient = "broker" if owner == "host" else "recipient"
             anchor = f'local sent, err = process.send({recipient}, topic, value)'
@@ -122,13 +122,13 @@ def routine(packed, cases=("open", "close", "prepare")):
             for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                 shutil.copy2(ROOT / name, project / name)
             if case == "prepare":
-                actor = project / "src/core/host/main.lua"
+                actor = project / "src/host/main.lua"
                 source = actor.read_text().replace("local function main(", "local reject_command = true\nlocal function main(")
                 anchor = '                        local sent, err = process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})'
                 operation = 'process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})'
                 condition = "reject_command"
             else:
-                actor = project / "src/core/host/clients.lua"
+                actor = project / "src/host/clients.lua"
                 source = actor.read_text().replace("function M.request(", "local reject_command = true\nfunction M.request(")
                 anchor = '    local sent, send_error = process.send(state.broker, "bee.app.request", request)'
                 operation = 'process.send(state.broker, "bee.app.request", request)'
@@ -189,14 +189,14 @@ def targeting(packed):
                 for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                     shutil.copy2(ROOT / name, project / name)
                 if boundary == "workspace":
-                    actor = project / "src/core/client/main.lua"
+                    actor = project / "src/client/main.lua"
                     source = actor.read_text().replace("        local function send(", "        local reject_target = true\n        local function send(")
                     anchor = '            local sent, err = process.send(recipient, topic, value)'
                     owner_id = "workspace_id"
                     prefix = ""
                     delivery = anchor
                 else:
-                    actor = project / "src/core/host/clients.lua"
+                    actor = project / "src/host/clients.lua"
                     source = actor.read_text().replace("function M.request(", "local reject_target = true\nfunction M.request(")
                     anchor = '    local sent, send_error = process.send(state.broker, "bee.app.request", request)'
                     owner_id = "state.workspace_id"

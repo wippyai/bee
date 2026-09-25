@@ -159,7 +159,7 @@ func run() error {
 	if err := os.MkdirAll(filepath.Join(root, ".wippy"), 0700); err != nil {
 		return err
 	}
-	manifestPath := filepath.Join(root, "src/gateway/host/_index.yaml")
+	manifestPath := filepath.Join(root, "src", "_index.yaml")
 	manifest, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return err

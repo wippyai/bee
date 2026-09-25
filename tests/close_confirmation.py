@@ -33,7 +33,7 @@ def exercise(packed, responsive=True):
         shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
-        presenter = project / "src/core/terminal/main.lua"
+        presenter = project / "src/terminal/main.lua"
         presentation = presenter.read_text()
         label = '"Workspace " .. names.label(workspace_id)'
         assert presentation.count(label) == 1

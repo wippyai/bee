@@ -246,7 +246,7 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   it; otherwise it shows a workspace picker (one catalog page, `/` label
   search, PgUp/PgDn paging, Enter to open). Ctrl+] detaches and returns to the
   picker; Ctrl+Q leaves.
-- **Hive member**: `bee.hive.host:workspaces` is an open Hive operation that
+- **Hive member**: `bee.hive:workspaces` is an open Hive operation that
   pages a node's catalog (`{label?, after?, limit?}` to `{node_id, workspaces,
   next_after?}`, each row with whether a host serves it); the Hive app lists and
   searches the selected node's workspaces through it. A Hive display client
@@ -269,7 +269,7 @@ Today a node's bridge admits a native display client only from a node its host
 grant names (`desktop.allowed_nodes`) or, with `local_clients`, from a node its
 local enrollment lists. Native launch configures `allowed_nodes` empty, so a
 peer that joined the hive through `bee hive invite` and `bee hive join` reaches
-the node's open operations (such as `bee.hive.host:workspaces`) but not its
+the node's open operations (such as `bee.hive:workspaces`) but not its
 desktops, and the Hive Manager's remote view is refused there. The proposal:
 the owner's enrollment already writes `{nodes, peers}` from its pinned peer keys;
 the bridge would admit display clients from a pinned peer only when the joining

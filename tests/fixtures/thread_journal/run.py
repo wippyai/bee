@@ -15,7 +15,7 @@ def stage(folder):
     project = Path(folder)
     shutil.copytree(Path(__file__).parent / "src", project / "src")
     # Exercise the actual current production model, not a second test implementation.
-    shutil.copy2(ROOT / "src/core/desktop/model.lua", project / "src/model.lua")
+    shutil.copy2(ROOT / "src/desktop/model.lua", project / "src/model.lua")
     (project / "wippy.lock").write_text("directories:\n  modules: .wippy\n  src: ./src\n")
     (project / ".wippy.yaml").write_text("version: '1.0'\nshutdown:\n  timeout: 2s\n")
     return project

@@ -1,0 +1,222 @@
+version: '1.0'
+namespace: bee.deps
+entries:
+- name: persist
+  kind: ns.dependency
+  component: bee/persist
+  version: 0.1.0-dev
+- name: sync
+  kind: ns.dependency
+  component: bee/sync
+  version: 0.1.0-dev
+  parameters:
+  - name: target_sender
+    value: bee.hive:replica_sender
+  - name: target_exports
+    value: bee:sync_exports
+- name: threads
+  kind: ns.dependency
+  component: bee/threads
+  version: 0.1.0-dev
+- name: hub
+  kind: ns.dependency
+  component: bee/hub
+  version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
+- name: governance
+  kind: ns.dependency
+  component: bee/governance
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.governance:db
+  - name: target_publication_profiles
+    value: bee:governance_publication_profiles
+  - name: target_activation_profiles
+    value: bee:governance_activation_profiles
+  - name: target_approval_request_policy
+    value: bee:approval_request_policy
+  - name: target_approval_consume_policy
+    value: bee:approval_consume_policy
+- name: gateway
+  kind: ns.dependency
+  component: bee/gateway
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.gateway:db
+  - name: target_listener
+    value: bee:gateway_listener
+  - name: target_endpoint
+    value: bee:gateway_endpoint
+  - name: target_hook_storage
+    value: bee.harness.host:environment
+  - name: target_approval_request_policy
+    value: bee:approval_request_policy
+  - name: target_approval_consume_policy
+    value: bee:approval_consume_policy
+  - name: target_tool_read_policy
+    value: bee:gateway_tool_read_policy
+  - name: target_tool_message_policy
+    value: bee:gateway_tool_message_policy
+  - name: target_tool_inbox_policy
+    value: bee:gateway_tool_inbox_policy
+  - name: target_tool_discover_policy
+    value: bee:gateway_session_discover_policy
+  - name: target_tool_send_grant_policy
+    value: bee:gateway_session_send_denied_policy
+  - name: target_tool_launch_policy
+    value: bee:gateway_tool_launch_policy
+  - name: target_tool_overlay_policy
+    value: bee:gateway_tool_overlay_policy
+  - name: target_tool_docs_policy
+    value: bee:gateway_tool_docs_policy
+  - name: target_tool_components_policy
+    value: bee:gateway_tool_components_policy
+  - name: target_tool_delivery_policy
+    value: bee:gateway_tool_delivery_policy
+  - name: target_tool_publish_policy
+    value: bee:gateway_tool_publish_policy
+  - name: target_tool_application_open_policy
+    value: bee:gateway_tool_application_open_policy
+- name: hive
+  kind: ns.dependency
+  component: bee/hive
+  version: 0.1.0-dev
+- name: application
+  kind: ns.dependency
+  component: bee/application
+  version: 0.1.0-dev
+- name: node
+  kind: ns.dependency
+  component: bee/node
+  version: 0.1.0-dev
+- name: docs
+  kind: ns.dependency
+  component: bee/docs
+  version: 0.1.0-dev
+  parameters:
+  - name: target_corpus
+    value: bee:docs_corpus
+- name: resources
+  kind: ns.dependency
+  component: bee/resources
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.resources:db
+  - name: target_roots
+    value: bee:resource_roots
+- name: placement
+  kind: ns.dependency
+  component: bee/placement
+  version: 0.1.0-dev
+- name: credentials
+  kind: ns.dependency
+  component: bee/credentials
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.credentials:db
+  - name: target_sources
+    value: bee:credential_sources
+  - name: target_materializer
+    value: bee.placement.native:binding
+- name: placement_native
+  kind: ns.dependency
+  component: bee/placement-native
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.placement.native:db
+  - name: target_root
+    value: bee.placement.native:root
+  - name: process_host
+    value: bee:workers
+  - name: target_executor
+    value: bee.placement.native:executor
+  - name: target_host_files
+    value: bee.placement.native:host_files
+  - name: target_admitted_roots
+    value: bee.placement.native:admitted_roots
+  - name: target_resource_mode
+    value: bee.placement.native:resource_mode
+- name: harness
+  kind: ns.dependency
+  component: bee/harness
+  version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
+  - name: target_db
+    value: bee.node:db
+- name: approvals
+  kind: ns.dependency
+  component: bee/approvals
+  version: 0.1.0-dev
+  parameters:
+  - name: target_db
+    value: bee.approvals:db
+  - name: target_policies
+    value: bee:approver_policies
+- name: driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: driver_agy
+  kind: ns.dependency
+  component: bee/driver-agy
+  version: '*'
+  parameters:
+  - name: host_environment
+    value: bee.harness.host:environment
+  - name: window_policy
+    value: bee:launch_policy_agy_window
+  - name: batch_policy
+    value: bee:launch_policy_agy_batch
+- name: driver_claude
+  kind: ns.dependency
+  component: bee/driver-claude
+  version: '*'
+  parameters:
+  - name: host_environment
+    value: bee.harness.host:environment
+  - name: window_policy
+    value: bee:launch_policy_claude_window
+  - name: batch_policy
+    value: bee:launch_policy_claude_batch
+- name: driver_codex
+  kind: ns.dependency
+  component: bee/driver-codex
+  version: '*'
+  parameters:
+  - name: host_environment
+    value: bee.harness.host:environment
+  - name: window_policy
+    value: bee:launch_policy_codex_window
+  - name: batch_policy
+    value: bee:launch_policy_codex_batch
+  - name: named_batch_policy
+    value: bee:launch_policy_codex_named_batch
+- name: driver_grok
+  kind: ns.dependency
+  component: bee/driver-grok
+  version: '*'
+  parameters:
+  - name: host_environment
+    value: bee.harness.host:environment
+  - name: window_policy
+    value: bee:launch_policy_grok_window
+- name: driver_muse
+  kind: ns.dependency
+  component: bee/driver-muse
+  version: '*'
+  parameters:
+  - name: host_environment
+    value: bee.harness.host:environment
+  - name: window_policy
+    value: bee:launch_policy_muse_window
+  - name: batch_policy
+    value: bee:launch_policy_muse_batch

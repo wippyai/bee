@@ -295,7 +295,7 @@ entries:
   data:
     roots:
       project: bee:workspace_root
-      session: bee.placement.native:root
+      session: bee:placement_root
     credentials:
       claude_api_key:
         provider: claude
@@ -744,6 +744,13 @@ entries:
       modules: [tty, process, channel, json, time, uuid, base64, hash]
       policies: [bee:ordinary_app_subsystem_boundary]
       thread_access: none
+- name: placement_root
+  kind: fs.directory
+  meta:
+    comment: Host-selected placement root holding attempt homes and retained sessions; the host owns this volume mount
+  directory: ${env:bee.placement.native:root_path}
+  auto_init: true
+  mode: '0700'
 - name: resource_roots
   kind: registry.entry
   meta:
@@ -754,7 +761,7 @@ entries:
     roots:
     - root_ref: bee:workspace_root
       access: write
-    - root_ref: bee.placement.native:root
+    - root_ref: bee:placement_root
       access: write
 - name: resources_workspace_extension
   kind: contract.binding

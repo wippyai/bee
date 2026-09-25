@@ -26,7 +26,7 @@ entries:
     - custom
     - security
     - bee.placement.native:admitted_roots
-    - bee.placement.native:root
+    - bee:placement_root
     - bee.placement.native:host_files
     - bee.placement.native:executor
     - cwd

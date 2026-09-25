@@ -135,7 +135,7 @@ entries:
   - name: target_db
     value: bee.placement.native:db
   - name: target_root
-    value: bee.placement.native:root
+    value: bee:placement_root
   - name: process_host
     value: bee:workers
   - name: target_executor

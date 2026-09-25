@@ -6,7 +6,7 @@ local runtime = require("runtime")
 
 return {main = function(value: unknown, observer: string)
     return runtime.main(value, {
-        ["bee.placement.native:binding"] = function(_attempt_id: string, _options: unknown)
+        ["bee.placement.native.binding:binding"] = function(_attempt_id: string, _options: unknown)
             local release = assert(process.listen("bee.test.window_release", {message = true}))
             assert(process.send(observer, "bee.test.window_opening", {version = 1}))
             release:receive()

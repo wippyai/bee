@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='bee-navigation-') as temporary:
     shutil.copytree(ROOT / 'modules', project / 'modules')
     for name in ('wippy.lock', '.wippy.yaml', 'wippy.yaml'):
         shutil.copy2(ROOT / name, project / name)
-    index = project / 'src/apps/console/_index.yaml'
+    index = project / 'src/console/_index.yaml'
     document = yaml.safe_load(index.read_text())
     executor = next(entry for entry in document['entries'] if entry['name'] == 'executor')
     executor['default_env'].update({'HOME': str(folder), 'HISTFILE': '/dev/null', 'PS1': '$ '})

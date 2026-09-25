@@ -391,7 +391,7 @@ local function define_tests()
         local function await_fenced(attempt_id: string, generation: integer)
             local wanted = "runner installed generation " .. tostring(generation)
             for _ = 1, 600 do
-                local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 128})
+                local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
                 for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                     if item.kind == "attach.fenced" and item.detail == wanted then return end
                 end
@@ -475,7 +475,7 @@ local function define_tests()
                 local list, records = kinds(thread_id)
                 local stored = call("bee.threads.carrier:checkpoint", {thread_id = thread_id, attempt_id = launch.attempt_id :: string})
                 local point = stored.checkpoint :: {[string]: unknown}
-                error("replacement failed: " .. tostring(replacement_or_error.error) .. "; records " .. table.concat(list, ",") .. "; writes " .. table.concat(writes(records), ",") .. "; pending " .. tostring(#(point.pending_writes :: {unknown})) .. "; epoch " .. tostring(stored.carrier_epoch) .. "; placement " .. require("json").encode(call("bee.placement.native:evidence", {attempt_id = launch.attempt_id})))
+                error("replacement failed: " .. tostring(replacement_or_error.error) .. "; records " .. table.concat(list, ",") .. "; writes " .. table.concat(writes(records), ",") .. "; pending " .. tostring(#(point.pending_writes :: {unknown})) .. "; epoch " .. tostring(stored.carrier_epoch) .. "; placement " .. require("json").encode(call("bee.placement.native.binding:evidence", {attempt_id = launch.attempt_id})))
             end
             local replacement = replacement_or_error
             test.eq((replacement.value :: {[string]: unknown}).settlement and ((replacement.value :: {[string]: unknown}).settlement :: {[string]: unknown}).answer, "pong")
@@ -491,7 +491,7 @@ local function define_tests()
             if not outcome.value then error("orphan run failed: " .. tostring(outcome.error)) end
             local settlement = outcome.value.settlement :: {[string]: unknown}
             test.eq(settlement.outcome, "uncertain")
-            local status = call("bee.placement.native:status", {attempt_id = attempt_id})
+            local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
             local attempt = status.attempt :: {[string]: unknown}
             local _, records = kinds(thread_id)
             local output = ""

@@ -11,9 +11,9 @@ local bounds = require("bounds")
 type Object = {[string]: unknown}
 local TARGET = "bee.app_journey_demo:app"
 local THREAD = "open-probe-thread"
-local OPERATOR = "bee.app_open_probe:operator"
-local OPERATOR_SIGNAL = "bee.app_open_probe.operator.signal"
-local OPERATOR_RESULT = "bee.app_open_probe.operator.result"
+local OPERATOR = "bee.app.open.probe:operator"
+local OPERATOR_SIGNAL = "bee.app.open.probe.operator.signal"
+local OPERATOR_RESULT = "bee.app.open.probe.operator.result"
 
 local function object(value: unknown): Object
     local decoded = bounds.object(value)
@@ -22,7 +22,7 @@ local function object(value: unknown): Object
 end
 
 local function write_report(report: Object)
-    local root = assert(fs.get("bee.app_open_probe:evidence"))
+    local root = assert(fs.get("bee.app.open.probe:evidence"))
     local file = assert(root:open("/open.json", "w"))
     assert(file:write(json.encode(report)))
     file:close()

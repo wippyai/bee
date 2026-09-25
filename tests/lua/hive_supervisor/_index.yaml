@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.hive_host.supervisor
+namespace: bee.hive.supervisor
 entries:
 - name: peers_review_test
   kind: function.lua
@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive_host.supervisor:peers
+    peers: bee.hive.supervisor:peers
     types: bee.hive:types
 - name: peers_test
   kind: function.lua
@@ -17,7 +17,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive_host.supervisor:peers
+    peers: bee.hive.supervisor:peers
     types: bee.hive:types
     bounds: bee.hive:bounds
 - name: registration_test
@@ -27,7 +27,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    registration: bee.hive_host.supervisor:registration
+    registration: bee.hive.supervisor:registration
 - name: admission_test
   kind: function.lua
   source: file://admission_test.lua
@@ -37,16 +37,16 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    admission: bee.hive_host.supervisor:admission
-    peers: bee.hive_host.supervisor:peers
-    catalog: bee.hive.registry:catalog
+    admission: bee.hive.supervisor:admission
+    peers: bee.hive.supervisor:peers
+    catalog: bee.hive:catalog
 - name: dispatch_probe
   kind: function.lua
   source: file://dispatch_probe.lua
   method: handle
   meta: {type: test_support}
   imports:
-    dispatch: bee.hive_host.supervisor:dispatch
+    dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
 - name: dispatch_test
   kind: function.lua
@@ -56,7 +56,7 @@ entries:
   modules: [funcs, security]
   imports:
     test: wippy.test:test
-    dispatch: bee.hive_host.supervisor:dispatch
+    dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
     bounds: bee.hive:bounds
 - name: execute_policy
@@ -64,7 +64,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.hive_host.supervisor:execute]
+    resources: [bee.hive.supervisor:execute]
     effect: allow
 - name: supervisor_test
   kind: function.lua
@@ -81,7 +81,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call, system.read]
-    resources: [node, bee.hive_host.supervisor:admit_replica]
+    resources: [node, bee.hive.supervisor:admit_replica]
     effect: allow
 - name: replica_admission_test
   kind: function.lua
@@ -89,18 +89,18 @@ entries:
   method: run
   modules: [funcs, system, time, uuid, hash]
   meta: {type: test, suite: bee}
-  security: {policies: [bee.hive_host.supervisor:replica_admission_test_policy]}
+  security: {policies: [bee.hive.supervisor:replica_admission_test_policy]}
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    catalog: bee.hive.registry:catalog
+    catalog: bee.hive:catalog
     version: bee.sync:version
 - name: local_name_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [process.registry.register, process.registry.unregister]
-    resources: [bee.hive_host.supervisor]
+    resources: [bee.hive.supervisor]
     effect: allow
 - name: workspaces_test
   kind: function.lua
@@ -122,7 +122,7 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    commands: bee.hive_host.supervisor:workspace_commands
+    commands: bee.hive.supervisor:workspace_commands
 - name: owner_stop_test
   kind: function.lua
   source: file://owner_stop_test.lua
@@ -131,4 +131,4 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    owner_stop: bee.hive_host.supervisor:owner_stop
+    owner_stop: bee.hive.supervisor:owner_stop

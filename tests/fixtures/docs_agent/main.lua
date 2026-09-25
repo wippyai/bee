@@ -25,11 +25,11 @@ local function call(target: string, request: Object): Object
     return (reply :: Object).value :: Object
 end
 local function endpoint(): string
-    local selected, err = funcs.call("bee.gateway.registry:address", {})
+    local selected, err = funcs.call("bee.gateway:address", {})
     for _ = 1, 100 do
         if not err or not tostring(err):find("gateway listener is starting", 1, true) then break end
         time.sleep("20ms")
-        selected, err = funcs.call("bee.gateway.registry:address", {})
+        selected, err = funcs.call("bee.gateway:address", {})
     end
     assert(not err and type(selected) == "table", "gateway endpoint: " .. tostring(err))
     local address = (selected :: Object).address

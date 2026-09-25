@@ -103,7 +103,7 @@ def run(packed):
         index.write_text(yaml.safe_dump(doc, sort_keys=False))
         # Same authenticated broker, wrong workspace: the owner must not remove
         # its real view when a foreign reply arrives immediately after open.
-        broker = project / "src/applications/broker.lua"
+        broker = project / "src/apps/broker.lua"
         code = broker.read_text()
         send = '        assert(process.send(owner, "bee.app.reply", reply))'
         assert code.count(send) == 1
@@ -121,7 +121,13 @@ def run(packed):
         if packed:
             pack_deployment(project, pack)
         def boot(apps=()):
-            return Desktop(folder, packed, project=project, deployment=pack, apps=apps)
+            ui = Desktop(folder, packed, project=project, deployment=pack, apps=apps)
+            try:
+                ui.wait("BEE ▾", timeout=12)
+            except Exception:
+                ui.close()
+                raise
+            return ui
         ui = boot(("probe:app",))
         try:
             ui.wait("Saved: 0")
@@ -210,14 +216,15 @@ def run(packed):
             ui.close()
         with sqlite3.connect(folder / "workspace.db") as db:
             migrations = db.execute("SELECT id, name, checksum FROM workspace_schema_migrations ORDER BY id").fetchall()
-            assert [row[0] for row in migrations] == [1, 2, 3, 4, 5, 6, 7, 8], migrations
+            assert [row[0] for row in migrations] == [1, 2, 3, 4, 5, 6, 7, 8, 9], migrations
             assert migrations[2][1] == "workspace_display_assignments_v1", migrations
             assert migrations[3][1] == "workspace_application_thread_bindings_v1", migrations
             assert migrations[4][1] == "workspace_application_thread_bindings_v2", migrations
             assert migrations[5][1] == "node_workspaces_v1", migrations
             assert migrations[6][1] == "workspace_catalog_order_v1", migrations
             assert migrations[7][1] == "workspace_folder_on_open_v1", migrations
-        print(f"Recovery {'pack' if packed else 'source'}: stable identity, fresh execution, layout, acknowledged state, crash recovery, minimize, close tombstone, manual restore, incompatible schema, eight migrations")
+            assert migrations[8][1] == "nested_bee_names_v1", migrations
+        print(f"Recovery {'pack' if packed else 'source'}: stable identity, fresh execution, layout, acknowledged state, crash recovery, minimize, close tombstone, manual restore, incompatible schema, nine migrations")
 
 if __name__ == "__main__":
     run(False)

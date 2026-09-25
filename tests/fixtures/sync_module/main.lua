@@ -5,10 +5,10 @@ local logger = require("logger")
 local sql = require("sql")
 type Object = {[string]: unknown}
 local function principal(actor: string, write: boolean): funcs.Executor
-    local call_policy = assert(security.policy("bee.sync_probe:call_policy"))
-    local read_policy = assert(security.policy("bee.sync_probe:read_policy"))
+    local call_policy = assert(security.policy("bee.sync.probe:call_policy"))
+    local read_policy = assert(security.policy("bee.sync.probe:read_policy"))
     local policies = {call_policy, read_policy}
-    if write then policies[#policies + 1] = assert(security.policy("bee.sync_probe:write_policy")) end
+    if write then policies[#policies + 1] = assert(security.policy("bee.sync.probe:write_policy")) end
     return funcs.new():with_actor(security.new_actor(actor)):with_scope(security.new_scope(policies))
 end
 local function call(client: funcs.Executor, method: string, request: unknown): Object
@@ -62,8 +62,8 @@ local function main()
     end
     local defaults = value(call(reader, "get_appearance", {}))
     local appearance_writer = funcs.new():with_actor(security.new_actor("appearance-user")):
-        with_scope(security.new_scope({assert(security.policy("bee.sync_probe:call_policy")),
-            assert(security.policy("bee.sync_probe:read_policy")), assert(security.policy("bee.sync_probe:appearance_policy"))}))
+        with_scope(security.new_scope({assert(security.policy("bee.sync.probe:call_policy")),
+            assert(security.policy("bee.sync.probe:read_policy")), assert(security.policy("bee.sync.probe:appearance_policy"))}))
     local appearance_request = {expected_revision = 0, idempotency_key = "initial-description",
         preferences = {theme = "classic", background = "solid", taskbar = "labels"}}
     local denied_appearance = call(writer, "update_appearance", appearance_request)
@@ -85,8 +85,8 @@ local function main()
     assert(malformed.ok == false and malformed.code == "INVALID", "unknown theme accepted")
     -- The public caller has no direct store access even though methods can open it.
     local restricted = funcs.new():with_actor(security.new_actor("node-metadata-user")):
-        with_scope(security.new_scope({assert(security.policy("bee.sync_probe:call_policy"))}))
-    local access, access_error = restricted:call("bee.sync_probe:direct_db", {})
+        with_scope(security.new_scope({assert(security.policy("bee.sync.probe:call_policy"))}))
+    local access, access_error = restricted:call("bee.sync.probe:direct_db", {})
     assert(not access_error and access == false, "public principal opened the owner's database")
     local unavailable = call(restricted, "describe", {})
     assert(unavailable.ok == false and unavailable.code == "DENIED", "unprivileged principal read metadata")

@@ -14,17 +14,17 @@ unknown; do not retry blindly).
 
 | Method | Request | Authorized as | Value |
 |---|---|---|---|
-| `create` | `{label, root_ref, subpath?, create_directory?}` | `bee.workspaces.manage` on `root_ref` | the new row |
-| `read` | `{workspace_id}` | `bee.workspaces.read` on `workspace_id` | `{workspace, live}` |
-| `list` | `{state?, after?, limit?}` | `bee.workspaces.read` on `catalog` | `{items, next_after?}` |
-| `search` | `{state?, label? \| root_ref + path? \| path, after?, limit?}` | `bee.workspaces.read` on `catalog` | `{items, next_after?}` |
-| `rename` | `{workspace_id, label}` | `bee.workspaces.manage` on `workspace_id` | the row |
-| `archive` | `{workspace_id}` | `bee.workspaces.manage` on `workspace_id` | the row |
-| `restore` | `{workspace_id}` | `bee.workspaces.manage` on `workspace_id` | the row |
-| `inspect` | `{workspace_id}` | `bee.workspaces.read` on `workspace_id` | `{workspace, live, applications, extensions}` |
-| `search_within` | `{workspace_id, text, limit?}` | `bee.workspaces.read` on `workspace_id` | `{workspace_id, results}` |
-| `roots` | `{}` | `bee.workspaces.read` on `catalog` | `{roots}` |
-| `folders` | `{root_ref, path?, after?, limit?}` | `bee.workspaces.browse` on `root_ref` | `{root_ref, path, access, workspace_id?, folders, next_after?}` |
+| `create` | `{label, root_ref, subpath?, create_directory?}` | `bee.workspace.manager.manage` on `root_ref` | the new row |
+| `read` | `{workspace_id}` | `bee.workspace.manager.read` on `workspace_id` | `{workspace, live}` |
+| `list` | `{state?, after?, limit?}` | `bee.workspace.manager.read` on `catalog` | `{items, next_after?}` |
+| `search` | `{state?, label? \| root_ref + path? \| path, after?, limit?}` | `bee.workspace.manager.read` on `catalog` | `{items, next_after?}` |
+| `rename` | `{workspace_id, label}` | `bee.workspace.manager.manage` on `workspace_id` | the row |
+| `archive` | `{workspace_id}` | `bee.workspace.manager.manage` on `workspace_id` | the row |
+| `restore` | `{workspace_id}` | `bee.workspace.manager.manage` on `workspace_id` | the row |
+| `inspect` | `{workspace_id}` | `bee.workspace.manager.read` on `workspace_id` | `{workspace, live, applications, extensions}` |
+| `search_within` | `{workspace_id, text, limit?}` | `bee.workspace.manager.read` on `workspace_id` | `{workspace_id, results}` |
+| `roots` | `{}` | `bee.workspace.manager.read` on `catalog` | `{roots}` |
+| `folders` | `{root_ref, path?, after?, limit?}` | `bee.workspace.manager.browse` on `root_ref` | `{root_ref, path, access, workspace_id?, folders, next_after?}` |
 
 A row is `{workspace_id, label, root_ref, subpath, state, created_at,
 last_used_at}`. `live` says whether a host serves the workspace now. The
@@ -64,7 +64,7 @@ the workspace that holds `path` itself. The directory is read once per page and
 only the page's names are kept; a root the host does not admit is `FORBIDDEN`
 and a path that is not a folder `NOT_FOUND`. These are what a folder picker needs
 to offer a `create` or a launch folder. Browsing a root is its own action,
-`bee.workspaces.browse`: `bee.security.storage:workspace_catalog_manage_policy` grants it with
+`bee.workspace.manager.browse`: `bee.security.storage:workspace_catalog_manage_policy` grants it with
 management, and `bee.security.storage:workspace_folder_browse_policy` grants it with the
 catalog read `roots` needs and nothing else, which the Agent window holds for
 its folder choice. `bee.application:folder_picker` is the shared picker model
@@ -82,7 +82,7 @@ bindings of `bee.workspace.catalog:extension`, never through catalog columns.
 Its methods are `describe` (`{workspace_id}` to `{title, items, total}`, at
 most 50 items of `{label, detail}`) and `search` (`{workspace_id, text, limit?}`
 to `{title, hits}`), both answering with the reply envelope and only for
-callers holding `bee.workspaces.read` on the workspace. The catalog finds the
+callers holding `bee.workspace.manager.read` on the workspace. The catalog finds the
 bindings with `contract.find_implementations` (at most 16, in identity
 order), calls each under its execution scope after it has authorized the
 caller, checks every answer against those bounds and reports a failing
@@ -163,7 +163,7 @@ never stops the host, and its displays quit through their own lifecycle. A
 supervisor selected by the folder's root (classic mode and `bee start`) still
 spawns and owns its host.
 
-The desktop bridge in the Hive supervisor (`src/hive_host/desktop`) composes the
+The desktop bridge in the Hive supervisor (`src/hive/desktop`) composes the
 folder workspace when the host selects it (`desktop.folder`, default true) and
 starts a leased supervisor for any other workspace a client attaches to, at
 most 32 at once; the workspace's last detach stops that supervisor and so
@@ -219,9 +219,9 @@ The command joins the owner as an enrolled local client and calls service
 `bee.workspace` (`bee.workspace:list`, `:roots`, `:create`, `:archive`,
 `:restore`) on the owner's Hive supervisor. The supervisor serves it only to
 an enrolled local client of its own node and only while the host grants it
-`bee.workspaces.command` on the operation (`bee.security.hive:workspace_command_policy`,
+`bee.workspace.manager.command` on the operation (`bee.security.hive:workspace_command_policy`,
 selected for the supervisor service). It runs the command on its worker
-`bee.hive_host.supervisor:workspace_command`, which again requires that grant from
+`bee.hive.supervisor:workspace_command`, which again requires that grant from
 its caller and calls the catalog operation under the policies the host attaches
 to the worker (`bee.security.storage:workspace_catalog_read_policy`,
 `bee.security.storage:workspace_catalog_manage_policy`, `bee.security.hive:workspace_command_catalog_policy`);
@@ -246,14 +246,14 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   it; otherwise it shows a workspace picker (one catalog page, `/` label
   search, PgUp/PgDn paging, Enter to open). Ctrl+] detaches and returns to the
   picker; Ctrl+Q leaves.
-- **Hive member**: `bee.hive_host:workspaces` is an open Hive operation that
+- **Hive member**: `bee.hive.api:workspaces` is an open Hive operation that
   pages a node's catalog (`{label?, after?, limit?}` to `{node_id, workspaces,
   next_after?}`, each row with whether a host serves it); the Hive app lists and
   searches the selected node's workspaces through it. A Hive display client
   from a node the host admits (`desktop.allowed_nodes`) attaches to any of the
   node's workspaces by identity through the bridge's lease path. The Hive
   Manager's Control and Observe open the selected workspace of another node as
-  a remote view in its window: a view process (`bee.hive_host.desktop:viewer`) on
+  a remote view in its window: a view process (`bee.hive.desktop:viewer`) on
   the display client host lists the owner's displays naming no execution,
   attaches through that node's bridge (control reuses a display without a
   controller and allocates one only after definite `DESKTOP_CONTROLLED`
@@ -269,7 +269,7 @@ Today a node's bridge admits a native display client only from a node its host
 grant names (`desktop.allowed_nodes`) or, with `local_clients`, from a node its
 local enrollment lists. Native launch configures `allowed_nodes` empty, so a
 peer that joined the hive through `bee hive invite` and `bee hive join` reaches
-the node's open operations (such as `bee.hive_host:workspaces`) but not its
+the node's open operations (such as `bee.hive.api:workspaces`) but not its
 desktops, and the Hive Manager's remote view is refused there. The proposal:
 the owner's enrollment already writes `{nodes, peers}` from its pinned peer keys;
 the bridge would admit display clients from a pinned peer only when the joining
@@ -280,7 +280,7 @@ This is not implemented.
 
 ## Workspaces viewer
 
-`bee.workspaces:app` (Tools → Workspaces) is the bundled viewer on the shared
+`bee.workspace.manager:app` (Tools → Workspaces) is the bundled viewer on the shared
 application frame. It holds one catalog page (50 rows) and the cursors back to
 earlier pages, never the whole catalog; ↑↓ past either end of a page and
 PgUp/PgDn load the neighbouring page. The Active and Archived tabs list each
@@ -313,6 +313,6 @@ manager starts its host; S again, or closing the viewer, releases it.
 
 Its admission binding grants `bee.security.storage:workspace_catalog_read_policy`,
 `bee.security.storage:workspace_catalog_manage_policy`, `bee.security.threads:thread_workspace_list_policy`,
-`bee.security.desktop:workspace_host_lease_policy` and `bee.workspaces:client_policy`, which may
+`bee.security.desktop:workspace_host_lease_policy` and `bee.workspace.manager:client_policy`, which may
 call only the catalog operations it uses (`list`, `search`, `inspect`,
 `archive`, `restore`, `create`, `roots`, `folders`) and `list_workspace`.

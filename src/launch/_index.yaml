@@ -128,7 +128,7 @@ entries:
   source: file://command_stop.lua
   modules: [process, channel, system]
   imports:
-    owner_stop: bee.hive_host.supervisor:owner_stop
+    owner_stop: bee.hive.supervisor:owner_stop
     types: bee.hive:types
 - name: hosts
   kind: library.lua

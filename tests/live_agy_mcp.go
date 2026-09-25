@@ -156,7 +156,7 @@ func check() error {
 			entry := raw.(map[string]interface{})
 			if entry["name"] == "mcp_http" {
 				security := entry["security"].(map[string]interface{})
-				security["policies"] = append(security["policies"].([]interface{}), "bee.research_probe:docs_policy")
+				security["policies"] = append(security["policies"].([]interface{}), "bee.research.probe:docs_policy")
 				admitted = true
 			}
 		}
@@ -173,8 +173,8 @@ func check() error {
 		material := map[string]string{}
 		for topic, relative := range map[string]string{
 			"source": "modules/threads/src/records/canonical.lua", "corpus": "tests/fixtures/performance_research/corpus.lua",
-			"authoring": "tests/fixtures/research_author/AUTHORING.md", "application": "src/apps/timeline/app.lua",
-			"model": "src/apps/timeline/model.lua", "view": "src/apps/timeline/view.lua",
+			"authoring": "tests/fixtures/research_author/AUTHORING.md", "application": "src/threads/timeline/app.lua",
+			"model": "src/threads/timeline/model.lua", "view": "src/threads/timeline/view.lua",
 		} {
 			data, readErr := os.ReadFile(filepath.Join(repo, relative))
 			if readErr != nil {
@@ -195,7 +195,7 @@ func check() error {
 				material[topic] = string(data)
 			}
 		}
-		document := map[string]interface{}{"version": "1.0", "namespace": "bee.research_probe", "entries": []interface{}{
+		document := map[string]interface{}{"version": "1.0", "namespace": "bee.research.probe", "entries": []interface{}{
 			map[string]interface{}{"name": "material", "kind": "registry.entry", "data": material},
 		}}
 		data, marshalErr := yaml.Marshal(document)
@@ -219,7 +219,7 @@ func check() error {
 	if err = setVariable(root, "src/driver/agy/_index.yaml", "executable", "BEE_RESEARCH_AGY_EXECUTABLE"); err != nil {
 		return err
 	}
-	if err = setVariable(root, "src/environment/_index.yaml", "machine_home", "BEE_RESEARCH_USER_HOME"); err != nil {
+	if err = setVariable(root, "src/env/_index.yaml", "machine_home", "BEE_RESEARCH_USER_HOME"); err != nil {
 		return err
 	}
 	overrides := map[string]string{"BEE_RESEARCH_AGY_EXECUTABLE": agy, "BEE_RESEARCH_USER_HOME": home}

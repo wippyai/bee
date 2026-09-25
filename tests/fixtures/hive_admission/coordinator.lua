@@ -27,21 +27,21 @@ type CoordinatorResult = {
 local function main(): CoordinatorResult
     local self_pid: string = tostring(process.pid())
     local self_host: string? = protocol.extract_pid_host(self_pid)
-    if self_host ~= "bee.hive_admission:workers" then
+    if self_host ~= "bee.hive.admission:workers" then
         error("Coordinator not running on workers host, current host: " .. tostring(self_host))
     end
 
     local events = assert(process.events())
-    local reply_topic: string = "bee.hive_admission.reply"
+    local reply_topic: string = "bee.hive.admission.reply"
     local replies = assert(process.listen(reply_topic, {message = true}))
 
     local function run_negative_phase(phase_num: integer)
         local policies: {security.Policy} = {}
         for _, name in ipairs({"attacker_entry_policy", "attacker_worker_host_policy", "attacker_deny_supervisor_policy", "attacker_context_policy"}) do
-            policies[#policies + 1] = assert(security.policy("bee.hive_admission:" .. name))
+            policies[#policies + 1] = assert(security.policy("bee.hive.admission:" .. name))
         end
         local attacker_pid_raw = assert(process.with_options({}):with_scope(security.new_scope(policies))
-            :spawn_monitored("bee.hive_admission:attacker", "bee.hive_admission:workers", phase_num))
+            :spawn_monitored("bee.hive.admission:attacker", "bee.hive.admission:workers", phase_num))
         local attacker_pid: string = tostring(attacker_pid_raw)
         local deadline = time.after("5s")
         local raw_report: AttackerReport? = nil
@@ -78,7 +78,7 @@ local function main(): CoordinatorResult
             end
             local is_perm_denied: boolean = (string.find(res.err_msg, "not allowed to spawn on host", 1, true) ~= nil)
                 or (string.find(res.err_msg, "not allowed to exec on host", 1, true) ~= nil)
-            is_perm_denied = is_perm_denied and string.find(res.err_msg, "bee.hive_admission:supervisor_host", 1, true) ~= nil
+            is_perm_denied = is_perm_denied and string.find(res.err_msg, "bee.hive.admission:supervisor_host", 1, true) ~= nil
 
             local is_capacity_err: boolean = (string.find(res.err_msg, "capacity", 1, true) ~= nil)
                 or (string.find(res.err_msg, "max_processes", 1, true) ~= nil)
@@ -102,12 +102,12 @@ local function main(): CoordinatorResult
 
     -- Phase 2: Authorized probe child on supervisor host
     local token: string = "auth-token-" .. tostring(time.now())
-    local child_pid_raw = assert(process.spawn_monitored("bee.hive_admission:probe", "bee.hive_admission:supervisor_host", self_pid, reply_topic, token))
+    local child_pid_raw = assert(process.spawn_monitored("bee.hive.admission:probe", "bee.hive.admission:supervisor_host", self_pid, reply_topic, token))
     local child_pid: string = tostring(child_pid_raw)
 
     local child_host: string? = protocol.extract_pid_host(child_pid)
-    if child_host ~= "bee.hive_admission:supervisor_host" then
-        error("Authorized child PID host mismatch: expected bee.hive_admission:supervisor_host, got " .. tostring(child_host))
+    if child_host ~= "bee.hive.admission:supervisor_host" then
+        error("Authorized child PID host mismatch: expected bee.hive.admission:supervisor_host, got " .. tostring(child_host))
     end
 
     local deadline = time.after("5s")
@@ -126,7 +126,7 @@ local function main(): CoordinatorResult
                 error("Reply sender mismatch: expected " .. child_pid .. ", got " .. sender_pid)
             end
             local sender_host: string? = protocol.extract_pid_host(sender_pid)
-            if sender_host ~= "bee.hive_admission:supervisor_host" then
+            if sender_host ~= "bee.hive.admission:supervisor_host" then
                 error("Sender PID does not show supervisor host: " .. sender_pid)
             end
             local reply = protocol.decode_probe_reply(msg:payload():data())

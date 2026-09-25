@@ -66,7 +66,7 @@ local function define_tests()
             local suffix = assert(uuid.v7())
             local node = "publication-node-" .. suffix
             local workspace = "publication-workspace-" .. suffix
-            local store = assert(staging.open("bee.governance:plan_test_db", node))
+            local store = assert(staging.open("bee.gov:plan_test_db", node))
             local created = store:call("author-a", {operation = "create", workspace_id = workspace,
                 expected_revision = 0, idempotency_key = "create"})
             test.is_true(created.ok)
@@ -87,7 +87,7 @@ local function define_tests()
         end)
         test.it("assembles large authored files with checked append, CAS and replay", function()
             local suffix = assert(uuid.v7())
-            local store = assert(staging.open("bee.governance:plan_test_db", "append-node-" .. suffix))
+            local store = assert(staging.open("bee.gov:plan_test_db", "append-node-" .. suffix))
             local id = "append-" .. suffix
             test.is_true(store:call("author-a", {operation = "create", workspace_id = id,
                 expected_revision = 0, idempotency_key = "create"}).ok)
@@ -136,7 +136,7 @@ local function define_tests()
 
         test.it("contains workspace capacity per author instead of exhausting the node", function()
             local suffix = assert(uuid.v7())
-            local store = assert(staging.open("bee.governance:plan_test_db", "capacity-node-" .. suffix))
+            local store = assert(staging.open("bee.gov:plan_test_db", "capacity-node-" .. suffix))
             for index = 1, 8 do
                 local created = store:call("bounded-author", {operation = "create",
                     workspace_id = "bounded-" .. tostring(index), expected_revision = 0,

@@ -69,10 +69,10 @@ function M.main()
     if not view then error(tostring(view_error)) end
     local grant = assert(view:grant())
     local producer = tostring(assert(process.with_options({terminal = grant}):spawn_monitored(
-        "bee.attachment_probe:observer_producer", "bee:workers", owner)))
+        "bee.attachment.probe:observer_producer", "bee:workers", owner)))
     assert(ready:receive():from() == producer)
     local observer_pid = tostring(assert(process.with_options({}):spawn_monitored(
-        "bee.attachment_probe:observer_consumer", "bee:workers", owner)))
+        "bee.attachment.probe:observer_consumer", "bee:workers", owner)))
     assert(ready:receive():from() == observer_pid)
     local control_ref, control_mount_error = view:mount(owner, {observe = true, input = true, resize = true})
     if not control_ref then error(tostring(control_mount_error)) end

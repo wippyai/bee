@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.admission_probe
+namespace: bee.admission.probe
 entries:
 - name: writer
   kind: security.policy
@@ -26,7 +26,7 @@ entries:
       name: app-admission-probe
       security:
         actor: {id: app-admission-test}
-        policies: [bee.security.desktop:broker_policy, bee.admission_probe:core_spawn_policy, bee.admission_probe:writer]
+        policies: [bee.security.desktop:broker_policy, bee.admission.probe:core_spawn_policy, bee.admission.probe:writer]
 - name: app
   kind: process.lua
   source: file://app.lua
@@ -36,7 +36,7 @@ entries:
     client: bee.application:client
   meta:
     type: bee.application
-    policies: [bee.admission_probe:grant]
+    policies: [bee.admission.probe:grant]
     application:
       api_version: 1
       title: Admission probe
@@ -54,6 +54,6 @@ entries:
     resources:
     - bee.host:main
     - bee.session:main
-    - bee.applications:broker
+    - bee.apps:broker
     - bee.terminal:main
     effect: allow

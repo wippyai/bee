@@ -78,7 +78,7 @@ end
 -- Command hooks submit through the host-selected `hook-post` executable, which
 -- reports acceptance by its exit status; direct hooks report the HTTP status.
 local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook: boolean, command_hooks: boolean)
-    local definition = command_hooks and "bee.window_hooks_fixture:command_definition" or "bee.window_hooks_fixture:definition"
+    local definition = command_hooks and "bee.window.hooks.fixture:command_definition" or "bee.window.hooks.fixture:definition"
     local accepted_result = command_hooks and "exit-0" or "http-202"
     -- 1. Open gateway listener under configured loopback endpoint
     local address = endpoint()
@@ -87,12 +87,12 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     -- The host explicitly admits a session root in this disposable fixture.
     local roots = assert(registry.get("bee:resource_roots"))
-    roots.data = {roots = {{root_ref = "bee.window_hooks_fixture:session_root", access = "write"}}}
+    roots.data = {roots = {{root_ref = "bee.window.hooks.fixture:session_root", access = "write"}}}
     local changes = registry.snapshot():changes()
     changes:update(roots)
     assert(changes:apply())
     call("bee.resources.binding:associate", {workspace_id = WORKSPACE, name = "retained",
-        root_ref = "bee.window_hooks_fixture:session_root", subpath = "", allowed_access = "write"})
+        root_ref = "bee.window.hooks.fixture:session_root", subpath = "", allowed_access = "write"})
 
     -- 2. Create the target thread
     call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "window-hooks-create", title = "Window hooks fixture"})
@@ -108,7 +108,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     if not boundary then error(tostring(boundary_error)) end
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-        :with_scope(scope):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
     assert(catalogs:receive():from() == broker)
 
     -- 4. Resolve plan and open bee.harness.window:app

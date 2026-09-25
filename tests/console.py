@@ -15,12 +15,12 @@ PROBE = '''
     local security = require("security")
     local registry = require("registry")
     local sql = require("sql")
-    local database, database_error = sql.get("bee.environment:workspace_db")
+    local database, database_error = sql.get("bee.env:workspace_db")
     assert(not database and database_error, "App accessed the primary database")
-    assert(not security.can("db.get", "bee.environment:workspace_db"))
-    local client_database, client_database_error = sql.get("bee.environment:client_db")
+    assert(not security.can("db.get", "bee.env:workspace_db"))
+    local client_database, client_database_error = sql.get("bee.env:client_db")
     assert(not client_database and client_database_error)
-    assert(not security.can("db.get", "bee.environment:client_db"))
+    assert(not security.can("db.get", "bee.env:client_db"))
     assert(security.can("db.get", "foreign-resource"), "Broad test policy was not applied")
     assert(security.can("exec.get", "bee.console:executor"))
     assert(not security.can("exec.get", "other:executor"))
@@ -53,9 +53,9 @@ def exercise(packed, theme="honey"):
             appearance.write_text(source.replace(anchor, f'function M.defaults(): Preferences return {{theme = "{theme}",'))
         for name in ["wippy.lock", ".wippy.yaml", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
-        app = project / "src/apps/console/app.lua"
+        app = project / "src/console/app.lua"
         app.write_text(app.read_text().replace('    local input = assert(tty.events())', PROBE + '\n    local input = assert(tty.events())'))
-        index = project / "src/apps/console/_index.yaml"
+        index = project / "src/console/_index.yaml"
         doc = yaml.safe_load(index.read_text())
         doc["entries"][0]["modules"] += ["security", "registry", "sql"]
         executor_entry = next(entry for entry in doc["entries"] if entry["name"] == "executor")
@@ -156,7 +156,7 @@ def command_handlers(packed):
         shutil.copytree(ROOT / "modules", project / "modules")
         for name in ("wippy.lock", ".wippy.yaml", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
-        index = project / "src/apps/console/_index.yaml"
+        index = project / "src/console/_index.yaml"
         document = yaml.safe_load(index.read_text())
         app = next(e for e in document["entries"] if e["name"] == "app")
         # A newly registered name exercises discovery without core/provider edits.
@@ -176,7 +176,7 @@ def command_handlers(packed):
         finally:
             ui.close()
         # Admitted duplicate aliases must not silently select one executable.
-        other = project / "src/apps/settings/_index.yaml"
+        other = project / "src/settings/_index.yaml"
         settings = yaml.safe_load(other.read_text())
         next(e for e in settings["entries"] if e["name"] == "app")["meta"]["application"]["commands"] = [{"name": "probe"}]
         other.write_text(yaml.safe_dump(settings, sort_keys=False))

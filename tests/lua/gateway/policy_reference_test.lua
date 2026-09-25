@@ -10,7 +10,7 @@ local json = require("json")
 local time = require("time")
 
 local POLICY = "bee.gateway:policy_reference_target"
-local RESOURCE = "bee.gateway_probe:policy_reference_sentinel"
+local RESOURCE = "bee.gateway.probe:policy_reference_sentinel"
 
 type Object = {[string]: unknown}
 

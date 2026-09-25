@@ -42,7 +42,7 @@ local function admitted_scope(): security.Scope
     for _, item in ipairs(BASE) do names[#names + 1] = item end
     local found = false
     for _, binding in ipairs((entry.data :: Object).bindings :: {Object}) do
-        if binding.definition_id == "bee.inbox:app" then
+        if binding.definition_id == "bee.approvals.inbox:app" then
             found = true
             for _, name in ipairs(binding.policies :: {string}) do names[#names + 1] = name end
         end
@@ -65,7 +65,7 @@ local function install_policy()
         policies[#policies + 1] = {name = POLICY, approvers = {ALICE, "bee.test.inbox_bob"}, max_ttl_ms = 60000}
     end
     if not found_selector then
-        policies[#policies + 1] = {name = SELECTOR_POLICY, approvers = {{definition_id = "bee.inbox:app"}}, max_ttl_ms = 60000}
+        policies[#policies + 1] = {name = SELECTOR_POLICY, approvers = {{definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 60000}
     end
     local changes = registry.snapshot():changes()
     changes:update(entry)
@@ -73,7 +73,7 @@ local function install_policy()
     if not applied then error("install approver policy: " .. tostring(err)) end
 end
 local function requester(): funcs.Executor
-    return funcs.new():with_actor(security.new_actor(REQUESTER)):with_scope(security.new_scope(policies_of({"bee.inbox:client_test_policy", "bee.security.approvals:approval_request_policy"})))
+    return funcs.new():with_actor(security.new_actor(REQUESTER)):with_scope(security.new_scope(policies_of({"bee.approvals.inbox:client_test_policy", "bee.security.approvals:approval_request_policy"})))
 end
 local function file(workspace: string, policy: string?): string
     local reply, err = requester():call("bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = policy or POLICY,
@@ -86,7 +86,7 @@ end
 -- probe: the process under the admitted scope as the given actor.
 local function probe(actor: string, input: Object, metadata: Object?): Object
     local spawner = process.with_context({}):with_actor(security.new_actor(actor, metadata)):with_scope(admitted_scope())
-    local pid, err = spawner:spawn_monitored("bee.inbox:admission_probe", "bee:workers", input)
+    local pid, err = spawner:spawn_monitored("bee.approvals.inbox:admission_probe", "bee:workers", input)
     if not pid then error("spawn probe: " .. tostring(err)) end
     local events = assert(process.events())
     local deadline = time.after("30s")
@@ -144,11 +144,11 @@ local function define_tests()
             local approval_id = file(workspace, SELECTOR_POLICY)
             local workspace_id = string.rep("a", 32)
             local app_actor = "bee.application:" .. workspace_id .. ":inbox-instance"
-            local app_metadata = {workspace_id = workspace_id, definition_id = "bee.inbox:app",
+            local app_metadata = {workspace_id = workspace_id, definition_id = "bee.approvals.inbox:app",
                 definition_revision = "1", execution_generation = 1}
             local sibling = probe("bee.application:" .. workspace_id .. ":timeline-instance",
                 {workspace_id = workspace, approval_id = approval_id},
-                {workspace_id = workspace_id, definition_id = "bee.timeline:app",
+                {workspace_id = workspace_id, definition_id = "bee.threads.timeline:app",
                     definition_revision = "1", execution_generation = 1})
             test.eq(sibling.visible, 0)
             test.eq(sibling.read, "refused: DENIED")

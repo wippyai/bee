@@ -153,7 +153,7 @@ func (c *Client) Call(ctx context.Context, operation Operation) (Reply, error) {
 	if err != nil {
 		return Reply{}, err
 	}
-	if supervisor.Node != c.owner || supervisor.Host != "bee.hive_host:supervisor_host" || supervisor.UniqID == "" {
+	if supervisor.Node != c.owner || supervisor.Host != "bee.hive.service:supervisor_host" || supervisor.UniqID == "" {
 		return Reply{}, ErrProtocol
 	}
 	if c.supervisor.UniqID != "" && !samePID(c.supervisor, supervisor) {

@@ -1080,7 +1080,7 @@ function M.workspace_sessions(binding: Binding): ({sessions.Candidate}?, Reply?)
 end
 -- The workspace extension methods: the agent sessions running in one
 -- workspace, for a caller the workspace catalog lets read that workspace.
-M.READ_WORKSPACE = "bee.workspaces.read"
+M.READ_WORKSPACE = "bee.workspace.manager.read"
 M.MAX_DESCRIBED = 50
 local function running(value: unknown, fields: {string}): ({sessions.Candidate}?, {[string]: unknown}?, Reply?)
     local object = bounds.object(value)

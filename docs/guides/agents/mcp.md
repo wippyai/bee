@@ -59,7 +59,7 @@ direct call. The gateway does not rewrite a running harness's system prompt.
 
 ## Built-in tools
 
-`overlay` reaches the public `bee.governance.binding:overlay_call` facade. `guide`
+`overlay` reaches the public `bee.gov.binding:overlay_call` facade. `guide`
 names no overlay: without `section` it returns the short index with the
 section list, with `section` one section, and with `include_example` the
 minimal worked example with its entries JSON inline. `create`, `list files
@@ -95,7 +95,7 @@ with placements, overrides and saved profile IDs and revisions.
 in the caller's workspace or in an optional `workspace_id`. It accepts a
 definition reference, brief and retry key, and returns the child thread,
 action and attempt identity plus the admitted title. A workspace other than
-the binding's needs `bee.workspaces.launch` on it in the caller's own scope
+the binding's needs `bee.workspace.manager.launch` on it in the caller's own scope
 (the host attaches `bee.security.harness:workspace_launch_policy` only to agents it lets act
 across workspaces); the launch then runs as the same actor bound to that
 workspace. The child gets its own launch policy and tool scope and holds a

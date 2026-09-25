@@ -3,16 +3,16 @@ namespace: bee.workspace.db
 entries:
 - name: first
   kind: db.sql.sqlite
-  file: ${env:bee.environment:workspace_db_path}.first
+  file: ${env:bee.env:workspace_db_path}.first
   lifecycle:
     auto_start: true
 - name: second
   kind: db.sql.sqlite
-  file: ${env:bee.environment:workspace_db_path}.second
+  file: ${env:bee.env:workspace_db_path}.second
   lifecycle:
     auto_start: true
 - name: node
   kind: db.sql.sqlite
-  file: ${env:bee.environment:workspace_db_path}.node
+  file: ${env:bee.env:workspace_db_path}.node
   lifecycle:
     auto_start: true

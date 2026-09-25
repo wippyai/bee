@@ -8,7 +8,7 @@ type Object = {[string]: unknown}
 local WORKSPACE = string.rep("b", 32)
 local DISPLAY = string.rep("c", 32)
 local function view(mode: "control" | "observe"): remote.View
-    return {pid = "{local@bee.hive_host.desktop:display_host|7}", node_id = "forge", node_label = "Forge", workspace_id = WORKSPACE,
+    return {pid = "{local@bee.hive.desktop:display_host|7}", node_id = "forge", node_label = "Forge", workspace_id = WORKSPACE,
         desktop_id = DISPLAY, mode = mode, session_id = "session-1", rows = {}, cursor = nil, leaving = false}
 end
 local function define_tests()
@@ -55,7 +55,7 @@ local function define_tests()
             test.eq((remote.forward(control, {type = "key", key = "a", action = "press"})), "drop")
         end)
         test.it("draws a title row above the remote rows", function()
-            local shown: remote.View = {pid = "{local@bee.hive_host.desktop:display_host|7}", node_id = "forge", node_label = "Forge",
+            local shown: remote.View = {pid = "{local@bee.hive.desktop:display_host|7}", node_id = "forge", node_label = "Forge",
                 workspace_id = WORKSPACE, desktop_id = DISPLAY, mode = "control", session_id = "session-1",
                 rows = {"row one", "row two"}, cursor = {x = 2, y = 1, visible = true}, leaving = false}
             local drawn = remote.draw(60, 4, appearance.defaults(), shown)

@@ -28,10 +28,10 @@ import (
 
 const (
 	// enrollmentEntry is the host-owned registry entry the Hive supervisor
-	// reconciles (src/hive_host/supervisor/enrollment.lua). The owner rewrites it
+	// reconciles (src/hive/supervisor/enrollment.lua). The owner rewrites it
 	// from its trusted and peers directories, so a local client or Hive peer is
 	// admitted exactly while its public key file exists.
-	enrollmentEntry = "bee.hive_host.supervisor:enrollment_nodes"
+	enrollmentEntry = "bee.hive.supervisor:enrollment_nodes"
 	// enrollmentEntryKind must match the entry's declared kind, so the update is
 	// a same-kind replacement the registry accepts.
 	enrollmentEntryKind = "registry.entry"
@@ -66,7 +66,7 @@ func enrollmentChange(clients, peers []trustedKey) registry.ChangeSet {
 		ID:   registry.ParseID(enrollmentEntry),
 		Kind: enrollmentEntryKind,
 		Data: payload.New(map[string]any{"nodes": names(clients), "peers": names(peers)}),
-		Meta: attrs.NewBagFrom(map[string]any{"type": "bee.hive_host.supervisor_enrollment"}),
+		Meta: attrs.NewBagFrom(map[string]any{"type": "bee.hive.supervisor_enrollment"}),
 	}
 	return registry.ChangeSet{{Kind: registry.EntryUpdate, Entry: entry}}
 }
@@ -177,8 +177,8 @@ func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) er
 	if pidRegistry == nil {
 		return errors.New("enrollment publisher requires the process names")
 	}
-	supervisor, found := pidRegistry.Lookup("bee.hive_host.supervisor")
-	if !found || supervisor.Node != p.node || supervisor.Host != "bee.hive_host:supervisor_host" || supervisor.UniqID == "" {
+	supervisor, found := pidRegistry.Lookup("bee.hive.supervisor")
+	if !found || supervisor.Node != p.node || supervisor.Host != "bee.hive.service:supervisor_host" || supervisor.UniqID == "" {
 		return errSupervisorPending
 	}
 	store, err := rendezvous.New(filepath.Join(p.state, rendezvous.DirectoryName))

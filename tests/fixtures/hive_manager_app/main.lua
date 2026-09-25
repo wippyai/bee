@@ -23,14 +23,14 @@ local function main(mode: string?)
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local dialogs = assert(process.listen("bee.interaction.state", {message = true}))
-    local slow_entered = assert(process.listen("bee.hive_manager_probe.slow_entered", {message = true}))
+    local slow_entered = assert(process.listen("bee.hive.manager.probe.slow_entered", {message = true}))
     local broker_policy = assert(security.policy("bee.security.desktop:broker_policy"))
     local boundary = assert(security.policy("bee.security:core_spawn_boundary"))
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-        :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
     assert(catalogs:receive())
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.hive_manager:app", arguments = {}}))
+        definition_id = "bee.hive.manager:app", arguments = {}}))
     local opened: {[string]: unknown}? = nil
     while not opened do
         local message = assert(replies:receive())

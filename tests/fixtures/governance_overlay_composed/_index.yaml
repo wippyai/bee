@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.governance_overlay_composed_probe
+namespace: bee.gov.overlay.composed.probe
 entries:
 - name: workers
   kind: process.host
@@ -20,9 +20,9 @@ entries:
   method: main
   modules: [registry, logger]
   security:
-    policies: [bee.governance_overlay_composed_probe:policy]
+    policies: [bee.gov.overlay.composed.probe:policy]
   meta:
     command:
       name: governance-overlay-composed-probe
       security:
-        actor: {id: bee.governance_overlay_composed_probe}
+        actor: {id: bee.gov.overlay.composed.probe}

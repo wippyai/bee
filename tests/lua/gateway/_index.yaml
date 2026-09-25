@@ -84,10 +84,10 @@ entries:
   policy:
     actions: [registry.get]
     resources:
-    - bee.governance.traits:authoring_trait
-    - bee.governance.traits:application_delivery_trait
-    - bee.governance.traits:application_publish_trait
-    - bee.governance.binding:overlay_call
+    - bee.gov.traits:authoring_trait
+    - bee.gov.traits:application_delivery_trait
+    - bee.gov.traits:application_publish_trait
+    - bee.gov.binding:overlay_call
     effect: allow
 - name: context_test
   kind: function.lua
@@ -128,7 +128,7 @@ entries:
     policies: [bee.gateway:address_test_policy]
   imports:
     test: wippy.test:test
-    configuration: bee.gateway.registry:configuration
+    configuration: bee.gateway:configuration
 - name: native_admission_db_path
   kind: env.variable
   meta: {type: test_support}
@@ -163,7 +163,7 @@ entries:
     policies: [bee.gateway:native_admission_test_policy]
   imports:
     test: wippy.test:test
-    configuration: bee.gateway.registry:configuration
+    configuration: bee.gateway:configuration
 - name: policy_reference_admin
   kind: security.policy
   meta: {type: test_support}
@@ -176,7 +176,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.gateway_probe:policy_reference_other]
+    resources: [bee.gateway.probe:policy_reference_other]
     effect: allow
 - name: policy_reference_test
   kind: function.lua

@@ -77,7 +77,7 @@ themselves.
 stable database, listener, address, and hook-executable entries. The callable
 lifecycle and hook operations are in `bee.gateway.binding`; the HTTP handlers
 are in `bee.gateway.api`; and endpoint lookup is
-`bee.gateway.registry:address`. `bee.gateway.migrations`,
+`bee.gateway:address`. `bee.gateway.migrations`,
 `bee.gateway.persist`, and `bee.gateway.security` contain the component's
 migration, storage, and policy implementation. There are no root-namespace
 forwarding functions for the lifecycle operations.

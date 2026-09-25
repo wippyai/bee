@@ -14,7 +14,7 @@ type CoordinatorResult = {
 local function main()
     -- When launched from terminal host, coordinate via worker process.
     local events = assert(process.events())
-    local coordinator_pid_raw = assert(process.spawn_monitored("bee.hive_admission:coordinator", "bee.hive_admission:workers"))
+    local coordinator_pid_raw = assert(process.spawn_monitored("bee.hive.admission:coordinator", "bee.hive.admission:workers"))
     local coordinator_pid: string = tostring(coordinator_pid_raw)
 
     local deadline = time.after("15s")

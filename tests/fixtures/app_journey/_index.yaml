@@ -1,9 +1,9 @@
 version: '1.0'
-namespace: bee.app_journey_probe
+namespace: bee.app.journey.probe
 entries:
 - name: destination_workspace
   kind: env.variable
-  storage: bee.environment:workspace_environment
+  storage: bee.env:workspace_environment
   variable: BEE_APP_JOURNEY_WORKSPACE
   readonly: true
 - name: operator_policy
@@ -20,12 +20,12 @@ entries:
     - db.get
     - system.read
     - env.get
-    - bee.governance.overlay.read
-    - bee.governance.overlay.write
-    - bee.governance.delivery.read
-    - bee.governance.delivery.manage
-    - bee.governance.delivery.activate
-    - bee.governance.delivery.publish
+    - bee.gov.overlay.read
+    - bee.gov.overlay.write
+    - bee.gov.delivery.read
+    - bee.gov.delivery.manage
+    - bee.gov.delivery.activate
+    - bee.gov.delivery.publish
     - bee.approvals.decide
     resources: '*'
     effect: allow
@@ -36,7 +36,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call, db.get]
-    resources: [bee.app_journey_demo:001, bee.app_journey_probe:shared_db]
+    resources: [bee.app_journey_demo:001, bee.app.journey.probe:shared_db]
     effect: allow
 - name: deliver
   kind: process.lua
@@ -45,13 +45,13 @@ entries:
   modules: [funcs, registry, system, env, json, logger, sql]
   imports:
     bounds: bee.threads.records:bounds
-    artifact: bee.governance:artifact
-    materializer: bee.governance.registry:materializer
-    preflight: bee.governance:preflight
-    catalog: bee.applications:catalog
+    artifact: bee.gov:artifact
+    materializer: bee.gov:materializer
+    preflight: bee.gov:preflight
+    catalog: bee.apps:catalog
   security:
     policies:
-    - bee.app_journey_probe:operator_policy
+    - bee.app.journey.probe:operator_policy
     - bee.security.approvals:approval_consume_policy
   meta:
     command:
@@ -59,7 +59,7 @@ entries:
       security:
         actor: {id: bee.app_journey.operator}
         policies:
-        - bee.app_journey_probe:operator_policy
+        - bee.app.journey.probe:operator_policy
         - bee.security.approvals:approval_consume_policy
 - name: stage
   kind: process.lua
@@ -69,13 +69,13 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee.app_journey_probe:operator_policy]
+    policies: [bee.app.journey.probe:operator_policy]
   meta:
     command:
       name: app-journey-stage
       security:
         actor: {id: bee.app_journey.operator}
-        policies: [bee.app_journey_probe:operator_policy]
+        policies: [bee.app.journey.probe:operator_policy]
 - name: guide
   kind: process.lua
   source: file://guide.lua
@@ -83,30 +83,30 @@ entries:
   modules: [funcs, system, env, json, logger]
   imports:
     bounds: bee.threads.records:bounds
-    guide: bee.governance.traits:guide
-    artifact: bee.governance:artifact
-    preflight: bee.governance:preflight
+    guide: bee.gov.traits:guide
+    artifact: bee.gov:artifact
+    preflight: bee.gov:preflight
   security:
-    policies: [bee.app_journey_probe:operator_policy]
+    policies: [bee.app.journey.probe:operator_policy]
   meta:
     command:
       name: app-journey-guide
       security:
         actor: {id: bee.app_journey.operator}
-        policies: [bee.app_journey_probe:operator_policy]
+        policies: [bee.app.journey.probe:operator_policy]
 - name: inspect
   kind: process.lua
   source: file://inspect.lua
   method: main
   modules: [registry, time, logger, env]
   imports:
-    catalog: bee.applications:catalog
+    catalog: bee.apps:catalog
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee.app_journey_probe:operator_policy]
+    policies: [bee.app.journey.probe:operator_policy]
   meta:
     command:
       name: app-journey-inspect
       security:
         actor: {id: bee.app_journey.operator}
-        policies: [bee.app_journey_probe:operator_policy]
+        policies: [bee.app.journey.probe:operator_policy]

@@ -54,7 +54,7 @@ entries:
     - process.unmonitor
     - process.send
     resources:
-    - bee.placement.native:runner
+    - bee.placement.native.service:runner
     - bee:workers
     - '*'
     effect: allow

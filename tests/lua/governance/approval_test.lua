@@ -56,7 +56,7 @@ local function define_tests()
         end)
 
         test.it("binds activation and validates the exact consumption receipt", function()
-            local intent = {workspace_id = "workspace-a", overlay_owner = "bee.governance:overlay",
+            local intent = {workspace_id = "workspace-a", overlay_owner = "bee.gov:overlay",
                 source_node = "source-a", source_workspace = "application-a", version = "v1",
                 authorization_digest = DIGEST, artifact_digest = string.rep("b", 64),
                 resolution_digest = string.rep("c", 64), preflight_digest = string.rep("d", 64),

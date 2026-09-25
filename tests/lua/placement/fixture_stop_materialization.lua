@@ -20,7 +20,7 @@ local function handle(value: unknown): Reply
     -- inside the asynchronous credential call, rather than relying on sleep.
     local file, open_error = volume:open("/auth.json", "w")
     if not file then return {ok = false, error = tostring(open_error or "open fixture fifo")} end
-    local stopped, stop_error = funcs.call("bee.placement.native:stop", {attempt_id = request.attempt_id, mode = "cooperative"})
+    local stopped, stop_error = funcs.call("bee.placement.native.binding:stop", {attempt_id = request.attempt_id, mode = "cooperative"})
     if stop_error or type(stopped) ~= "table" or (stopped :: {[string]: unknown}).ok ~= true then
         file:close()
         local failure = type(stopped) == "table" and (stopped :: {[string]: unknown}).error

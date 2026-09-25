@@ -21,14 +21,14 @@ type Object = {[string]: unknown}
 
 local SOURCE_WORKSPACE = "app-journey-source"
 local COMPONENT = "bee.app_journey_demo/app"
-local OVERLAY_OWNER = "bee.app_journey_probe:activation_overlay"
+local OVERLAY_OWNER = "bee.app.journey.probe:activation_overlay"
 local APPROVAL_POLICY = "local-app-journey"
 local VERSION = "1.0.0"
 local DEFINITION_ID = "bee.app_journey_demo:app"
 local APP_TITLE = "App Journey"
 local RETRY_EFFECT = "app-journey-second-effect"
 local LOGICAL_DB = "bee.app_journey_demo:data"
-local PHYSICAL_DB = "bee.app_journey_probe:shared_db"
+local PHYSICAL_DB = "bee.app.journey.probe:shared_db"
 local TABLE_PREFIX = "journey_"
 local MIGRATION_ID = "bee.app_journey_demo:001"
 
@@ -48,17 +48,17 @@ local function main(value: unknown)
     local lifecycle = assert(process.events())
     local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
     local thread_results = assert(process.listen("bee.application.thread.result", {message = true}))
-    local rechecks = assert(process.listen("bee.app_journey_probe.recheck", {message = true}))
-    local revocations = assert(process.listen("bee.app_open_probe.access.revoke.result", {message = true}))
+    local rechecks = assert(process.listen("bee.app.journey.probe.recheck", {message = true}))
+    local revocations = assert(process.listen("bee.app.open.probe.access.revoke.result", {message = true}))
     local stale_status = "n/a"
     local operator: string? = nil
     for _ = 1, 100 do
-        operator = process.registry.lookup("bee.app_open_probe:operator")
+        operator = process.registry.lookup("bee.app.open.probe:operator")
         if operator then break end
         time.sleep("20ms")
     end
     if not operator then error("app-open operator is unavailable") end
-    assert(process.send(operator, "bee.app_open_probe.credentials", {instance_id = launch.instance_id,
+    assert(process.send(operator, "bee.app.open.probe.credentials", {instance_id = launch.instance_id,
         launch_token = launch.launch_token, execution_generation = launch.execution_generation}))
     local count = 0
     local thread_complete = false
@@ -254,7 +254,7 @@ local function main(value: unknown)
                     else error("fresh read failed: " .. (code == "" and "unknown" or code)) end
                     paint(); checkpoint()
                     if recipient then
-                        assert(process.send(recipient, "bee.app_journey_probe.recheck.result", {
+                        assert(process.send(recipient, "bee.app.journey.probe.recheck.result", {
                             instance_id = launch.instance_id, access = thread_status, code = code}))
                     end
                     return
@@ -298,7 +298,7 @@ local function main(value: unknown)
             if event.value.key == "r" then recheck(nil)
             elseif event.value.key == "d" then
                 thread_status = "revoking"; paint()
-                assert(process.send(operator, "bee.app_open_probe.access.revoke", {instance_id = launch.instance_id}))
+                assert(process.send(operator, "bee.app.open.probe.access.revoke", {instance_id = launch.instance_id}))
             else count = count + 1; paint(); checkpoint() end
         end
     end
@@ -313,7 +313,7 @@ return {main = main}
 local MIGRATION_SOURCE = [[local sql = require("sql")
 local function run(options)
     assert(options.target_db == "bee.app_journey_demo:data")
-    assert(options.database_id == "bee.app_journey_probe:shared_db")
+    assert(options.database_id == "bee.app.journey.probe:shared_db")
     assert(options.table_prefix == "journey_")
     assert(options.direction == "up")
     local db = assert(sql.get(options.database_id))
@@ -399,13 +399,13 @@ local function admitted_title(workspace_id: string): string?
 end
 
 local function configure_host(workspace_id: string, local_node: string)
-    local pub_entry = assert(registry.get("bee:governance_publication_profiles"))
+    local pub_entry = assert(registry.get("bee.env:gov_publication_profiles"))
     local pub_data = object(pub_entry.data)
     pub_data.profiles = {{workspace_id = workspace_id, source_workspace = SOURCE_WORKSPACE,
         component = COMPONENT, overlay_owner = OVERLAY_OWNER}}
     pub_entry.data = pub_data
 
-    local act_entry = assert(registry.get("bee:governance_activation_profiles"))
+    local act_entry = assert(registry.get("bee.env:gov_activation_profiles"))
     local act_data = object(act_entry.data)
     act_data.profiles = {{workspace_id = workspace_id, source_node = local_node, source_workspace = SOURCE_WORKSPACE,
         component = COMPONENT, resolver = "overlay", overlay_owner = OVERLAY_OWNER, approval_policy = APPROVAL_POLICY,
@@ -413,14 +413,14 @@ local function configure_host(workspace_id: string, local_node: string)
             kinds = {"process.lua", "function.lua"}, databases = {LOGICAL_DB}, grants = {},
             modules = {"tty", "process", "channel", "json", "sql", "time"}},
         database_bindings = {{target_db = LOGICAL_DB, database_id = PHYSICAL_DB, table_prefix = TABLE_PREFIX}},
-        migration_policies = {"bee.app_journey_probe:migration_policy"}}}
+        migration_policies = {"bee.app.journey.probe:migration_policy"}}}
     act_entry.data = act_data
 
     local policy_entry = assert(registry.get("bee:approver_policies"))
     local policy_data = object(policy_entry.data)
     local policies = policy_data.policies :: {unknown}
     policies[#policies + 1] = {name = APPROVAL_POLICY,
-        approvers = {"bee.app_journey.operator", {definition_id = "bee.inbox:app"}}, max_ttl_ms = 600000}
+        approvers = {"bee.app_journey.operator", {definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 600000}
     policy_data.policies = policies
     policy_entry.data = policy_data
 
@@ -430,9 +430,9 @@ local function configure_host(workspace_id: string, local_node: string)
     assert(changes:update(policy_entry))
     local applied, apply_error = changes:apply()
     if not applied then error("apply host delivery profiles: " .. tostring(apply_error)) end
-    local selected = assert(registry.get("bee.governance.registry:activation_profiles_ref"))
+    local selected = assert(registry.get("bee.gov:activation_profiles_ref"))
     local selected_data = object(selected.data)
-    if selected_data.resource_ref ~= "bee:governance_activation_profiles" then
+    if selected_data.resource_ref ~= "bee.env:gov_activation_profiles" then
         error("activation profile requirement did not retain the default selection")
     end
     local retained = assert(registry.get(selected_data.resource_ref :: string))
@@ -443,7 +443,7 @@ local function configure_host(workspace_id: string, local_node: string)
 end
 
 local function main()
-    local workspace_id = bounds.id(env.get("bee.app_journey_probe:destination_workspace"))
+    local workspace_id = bounds.id(env.get("bee.app.journey.probe:destination_workspace"))
     if not workspace_id then error("destination workspace identity is unavailable") end
     if registry.get(DEFINITION_ID) then error("candidate must be absent before governed activation") end
     -- Admission is already bound by the host, and that binding alone admits
@@ -465,21 +465,21 @@ local function main()
 
     -- Author into a governed workspace and freeze it, exactly as a person
     -- editing the source tree would.
-    local create_res = call_api("bee.governance.binding:overlay_call", {operation = "create",
+    local create_res = call_api("bee.gov.binding:overlay_call", {operation = "create",
         overlay_id = SOURCE_WORKSPACE, expected_revision = 0, idempotency_key = "create-" .. SOURCE_WORKSPACE})
     if create_res.revision ~= 1 then error("workspace create revision expected 1") end
-    local put_res = call_api("bee.governance.binding:overlay_call", {operation = "put", overlay_id = SOURCE_WORKSPACE,
+    local put_res = call_api("bee.gov.binding:overlay_call", {operation = "put", overlay_id = SOURCE_WORKSPACE,
         expected_revision = 1, idempotency_key = "put-entries-" .. SOURCE_WORKSPACE, path = "entries.json",
         content = json.encode(measured.entries)})
     if put_res.revision ~= 2 then error("workspace put revision expected 2") end
-    local freeze_res = call_api("bee.governance.binding:overlay_call", {operation = "freeze",
+    local freeze_res = call_api("bee.gov.binding:overlay_call", {operation = "freeze",
         overlay_id = SOURCE_WORKSPACE, expected_revision = 2, idempotency_key = "freeze-" .. SOURCE_WORKSPACE})
     local snapshot_digest = digest_of(freeze_res.digest, "frozen overlay digest")
 
     local local_node = assert(system.node.id())
     configure_host(workspace_id, local_node)
 
-    local pub_res = call_api("bee.governance.binding:publication_call", {operation = "prepare", workspace_id = workspace_id,
+    local pub_res = call_api("bee.gov.binding:publication_call", {operation = "prepare", workspace_id = workspace_id,
         component = COMPONENT, version = VERSION, snapshot_digest = snapshot_digest})
     local descriptor = object(pub_res.descriptor)
     local manifest = object(descriptor.manifest)
@@ -487,7 +487,7 @@ local function main()
         error("descriptor artifact digest does not match the authored artifact")
     end
 
-    local available = call_api("bee.governance.binding:destination_call", {operation = "available", workspace_id = workspace_id})
+    local available = call_api("bee.gov.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
     for _, raw in ipairs(available.versions :: {unknown}) do
         local item = object(raw)
@@ -495,14 +495,14 @@ local function main()
     end
     if not found then error("prepared descriptor was not discoverable by the destination") end
 
-    local stage_res = call_api("bee.governance.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
+    local stage_res = call_api("bee.gov.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
         source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
         descriptor_digest = descriptor.digest, idempotency_key = "stage-" .. workspace_id})
     if stage_res.status ~= "staged" or stage_res.selected == true then error("staged plan is not staged-and-unselected") end
 
     -- The staged plan is the review surface: its exact artifact bytes and the
     -- destination's own preflight report, verified against its digest.
-    local staged = call_api("bee.governance.binding:destination_call", {operation = "get", workspace_id = workspace_id,
+    local staged = call_api("bee.gov.binding:destination_call", {operation = "get", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = VERSION})
     local plan_digest = digest_of(staged.plan_digest, "staged plan digest")
     if staged.artifact_digest ~= artifact_digest then error("staged plan carries another artifact digest") end
@@ -515,19 +515,19 @@ local function main()
         error("staged plan does not report the logical pending migration")
     end
 
-    local review_res = call_api("bee.governance.binding:destination_call", {operation = "review", workspace_id = workspace_id,
+    local review_res = call_api("bee.gov.binding:destination_call", {operation = "review", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = VERSION,
         expected_revision = staged.revision, idempotency_key = "review-" .. workspace_id,
         review_status = "accepted", review_reason = "app journey acceptance review"})
     if review_res.review_status ~= "accepted" then error("plan was not reviewed accepted") end
 
-    local select_res = call_api("bee.governance.binding:destination_call", {operation = "select", workspace_id = workspace_id,
+    local select_res = call_api("bee.gov.binding:destination_call", {operation = "select", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = VERSION,
         expected_revision = review_res.revision, idempotency_key = "select-" .. workspace_id})
     if select_res.selected ~= true then error("plan was not selected") end
 
     local intent_id, receipt_key = "intent-" .. workspace_id, "receipt-" .. workspace_id
-    local prepared = call_api("bee.governance.binding:destination_call", {operation = "prepare", workspace_id = workspace_id,
+    local prepared = call_api("bee.gov.binding:destination_call", {operation = "prepare", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = VERSION,
         intent_id = intent_id, receipt_key = receipt_key})
     if prepared.phase ~= "approval_bound" then error("prepared activation phase expected approval_bound") end
@@ -545,7 +545,7 @@ local function main()
         error("a decision on another proposal digest was refused with " .. fault_code(misdirected) .. " instead of CONFLICT")
     end
 
-    local pending = call_api("bee.governance.binding:destination_call", {operation = "step", workspace_id = workspace_id,
+    local pending = call_api("bee.gov.binding:destination_call", {operation = "step", workspace_id = workspace_id,
         intent_id = intent_id, receipt_key = receipt_key})
     if pending.phase == "settled" or registry.get(DEFINITION_ID) then
         error("unapproved candidate was applied")
@@ -558,7 +558,7 @@ local function main()
 
     local stepped: Object = prepared
     for _ = 1, 8 do
-        stepped = call_api("bee.governance.binding:destination_call", {operation = "step", workspace_id = workspace_id,
+        stepped = call_api("bee.gov.binding:destination_call", {operation = "step", workspace_id = workspace_id,
             intent_id = intent_id, receipt_key = receipt_key})
         if stepped.phase == "settled" then break end
     end
@@ -568,7 +568,7 @@ local function main()
 
     -- The settled record is the fence's evidence: the composed base this
     -- overlay landed on is the one the owner reviewed and approved.
-    local status = call_api("bee.governance.binding:destination_call", {operation = "status",
+    local status = call_api("bee.gov.binding:destination_call", {operation = "status",
         workspace_id = workspace_id, intent_id = intent_id})
     if status.plan_digest ~= plan_digest then error("settled activation records another plan digest") end
     -- The proposal the owner decided binds this authorization digest, which
@@ -621,7 +621,7 @@ local function main()
 
     -- Overlay authority is the activation owner's alone. This caller drove
     -- the whole governed chain and still cannot materialize an overlay.
-    local forced, force_error = materializer.reconcile("bee.app_journey_probe:forbidden_overlay", measured.entries)
+    local forced, force_error = materializer.reconcile("bee.app.journey.probe:forbidden_overlay", measured.entries)
     if forced then error("a caller outside the activation owner materialized an overlay") end
     if not force_error then error("the refused overlay write reported no reason") end
 

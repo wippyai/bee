@@ -57,12 +57,12 @@ end
 local function define_tests()
     test.describe("governed application catalog", function()
         test.it("scopes a measured binding and withdraws it with its host profile", function()
-            local original = assert(registry.get("bee:governance_activation_profiles"))
+            local original = assert(registry.get("bee.env:gov_activation_profiles"))
             local definition = app()
             local selected_profile = profile(APP)
             local derived = measured(selected_profile, definition)
             local install = registry.snapshot():changes()
-            local configured = assert(registry.get("bee:governance_activation_profiles"))
+            local configured = assert(registry.get("bee.env:gov_activation_profiles"))
             configured.data = {profiles = {selected_profile}}
             assert(install:update(configured))
             assert(install:create(definition))
@@ -82,7 +82,7 @@ local function define_tests()
             test.is_true(selected.evidence ~= "")
 
             local withdraw = registry.snapshot():changes()
-            local withdrawn = assert(registry.get("bee:governance_activation_profiles"))
+            local withdrawn = assert(registry.get("bee.env:gov_activation_profiles"))
             local withdrawn_profile = profile(APP)
             withdrawn_profile.applications = {}
             withdrawn.data = {profiles = {withdrawn_profile}}
@@ -102,7 +102,7 @@ local function define_tests()
         test.it("admits an application this node authored under the host's workspace-application rule", function()
             local node = assert(system.node.id())
             local derived_app = "app.catalog_probe:app"
-            local derived_owner = "bee.governance.workspace_applications:" .. WORKSPACE .. ".catalog_probe"
+            local derived_owner = "bee.gov.apps:" .. WORKSPACE .. ".catalog_probe"
             local definition = app(derived_app)
             local rule_profile = {applications = {{definition_id = derived_app, policies = {POLICY}, thread_access = "none"}}}
             local derived = project(rule_profile, definition, derived_owner, node, "catalog_probe")
@@ -110,8 +110,8 @@ local function define_tests()
             local foreign_definition = app(foreign_app)
             local foreign = project({applications = {{definition_id = foreign_app, policies = {POLICY},
                 thread_access = "none"}}}, foreign_definition,
-                "bee.governance.workspace_applications:" .. WORKSPACE .. ".catalog_foreign", "node-remote", "catalog_foreign")
-            local original = assert(registry.get("bee:governance_activation_profiles"))
+                "bee.gov.apps:" .. WORKSPACE .. ".catalog_foreign", "node-remote", "catalog_foreign")
+            local original = assert(registry.get("bee.env:gov_activation_profiles"))
             local install = registry.snapshot():changes()
             assert(install:create(definition))
             assert(install:create(derived))
@@ -125,7 +125,7 @@ local function define_tests()
             test.is_false(has(catalog.read(FOREIGN), derived_app))
 
             local withdraw = registry.snapshot():changes()
-            local withdrawn = assert(registry.get("bee:governance_activation_profiles"))
+            local withdrawn = assert(registry.get("bee.env:gov_activation_profiles"))
             withdrawn.data = {profiles = {}}
             assert(withdraw:update(withdrawn))
             assert(withdraw:apply())

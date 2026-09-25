@@ -12,7 +12,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-") as temporary:
     folder = Path(temporary) / "project"
     folder.mkdir()
     state = Path(temporary) / "state"
-    ui = NativeDesktop(binary, folder, state, application="bee.modules:app")
+    ui = NativeDesktop(binary, folder, state, application="bee.hub.modules:app")
     try:
         ui.wait("MODULES", timeout=20)
         ui.wait("Keyword: bee")

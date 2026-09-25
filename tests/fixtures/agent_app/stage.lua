@@ -13,9 +13,9 @@ local preflight = require("preflight")
 
 type Object = {[string]: unknown}
 
-local INPUTS = "bee.agent_app_probe:inputs"
+local INPUTS = "bee.agent.app.probe:inputs"
 local COMPONENT = "bee.agent_app_demo/app"
-local OVERLAY_OWNER = "bee.agent_app_probe:activation_overlay"
+local OVERLAY_OWNER = "bee.agent.app.probe:activation_overlay"
 local APPROVAL_POLICY = "local-agent-app-delivery"
 local NAMESPACE = "bee.agent_app_demo"
 
@@ -62,7 +62,7 @@ end
 -- profile: a plan the destination still lists resolves against the profile it
 -- was staged under.
 local function configure(workspace_id: string, local_node: string, source_workspace: string)
-    local publication = registry.get("bee:governance_publication_profiles")
+    local publication = registry.get("bee.env:gov_publication_profiles")
     if not publication then error("publication profiles are unavailable") end
     local publication_data = object(publication.data)
     local publication_profiles: {unknown} = {}
@@ -77,7 +77,7 @@ local function configure(workspace_id: string, local_node: string, source_worksp
     publication_data.profiles = publication_profiles
     publication.data = publication_data
 
-    local activation = registry.get("bee:governance_activation_profiles")
+    local activation = registry.get("bee.env:gov_activation_profiles")
     if not activation then error("activation profiles are unavailable") end
     local activation_data = object(activation.data)
     local activation_profiles: {unknown} = {}
@@ -111,7 +111,7 @@ local function configure(workspace_id: string, local_node: string, source_worksp
     end
     if not declared then
         policies[#policies + 1] = {name = APPROVAL_POLICY,
-            approvers = {{definition_id = "bee.inbox:app"}}, max_ttl_ms = 600000}
+            approvers = {{definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 600000}
     end
     approver_data.policies = policies
     approvers.data = approver_data
@@ -134,7 +134,7 @@ local function main()
     local local_node = assert(system.node.id())
     configure(workspace_id, local_node, source_workspace)
 
-    local prepared = call_api("bee.governance.binding:publication_call", {operation = "prepare", workspace_id = workspace_id,
+    local prepared = call_api("bee.gov.binding:publication_call", {operation = "prepare", workspace_id = workspace_id,
         component = COMPONENT, version = version, snapshot_digest = snapshot_digest})
     local descriptor = object(prepared.descriptor)
     local manifest = object(descriptor.manifest)
@@ -142,7 +142,7 @@ local function main()
         error("the prepared descriptor carries another artifact than the one the agent froze")
     end
 
-    local available = call_api("bee.governance.binding:destination_call", {operation = "available", workspace_id = workspace_id})
+    local available = call_api("bee.gov.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
     for _, raw in ipairs(available.versions :: {unknown}) do
         local item = object(raw)
@@ -150,14 +150,14 @@ local function main()
     end
     if not found then error("the prepared descriptor was not discoverable by the destination") end
 
-    local staged_reply = call_api("bee.governance.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
+    local staged_reply = call_api("bee.gov.binding:destination_call", {operation = "stage", workspace_id = workspace_id,
         source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
         descriptor_digest = descriptor.digest, idempotency_key = "stage-" .. source_workspace .. "-" .. version})
     if staged_reply.status ~= "staged" or staged_reply.selected == true then
         error("the agent's version did not stage as an unselected plan")
     end
 
-    local staged = call_api("bee.governance.binding:destination_call", {operation = "get", workspace_id = workspace_id,
+    local staged = call_api("bee.gov.binding:destination_call", {operation = "get", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = source_workspace, version = version})
     if staged.artifact_digest ~= artifact_digest then error("the staged plan carries another artifact digest") end
     local report, report_error = preflight.decode_report(staged.preflight_bytes, staged.preflight_digest)
@@ -171,7 +171,7 @@ local function main()
     local added: {unknown} = table.create(1, 0)
     local modified: {unknown} = table.create(1, 0)
     if report.ready == true and #report.diagnostics == 0 then
-        local changes = call_api("bee.governance.binding:destination_call", {operation = "changes", workspace_id = workspace_id,
+        local changes = call_api("bee.gov.binding:destination_call", {operation = "changes", workspace_id = workspace_id,
             source_node = local_node, source_workspace = source_workspace, version = version})
         for _, raw in ipairs(changes.added :: {unknown}) do
             local item = object(raw)

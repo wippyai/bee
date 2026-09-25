@@ -53,6 +53,16 @@ local function define_tests()
             test.is_nil(admission.id("bad\nowner"))
         end)
 
+        test.it("retains the admission identity measured by an older workspace activation", function()
+            local old_owner = "bee.governance.workspace_applications:workspace-a.todo"
+            local value = record()
+            value.overlay_owner = old_owner
+            local measured = assert(admission.measure(value))
+            test.eq(measured.id, admission.prior_id(old_owner))
+            local restored = assert(admission.entry(measured.bytes, measured.digest))
+            test.eq(restored.id, measured.id)
+        end)
+
         test.it("canonically decodes immutable bytes and builds the derived registry entry", function()
             local measured = assert(admission.measure(record()))
             local decoded = assert(admission.decode(measured.bytes, measured.digest))
@@ -68,7 +78,7 @@ local function define_tests()
         test.it("reserves every prefix identity, including malformed forgery suffixes", function()
             test.is_true(admission.reserved(admission.RESERVED_PREFIX .. "not-a-digest"))
             test.is_true(admission.reserved(assert(admission.id("bee.apps:workspace-a"))))
-            test.is_false(admission.reserved("bee.governance:ordinary"))
+            test.is_false(admission.reserved("bee.gov:ordinary"))
         end)
 
         test.it("rejects unknown authority and malformed thread access", function()
@@ -154,7 +164,7 @@ local function define_tests()
         end)
         test.it("measures a host-generated policy in the same atomic overlay", function()
             local value = projection()
-            local id = "bee.governance.grants:policy." .. DIGEST
+            local id = "bee.gov.grants:policy." .. DIGEST
             local binding = (value.bindings :: {{[string]: unknown}})[1]
             binding.policies = {"bee:ordinary-policy", id}
             value.overlay_ids = {[id] = true}

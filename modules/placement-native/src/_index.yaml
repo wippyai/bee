@@ -59,14 +59,14 @@ entries:
   targets:
   - entry: bee.placement.native:runner_host_ref
     path: .host_ref
-  - entry: bee.placement.native:sweeper_service
+  - entry: bee.placement.native.service:sweeper_service
     path: .host
 - name: sweeper_policies
   kind: ns.requirement
   meta:
     comment: Host-selected policy grants for the supervision sweeper
   targets:
-  - entry: bee.placement.native:sweeper_service
+  - entry: bee.placement.native.service:sweeper_service
     path: .lifecycle.security.policies
 - name: target_executor
   kind: ns.requirement
@@ -131,80 +131,13 @@ entries:
   meta:
     type: bee.resource_ref
     comment: The linked host resource-mode policy; target_resource_mode fills resource_ref
-- name: executable
-  kind: library.lua
-  source: file://service/executable.lua
-  modules: [fs, hash]
-  imports:
-    resources: bee.placement.native:resources
-    types: bee.placement:types
-- name: migrations
-  kind: library.lua
-  source: file://migrations/migrations.lua
 - name: resources
   kind: library.lua
-  source: file://registry/resources.lua
+  source: file://resources.lua
   modules: [registry, env, system]
-- name: store
-  kind: library.lua
-  source: file://persist/store.lua
-  modules: [sql, json, time]
-  imports:
-    persist: bee.persist:database
-    migrations: bee.placement.native:migrations
-    resources: bee.placement.native:resources
-    types: bee.placement:types
-    transitions: bee.placement:transitions
-    request_protocol: bee.placement:request
-    configuration: bee.driver:configuration
-- name: capability
-  kind: library.lua
-  source: file://service/capability.lua
-  modules: [exec]
-  imports:
-    types: bee.placement:types
-    resources: bee.placement.native:resources
-- name: homes
-  kind: library.lua
-  source: file://service/homes.lua
-  modules: [fs, hash]
-  imports:
-    formats: bee.credentials:formats
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    resources: bee.placement.native:resources
-- name: identity
-  kind: library.lua
-  source: file://service/identity.lua
-  modules: [exec]
-  imports:
-    resources: bee.placement.native:resources
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-- name: service
-  kind: library.lua
-  source: file://service/service.lua
-  modules: [process, channel, time, security, uuid, json, funcs, registry]
-  imports:
-    gateway_configuration: bee.gateway.registry:configuration
-    configuration: bee.driver:configuration
-    preferences: bee.driver:preferences
-    resolver: bee.driver:resolver
-    placement_resolver: bee.placement.registry:resolver
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    types: bee.placement:types
-    request: bee.placement:request
-    transitions: bee.placement:transitions
-    store: bee.placement.native:store
-    executable: bee.placement.native:executable
-    resources: bee.placement.native:resources
-    capability: bee.placement.native:capability
-    homes: bee.placement.native:homes
-    identity: bee.placement.native:identity
-    protocol: bee.placement.native:protocol
-    materialization: bee.placement.native:materialization
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -213,168 +146,6 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     types: bee.placement:types
-- name: materialization
-  kind: library.lua
-  source: file://service/materialization.lua
-  modules: [env, fs, funcs, sql, process, hash]
-  imports:
-    store: bee.placement.native:store
-    resources: bee.placement.native:resources
-    homes: bee.placement.native:homes
-    configuration: bee.placement.native:configuration
-    types: bee.placement:types
-- name: runner
-  kind: process.lua
-  source: file://service/runner.lua
-  method: main
-  modules: [process, channel, time, exec, funcs]
-  imports:
-    materialization: bee.placement.native:materialization
-    store: bee.placement.native:store
-    executable: bee.placement.native:executable
-    resources: bee.placement.native:resources
-    identity: bee.placement.native:identity
-    protocol: bee.placement.native:protocol
-    quote: bee.driver.kit:quote
-    types: bee.placement:types
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_runner_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_materialize_policy]
-- name: window
-  kind: library.lua
-  source: file://service/window.lua
-  modules: [process, exec, tty, security, funcs]
-  imports:
-    protocol: bee.placement.native:protocol
-    store: bee.placement.native:store
-    resources: bee.placement.native:resources
-    materialization: bee.placement.native:materialization
-    executable: bee.placement.native:executable
-    quote: bee.driver.kit:quote
-    service: bee.placement.native:service
-    bounds: bee.threads.records:bounds
-    identity: bee.placement.native:identity
-- name: sweeper
-  kind: process.lua
-  source: file://service/sweeper.lua
-  method: main
-  modules: [process, channel, time]
-  imports:
-    service: bee.placement.native:service
-- name: sweeper_service
-  kind: process.service
-  process: bee.placement.native:sweeper
-  lifecycle:
-    auto_start: true
-    security:
-      actor: {id: bee.placement.sweeper}
-      policies: []
-- name: binding
-  kind: contract.binding
-  contracts:
-  - contract: bee.placement:placement
-    methods:
-      prepare: bee.placement.native:prepare
-      start: bee.placement.native:start
-      status: bee.placement.native:status
-      stop: bee.placement.native:stop
-      reconcile: bee.placement.native:reconcile
-      cleanup: bee.placement.native:cleanup
-      evidence: bee.placement.native:evidence
-      attach: bee.placement.native:attach
-      capabilities: bee.placement.native:capabilities
-      measure_executable: bee.placement.native:measure_executable
-      close_stdin: bee.placement.native:close_stdin
-  meta:
-    type: placement
-    placement_kind: native
-- name: prepare
-  kind: function.lua
-  source: file://binding/prepare_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: start
-  kind: function.lua
-  source: file://binding/start_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: status
-  kind: function.lua
-  source: file://binding/status_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: stop
-  kind: function.lua
-  source: file://binding/stop_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: capabilities
-  kind: function.lua
-  source: file://binding/capabilities_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: measure_executable
-  kind: function.lua
-  source: file://binding/measure_executable_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: close_stdin
-  kind: function.lua
-  source: file://binding/close_stdin_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: reconcile
-  kind: function.lua
-  source: file://binding/reconcile_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: cleanup
-  kind: function.lua
-  source: file://binding/cleanup_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: evidence
-  kind: function.lua
-  source: file://binding/evidence_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
-- name: attach
-  kind: function.lua
-  source: file://binding/attach_method.lua
-  method: handle
-  imports:
-    service: bee.placement.native:service
-  security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: environment
   kind: env.storage.os
   lifecycle:

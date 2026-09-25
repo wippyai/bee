@@ -129,8 +129,8 @@ func (e *Endpoint) OwnerSupervisor(ctx context.Context) (pid.PID, error) {
 	if err := ctx.Err(); err != nil {
 		return pid.PID{}, err
 	}
-	found, ok := e.names.Lookup("bee.hive_host.supervisor")
-	if !ok || found.Node != e.id.Node || found.Host != "bee.hive_host:supervisor_host" || found.UniqID == "" {
+	found, ok := e.names.Lookup("bee.hive.supervisor")
+	if !ok || found.Node != e.id.Node || found.Host != "bee.hive.service:supervisor_host" || found.UniqID == "" {
 		return pid.PID{}, errors.New("mesh endpoint: node supervisor is not registered")
 	}
 	return found, nil

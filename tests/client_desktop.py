@@ -31,7 +31,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         shell_home = root / "shell-home"
         shell_home.mkdir()
         (shell_home / ".bashrc").write_text("PS1='$ '\n")
-        console = project / "src/apps/console/_index.yaml"
+        console = project / "src/console/_index.yaml"
         manifest = yaml.safe_load(console.read_text())
         executor = next(entry for entry in manifest["entries"] if entry["name"] == "executor")
         executor["default_env"]["HOME"] = str(shell_home)
@@ -150,12 +150,12 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         shutil.copytree(ROOT / "tests/fixtures/client_storage/client_database", project / "src/client_databases")
         databases = project / "src/client_databases/_index.yaml"
         database_entries = yaml.safe_load(databases.read_text())
-        database_entries["entries"].append({"name": "observer", "kind": "db.sql.sqlite", "file": "${env:bee:client_db_path}.observer"})
-        database_entries["entries"].append({"name": "status", "kind": "db.sql.sqlite", "file": "${env:bee:client_db_path}.status"})
+        database_entries["entries"].append({"name": "observer", "kind": "db.sql.sqlite", "file": "${env:bee.env:client_db_path}.observer"})
+        database_entries["entries"].append({"name": "status", "kind": "db.sql.sqlite", "file": "${env:bee.env:client_db_path}.status"})
         databases.write_text(yaml.safe_dump(database_entries, sort_keys=False))
-        config = project / "src/_index.yaml"
+        config = project / "src/env/_index.yaml"
         value = yaml.safe_load(config.read_text())
-        value["entries"].append({"name": "client_db_path", "kind": "env.variable", "storage": "bee.environment:workspace_environment",
+        value["entries"].append({"name": "client_db_path", "kind": "env.variable", "storage": "bee.env:workspace_environment",
                                  "variable": "BEE_CLIENT_DB", "default": str(root / "build-client.db"), "readonly": True})
         config.write_text(yaml.safe_dump(value, sort_keys=False))
         if command in ("thread-status-probe", "retained-supervisor-probe"):

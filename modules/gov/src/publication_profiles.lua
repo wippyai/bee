@@ -59,8 +59,8 @@ local function derived(configuration: Configuration, workspace_id: string, sourc
 end
 
 local function refusal(configuration: Configuration, source_workspace: string, reason: string?): Refusal
-    local configure = "a host adds a publication profile for it to bee:governance_publication_profiles"
-        .. " and an activation profile to bee:governance_activation_profiles"
+    local configure = "a host adds a publication profile for it to bee.env:gov_publication_profiles"
+        .. " and an activation profile to bee.env:gov_activation_profiles"
     return {message = reason or ("this workspace has no publication profile for overlay " .. source_workspace),
         remedy = configuration.workspace_applications and (workspace_applications.RULE .. "; or " .. configure)
             or configure}

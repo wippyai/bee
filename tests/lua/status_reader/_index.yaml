@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.status_reader
+namespace: bee.status.reader
 entries:
 - name: presentation_test
   kind: function.lua

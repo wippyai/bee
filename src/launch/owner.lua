@@ -43,7 +43,7 @@ local function main()
         -- spawn dies with "name already registered". When the host configured
         -- desktop admission, the desktop bridge composes it and forwards its
         -- readiness here.
-        local service = registry.get("bee.hive_host:supervisor_service")
+        local service = registry.get("bee.hive.service:supervisor_service")
         bridged = ownership.desktop_bridge(service and service.data)
         if ownership.spawn_retained(bridged) then
             local started, start_error = process.with_options({}):with_context({["bee.retained_owner"] = self})

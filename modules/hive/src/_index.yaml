@@ -27,12 +27,11 @@ entries:
   source: file://client.lua
   modules: [process, channel, time, uuid]
   imports: {types: bee.hive:types, bounds: bee.hive:bounds}
-- name: replica_sender
+- name: catalog
   kind: library.lua
-  source: file://replica_sender.lua
-  modules: [hash, base64]
+  source: file://catalog.lua
+  modules: [registry, security, json, hash]
   imports:
-    hive: bee.hive:client
-    version: bee.sync:version
-    transaction: bee.persist:transaction
-    bounds: bee.sync:bounds
+    canonical: bee.threads.records:canonical
+    bounds: bee.hive:bounds
+    types: bee.hive:types

@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.attachment_probe
+namespace: bee.attachment.probe
 entries:
 - name: client_policy
   kind: security.policy
@@ -11,13 +11,13 @@ entries:
   kind: security.policy
   policy:
     actions: [process.spawn, process.spawn.monitored]
-    resources: [bee.attachment_probe:observer_producer, bee.attachment_probe:observer_consumer, bee.attachment_probe:host_guest, bee.attachment_probe:controller, bee.attachment_probe:client, bee.attachment_probe:renderer]
+    resources: [bee.attachment.probe:observer_producer, bee.attachment.probe:observer_consumer, bee.attachment.probe:host_guest, bee.attachment.probe:controller, bee.attachment.probe:client, bee.attachment.probe:renderer]
     effect: allow
 - name: naming_policy
   kind: security.policy
   policy:
     actions: [process.registry.register, process.registry.unregister]
-    resources: [bee.attachment_probe.host]
+    resources: [bee.attachment.probe.host]
     effect: allow
 - name: owner
   kind: process.lua
@@ -25,10 +25,10 @@ entries:
   method: main
   modules: [process, channel, time, security, tty, json, logger]
   imports:
-    terminal_probe: bee.attachment_probe:terminal
-    observation_probe: bee.attachment_probe:observation
-    host_probe: bee.attachment_probe:host
-    clients_probe: bee.attachment_probe:clients
+    terminal_probe: bee.attachment.probe:terminal
+    observation_probe: bee.attachment.probe:observation
+    host_probe: bee.attachment.probe:host
+    clients_probe: bee.attachment.probe:clients
     decode: bee.protocol:decode
     model: bee.desktop:model
     appearance: bee.application:appearance
@@ -39,7 +39,7 @@ entries:
       name: attachment-probe
       security:
         actor: {id: attachment-test}
-        policies: [bee.security.desktop:desktop_policy, bee.attachment_probe:core_spawn_policy, bee.security.storage:workspace_storage_policy, bee.attachment_probe:observation_policy]
+        policies: [bee.security.desktop:desktop_policy, bee.attachment.probe:core_spawn_policy, bee.security.storage:workspace_storage_policy, bee.attachment.probe:observation_policy]
 - name: observation
   kind: library.lua
   source: file://observation.lua
@@ -146,6 +146,6 @@ entries:
     resources:
     - bee.host:main
     - bee.session:main
-    - bee.applications:broker
+    - bee.apps:broker
     - bee.terminal:main
     effect: allow

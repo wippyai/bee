@@ -28,6 +28,8 @@ entries:
   parameters:
   - name: bee.threads:process_host
     value: bee:hub_workers
+  - name: bee.threads:waiter_policies
+    value: [bee:thread_waiter_policy]
 - name: thread_storage_policy
   kind: security.policy
   policy:

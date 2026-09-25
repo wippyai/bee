@@ -85,7 +85,7 @@ while read -r module version expected_hash; do
     [ "$definitions" = 1 ] || fail "$module has $definitions namespace definitions"
     case "$module" in
         bee/bee) source=$root/src/_index.yaml ;;
-        bee/governance) source=$root/modules/gov/src/_index.yaml ;;
+        bee/gov) source=$root/modules/gov/src/_index.yaml ;;
         *) source=$root/modules/$name/src/_index.yaml ;;
     esac
     expected_namespace=$(awk -F': ' '/^namespace:/{print $2; exit}' "$source")

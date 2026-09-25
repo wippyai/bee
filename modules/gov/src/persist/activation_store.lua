@@ -524,7 +524,9 @@ function M.applied(store: Store, component_raw: unknown): Result
     local component = bounds.text(component_raw, 160)
     if not component or component == "" then return failure("INVALID", "migration component is invalid") end
     return transaction.read(store.db, "governance activation", function(tx): Result
-        local rows, err = tx:query("SELECT a.target_db, a.migration_id, a.ordinal, a.checksum, a.component, a.intent_id, i.migration_work_bytes, i.migration_work_digest FROM bee_governance_applied_migrations a JOIN bee_governance_activation_intents i ON i.owner_node = a.owner_node AND i.workspace_id = a.workspace_id AND i.intent_id = a.intent_id WHERE a.owner_node = ? AND a.workspace_id = ? AND a.component = ? ORDER BY a.target_db, a.ordinal, a.migration_id", {store.node, store.workspace, component})
+        -- Old package evidence retains its captured package and digest. Read it
+        -- under the renamed package without rewriting immutable intent bytes.
+        local rows, err = tx:query("SELECT a.target_db, a.migration_id, a.ordinal, a.checksum, a.component, a.intent_id, i.migration_work_bytes, i.migration_work_digest FROM bee_governance_applied_migrations a JOIN bee_governance_activation_intents i ON i.owner_node = a.owner_node AND i.workspace_id = a.workspace_id AND i.intent_id = a.intent_id WHERE a.owner_node = ? AND a.workspace_id = ? AND (a.component = ? OR (? = 'bee/gov' AND a.component = 'bee/governance')) ORDER BY a.target_db, a.ordinal, a.migration_id", {store.node, store.workspace, component, component})
         if not rows then return storage(err, "read applied migrations") end
         local migrations: Object = {}
         local databases: Object = {}
@@ -553,7 +555,9 @@ function M.applied(store: Store, component_raw: unknown): Result
                 return failure("CONFLICT", "applied migration database evidence differs: " .. tostring(row.target_db))
             end
             databases[row.target_db :: string] = database
-            migrations[(row.target_db :: string) .. "\n" .. (row.migration_id :: string)] = {
+            local key = (row.target_db :: string) .. "\n" .. (row.migration_id :: string)
+            if migrations[key] then return failure("CONFLICT", "applied migration identities overlap across package names") end
+            migrations[key] = {
                 id = row.migration_id, target_db = row.target_db, ordinal = row.ordinal, checksum = row.checksum}
         end
         return transaction.success({migrations = migrations, databases = databases}, false)

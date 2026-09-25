@@ -1,0 +1,86 @@
+version: '1.0'
+namespace: bee.hive.manager
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, time, uuid, registry, system]
+  imports:
+    frame: bee.application:frame
+    client: bee.application:client
+    appearance: bee.application:appearance
+    model: bee.hive.manager:model
+    names: bee.application:names
+    view: bee.hive.manager:view
+    directory: bee.hive.manager:directory
+    hive: bee.hive:client
+    types: bee.hive:types
+    remote: bee.hive.manager:remote
+    desktop_protocol: bee.hive.desktop:protocol
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Hive Manager
+      icon: H
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: hive
+      resume_schema: hive_manager.v1
+      restart_policy: manual
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules: [json]
+  imports:
+    text: bee.application:text
+    directory: bee.hive.manager:directory
+    names: bee.application:names
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    model: bee.hive.manager:model
+    names: bee.application:names
+- name: remote
+  kind: library.lua
+  source: file://remote.lua
+  imports:
+    appearance: bee.application:appearance
+    frame: bee.application:frame
+    names: bee.application:names
+- name: directory
+  kind: library.lua
+  source: file://directory.lua
+  imports:
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+- name: names
+  kind: registry.entry
+  meta:
+    type: bee.hive_node_names
+    comment: Friendly names the host gives node identities for display and selection; a name authenticates nothing and changes no identity
+  data:
+    names: {}
+- name: client_policy
+  kind: security.policy
+  meta:
+    comment: The manager reads runtime membership and its own host entries; every Hive answer comes from the supervisor under the owner's exposure, and no desktop authority is granted here
+  policy:
+    actions: [registry.get, system.read]
+    resources: [bee.hive.manager:names, cluster]
+    effect: allow
+- name: viewer_policy
+  kind: security.policy.expr
+  meta:
+    comment: The manager opens a remote view of another node's workspace in a view process on the display client host; the owner node's bridge still admits that process and grants its mount
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.registry.lookup, process.monitor, tty.attach, tty.read, tty.write, tty.resize, tty.viewport]
+    resources: '*'
+    expression: '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.hive.desktop:viewer") || (action == "process.host" && resource == "bee.hive.desktop:display_host") || (action == "process.registry.lookup" && resource matches "^bee[.]hive[.]supervisor(/.+)?$") || action == "process.monitor" || action == "tty.attach" || action == "tty.read" || action == "tty.write" || action == "tty.resize" || action == "tty.viewport"'
+    effect: allow

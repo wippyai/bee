@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.workspaces
+namespace: bee.workspace.manager
 entries:
 - name: model_test
   kind: function.lua
@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    model: bee.workspaces:model
+    model: bee.workspace.manager:model
     caller: bee.application:caller
 - name: view_test
   kind: function.lua
@@ -18,9 +18,9 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    model: bee.workspaces:model
-    view: bee.workspaces:view
-    creation: bee.workspaces:creation
+    model: bee.workspace.manager:model
+    view: bee.workspace.manager:view
+    creation: bee.workspace.manager:creation
     folder_picker: bee.application:folder_picker
     frame: bee.application:frame
     appearance: bee.application:appearance
@@ -32,6 +32,6 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    creation: bee.workspaces:creation
+    creation: bee.workspace.manager:creation
     folder_picker: bee.application:folder_picker
     caller: bee.application:caller

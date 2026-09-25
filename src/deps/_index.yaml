@@ -11,7 +11,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_sender
-    value: bee.hive:replica_sender
+    value: bee.hive.service:replica_sender
   - name: target_exports
     value: bee:sync_exports
 - name: threads
@@ -30,17 +30,17 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
-- name: governance
+- name: gov
   kind: ns.dependency
-  component: bee/governance
+  component: bee/gov
   version: 0.1.0-dev
   parameters:
   - name: target_db
-    value: bee.governance:db
+    value: bee.gov:db
   - name: target_publication_profiles
-    value: bee:governance_publication_profiles
+    value: bee.env:gov_publication_profiles
   - name: target_activation_profiles
-    value: bee:governance_activation_profiles
+    value: bee.env:gov_activation_profiles
   - name: target_approval_request_policy
     value: bee.security.approvals:approval_request_policy
   - name: target_approval_consume_policy
@@ -128,7 +128,7 @@ entries:
   - name: target_sources
     value: bee:credential_sources
   - name: target_materializer
-    value: bee.placement.native:binding
+    value: bee.placement.native.binding:binding
 - name: placement_native
   kind: ns.dependency
   component: bee/placement-native

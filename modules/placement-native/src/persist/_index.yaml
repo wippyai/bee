@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.placement.native.persist
+entries:
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules: [sql, json, time]
+  imports:
+    persist: bee.persist:database
+    migrations: bee.placement.native.migrations:migrations
+    resources: bee.placement.native:resources
+    types: bee.placement:types
+    transitions: bee.placement:transitions
+    request_protocol: bee.placement:request
+    configuration: bee.driver:configuration

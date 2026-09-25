@@ -92,7 +92,7 @@ end
 local function define_tests()
     test.describe("Governance destination owner", function()
         test.it("binds a selected reviewed plan to an exact local approval", function()
-            local target, open_error = store.open("bee.governance:destination_test_db", "node-d", "workspace-d")
+            local target, open_error = store.open("bee.gov:destination_test_db", "node-d", "workspace-d")
             if not target then error(tostring(open_error)) end
             local stage = {operation = "stage", source_node = "node-s", source_workspace = "application-s", version = "v1",
                 expected_revision = 0, idempotency_key = "stage-d", candidate = blob("candidate-d"),
@@ -114,7 +114,7 @@ local function define_tests()
         end)
 
         test.it("does not request approval before local selection", function()
-            local target, open_error = store.open("bee.governance:destination_refusal_test_db", "node-d", "workspace-d")
+            local target, open_error = store.open("bee.gov:destination_refusal_test_db", "node-d", "workspace-d")
             if not target then error(tostring(open_error)) end
             ok(store.call(target, "local-user", {operation = "stage", source_node = "node-s",
                 source_workspace = "application-s", version = "v1", expected_revision = 0,
@@ -127,7 +127,7 @@ local function define_tests()
         end)
 
         test.it("stages only verified destination replicas and preserves local authority", function()
-            local plans, plan_error = store.open("bee.governance:destination_replica_test_db", "node-d", "workspace-d")
+            local plans, plan_error = store.open("bee.gov:destination_replica_test_db", "node-d", "workspace-d")
             if not plans then error(tostring(plan_error)) end
             local replica_store, replica_error = replicas.open("bee.sync:sync_test_db")
             if not replica_store then error(tostring(replica_error)) end
@@ -144,7 +144,7 @@ local function define_tests()
             assert(store.close(plans))
             assert(replicas.close(replica_store))
 
-            local reopened_plans, reopened_plan_error = store.open("bee.governance:destination_replica_test_db", "node-d", "workspace-d")
+            local reopened_plans, reopened_plan_error = store.open("bee.gov:destination_replica_test_db", "node-d", "workspace-d")
             if not reopened_plans then error(tostring(reopened_plan_error)) end
             local reopened_replicas, reopened_replica_error = replicas.open("bee.sync:sync_test_db")
             if not reopened_replicas then error(tostring(reopened_replica_error)) end

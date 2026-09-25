@@ -11,7 +11,7 @@ local grants = require("capability_grants")
 local vocabulary = require("capability_catalog")
 
 local function inspect()
-    local workspace = env.get("bee.workspace_app_probe:workspace")
+    local workspace = env.get("bee.workspace.app.probe:workspace")
     local identity = assert(naming.identity(workspace, "tally"))
     local installed_entry, installed_error = registry.get(assert(grants.record_id(identity.overlay_owner)))
     if not installed_entry then error("grant record unavailable: " .. tostring(installed_error)) end
@@ -42,15 +42,16 @@ local function inspect()
     local evidence = {capability = capability.capability,
         policy_id = policy_id, policies = policies, approval_id = installed.approval_id,
         revision = installed.revision}
-    local volume = assert(fs.get("bee.workspace_app_probe:grant_evidence"))
+    local volume = assert(fs.get("bee.workspace.app.probe:grant_evidence"))
     assert(volume:writefile("/grant.json", assert(json.encode(evidence))))
     logger:info("WORKSPACE_APP_GRANTS", evidence)
 end
 
 local function main()
-    if env.get("bee.workspace_app_probe:inspect") ~= "1" then return end
+    if env.get("bee.workspace.app.probe:inspect") ~= "1" then return end
     local last_error = "grant record did not arrive"
-    for _ = 1, 300 do
+    -- The UI may wait for approval and activation after this service boots.
+    for _ = 1, 1800 do
         local ok, failure = pcall(inspect)
         if ok then
             return

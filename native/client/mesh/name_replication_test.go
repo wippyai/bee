@@ -90,7 +90,7 @@ func TestEventualNameReplicatesOverGossip(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	name := "bee.hive_host.supervisor/owner"
+	name := "bee.hive.supervisor/owner"
 	ownerRegistry := topapi.GetEventualRegistry(ownerRoot)
 	if ownerRegistry == nil {
 		t.Fatal("owner eventual registry missing")
@@ -99,7 +99,7 @@ func TestEventualNameReplicatesOverGossip(t *testing.T) {
 	if clientRegistry == nil {
 		t.Fatal("client eventual registry missing")
 	}
-	if _, err := ownerRegistry.Register(name, pid.PID{Node: "owner", Host: "bee.hive_host:supervisor_host", UniqID: "0xabc"}); err != nil {
+	if _, err := ownerRegistry.Register(name, pid.PID{Node: "owner", Host: "bee.hive.service:supervisor_host", UniqID: "0xabc"}); err != nil {
 		t.Fatalf("owner register: %v", err)
 	}
 	deadline = time.Now().Add(12 * time.Second)

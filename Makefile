@@ -377,6 +377,10 @@ thread-launch-check: fixture-gateway-client
 cross-session-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/cross_session.py
 
+.PHONY: nested-names-upgrade-check
+nested-names-upgrade-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/nested_names_upgrade.py
+
 .PHONY: docs-agent-check agent-corpus agent-corpus-local
 # The embedded documentation corpus: build the selected runtime references and
 # Bee's own contracts, or verify the committed snapshot offline.

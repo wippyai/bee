@@ -1,19 +1,19 @@
 version: '1.0'
-namespace: bee.workspace_app_probe
+namespace: bee.workspace.app.probe
 entries:
 - name: workspace
   kind: env.variable
-  storage: bee.environment:workspace_environment
+  storage: bee.env:workspace_environment
   variable: BEE_WORKSPACE_APP_WORKSPACE
   readonly: true
 - name: brief
   kind: env.variable
-  storage: bee.environment:workspace_environment
+  storage: bee.env:workspace_environment
   variable: BEE_WORKSPACE_APP_BRIEF
   readonly: true
 - name: inspect
   kind: env.variable
-  storage: bee.environment:workspace_environment
+  storage: bee.env:workspace_environment
   variable: BEE_WORKSPACE_APP_INSPECT
   readonly: true
 - name: grant_evidence
@@ -24,7 +24,7 @@ entries:
   kind: security.policy
   policy:
     actions: [fs.get]
-    resources: [bee.workspace_app_probe:grant_evidence]
+    resources: [bee.workspace.app.probe:grant_evidence]
     effect: allow
 - name: agent_policy
   kind: registry.entry
@@ -76,7 +76,7 @@ entries:
     command_names: []
     binding_ref: bee.driver.claude:binding
     profile_id: batch
-    policy_ref: bee.workspace_app_probe:agent_policy
+    policy_ref: bee.workspace.app.probe:agent_policy
     default_mode: batch
     allowed_overrides:
     - brief
@@ -123,7 +123,7 @@ entries:
     bounds: bee.threads.records:bounds
   security:
     policies:
-    - bee.workspace_app_probe:operator_policy
+    - bee.workspace.app.probe:operator_policy
     - bee.security.harness:carrier_policy
     - bee.security.harness:carrier_environment_policy
     - bee.security.threads:thread_create_policy
@@ -145,7 +145,7 @@ entries:
         actor:
           id: bee.workspace_app.operator
         policies:
-        - bee.workspace_app_probe:operator_policy
+        - bee.workspace.app.probe:operator_policy
         - bee.security.harness:carrier_policy
         - bee.security.harness:carrier_environment_policy
         - bee.security.threads:thread_create_policy
@@ -166,19 +166,19 @@ entries:
   method: main
   modules: [registry, env, logger, time, fs, json]
   imports:
-    catalog: bee.applications:catalog
-    workspace_applications: bee.governance:workspace_applications
-    capability_grants: bee.governance:capability_grants
-    capability_catalog: bee.governance:capability_catalog
+    catalog: bee.apps:catalog
+    workspace_applications: bee.gov:workspace_applications
+    capability_grants: bee.gov:capability_grants
+    capability_catalog: bee.gov:capability_catalog
   security:
-    policies: [bee.workspace_app_probe:operator_policy, bee.workspace_app_probe:grant_evidence_policy]
+    policies: [bee.workspace.app.probe:operator_policy, bee.workspace.app.probe:grant_evidence_policy]
 - name: inspect_grants_service
   kind: process.service
-  process: bee.workspace_app_probe:inspect_grants
+  process: bee.workspace.app.probe:inspect_grants
   host: bee:workers
   lifecycle:
     auto_start: true
     restart: {max_attempts: 1}
     security:
       actor: {id: bee.workspace_app.operator}
-      policies: [bee.workspace_app_probe:operator_policy, bee.workspace_app_probe:grant_evidence_policy]
+      policies: [bee.workspace.app.probe:operator_policy, bee.workspace.app.probe:grant_evidence_policy]

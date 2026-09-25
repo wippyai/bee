@@ -4,8 +4,8 @@ local logger = require("logger")
 local env = require("env")
 local identity = require("identity")
 local function main()
-    local expected = env.get("bee.identity_probe:expected")
-    local executor, executor_error = exec.get("bee.identity_probe:executor")
+    local expected = env.get("bee.identity.probe:expected")
+    local executor, executor_error = exec.get("bee.identity.probe:executor")
     if not executor then error(tostring(executor_error)) end
     local child, child_error = executor:exec("/bin/sleep 20", {process_group = true})
     if not child then executor:release(); error(tostring(child_error)) end

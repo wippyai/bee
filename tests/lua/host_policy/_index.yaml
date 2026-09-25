@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.host_policy_test
+namespace: bee.host.policy.test
 entries:
 - name: fixture_broad_host_policy
   kind: security.policy

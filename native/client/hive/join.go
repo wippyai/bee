@@ -12,7 +12,7 @@ import (
 	"errors"
 )
 
-// The invite operations of the owner supervisor (src/hive_host/supervisor/invites.lua).
+// The invite operations of the owner supervisor (src/hive/supervisor/invites.lua).
 const (
 	JoinService = "bee.hive.join"
 	JoinInvite  = "bee.hive.join:invite"

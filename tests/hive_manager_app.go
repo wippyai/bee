@@ -75,10 +75,10 @@ func exercise(runtime, root, mode string, packed bool) error {
 	if mode != "slow" && updated == string(data) {
 		return fmt.Errorf("missing fake-directory mode for %s", mode)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "src", "apps", "hive", "directory.lua"), []byte(updated), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "src", "hive", "manager", "directory.lua"), []byte(updated), 0600); err != nil {
 		return err
 	}
-	manifest := filepath.Join(dir, "src", "apps", "hive", "_index.yaml")
+	manifest := filepath.Join(dir, "src", "hive", "manager", "_index.yaml")
 	data, err = os.ReadFile(manifest)
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func exercise(runtime, root, mode string, packed bool) error {
 		return err
 	}
 	if mode == "stale" {
-		app := filepath.Join(dir, "src", "apps", "hive", "app.lua")
+		app := filepath.Join(dir, "src", "hive", "manager", "app.lua")
 		data, err := os.ReadFile(app)
 		if err != nil {
 			return err
@@ -126,7 +126,7 @@ func exercise(runtime, root, mode string, packed bool) error {
 	}
 	// The product composition is linted by `make lint`; this proof lints its fixture
 	// and the manager entries it rewrites.
-	if err := run(runtime, dir, "", "lint", "--ns", "bee.hive_manager_probe,bee.hive_manager", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"); err != nil {
+	if err := run(runtime, dir, "", "lint", "--ns", "bee.hive.manager.probe,bee.hive.manager", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"); err != nil {
 		return err
 	}
 	marker := "BEE_HIVE_MANAGER_APP_PROBE: OK " + mode

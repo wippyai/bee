@@ -2,7 +2,7 @@
 -- status, wait for it through its thread and cancel it. It runs as the
 -- calling application's own actor. A launch needs the host to grant the
 -- application bee.harness.launch on that definition and, for another
--- workspace, bee.workspaces.launch on it; status, wait and cancel need the
+-- workspace, bee.workspace.manager.launch on it; status, wait and cancel need the
 -- application to belong to the child's thread, and cancel to own its
 -- attempt. The backend runs in the host-named launch scope and mints no
 -- grant, credential, trait or overlay authority of its own.

@@ -212,7 +212,7 @@ entries:
   meta: {type: test_support}
   modules: [registry]
   imports:
-    resolver: bee.placement.registry:resolver
+    resolver: bee.placement:resolver
 - name: fixture_policy
   kind: registry.entry
   meta:
@@ -402,7 +402,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call, funcs.security]
-    resources: [bee.gateway.binding:open, bee.gateway.binding:check, bee.gateway.binding:revoke, bee.gateway.binding:drain, bee.gateway.binding:ready, bee.gateway.binding:admit, bee.gateway.binding:authorize_materialization, bee.gateway.binding:materialize, bee.gateway.binding:hook_queue, bee.placement.native:evidence, bee.placement.native:status, bee.placement.native:capabilities, bee.placement.native:measure_executable]
+    resources: [bee.gateway.binding:open, bee.gateway.binding:check, bee.gateway.binding:revoke, bee.gateway.binding:drain, bee.gateway.binding:ready, bee.gateway.binding:admit, bee.gateway.binding:authorize_materialization, bee.gateway.binding:materialize, bee.gateway.binding:hook_queue, bee.placement.native.binding:evidence, bee.placement.native.binding:status, bee.placement.native.binding:capabilities, bee.placement.native.binding:measure_executable]
     effect: allow
 - name: agent_launch_acceptance_test
   kind: function.lua
@@ -543,8 +543,8 @@ entries:
       bee.threads.delivery:subscribe, bee.threads.delivery:page, bee.threads.delivery:ack_page, bee.threads.delivery:resume, bee.threads.delivery:unsubscribe,
       bee.threads.service:start_attempt, bee.threads.service:request_turn, bee.threads.service:end_turn, bee.threads.service:receipt,
       bee.threads.carrier:claim, bee.threads.carrier:commit, bee.threads.carrier:checkpoint,
-      bee.placement.native:prepare, bee.placement.native:start, bee.placement.native:status, bee.placement.native:stop, bee.placement.native:reconcile,
-      bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach, bee.driver.claude.binding:prepare, bee.driver.claude.binding:normalize, bee.driver.claude.binding:configure,
+      bee.placement.native.binding:prepare, bee.placement.native.binding:start, bee.placement.native.binding:status, bee.placement.native.binding:stop, bee.placement.native.binding:reconcile,
+      bee.placement.native.binding:cleanup, bee.placement.native.binding:evidence, bee.placement.native.binding:attach, bee.driver.claude.binding:prepare, bee.driver.claude.binding:normalize, bee.driver.claude.binding:configure,
       bee.driver.codex.binding:configure, bee.harness.catalog:configuration_probe, bee.harness.carrier:capabilities, security]
     effect: allow
 - name: carrier_spawn_policy
@@ -946,7 +946,7 @@ entries:
     machine: bee.harness.carrier:machine
     checkpoint: bee.harness.carrier:checkpoint
     hook_records: bee.harness.carrier:hook_records
-    placement_store: bee.placement.native:store
+    placement_store: bee.placement.native.persist:store
 - name: codex_profile_test
   kind: function.lua
   source: file://codex_profile_test.lua
@@ -964,7 +964,7 @@ entries:
     machine: bee.harness.carrier:machine
     types: bee.placement:types
     driver_types: bee.driver:types
-    materialization: bee.placement.native:materialization
+    materialization: bee.placement.native.service:materialization
 - name: selection_test
   kind: function.lua
   source: file://selection_test.lua
@@ -1342,7 +1342,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     launch: bee.driver.codex:launch
-    placement: bee.placement.native:service
+    placement: bee.placement.native.service:service
     placement_fixture: bee.harness.catalog:placement_fixture
 - name: continuation_test
   kind: function.lua

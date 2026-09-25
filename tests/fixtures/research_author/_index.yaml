@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.research_probe
+namespace: bee.research.probe
 entries:
 - name: docs
   kind: function.lua
@@ -10,7 +10,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.research_probe:docs, bee.research_probe:material]
+    resources: [bee.research.probe:docs, bee.research.probe:material]
     effect: allow
 - name: host_policy
   kind: security.policy
@@ -20,8 +20,8 @@ entries:
   source: file://main.lua
   method: main
   modules: [funcs, registry, process, channel, time, json, sql, io, base64]
-  imports: {bounds: bee.threads.records:bounds, artifact: bee.governance:artifact}
-  security: {policies: [bee.research_probe:host_policy]}
+  imports: {bounds: bee.threads.records:bounds, artifact: bee.gov:artifact}
+  security: {policies: [bee.research.probe:host_policy]}
   meta:
     command:
       name: research-live-probe

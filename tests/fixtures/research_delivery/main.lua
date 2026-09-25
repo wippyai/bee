@@ -34,14 +34,14 @@ end
 
 local function recover()
     time.sleep("3s")
-    local input = assert(registry.get("bee.research_delivery:artifact_input"))
+    local input = assert(registry.get("bee.research.delivery:artifact_input"))
     local parsed = object(json.decode(tostring(object(input.data).raw_json)))
     local measured = assert(artifact.create(parsed.entries))
-    local matches, match_error = materializer.matches("bee.research_delivery:activation_overlay", measured.entries)
+    local matches, match_error = materializer.matches("bee.research.delivery:activation_overlay", measured.entries)
     if matches ~= true then
         local states = system.supervisor.states()
         for _, state in ipairs(states or {}) do
-            if tostring(state.id) == "bee:governance_recovery_service" then
+            if tostring(state.id) == "bee:gov_recovery_service" then
                 io.print("RESEARCH_RECOVERY_SERVICE " .. tostring(json.encode(state)))
             end
         end
@@ -53,8 +53,8 @@ end
 
 local function main()
     -- Read supplied artifact from registry entry
-    local input_entry = registry.get("bee.research_delivery:artifact_input")
-    if not input_entry then error("missing bee.research_delivery:artifact_input entry") end
+    local input_entry = registry.get("bee.research.delivery:artifact_input")
+    if not input_entry then error("missing bee.research.delivery:artifact_input entry") end
     local input_data = object(input_entry.data)
     local raw_json = input_data.raw_json
     if type(raw_json) ~= "string" or #raw_json == 0 then
@@ -107,7 +107,7 @@ local function main()
     -- 1 overlay_call create/put entries.json/freeze (test operator actor);
     --   returned snapshot_digest is a new file snapshot, distinct from original artifact digest.
     --   Keep exact entries so artifact digest remains same.
-    local create_res = call_api("bee.governance.binding:overlay_call", {
+    local create_res = call_api("bee.gov.binding:overlay_call", {
         operation = "create",
         overlay_id = SOURCE_WORKSPACE,
         expected_revision = 0,
@@ -116,7 +116,7 @@ local function main()
     assert(create_res.revision == 1, "create revision expected 1")
 
     local entries_json = json.encode(measured.entries)
-    local put_res = call_api("bee.governance.binding:overlay_call", {
+    local put_res = call_api("bee.gov.binding:overlay_call", {
         operation = "put",
         overlay_id = SOURCE_WORKSPACE,
         expected_revision = 1,
@@ -126,7 +126,7 @@ local function main()
     })
     assert(put_res.revision == 2, "put revision expected 2")
 
-    local freeze_res = call_api("bee.governance.binding:overlay_call", {
+    local freeze_res = call_api("bee.gov.binding:overlay_call", {
         operation = "freeze",
         overlay_id = SOURCE_WORKSPACE,
         expected_revision = 2,
@@ -144,12 +144,12 @@ local function main()
     --   overlay_owner host chosen.
     local test_workspace_uuid = tostring(uuid.v7())
     local COMPONENT = "bee.research.demo/app"
-    local OVERLAY_OWNER = "bee.research_delivery:activation_overlay"
+    local OVERLAY_OWNER = "bee.research.delivery:activation_overlay"
     local APPROVAL_POLICY = "local-research-delivery"
     local VERSION = "1.0.0"
     local local_node = assert(system.node.id())
 
-    local pub_entry = assert(registry.get("bee:governance_publication_profiles"))
+    local pub_entry = assert(registry.get("bee.env:gov_publication_profiles"))
     local pub_data = object(pub_entry.data) or {}
     pub_data.profiles = {
         {
@@ -163,7 +163,7 @@ local function main()
 
     -- 3 host activation profile narrow namespace bee.research.demo,
     --   allowed kinds library.lua/process.lua, explicit approval policy and overlay owner.
-    local act_entry = assert(registry.get("bee:governance_activation_profiles"))
+    local act_entry = assert(registry.get("bee.env:gov_activation_profiles"))
     local act_data = object(act_entry.data) or {}
     act_data.profiles = {
         {
@@ -193,7 +193,7 @@ local function main()
     if type(app_policies) ~= "table" then error("host approval policies missing") end
     app_policies[#app_policies + 1] = {
         name = APPROVAL_POLICY,
-        approvers = {"bee.research_delivery.operator"},
+        approvers = {"bee.research.delivery.operator"},
         max_ttl_ms = 60000,
     }
     app_data.policies = app_policies
@@ -208,7 +208,7 @@ local function main()
 
     -- publication_call prepare {operation,workspace_id,component,version,snapshot_digest}.
     -- Verify descriptor manifest artifact_digest matches supplied artifact.
-    local pub_res = call_api("bee.governance.binding:publication_call", {
+    local pub_res = call_api("bee.gov.binding:publication_call", {
         operation = "prepare",
         workspace_id = test_workspace_uuid,
         component = COMPONENT,
@@ -223,7 +223,7 @@ local function main()
 
     -- destination_call available -> stage using returned descriptor/source_owner/feed/version_key/descriptor_digest
     -- -> review accepted -> select -> prepare intent/receipt.
-    local avail_res = call_api("bee.governance.binding:destination_call", {
+    local avail_res = call_api("bee.gov.binding:destination_call", {
         operation = "available",
         workspace_id = test_workspace_uuid,
     })
@@ -239,7 +239,7 @@ local function main()
     end
     assert(found_desc, "prepared descriptor was not listed in destination available versions")
 
-    local stage_res = call_api("bee.governance.binding:destination_call", {
+    local stage_res = call_api("bee.gov.binding:destination_call", {
         operation = "stage",
         workspace_id = test_workspace_uuid,
         source_owner = descriptor.owner_id,
@@ -252,7 +252,7 @@ local function main()
     assert(stage_res.selected ~= true, "staged version must not be selected")
     local stage_rev = stage_res.revision :: integer
 
-    local review_res = call_api("bee.governance.binding:destination_call", {
+    local review_res = call_api("bee.gov.binding:destination_call", {
         operation = "review",
         workspace_id = test_workspace_uuid,
         source_node = descriptor.owner_id,
@@ -266,7 +266,7 @@ local function main()
     assert(review_res.review_status == "accepted", "review_status expected 'accepted'")
     local review_rev = review_res.revision :: integer
 
-    local select_res = call_api("bee.governance.binding:destination_call", {
+    local select_res = call_api("bee.gov.binding:destination_call", {
         operation = "select",
         workspace_id = test_workspace_uuid,
         source_node = descriptor.owner_id,
@@ -279,7 +279,7 @@ local function main()
 
     local intent_id = "intent-" .. test_workspace_uuid
     local receipt_key = "receipt-" .. test_workspace_uuid
-    local prep_res = call_api("bee.governance.binding:destination_call", {
+    local prep_res = call_api("bee.gov.binding:destination_call", {
         operation = "prepare",
         workspace_id = test_workspace_uuid,
         source_node = descriptor.owner_id,
@@ -295,7 +295,7 @@ local function main()
         error("prepare omitted approval_id or approval_proposal_digest")
     end
 
-    local pending = call_api("bee.governance.binding:destination_call", {operation = "step",
+    local pending = call_api("bee.gov.binding:destination_call", {operation = "step",
         workspace_id = test_workspace_uuid, intent_id = intent_id, receipt_key = receipt_key})
     if pending.phase == "settled" or registry.get("bee.research.demo:app") then
         error("unapproved candidate was applied")
@@ -312,7 +312,7 @@ local function main()
 
     local stepped: Object = prep_res
     for _ = 1, 8 do
-        stepped = call_api("bee.governance.binding:destination_call", {
+        stepped = call_api("bee.gov.binding:destination_call", {
             operation = "step",
             workspace_id = test_workspace_uuid,
             intent_id = intent_id,
@@ -342,8 +342,8 @@ local function main()
     local matches, match_error = materializer.matches(OVERLAY_OWNER, measured.entries)
     if matches ~= true then error("applied overlay differs from reviewed artifact: " .. tostring(match_error)) end
 
-    if registry.get("bee.research_measurement:inputs") then
-        local result, result_error = funcs.call("bee.research_measurement:probe", {})
+    if registry.get("bee.research.measurement:inputs") then
+        local result, result_error = funcs.call("bee.research.measurement:probe", {})
         if result_error then error("measurement probe: " .. tostring(result_error)) end
         local checked = object(result)
         if checked.ok ~= true then error("measurement probe failed") end

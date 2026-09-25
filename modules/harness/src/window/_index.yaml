@@ -71,7 +71,7 @@ entries:
   modules: []
   imports:
     runtime: bee.harness.window:runtime
-    window: bee.placement.native:window
+    window: bee.placement.native.service:window
   meta:
     type: bee.application
     application:

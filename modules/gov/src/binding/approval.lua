@@ -75,7 +75,7 @@ end
 function M.proposal(value: unknown): (Object?, string?)
     local item, err = plan(value)
     if not item then return nil, err end
-    return {kind = "operation", ref = "bee.governance:apply", revision = item.plan_digest,
+    return {kind = "operation", ref = "bee.gov:apply", revision = item.plan_digest,
         input_digest = item.plan_digest, payload = {workspace_id = item.workspace_id,
             source_node = item.source_node, source_workspace = item.source_workspace,
             version = item.version, artifact_digest = item.artifact_digest,
@@ -194,7 +194,7 @@ function M.activation_proposal(value: unknown, review_raw: unknown?): (Object?, 
         payload.resolved_capabilities = resolved
         payload.permission_changes = delta
     end
-    return {kind = "operation", ref = "bee.governance:establish-overlay",
+    return {kind = "operation", ref = "bee.gov:establish-overlay",
         revision = item.authorization_digest, input_digest = item.authorization_digest,
         payload = payload}, nil
 end

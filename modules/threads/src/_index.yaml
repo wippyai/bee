@@ -55,7 +55,7 @@ entries:
   source: file://capabilities.lua
   imports:
     bounds: bee.threads.records:bounds
-    migrations: bee.threads.persist:migrations
+    migrations: bee.threads.migrations:migrations
     claims: bee.threads.delivery:claims
     subscriptions: bee.threads.delivery:subscriptions
     waits: bee.threads.delivery:waits

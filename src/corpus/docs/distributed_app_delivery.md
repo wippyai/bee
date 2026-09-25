@@ -86,9 +86,9 @@ storage fields, but those are not public authoring vocabulary.
 
 A fresh install delivers an application a workspace's own agent authors to
 that workspace without host configuration, and still only after the person
-approves it. The shipped `bee:governance_publication_profiles` sets
+approves it. The shipped `bee.env:gov_publication_profiles` sets
 `workspace_applications: true`, and the shipped
-`bee:governance_activation_profiles` carries a `workspace_applications` rule:
+`bee.env:gov_activation_profiles` carries a `workspace_applications` rule:
 the approval policy (`workspace-application-delivery`, decided in Approvals by
 the person, as `bee:approver_policies` ships it), the admitted entry kinds and
 native modules, and the admission policies and thread access of the one
@@ -98,12 +98,14 @@ The rule applies only to an overlay this node authored whose name is lowercase
 letters, digits and underscores starting with a letter. Overlay `todo` gets
 component and namespace `app.todo`, the application entry `app.todo:app` under
 the ordinary application boundary, and the private overlay owner
-`bee.governance.workspace_applications:<workspace_id>.todo`. Nothing under the
+`bee.gov.apps:<workspace_id>.todo`. Nothing under the
 rule starts itself: an entry that declares `lifecycle.auto_start` is refused at
 preflight with `AUTO_START_DENIED`, so the application runs only while the
 broker has it open. An explicit profile row for the same source takes
 precedence; it admits auto start unless its `allow.auto_start` is `false`. A source the rule does not
 cover is refused with the rule and the profile entries a host adds.
+Previously installed workspace applications retain their measured overlay
+owner, grant IDs, and activation receipts when Bee resumes them.
 
 The shipped workspace application profile also admits `ns.requirement` entries
 for capability requests. A request declares `meta.value_kind: security.policy`,
@@ -132,7 +134,7 @@ shipped module ceiling includes `funcs` so the installed policy can authorize
 calls to the Threads owner, which checks the application's actor membership.
 
 On approval, one registry overlay transaction installs host-owned policies in
-`bee.governance.grants`, fills the requirement defaults, and records the grant
+`bee.gov.grants`, fills the requirement defaults, and records the grant
 set, digest, approval ID, and revision. The workspace application rule derives
 its policy allowance, application binding and thread access from that live
 record. A later version still receives artifact measurement and preflight. If

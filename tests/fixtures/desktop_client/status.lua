@@ -17,7 +17,7 @@ local decode = require("decode")
 local launch_protocol = require("launch_protocol")
 local log = logger:named("bee.thread_status_probe")
 
-local ACTOR = "bee.desktop_client_probe:status_viewer"
+local ACTOR = "bee.desktop.client.probe:status_viewer"
 
 local function scope(names: {string}): security.Scope
     local policies: {security.Policy} = {}
@@ -78,7 +78,7 @@ local function main()
     end
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
         "bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"})):spawn_monitored(
-            "bee.host:main", "bee:workers", owner, {root_ref = "bee.environment:workspace_root", subpath = ""})))
+            "bee.host:main", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""})))
     local host_ready = assert(hosts:receive())
     assert(tostring(host_ready:from()) == host)
     local ready: unknown = host_ready:payload():data()
@@ -113,7 +113,7 @@ local function main()
             end
         end
     end
-    local thread_scope = scope({"bee.desktop_client_probe:root_policy"})
+    local thread_scope = scope({"bee.desktop.client.probe:root_policy"})
     local thread_actor = security.new_actor(ACTOR)
     local function thread_call(target: string, request: unknown): {[string]: unknown}
         local reply, err = funcs.new():with_actor(thread_actor):with_scope(thread_scope):call(target, request)
@@ -176,7 +176,7 @@ local function main()
             width = 120, height = 32, application = nil,
             options = {version = 1, quit_mode = "detach", arguments = {}}}
         local desktop, start_error = desktops.start(retained, selected, scope({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy",
-            "bee.desktop_client_probe:status_policy"}))
+            "bee.desktop.client.probe:status_policy"}))
         if not desktop then error(tostring(start_error)) end
         local client = desktop.pid
         local ready_message = assert(clients:receive())

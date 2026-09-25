@@ -39,7 +39,7 @@ local function main(initial_application: string?, secondary_application: string?
     local appearance_requests = assert(process.listen("bee.appearance.request", {message = true}))
     local display = physical.open()
     local width, height = display.width, display.height
-    local database, database_error = persistence.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""})
+    local database, database_error = persistence.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""})
     if not database then error(tostring(database_error)) end
     local workspace_id = database.workspace_id
     local saved = database.saved
@@ -70,7 +70,7 @@ local function main(initial_application: string?, secondary_application: string?
     local session = tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id}):with_scope(session_scope)
         :spawn_monitored("bee.session:main", "bee:workers", owner, width, height, preferences)))
     local broker = tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id}):with_scope(broker_scope)
-        :spawn_monitored("bee.applications:broker", "bee:workers", owner, preferences)))
+        :spawn_monitored("bee.apps:broker", "bee:workers", owner, preferences)))
     local scene = model.new(width, height)
     local tabs: {string} = {}
     local updates = assert(display.view:updates())

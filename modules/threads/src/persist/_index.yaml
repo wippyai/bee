@@ -1,16 +1,13 @@
 version: '1.0'
 namespace: bee.threads.persist
 entries:
-- name: migrations
-  kind: library.lua
-  source: file://migrations.lua
 - name: database
   kind: library.lua
   source: file://database.lua
   modules: [sql]
   imports:
     persist: bee.persist:database
-    migrations: bee.threads.persist:migrations
+    migrations: bee.threads.migrations:migrations
 - name: legacy
   kind: library.lua
   source: file://legacy.lua

@@ -103,7 +103,7 @@ entries:
     database: bee.threads.persist:database
     legacy: bee.threads.persist:legacy
     ledger: bee.persist:ledger
-    migrations: bee.threads.persist:migrations
+    migrations: bee.threads.migrations:migrations
     owner: bee.threads.persist:owner
 - name: delivery_test
   kind: function.lua
@@ -172,7 +172,7 @@ entries:
     test: wippy.test:test
     capabilities: bee.threads:capabilities_report
     bounds: bee.threads.records:bounds
-    migrations: bee.threads.persist:migrations
+    migrations: bee.threads.migrations:migrations
     waits: bee.threads.delivery:waits
 - name: carrier_test
   kind: function.lua

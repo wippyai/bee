@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.thread_demo
+namespace: bee.thread.demo
 entries:
 - name: main
   kind: process.lua
@@ -7,36 +7,36 @@ entries:
   method: main
   modules: [process, channel, security, time, io, uuid]
   imports:
-    store: bee.thread_demo.storage:store
+    store: bee.thread.demo.storage:store
   meta:
     command:
       name: thread-demo
       short: Run an isolated durable thread with a subscriber
       security:
-        actor: {id: bee.thread_demo.local}
-        policies: [bee.thread_demo:owner]
+        actor: {id: bee.thread.demo.local}
+        policies: [bee.thread.demo:owner]
 - name: producer
   kind: process.lua
   source: file://producer.lua
   method: main
   modules: [process, json]
   imports:
-    model: bee.thread_demo:model
-    client: bee.thread_demo:client
+    model: bee.thread.demo:model
+    client: bee.thread.demo:client
 - name: subscriber
   kind: process.lua
   source: file://subscriber.lua
   method: main
   modules: [process, sql, contract, security]
   imports:
-    client: bee.thread_demo:client
-    reader: bee.thread_demo:reader
+    client: bee.thread.demo:client
+    reader: bee.thread.demo:reader
 - name: reader
   kind: library.lua
   source: file://reader.lua
   modules: [contract]
   imports:
-    client: bee.thread_demo:client
+    client: bee.thread.demo:client
 - name: reader_contract
   kind: contract.definition
   methods:
@@ -49,30 +49,30 @@ entries:
 - name: reader_binding
   kind: contract.binding
   contracts:
-  - contract: bee.thread_demo:reader_contract
+  - contract: bee.thread.demo:reader_contract
     methods:
-      inspect: bee.thread_demo:identity_probe
-      read_after: bee.thread_demo:read_after
-      inspect_owned_storage: bee.thread_demo:owned_storage_probe
+      inspect: bee.thread.demo:identity_probe
+      read_after: bee.thread.demo:read_after
+      inspect_owned_storage: bee.thread.demo:owned_storage_probe
 - name: owned_storage_probe
   kind: function.lua
   source: file://identity_probe.lua
   method: main
   modules: [process, sql, security]
   security:
-    policies: [bee.thread_demo:owned_storage_policy]
+    policies: [bee.thread.demo:owned_storage_policy]
 - name: owned_storage_policy
   kind: security.policy
   policy:
     actions: [db.get]
-    resources: [bee.thread_demo:db]
+    resources: [bee.thread.demo:db]
     effect: allow
 - name: read_after
   kind: function.lua
   source: file://read_after.lua
   method: main
   imports:
-    client: bee.thread_demo:client
+    client: bee.thread.demo:client
 - name: identity_probe
   kind: function.lua
   source: file://identity_probe.lua
@@ -94,13 +94,13 @@ entries:
   lifecycle: {auto_start: true}
 - name: database_path
   kind: env.variable
-  storage: bee.thread_demo:environment
+  storage: bee.thread.demo:environment
   variable: BEE_THREAD_DEMO_DB
   default: thread-demo.db
   readonly: true
 - name: db
   kind: db.sql.sqlite
-  file: ${env:bee.thread_demo:database_path}
+  file: ${env:bee.thread.demo:database_path}
   lifecycle: {auto_start: true}
 - name: participant
   kind: security.policy
@@ -112,7 +112,7 @@ entries:
   kind: security.policy
   policy:
     actions: [contract.open]
-    resources: [bee.thread_demo:reader_binding]
+    resources: [bee.thread.demo:reader_binding]
     effect: allow
 - name: method_policy
   kind: security.policy
@@ -124,7 +124,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.thread_demo:identity_probe, bee.thread_demo:read_after, bee.thread_demo:owned_storage_probe]
+    resources: [bee.thread.demo:identity_probe, bee.thread.demo:read_after, bee.thread.demo:owned_storage_probe]
     effect: allow
 - name: owner
   kind: security.policy

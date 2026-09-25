@@ -12,7 +12,7 @@ import (
 )
 
 // The owner's desktop bridge admits native desktop calls only from its client
-// host (src/hive_host/desktop/protocol.lua CLIENT_HOST), so the physical client's
+// host (src/hive/desktop/protocol.lua CLIENT_HOST), so the physical client's
 // actor must speak from exactly that host.
 func TestActorHostIsTheDesktopBridgeClientHost(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join("..", "..", "..", "src", "hive", "desktop", "protocol.lua"))

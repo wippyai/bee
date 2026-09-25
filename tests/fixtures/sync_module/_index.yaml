@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.sync_probe
+namespace: bee.sync.probe
 entries:
 - name: workers
   kind: process.host
@@ -19,7 +19,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.node.binding:get_appearance, bee.node.binding:update_appearance, bee.node.binding:describe, bee.node.binding:update_metadata, bee.node.binding:snapshot, bee.node.binding:read_after, bee.sync_probe:direct_db]
+    resources: [bee.node.binding:get_appearance, bee.node.binding:update_appearance, bee.node.binding:describe, bee.node.binding:update_metadata, bee.node.binding:snapshot, bee.node.binding:read_after, bee.sync.probe:direct_db]
     effect: allow
 - name: read_policy
   kind: security.policy
@@ -40,9 +40,9 @@ entries:
   source: file://main.lua
   method: main
   modules: [funcs, security, logger, sql]
-  security: {policies: [bee.sync_probe:owner_policy]}
+  security: {policies: [bee.sync.probe:owner_policy]}
   meta:
     command:
       name: sync-probe
       security:
-        actor: {id: bee.sync_probe}
+        actor: {id: bee.sync.probe}

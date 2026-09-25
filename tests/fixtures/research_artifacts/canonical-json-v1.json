@@ -50,7 +50,7 @@
         "source": "local measure = require(\"measure\")\nlocal candidate = require(\"candidate\")\nlocal function run(): {[string]: unknown}\n    return measure.run(candidate.encode)\nend\nreturn {run = run}\n",
         "method": "run",
         "imports": {
-          "measure": "bee.research_benchmark_probe:measure",
+          "measure": "bee.research.benchmark.probe:measure",
           "candidate": "bee.research.demo:canonical"
         }
       }

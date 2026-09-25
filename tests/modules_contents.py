@@ -29,7 +29,7 @@ def run():
         for packed in (False, True):
             with tempfile.TemporaryDirectory(prefix="bee-contents-ui-") as directory:
                 (Path(directory) / ".wippy").mkdir()
-                ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.modules:app",))
+                ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules:app",))
                 try:
                     ui.wait("Preview fixture", timeout=20)
                     ui.key(b"\x1b[B\r")

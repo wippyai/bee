@@ -44,7 +44,7 @@ local function caller(actor: string, workspace_id: unknown)
 end
 
 local function call(actor: string, method: string, value: unknown): service.Reply
-    local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native:" .. method, value)
+    local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: service.Reply
 end

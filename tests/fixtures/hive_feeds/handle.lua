@@ -33,14 +33,14 @@ local function handle(raw: unknown): string
         return "approval_created"
     end
     if command == "revoke" or command:match("^enroll%-") then
-        local entry = registry.get("bee.hive_host.supervisor:principal_mappings")
+        local entry = registry.get("bee.hive.supervisor:principal_mappings")
         if not entry then error("missing mappings") end
         local mappings: {{[string]: unknown}} = {}
         if command ~= "revoke" then
             local subject = command:match("^enroll%-[a-z]+ (.+)$")
             if not subject or types.pid_parts(subject) ~= remote then error("bad peer subject") end
-            local policies = {"bee.feed_probe:read_policy"}
-            if command:match("^enroll%-write ") then policies[#policies + 1] = "bee.feed_probe:write_policy" end
+            local policies = {"bee.feed.probe:read_policy"}
+            if command:match("^enroll%-write ") then policies[#policies + 1] = "bee.feed.probe:write_policy" end
             mappings[1] = {issuer = remote, subject_id = subject, policies = policies}
         end
         entry.data = {mappings = mappings}

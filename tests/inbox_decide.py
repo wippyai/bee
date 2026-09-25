@@ -28,12 +28,12 @@ def edit_approver_policy(project):
     doc = yaml.safe_load(index.read_text())
     entry = next(e for e in doc["entries"] if e["name"] == "approver_policies")
     entry["policies"].append(
-        {"name": POLICY, "approvers": [{"definition_id": "bee.inbox:app"}], "max_ttl_ms": 600000})
+        {"name": POLICY, "approvers": [{"definition_id": "bee.approvals.inbox:app"}], "max_ttl_ms": 600000})
     index.write_text(yaml.safe_dump(doc, sort_keys=False))
 
 
 def edit_inbox_workspaces(project):
-    index = project / "src/apps/inbox/_index.yaml"
+    index = project / "src/approvals/inbox/_index.yaml"
     import yaml
     doc = yaml.safe_load(index.read_text())
     entry = next(e for e in doc["entries"] if e["name"] == "workspaces")
@@ -84,7 +84,7 @@ def exercise(packed):
             ui.choose("Tools")
             ui.choose("Approvals")
             ui.wait("APPROVALS", timeout=30)
-            ui.wait("bee.governance:apply", timeout=30)
+            ui.wait("bee.gov:apply", timeout=30)
             ui.key(b"j")
             ui.key(b"o")
             ui.wait("Asked: " + PROMPT, timeout=20)

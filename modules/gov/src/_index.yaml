@@ -1,9 +1,9 @@
 version: '1.0'
-namespace: bee.governance
+namespace: bee.gov
 entries:
 - name: definition
   kind: ns.definition
-  module: governance
+  module: gov
   readme: file://README.md
   meta:
     title: Bee governance authoring
@@ -46,8 +46,8 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
-    capability_catalog: bee.governance:capability_catalog
-    capability_containment: bee.governance:capability_containment
+    capability_catalog: bee.gov:capability_catalog
+    capability_containment: bee.gov:capability_containment
 - name: delivery_protocol
   kind: library.lua
   source: file://delivery_protocol.lua
@@ -66,7 +66,7 @@ entries:
   kind: library.lua
   source: file://candidate.lua
   modules: [hash, json]
-  imports: {canonical: bee.sync:canonical, workspace: bee.governance:workspace}
+  imports: {canonical: bee.sync:canonical, workspace: bee.gov:workspace}
 - name: artifact
   kind: library.lua
   source: file://artifact.lua
@@ -84,16 +84,16 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
-    artifact: bee.governance:artifact
+    artifact: bee.gov:artifact
     version: bee.sync:version
 - name: target_db
   kind: ns.requirement
-  default: bee.governance:db
+  default: bee.gov:db
   meta: {comment: Host-selected SQLite store for private overlays and frozen content}
   targets:
-  - entry: bee.governance:database_ref
+  - entry: bee.gov:database_ref
     path: .resource_ref
-  - entry: bee.governance.security:staging_database_policy
+  - entry: bee.gov.security:staging_database_policy
     path: .policy.resources
 - name: database_ref
   kind: registry.entry
@@ -103,23 +103,23 @@ entries:
   lifecycle: {auto_start: true}
 - name: db_path
   kind: env.variable
-  storage: bee.governance:environment
+  storage: bee.gov:environment
   variable: BEE_GOVERNANCE_DB
   default: .wippy/governance.db
   readonly: true
 - name: db
   kind: db.sql.sqlite
-  file: ${env:bee.governance:db_path}
+  file: ${env:bee.gov:db_path}
   lifecycle: {auto_start: true}
 - name: activation_measure
   kind: library.lua
   source: file://activation_measure.lua
   modules: [hash, json]
   imports:
-    artifact: bee.governance:artifact
-    preflight: bee.governance:preflight
-    migration_work: bee.governance:migration_work
-    application_admission: bee.governance:governed_application_admission
+    artifact: bee.gov:artifact
+    preflight: bee.gov:preflight
+    migration_work: bee.gov:migration_work
+    application_admission: bee.gov:governed_application_admission
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
 - name: migration_work
@@ -127,34 +127,34 @@ entries:
   source: file://migration_work.lua
   modules: [hash, json]
   imports:
-    artifact: bee.governance:artifact
+    artifact: bee.gov:artifact
     canonical: bee.sync:canonical
-    preflight: bee.governance:preflight
+    preflight: bee.gov:preflight
 - name: target_publication_profiles
   kind: ns.requirement
-  meta: {comment: Host-selected publication profiles; the host supplies bee:governance_publication_profiles}
+  meta: {comment: Host-selected publication profiles; the host supplies bee.env:gov_publication_profiles}
   targets:
-  - entry: bee.governance.registry:publication_profiles_ref
+  - entry: bee.gov:publication_profiles_ref
     path: .resource_ref
-  - entry: bee.governance.security:publication_profiles_read_policy
+  - entry: bee.gov.security:publication_profiles_read_policy
     path: .policy.resources
 - name: target_activation_profiles
   kind: ns.requirement
-  meta: {comment: Host-selected activation profiles; the host supplies bee:governance_activation_profiles}
+  meta: {comment: Host-selected activation profiles; the host supplies bee.env:gov_activation_profiles}
   targets:
-  - entry: bee.governance.registry:activation_profiles_ref
+  - entry: bee.gov:activation_profiles_ref
     path: .resource_ref
 - name: target_approval_request_policy
   kind: ns.requirement
   meta: {comment: Host-selected approval request policy for the fixed activation actor; absent selection fails closed}
   targets:
-  - entry: bee.governance.registry:approval_request_policy_ref
+  - entry: bee.gov:approval_request_policy_ref
     path: .resource_ref
 - name: target_approval_consume_policy
   kind: ns.requirement
   meta: {comment: Host-selected approval consume policy for the fixed activation actor; absent selection fails closed}
   targets:
-  - entry: bee.governance.registry:approval_consume_policy_ref
+  - entry: bee.gov:approval_consume_policy_ref
     path: .resource_ref
 - name: activation_profile_decoder
   kind: library.lua
@@ -163,10 +163,10 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
-    application_admission: bee.governance:governed_application_admission
-    workspace_applications: bee.governance:workspace_applications
-    capability_grants: bee.governance:capability_grants
-    capability_catalog: bee.governance:capability_catalog
+    application_admission: bee.gov:governed_application_admission
+    workspace_applications: bee.gov:workspace_applications
+    capability_grants: bee.gov:capability_grants
+    capability_catalog: bee.gov:capability_catalog
 - name: workspace_applications
   kind: library.lua
   source: file://workspace_applications.lua
@@ -175,7 +175,7 @@ entries:
   source: file://publication_profiles.lua
   imports:
     bounds: bee.threads.records:bounds
-    workspace_applications: bee.governance:workspace_applications
+    workspace_applications: bee.gov:workspace_applications
 - name: delivery_contract
   kind: contract.definition
   methods:
@@ -184,8 +184,8 @@ entries:
 - name: delivery_local
   kind: contract.binding
   contracts:
-  - contract: bee.governance:delivery_contract
-    methods: {call: bee.governance.binding:destination_call}
+  - contract: bee.gov:delivery_contract
+    methods: {call: bee.gov.binding:destination_call}
 - name: overlay_contract
   kind: contract.definition
   methods:
@@ -194,5 +194,52 @@ entries:
 - name: overlay_local
   kind: contract.binding
   contracts:
-  - contract: bee.governance:overlay_contract
-    methods: {call: bee.governance.binding:overlay_call}
+  - contract: bee.gov:overlay_contract
+    methods: {call: bee.gov.binding:overlay_call}
+- name: materializer
+  kind: library.lua
+  source: file://materializer.lua
+  modules: [registry, hash]
+  imports:
+    artifact: bee.gov:artifact
+    application_admission: bee.gov:governed_application_admission
+    capability_grants: bee.gov:capability_grants
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+- name: hub_resolver
+  kind: library.lua
+  source: file://hub_resolver.lua
+  modules: [registry, hash]
+  imports:
+    artifact: bee.gov:artifact
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+    application_admission: bee.gov:governed_application_admission
+- name: overlay_resolver
+  kind: library.lua
+  source: file://overlay_resolver.lua
+  modules: [registry, hash]
+  imports:
+    artifact: bee.gov:artifact
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+    application_admission: bee.gov:governed_application_admission
+    capability_catalog: bee.gov:capability_catalog
+    capability_grants: bee.gov:capability_grants
+- name: staging_resources
+  kind: library.lua
+  source: file://staging_resources.lua
+  modules: [registry]
+  imports: {bounds: bee.threads.records:bounds}
+- name: publication_profiles_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected publication profiles; absent link fails closed}
+- name: activation_profiles_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected activation profiles; absent link fails closed}
+- name: approval_request_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected approval request policy; absent link fails closed}
+- name: approval_consume_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected approval consume policy; absent link fails closed}

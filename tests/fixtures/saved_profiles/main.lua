@@ -12,10 +12,10 @@ local DELETED = "deleted-profile"
 
 local function principal(actor: string, write: boolean): funcs.Executor
     local policies: {security.Policy} = {
-        assert(security.policy("bee.saved_profiles_probe:call_policy")),
-        assert(security.policy("bee.saved_profiles_probe:read_policy")),
+        assert(security.policy("bee.saved.profiles.probe:call_policy")),
+        assert(security.policy("bee.saved.profiles.probe:read_policy")),
     }
-    if write then policies[#policies + 1] = assert(security.policy("bee.saved_profiles_probe:write_policy")) end
+    if write then policies[#policies + 1] = assert(security.policy("bee.saved.profiles.probe:write_policy")) end
     return funcs.new():with_actor(security.new_actor(actor)):with_scope(security.new_scope(policies))
 end
 

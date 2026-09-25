@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.hive.security
+entries:
+- name: workspaces_policy
+  kind: security.policy
+  meta:
+    comment: The workspaces operation reads the catalog through its owner operations
+  policy:
+    actions: [funcs.call]
+    resources: [bee.workspace.catalog:list, bee.workspace.catalog:search]
+    effect: allow

@@ -36,22 +36,22 @@ local function run_probe(mode: string?)
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
-    local database = assert(store.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
+    local database = assert(store.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""}))
     local workspace_id = assert(database:identity())
     local broker_policy, policy_error = security.policy("bee.security.desktop:broker_policy")
     if policy_error then error(tostring(policy_error)) end
     local boundary, boundary_error = security.policy("bee.security:core_spawn_boundary")
     if boundary_error then error(tostring(boundary_error)) end
-    local naming_policy, naming_error = security.policy("bee.attachment_probe:naming_policy")
+    local naming_policy, naming_error = security.policy("bee.attachment.probe:naming_policy")
     if naming_error then error(tostring(naming_error)) end
     local scope = security.new_scope({broker_policy, boundary, naming_policy})
     local broker = tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id})
-        :with_scope(scope):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
     -- The catalog is the owner's startup signal. Do not race name registration
     -- by treating successful spawn as service readiness.
     local ready = assert(catalogs:receive())
     assert(ready:from() == broker)
-    local endpoint = "bee.attachment_probe.host"
+    local endpoint = "bee.attachment.probe.host"
     assert(process.registry.lookup(endpoint) == broker)
     local saved = false
     local function commit(data: unknown)
@@ -89,7 +89,7 @@ local function run_probe(mode: string?)
         bind("initial", "not-a-process")
         assert(wait_reply("initial", "bind").error_code == "")
     end
-    assert(process.send(endpoint, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = workspace_id, definition_id = "bee.attachment_probe:app"}))
+    assert(process.send(endpoint, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = workspace_id, definition_id = "bee.attachment.probe:app"}))
     local opened = wait_reply("open", "open")
     assert(opened.error_code == "" and opened.mount == "", "Headless open required an attachment")
     if mode == "failed-open" then

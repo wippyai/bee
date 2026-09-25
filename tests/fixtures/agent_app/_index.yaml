@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.agent_app_probe
+namespace: bee.agent.app.probe
 entries:
 - name: inputs
   kind: registry.entry
@@ -39,7 +39,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.agent_app_probe:docs, bee.agent_app_probe:material]
+    resources: [bee.agent.app.probe:docs, bee.agent.app.probe:material]
     effect: allow
 - name: operator_policy
   kind: security.policy
@@ -60,8 +60,8 @@ entries:
     - process.monitor
     - process.unmonitor
     - bee.approvals.decide
-    - bee.governance.overlay.read
-    - bee.governance.overlay.write
+    - bee.gov.overlay.read
+    - bee.gov.overlay.write
     - funcs.security
     - security.actor.create
     resources: '*'
@@ -73,11 +73,11 @@ entries:
   modules: [funcs, security, registry, process, channel, time, json, sql, io, base64]
   imports:
     bounds: bee.threads.records:bounds
-    artifact: bee.governance:artifact
-    publication_service: bee.governance.binding:publication_service
+    artifact: bee.gov:artifact
+    publication_service: bee.gov.binding:publication_service
   security:
     policies:
-    - bee.agent_app_probe:operator_policy
+    - bee.agent.app.probe:operator_policy
     - bee.security.harness:carrier_policy
     - bee.security.harness:carrier_environment_policy
     - bee.security.threads:thread_create_policy
@@ -97,7 +97,7 @@ entries:
       security:
         actor: {id: bee.agent_app.operator}
         policies:
-        - bee.agent_app_probe:operator_policy
+        - bee.agent.app.probe:operator_policy
         - bee.security.harness:carrier_policy
         - bee.security.harness:carrier_environment_policy
         - bee.security.threads:thread_create_policy
@@ -124,10 +124,10 @@ entries:
     - registry.overlay.get
     - db.get
     - system.read
-    - bee.governance.overlay.read
-    - bee.governance.delivery.read
-    - bee.governance.delivery.manage
-    - bee.governance.delivery.publish
+    - bee.gov.overlay.read
+    - bee.gov.delivery.read
+    - bee.gov.delivery.manage
+    - bee.gov.delivery.publish
     resources: '*'
     effect: allow
 - name: stage
@@ -137,12 +137,12 @@ entries:
   modules: [funcs, registry, system, json, logger]
   imports:
     bounds: bee.threads.records:bounds
-    preflight: bee.governance:preflight
+    preflight: bee.gov:preflight
   security:
-    policies: [bee.agent_app_probe:stage_policy]
+    policies: [bee.agent.app.probe:stage_policy]
   meta:
     command:
       name: agent-app-stage
       security:
         actor: {id: bee.agent_app.operator}
-        policies: [bee.agent_app_probe:stage_policy]
+        policies: [bee.agent.app.probe:stage_policy]

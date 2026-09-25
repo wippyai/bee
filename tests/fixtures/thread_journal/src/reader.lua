@@ -3,7 +3,7 @@ local client = require("client")
 type Reader = {read_after: (Reader, integer) -> (client.Reply?, string?)}
 local M = {}
 function M.open(owner: string, thread: string, capability: string): (Reader?, string?)
-    local binding, err = contract.open("bee.thread_demo:reader_binding")
+    local binding, err = contract.open("bee.thread.demo:reader_binding")
     if not binding then return nil, tostring(err) end
     local function read_after(self: Reader, after: integer): (client.Reply?, string?)
         local raw, call_error = binding:read_after(owner, thread, capability, after)

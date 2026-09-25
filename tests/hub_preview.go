@@ -94,7 +94,7 @@ func main() {
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
-	output, runErr := runCommand(ctx, root, runtime, "run", "--verbose", "--host", "bee.hub_preview_probe:workers", "--", "hub-preview-probe")
+	output, runErr := runCommand(ctx, root, runtime, "run", "--verbose", "--host", "bee.hub.preview.probe:workers", "--", "hub-preview-probe")
 	if runErr != nil {
 		fmt.Fprintf(os.Stderr, "Hub preview probe failed: %v\n%s", runErr, output)
 		os.Exit(1)

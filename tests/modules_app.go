@@ -377,7 +377,7 @@ func startDesktop(runtime, project, pack, mode string) (*desktop, error) {
 	if pack != "" {
 		args = append(args, pack)
 	}
-	args = append(args, "bee", "bee.modules:app", "--host", "bee:terminal", "--set", "registry.history_path="+filepath.Join(root, "registry.db"))
+	args = append(args, "bee", "bee.hub.modules:app", "--host", "bee:terminal", "--set", "registry.history_path="+filepath.Join(root, "registry.db"))
 	ctx, cancel := context.WithTimeout(context.Background(), 75*time.Second)
 	cmd := exec.CommandContext(ctx, runtime, args...)
 	cmd.Dir = project

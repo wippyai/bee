@@ -34,7 +34,7 @@ entries:
     inspection: bee.hub:inspection
     transaction: bee.persist:transaction
     inventory: bee.hub:inventory
-    inventory_reader: bee.hub.registry:inventory_reader
+    inventory_reader: bee.hub:inventory_reader
     migration_runner: bee.hub.binding:migration_runner
     migrations: bee.hub:migrations
     migration_work: bee.hub:migration_work
@@ -46,12 +46,12 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     catalog: bee.hub.binding:catalog
-    inventory_reader: bee.hub.registry:inventory_reader
+    inventory_reader: bee.hub:inventory_reader
     inspect: bee.hub.binding:inspect
     publication: bee.hub.binding:publication
     transaction: bee.persist:transaction
     preview: bee.hub.binding:preview
-    host_resources: bee.hub.registry:host_resources
+    host_resources: bee.hub:host_resources
   meta: {type: internal}
 - name: call
   kind: function.lua

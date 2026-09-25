@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: tests.hub_migration_work
+namespace: tests.hub.migration.work
 entries:
 - name: migration_work_test
   kind: function.lua

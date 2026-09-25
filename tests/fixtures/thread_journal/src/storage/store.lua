@@ -24,7 +24,7 @@ type Migration = {id: integer, name: string, sql: string}
 
 local M = {}
 
-local DATABASE_ID = "bee.thread_demo:db"
+local DATABASE_ID = "bee.thread.demo:db"
 local MIGRATION_TABLE = "thread_demo_schema_migrations"
 local MAX_TEXT_BYTES = 256
 local MAX_BODY_BYTES = 16384

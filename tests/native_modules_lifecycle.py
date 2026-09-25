@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-lifecycle-") as temp
     project = root / "project"
     project.mkdir()
     state = root / "state"
-    ui = NativeDesktop(binary, project, state, application="bee.modules:app")
+    ui = NativeDesktop(binary, project, state, application="bee.hub.modules:app")
     try:
         def base_hashes():
             artifacts = sorted(state.glob("base/**/vendor/bee/*.wapp"))
@@ -111,7 +111,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-lifecycle-") as temp
         # Restart the physical client against the same state, then prove the
         # removed Hub root remains absent and the base remains byte-identical.
         ui.quit()
-        ui = NativeDesktop(binary, project, state, application="bee.modules:app")
+        ui = NativeDesktop(binary, project, state, application="bee.hub.modules:app")
         select_test()
         ui.key(b"x")
         ui.key(b"p")

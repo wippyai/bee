@@ -980,10 +980,10 @@ local function local_application(database_resource: string, application: string,
 end
 -- Public argv never selects a database resource. Composition owns that binding.
 local function desktop(name: string?, ...)
-    return local_command("bee.environment:client_db", name, ...)
+    return local_command("bee.env:client_db", name, ...)
 end
 local function application(application_id: string, ...)
-    return local_application("bee.environment:client_db", application_id, ...)
+    return local_application("bee.env:client_db", application_id, ...)
 end
 return {main = main, local_entry = local_entry, local_command = local_command, local_application = local_application,
     desktop = desktop, application = application}

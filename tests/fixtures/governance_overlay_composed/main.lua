@@ -3,9 +3,9 @@
 -- the composed-base precondition, even when owner generation CAS works.
 local registry = require("registry")
 local logger = require("logger")
-local OWNER = "bee.governance_overlay_composed_probe:owner"
-local DEPENDENCY = "bee.governance_overlay_composed_probe:dependency"
-local SUBJECT = "bee.governance_overlay_composed_probe:subject"
+local OWNER = "bee.gov.overlay.composed.probe:owner"
+local DEPENDENCY = "bee.gov.overlay.composed.probe:dependency"
+local SUBJECT = "bee.gov.overlay.composed.probe:subject"
 
 local function main()
     local base = registry.snapshot()

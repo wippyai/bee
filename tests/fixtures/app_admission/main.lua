@@ -15,10 +15,10 @@ local function run()
     local workspace = "0123456789abcdef0123456789abcdef"
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
-    local principals = assert(process.listen("bee.admission_probe.principal", {message = true}))
+    local principals = assert(process.listen("bee.admission.probe.principal", {message = true}))
     local scope = security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")), assert(security.policy("bee.security:core_spawn_boundary"))})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace})
-        :with_scope(scope):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
     local function catalog_contains(expected: boolean)
         local selected = channel.select({catalogs:case_receive(), time.after("5s"):case_receive()})
         assert(selected.ok and selected.channel == catalogs, "Catalog refresh timed out")
@@ -28,7 +28,7 @@ local function run()
         assert(type(value) == "table" and type(value.items) == "table")
         local found = false
         for _, item in ipairs(value.items) do
-            if type(item) == "table" and item.definition_id == "bee.admission_probe:app" then found = true end
+            if type(item) == "table" and item.definition_id == "bee.admission.probe:app" then found = true end
         end
         assert(found == expected, "Wrong admitted catalog")
     end
@@ -47,7 +47,7 @@ local function run()
     end
     local function open(id: string, thread_id: string?): decode.Reply
         assert(process.send(broker, "bee.app.request", {version = 1, workspace_id = workspace,
-            request_id = id, op = "open", definition_id = "bee.admission_probe:app", thread_id = thread_id}))
+            request_id = id, op = "open", definition_id = "bee.admission.probe:app", thread_id = thread_id}))
         return reply(id)
     end
     local function principal(): Principal
@@ -79,7 +79,7 @@ local function run()
     assert(process.send(broker, "bee.app.request", {version = 1, workspace_id = workspace,
         request_id = "bind", op = "bind", recipient = owner}))
     assert(reply("bind").error_code == "")
-    publish({{definition_id = "bee.admission_probe:app", policies = {"bee.admission_probe:grant"}}})
+    publish({{definition_id = "bee.admission.probe:app", policies = {"bee.admission.probe:grant"}}})
     catalog_contains(true)
     local first = open("admitted", "admission-thread")
     assert(first.error_code == "", first.error)
@@ -87,7 +87,7 @@ local function run()
     assert(table.concat(assert(retained:snapshot()).rows):find("GRANTED", 1, true), "Host-selected scope was not used")
     local first_principal = principal()
     assert(first_principal.actor_id == "bee.application:" .. workspace .. ":" .. first.instance_id, "Application actor ID was not host-derived")
-    assert(first_principal.workspace_id == workspace and first_principal.definition_id == "bee.admission_probe:app"
+    assert(first_principal.workspace_id == workspace and first_principal.definition_id == "bee.admission.probe:app"
         and first_principal.definition_revision == "1" and first_principal.execution_generation == 1,
         "Application actor metadata was not delivered")
     assert(first_principal.launch_generation == first_principal.execution_generation,
@@ -95,7 +95,7 @@ local function run()
     assert(first.thread_id == "admission-thread" and first_principal.thread_id == "admission-thread",
         "Broker-selected thread identity was not delivered to the application")
     -- A valid replacement changes only future launches, not an existing scope.
-    publish({{definition_id = "bee.admission_probe:app", policies = {}}})
+    publish({{definition_id = "bee.admission.probe:app", policies = {}}})
     catalog_contains(true)
     local second = open("reduced")
     assert(second.error_code == "", second.error)
@@ -109,14 +109,14 @@ local function run()
     assert(open("revoked").error_code == "not_admitted", "Revoked binding still launched")
     catalog_contains(false)
     assert(retained:snapshot() and reduced:snapshot(), "Revocation killed running producers")
-    publish({{definition_id = "bee.admission_probe:app", policies = {"bee.admission_probe:missing"}}})
+    publish({{definition_id = "bee.admission.probe:app", policies = {"bee.admission.probe:missing"}}})
     assert(open("invalid-policy").error_code == "not_admitted", "Invalid policy reused old grants")
     catalog_contains(false)
-    publish({{definition_id = "bee.admission_probe:app", policies = {}}})
+    publish({{definition_id = "bee.admission.probe:app", policies = {}}})
     catalog_contains(true)
     local recovered = open("recovered")
     assert(recovered.error_code == "", "Valid admission did not recover: " .. recovered.error_code .. " " .. recovered.error)
-    publish({{definition_id = "bee.admission_probe:app", policies = {}, unknown_authority = true}})
+    publish({{definition_id = "bee.admission.probe:app", policies = {}, unknown_authority = true}})
     assert(open("malformed").error_code == "not_admitted", "Malformed binding reused old grants")
     catalog_contains(false)
     assert(retained:snapshot(), "Invalid declaration killed running producer")

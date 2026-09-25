@@ -160,7 +160,7 @@ return {
 
 
 PROBE_INDEX = r'''version: '1.0'
-namespace: bee.hub_recovery_probe
+namespace: bee.hubrecoveryprobe
 entries:
 - name: policy
   kind: security.policy
@@ -188,11 +188,11 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee.hub_recovery_probe:policy, bee.hub_recovery_probe:management_policy, bee.hub_recovery_probe:reader_policy]
+    policies: [bee.hubrecoveryprobe:policy, bee.hubrecoveryprobe:management_policy, bee.hubrecoveryprobe:reader_policy]
   meta:
     command:
       name: hub-recovery-probe
-      security: {actor: {id: bee.hub_recovery_probe}}
+      security: {actor: {id: bee.hubrecoveryprobe}}
 - name: restart
   kind: process.lua
   source: file://main.lua
@@ -201,11 +201,11 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee.hub_recovery_probe:policy, bee.hub_recovery_probe:management_policy, bee.hub_recovery_probe:reader_policy]
+    policies: [bee.hubrecoveryprobe:policy, bee.hubrecoveryprobe:management_policy, bee.hubrecoveryprobe:reader_policy]
   meta:
     command:
       name: hub-recovery-restart
-      security: {actor: {id: bee.hub_recovery_probe}}
+      security: {actor: {id: bee.hubrecoveryprobe}}
 - name: writer_policy
   kind: security.policy
   policy:
@@ -220,7 +220,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee.hub_recovery_probe:writer_policy]
+    policies: [bee.hubrecoveryprobe:writer_policy]
   meta:
     command:
       name: hub-recovery-tamper
@@ -233,11 +233,11 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee.hub_recovery_probe:policy, bee.hub_recovery_probe:management_policy, bee.hub_recovery_probe:reader_policy]
+    policies: [bee.hubrecoveryprobe:policy, bee.hubrecoveryprobe:management_policy, bee.hubrecoveryprobe:reader_policy]
   meta:
     command:
       name: hub-recovery-conflict
-      security: {actor: {id: bee.hub_recovery_probe}}
+      security: {actor: {id: bee.hubrecoveryprobe}}
 '''
 
 
@@ -256,9 +256,9 @@ def prepare_fixture(folder):
     shutil.copytree(ROOT / "tests/fixtures/hub_manage", folder / "src")
     for module in ("hub", "persist", "sync", "threads"):
         shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
-    (folder / "src/hub_recovery_probe").mkdir()
-    (folder / "src/hub_recovery_probe/main.lua").write_text(PROBE)
-    (folder / "src/hub_recovery_probe/_index.yaml").write_text(PROBE_INDEX)
+    (folder / "src/hubrecoveryprobe").mkdir()
+    (folder / "src/hubrecoveryprobe/main.lua").write_text(PROBE)
+    (folder / "src/hubrecoveryprobe/_index.yaml").write_text(PROBE_INDEX)
     (folder / "wippy.lock").write_text(
         "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
         "- name: bee/hub\n  version: 0.1.0-dev\n"

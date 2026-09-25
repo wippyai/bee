@@ -52,7 +52,7 @@ local outsider = caller(OUTSIDER, {})
 local manager = caller(MANAGER, {"bee.security.approvals:approval_manage_policy"})
 local INBOX_ACTOR = "bee.application:0123456789abcdef0123456789abcdef:inbox-instance"
 local inbox_app = caller(INBOX_ACTOR, {"bee.security.approvals:approval_decide_policy"},
-    {definition_id = "bee.inbox:app", workspace_id = "0123456789abcdef0123456789abcdef"})
+    {definition_id = "bee.approvals.inbox:app", workspace_id = "0123456789abcdef0123456789abcdef"})
 local other_app = caller("bee.application:0123456789abcdef0123456789abcdef:other-instance",
     {"bee.security.approvals:approval_decide_policy"}, {definition_id = "bee.settings:app"})
 local owner = caller(OUTBOX, {"bee.security.approvals:approval_owner_policy", "bee.security.threads:thread_approval_policy", "bee.security.threads:thread_approval_client_policy", "bee.security.threads:thread_storage_policy", "bee.security.threads:thread_resource_policy"})
@@ -101,7 +101,7 @@ local function install_policy()
         if policy.name == POLICY then return end
     end
     policies[#policies + 1] = {name = POLICY,
-        approvers = {ALICE, BOB, "bee.test.carol", {definition_id = "bee.inbox:app"}}, max_ttl_ms = 60000}
+        approvers = {ALICE, BOB, "bee.test.carol", {definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 60000}
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local applied, err = changes:apply()
@@ -309,7 +309,7 @@ local function define_tests()
         test.it("admits a host-selected application definition while retaining its private actor", function()
             local workspace = "ws-" .. key()
             local created = value(call(requester, "request", request_of(workspace, {
-                proposal = proposal({definition_id = "bee.inbox:app"})})))
+                proposal = proposal({definition_id = "bee.approvals.inbox:app"})})))
             local approval_id, digest = created.approval_id :: string, created.proposal_digest :: string
             test.eq(code(call(other_app, "read", {approval_id = approval_id})), "DENIED")
             test.eq(value(call(inbox_app, "read", {approval_id = approval_id})).approval_id, approval_id)
@@ -319,9 +319,9 @@ local function define_tests()
             test.eq(decided.state, "decided")
         end)
         test.it("rejects malformed application definition selectors", function()
-            local valid: {unknown} = {ALICE, BOB, "bee.test.carol", {definition_id = "bee.inbox:app"}}
+            local valid: {unknown} = {ALICE, BOB, "bee.test.carol", {definition_id = "bee.approvals.inbox:app"}}
             for _, invalid in ipairs({{{}}, {{definition_id = ""}},
-                    {{definition_id = "bee.inbox:app", extra = true}}}) do
+                    {{definition_id = "bee.approvals.inbox:app", extra = true}}}) do
                 replace_approvers(invalid :: {unknown})
                 local decoded, decode_error = resources.policies()
                 test.eq(decoded, nil)

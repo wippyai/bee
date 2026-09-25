@@ -13,7 +13,7 @@ from tui_smoke import Desktop  # noqa: E402
 
 def exercise():
     with tempfile.TemporaryDirectory(prefix="bee-inbox-") as directory:
-        ui = Desktop(directory, apps=("bee.inbox:app",))
+        ui = Desktop(directory, apps=("bee.approvals.inbox:app",))
         try:
             ui.wait("APPROVALS", timeout=20)
             ui.wait("No requests", timeout=10)

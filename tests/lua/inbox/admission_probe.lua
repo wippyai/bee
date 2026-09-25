@@ -53,7 +53,7 @@ local function main(value: unknown): Object
         if input.forge == true then
             -- Request payload metadata is untrusted and cannot stand in for
             -- the authenticated process actor's host-issued definition.
-            decision_request.metadata = {definition_id = "bee.inbox:app"}
+            decision_request.metadata = {definition_id = "bee.approvals.inbox:app"}
         end
         report.decide = call("bee.approvals.binding:decide", decision_request)
         report.store_after_decide = attempt_store()

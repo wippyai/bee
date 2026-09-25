@@ -37,7 +37,7 @@ local function define_tests()
                     local names: {string} = {"bee.harness.catalog:scope_probe_allow", "bee.harness.catalog:scope_probe_broad_store"}
                     for _, name in ipairs(binding.policies) do names[#names + 1] = name end
                     local access = probe(names)
-                    for _, resource in ipairs({"bee.environment:workspace_db", "bee.environment:client_db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db"}) do
+                    for _, resource in ipairs({"bee.env:workspace_db", "bee.env:client_db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db"}) do
                         if access[resource] then error(binding.definition_id .. " opened " .. resource) end
                     end
                 end
@@ -55,13 +55,13 @@ local function define_tests()
                     for _, name in ipairs(binding.policies) do names[#names + 1] = name end
                     local access = probe(names)
                     test.is_true(access["bee.placement.native:db"])
-                    for _, resource in ipairs({"bee.environment:workspace_db", "bee.environment:client_db", "bee.resources:db", "bee.credentials:db"}) do
+                    for _, resource in ipairs({"bee.env:workspace_db", "bee.env:client_db", "bee.resources:db", "bee.credentials:db"}) do
                         test.is_false(access[resource])
                     end
                     names[#names + 1] = "bee.harness.catalog:scope_probe_broad_store"
                     local broad = probe(names)
-                    test.is_false(broad["bee.environment:workspace_db"])
-                    test.is_false(broad["bee.environment:client_db"])
+                    test.is_false(broad["bee.env:workspace_db"])
+                    test.is_false(broad["bee.env:client_db"])
                 end
             end
             test.is_true(found)
@@ -74,8 +74,8 @@ local function define_tests()
             test.is_false(allowed["bee.resources:db"])
             test.is_false(allowed["bee.credentials:db"])
             local broad = probe({"bee.harness.catalog:scope_probe_allow", "bee.harness.catalog:scope_probe_broad_store"})
-            test.is_false(broad["bee.environment:workspace_db"])
-            test.is_false(broad["bee.environment:client_db"])
+            test.is_false(broad["bee.env:workspace_db"])
+            test.is_false(broad["bee.env:client_db"])
         end)
     end)
 end

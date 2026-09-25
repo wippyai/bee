@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 version: '1.0'
-namespace: bee.research_measurement
+namespace: bee.research.measurement
 entries:
 - name: probe_policy
   kind: security.policy
@@ -11,7 +11,7 @@ entries:
   source: file://probe.lua
   modules: [funcs, registry, security, http_client, json, time, hash]
   imports: {bounds: bee.threads.records:bounds}
-  security: {policies: [bee.research_measurement:probe_policy]}
+  security: {policies: [bee.research.measurement:probe_policy]}
 - name: inputs
   kind: registry.entry
   data: {baseline_sha256: '', candidate_sha256: ''}
@@ -27,8 +27,8 @@ entries:
     end
     return {run = run}
   imports:
-    measure: bee.research_benchmark_probe:measure
-    baseline: bee.research_benchmark_probe:canonical
+    measure: bee.research.benchmark.probe:measure
+    baseline: bee.research.benchmark.probe:canonical
 - name: run
   kind: function.lua
   source: file://tool.lua
@@ -39,8 +39,8 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.research_measurement:run, bee.research_measurement:measure,
-      bee.research_measurement:inputs, bee.research_benchmark_probe:canonical,
+    resources: [bee.research.measurement:run, bee.research.measurement:measure,
+      bee.research.measurement:inputs, bee.research.benchmark.probe:canonical,
       bee.research.demo:canonical, bee.research.demo:measure, bee.threads.service:read_after, bee.threads.service:record]
     effect: allow
 - name: attribution_policy
@@ -66,7 +66,7 @@ entries:
   data:
     tools:
     - name: research_measure
-      operation: bee.research_measurement:run
+      operation: bee.research.measurement:run
       description: Measure reviewed canonical encoder
       annotations:
         readOnlyHint: false
@@ -74,10 +74,10 @@ entries:
         idempotentHint: true
         openWorldHint: false
       policies:
-      - bee.research_measurement:tool_policy
-      - bee.research_measurement:attribution_policy
-      - bee.research_measurement:delegation_policy
-      - bee.research_measurement:observation_policy
+      - bee.research.measurement:tool_policy
+      - bee.research.measurement:attribution_policy
+      - bee.research.measurement:delegation_policy
+      - bee.research.measurement:observation_policy
       schema:
         type: object
         additionalProperties: false
@@ -108,10 +108,10 @@ entries:
   source: file://live.lua
   modules: [funcs, registry, security, process, channel, time, json, io]
   imports: {bounds: bee.threads.records:bounds}
-  security: {policies: [bee.research_measurement:probe_policy]}
+  security: {policies: [bee.research.measurement:probe_policy]}
   meta:
     command:
       name: research-live-measurement
       security:
-        actor: {id: bee.research_delivery.operator}
-        policies: [bee.research_measurement:probe_policy]
+        actor: {id: bee.research.delivery.operator}
+        policies: [bee.research.measurement:probe_policy]

@@ -11,3 +11,8 @@ When Bee gateway tools are selected, the launch allows Claude Code's reserved
 `mcp__bee__session` tool in `dontAsk` mode alongside those tools. The gateway
 still checks session operations against the admitted binding. Gateway-only
 authoring does not enable Claude's local `Edit` or `Write` filesystem tools.
+
+For a fixture-enabled structured controller, `control_enabled` starts Claude
+with stream-json input and keeps stdin open after the initial brief. The
+carrier may then send an identified inbox item as a new user turn. The shipped
+production host policy does not enable this route pending executable acceptance.

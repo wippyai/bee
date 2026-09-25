@@ -58,7 +58,7 @@ local function define_tests()
             for index = 1, 70 do raw[#raw + 1] = {id = "n" .. tostring(index), addr = "10.0.0." .. tostring(index) .. ":7946", is_local = false} end
             local live = directory.live({open_view = no_view, 
                 local_node = "me",
-                lookup = function(): (string?, string?) return "{me@bee.hive_host:supervisor_host|1}", nil end,
+                lookup = function(): (string?, string?) return "{me@bee.hive.service:supervisor_host|1}", nil end,
                 membership = function(): (unknown, unknown) return raw, nil end,
                 call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
                     return types.reply_ok("r", {})
@@ -86,17 +86,17 @@ local function define_tests()
             local opened: {directory.Attach} = {}
             local live = directory.live({
                 local_node = "local",
-                lookup = function(): (string?, string?) return "{local@bee.hive_host:supervisor_host|1}", nil end,
+                lookup = function(): (string?, string?) return "{local@bee.hive.service:supervisor_host|1}", nil end,
                 membership = function(): (unknown, unknown) return {}, nil end,
                 call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
-                    test.eq(_owner.service_id, "bee.hive_host")
+                    test.eq(_owner.service_id, "bee.hive.api")
                     test.eq(_target.operation_ref, directory.WORKSPACES)
                     return types.reply_error("read", types.fault("DENIED", "not admitted"))
                 end,
                 open_view = function(request: directory.Attach): directory.Outcome
                     opened[#opened + 1] = request
                     if request.mode == "observe" then return {ok = false, code = "DENIED", message = "the node does not admit this node's displays"} end
-                    return {ok = true, code = "", message = "", session_id = "session-1", mode = "control", viewer = "{local@bee.hive_host.desktop:display_host|9}"}
+                    return {ok = true, code = "", message = "", session_id = "session-1", mode = "control", viewer = "{local@bee.hive.desktop:display_host|9}"}
                 end,
             })
             local catalog = live:workspaces("local", {})
@@ -108,7 +108,7 @@ local function define_tests()
             local outcome = live:attach(intent)
             test.is_true(outcome.ok)
             test.eq(outcome.session_id, "session-1")
-            test.eq(outcome.viewer, "{local@bee.hive_host.desktop:display_host|9}")
+            test.eq(outcome.viewer, "{local@bee.hive.desktop:display_host|9}")
             test.eq(opened[1].node_id, "forge")
             test.eq(opened[1].workspace_id, string.rep("b", 32))
             intent.mode = "observe"
@@ -125,7 +125,7 @@ local function define_tests()
                 call = function(owner: types.OwnerRef, target: types.Target, input: Object, _options: {timeout: string?}): types.Reply
                     asked[#asked + 1] = input
                     test.eq(owner.node_id, "selected")
-                    test.eq(owner.service_id, "bee.hive_host")
+                    test.eq(owner.service_id, "bee.hive.api")
                     test.eq(target.operation_ref, directory.WORKSPACES)
                     return types.reply_ok("read", {node_id = "selected", workspaces = {{workspace_id = workspace, label = "Main", served = true}},
                         next_after = "cursor-2"})

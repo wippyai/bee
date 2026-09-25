@@ -85,6 +85,11 @@ item and records its attempt and epoch. A newer carrier may reclaim that same
 record and digest after an uncertain dispatch. `inbox_transport` records
 transport acceptance under the same fence; it does not acknowledge the item
 for the agent. The agent acknowledges or replies through its own inbox tools.
+The persisted `delivery_status` is `waiting_for_restart` when a send finds no
+live attempt, or `undeliverable` when the action has ended. The item's receipt
+`state` remains `committed` until an admitted carrier offers it; an offer
+clears the blocker, an attempt or action receipt updates outstanding blockers
+in the same transaction, and acknowledgment or reply takes precedence over it.
 
 ## Storage
 
@@ -98,7 +103,8 @@ subscriptions, pages), 5 `projection` (checkpoints), 6 `carrier`, 7
 (the owning workspace on each head, attributed from application owners, and
 the index `list_workspace` walks), 11 `action_inbox` (acceptance epochs, rules
 and ordered items), 12 `action_inbox_push` (offer generations and transport
-receipt fields). Records are stored
+receipt fields), 13 `action_inbox_delivery_status` (persisted restart blockers).
+Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and
 indexes in one transaction; identical retries replay the stored reply and

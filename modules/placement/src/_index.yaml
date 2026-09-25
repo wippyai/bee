@@ -64,3 +64,11 @@ entries:
     description: Measure an absolute executable path under the selected placement's host rules
   - name: close_stdin
     description: Close the admitted attempt's stdin when its driver declares session end on stdin closure
+- name: resolver
+  kind: library.lua
+  source: file://resolver.lua
+  modules: [hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    types: bee.placement:types

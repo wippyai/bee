@@ -27,7 +27,7 @@ def main():
                                 "BEE_IDENTITY_PATH": f"{fake_bin}:/usr/bin:/bin" if script else "/usr/bin:/bin",
                                 "BEE_IDENTITY_EXPECTED": "unknown" if script else "lifetime"}
             case_environment["PATH"] = case_environment["BEE_IDENTITY_PATH"]
-            result = subprocess.run([str(RUNTIME), "run", "--verbose", "--host", "bee.identity_probe:workers", "--", "identity-probe"],
+            result = subprocess.run([str(RUNTIME), "run", "--verbose", "--host", "bee.identity.probe:workers", "--", "identity-probe"],
                                     cwd=folder, env=case_environment, capture_output=True, text=True, timeout=30)
             output = result.stdout + result.stderr
             marker = "IDENTITY_GROUP_UNKNOWN_PASS" if script else "IDENTITY_GROUP_LIFETIME_PASS"

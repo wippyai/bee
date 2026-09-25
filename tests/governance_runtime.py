@@ -19,7 +19,7 @@ def main():
         (folder / ".wippy.yaml").write_text("version: '1.0'\nshutdown:\n  timeout: 2s\n")
         subprocess.run([str(RUNTIME), "lint"], cwd=folder, check=True, timeout=60)
         result = subprocess.run(
-            [str(RUNTIME), "run", "--verbose", "--host", "bee.governance_probe:workers", "--", "governance-runtime-probe"],
+            [str(RUNTIME), "run", "--verbose", "--host", "bee.gov.probe:workers", "--", "governance-runtime-probe"],
             cwd=folder, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, timeout=30,
         )

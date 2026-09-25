@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.applications
+namespace: bee.apps
 entries:
 - name: catalog_test
   kind: function.lua
@@ -8,8 +8,8 @@ entries:
   modules: [registry, system]
   meta: {type: test, suite: bee}
   imports:
-    catalog: bee.applications:catalog
-    admission: bee.governance:governed_application_admission
+    catalog: bee.apps:catalog
+    admission: bee.gov:governed_application_admission
     test: wippy.test:test
 - name: command_test
   kind: function.lua
@@ -17,7 +17,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    handler: bee.applications:command
+    handler: bee.apps:command
     native_command: bee.console:command
     test: wippy.test:test
 - name: lifecycle_test
@@ -26,8 +26,8 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    catalog: bee.applications:catalog
-    lifecycle: bee.applications:lifecycle
+    catalog: bee.apps:catalog
+    lifecycle: bee.apps:lifecycle
     contract: bee.protocol:application
     test: wippy.test:test
 - name: principal_test
@@ -36,7 +36,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    principal: bee.applications:principal
+    principal: bee.apps:principal
     test: wippy.test:test
 - name: interactions_test
   kind: function.lua
@@ -44,7 +44,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    interactions: bee.applications:interactions
+    interactions: bee.apps:interactions
     protocol: bee.application:interaction
     test: wippy.test:test
 - name: shutdown_test
@@ -53,7 +53,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    shutdown: bee.applications:shutdown
+    shutdown: bee.apps:shutdown
     test: wippy.test:test
 - name: open_protocol_test
   kind: function.lua
@@ -61,7 +61,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    protocol: bee.applications:open_protocol
+    protocol: bee.apps:open_protocol
     contract: bee.protocol:application
     test: wippy.test:test
 - name: thread_protocol_test
@@ -79,7 +79,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    thread_binding: bee.applications:thread_binding
+    thread_binding: bee.apps:thread_binding
 - name: thread_binding_reducer_test
   kind: function.lua
   source: file://thread_binding_reducer_test.lua
@@ -87,7 +87,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    reducer: bee.applications:thread_binding_reducer
+    reducer: bee.apps:thread_binding_reducer
 - name: open_thread_membership_test
   kind: function.lua
   source: file://open_thread_membership_test.lua

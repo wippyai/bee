@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.saved_profiles_probe
+namespace: bee.saved.profiles.probe
 entries:
 - name: workers
   kind: process.host
@@ -29,9 +29,9 @@ entries:
   method: main
   modules: [funcs, security, logger, system]
   imports: {bounds: bee.threads.records:bounds}
-  security: {policies: [bee.saved_profiles_probe:owner_policy]}
+  security: {policies: [bee.saved.profiles.probe:owner_policy]}
   meta:
     command:
       name: saved-profiles-probe
       security:
-        actor: {id: bee.saved_profiles_probe}
+        actor: {id: bee.saved.profiles.probe}

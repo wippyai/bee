@@ -1,0 +1,27 @@
+version: '1.0'
+namespace: bee.security.gov
+entries:
+- name: governance_delivery_read_policy
+  kind: security.policy
+  policy:
+    actions: [bee.gov.delivery.read]
+    resources: '*'
+    effect: allow
+- name: governance_delivery_manage_policy
+  kind: security.policy
+  policy:
+    actions: [bee.gov.delivery.manage]
+    resources: '*'
+    effect: allow
+- name: governance_delivery_activate_policy
+  kind: security.policy
+  policy:
+    actions: [bee.gov.delivery.activate]
+    resources: '*'
+    effect: allow
+- name: governance_delivery_publish_policy
+  kind: security.policy
+  policy:
+    actions: [bee.gov.delivery.publish]
+    resources: '*'
+    effect: allow

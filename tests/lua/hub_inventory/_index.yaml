@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: tests.hub_inventory
+namespace: tests.hub.inventory
 entries:
 - name: inventory_test
   kind: function.lua

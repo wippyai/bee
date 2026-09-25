@@ -67,7 +67,7 @@ entries:
     persist: bee.persist:database
     transaction: bee.persist:transaction
     migrations: bee.approvals.migrations:migrations
-    resources: bee.approvals.registry:resources
+    resources: bee.approvals:resources
 - name: contract
   kind: contract.definition
   meta:
@@ -117,3 +117,7 @@ entries:
       deliveries: bee.approvals.binding:deliveries
       reconcile: bee.approvals.binding:reconcile
       capabilities: bee.approvals.binding:capabilities
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]

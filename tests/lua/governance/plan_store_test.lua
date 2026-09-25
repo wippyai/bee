@@ -22,7 +22,7 @@ end
 local function define_tests()
     test.describe("Governance destination plan store", function()
         test.it("retains review, selection and exact approval binding across reopen", function()
-            local state, open_error = store.open("bee.governance:plan_test_db", "node-a", "workspace-a")
+            local state, open_error = store.open("bee.gov:plan_test_db", "node-a", "workspace-a")
             if not state then error(tostring(open_error)) end
             local stage = identity("stage", 0, "stage-1", "author-a")
             stage.candidate, stage.artifact, stage.preflight = blob("candidate"), blob("artifact"), blob("preflight")
@@ -58,7 +58,7 @@ local function define_tests()
             test.eq(bound.status, "approval_bound")
             assert(store.close(state))
 
-            local reopened, reopen_error = store.open("bee.governance:plan_test_db", "node-a", "workspace-a")
+            local reopened, reopen_error = store.open("bee.gov:plan_test_db", "node-a", "workspace-a")
             if not reopened then error(tostring(reopen_error)) end
             local restored = ok(store.call(reopened, "reader-a", {operation = "get", source_node = "source-a",
                 source_workspace = "author-a", version = "v1"}))
@@ -72,7 +72,7 @@ local function define_tests()
             assert(store.close(reopened))
         end)
         test.it("selects two applications independently in one workspace", function()
-            local state, open_error = store.open("bee.governance:plan_test_db", "node-a", "workspace-multi")
+            local state, open_error = store.open("bee.gov:plan_test_db", "node-a", "workspace-multi")
             if not state then error(tostring(open_error)) end
             for index, application in ipairs({"application-a", "application-b"}) do
                 local stage = identity("stage", 0, "multi-stage-" .. index, application)

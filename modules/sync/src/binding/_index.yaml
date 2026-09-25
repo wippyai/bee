@@ -11,7 +11,7 @@ entries:
   imports:
     protocol: bee.sync:replica_protocol
     replicas: bee.sync.persist:replicas
-    resources: bee.sync.registry:resources
+    resources: bee.sync:resources
     transaction: bee.persist:transaction
   meta:
     hive: policy

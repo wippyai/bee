@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.hive_manager
+namespace: bee.hive.manager
 entries:
 - name: directory_test
   kind: function.lua
@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    directory: bee.hive_manager:directory
+    directory: bee.hive.manager:directory
     types: bee.hive:types
 - name: model_test
   kind: function.lua
@@ -18,8 +18,8 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
-    model: bee.hive_manager:model
-    directory: bee.hive_manager:directory
+    model: bee.hive.manager:model
+    directory: bee.hive.manager:directory
     types: bee.hive:types
 - name: view_test
   kind: function.lua
@@ -30,9 +30,9 @@ entries:
   imports:
     frames: bee.application:frame
     test: wippy.test:test
-    model: bee.hive_manager:model
-    view: bee.hive_manager:view
-    directory: bee.hive_manager:directory
+    model: bee.hive.manager:model
+    view: bee.hive.manager:view
+    directory: bee.hive.manager:directory
     types: bee.hive:types
     appearance: bee.application:appearance
 - name: remote_test
@@ -42,5 +42,5 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    remote: bee.hive_manager:remote
+    remote: bee.hive.manager:remote
     appearance: bee.application:appearance

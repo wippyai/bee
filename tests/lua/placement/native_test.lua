@@ -129,7 +129,7 @@ local function resource_call(method: string, value: unknown): {[string]: unknown
     return typed.value :: {[string]: unknown}
 end
 local function call(actor: string, method: string, value: unknown): service.Reply
-    local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native:" .. method, value)
+    local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: service.Reply
 end
@@ -505,8 +505,8 @@ local function define_tests()
                 local prepared = attempt_of(call(OWNER, "prepare", request))
                 local first = index % 2 == 0 and "stop" or "start"
                 local second = first == "stop" and "start" or "stop"
-                local a, a_error = caller(OWNER):async("bee.placement.native:" .. first, {attempt_id = prepared.attempt_id})
-                local b, b_error = caller(OWNER):async("bee.placement.native:" .. second, {attempt_id = prepared.attempt_id})
+                local a, a_error = caller(OWNER):async("bee.placement.native.binding:" .. first, {attempt_id = prepared.attempt_id})
+                local b, b_error = caller(OWNER):async("bee.placement.native.binding:" .. second, {attempt_id = prepared.attempt_id})
                 if a_error or not a or b_error or not b then error("start/stop race: " .. tostring(a_error or b_error)) end
                 local first_reply, second_reply = await(a), await(b)
                 local stop_reply = first == "stop" and first_reply or second_reply
@@ -522,7 +522,7 @@ local function define_tests()
         end)
         test.it("inherits only the host-selected user home while keeping placement files private", function()
             local unapproved = launch({"sh", "-c", "true"}, "direct_process")
-            unapproved.environment_refs = {HOME = "bee.environment:machine_home"}
+            unapproved.environment_refs = {HOME = "bee.env:machine_home"}
             local refused = call(OWNER, "prepare", unapproved)
             test.is_false(refused.ok)
             test.eq(refused.error and refused.error.code, "DENIED")
@@ -530,9 +530,9 @@ local function define_tests()
             local refused_db = assert(store.open())
             test.is_nil(store.row(refused_db, tostring(unapproved.attempt_id)))
             refused_db:release()
-            local original = registry.get("bee.environment:machine_home")
+            local original = registry.get("bee.env:machine_home")
             if not original then error("machine home binding is missing") end
-            local changed = registry.get("bee.environment:machine_home")
+            local changed = registry.get("bee.env:machine_home")
             if not changed then error("machine home binding is missing") end
             changed.data = {storage = "bee.placement.native:sentinel_storage",
                 variable = "BEE_TEST_INHERITED_HOME", default = "/tmp", readonly = true}
@@ -543,7 +543,7 @@ local function define_tests()
             local ok, err = pcall(function()
                 local request = retained_launch(OWNER, fresh("inherited-session"), "unused")
                 request.launch.argv = {"-c", 'test "$HOME" = /tmp'}
-                request.environment_refs = {HOME = "bee.environment:machine_home"}
+                request.environment_refs = {HOME = "bee.env:machine_home"}
                 local prepared = attempt_of(call(OWNER, "prepare", request))
                 test.eq(value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).private_home, false)
                 attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
@@ -571,7 +571,7 @@ local function define_tests()
             for key, item in pairs(original_policy :: {[string]: unknown}) do revoked[key] = item end
             revoked.allow_host_home = false
             local request = retained_launch(OWNER, fresh("revoked-home-session"), "must-not-run")
-            request.environment_refs = {HOME = "bee.environment:machine_home"}
+            request.environment_refs = {HOME = "bee.env:machine_home"}
             local prepared = attempt_of(call(OWNER, "prepare", request))
             local ok, failure = pcall(function()
                 policy_entry.data = revoked
@@ -714,7 +714,7 @@ local function define_tests()
             if not claimed.ok then db:release(); error(claimed.message or "claim") end
             local topic = "bee.test.duplicate-runner." .. fresh("reply")
             local replies = assert(process.listen(topic, {message = true}))
-            local duplicate, spawn_error = process.spawn("bee.placement.native:runner", "bee:workers", prepared.attempt_id, process.pid(), topic)
+            local duplicate, spawn_error = process.spawn("bee.placement.native.service:runner", "bee:workers", prepared.attempt_id, process.pid(), topic)
             if not duplicate then process.unlisten(replies); db:release(); error(tostring(spawn_error)) end
             local selected = channel.select({replies:case_receive(), time.after("5s"):case_receive()})
             process.unlisten(replies)
@@ -1077,8 +1077,8 @@ local function define_tests()
             local session_ref = fresh("contended-session")
             local first = retained_launch(OWNER, session_ref, "contender-one")
             local second = retained_launch(OWNER, session_ref, "contender-two")
-            local a, a_error = caller(OWNER, principals.workspace(first)):async("bee.placement.native:prepare", first)
-            local b, b_error = caller(OWNER, principals.workspace(second)):async("bee.placement.native:prepare", second)
+            local a, a_error = caller(OWNER, principals.workspace(first)):async("bee.placement.native.binding:prepare", first)
+            local b, b_error = caller(OWNER, principals.workspace(second)):async("bee.placement.native.binding:prepare", second)
             if a_error or not a or b_error or not b then error("start prepare race: " .. tostring(a_error or b_error)) end
             local first_reply, second_reply = await(a), await(b)
             local replies = {first_reply, second_reply}
@@ -1105,8 +1105,8 @@ local function define_tests()
             -- An overlapping retry is not a second holder: both replies name
             -- the one recorded intent, with no additional receipt.
             local replay = retained_launch(OWNER, fresh("replay-session"), "same-request")
-            local first_retry, first_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native:prepare", replay)
-            local second_retry, second_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native:prepare", replay)
+            local first_retry, first_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native.binding:prepare", replay)
+            local second_retry, second_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native.binding:prepare", replay)
             if first_retry_error or not first_retry or second_retry_error or not second_retry then error("start replay race: " .. tostring(first_retry_error or second_retry_error)) end
             local replay_a, replay_b = attempt_of(await(first_retry)), attempt_of(await(second_retry))
             test.eq(replay_a.attempt_id, replay.attempt_id)
@@ -2020,7 +2020,7 @@ local function define_tests()
             local fixture, fixture_error = caller(OWNER):async("bee.placement.native:fixture_stop_materialization", {
                 source_ref = source, attempt_id = attempt_id, content = '{"fixture":"fenced"}'})
             if not fixture then error(tostring(fixture_error or "start materialization fence fixture")) end
-            local start, start_error = caller(OWNER):async("bee.placement.native:start", {attempt_id = attempt_id})
+            local start, start_error = caller(OWNER):async("bee.placement.native.binding:start", {attempt_id = attempt_id})
             if not start then error(tostring(start_error or "start fenced attempt")) end
             local fixture_reply = await(fixture) :: {[string]: unknown}
             if fixture_reply.ok ~= true then error("materialization fence fixture failed: " .. tostring(fixture_reply.error)) end

@@ -289,8 +289,9 @@ def toolkit_reference() -> bytes:
         raise SystemExit(f"modules/application/src/viz.lua calls without a proven example: {missing}")
     gallery = []
     for names, text in examples:
-        gallery += ["### " + ", ".join(f"`viz.{name}`" for name in names), "", text, ""]
-    apps = sorted((ROOT / "src/apps").glob("*/view.lua"))
+        gallery += ["### " + ", ".join(f"`viz.{name}`" for name in names), "",
+                    "\n".join(line.rstrip() for line in text.splitlines()), ""]
+    apps = sorted((ROOT / "src").rglob("view.lua"))
     calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance + frame + viz
                                   + "".join(p.read_text() for p in apps))))
     sections = [
@@ -539,7 +540,7 @@ def build(local: bool = False) -> int:
     for identity, topic, payload, source in component_documents():
         record(identity, topic, payload, source)
     record("toolkit", "terminal", toolkit_reference(),
-           "generated: modules/application/src, src/apps, tests/lua/frame")
+           "generated: modules/application/src, src application views, tests/lua/frame")
 
     total = sum(document["bytes"] for document in documents)
     if total > MAX_CORPUS_BYTES:

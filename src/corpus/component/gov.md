@@ -18,7 +18,7 @@ captures exact work and runs it behind a prerequisite overlay before the full
 application overlay becomes visible. The agent execution environment is separate.
 Persistent target ledgers remain authoritative even for ephemeral definitions.
 
-`bee.governance:workspace` now freezes trusted in-memory file records into a
+`bee.gov:workspace` now freezes trusted in-memory file records into a
 deterministic binary-safe snapshot. It copies records, measures each file's bytes
 and SHA-256, hashes a sorted length-framed manifest, and binds workspace identity
 and revision. It rejects path traversal, drive/stream paths, duplicate paths,
@@ -27,11 +27,11 @@ file, 16 MiB total). It is not a filesystem server or an authorization boundary;
 returned Lua values must be remeasured before execution, not treated as immutable
 merely because the helper calls them snapshots.
 
-The source now includes the `bee.governance.binding:overlay_call` function and
-`bee.governance:overlay_contract` binding through `overlay_local`, with the
+The source now includes the `bee.gov.binding:overlay_call` function and
+`bee.gov:overlay_contract` binding through `overlay_local`, with the
 `authoring_trait` agent description. This is private authoring, not activation.
-The managed Agent gateway admits `bee.governance.overlay.read` (list/read) and
-`bee.governance.overlay.write` (create/put/append/remove/freeze) only through this
+The managed Agent gateway admits `bee.gov.overlay.read` (list/read) and
+`bee.gov.overlay.write` (create/put/append/remove/freeze) only through this
 facade. Every operation also checks the stored author against the authenticated
 actor; an operation grant does not transfer an existing overlay's ownership.
 The method's protected store policy does not grant callers direct database,
@@ -63,7 +63,7 @@ its internal `workspace_id`.
 For an application candidate, the author writes `entries.json` as a plain JSON
 list of complete registry entries and freezes it with the other source files.
 The publication preparation service parses that exact frozen file and uses
-`bee.governance:artifact` to create the canonical measured envelope. It executes
+`bee.gov:artifact` to create the canonical measured envelope. It executes
 no code and does not mutate the overlay or frozen snapshot.
 
 The host links `target_db`; `BEE_GOVERNANCE_DB` selects the default SQLite path.
@@ -90,7 +90,7 @@ conflicts, entry ownership and scoped permissions, explicit deletion and unchang
 durable history on the candidate executable. Logical overlay ownership is not
 automatic process-exit cleanup. Expanded packages, service readiness and migration
 ordering remain unproved by this registry-entry-only fixture.
-`bee.governance.registry:materializer` keeps the overlay owner outside transferred data,
+`bee.gov:materializer` keeps the overlay owner outside transferred data,
 copies and remeasures the desired artifact, and deletes definitions no longer in
 that owner's complete desired set. Cleanup can reconcile and observe the exact
 empty owner overlay without making an empty application artifact publishable. It
@@ -139,7 +139,7 @@ adapter may claim `guarded_publication` or `exact_expansion` from metadata alone
 No direct registry writer or remote activation endpoint is exposed through the
 agent facade.
 
-Migrations 5-7 and `bee.governance.persist:activation_store` provide the internal
+Migrations 5-7 and `bee.gov.persist:activation_store` provide the internal
 recovery ledger. An immutable intent binds the host-selected overlay owner and
 exact plan, artifact, resolution, preflight and migration-work digests.
 Approval/consumption and migration progress are stored separately, and the
@@ -149,7 +149,7 @@ ledger before they enter preflight; they are a recovery index, not a substitute
 for database truth. This store performs no resolution, approval call or overlay
 operation.
 
-`bee.governance.binding:activation_owner` prepares and advances that ledger one durable
+`bee.gov.binding:activation_owner` prepares and advances that ledger one durable
 phase at a time. Before consumption it requires the same current accepted
 selection and repeats local resolution/preflight. Once `consuming` is durable,
 recovery reconciles the same approval effect because it may already have been
@@ -171,7 +171,7 @@ frozen work and target ledger. Removing an overlay restores registry state; it
 never claims to roll back committed schema effects. Applied definitions are
 immutable and updates append migrations.
 
-`bee.governance.registry:hub_resolver` now provides the destination resolution adapter.
+`bee.gov:hub_resolver` now provides the destination resolution adapter.
 It captures one atomic registry state, asks the runtime to plan a
 host-selected Hub dependency root, reconstructs the complete selected closure
 from the planned final state, and retains definitions absent from the plan
@@ -183,7 +183,7 @@ bytes exactly.
 
 The destination facade is split the way the authoring facade is: the public
 `destination_call` authenticates the caller's exact delivery operation and then
-enters `bee.governance.security:destination_execution_scope` to call the private
+enters `bee.gov.security:destination_execution_scope` to call the private
 `destination_backend_call`, which proves it is in that scope before opening any
 store. The caller's own actor stays the recorded one. The facade returns an
 owner fault as the application boundary names it, so a refusal carries its code

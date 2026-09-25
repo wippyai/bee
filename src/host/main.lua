@@ -109,7 +109,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
     local broker = tostring(assert(process.with_options({}):with_context({
         ["bee.workspace_owner"] = self, ["bee.workspace_id"] = workspace_id,
     }):with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored(
-        "bee.applications:broker", "bee:workers", self, snapshot.desktop.preferences)))
+        "bee.apps:broker", "bee:workers", self, snapshot.desktop.preferences)))
     local broker_started = false
     local broker_recovery_requested = false
     local restoring = ""

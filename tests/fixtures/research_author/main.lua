@@ -27,7 +27,7 @@ local function call(target: string, request: unknown): Object
 end
 local function main()
     for _, topic in ipairs({"source", "corpus", "authoring", "application", "model", "view"}) do
-        local document = call("bee.research_probe:docs", {topic = topic})
+        local document = call("bee.research.probe:docs", {topic = topic})
         if type(document.content) ~= "string" or #document.content == 0 then error("empty research document " .. topic) end
     end
     local actor = "bee.research.probe"
@@ -39,8 +39,8 @@ local function main()
     local data = bounds.object(policy.data)
     if not data then error("Agy policy data missing") end
     data.gateway_tools = {"thread_read", "thread_message", "overlay", "research_docs"}
-    data.gateway_surface = {tools = {{name = "research_docs", operation = "bee.research_probe:docs", description = "Read the fixed research source and Bee authoring contracts",
-        policies = {"bee.research_probe:docs_policy"}, schema = {type = "object", additionalProperties = false, required = {"topic"},
+    data.gateway_surface = {tools = {{name = "research_docs", operation = "bee.research.probe:docs", description = "Read the fixed research source and Bee authoring contracts",
+        policies = {"bee.research.probe:docs_policy"}, schema = {type = "object", additionalProperties = false, required = {"topic"},
             properties = {topic = {type = "string", enum = {"source", "corpus", "authoring", "application", "model", "view", "proposal", "review"}}}},
         annotations = {readOnlyHint = true, destructiveHint = false, openWorldHint = false}}}, traits = {
         {id = "research:read", title = "Research reader", prompt = "Read this research thread.", tools = {"thread_read", "research_docs"}},
@@ -59,7 +59,7 @@ local function main()
     if not applied then error(tostring(apply_error)) end
     local listener: Object? = nil
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway.registry:address", {})
+        local raw, address_error = funcs.call("bee.gateway:address", {})
         if not address_error then listener = bounds.object(raw) end
         if listener and type(listener.address) == "string" then break end
         time.sleep("100ms")
@@ -82,7 +82,7 @@ local function main()
         .. "Finally call thread_message with idempotency_key and message_id " .. marker
         .. ", message_kind progress, recipient_ids [bee.research.probe], and content {text: the frozen snapshot digest, artifact_ref: the frozen snapshot digest}. "
         .. "The host will separately review, lint, approve and apply; do not claim tests or benchmarks you did not run. Answer DONE after the thread message succeeds."
-    local review = call("bee.research_probe:docs", {topic = "review"})
+    local review = call("bee.research.probe:docs", {topic = "review"})
     if type(review.content) == "string" and #review.content > 0 then
         brief = "Repair the previous Gemini-authored research artifact using Bee MCP for all authoring. You may read the harness's own saved tool-output files when directed there. "
             .. "No shell, unrelated files, delegates or direct source/registry writes. Stop after two identical non-pending refusals. "
@@ -186,7 +186,7 @@ local function main()
     if active[1] ~= "research:read" or active[2] ~= "research:record" then error("wrong selected traits") end
     if context_error or not context or context.experiment ~= "baseline" then error("Gemini did not select the requested context") end
     if not frozen_digest then error("missing frozen artifact") end
-    local file = call("bee.governance.binding:overlay_call", {operation = "read", overlay_id = "research-performance",
+    local file = call("bee.gov.binding:overlay_call", {operation = "read", overlay_id = "research-performance",
         path = "entries.json", snapshot_digest = frozen_digest})
     if type(file.content_base64) ~= "string" then error("missing authored entries") end
     local source, decode_error = base64.decode(file.content_base64)

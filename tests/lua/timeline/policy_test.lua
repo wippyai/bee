@@ -9,8 +9,8 @@ local model = require("model")
 local function define_tests()
     test.describe("Timeline policy coverage", function()
         test.it("grants the app's declared policy every target the model calls", function()
-            local policy, policy_error = security.policy("bee.timeline:client_policy")
-            if not policy then error("resolve bee.timeline:client_policy: " .. tostring(policy_error)) end
+            local policy, policy_error = security.policy("bee.threads.timeline:client_policy")
+            if not policy then error("resolve bee.threads.timeline:client_policy: " .. tostring(policy_error)) end
             local scope = security.new_scope({policy})
             local actor = security.actor()
             if not actor then error("test actor is unavailable") end

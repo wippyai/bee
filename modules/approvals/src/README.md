@@ -58,6 +58,6 @@ place in the policy. Workspace membership alone exposes nothing.
 | root `bee.approvals` | Contract, stable local binding, linked host references, default database and the owner domain library |
 | `binding/` | Callable approval operations, including the Hive policy operations |
 | `persist/` | Durable thread-projection outbox |
-| `registry/` | Linked database and host-policy readers |
+| root `bee.approvals` | Linked database and host-policy readers |
 | `migrations/` | Immutable approval schema ledger |
 | `service/` | Authority and outbox worker processes |

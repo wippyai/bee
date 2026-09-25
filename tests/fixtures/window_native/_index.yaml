@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.window_native
+namespace: bee.window.native
 entries:
 - name: upgrade_db
   kind: db.sql.sqlite
@@ -9,7 +9,7 @@ entries:
   kind: security.policy
   policy:
     actions: [db.get]
-    resources: [bee.window_native:upgrade_db]
+    resources: [bee.window.native:upgrade_db]
     effect: allow
 - name: launch_policy
   kind: registry.entry
@@ -47,7 +47,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.placement.native:prepare, bee.placement.native:status, bee.placement.native:cleanup, bee.placement.native:reconcile, bee.placement.native:stop]
+    resources: [bee.placement.native.binding:prepare, bee.placement.native.binding:status, bee.placement.native.binding:cleanup, bee.placement.native.binding:reconcile, bee.placement.native.binding:stop]
     effect: allow
 - name: child_policy
   kind: security.policy
@@ -62,11 +62,11 @@ entries:
   modules: [process, channel, tty, time, security, funcs, registry]
   imports:
     test: wippy.test:test
-    service: bee.placement.native:service
-    placement_store: bee.placement.native:store
-    window: bee.placement.native:window
+    service: bee.placement.native.service:service
+    placement_store: bee.placement.native.persist:store
+    window: bee.placement.native.service:window
   security:
-    policies: [bee.window_native:activation_policy, bee.window_native:caller_policy, bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.resources:resource_resolve_policy]
+    policies: [bee.window.native:activation_policy, bee.window.native:caller_policy, bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.resources:resource_resolve_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: child
   kind: process.lua
@@ -74,7 +74,7 @@ entries:
   method: main
   modules: [process, channel, time, funcs]
   imports:
-    window: bee.placement.native:window
+    window: bee.placement.native.service:window
     protocol: bee.placement.native:protocol
 - name: migration_test
   kind: function.lua
@@ -84,9 +84,9 @@ entries:
   imports:
     test: wippy.test:test
     persist: bee.persist:database
-    migrations: bee.placement.native:migrations
+    migrations: bee.placement.native.migrations:migrations
   security:
-    policies: [bee.window_native:upgrade_policy]
+    policies: [bee.window.native:upgrade_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: cas_test
   kind: function.lua
@@ -95,7 +95,7 @@ entries:
   modules: [sql]
   imports:
     test: wippy.test:test
-    store: bee.placement.native:store
+    store: bee.placement.native.persist:store
   security:
     policies: [bee.security.placement:placement_store_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
@@ -111,10 +111,10 @@ entries:
   contracts:
   - contract: bee.driver:driver
     methods:
-      prepare: bee.window_native:unused
-      dispatch: bee.window_native:unused
-      normalize: bee.window_native:unused
-      configure: bee.window_native:configure
+      prepare: bee.window.native:unused
+      dispatch: bee.window.native:unused
+      normalize: bee.window.native:unused
+      configure: bee.window.native:configure
 - name: configure
   kind: function.lua
   source: file://driver.lua

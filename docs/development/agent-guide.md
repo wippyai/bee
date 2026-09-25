@@ -15,7 +15,8 @@ them. Native Terminal runs with the operating system user's authority.
 Keep desktop responsibilities in the `src/` component folders (`src/host`,
 `src/client`, `src/launch` and their siblings, one namespace per folder),
 public application helpers and appearance values in
-`modules/application/src`, and standalone applications in `src/apps`.
+`modules/application/src`, and standalone applications in their feature folders
+under `src/`.
 Use the [UI brand book](../guides/ui.md) and
 [application visual style](../guides/app-style.md) for presentation and
 interaction rules. The offline toolkit reference gives compact, tested examples

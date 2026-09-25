@@ -7,8 +7,8 @@ local guide = require("guide")
 local transaction = require("transaction")
 local bounds = require("bounds")
 
-local BACKEND = "bee.governance.binding:workspace_backend_call"
-local EXECUTION_SCOPE = "bee.governance.security:workspace_execution_scope"
+local BACKEND = "bee.gov.binding:workspace_backend_call"
+local EXECUTION_SCOPE = "bee.gov.security:workspace_execution_scope"
 type Result = transaction.Result
 
 local function decode_reply(value: unknown): Result?
@@ -59,7 +59,7 @@ local function handle(raw: unknown): Result
     end
     local actor = security.actor()
     local action = (request.operation == "read" or request.operation == "list")
-        and "bee.governance.overlay.read" or "bee.governance.overlay.write"
+        and "bee.gov.overlay.read" or "bee.gov.overlay.write"
     local resource = request.owned and "own-overlays" or request.workspace_id
     if not actor or not security.can(action, resource) then
         return transaction.failure("DENIED", "overlay operation is not authorized")

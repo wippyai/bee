@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.desktop_client_probe
+namespace: bee.desktop.client.probe
 entries:
 - name: physical
   kind: process.lua
@@ -52,7 +52,7 @@ entries:
     interaction: bee.application:interaction
     names: bee.application:names
   security:
-    policies: [bee.desktop_client_probe:root_policy]
+    policies: [bee.desktop.client.probe:root_policy]
   meta:
     command:
       name: desktop-client-probe
@@ -64,7 +64,7 @@ entries:
   modules: [process, security, tty, time, channel, logger]
   imports: {store: bee.client:store}
   security:
-    policies: [bee.desktop_client_probe:root_policy]
+    policies: [bee.desktop.client.probe:root_policy]
   meta:
     command:
       name: retained-supervisor-probe
@@ -82,14 +82,14 @@ entries:
     decode: bee.protocol:decode
     launch_protocol: bee.launch:protocol
   security:
-    policies: [bee.desktop_client_probe:root_policy]
+    policies: [bee.desktop.client.probe:root_policy]
   meta:
     command:
       name: thread-status-probe
       short: Verify host-authorized thread status through F12 and reconnect
       security:
-        actor: {id: bee.desktop_client_probe:status_viewer}
-        policies: [bee.desktop_client_probe:root_policy]
+        actor: {id: bee.desktop.client.probe:status_viewer}
+        policies: [bee.desktop.client.probe:root_policy]
 - name: forger
   kind: process.lua
   source: file://forger.lua

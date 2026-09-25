@@ -1,0 +1,6 @@
+version: '1.0'
+namespace: bee.threads.migrations
+entries:
+- name: migrations
+  kind: library.lua
+  source: file://migrations.lua

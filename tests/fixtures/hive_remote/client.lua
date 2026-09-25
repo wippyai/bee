@@ -52,7 +52,7 @@ local function scope(names: {string}): security.Scope
 end
 
 local function run_desktop(self: string, host_pid: string, workspace_id: string, supervisor_pid: string, proof_token: string, proof_file: string)
-    local render_acks = assert(process.listen("bee.hive_remote.renderer_ack", {message = true}))
+    local render_acks = assert(process.listen("bee.hive.remote.renderer_ack", {message = true}))
     local client_readies = assert(process.listen("bee.client.ready", {message = true}))
     local client_renderers = assert(process.listen("bee.client.renderer", {message = true}))
     local events: Channel<process.Event> = assert(process.events())
@@ -104,7 +104,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     local client1_pid = tostring(assert(process.with_options({terminal = grant})
         :with_context({["bee.client_owner"] = self})
         :with_scope(client_scope)
-        :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee.environment:client_db",
+        :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee.env:client_db",
             "bee.console:app", {version = 1, quit_mode = "detach", fullscreen = true})))
 
     local c1_ready_msg = hop(client_readies, "client 1 ready")
@@ -115,7 +115,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         error("Invalid client 1 ready payload")
     end
 
-    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {
+    assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {
         version = 1,
         request_id = "admit-c1",
         op = "admit_client",
@@ -139,7 +139,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     end
     local renderer1_pid = rend1_data.renderer
 
-    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {
+    assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {
         version = 1,
         request_id = "render-c1",
         op = "select_renderer",
@@ -200,7 +200,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     end
     local repl_renderer_pid = repl_data.renderer
 
-    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {
+    assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {
         version = 1,
         request_id = "rejoin-c1",
         op = "select_renderer",
@@ -244,7 +244,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     -- A departed client keeps its display fenced on the host until the owner
     -- releases the admission. The controller observes its own client, so it
     -- drives that release before the display is attached again.
-    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {
+    assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {
         version = 1,
         request_id = "detach-c1",
         op = "detach_client",
@@ -266,7 +266,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     local client2_pid = tostring(assert(process.with_options({terminal = grant2})
         :with_context({["bee.client_owner"] = self})
         :with_scope(client_scope)
-        :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee.environment:client_db",
+        :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee.env:client_db",
             nil, {version = 1, quit_mode = "detach", fullscreen = true})))
 
     local c2_ready_msg = hop(client_readies, "client 2 ready")
@@ -277,7 +277,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         error("Invalid client 2 ready payload")
     end
 
-    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {
+    assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {
         version = 1,
         request_id = "admit-c2",
         op = "admit_client",
@@ -301,7 +301,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     end
     local renderer2_pid = rend2_data.renderer
 
-    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {
+    assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {
         version = 1,
         request_id = "render-c2",
         op = "select_renderer",
@@ -345,7 +345,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     assert(c2_exited, "Client 2 did not exit within 6s after Ctrl+Q detach")
     screen2:close()
 
-    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {version = 1, op = "done"}))
+    assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {version = 1, op = "done"}))
     assert(io.print("BEE_HIVE_REMOTE client_passed"))
 
     process.unlisten(render_acks)
@@ -371,7 +371,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
     local updates = assert(process.listen("bee.host.views", {message = true}))
     local controls = assert(process.listen("bee.workspace.control", {message = true}))
     local presentations = assert(process.listen("bee.host.presentation", {message = true}))
-    local render_acks = assert(process.listen("bee.hive_remote.renderer_ack", {message = true}))
+    local render_acks = assert(process.listen("bee.hive.remote.renderer_ack", {message = true}))
     local events: Channel<process.Event> = assert(process.events())
 
     -- Wait for cluster membership convergence (at least 2 members)
@@ -474,7 +474,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
             error("Invalid presenter ready payload")
         end
 
-        assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {
+        assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {
             version = 1,
             request_id = "select-render-presenter",
             op = "select_renderer",
@@ -631,7 +631,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
         local resumed_in: string = tostring(assert(io.readline()))
         if resumed_in ~= "resumed" then error("Unexpected client test command: " .. resumed_in) end
 
-        assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {
+        assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {
             version = 1,
             request_id = "select-render-self",
             op = "select_renderer",
@@ -799,7 +799,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
         "Foreign workspace request was not rejected")
 
     -- Signal active testing complete
-    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {version = 1}))
+    assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {version = 1}))
     assert(io.print("BEE_HIVE_REMOTE client_active_done"))
 
     -- Wait for harness to signal that detach has completed
@@ -880,7 +880,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
     assert(wait_for(rejoined, "BEE_REJOIN_TOKEN=([%w_]+)") == proof_token, "Destination proof token mismatch on rejoined shell")
 
     rejoined:close()
-    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {version = 1}))
+    assert(process.send(supervisor_pid, "bee.hive.remote.active_done", {version = 1}))
 
     assert(io.print("BEE_HIVE_REMOTE client_passed"))
 

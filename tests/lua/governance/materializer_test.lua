@@ -9,7 +9,7 @@ type State = {entries: {[string]: Entry}, generation: integer, conflicts: intege
 
 local function admission_blob(artifact_digest: string): {[string]: unknown}
     local measured = assert(admission.measure({schema_revision = admission.SCHEMA,
-        workspace_id = "workspace-a", overlay_owner = "bee.governance:overlay", source_node = "node-a",
+        workspace_id = "workspace-a", overlay_owner = "bee.gov:overlay", source_node = "node-a",
         source_workspace = "source-a", artifact_digest = artifact_digest, policy_digest = string.rep("a", 64), bindings = {}}))
     return {bytes = measured.bytes, digest = measured.digest}
 end
@@ -73,16 +73,16 @@ local function define_tests()
                 {id = "app:kept", kind = "registry.entry", data = {value = "after"}},
                 {id = "app:new", kind = "registry.entry", data = {value = "new"}},
             }
-            local result, err = materializer.reconcile_with(api(state), is_conflict, "bee.governance:overlay", desired)
+            local result, err = materializer.reconcile_with(api(state), is_conflict, "bee.gov:overlay", desired)
             if not result then error(tostring(err)) end
             test.eq(result.attempts, 1)
             test.is_true(result.changed == true)
             test.eq((state.entries["app:kept"].data :: {[string]: unknown}).value, "after")
             test.eq((state.entries["app:new"].data :: {[string]: unknown}).value, "new")
             test.is_true(state.entries["old:gone"] == nil)
-            test.is_true(materializer.matches_with(api(state), "bee.governance:overlay", desired) == true)
+            test.is_true(materializer.matches_with(api(state), "bee.gov:overlay", desired) == true)
 
-            local stable, stable_error = materializer.reconcile_with(api(state), is_conflict, "bee.governance:overlay", desired)
+            local stable, stable_error = materializer.reconcile_with(api(state), is_conflict, "bee.gov:overlay", desired)
             if not stable then error(tostring(stable_error)) end
             test.is_false(stable.changed == true)
             test.eq(stable.attempts, 1)
@@ -91,10 +91,10 @@ local function define_tests()
         test.it("keeps owner selection outside the artifact and returns conflicts for re-preflight", function()
             local state: State = {entries = {}, generation = 1, conflicts = 1}
             local desired = {{id = "app:item", kind = "registry.entry", data = {value = true}}}
-            local result = materializer.reconcile_with(api(state), is_conflict, "bee.governance:overlay", desired)
+            local result = materializer.reconcile_with(api(state), is_conflict, "bee.gov:overlay", desired)
             test.is_true(result == nil)
             test.is_true(state.entries["app:item"] == nil)
-            test.is_false(materializer.matches_with(api(state), "bee.governance:overlay", desired) == true)
+            test.is_false(materializer.matches_with(api(state), "bee.gov:overlay", desired) == true)
             local invalid = materializer.reconcile_with(api(state), is_conflict, "", desired)
             test.is_true(invalid == nil)
         end)
@@ -102,15 +102,15 @@ local function define_tests()
         test.it("reconciles and observes an exact empty overlay for cleanup", function()
             local state: State = {entries = { ["app:item"] = {
                 id = "app:item", kind = "registry.entry", data = {value = true}}}, generation = 1, conflicts = 0}
-            test.is_false(materializer.matches_with(api(state), "bee.governance:overlay", {}) == true)
+            test.is_false(materializer.matches_with(api(state), "bee.gov:overlay", {}) == true)
             local result, result_error = materializer.reconcile_with(api(state), is_conflict,
-                "bee.governance:overlay", {})
+                "bee.gov:overlay", {})
             if not result then error(tostring(result_error)) end
             test.is_true(result.changed == true)
             test.eq(result.entries, 0)
             test.is_true(result.artifact_digest ~= "")
             test.is_true(next(state.entries) == nil)
-            test.is_true(materializer.matches_with(api(state), "bee.governance:overlay", {}) == true)
+            test.is_true(materializer.matches_with(api(state), "bee.gov:overlay", {}) == true)
         end)
 
         test.it("treats empty artifact and registry metadata as the same object", function()
@@ -119,15 +119,15 @@ local function define_tests()
                 meta = table.create(0, 1)}}, generation = 1, conflicts = 0}
             local desired = {{id = "app:item", kind = "registry.entry", data = {value = true},
                 meta = table.create(1, 0)}}
-            test.is_true(materializer.matches_with(api(state), "bee.governance:overlay", desired) == true)
+            test.is_true(materializer.matches_with(api(state), "bee.gov:overlay", desired) == true)
             local result, result_error = materializer.reconcile_with(api(state), is_conflict,
-                "bee.governance:overlay", desired)
+                "bee.gov:overlay", desired)
             if not result then error(tostring(result_error)) end
             test.is_false(result.changed == true)
         end)
         test.it("writes policy, requirement default and grant record in one overlay generation", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
-            local policy_id = "bee.governance.grants:policy." .. string.rep("a", 64)
+            local policy_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
                 meta = {type = "bee.application"}, data = {source = "return true"}},
                 {id = "app.notes:threads", kind = "ns.requirement",
@@ -136,21 +136,21 @@ local function define_tests()
             local generated = {policies = {{id = policy_id, kind = "security.policy",
                 data = {policy = {actions = {"funcs.call"}, resources = {"bee.threads.service:get"}, effect = "allow"}}}},
                 bindings = {{requirement_id = "app.notes:threads", policy_id = policy_id}},
-                record = {id = "bee.governance.grants:record." .. string.rep("b", 64),
+                record = {id = "bee.gov.grants:record." .. string.rep("b", 64),
                     kind = "registry.entry", data = {digest = string.rep("c", 64)}}}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
-                "bee.governance:overlay", portable, nil, generated))
+                "bee.gov:overlay", portable, nil, generated))
             test.eq(applied.entries, 2)
             test.eq(applied.overlay_entries, 4)
             test.eq(state.generation, 2)
             test.eq((state.entries["app.notes:threads"].data :: {[string]: unknown}).default, policy_id)
             test.not_nil(state.entries[policy_id])
             test.not_nil(state.entries[generated.record.id])
-            test.is_true(materializer.matches_composed_with(api(state), "bee.governance:overlay",
+            test.is_true(materializer.matches_composed_with(api(state), "bee.gov:overlay",
                 portable, nil, generated))
             local narrowed = {policies = {}, bindings = {}, record = generated.record}
             assert(materializer.reconcile_composed_with(api(state), is_conflict,
-                "bee.governance:overlay", portable, nil, narrowed))
+                "bee.gov:overlay", portable, nil, narrowed))
             test.is_nil(state.entries[policy_id])
             test.is_nil((state.entries["app.notes:threads"].data :: {[string]: unknown}).default)
         end)
@@ -159,11 +159,11 @@ local function define_tests()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local desired = {{id = "app:large", kind = "function.lua",
                 data = {source = string.rep("x", artifact.MAX_BYTES - 2048)}}}
-            local result, err = materializer.reconcile_with(api(state), is_conflict, "bee.governance:overlay", desired)
+            local result, err = materializer.reconcile_with(api(state), is_conflict, "bee.gov:overlay", desired)
             if not result then error(tostring(err)) end
             test.is_true(result.changed == true)
             test.is_true(result.artifact_digest ~= "")
-            test.is_true(materializer.matches_with(api(state), "bee.governance:overlay", desired) == true)
+            test.is_true(materializer.matches_with(api(state), "bee.gov:overlay", desired) == true)
         end)
 
         test.it("stages portable entries and one derived admission in one changeset", function()
@@ -176,14 +176,14 @@ local function define_tests()
             local next_artifact = assert(artifact.create({{id = "app:new", kind = "registry.entry", data = {value = "new"}}}))
             local next_admission = admission_blob(next_artifact.digest)
             local result = assert(materializer.reconcile_composed_with(api(state), is_conflict,
-                "bee.governance:overlay", next_artifact.entries, next_admission))
+                "bee.gov:overlay", next_artifact.entries, next_admission))
             test.eq(result.entries, 1)
             test.eq(result.overlay_entries, 2)
             test.eq(result.artifact_digest, next_artifact.digest)
             test.eq(state.generation, 8)
             test.is_true(state.entries["app:old"] == nil)
             test.not_nil(state.entries["app:new"])
-            test.is_true(materializer.matches_composed_with(api(state), "bee.governance:overlay",
+            test.is_true(materializer.matches_composed_with(api(state), "bee.gov:overlay",
                 next_artifact.entries, next_admission) == true)
         end)
 
@@ -195,7 +195,7 @@ local function define_tests()
             local portable = assert(artifact.create(entries))
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local result = assert(materializer.reconcile_composed_with(api(state), is_conflict,
-                "bee.governance:overlay", portable.entries, admission_blob(portable.digest)))
+                "bee.gov:overlay", portable.entries, admission_blob(portable.digest)))
             test.eq(result.entries, artifact.MAX_ENTRIES)
             test.eq(result.overlay_entries, artifact.MAX_ENTRIES + 1)
             test.eq(result.artifact_digest, portable.digest)
@@ -208,7 +208,7 @@ local function define_tests()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local forged = {{id = admission.RESERVED_PREFIX .. "forged", kind = "registry.entry", data = {}}}
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
-                "bee.governance:overlay", forged, nil))
+                "bee.gov:overlay", forged, nil))
             test.is_true(next(state.entries) == nil)
         end)
     end)

@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
 version: '1.0'
-namespace: bee.research_delivery
+namespace: bee.research.delivery
 entries:
 - name: artifact_input
   kind: registry.entry
   meta:
-    type: bee.research_delivery.artifact_input
+    type: bee.research.delivery.artifact_input
   data:
     artifact_digest: ''
     raw_json: ''
@@ -29,12 +29,12 @@ entries:
     - registry.overlay.delete.*
     - db.get
     - system.read
-    - bee.governance.overlay.read
-    - bee.governance.overlay.write
-    - bee.governance.delivery.read
-    - bee.governance.delivery.manage
-    - bee.governance.delivery.activate
-    - bee.governance.delivery.publish
+    - bee.gov.overlay.read
+    - bee.gov.overlay.write
+    - bee.gov.delivery.read
+    - bee.gov.delivery.manage
+    - bee.gov.delivery.activate
+    - bee.gov.delivery.publish
     - bee.approvals.decide
     resources: '*'
     effect: allow
@@ -45,27 +45,27 @@ entries:
   modules: &modules [funcs, registry, system, json, io, uuid, time]
   imports: &imports
     bounds: bee.threads.records:bounds
-    artifact: bee.governance:artifact
-    materializer: bee.governance.registry:materializer
-    recovery: bee.governance.binding:destination_service
+    artifact: bee.gov:artifact
+    materializer: bee.gov:materializer
+    recovery: bee.gov.binding:destination_service
   security:
-    policies: [bee.research_delivery:operator_policy]
+    policies: [bee.research.delivery:operator_policy]
   meta:
     command:
       name: research-delivery-probe
       security:
-        actor: {id: bee.research_delivery.operator}
-        policies: [bee.research_delivery:operator_policy]
+        actor: {id: bee.research.delivery.operator}
+        policies: [bee.research.delivery:operator_policy]
 - name: recover
   kind: process.lua
   source: file://main.lua
   method: recover
   modules: *modules
   imports: *imports
-  security: {policies: [bee.research_delivery:operator_policy]}
+  security: {policies: [bee.research.delivery:operator_policy]}
   meta:
     command:
       name: research-recovery-probe
       security:
-        actor: {id: bee.research_delivery.operator}
-        policies: [bee.research_delivery:operator_policy]
+        actor: {id: bee.research.delivery.operator}
+        policies: [bee.research.delivery:operator_policy]

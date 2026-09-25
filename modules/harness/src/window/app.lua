@@ -6,6 +6,6 @@ local native = require("window")
 
 return {main = function(value: unknown)
     return runtime.main(value, {
-        ["bee.placement.native:binding"] = native.open,
+        ["bee.placement.native.binding:binding"] = native.open,
     })
 end}

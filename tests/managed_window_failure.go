@@ -71,7 +71,7 @@ local function run()
     local broker_policy = assert(security.policy("bee.security.desktop:broker_policy"))
     local boundary = assert(security.policy("bee.security:core_spawn_boundary"))
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-        :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.applications:broker", "bee:workers", owner,
+        :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.apps:broker", "bee:workers", owner,
             {theme = "classic", background = "solid", taskbar = "labels"})))
     local events = assert(process.events())
     local appearance_replies = 0
@@ -98,7 +98,7 @@ local function run()
         if selected.channel == catalogs then ready = true
         elseif selected.value.kind == process.event.EXIT then error("broker exited before catalog") end
     end
-    local selector = assert(registry.get("bee.managed_window_fixture:selector_definition"))
+    local selector = assert(registry.get("bee.managed.window.fixture:selector_definition"))
     local found = assert(registry.find({["meta.type"] = "bee.launch_definition"}))
     for _, entry in ipairs(found) do
         local meta = entry.meta :: {[string]: unknown}
@@ -111,7 +111,7 @@ local function run()
     local hidden = changed(selector)
     hidden.data.presentation = {start_menu = false, fullscreen = false, reuse = "never"}
     apply(hidden)
-    local plan, refused = admission.resolve("bee.managed_window_fixture:selector_definition", "window")
+    local plan, refused = admission.resolve("bee.managed.window.fixture:selector_definition", "window")
     assert(plan, tostring(refused and refused.error))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
         definition_id = "bee.harness.window:app", arguments = {}}))
@@ -219,7 +219,7 @@ local function run()
     view:close()
     process.terminate(broker)
     process.unlisten(catalogs); process.unlisten(replies); process.unlisten(appearance_requests)
-    local evidence = assert(fs.get("bee.managed_window_fixture:failure_evidence"))
+    local evidence = assert(fs.get("bee.managed.window.fixture:failure_evidence"))
     local proof = assert(evidence:open("/complete", "w"))
     assert(proof:write("MANAGED_WINDOW_FAILURE_COMPLETE"))
     proof:close()
@@ -325,14 +325,14 @@ func run() error {
 		}
 		if name == "test" {
 			entry["source"], entry["method"] = "file://failure.lua", "run"
-			entry["imports"].(map[string]interface{})["placement_store"] = "bee.placement.native:store"
-			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee.security.placement:placement_store_policy", "bee.managed_window_fixture:failure_evidence_policy")
+			entry["imports"].(map[string]interface{})["placement_store"] = "bee.placement.native.persist:store"
+			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee.security.placement:placement_store_policy", "bee.managed.window.fixture:failure_evidence_policy")
 		}
 		kept = append(kept, entry)
 	}
 	index.Entries = append(kept,
 		map[string]interface{}{"name": "failure_evidence", "kind": "fs.directory", "directory": "evidence", "auto_init": true},
-		map[string]interface{}{"name": "failure_evidence_policy", "kind": "security.policy", "policy": map[string]interface{}{"actions": []string{"fs.get"}, "resources": []string{"bee.managed_window_fixture:failure_evidence"}, "effect": "allow"}},
+		map[string]interface{}{"name": "failure_evidence_policy", "kind": "security.policy", "policy": map[string]interface{}{"actions": []string{"fs.get"}, "resources": []string{"bee.managed.window.fixture:failure_evidence"}, "effect": "allow"}},
 	)
 	indexData, err = yaml.Marshal(&index)
 	if err != nil {
@@ -341,13 +341,13 @@ func run() error {
 	if err := os.WriteFile(indexPath, indexData, 0600); err != nil {
 		return err
 	}
-	hostPath := filepath.Join(dir, "src", "harness", "host", "_index.yaml")
+	hostPath := filepath.Join(dir, "src", "_index.yaml")
 	host, err := os.ReadFile(hostPath)
 	if err != nil {
 		return err
 	}
 	const activation = "    - bee.driver.grok:binding\n"
-	updated := strings.Replace(string(host), activation, activation+"    - bee.managed_window_fixture:binding\n", 1)
+	updated := strings.Replace(string(host), activation, activation+"    - bee.managed.window.fixture:binding\n", 1)
 	if updated == string(host) {
 		return fmt.Errorf("host activation anchor missing")
 	}
@@ -393,9 +393,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	machineText := strings.Replace(string(machine), "    step(io, \"admitted\")\n", "    step(io, \"admitted\")\n    if request.binding_ref == \"bee.managed_window_fixture:binding\" then return nil, \"injected post-admission preparation failure\", {epoch = nil, gateway_binding = nil, attempt = false} end\n", 1)
+	machineText := strings.Replace(string(machine), "    step(io, \"admitted\")\n", "    step(io, \"admitted\")\n    if request.binding_ref == \"bee.managed.window.fixture:binding\" then return nil, \"injected post-admission preparation failure\", {epoch = nil, gateway_binding = nil, attempt = false} end\n", 1)
 	if *stage == "plan" {
-		machineText = strings.Replace(string(machine), "function M.plan(io: IO, request: Request): (Plan?, string?)\n", "function M.plan(io: IO, request: Request): (Plan?, string?)\n    if request.binding_ref == \"bee.managed_window_fixture:binding\" then return nil, \"injected planning failure\" end\n", 1)
+		machineText = strings.Replace(string(machine), "function M.plan(io: IO, request: Request): (Plan?, string?)\n", "function M.plan(io: IO, request: Request): (Plan?, string?)\n    if request.binding_ref == \"bee.managed.window.fixture:binding\" then return nil, \"injected planning failure\" end\n", 1)
 	} else if *stage == "placement" {
 		runtimePath := filepath.Join(dir, "modules", "harness", "src", "window", "runtime.lua")
 		runtimeSource, readError := os.ReadFile(runtimePath)
@@ -432,7 +432,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		changed := strings.Replace(string(appSource), `"bee.placement.native:binding"`, `"fixture.other:binding"`, 1)
+		changed := strings.Replace(string(appSource), `"bee.placement.native.binding:binding"`, `"fixture.other:binding"`, 1)
 		if changed == string(appSource) {
 			return fmt.Errorf("component binding anchor missing")
 		}

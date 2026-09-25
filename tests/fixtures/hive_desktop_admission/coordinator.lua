@@ -14,13 +14,13 @@ local function main(node: string)
     if node == "node-0" then
         -- The supervisor runs under the host service's own grants; the fixture
         -- adds only the registration of its names.
-        local service = registry.get("bee.hive_host:supervisor_service")
+        local service = registry.get("bee.hive.service:supervisor_service")
         local data: unknown = service and service.data
         local lifecycle: unknown = type(data) == "table" and data.lifecycle or nil
         local grant: unknown = type(lifecycle) == "table" and lifecycle.security or nil
         local grants: unknown = type(grant) == "table" and grant.policies or nil
         if type(grants) ~= "table" then error("the host supervisor service declares no policies") end
-        local names: {string} = {"bee.desktop_admission_probe:names"}
+        local names: {string} = {"bee.desktop.admission.probe:names"}
         for _, name in ipairs(grants :: {unknown}) do
             if type(name) ~= "string" then error("the host supervisor service declares a malformed policy") end
             names[#names + 1] = name
@@ -32,7 +32,7 @@ local function main(node: string)
             policies[#policies + 1] = policy
         end
         local pid, err = process.with_options({}):with_scope(security.new_scope(policies)):spawn_monitored(
-            "bee.hive_host.supervisor:main", "bee.hive_host:supervisor_host", {configured_nodes = {}, desktop = {
+            "bee.hive.supervisor:main", "bee.hive.service:supervisor_host", {configured_nodes = {}, desktop = {
                 execution = EXECUTION, expires_at = time.now():add("120s"):utc():format("2006-01-02T15:04:05.000Z07:00"),
                 allowed_nodes = {"node-1", "node-2"}, application = "bee.console:app"}})
         if not pid then error(tostring(err)) end
@@ -52,10 +52,10 @@ local function main(node: string)
         local command, command_error = io.readline()
         if not command then error(tostring(command_error)) end
         if command == "probe" or command == "crash" or command == "recover" or command == "exit" then
-            local policy, err = security.policy("bee.desktop_admission_probe:client_policy")
+            local policy, err = security.policy("bee.desktop.admission.probe:client_policy")
             if not policy then error(tostring(err)) end
             local child, spawn_error = process.with_options({}):with_scope(security.new_scope({policy}))
-                :spawn_monitored("bee.desktop_admission_probe:client", "bee.hive_host.desktop:display_host", EXECUTION, command)
+                :spawn_monitored("bee.desktop.admission.probe:client", "bee.hive.desktop:display_host", EXECUTION, command)
             if not child then error(tostring(spawn_error)) end
             local timeout = time.after("45s")
             while true do

@@ -13,7 +13,7 @@ local function run(request: Object): Object
     local address = request.address
     local action_id = request.action_id
     assert(type(address) == "string" and type(action_id) == "string", "render request")
-    local provider, provider_error = configuration.decode("bee.gateway_probe:provider", {
+    local provider, provider_error = configuration.decode("bee.gateway.probe:provider", {
         kind = "registry.entry", meta = {type = "bee.codex_provider"}, data = {
             schema_revision = "bee.codex-provider@1", name = "bee", base_url = "https://example.invalid/v1", model = "fixture"}})
     if not provider then error(tostring(provider_error)) end

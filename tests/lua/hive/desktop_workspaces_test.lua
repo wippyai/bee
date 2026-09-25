@@ -54,7 +54,7 @@ local function harness(tag: string): Harness
     local switches = listen("bee.retained.switch")
     local unused = listen("bee.test.desktop_workspaces." .. tag)
     -- The bridge monitors its clients itself, so the test does not.
-    local standin = tostring(assert(process.spawn("bee.hive:display_standin", "bee.hive_host.desktop:display_host", self)))
+    local standin = tostring(assert(process.spawn("bee.hive:display_standin", "bee.hive.desktop:display_host", self)))
     local folder = tostring(assert(process.spawn_monitored("bee.hive:retained_standin", "bee:workers", self)))
     local leased = tostring(assert(process.spawn_monitored("bee.hive:retained_standin", "bee:workers", self)))
     local client_node = types.pid_parts(standin)

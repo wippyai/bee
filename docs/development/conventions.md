@@ -19,21 +19,24 @@ host wiring lives in the app root or beside its component.
 | `src/_index.yaml` | Host composition, resources and protected admission wiring |
 | `src/deps` | One `bee.deps:<module>` dependency per composed module with the host-selected requirement parameters |
 | `src/security`, `src/security/<area>` | Host-selected app policies as `bee.security` and `bee.security.<area>` |
-| `src/environment` | Host environment, workspace and client stores as `bee.environment` |
-| `src/hive_host` | App-owned Hive supervisor, desktop bridge and open workspaces operation as `bee.hive_host` |
+| `src/env` | Host environment and selected resources as `bee.env` |
+| `src/hive/service`, `src/hive/api`, `src/hive/security` | App-owned Hive supervisor, open workspaces operation and its policy |
+| `src/hive/supervisor`, `src/hive/desktop`, `src/hive/manager` | Hive host behavior, desktop bridge and management app |
 | `src/workspace` | Workspace persistence, application checkpoints, workspace identity and the node catalog operations and extension contract |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
 | `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
 | `src/client` | Desktop client, public commands, qualified layout and client store |
 | `src/interaction` | Bounded host/client questions and delivery state |
 | `src/session` | Committed desktop projection |
-| `src/applications` | Admission, application lifecycle, producer capabilities and routing |
+| `src/apps` | Admission, application lifecycle, producer capabilities and routing as `bee.apps` |
 | `src/desktop` | Pure scene, reducer and layout values |
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
 | `src/storage` | Workspace database, catalog rows and migration ledger |
 | `modules/application/src` | Public application helpers, appearance and rendering values |
-| `src/apps/<name>` | A standalone default application and its view/domain helpers |
+| `src/console`, `src/settings` | Standalone Terminal and Settings applications |
+| `src/approvals/inbox`, `src/hub/modules`, `src/gov/overlays` | Feature-owned standalone applications |
+| `src/workspace/manager`, `src/threads/timeline`, `src/host/processes` | Feature-owned standalone applications |
 | `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
 | `modules/docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/resources/src` | Resource associations, scoped grants and owner-local ledger |
@@ -43,8 +46,9 @@ host wiring lives in the app root or beside its component.
 | `modules/placement-native/src` | Native launch attempts, executor boundary, evidence and cleanup state |
 | `modules/node/src` | Authorized native-node descriptions and metadata |
 
-The app never writes into a module namespace; it overrides module entries
-only through `bee.deps` requirement parameters. Module requirement defaults
+The app keeps its entries in the root package even when a feature child uses
+the module's namespace prefix. It overrides module entries only through
+`bee.deps` requirement parameters. Module requirement defaults
 never point at app ids. Module `process.service` entries take their host and
 policy grants through requirements (`process_host`, per-service policy lists);
 their entries keep empty underlays the host fills.

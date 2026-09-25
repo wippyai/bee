@@ -15,7 +15,7 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
     host = folder / "src/_index.yaml"
     document = yaml.safe_load(host.read_text())
     activation = next(entry for entry in document["entries"] if entry["name"] == "harness_activation")
-    activation["data"]["bindings"].append("bee.managed_window_fixture:binding")
+    activation["data"]["bindings"].append("bee.managed.window.fixture:binding")
     host.write_text(yaml.safe_dump(document, sort_keys=False))
     profiles_index = folder / "modules/harness/src/profiles/_index.yaml"
     profiles_document = yaml.safe_load(profiles_index.read_text())
@@ -38,7 +38,7 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
     environment = workspace.database_environment(folder)
     # The product composition is linted by `make lint`; this proof lints its fixture
     # and the harness entries it rewrites.
-    subprocess.run([str(workspace.RUNTIME), "lint", "--ns", "bee.managed_window_fixture,bee.harness.profiles,bee.harness.launch"],
+    subprocess.run([str(workspace.RUNTIME), "lint", "--ns", "bee.managed.window.fixture,bee.harness.profiles,bee.harness.launch"],
                    cwd=folder, env=environment, check=True, timeout=60)
     subprocess.run([str(workspace.RUNTIME), "test", "--host", "bee:terminal"], cwd=folder, env=environment, check=True, timeout=60)
 

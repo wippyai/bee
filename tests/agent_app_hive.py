@@ -116,13 +116,13 @@ def application_identity(folder):
 def configure_destination(project, workspace_id=None, source_node="node-1"):
     """Install the destination's local policy in its source composition."""
     if workspace_id is not None:
-        governance_path = project / "src/_index.yaml"
+        governance_path = project / "src/env/_index.yaml"
         governance = yaml.safe_load(governance_path.read_text())
-        profiles = next(item for item in governance["entries"] if item["name"] == "governance_activation_profiles")
+        profiles = next(item for item in governance["entries"] if item["name"] == "gov_activation_profiles")
         profiles["data"] = {"profiles": [{
             "workspace_id": workspace_id, "source_node": source_node,
             "source_workspace": "agent-app-source", "component": "bee.agent_app_demo/app",
-            "resolver": "overlay", "overlay_owner": "bee.replica_probe:activation_overlay",
+            "resolver": "overlay", "overlay_owner": "bee.replica.probe:activation_overlay",
             "approval_policy": "local-agent-app-hive", "parameters": [],
             "applications": [{"definition_id": DEFINITION_ID,
                               "policies": ["bee.security:ordinary_app_subsystem_boundary"],
@@ -136,7 +136,7 @@ def configure_destination(project, workspace_id=None, source_node="node-1"):
         approvals_path = project / "src/_index.yaml"
         approvals = yaml.safe_load(approvals_path.read_text())
         policies = next(item for item in approvals["entries"] if item["name"] == "approver_policies")
-        policies["policies"] = [{"name": "local-agent-app-hive", "approvers": ["bee.replica_probe"],
+        policies["policies"] = [{"name": "local-agent-app-hive", "approvers": ["bee.replica.probe"],
                                  "max_ttl_ms": 60000}]
         approvals_path.write_text(yaml.safe_dump(approvals, sort_keys=False))
 

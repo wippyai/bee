@@ -52,7 +52,7 @@ local function columns(): {frame.Column}
     return {{title = "Name", width = 0}, {title = "State", width = 10}, {title = "Steps", width = 7, align = "right"}}
 end
 local function cells(): {{string}}
-    return {{"bee.host:main", "idle", "96"}, {"bee.applications:broker\27[2J", "running\r", "70"}, {"bee.session:main", "idle", "16"}}
+    return {{"bee.host:main", "idle", "96"}, {"bee.apps:broker\27[2J", "running\r", "70"}, {"bee.session:main", "idle", "16"}}
 end
 
 local function define_tests()
@@ -129,7 +129,7 @@ local function define_tests()
             test.is_true(rows[2]:find("NAME", 1, true) ~= nil and rows[2]:find("STATE", 1, true) ~= nil)
             test.eq(rows[3]:sub(1, 2), " b")
             test.eq(rows[4]:sub(1, #"›"), "›")
-            test.is_true(rows[4]:find("bee.applications:broker", 1, true) ~= nil)
+            test.is_true(rows[4]:find("bee.apps:broker", 1, true) ~= nil)
             local hit = frame.hit(painter.hits, 30, 4)
             test.not_nil(hit)
             test.eq(hit and hit.index or 0, 2)

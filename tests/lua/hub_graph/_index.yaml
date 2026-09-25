@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: tests.hub_graph
+namespace: tests.hub.graph
 entries:
 - name: graph_test
   kind: function.lua

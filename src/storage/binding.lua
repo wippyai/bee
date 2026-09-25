@@ -6,9 +6,9 @@ type Selection = {workspace_id: string?, root_ref: string?, subpath: string?}
 local M = {}
 -- Classic mode: the node folder is the workspace rooted at the node's own
 -- workspace root resource.
-M.CLASSIC_ROOT = "bee.environment:workspace_root"
+M.CLASSIC_ROOT = "bee.env:workspace_root"
 function M.database(kind: "client" | "workspace", value: unknown): string?
-    local default = "bee.environment:" .. kind .. "_db"
+    local default = "bee.env:" .. kind .. "_db"
     if value == nil or value == default then return default end
     if type(value) ~= "string" or #value > 160 then return nil end
     local prefix = "bee." .. kind .. ".db:"

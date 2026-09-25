@@ -21,7 +21,7 @@ entries:
     canonical: bee.threads.records:canonical
     persist: bee.persist:database
     migrations: bee.gateway.migrations:migrations
-    configuration: bee.gateway.registry:configuration
+    configuration: bee.gateway:configuration
     hooks: bee.gateway:hooks
     mcp: bee.gateway:mcp
     sessions: bee.gateway:sessions

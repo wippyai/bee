@@ -38,7 +38,7 @@ def exercise(packed, responsive=True):
         label = '"Workspace " .. names.label(workspace_id)'
         assert presentation.count(label) == 1
         presenter.write_text(presentation.replace(label, label + ' .. " P:" .. tostring(process.pid()):sub(-8)'))
-        source = project / "src/apps/console/app.lua"
+        source = project / "src/console/app.lua"
         code = source.read_text()
         handler = '''        elseif selected.channel == closes then
             local request = client.close_request(launch, tostring(selected.value:from()), selected.value:payload():data())

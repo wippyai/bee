@@ -70,7 +70,7 @@ end
 local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?, retained_id: string?, cancel_activation: boolean?): (string?, string?)
     local THREAD = selected and "managed_window_selector" or (natural and "managed_window_natural" or "managed_window_thread")
     if retained_id then THREAD = "managed-window-thread:" .. retained_id end
-    local definition_ref = retained_id and "bee.managed_window_fixture:retained_definition" or "bee.managed_window_fixture:definition"
+    local definition_ref = retained_id and "bee.managed.window.fixture:retained_definition" or "bee.managed.window.fixture:definition"
     local request_id = retained_id or (natural and "managed-window-natural-request" or "managed-window-request")
     call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "managed-window-create", title = "Managed window fixture"})
     local owner = tostring(process.pid())
@@ -89,7 +89,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     if not boundary then error(tostring(boundary_error)) end
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-        :with_scope(scope):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
     local events = assert(process.events())
     local catalog_deadline = time.after("5s")
     while true do
@@ -305,7 +305,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     assert(type(saved.checkpoint_revision) == "number" and saved.checkpoint_revision >= 1,
         "running native window has no committed carrier checkpoint")
     local point = reply(saved.checkpoint)
-    assert(point.schema_revision == "bee.carrier.checkpoint@1" and point.binding_ref == "bee.managed_window_fixture:binding",
+    assert(point.schema_revision == "bee.carrier.checkpoint@1" and point.binding_ref == "bee.managed.window.fixture:binding",
         "native checkpoint must pin the admitted driver")
     local session_ref: string? = nil
     if retained_id then
@@ -419,11 +419,11 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
         for key, value in pairs(binding) do copy[key] = value end
         bindings[#bindings + 1] = copy
     end
-    bindings[#bindings + 1] = {definition_id = "bee.managed_window_fixture:checkpoint_app", policies = {}}
+    bindings[#bindings + 1] = {definition_id = "bee.managed.window.fixture:checkpoint_app", policies = {}}
     fixture_data.bindings = bindings
     apply(fixture_admission)
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-        :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
     local function wait_message(subscription: Channel<process.Message>, label: string, timeout: string?): process.Message
         local deadline = time.after(timeout or "5s")
         local selected = channel.select({subscription:case_receive(), events:case_receive(), deadline:case_receive()})
@@ -461,7 +461,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     local catalog_message = wait_message(catalogs, "broker startup")
     assert(tostring(catalog_message:from()) == broker and type(catalog_message:payload():data()) == "table", "broker did not publish catalog")
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "checkpoint-open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.managed_window_fixture:checkpoint_app", resume_schema = "checkpoint-fixture.v1", resume_state = initial}))
+        definition_id = "bee.managed.window.fixture:checkpoint_app", resume_schema = "checkpoint-fixture.v1", resume_state = initial}))
     local ready_message = wait_message(app_ready, "checkpoint fixture ready")
     local ready_data: unknown = ready_message:payload():data()
     assert(type(ready_data) == "table" and type(ready_data.pid) == "string" and tostring(ready_message:from()) == ready_data.pid, "invalid checkpoint fixture readiness")
@@ -525,7 +525,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
         return false
     end
     assert(wait_snapshot("CHECKPOINT APP 1"), "initial checkpoint app did not retain its resized viewport")
-    local original_app = assert(registry.get("bee.managed_window_fixture:checkpoint_app"))
+    local original_app = assert(registry.get("bee.managed.window.fixture:checkpoint_app"))
     local updated_app = clone_entry(original_app)
     local updated_data = updated_app.data :: {[string]: unknown}
     assert(type(updated_data.source) == "string", "checkpoint app lost its executable source")
@@ -633,7 +633,7 @@ end
 
 local function checkpoint_ack()
     local original_admission = assert(registry.get("bee.security:application_admission"))
-    local original_app = assert(registry.get("bee.managed_window_fixture:checkpoint_app"))
+    local original_app = assert(registry.get("bee.managed.window.fixture:checkpoint_app"))
     local ok, failure = pcall(checkpoint_ack_body, original_admission)
     apply(original_app)
     apply(original_admission)
@@ -644,8 +644,8 @@ M.run = function() run(false) end
 M.checkpoint_ack = checkpoint_ack
 M.natural = function() run(true) end
 M.select = function()
-    local definition = assert(registry.get("bee.managed_window_fixture:selector_definition"))
-    local policy = assert(registry.get("bee.managed_window_fixture:policy"))
+    local definition = assert(registry.get("bee.managed.window.fixture:selector_definition"))
+    local policy = assert(registry.get("bee.managed.window.fixture:policy"))
     local defaults: {{[string]: unknown}} = {}
     local ok, failure = pcall(function()
         local found = assert(registry.find({["meta.type"] = "bee.launch_definition"}))
@@ -680,13 +680,13 @@ M.retained = function()
     local mode = assert(registry.get("bee:placement_resource_mode"))
     local ok, failure = pcall(function()
         local admitted = changed(roots)
-        admitted.data = {roots = {{root_ref = "bee.managed_window_fixture:session_root", access = "write"}}}
+        admitted.data = {roots = {{root_ref = "bee.managed.window.fixture:session_root", access = "write"}}}
         apply(admitted)
         local granted = changed(mode)
         granted.data = {mode = "granted"}
         apply(granted)
         call("bee.resources.binding:associate", {workspace_id = WORKSPACE, name = "retained",
-            root_ref = "bee.managed_window_fixture:session_root", subpath = "", allowed_access = "write"})
+            root_ref = "bee.managed.window.fixture:session_root", subpath = "", allowed_access = "write"})
         local actor = security.actor()
         if not actor then error("fixture has no authenticated actor") end
         local vol = assert(fs.get("bee.placement.native:root"))

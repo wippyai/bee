@@ -64,7 +64,7 @@ local function decode(value: unknown, request: Request): Reply?
 end
 function M.start(request: Request): (Pending?, string?)
     local target = request.op == "list" and "bee.client:list_desktops" or "bee.client:allocate_desktop"
-    local future, err = funcs.async(target, {version = 1, database_resource = "bee.environment:client_db", desktop_id = request.desktop_id})
+    local future, err = funcs.async(target, {version = 1, database_resource = "bee.env:client_db", desktop_id = request.desktop_id})
     if not future then return nil, tostring(err) end
     -- The pinned manifest exposes this native response channel as any. Its
     -- payload remains unknown until complete validates the function reply.

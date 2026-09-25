@@ -34,7 +34,7 @@ local function define_tests()
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
-                :spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())
+                :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
             assert(catalogs:receive():from() == broker)

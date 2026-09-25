@@ -8,7 +8,10 @@ local containment = require("capability_containment")
 
 local M = {}
 M.SCHEMA = "bee.governance-capability-grants@1"
-M.PREFIX = "bee.governance.grants:"
+M.PREFIX = "bee.gov.grants:"
+-- Previously activated overlays retain their measured policy and record IDs.
+-- Decode those exact IDs without rewriting approval-bound policy bytes.
+local PRIOR_PREFIX = "bee.governance.grants:"
 type Object = {[string]: unknown}
 type Proposal = {capabilities: {Object}, policies: {Object}, bindings: {Object},
     thread_access: string, digest: string}
@@ -37,17 +40,23 @@ local function digest(value: unknown): string?
     local bytes = canonical.encode(value)
     return bytes and hash.sha256(bytes) or nil
 end
-local function policy_id(owner: string, requirement: string): string?
+local function policy_id(owner: string, requirement: string, prefix: string?): string?
     local suffix = digest({owner = owner, requirement = requirement})
-    return suffix and M.PREFIX .. "policy." .. suffix or nil
+    return suffix and (prefix or M.PREFIX) .. "policy." .. suffix or nil
 end
 function M.record_id(owner_raw: unknown): string?
     local owner = bounds.id(owner_raw)
     local suffix = owner and hash.sha256(owner) or nil
     return suffix and M.PREFIX .. "record." .. suffix or nil
 end
+function M.prior_record_id(owner_raw: unknown): string?
+    local owner = bounds.id(owner_raw)
+    local suffix = owner and hash.sha256(owner) or nil
+    return suffix and PRIOR_PREFIX .. "record." .. suffix or nil
+end
 function M.reserved(raw: unknown): boolean
-    return type(raw) == "string" and raw:sub(1, #M.PREFIX) == M.PREFIX
+    return type(raw) == "string" and (raw:sub(1, #M.PREFIX) == M.PREFIX
+        or raw:sub(1, #PRIOR_PREFIX) == PRIOR_PREFIX)
 end
 
 -- This slice materializes only owner-checked thread reads. Other catalog
@@ -66,7 +75,7 @@ local function policy(grant: Object, id: string): (Object?, string?)
 end
 
 function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unknown,
-    requirements_raw: unknown): (Proposal?, string?)
+    requirements_raw: unknown, prior: boolean?): (Proposal?, string?)
     local owner, app = bounds.id(owner_raw), bounds.id(app_raw)
     local rows = list(requirements_raw, 8)
     if not owner or not app or not rows then return nil, "capability proposal identity is invalid" end
@@ -94,7 +103,7 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
         local resolved, resolve_error = catalog.resolve(vocabulary, request.capability, request.parameters)
         if not resolved then return nil, resolve_error end
         if #resolved ~= 1 then return nil, "capability template needs unsupported policy count" end
-        local id = policy_id(owner :: string, requirement_id :: string)
+        local id = policy_id(owner :: string, requirement_id :: string, prior and PRIOR_PREFIX or nil)
         if not id then return nil, "measure generated policy identity" end
         local generated, policy_error = policy(resolved[1], id)
         if not generated then return nil, policy_error end
@@ -119,10 +128,10 @@ end
 
 function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
     proposal: Proposal, approval_raw: unknown, revision_raw: unknown,
-    artifact_raw: unknown?, version_raw: unknown?): (Object?, string?)
+    artifact_raw: unknown?, version_raw: unknown?, prior: boolean?): (Object?, string?)
     local owner, workspace, app = bounds.id(owner_raw), bounds.id(workspace_raw), bounds.id(app_raw)
     local approval_id, revision = bounds.id(approval_raw), bounds.count(revision_raw)
-    local id = M.record_id(owner)
+    local id = prior and M.prior_record_id(owner) or M.record_id(owner)
     if not owner or not workspace or not app or not approval_id or not revision or revision < 1
         or not id or not sha(proposal.digest) then return nil, "capability grant record is invalid" end
     local artifact_digest = artifact_raw == nil and nil or sha(artifact_raw)
@@ -143,9 +152,10 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
     local item, owner = bounds.object(raw), bounds.id(owner_raw)
     local data = item and bounds.object(item.data) or nil
     local expected = M.record_id(owner)
+    local prior_id = M.prior_record_id(owner)
     local meta = item and bounds.object(item.meta) or nil
     if not item or not data or not meta or meta.type ~= M.SCHEMA
-        or item.id ~= expected or item.kind ~= "registry.entry"
+        or (item.id ~= expected and item.id ~= prior_id) or item.kind ~= "registry.entry"
         or data.schema_revision ~= M.SCHEMA or data.overlay_owner ~= owner
         or data.workspace_id ~= workspace_raw or data.application ~= app_raw
         or not bounds.id(data.approval_id) or not bounds.count(data.revision)
@@ -172,7 +182,7 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
                 template_revision = grant.template_revision, catalog_revision = vocabulary.revision,
                 target = app_raw, path = ".security.policies +="}}
     end
-    local resolved, resolve_error = M.propose(vocabulary, owner, app_raw, reproduced)
+    local resolved, resolve_error = M.propose(vocabulary, owner, app_raw, reproduced, item.id == prior_id)
     if not resolved or resolved.digest ~= data.digest then
         return nil, resolve_error or "installed capability digest differs from host templates"
     end

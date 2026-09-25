@@ -5,7 +5,7 @@ local contract = require("contract")
 local security = require("security")
 local reader = require("reader")
 local function main(owner: string, thread: string, after: integer, read_capability: string)
-    local binding = assert(contract.open("bee.thread_demo:reader_binding"))
+    local binding = assert(contract.open("bee.thread.demo:reader_binding"))
     local framing: unknown = binding:inspect()
     assert(type(framing) == "table", "Invalid native contract result")
     local actor = assert(security.actor())
@@ -25,7 +25,7 @@ local function main(owner: string, thread: string, after: integer, read_capabili
     assert(not client.decode({seq = 0, rows = {[2] = {seq = 1, source = "s", key = "k", kind = "e", body = "{}"}}, error = ""}), "Sparse event page accepted")
     assert(not client.decode({seq = 0, rows = {{seq = 1, source = "s", key = "k", kind = "e", body = "{}"},
         {seq = 1, source = "s", key = "k", kind = "e", body = "{}"}}, error = ""}), "Duplicate event sequence accepted")
-    local database, denied = sql.get("bee.thread_demo:db")
+    local database, denied = sql.get("bee.thread.demo:db")
     assert(not database and denied, "Subscriber accessed owner storage")
     assert(client.call(owner, "read", thread .. "/foreign", "", "", "", 0).error == "denied")
     assert(client.call(owner, "append", thread, "spoof", "test.run.finished", "{}", 0).error == "denied")
@@ -41,13 +41,13 @@ local function main(owner: string, thread: string, after: integer, read_capabili
             local seq = math.floor(value.seq)
             assert(seq > cursor, "Cursor moved backwards")
             cursor = seq
-            assert(process.send(owner, "bee.thread_demo.request", {version = 1, op = "status", thread = thread,
+            assert(process.send(owner, "bee.thread.demo.request", {version = 1, op = "status", thread = thread,
                 text = tostring(seq) .. "  " .. value.kind .. "  " .. value.body}))
         end
         local done = client.call(owner, "caught_up", thread, "", "", "", cursor)
         if done.error == "" then break end
         assert(done.error == "pending", done.error)
     end
-    assert(process.send(owner, "bee.thread_demo.request", {version = 1, op = "subscriber_done", thread = thread}))
+    assert(process.send(owner, "bee.thread.demo.request", {version = 1, op = "subscriber_done", thread = thread}))
 end
 return {main = main}

@@ -246,7 +246,7 @@ local function records_of(thread_id: string): {Object}
     return all
 end
 local function evidence_of(attempt_id: string): {Object}
-    local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 64})
+    local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64})
     return page.evidence :: {Object}
 end
 -- The stream as the carrier recorded it, for a failure message.
@@ -368,9 +368,9 @@ local function through_placement(harness: Harness)
     -- executable where it is installed; under the fixture policy a launch
     -- proceeds without one otherwise.
     local wanted_evidence = {"gateway.materialized", "credential.materialized"}
-    local capabilities = call("bee.placement.native:capabilities", {})
+    local capabilities = call("bee.placement.native.binding:capabilities", {})
     if (capabilities.executable_measurement :: Object).streaming == true then
-        local measurable, measure_err = funcs.new():with_actor(actor):with_scope(scope()):call("bee.placement.native:measure_executable", {path = harness.bin})
+        local measurable, measure_err = funcs.new():with_actor(actor):with_scope(scope()):call("bee.placement.native.binding:measure_executable", {path = harness.bin})
         if measure_err or type(measurable) ~= "table" or (measurable :: Object).ok ~= true then error(harness.name .. ": this runtime measures streams but could not measure " .. harness.bin .. ": " .. tostring(measure_err or json.encode(measurable))) end
         wanted_evidence[#wanted_evidence + 1] = "executable.measured"
     end
@@ -638,7 +638,7 @@ local function ready_for(harness: Harness): boolean
     -- links out of it.
     harness.bin = shell("readlink -f " .. bin):gsub("%s+$", "")
     if harness.name == "codex" then
-        local capabilities = call("bee.placement.native:capabilities", {})
+        local capabilities = call("bee.placement.native.binding:capabilities", {})
         if capabilities.stdin_close ~= true then
             error("the configured Codex executable requires placement stdin_close")
         end

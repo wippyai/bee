@@ -3,7 +3,7 @@
 An application definition is authored into a governed overlay, frozen with
 its digest, published, discovered, staged, preflighted, reviewed, selected,
 approved, consumed and applied by the registry owner through the production
-governance chain (bee.governance.binding:overlay_call, publication_call,
+governance chain (bee.gov.binding:overlay_call, publication_call,
 destination_call and the approvals owner). The application then appears in the
 desktop's effective catalog, opens from it as a real window with its own
 content, and comes back with its state after a full host restart.
@@ -39,8 +39,8 @@ GUIDE_APPROVAL_POLICY = "workspace-application-delivery"
 # acceptances (tests/inbox_decide.py) already use for one.
 COLD_BOOT = 30
 OVERLAY_WRITE = "registry.overlay.apply"
-OVERLAY_OWNER = "bee.app_journey_probe:activation_overlay"
-OPEN_SEED = "bee.app_open_probe:seed"
+OVERLAY_OWNER = "bee.app.journey.probe:activation_overlay"
+OPEN_SEED = "bee.app.open.probe:seed"
 OPEN_PROBE_THREAD = "open-probe-thread"
 MIGRATION_ID = "bee.app_journey_demo:001"
 
@@ -63,8 +63,8 @@ def bind_admission(project):
     admission = next(entry for entry in document["entries"] if entry["name"] == "application_admission")
     admission["bindings"].append({"definition_id": DEFINITION_ID,
                                   "policies": ["bee.security:ordinary_app_subsystem_boundary",
-                                               "bee.app_open_probe:recheck_policy",
-                                               "bee.app_open_probe:operator_signal_policy"],
+                                               "bee.app.open.probe:recheck_policy",
+                                               "bee.app.open.probe:operator_signal_policy"],
                                   "thread_access": "observe_post"})
     window = next(item for item in admission["bindings"]
                   if item["definition_id"] == "bee.harness.window:app")
@@ -84,7 +84,7 @@ def assert_overlay_authority(project):
                 continue
             identity = f'{document["namespace"]}:{entry["name"]}'
             (granted if policy.get("effect") == "allow" else denied).add(identity)
-    assert granted == {"bee.governance.security:destination_service_policy"}, granted
+    assert granted == {"bee.gov.security:destination_service_policy"}, granted
     assert denied == {"bee.security:app_boundary_policy", "bee.security:scope_managing_app_boundary"}, denied
 
 
@@ -93,7 +93,7 @@ def assert_delivery_has_no_overlay_authority(project):
     destination staging; they grant no overlay write, which is the activation
     owner's alone."""
     wanted = {"bee.security.gateway:gateway_tool_delivery_policy", "bee.security.gateway:gateway_tool_publish_policy",
-              "bee.governance.security:delivery_facade_policy"}
+              "bee.gov.security:delivery_facade_policy"}
     seen = set()
     indexes = list((project / "src").rglob("_index.yaml")) + list((project / "modules/gov/src").rglob("_index.yaml"))
     for index in indexes:
@@ -143,7 +143,7 @@ def deliver(project, folder, deployment=None):
     assert evidence["admitted_title"] == TITLE, evidence
     assert evidence["overlay_owner"] == OVERLAY_OWNER, evidence
     assert evidence["refused_overlay_write"] == \
-        "not allowed to apply registry overlay: bee.app_journey_probe:forbidden_overlay", evidence
+        "not allowed to apply registry overlay: bee.app.journey.probe:forbidden_overlay", evidence
     return evidence
 
 
@@ -202,7 +202,7 @@ def apply_staged_in_ui(ui, staged, root, expected_capability=None):
     ui.window_control("□")
     ui.pump(.5)
     ui.key(b"r")
-    ui.wait("bee.governance:establish-overlay", timeout=COLD_BOOT)
+    ui.wait("bee.gov:establish-overlay", timeout=COLD_BOOT)
     expected = ("Asked: Establish and recover " + staged["workspace"]
                 + " version " + staged["version"] + " in this workspace?")
     for _ in range(8):
@@ -303,8 +303,8 @@ def add_open_admission(project):
                      if entry["name"] == "application_admission")
     admission["bindings"].append({
         "definition_id": OPEN_SEED,
-        "policies": ["bee.app_open_probe:view_policy", "bee.app_open_probe:host_lookup_policy",
-                      "bee.app_open_probe:evidence_policy", "bee.app_open_probe:operator_signal_policy"]})
+        "policies": ["bee.app.open.probe:view_policy", "bee.app.open.probe:host_lookup_policy",
+                      "bee.app.open.probe:evidence_policy", "bee.app.open.probe:operator_signal_policy"]})
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
@@ -362,7 +362,7 @@ def configure_open_agent(project):
     harness = project / "src/_index.yaml"
     harness_document = yaml.safe_load(harness.read_text())
     activation = next(entry for entry in harness_document["entries"] if entry["name"] == "harness_activation")
-    activation["data"]["bindings"].append("bee.window_hooks_fixture:binding")
+    activation["data"]["bindings"].append("bee.window.hooks.fixture:binding")
     harness.write_text(yaml.safe_dump(harness_document, sort_keys=False))
     hooks = project / "src/window_hooks/_index.yaml"
     hooks_document = yaml.safe_load(hooks.read_text())
@@ -552,7 +552,7 @@ def assert_inbox_decider(root, workspace_id, policy="local-app-journey"):
     assert row and re.fullmatch(
         rf"bee\.application:{re.escape(workspace_id)}:[0-9a-f-]+", row[0]), row
     checkpoint = saved_application(root, row[0].rsplit(":", 1)[1])
-    assert checkpoint["definition_id"] == "bee.inbox:app", checkpoint
+    assert checkpoint["definition_id"] == "bee.approvals.inbox:app", checkpoint
 
 
 def revoke_crash_recovery(project, source_root, report, destination):

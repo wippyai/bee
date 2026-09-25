@@ -7,4 +7,4 @@ entries:
   modules: [sql, json, funcs, time]
   imports:
     transaction: bee.persist:transaction
-    resources: bee.approvals.registry:resources
+    resources: bee.approvals:resources

@@ -18,7 +18,7 @@ entries:
   source: file://attachments.lua
   modules: [tty]
   imports:
-    attachment: bee.applications:attachment
+    attachment: bee.apps:attachment
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
@@ -44,7 +44,7 @@ entries:
     retained_protocol: bee.launch:retained_protocol
     clipboard: bee.client:clipboard
     launcher: bee.launch:bootstrap
-    command: bee.applications:command
+    command: bee.apps:command
     arguments: bee.application:arguments
     store: bee.client:store
     state: bee.client:state

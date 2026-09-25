@@ -12,7 +12,7 @@ local function main()
     local ready = assert(process.listen("bee.host.ready", {message = true}))
     local results = assert(process.listen("bee.host.client_result", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
-    local phases = assert(process.listen("bee.hive_remote.active_done", {message = true}))
+    local phases = assert(process.listen("bee.hive.remote.active_done", {message = true}))
 
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"}) do
@@ -22,7 +22,7 @@ local function main()
     end
 
     local host = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-        :with_context({["bee.host_owner"] = self}):spawn_monitored("bee.host:main", "bee:workers", self, {root_ref = "bee.environment:workspace_root", subpath = ""})))
+        :with_context({["bee.host_owner"] = self}):spawn_monitored("bee.host:main", "bee:workers", self, {root_ref = "bee.env:workspace_root", subpath = ""})))
 
     local started = assert(ready:receive())
     assert(tostring(started:from()) == host, "Ready sender mismatch")
@@ -100,7 +100,7 @@ local function main()
                     if type(res_data) ~= "table" or res_data.error_code ~= "" then
                         error("Host admission failed: " .. tostring(type(res_data) == "table" and res_data.error or "unknown"))
                     end
-                    assert(process.send(authorized_controller, "bee.hive_remote.renderer_ack", {
+                    assert(process.send(authorized_controller, "bee.hive.remote.renderer_ack", {
                         version = 1,
                         request_id = req_id,
                         op = "admit_ack",
@@ -127,7 +127,7 @@ local function main()
                     if type(res_data) ~= "table" or res_data.error_code ~= "" then
                         error("Host render failed: " .. tostring(type(res_data) == "table" and res_data.error or "unknown"))
                     end
-                    assert(process.send(authorized_controller, "bee.hive_remote.renderer_ack", {
+                    assert(process.send(authorized_controller, "bee.hive.remote.renderer_ack", {
                         version = 1,
                         request_id = req_id,
                         op = "render_ack",
@@ -147,7 +147,7 @@ local function main()
                         recipient = target_client,
                     }))
                     detach_result(req_id, target_client)
-                    assert(process.send(authorized_controller, "bee.hive_remote.renderer_ack", {
+                    assert(process.send(authorized_controller, "bee.hive.remote.renderer_ack", {
                         version = 1,
                         request_id = req_id,
                         op = "detach_ack",
@@ -211,7 +211,7 @@ local function main()
                         or res_data.request_id ~= req_id or res_data.op ~= "render" or res_data.error_code ~= "" then
                         error("Host render failed: " .. tostring(type(res_data) == "table" and res_data.error or "unknown"))
                     end
-                    assert(process.send(client_pid, "bee.hive_remote.renderer_ack", {
+                    assert(process.send(client_pid, "bee.hive.remote.renderer_ack", {
                         version = 1,
                         request_id = req_id,
                         renderer = renderer,

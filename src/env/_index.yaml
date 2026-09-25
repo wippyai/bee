@@ -1,0 +1,60 @@
+version: '1.0'
+namespace: bee.env
+entries:
+- name: workspace_environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: workspace_db_path
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: BEE_WORKSPACE_DB
+  default: .wippy/workspace.db
+  readonly: true
+- name: workspace_db
+  kind: db.sql.sqlite
+  file: ${env:bee.env:workspace_db_path}
+  lifecycle:
+    auto_start: true
+- name: client_db
+  kind: db.sql.sqlite
+  file: ${env:bee.env:workspace_db_path}.client
+  lifecycle:
+    auto_start: true
+- name: workspace_root
+  kind: fs.directory
+  directory: .
+  base: project
+  auto_init: false
+- name: machine_home
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: home
+  readonly: true
+- name: machine_login_source
+  kind: fs.directory
+  directory: ${env:bee.env:machine_home}
+  base: project
+  mode: '0500'
+  auto_init: false
+- name: gov_publication_profiles
+  kind: registry.entry
+  meta:
+    type: bee.gov.publication_profiles
+    comment: Host-selected source workspaces and overlay owners available for immutable publication; workspace_applications publishes the overlays a workspace's own agents author under the app.<overlay_id> naming rule
+  data:
+    profiles: []
+    workspace_applications: true
+- name: gov_activation_profiles
+  kind: registry.entry
+  meta:
+    type: bee.gov.activation_profiles
+    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications this node's agents author for their own workspace, with permission approval at first install or widening; remote artifacts cannot edit this entry
+  data:
+    profiles: []
+    workspace_applications:
+      approval_policy: workspace-application-delivery
+      kinds: [process.lua, library.lua, ns.requirement]
+      modules: [tty, process, channel, json, time, uuid, base64, hash, funcs]
+      policies: [bee.security:ordinary_app_subsystem_boundary]
+      thread_access: none

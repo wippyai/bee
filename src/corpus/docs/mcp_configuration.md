@@ -59,7 +59,7 @@ direct call. The gateway does not rewrite a running harness's system prompt.
 
 ## Built-in tools
 
-`overlay` reaches the public `bee.governance.binding:overlay_call` facade. `guide`
+`overlay` reaches the public `bee.gov.binding:overlay_call` facade. `guide`
 names no overlay: without `section` it returns the short index with the
 section list, with `section` one section, and with `include_example` the
 minimal worked example with its entries JSON inline. `create`, `list files
@@ -95,7 +95,7 @@ with placements, overrides and saved profile IDs and revisions.
 in the caller's workspace or in an optional `workspace_id`. It accepts a
 definition reference, brief and retry key, and returns the child thread,
 action and attempt identity plus the admitted title. A workspace other than
-the binding's needs `bee.workspaces.launch` on it in the caller's own scope
+the binding's needs `bee.workspace.manager.launch` on it in the caller's own scope
 (the host attaches `bee.security.harness:workspace_launch_policy` only to agents it lets act
 across workspaces); the launch then runs as the same actor bound to that
 workspace. The child gets its own launch policy and tool scope and holds a
@@ -162,9 +162,11 @@ live actions are unique within a workspace; use the exact address for a send.
 `session_send` takes `{address, grant_epoch, idempotency_key, message_id,
 content}`. The host must grant `bee.sessions.send` on the exact
 `<workspace_id>/<node_id>/<action_id>` address, and the recipient's thread
-owner must accept the sender actor or class. The default send policy grants no
-address. A successful call means that the request and its ordered inbox item
-committed; replaying the same key and payload returns the same record ID.
+owner must accept the sender actor or class. The bundled host selects a
+same-workspace send policy for managed agents; another host may select the
+deny policy or a narrower address policy. A successful call means that the
+request and its ordered inbox item committed; replaying the same key and
+payload returns the same record ID.
 `session_inbox` pages the caller's own action inbox using `after_sequence` and
 `limit`. `session_ack` takes `{inbox_sequence, idempotency_key}`.
 `session_reply` takes the original sender's address and current epoch plus an
@@ -174,10 +176,12 @@ in the original sender's own inbox, with correlation across the two threads.
 The recipient can acknowledge or reply without letting the sender read its
 thread. A stale grant epoch is refused.
 
-A harness learns of new records only when it calls a thread tool: every
-harness pulls through `thread_read` and `thread_wait`; an inbox needs an
-explicit `session_inbox` call. Nothing types a message into a running window or
-writes it to a structured session's input. A window
+A harness can read records through `thread_read` and `thread_wait`, and page
+its inbox through `session_inbox`. A fixture-enabled Claude structured
+controller also wakes on an inbox commit and inserts an identified stream-json
+user message between turns. Shipped production policies currently leave that
+push path disabled pending executable acceptance. No inbox item is typed into
+a running PTY window. A window
 harness's `Stop` hook is recorded as a hook-sourced turn signal, so notices see
 window agents end turns the way stream agents report them. Inbox addresses on
 another Hive node cannot yet be sent to: Hive forwards only the thread owner's

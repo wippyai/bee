@@ -16,6 +16,7 @@ local transaction = require("transaction")
 local materializer = require("materializer")
 local application_admission = require("application_admission")
 local publication_profiles = require("publication_profiles")
+local workspace_applications = require("workspace_applications")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -138,7 +139,7 @@ function M.call(raw: unknown): Result
         return failure("INVALID", "publication identity is invalid")
     end
     local actor = security.actor()
-    local action = request.operation == "prepare" and "bee.governance.delivery.manage" or "bee.governance.delivery.publish"
+    local action = request.operation == "prepare" and "bee.gov.delivery.manage" or "bee.gov.delivery.publish"
     if not actor or not security.can(action, workspace_id) then
         return failure("DENIED", "application publication is not authorized")
     end
@@ -176,19 +177,30 @@ function M.call(raw: unknown): Result
 
     local activation_store, activation_error = activations.open(governance_resource, node_id, workspace_id)
     if not activation_store then return failure("UNAVAILABLE", activation_error or "open application activation state") end
-    local desired = activations.desired(activation_store, chosen.overlay_owner)
+    local active: Profile = chosen
+    local identity = workspace_applications.identity(workspace_id, chosen.source_workspace)
+    local prior_owner = workspace_applications.prior_owner(workspace_id, chosen.source_workspace)
+    if identity and prior_owner and chosen.overlay_owner == identity.overlay_owner then
+        local prior = activations.desired(activation_store, prior_owner)
+        if prior.ok then active.overlay_owner = prior_owner
+        elseif prior.code ~= "NOT_FOUND" then
+            activations.close(activation_store)
+            return failure("UNAVAILABLE", prior.message or "read prior application activation")
+        end
+    end
+    local desired = activations.desired(activation_store, active.overlay_owner)
     local intent, entries, admission, intent_error = publish_intent(desired.ok and desired.value or nil,
-        chosen, node_id, workspace_id, selected_version)
+        active, node_id, workspace_id, selected_version)
     if not intent or not entries then activations.close(activation_store); return failure("BLOCKED", intent_error or "read immutable activation intent") end
-    local matches, match_error = materializer.matches_composed(chosen.overlay_owner, entries, admission)
+    local matches, match_error = materializer.matches_composed(active.overlay_owner, entries, admission)
     if matches == nil then activations.close(activation_store); return failure("UNAVAILABLE", tostring(match_error)) end
     if matches ~= true then activations.close(activation_store); return failure("BLOCKED", "complete applied overlay no longer matches its immutable intent") end
     -- Fence the immutable record after observing the overlay.  A superseding
     -- activation cannot publish bytes that were only valid for the prior slot.
-    local fenced = activations.desired(activation_store, chosen.overlay_owner)
+    local fenced = activations.desired(activation_store, active.overlay_owner)
     activations.close(activation_store)
     local current, _, _, fence_error = publish_intent(fenced.ok and fenced.value or nil,
-        chosen, node_id, workspace_id, selected_version)
+        active, node_id, workspace_id, selected_version)
     if not current or not same_intent(intent, current) then
         return failure("BLOCKED", fence_error or "applied activation changed before publication")
     end

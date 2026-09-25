@@ -70,3 +70,9 @@ entries:
     description: Snapshot the node description feed and its owner-local cursor
   - name: read_after
     description: Catch up the node description feed from an owner-local cursor
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds

@@ -9,10 +9,23 @@ type Record = {id: string, instance_id: string, definition_id: string, thread_id
 type Desktop = {scene: model.Scene, tabs: {string}, preferences: appearance.Preferences}
 type Snapshot = {version: integer, desktop: Desktop, applications: {Record}}
 local M = {}
+-- State written by earlier Bee builds may use the old application definitions.
+-- Keep this at the workspace recovery boundary; opaque resume_state is never
+-- rewritten or interpreted as a Bee-owned identifier.
+local prior_definitions: {[string]: string} = {
+    ["bee.hive_manager:app"] = "bee.hive.manager:app",
+    ["bee.inbox:app"] = "bee.approvals.inbox:app",
+    ["bee.modules:app"] = "bee.hub.modules:app",
+    ["bee.overlays:app"] = "bee.gov.overlays:app",
+    ["bee.workspaces:app"] = "bee.workspace.manager:app",
+    ["bee.timeline:app"] = "bee.threads.timeline:app",
+    ["bee.processes:app"] = "bee.host.processes:app",
+}
 function M.record(value: unknown): Record?
     if type(value) ~= "table" then return nil end
     local id, instance = contract.text(value.id, 80), contract.text(value.instance_id, 80)
     local definition, schema = contract.text(value.definition_id, 160), contract.text(value.resume_schema, 80)
+    if definition then definition = prior_definitions[definition] or definition end
     local thread_id = value.thread_id == nil and nil or contract.thread_id(value.thread_id)
     if not id or id == "" or not instance or instance == "" or not definition or definition == "" or not schema or schema == ""
         or (value.thread_id ~= nil and not thread_id) then return nil end

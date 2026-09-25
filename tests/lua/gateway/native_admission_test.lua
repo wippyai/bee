@@ -11,7 +11,7 @@ local json = require("json")
 local time = require("time")
 local configuration = require("configuration")
 
-local ENDPOINT_REF = "bee.gateway.registry:endpoint_ref"
+local ENDPOINT_REF = "bee.gateway:endpoint_ref"
 local ENDPOINT = "bee.gateway:native_admission_endpoint"
 local LISTENER_REF = "bee.gateway:listener_ref"
 local DATABASE_REF = "bee.gateway:database_ref"

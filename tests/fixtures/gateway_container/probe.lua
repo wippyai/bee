@@ -23,11 +23,11 @@ local function call(target: string, request: Object): Object
     return reply.value :: Object
 end
 local function main()
-    local callback = env.get("bee.gateway_container:callback")
+    local callback = env.get("bee.gateway.container:callback")
     if not callback then error("fixture callback missing") end
     local selected: Object? = nil
     for _ = 1, 100 do
-        local raw, err = funcs.call("bee.gateway.registry:address", {})
+        local raw, err = funcs.call("bee.gateway:address", {})
         if not err and type(raw) == "table" then selected = raw :: Object; break end
         time.sleep("20ms")
     end

@@ -35,9 +35,9 @@ function M.main()
     if not host_policy then error(tostring(host_err)) end
     local host_spawn_policy, spawn_err = security.policy("bee.security.desktop:host_spawn_policy")
     if not host_spawn_policy then error(tostring(spawn_err)) end
-    local first_storage_policy, first_err = security.policy("bee.workspace_hosts:first_storage_policy")
+    local first_storage_policy, first_err = security.policy("bee.workspace.hosts:first_storage_policy")
     if not first_storage_policy then error(tostring(first_err)) end
-    local second_storage_policy, second_err = security.policy("bee.workspace_hosts:second_storage_policy")
+    local second_storage_policy, second_err = security.policy("bee.workspace.hosts:second_storage_policy")
     if not second_storage_policy then error(tostring(second_err)) end
 
     local observed_exits: {[string]: unknown} = {}
@@ -45,7 +45,7 @@ function M.main()
     local function spawn_host_with_policies(resource: string, policies: {security.Policy}): string
         local scope = security.new_scope(policies)
         local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
-            :with_scope(scope):spawn_monitored("bee.host:main", "bee:workers", self, {root_ref = "bee.environment:workspace_root", subpath = ""}, resource)))
+            :with_scope(scope):spawn_monitored("bee.host:main", "bee:workers", self, {root_ref = "bee.env:workspace_root", subpath = ""}, resource)))
         return host
     end
 

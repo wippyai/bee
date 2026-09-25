@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.governance_workspace_probe
+namespace: bee.gov.workspace.probe
 entries:
 - name: workers
   kind: process.host
@@ -19,7 +19,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.governance.binding:overlay_call, bee.governance.binding:workspace_backend_call, bee.governance_workspace_probe:authority_probe]
+    resources: [bee.gov.binding:overlay_call, bee.gov.binding:workspace_backend_call, bee.gov.workspace.probe:authority_probe]
     effect: allow
 - name: caller_boundary
   kind: security.policy
@@ -34,19 +34,19 @@ entries:
   modules: [sql, security]
 - name: read_policy
   kind: security.policy
-  policy: {actions: [bee.governance.overlay.read], resources: 'demo', effect: allow}
+  policy: {actions: [bee.gov.overlay.read], resources: 'demo', effect: allow}
 - name: write_policy
   kind: security.policy
-  policy: {actions: [bee.governance.overlay.write], resources: 'demo', effect: allow}
+  policy: {actions: [bee.gov.overlay.write], resources: 'demo', effect: allow}
 - name: main
   kind: process.lua
   source: file://main.lua
   method: main
   modules: [funcs, security, logger]
   imports: {bounds: bee.threads.records:bounds}
-  security: {policies: [bee.governance_workspace_probe:owner_policy]}
+  security: {policies: [bee.gov.workspace.probe:owner_policy]}
   meta:
     command:
       name: governance-workspace-probe
       security:
-        actor: {id: bee.governance_workspace_probe}
+        actor: {id: bee.gov.workspace.probe}

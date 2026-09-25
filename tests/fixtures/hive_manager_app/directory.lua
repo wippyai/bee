@@ -1,5 +1,5 @@
 -- MIT. Disposable live-directory double. The staging runner selects MODE only in
--- its temporary composition; production imports bee.hive_manager:directory.
+-- its temporary composition; production imports bee.hive.manager:directory.
 local time = require("time")
 local process = require("process")
 local ctx = require("ctx")
@@ -35,7 +35,7 @@ function M.live(_value: unknown): Directory
         if MODE == "slow" then
             local owner = ctx.get("bee.workspace_owner")
             assert(type(owner) == "string" and owner ~= "", "missing fixture owner context")
-            assert(process.send(owner, "bee.hive_manager_probe.slow_entered", {}))
+            assert(process.send(owner, "bee.hive.manager.probe.slow_entered", {}))
             time.sleep("8s")
         end
         local none: {Workspace} = {}

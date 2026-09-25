@@ -87,7 +87,7 @@ return {handle = handle}
 def exercise(project, packed, pack):
     with tempfile.TemporaryDirectory(prefix="bee-modules-update-") as directory:
         (Path(directory) / ".wippy").mkdir()
-        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.modules:app",))
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules:app",))
         try:
             ui.wait("MODULES", timeout=20)
             ui.wait("Update fixture")

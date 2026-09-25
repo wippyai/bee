@@ -11,7 +11,7 @@ entries:
     sync: bee.sync.persist:store
     replicas: bee.sync.persist:replicas
     cursors: bee.sync.persist:distribution_store
-    resources: bee.sync.registry:resources
+    resources: bee.sync:resources
     transaction: bee.persist:transaction
     types: bee.sync:types
 - name: distribution_worker

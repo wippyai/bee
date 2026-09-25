@@ -19,7 +19,7 @@ local publication = require("publication_service")
 
 type Object = {[string]: unknown}
 
-local INPUTS = "bee.agent_app_probe:inputs"
+local INPUTS = "bee.agent.app.probe:inputs"
 local ACTOR = "bee.agent_app.operator"
 local THREAD = "agent-app-authoring"
 -- The launch route and its policy are host-selected per run: the live Agy
@@ -97,9 +97,9 @@ local function text_of(value: unknown, label: string): string
 end
 
 local function surface(): Object
-    return {tools = {{name = "app_docs", operation = "bee.agent_app_probe:docs",
+    return {tools = {{name = "app_docs", operation = "bee.agent.app.probe:docs",
         description = "Read the Bee application authoring contract and a real example application",
-        policies = {"bee.agent_app_probe:docs_policy"},
+        policies = {"bee.agent.app.probe:docs_policy"},
         schema = {type = "object", additionalProperties = false, required = {"topic"},
             properties = {topic = {type = "string", enum = {"contract", "client", "example", "view"}}}},
         annotations = {readOnlyHint = true, destructiveHint = false, openWorldHint = false}}},
@@ -154,7 +154,7 @@ end
 
 local function listener_ready()
     for _ = 1, 150 do
-        local raw, address_error = funcs.call("bee.gateway.registry:address", {})
+        local raw, address_error = funcs.call("bee.gateway:address", {})
         local address = not address_error and bounds.object(raw) or nil
         if address and type(address.address) == "string" then return end
         time.sleep("100ms")
@@ -453,7 +453,7 @@ local function main()
         return "the destination refused your frozen overlay before delivery: " .. tostring(refusal.code)
             .. ": " .. tostring(refusal.message) .. " Remedy: " .. tostring(value.remedy)
     end
-    local file = call("bee.governance.binding:overlay_call", {operation = "read", overlay_id = source_workspace,
+    local file = call("bee.gov.binding:overlay_call", {operation = "read", overlay_id = source_workspace,
         path = "entries.json", snapshot_digest = snapshot_digest})
     if file.overlay_id ~= source_workspace then error("overlay read returned another overlay") end
     report.workspace_revision = bounds.count(file.revision) or 0

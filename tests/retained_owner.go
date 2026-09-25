@@ -117,7 +117,7 @@ func stop(runtime, root string) error {
 }
 
 const probeIndex = `version: '1.0'
-namespace: bee.retained_owner_probe
+namespace: bee.retainedownerprobe
 entries:
 - name: probe_policy
   kind: security.policy.expr
@@ -134,14 +134,14 @@ entries:
   imports:
     decode: bee.protocol:decode
   security:
-    policies: [bee.retained_owner_probe:probe_policy]
+    policies: [bee.retainedownerprobe:probe_policy]
   meta:
     command:
       name: bee-retained-owner-probe
       host: bee:terminal
       short: Verify retained owner startup and cancellation
       security:
-        actor: {id: bee.retained_owner_probe}
+        actor: {id: bee.retainedownerprobe}
 `
 
 const probeSource = `local process = require("process")
@@ -155,7 +155,7 @@ local function main()
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:retained_owner_spawn_policy", "bee.security.desktop:retained_owner_name_policy", "bee.security.desktop:retained_owner_node_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:retained_owner_spawn_policy", "bee.security.desktop:retained_owner_name_policy", "bee.security.desktop:retained_owner_node_policy", "bee.security.desktop:owner_command_stop_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error(tostring(policy_error)) end
         policies[#policies + 1] = policy
@@ -193,7 +193,7 @@ func desktopAdmission(root string) (string, error) {
 	expires := time.Now().Add(time.Hour).UTC().Format("2006-01-02T15:04:05.000Z07:00")
 	config := fmt.Sprintf(`version: "1.0"
 override:
-  "bee.hive_host:supervisor_service:input":
+  "bee.hive.service:supervisor_service:input":
   - configured_nodes: []
     desktop:
       execution: %s
@@ -206,7 +206,7 @@ override:
 }
 
 func writeProbe(root string) error {
-	directory := filepath.Join(root, "src", "retained_owner_probe")
+	directory := filepath.Join(root, "src", "retainedownerprobe")
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return err
 	}

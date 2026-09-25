@@ -7,7 +7,7 @@ entries:
   - definition_id: bee.settings:app
     policies: [bee.security:ordinary_app_subsystem_boundary]
     appearance_write: true
-  - definition_id: bee.processes:app
+  - definition_id: bee.host.processes:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.security.desktop:processes_policy
@@ -17,41 +17,41 @@ entries:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.console:executor_policy
     - bee.console:command_policy
-  - definition_id: bee.inbox:app
+  - definition_id: bee.approvals.inbox:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.security.approvals:approval_decide_policy
-    - bee.inbox:client_policy
-  - definition_id: bee.hive_manager:app
+    - bee.approvals.inbox:client_policy
+  - definition_id: bee.hive.manager:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
-    - bee.hive_manager:client_policy
-    - bee.hive_manager:viewer_policy
-  - definition_id: bee.timeline:app
+    - bee.hive.manager:client_policy
+    - bee.hive.manager:viewer_policy
+  - definition_id: bee.threads.timeline:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
-    - bee.timeline:client_policy
-  - definition_id: bee.workspaces:app
+    - bee.threads.timeline:client_policy
+  - definition_id: bee.workspace.manager:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
-    - bee.workspaces:client_policy
+    - bee.workspace.manager:client_policy
     - bee.security.storage:workspace_catalog_read_policy
     - bee.security.storage:workspace_catalog_manage_policy
     - bee.security.threads:thread_workspace_list_policy
     - bee.security.desktop:workspace_host_lease_policy
-  - definition_id: bee.overlays:app
+  - definition_id: bee.gov.overlays:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
-    - bee.overlays:client_policy
-    - bee.security.governance:governance_delivery_read_policy
-    - bee.security.governance:governance_delivery_manage_policy
-    - bee.security.governance:governance_delivery_activate_policy
-  - definition_id: bee.modules:app
+    - bee.gov.overlays:client_policy
+    - bee.security.gov:governance_delivery_read_policy
+    - bee.security.gov:governance_delivery_manage_policy
+    - bee.security.gov:governance_delivery_activate_policy
+  - definition_id: bee.hub.modules:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
-    - bee.modules:client_policy
-    - bee.modules:hub_policy
-    - bee.modules:publication_policy
+    - bee.hub.modules:client_policy
+    - bee.hub.modules:hub_policy
+    - bee.hub.modules:publication_policy
   - definition_id: bee.harness.window:app
     scope_management: true
     close_grace_ms: 60000
@@ -122,11 +122,11 @@ entries:
     - bee.launch:supervisor
     - bee.launch:headless
     - bee.session:main
-    - bee.applications:broker
+    - bee.apps:broker
     - bee.terminal:main
     - bee.hive:supervisor
-    - bee.hive_host.supervisor:main
-    - bee.hive_host:supervisor_host
+    - bee.hive.supervisor:main
+    - bee.hive.service:supervisor_host
     effect: deny
 - name: ordinary_app_subsystem_boundary
   kind: security.policy
@@ -140,7 +140,7 @@ entries:
     - bee.placement.native:db
     - bee.resources:db
     - bee.credentials:db
-    - bee.governance:db
+    - bee.gov:db
     effect: deny
 - name: application_open_facade_policy
   kind: security.policy.expr
@@ -149,5 +149,14 @@ entries:
   policy:
     expression: '((action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]+$") || (action == "process.registry.register" && resource matches "^bee[.]application[.]open/[0-9a-f-]+$") || (action == "process.registry.unregister" && resource matches "^bee[.]application[.]open/[0-9a-f-]+$") || action == "process.send")'
     actions: [process.registry.lookup, process.registry.register, process.registry.unregister, process.send]
+    resources: '*'
+    effect: allow
+- name: sync_distribution_policy
+  kind: security.policy
+  meta:
+    comment: Generic immutable feed delivery to connected non-client Hive members
+  policy:
+    actions: [db.get, registry.get, system.read, hive.invoke, process.registry.lookup,
+      process.listen, process.unlisten, process.send]
     resources: '*'
     effect: allow

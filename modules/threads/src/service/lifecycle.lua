@@ -10,6 +10,7 @@ local access = require("access")
 local reader = require("reader")
 local transaction = require("transaction")
 local authority = require("authority")
+local inbox = require("inbox")
 local M = {}
 type Result = transaction.Result
 type Prepared = {mutation: authority.Mutation, object: {[string]: unknown}}
@@ -293,6 +294,8 @@ function M.receipt(db: sql.DB, actor: string, request: unknown): Result
             if attempt_state_err then return storage(attempt_state_err) end
             local action_state_err = transaction.set_action_state(tx, head.thread_id, action_id, "admitted")
             if action_state_err then return storage(action_state_err) end
+            local block_err = inbox.attempt_ended(tx, head.thread_id, action_id)
+            if block_err then return block_err end
             return authority.remember(tx, actor, "receipt", prepared.mutation, {record_id = committed.record_id, sequence = committed.sequence, scope = "attempt", attempt_id = attempt_id, outcome = receipt.outcome})
         end
         if action.state == "ended" then return failure("CONFLICT", "action already has a receipt") end
@@ -305,6 +308,8 @@ function M.receipt(db: sql.DB, actor: string, request: unknown): Result
         if settle_err then return storage(settle_err) end
         local state_err = transaction.set_action_state(tx, head.thread_id, action_id, "ended")
         if state_err then return storage(state_err) end
+        local block_err = inbox.action_ended(tx, head.thread_id, action_id)
+        if block_err then return block_err end
         return authority.remember(tx, actor, "receipt", prepared.mutation, {record_id = committed.record_id, sequence = committed.sequence, scope = "action", outcome = receipt.outcome})
     end)
 end

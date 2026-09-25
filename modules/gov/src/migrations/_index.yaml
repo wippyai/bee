@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.governance.migrations
+namespace: bee.gov.migrations
 entries:
 - name: schema
   kind: library.lua

@@ -7,7 +7,7 @@ entries:
     actions:
     - db.get
     resources:
-    - bee.environment:workspace_db
+    - bee.env:workspace_db
     effect: allow
 - name: workspace_storage_boundary
   kind: security.policy
@@ -17,8 +17,8 @@ entries:
     actions:
     - db.get
     resources:
-    - bee.environment:workspace_db
-    - bee.environment:client_db
+    - bee.env:workspace_db
+    - bee.env:client_db
     - bee.client.db:*
     - bee.workspace.db:*
     effect: deny
@@ -28,14 +28,14 @@ entries:
     actions:
     - db.get
     resources:
-    - bee.environment:client_db
+    - bee.env:client_db
     effect: allow
 - name: workspace_catalog_read_policy
   kind: security.policy
   meta:
     comment: Read the node workspace catalog, list it and search it
   policy:
-    actions: [bee.workspaces.read]
+    actions: [bee.workspace.manager.read]
     resources: '*'
     effect: allow
 - name: workspace_catalog_manage_policy
@@ -43,7 +43,7 @@ entries:
   meta:
     comment: Create, rename, archive and restore node workspaces under the host's admitted roots, and browse those roots' folders
   policy:
-    actions: [bee.workspaces.manage, bee.workspaces.browse]
+    actions: [bee.workspace.manager.manage, bee.workspace.manager.browse]
     resources: '*'
     effect: allow
 - name: workspace_folder_browse_policy
@@ -51,8 +51,8 @@ entries:
   meta:
     comment: List the admitted roots and page their folders, to pick a folder under them; reads no workspace and creates, changes and archives nothing
   policy:
-    expression: '(action == "bee.workspaces.read" && resource == "catalog") || action == "bee.workspaces.browse"'
-    actions: [bee.workspaces.read, bee.workspaces.browse]
+    expression: '(action == "bee.workspace.manager.read" && resource == "catalog") || action == "bee.workspace.manager.browse"'
+    actions: [bee.workspace.manager.read, bee.workspace.manager.browse]
     resources: '*'
     effect: allow
 - name: workspace_catalog_facade_policy
@@ -70,8 +70,8 @@ entries:
   meta:
     comment: The catalog backend's store, the host's admitted roots and its own execution
   policy:
-    actions: [db.get, registry.get, bee.workspaces.execute]
-    resources: [bee.environment:workspace_db, bee.resources:roots_ref, bee:resource_roots, bee.workspace.catalog:backend]
+    actions: [db.get, registry.get, bee.workspace.manager.execute]
+    resources: [bee.env:workspace_db, bee.resources:roots_ref, bee:resource_roots, bee.workspace.catalog:backend]
     effect: allow
 - name: workspace_catalog_volume_policy
   kind: security.policy
@@ -98,7 +98,7 @@ entries:
   meta:
     comment: The catalog finds the workspace extension bindings and calls their describe and search methods; each binding answers only for workspaces this scope may read, and the operations authorized the caller for that workspace first
   policy:
-    expression: '(action == "contract.implementations" && resource == "bee.workspace.catalog:extension") || action == "contract.open" || (action == "contract.call" && (resource == "describe" || resource == "search")) || action == "bee.workspaces.read"'
-    actions: [contract.implementations, contract.open, contract.call, bee.workspaces.read]
+    expression: '(action == "contract.implementations" && resource == "bee.workspace.catalog:extension") || action == "contract.open" || (action == "contract.call" && (resource == "describe" || resource == "search")) || action == "bee.workspace.manager.read"'
+    actions: [contract.implementations, contract.open, contract.call, bee.workspace.manager.read]
     resources: '*'
     effect: allow

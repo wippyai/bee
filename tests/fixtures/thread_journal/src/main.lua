@@ -10,27 +10,27 @@ local function main(thread: string?, run: string?, after_text: string?)
     if #thread == 0 or #thread > 80 or thread:find("%c") or #run == 0 or #run > 80 or run:find("%c") then error("Invalid thread or run ID") end
     local after = tonumber(after_text or "0")
     if not after or after < 0 or after > 10000 or after ~= math.floor(after) then error("Invalid cursor") end
-    local requests = assert(process.listen("bee.thread_demo.request", {message = true}))
+    local requests = assert(process.listen("bee.thread.demo.request", {message = true}))
     local lifecycle = assert(process.events())
     local database, open_error = store.open()
     if not database then error(tostring(open_error)) end
-    local participant, policy_error = security.policy("bee.thread_demo:participant")
+    local participant, policy_error = security.policy("bee.thread.demo:participant")
     if not participant then error(tostring(policy_error)) end
-    local binding_policy = security.policy("bee.thread_demo:binding_policy")
-    local method_policy = security.policy("bee.thread_demo:method_policy")
-    local function_policy = security.policy("bee.thread_demo:function_policy")
+    local binding_policy = security.policy("bee.thread.demo:binding_policy")
+    local method_policy = security.policy("bee.thread.demo:method_policy")
+    local function_policy = security.policy("bee.thread.demo:function_policy")
     if not binding_policy or not method_policy or not function_policy then error("Missing contract probe policy") end
     local scope = security.new_scope({participant, binding_policy, method_policy, function_policy})
     local owner = tostring(process.pid())
     local read_capability = uuid.v7()
-    local reader = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.thread_demo:subscriber", "bee.thread_demo:workers", owner, thread, math.floor(after), read_capability)))
-    local writer = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.thread_demo:producer", "bee.thread_demo:workers", owner, thread, run)))
+    local reader = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.thread.demo:subscriber", "bee.thread.demo:workers", owner, thread, math.floor(after), read_capability)))
+    local writer = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.thread.demo:producer", "bee.thread.demo:workers", owner, thread, run)))
     local ticker = assert(time.ticker("100ms"))
     local ticks = ticker:channel()
     local tick, waiter, waiter_deadline = 0, -1, 0
     local producer_done, subscriber_done = false, false
     local function reply(pid: string, seq: integer, rows: {unknown}, err: string)
-        assert(process.send(pid, "bee.thread_demo.reply", {version = 1, seq = seq, rows = rows, error = err}))
+        assert(process.send(pid, "bee.thread.demo.reply", {version = 1, seq = seq, rows = rows, error = err}))
     end
     local function read(cursor: integer): ({unknown}, string?)
         local rows, err = database:read(thread, cursor)

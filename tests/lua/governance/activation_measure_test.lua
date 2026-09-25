@@ -10,7 +10,7 @@ local admission = require("application_admission")
 local SHA = string.rep("a", 64)
 local function application_admission(artifact_digest: string, policy_digest: string): {[string]: unknown}
     local measured, measure_error = admission.measure({schema_revision = admission.SCHEMA,
-        workspace_id = "workspace-a", overlay_owner = "bee.governance:overlay",
+        workspace_id = "workspace-a", overlay_owner = "bee.gov:overlay",
         source_node = "node-b", source_workspace = "source-app", artifact_digest = artifact_digest,
         policy_digest = policy_digest, bindings = {}})
     if not measured then error(tostring(measure_error)) end

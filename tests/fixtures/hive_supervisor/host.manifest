@@ -4,7 +4,7 @@ namespace: bee
 entries:
 - name: terminal
   kind: terminal.host
-  lifecycle: {auto_start: true, requires: [bee.hive:supervisor_host]}
+  lifecycle: {auto_start: true, requires: [bee.hive_host:supervisor_host]}
 - name: workers
   kind: process.host
   host: {max_processes: 64, workers: 2}
@@ -25,6 +25,8 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
+  - name: waiter_policies
+    value: [bee.security.threads:thread_waiter_policy]
 - name: sync_exports
   kind: registry.entry
   meta:

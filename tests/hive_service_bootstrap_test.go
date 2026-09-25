@@ -21,8 +21,8 @@ import (
 )
 
 type hiveHostManifest struct {
-	Namespace string             `yaml:"namespace"`
-	Entries   []hiveServiceEntry `yaml:"entries"`
+	Namespace string                   `yaml:"namespace"`
+	Entries   []map[string]interface{} `yaml:"entries"`
 }
 
 type hiveServiceEntry struct {
@@ -50,19 +50,26 @@ func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
 	if err := yaml.Unmarshal(source, &manifest); err != nil {
 		t.Fatalf("decode Hive host service: %v", err)
 	}
-	if manifest.Namespace != "bee.hive" {
+	if manifest.Namespace != "bee.hive_host" {
 		t.Fatalf("Hive service namespace = %q", manifest.Namespace)
 	}
 	var service *hiveServiceEntry
-	for index := range manifest.Entries {
-		entry := &manifest.Entries[index]
-		if entry.Name != "supervisor_service" {
+	for _, entry := range manifest.Entries {
+		if entry["name"] != "supervisor_service" {
 			continue
 		}
 		if service != nil {
 			t.Fatal("duplicate Hive supervisor service")
 		}
-		service = entry
+		encoded, err := yaml.Marshal(entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var selected hiveServiceEntry
+		if err := yaml.Unmarshal(encoded, &selected); err != nil {
+			t.Fatalf("decode Hive supervisor service: %v", err)
+		}
+		service = &selected
 	}
 	if service == nil {
 		t.Fatal("missing default Hive supervisor service")
@@ -164,7 +171,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		mainPath := filepath.Join(srcDir, "hive/supervisor/main.lua")
+		mainPath := filepath.Join(srcDir, "hive_host/supervisor/main.lua")
 		mainSource, err := os.ReadFile(mainPath)
 		if err != nil {
 			t.Fatal(err)
@@ -177,7 +184,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		if err := os.WriteFile(mainPath, []byte(observed), 0600); err != nil {
 			t.Fatal(err)
 		}
-		manifestPath := filepath.Join(srcDir, "hive/supervisor/_index.yaml")
+		manifestPath := filepath.Join(srcDir, "hive_host/supervisor/_index.yaml")
 		manifest, err := os.ReadFile(manifestPath)
 		if err != nil {
 			t.Fatal(err)
@@ -193,7 +200,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		// this native fixture. The service declaration and its lifecycle policies
 		// remain the production module composition.
 		peerNode := fmt.Sprintf("node-%d", 1-i)
-		servicePath := filepath.Join(folder, "modules", "hive", "src", "_index.yaml")
+		servicePath := filepath.Join(folder, "src", "hive_host", "_index.yaml")
 		serviceManifest, err := os.ReadFile(servicePath)
 		if err != nil {
 			t.Fatal(err)

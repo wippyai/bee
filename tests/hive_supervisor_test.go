@@ -27,7 +27,7 @@ import (
 
 func stageHiveSupervisorDesktop(t *testing.T, source string) {
 	t.Helper()
-	path := filepath.Join(source, "hive", "desktop", "_index.yaml")
+	path := filepath.Join(source, "hive_host", "desktop", "_index.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	}
 	sourceSnapshot := filepath.Join(root, "source")
 	fixtureSnapshot := filepath.Join(root, "fixture")
-	if err := os.CopyFS(filepath.Join(sourceSnapshot, "hive"), os.DirFS(filepath.Join(repository, "src/hive"))); err != nil {
+	if err := os.CopyFS(filepath.Join(sourceSnapshot, "hive_host"), os.DirFS(filepath.Join(repository, "src/hive_host"))); err != nil {
 		t.Fatal(err)
 	}
 	// The staged supervisor boots the production service declaration, so it
@@ -289,7 +289,11 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 		t.Fatal(err)
 	}
 	dependency := "- name: dependency_approvals\n  kind: ns.dependency\n  component: bee/approvals\n" +
-		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee:approver_policies\n"
+		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee:approver_policies\n" +
+		"  - name: process_host\n    value: bee:workers\n" +
+		"  - name: authority_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]\n" +
+		"  - name: worker_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy,\n" +
+		"      bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]\n"
 	if err := os.WriteFile(stagedRoot, append(staged, []byte(dependency)...), 0600); err != nil {
 		t.Fatal(err)
 	}

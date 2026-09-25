@@ -379,6 +379,19 @@ local function define_tests()
                 test.eq(notice and notice.provider, case.provider)
             end
         end)
+        test.it("returns a typed login notice from prepare and its replay", function()
+            local raw = launch({"sh", "-c", "true"}, "direct_process")
+            raw.profile_id = "window"
+            local spec = raw.launch :: {[string]: unknown}
+            spec.login = {provider = "codex", command = "codex login", files = {{variable = "HOME", path = ".codex/auth.json"}}}
+            local prepared = attempt_of(call(OWNER, "prepare", raw))
+            test.eq(prepared.notice and prepared.notice.code, "LOGIN_REQUIRED")
+            test.eq(prepared.notice and prepared.notice.provider, "codex")
+            test.eq(prepared.notice and prepared.notice.command, "codex login")
+            local replay = attempt_of(call(OWNER, "prepare", raw))
+            test.eq(replay.notice and replay.notice.code, "LOGIN_REQUIRED")
+            value(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+        end)
         test.it("decodes Linux execution identity facts", function()
             local facts = assert(identity.decode("linux_start=55016250\nlinux_boot=2d21bc55-a6c4-441f-9d95-f5bc579c4152\npgid= 2425392\n"))
             test.eq(facts.start_ticks, 55016250)

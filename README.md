@@ -114,6 +114,13 @@ to an IP address assigned to that machine and reachable by the other node.
 Set it for `bee hive join` on the joining machine as well. Bee listens on all
 interfaces of that IP family so local loopback clients can attach, and
 advertises only the selected address to peers.
+The invite also lists up to eight alternate interface, tailnet, MagicDNS and
+host-selected addresses. Set `BEE_HIVE_ADDRESSES` to comma-separated external
+IP addresses for a port-forwarded host. The join command races their TLS
+handshakes and reports each failed route. The runtime mesh still advertises
+one `BEE_MESH_ADDRESS`, so that address must remain reachable for the session
+and reconnects. See the [reachability notes](docs/operations/hive-reach.notes.md)
+for WSL2 NAT and multi-network limitations.
 
 To let a joined peer open this node's desktop in Hive Manager, stop this
 node's owner and restart it with `BEE_DESKTOP_ALLOWED_PEERS` set to the exact

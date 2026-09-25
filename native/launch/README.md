@@ -126,6 +126,16 @@ mesh and invite listener on that address family, advertises the selected IP to
 peers, and publishes loopback aliases in the local rendezvous descriptor for
 same-machine clients. An invalid or unassigned selected address fails owner
 preparation.
+Invites carry up to eight alternate interface, tailnet, MagicDNS, and
+`BEE_HIVE_ADDRESSES` external IP hints. The joining command races TLS
+handshakes, authenticates the pinned identity, and uses the first verified
+route for redemption. It persists that route's IP as its initial gossip seed
+and reports every candidate failure if none verifies. This does not change
+the runtime's one advertised mesh address; keep `BEE_MESH_ADDRESS` reachable
+for established sessions and reconnects. On detected WSL2 NAT, the invite
+prints mirrored-networking instructions and exact Windows TCP forwarding and
+firewall commands, with an explicit warning that Windows portproxy cannot
+forward the UDP gossip path.
 
 `bee version` is not answered by the host: the embedded pack version and the
 pinned runtime commit are not visible to `app.Host`, so the word reaches the

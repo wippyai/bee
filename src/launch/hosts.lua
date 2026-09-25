@@ -15,6 +15,9 @@ type Decision = {kind: string, evict: string?}
 
 local M = {}
 M.MAX_CAP = 1024
+-- One page of a node's live workspace holdings, and the cursor bound.
+M.MAX_PAGE = 50
+M.MAX_CURSOR_BYTES = 160
 -- Relayed requests one host may have outstanding.
 M.MAX_RELAYED = 256
 
@@ -202,6 +205,56 @@ end
 
 function M.host(state: State, workspace_id: string): Host?
     return state.hosts[workspace_id]
+end
+
+-- identity: a workspace identity is 32 lowercase hexadecimal characters.
+local function identity(value: unknown): string?
+    if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
+    return value
+end
+
+-- One bounded page of the live workspaces this node holds, in identity order,
+-- each with its host phase and the number of leases that keep it live. This is
+-- a read model: it grants nothing and changes no state. Page size is bounded by
+-- M.MAX_PAGE and a cursor must be an identity an earlier page returned.
+function M.holdings(state: State, query: unknown): ({workspaces: {{workspace_id: string, phase: string, lease_count: integer}}, has_more: boolean, next_after: string?}?, string?)
+    local limit = M.MAX_PAGE
+    local after: string? = nil
+    if query ~= nil then
+        if type(query) ~= "table" then return nil, "query must be an object" end
+        local object = query :: {[string]: unknown}
+        for key in pairs(object) do
+            if key ~= "after" and key ~= "limit" then return nil, "query takes after and limit only" end
+        end
+        if object.limit ~= nil then
+            local number = object.limit
+            if type(number) ~= "number" or number ~= math.floor(number) or number < 1 or number > M.MAX_PAGE then
+                return nil, "limit must be between 1 and " .. tostring(M.MAX_PAGE)
+            end
+            limit = math.floor(number)
+        end
+        if object.after ~= nil then
+            after = identity(object.after)
+            if not after then return nil, "after must be a workspace identity this operation returned" end
+        end
+    end
+    local ids: {string} = {}
+    for workspace_id in pairs(state.hosts) do ids[#ids + 1] = workspace_id end
+    table.sort(ids)
+    local workspaces: {{workspace_id: string, phase: string, lease_count: integer}} = {}
+    local has_more = false
+    for _, workspace_id in ipairs(ids) do
+        if not after or workspace_id > after then
+            if #workspaces >= limit then has_more = true; break end
+            local host = state.hosts[workspace_id]
+            if host then
+                workspaces[#workspaces + 1] = {workspace_id = workspace_id, phase = host.phase, lease_count = host.lease_count}
+            end
+        end
+    end
+    local next_after: string? = nil
+    if has_more and #workspaces > 0 then next_after = workspaces[#workspaces].workspace_id end
+    return {workspaces = workspaces, has_more = has_more, next_after = next_after}, nil
 end
 
 -- A holder of a lease on a ready host admits desktops through the manager

@@ -23,6 +23,7 @@ type Definition = {
     binding_ref: string,
     profile_id: string,
     policy_ref: string,
+    agent_ref: string?,
     default_mode: string,
     allowed_overrides: {string},
     workdir_policy: WorkdirPolicy,
@@ -68,7 +69,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch definition" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "launch_id", "title", "command_names", "binding_ref", "profile_id", "policy_ref", "default_mode",
+    local unknown_field = bounds.fields(data, {"schema_revision", "launch_id", "title", "command_names", "binding_ref", "profile_id", "policy_ref", "agent_ref", "default_mode",
         "allowed_overrides", "workdir_policy", "thread_policy", "session_resource", "credentials", "presentation"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
@@ -79,6 +80,11 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if not policy_ref then return nil, ref .. ": policy_ref is not an identifier" end
     local title = bounds.text(data.title, 256)
     if not title or title == "" then return nil, ref .. ": title must be nonempty text" end
+    local agent_ref: string? = nil
+    if data.agent_ref ~= nil then
+        agent_ref = bounds.id(data.agent_ref)
+        if not agent_ref then return nil, ref .. ": agent_ref is not an identifier" end
+    end
     local commands, commands_error = bounds.ids(data.command_names == nil and {} or data.command_names, true)
     if not commands then return nil, ref .. ": command_names: " .. tostring(commands_error) end
     local mode = bounds.member(data.default_mode, M.MODES)
@@ -110,7 +116,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, ref .. ": digest failed" end
     return {ref = ref, digest = digest, launch_id = launch_id, title = title, command_names = commands, binding_ref = binding_ref, profile_id = profile_id,
-        policy_ref = policy_ref, default_mode = mode, allowed_overrides = overrides, workdir_policy = workdir, thread_policy = thread, session_resource = session_resource, credentials = credentials,
+        policy_ref = policy_ref, agent_ref = agent_ref, default_mode = mode, allowed_overrides = overrides, workdir_policy = workdir, thread_policy = thread, session_resource = session_resource, credentials = credentials,
         presentation = {start_menu = presentation.start_menu == true, fullscreen = presentation.fullscreen == true, reuse = reuse}}, nil
 end
 function M.load(ref: string): (Definition?, string?)

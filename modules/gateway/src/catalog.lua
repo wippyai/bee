@@ -173,4 +173,68 @@ function M.select(catalog: Catalog, ceiling: {string}, base: {string}, allowed_t
     for _, tool in ipairs(catalog.tools) do if selected[tool.name] then tools[#tools + 1] = tool end end
     return tools, nil
 end
+type FrameworkTool = {alias: string, operation: string, description: string, schema: Object, annotations: Object}
+type FrameworkTrait = {id: string, title: string, prompt: string, tools: {string}}
+-- from_framework: project an admitted agent closure's selected function
+-- tools and traits into catalog declarations. The MCP name is an adapter
+-- alias for the function id, never a second tool definition: authority
+-- stays with the host policies the caller supplies per function id, and the
+-- function still executes under a host-selected scope.
+function M.from_framework(framework: unknown, policies: unknown): (Catalog?, string?)
+    local value = bounds.object(framework)
+    if not value then return nil, "framework closure must be an object" end
+    local extra = bounds.fields(value, {"tools", "traits"})
+    if extra then return nil, extra end
+    local declared_tools, tools_error = list(value.tools, 32)
+    local declared_traits, traits_error = list(value.traits, 16)
+    if not declared_tools then return nil, tools_error end
+    if not declared_traits then return nil, traits_error end
+    local host = bounds.object(policies)
+    if not host then return nil, "host policies must be an object" end
+    local result: Catalog = {tools = {}, traits = {}}
+    local names: {[string]: boolean} = {}
+    for _, raw_tool in ipairs(declared_tools) do
+        local tool = bounds.object(raw_tool)
+        if not tool then return nil, "tool must be an object" end
+        local invalid = bounds.fields(tool, {"alias", "operation", "description", "schema", "annotations"})
+        if invalid then return nil, invalid end
+        local name, operation = bounds.line(tool.alias, 64), reference(tool.operation)
+        local description = bounds.text(tool.description, 4096)
+        local schema, annotations = bounds.object(tool.schema), bounds.object(tool.annotations)
+        if not name or name == "session" or name == "call_tool" or not name:match("^[%w_.%-]+$") or names[name] then
+            return nil, "invalid or duplicate framework tool"
+        end
+        if not operation or not description or not schema or not annotations then
+            return nil, "invalid or duplicate framework tool"
+        end
+        local tool_name: string = name or ""
+        local operation_id: string = operation or ""
+        if schema.type ~= "object" or not valid_schema(schema, 0) then
+            return nil, "tool schema must be an object schema in the supported subset"
+        end
+        if not valid_annotations(annotations) then
+            return nil, "tool annotations must be booleans from the MCP annotation set"
+        end
+        local admitted = bounds.ids(host[operation_id], true)
+        if not admitted or #admitted == 0 or #admitted > 8 then return nil, "no host policy admits tool " .. operation_id end
+        for _, policy in ipairs(admitted) do if not reference(policy) then return nil, "invalid policy reference" end end
+        names[tool_name] = true
+        result.tools[#result.tools + 1] = {name = tool_name, operation = operation_id, description = description,
+            policies = admitted, schema = schema, annotations = annotations}
+    end
+    local ids: {[string]: boolean} = {}
+    for _, raw_trait in ipairs(declared_traits) do
+        local trait = bounds.object(raw_trait)
+        if not trait then return nil, "trait must be an object" end
+        local invalid = bounds.fields(trait, {"id", "title", "prompt", "tools"})
+        if invalid then return nil, invalid end
+        local id, title, prompt = reference(trait.id), bounds.line(trait.title, 256), bounds.text(trait.prompt, 16384)
+        local selected = bounds.ids(trait.tools, true)
+        if not id or ids[id] or not title or not prompt or not selected or #selected > 32 then return nil, "invalid or duplicate framework trait" end
+        for _, name in ipairs(selected) do if not names[name] then return nil, "trait references unknown tool" end end
+        ids[id] = true
+        result.traits[#result.traits + 1] = {id = id, title = title, prompt = prompt, tools = selected}
+    end
+    return result, nil
+end
 return M

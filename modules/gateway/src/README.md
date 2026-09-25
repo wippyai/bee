@@ -81,3 +81,10 @@ are in `bee.gateway.api`; and endpoint lookup is
 `bee.gateway.persist`, and `bee.gateway.security` contain the component's
 migration, storage, and policy implementation. There are no root-namespace
 forwarding functions for the lifecycle operations.
+
+The `catalog.from_framework` projection exposes an admitted agent closure's
+selected function tools and traits through the gateway: each function id
+becomes one MCP tool under its `llm_alias` adapter alias with its input
+schema, and each trait keeps its prompt with those aliases. The alias carries
+no authority; the host supplies one policy list per function id, and
+selection still refuses any tool outside the admitted ceiling.

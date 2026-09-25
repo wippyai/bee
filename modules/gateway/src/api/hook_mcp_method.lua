@@ -9,8 +9,10 @@ local function answer(response: http.Response, status: number, body: Object)
     response:set_content_type(http.CONTENT.JSON)
     response:write_json(body)
 end
-local HOOK_TOOL = {name = "hook", description = "Submit one hook observation about this attempt; it is recorded, never answered with a decision",
-    inputSchema = {type = "object"}, annotations = mcp.WRITE_ANNOTATIONS}
+local HOOK_TOOL = {name = "hook", description = "Submit one hook observation about this attempt; it is recorded, never answered with a decision. "
+    .. "event names the closed hook catalog event; identity fields correlate the occurrence; "
+    .. "content fields keep only sizes and digests, never text",
+    inputSchema = hooks.schema(), annotations = mcp.WRITE_ANNOTATIONS}
 local function handle(): nil
     local request = http.request()
     local response = http.response()

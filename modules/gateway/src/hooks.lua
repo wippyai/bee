@@ -205,6 +205,33 @@ function M.classify(meta: unknown): (string, string)
     if hook and model then return "mixed", "hook and model call fields together" end
     return "unclassified", "neither hook nor model call fields"
 end
+-- The MCP input schema for the hook tool, generated from the same event
+-- catalog, identity fields and bounds normalize enforces.
+function M.schema(): {[string]: unknown}
+    return {type = "object", additionalProperties = false, required = {"event"},
+        properties = {
+            event = {type = "string", enum = M.EVENTS,
+                description = "closed hook event catalog; nothing outside it is accepted"},
+            session_id = {type = "string", minLength = 1, maxLength = 160},
+            turn_id = {type = "string", minLength = 1, maxLength = 160},
+            prompt_id = {type = "string", minLength = 1, maxLength = 160},
+            tool_use_id = {type = "string", minLength = 1, maxLength = 160},
+            agent_id = {type = "string", minLength = 1, maxLength = 160},
+            tool_name = {type = "string", minLength = 1, maxLength = 128,
+                pattern = "^[A-Za-z0-9_.:/-]+$"},
+            source = {type = "string", enum = M.ENUMERATED.source},
+            reason = {type = "string", enum = M.ENUMERATED.reason},
+            permission_mode = {type = "string", enum = M.ENUMERATED.permission_mode},
+            error = {type = "string", enum = M.ENUMERATED.error},
+            notification_type = {type = "string", enum = M.ENUMERATED.notification_type},
+            stop_hook_active = {type = "boolean"},
+            duration_ms = {type = "number"},
+        },
+        examples = {
+            {event = "PreToolUse", session_id = "sess-1", tool_use_id = "tool-1", tool_name = "read"},
+            {event = "Stop", session_id = "sess-1", turn_id = "turn-1", stop_hook_active = false},
+        }}
+end
 function M.control_free(payload: Object): Object
     local cleaned: Object = {}
     for key, value in pairs(payload) do

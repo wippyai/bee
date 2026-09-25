@@ -122,6 +122,43 @@ entries:
     caller_launch: bee.harness.launch:caller_launch
   meta:
     type: internal
+- name: launch_definitions_call
+  kind: function.lua
+  source: file://launch_definitions_method.lua
+  method: handle
+  modules: [ctx]
+  imports:
+    bounds: bee.threads.records:bounds
+    caller_launch: bee.harness.launch:caller_launch
+  meta:
+    type: tool
+    title: List admitted launch definitions
+    llm_alias: BeeLaunchDefinitions
+    llm_description: Read-only discovery for the caller's own launch allow-list. Returns the launch definitions the caller's host-selected launch policy admits, with each definition's title, default mode, driver profile, policy, admitted overrides, workdir and thread policies and the placements a launch accepts, plus the saved profile IDs and revisions held for those definitions in the workspace. Starts nothing and grants nothing.
+    input_schema: |
+      {"type":"object","additionalProperties":false,"properties":{"workspace_id":{"type":"string","minLength":32,"maxLength":32}}}
+  security:
+    policies: [bee.harness.launch:launch_definitions_facade_policy]
+- name: launch_definitions_backend
+  kind: function.lua
+  source: file://launch_definitions_backend.lua
+  method: handle
+  modules: [ctx, funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    policy: bee.harness.carrier:policy
+    definitions: bee.harness.launch:definitions
+  meta:
+    type: internal
+- name: launch_definitions_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The launch-discovery facade runs as the bound subject; it may enter the host-named launch scope and call its backend, and nothing else
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:agent_launch_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:launch_definitions_backend") || action == "security.actor.create"'
+    actions: [funcs.security, security.policy_group.get, funcs.call, security.actor.create]
+    resources: [security, bee.harness.launch:agent_launch_execution_scope, bee.harness.launch:launch_definitions_backend, '*']
+    effect: allow
 - name: agent_call
   kind: function.lua
   source: file://agent_call_method.lua

@@ -22,7 +22,7 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string}
+type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, launch_definitions: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
     read = "bee.gateway.registry:tool_read_policy_ref",
     message = "bee.gateway.registry:tool_message_policy_ref",
@@ -36,6 +36,8 @@ local TOOL_POLICY_REFS: ToolPolicyRefs = {
     delivery = "bee.gateway.registry:tool_delivery_policy_ref",
     publish = "bee.gateway.registry:tool_publish_policy_ref",
     application_open = "bee.gateway.registry:tool_application_open_policy_ref",
+    capabilities = "bee.gateway.registry:tool_read_policy_ref",
+    launch_definitions = "bee.gateway.registry:tool_launch_policy_ref",
 }
 local BUILTIN_POLICY_REFS: {[string]: boolean} = {}
 for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = true end
@@ -48,10 +50,12 @@ local TOOLS: {Tool} = {
     {name = "thread_wait", description = "Wait, read-only and bounded, for the bound thread to move past a cursor; claims nothing", operation = "bee.threads.delivery:watch",
         policies = {TOOL_POLICY_REFS.read},
         schema = {type = "object", additionalProperties = false, properties = {after_sequence = {type = "integer", minimum = 0}, wait_ms = {type = "integer", minimum = 0}}}, annotations = READ_ANNOTATIONS},
-    {name = "thread_sessions", description = "List the running agent sessions in your workspace whose threads you may read, yourself included (self). Each has a session address (its action_id), attempt, thread and title. Pass an action_id, attempt_id, or a thread_id holding one session as session to thread_message or thread_notify.", operation = "bee.threads.service:get",
+    {name = "thread_sessions", description = "Page the running agent sessions in your workspace whose threads you may read, yourself included (self), in stable action order. Each has a session address (its action_id), attempt, thread and title. Pass cursor from the previous reply's next_cursor; a missing next_cursor ends the listing. Pass an action_id, attempt_id, or a thread_id holding one session as session to thread_message or thread_notify.", operation = "bee.threads.service:get",
         policies = {TOOL_POLICY_REFS.read},
-        -- An empty table encodes as a JSON list unless allocated as a map.
-        schema = {type = "object", additionalProperties = false, properties = table.create(0, 1)}, annotations = READ_ANNOTATIONS},
+        schema = {type = "object", additionalProperties = false,
+            properties = {cursor = {type = "integer", minimum = 0, description = "offset into the stable session order; omit for the first page"},
+                limit = {type = "integer", minimum = 1, maximum = 64, description = "page size, at most 64"}},
+            examples = {{limit = 32}, {cursor = 32, limit = 32}}}, annotations = READ_ANNOTATIONS},
     {name = "thread_message", description = "Append one message as the authenticated subject: to the bound thread with recipient_ids, or with session to that running session's thread, addressed to it; it reads the message at its next thread_read and a thread_wait there wakes", operation = "bee.threads.service:record",
         policies = {TOOL_POLICY_REFS.message}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"idempotency_key", "message_id", "message_kind", "content"}, properties = {
@@ -69,9 +73,24 @@ local TOOLS: {Tool} = {
             session = {type = "string", minLength = 1, maxLength = 160},
             idempotency_key = {type = "string", minLength = 1, maxLength = 160},
         }}},
-    {name = "session_directory", description = "List local agents in your workspace that your host permits you to discover. Each entry has a host-assigned name, an exact node/action address, current acceptance epoch, attempt state and latest inbox delivery state; discovery grants no thread read or send permission.", operation = "bee.threads.service:inbox_describe",
+    {name = "session_directory", description = "Page the local agents in your workspace that your host permits you to discover, in stable name order. Each entry has a host-assigned name, an exact node/action address, current acceptance epoch, attempt state and latest inbox delivery state; discovery grants no thread read or send permission. Pass cursor from the previous reply's next_cursor; a missing next_cursor ends the listing.", operation = "bee.threads.service:inbox_describe",
         policies = {TOOL_POLICY_REFS.inbox, TOOL_POLICY_REFS.discover, TOOL_POLICY_REFS.send_grant},
-        schema = {type = "object", additionalProperties = false, properties = table.create(0, 1)}, annotations = READ_ANNOTATIONS},
+        schema = {type = "object", additionalProperties = false,
+            properties = {cursor = {type = "integer", minimum = 0, description = "offset into the stable directory order; omit for the first page"},
+                limit = {type = "integer", minimum = 1, maximum = 64, description = "page size, at most 64"}},
+            examples = {{limit = 32}}}, annotations = READ_ANNOTATIONS},
+    {name = "capabilities", description = "Read-only report of what this workspace's host admits for this agent: the admitted tool set with the policy each tool runs under, the trait catalog with allowed, active and requestable traits, the bound workspace and thread, and whether this agent may launch children and under which launch policy. Read it before authoring; it names no secret and grants nothing.",
+        operation = "bee.gateway.binding:surface",
+        policies = {TOOL_POLICY_REFS.capabilities},
+        schema = {type = "object", additionalProperties = false, properties = table.create(0, 1),
+            examples = {{}}}, annotations = READ_ANNOTATIONS},
+    {name = "launch_definitions", description = "Read-only discovery of this caller's admitted launch definitions, placements, overrides and saved profiles: each definition the caller's host-selected launch policy admits, with title, default mode, driver profile, policy, admitted overrides, workdir and thread policies and the placements a launch accepts (native or docker), plus the saved profile IDs and revisions held for those definitions. Starts nothing and grants nothing; launch with thread_launch.",
+        operation = "bee.harness.launch:launch_definitions_call",
+        policies = {TOOL_POLICY_REFS.launch_definitions},
+        schema = {type = "object", additionalProperties = false,
+            properties = {workspace_id = {type = "string", minLength = 32, maxLength = 32,
+                description = "This session's own workspace, the default; any other is refused"}},
+            examples = {{}}}, annotations = READ_ANNOTATIONS},
     {name = "session_send", description = "Commit one request into an action's durable inbox by exact node/action address and current grant_epoch. The host must grant bee.sessions.send for that workspace/node/action, and the recipient owner must accept your action's sender. Delivery is committed, not yet offered to a running model.", operation = "bee.threads.service:inbox_send",
         policies = {TOOL_POLICY_REFS.inbox, TOOL_POLICY_REFS.send_grant}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"address", "grant_epoch", "idempotency_key", "message_id", "content"}, properties = {
@@ -111,49 +130,58 @@ local TOOLS: {Tool} = {
                 title = {type = "string", minLength = 1, maxLength = 512}}},
             placement = {type = "string", enum = {"native", "docker"}},
         }}},
-    {name = "overlay", description = "Learn this destination's governed overlay contract (read-only guide), or create, inspect, put, append, remove or freeze a caller-owned overlay. List without overlay_id returns your own overlay IDs; list with one returns its files. For files over 65,536 bytes, put the first chunk then append bounded chunks with the exact byte offset. The owner returns the assembled SHA-256 digest; result_digest is an optional assertion if you already know it.", operation = "bee.governance.binding:overlay_call",
+    {name = "overlay", description = "Read-only guide index, sections and worked example (guide names no overlay_id; without section it returns the short index, with section one section, with include_example the entries JSON), or create, list files in, read, put, append, remove or freeze a caller-owned overlay. List files in overlay requires overlay_id; without one list returns your own overlay IDs. For files over 65,536 bytes, put the first chunk then append bounded chunks with the exact byte offset. The owner returns the assembled SHA-256 digest; result_digest is an optional assertion if you already know it. Reads change nothing; creates, puts, appends, removes and freezes change the overlay.",
+        operation = "bee.governance.binding:overlay_call",
         policies = {TOOL_POLICY_REFS.overlay}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
-            operation = {type = "string", enum = {"guide", "create", "list", "read", "put", "append", "remove", "freeze"}},
-            overlay_id = {type = "string", minLength = 1, maxLength = 160},
-            expected_revision = {type = "integer", minimum = 0, maximum = 9007199254740990},
-            idempotency_key = {type = "string", minLength = 1, maxLength = 160},
-            path = {type = "string", minLength = 1, maxLength = 240},
-            offset = {type = "integer", minimum = 0, maximum = 4194304},
-            limit = {type = "integer", minimum = 1, maximum = 16384},
-            result_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
-            content = {type = "string", maxLength = M.MAX_WORKSPACE_TEXT_BYTES},
-            content_base64 = {type = "string", maxLength = M.MAX_WORKSPACE_BASE64_BYTES},
-            snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
-        }}},
-    {name = "docs", description = "Read the platform documentation that ships inside Bee, offline: list the corpus by topic, search it for a phrase, or read one bounded window of one document by stable id. Use it to look up how the runtime modules an application author calls work (process, channel, tty, registry, sql, fs, http, events), Bee's own contracts (application, threads, hive and cross-node subscriptions, placement, gateway, storage, UI) and the terminal toolkit for drawing, layout, styles and input.", operation = "bee.docs.binding:call",
+        schema = workspace_protocol.overlay_schema(M.MAX_WORKSPACE_TEXT_BYTES, M.MAX_WORKSPACE_BASE64_BYTES)},
+    {name = "docs", description = "Read the platform documentation that ships inside Bee, offline: list the corpus by topic (at most 64 per page), search it for a phrase (at most 16 matches per page), or read one bounded window of one document by stable id (at most 16,384 bytes per window, honoring offset after section selection). Use it to look up how the runtime modules an application author calls work (process, channel, tty, registry, sql, fs, http, events), Bee's own contracts (application, threads, hive and cross-node subscriptions, placement, gateway, storage, UI) and the terminal toolkit for drawing, layout, styles and input.", operation = "bee.docs.binding:call",
         policies = {TOOL_POLICY_REFS.docs}, annotations = READ_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
-            operation = {type = "string", enum = {"list", "search", "read"}},
-            topic = {type = "string", pattern = "^[a-z0-9_-]+$", maxLength = 64},
-            query = {type = "string", minLength = 1, maxLength = 256},
-            id = {type = "string", minLength = 1, maxLength = 160},
-            section = {type = "string", pattern = "^[a-z0-9_-]+$", maxLength = 120},
-            offset = {type = "integer", minimum = 0},
-            limit = {type = "integer", minimum = 1, maximum = 16384},
-        }}},
-    {name = "components", description = "Inspect installed registry components, explore Hub packages and review a resolved installation plan without applying it. Catalog and details discover Hub packages; installed reads effective component inventory; installed_source lists and pages Lua source of an exact installed component, including local dev versions, under its registry revision; inspect and state read exact Hub artifacts, which may differ from installed versions; files and read_file inspect packaged resources; plan resolves dependencies and capabilities. This tool cannot apply or write the registry.", operation = "bee.hub.binding:call",
+        schema = docs_protocol.schema()},
+    {name = "components", description = "Read-only inspection of installed registry components, Hub packages and resolved installation plans. catalog {query?, page?, keyword?} discovers Hub packages; details {component} describes one; inspect {component, version} reads one exact Hub artifact (an exact version is required) as entry summaries first, at most 32 per page with next_offset, then page entries or read selected source windows; state {component, version} reads its metadata, resources and entry summaries the same way; files {component, version, resource, path?, offset?, limit?} pages a packaged directory; read_file {component, version, resource, path, offset?, limit?} reads one packaged file window of at most 16,384 bytes with next_offset; installed takes no request body and reads effective component inventory; installed_source {component, version, entry_id?, expected_revision?, offset?, limit?} lists and pages Lua source of an exact installed component, including local dev versions, under its registry revision; plan resolves dependencies and capabilities without applying. Hub artifact inspection and installed inspection are different sources and may differ. This tool cannot apply or write the registry.", operation = "bee.hub.binding:call",
         policies = {TOOL_POLICY_REFS.components}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
             operation = {type = "string", enum = {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan"}},
-            request = {type = "object"},
+            request = {type = "object", additionalProperties = false,
+                properties = {
+                    query = {type = "string", maxLength = 160},
+                    page = {type = "integer", minimum = 1},
+                    keyword = {type = "string", maxLength = 160},
+                    component = {type = "string", minLength = 1, maxLength = 160},
+                    version = {type = "string", minLength = 1, maxLength = 128},
+                    resource = {type = "string", minLength = 1, maxLength = 160},
+                    path = {type = "string", minLength = 1, maxLength = 1024},
+                    offset = {type = "integer", minimum = 0},
+                    limit = {type = "integer", minimum = 1, maximum = 16384,
+                        description = "read_file windows accept at most 16384 bytes"},
+                    entry_id = {type = "string", minLength = 1, maxLength = 160},
+                    expected_revision = {type = "integer", minimum = 0},
+                    expected_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
+                    parameters = {type = "array", maxItems = 32},
+                    entry_offset = {type = "integer", minimum = 0,
+                        description = "inspect/state entry page cursor; omit for the first page"},
+                    entry_limit = {type = "integer", minimum = 1, maximum = 32,
+                        description = "inspect/state entries per page, at most 32"},
+                    include_data = {type = "boolean",
+                        description = "inspect/state only: include entry source in the paged window; summaries travel otherwise"},
+                },
+                description = "Per-operation fields the Hub facade enforces: catalog takes query/page/keyword; "
+                    .. "details takes component; inspect and state take component and an exact version, with "
+                    .. "entry_offset, entry_limit and include_data paging entry summaries; files and "
+                    .. "read_file take component, version, resource and path; installed takes nothing; "
+                    .. "installed_source takes component and version, then entry_id with expected_revision to page; "
+                    .. "plan takes its resolution request. Unknown fields are refused."},
+        },
+        examples = {
+            {operation = "catalog", request = {query = "counter", page = 1}},
+            {operation = "installed"},
+            {operation = "installed_source", request = {component = "bee/application", version = "0.1.0-dev"}},
+            {operation = "read_file", request = {component = "acme/tool", version = "1.2.3",
+                resource = "package", path = "init.lua", offset = 0, limit = 16384}},
         }}},
-    {name = "delivery", description = "Request delivery of your frozen component pack to this destination: publish the frozen artifact, stage it and read the destination's preflight verdict; or read a staged version's review, selection and activation status. It names the human steps it cannot take: review in Overlays, approval in Approvals and apply by the activation owner.", operation = "bee.governance.binding:delivery_call",
-        policies = {TOOL_POLICY_REFS.delivery}, annotations = READ_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"operation", "source_overlay_id", "version"}, properties = {
-            operation = {type = "string", enum = {"request", "status"}},
-            workspace_id = {type = "string", minLength = 1, maxLength = 160, description = "This session's own workspace, the default; any other is refused"},
-            source_overlay_id = {type = "string", minLength = 1, maxLength = 160},
-            version = {type = "string", minLength = 1, maxLength = 160},
-            snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
-            source_node = {type = "string", minLength = 1, maxLength = 160},
-            intent_id = {type = "string", minLength = 1, maxLength = 160},
-        }}},
+    {name = "delivery", description = "Check a frozen component pack without staging it (preflight needs the frozen snapshot_digest and stages nothing; call it before request), request delivery of your frozen pack to this destination (request publishes the frozen artifact, stages it and reads the destination's preflight verdict and needs snapshot_digest), or read a staged version's review, selection and activation status (status needs neither digest nor node; source_node and intent_id narrow it). It names the human steps it cannot take: review in Overlays, approval in Approvals and apply by the activation owner. Request and preflight stage and check; status only reads.",
+        operation = "bee.governance.binding:delivery_call",
+        policies = {TOOL_POLICY_REFS.delivery}, annotations = WRITE_ANNOTATIONS,
+        schema = delivery_protocol.schema()},
     {name = "publish", description = "Publish the exact application version a person has already reviewed, selected, approved and had applied at this destination. Use delivery request first and wait for the person; publication refuses any version that is not locally reviewed and applied.", operation = "bee.governance.binding:delivery_call",
         policies = {TOOL_POLICY_REFS.publish}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"source_overlay_id", "version"}, properties = {
@@ -170,6 +198,49 @@ local TOOLS: {Tool} = {
         }}},
 }
 M.TOOLS = TOOLS
+-- The typed output contract every tool result shares: ok names success, value
+-- carries the operation's ids, cursors, statuses or diagnostics, and error is
+-- the normalized shape {code, message, field, retryable, remedy} naming the
+-- next call. Results travel both as text JSON and as structured content.
+local ERROR_SCHEMA: Object = {type = "object", additionalProperties = false,
+    properties = {
+        code = {type = "string"}, message = {type = "string"},
+        field = {type = "string"}, retryable = {type = "boolean"}, remedy = {type = "string"},
+    }}
+local function output_schema(value: Object): Object
+    return {type = "object", additionalProperties = false, required = {"ok"},
+        properties = {ok = {type = "boolean"}, value = value, error = ERROR_SCHEMA}}
+end
+M.OUTPUT_SCHEMAS = {
+    thread_read = output_schema({type = "object"}),
+    thread_wait = output_schema({type = "object"}),
+    thread_sessions = output_schema({type = "object", additionalProperties = false,
+        properties = {sessions = {type = "array"}, next_cursor = {type = "integer"}, eof = {type = "boolean"}}}),
+    thread_message = output_schema({type = "object"}),
+    thread_notify = output_schema({type = "object"}),
+    session_directory = output_schema({type = "object", additionalProperties = false,
+        properties = {peers = {type = "array"}, next_cursor = {type = "integer"}, eof = {type = "boolean"}}}),
+    session_send = output_schema({type = "object"}),
+    session_inbox = output_schema({type = "object"}),
+    session_ack = output_schema({type = "object"}),
+    session_reply = output_schema({type = "object"}),
+    thread_launch = output_schema({type = "object"}),
+    capabilities = output_schema({type = "object", additionalProperties = false,
+        properties = {workspace_id = {type = "string"}, thread_id = {type = "string"},
+            tools = {type = "array"}, traits = {type = "object"}, launch = {type = "object"}}}),
+    launch_definitions = output_schema({type = "object", additionalProperties = false,
+        properties = {workspace_id = {type = "string"}, policy_ref = {type = "string"},
+            definitions = {type = "array"}, saved_profiles = {type = "array"},
+            profiles_complete = {type = "boolean"}}}),
+    overlay = output_schema({type = "object"}),
+    docs = output_schema({type = "object"}),
+    components = output_schema({type = "object"}),
+    delivery = output_schema({type = "object", additionalProperties = false,
+        properties = {ready = {type = "boolean"}, staged = {type = "boolean"},
+            diagnostics = {type = "array"}, human_steps = {type = "array"}}}),
+    publish = output_schema({type = "object"}),
+    application_open = output_schema({type = "object"}),
+}
 -- Opening a reviewed application is deliberately not a base capability.  The
 -- surface installs this one built-in trait when the binding admits the tool;
 -- an access receipt must then make it selectable.
@@ -214,23 +285,39 @@ function M.failure(id: unknown, code: integer, message: string): Object
     return {jsonrpc = "2.0", id = id, error = {code = code, message = message}}
 end
 function M.initialize(): Object
-    return {protocolVersion = M.PROTOCOL, capabilities = {tools = {listChanged = false}}, serverInfo = M.SERVER}
+    -- Trait selection changes the admitted tool set, so the list changes.
+    -- Clients re-list after session select; select names the new revision.
+    return {protocolVersion = M.PROTOCOL, capabilities = {tools = {listChanged = true}}, serverInfo = M.SERVER}
 end
 -- The tools a binding may call: the closed catalog filtered by the
--- binding's admitted tool names, in catalog order.
+-- binding's admitted tool names, in catalog order, each with its input and
+-- output contracts.
 function M.list(admitted: {string}): Object
     local allowed: {[string]: boolean} = {}
     for _, name in ipairs(admitted) do allowed[name] = true end
     local tools: {Object} = {}
     for _, tool in ipairs(TOOLS) do
-        if allowed[tool.name] then tools[#tools + 1] = {name = tool.name, description = tool.description, inputSchema = tool.schema, annotations = tool.annotations} end
+        if allowed[tool.name] then tools[#tools + 1] = {name = tool.name, description = tool.description,
+            inputSchema = tool.schema, outputSchema = M.OUTPUT_SCHEMAS[tool.name], annotations = tool.annotations} end
     end
     return {tools = tools}
 end
 -- A tool result carries one text content block with the operation's JSON
--- reply; a refused call is a tool error, not a protocol error.
-function M.tool_result(text: string, is_error: boolean): Object
-    return {content = {{type = "text", text = text}}, isError = is_error}
+-- reply plus the same reply as structured content; a refused call is a tool
+-- error, not a protocol error.
+function M.tool_result(text: string, is_error: boolean, structured: unknown?): Object
+    local content: Object = {content = {{type = "text", text = text}}, isError = is_error}
+    if structured ~= nil then content.structuredContent = structured end
+    return content
+end
+-- One normalized tool error: code and message name the failure, field the
+-- offending argument when one exists, retryable whether a retry may help,
+-- and remedy the next call that unblocks the agent.
+function M.tool_error(code: string, message: string, field: string?, retryable: boolean, remedy: string?): Object
+    local error: Object = {code = code, message = message, retryable = retryable}
+    if field ~= nil then error.field = field end
+    if remedy ~= nil then error.remedy = remedy end
+    return {ok = false, error = error}
 end
 -- Tool arguments are bounded before they reach an owner operation.
 function M.read_arguments(params: Object): (Object?, string?)
@@ -309,8 +396,33 @@ function M.message_arguments(params: Object): (Object?, string?)
     if decoded.outcome then body.outcome = decoded.outcome end
     return {idempotency_key = key, body = body, session = session}, nil
 end
--- Session discovery takes no arguments: the binding selects the workspace.
+-- Session discovery pages the binding's workspace in stable order: the
+-- binding selects the workspace, cursor and limit select the window.
 function M.sessions_arguments(params: Object): (Object?, string?)
+    local arguments: Object = {}
+    if params.arguments ~= nil then
+        local declared = bounds.object(params.arguments)
+        if not declared then return nil, "arguments must be an object" end
+        arguments = declared
+    end
+    local unknown_field = bounds.fields(arguments, {"cursor", "limit"})
+    if unknown_field then return nil, unknown_field end
+    local cursor = 0
+    if arguments.cursor ~= nil then
+        local declared = bounds.cursor(arguments.cursor)
+        if not declared then return nil, "cursor is out of range; pass next_cursor from the previous reply" end
+        cursor = declared
+    end
+    local limit = 32
+    if arguments.limit ~= nil then
+        local declared = bounds.integer(arguments.limit)
+        if not declared or declared < 1 or declared > 64 then return nil, "limit must be between 1 and 64" end
+        limit = declared
+    end
+    return {cursor = cursor, limit = limit}, nil
+end
+-- The capability report takes no arguments: the binding selects the surface.
+function M.capabilities_arguments(params: Object): (Object?, string?)
     local arguments: Object = {}
     if params.arguments ~= nil then
         local declared = bounds.object(params.arguments)
@@ -320,6 +432,21 @@ function M.sessions_arguments(params: Object): (Object?, string?)
     local unknown_field = bounds.fields(arguments, {})
     if unknown_field then return nil, unknown_field end
     return {}, nil
+end
+-- Launch discovery takes only an optional workspace identity defaulting to
+-- the binding's own workspace; any other workspace is refused downstream.
+function M.launch_definitions_arguments(params: Object, workspace_id: string?): (Object?, string?)
+    local supplied = bounds.object(params.arguments or {})
+    if not supplied then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(supplied, {"workspace_id"})
+    if unknown_field then return nil, unknown_field end
+    local arguments: Object = {}
+    if supplied.workspace_id == nil then
+        if workspace_id then arguments.workspace_id = workspace_id end
+    else
+        arguments.workspace_id = supplied.workspace_id
+    end
+    return arguments, nil
 end
 -- A notice names the watched session and a retry key; the endpoint supplies
 -- the caller's own thread and action as where and to whom it is delivered.
@@ -496,6 +623,14 @@ function M.components_arguments(params: Object): (Object?, string?)
     local operation = bounds.member(arguments.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan"})
     if not operation then return nil, "components operation is read-only" end
     if arguments.request ~= nil and not bounds.object(arguments.request) then return nil, "request must be an object" end
+    -- installed takes no request body at the Hub facade; an empty envelope
+    -- object is the same call, so it is dropped here rather than refused there.
+    if operation == "installed" then
+        local body = bounds.object(arguments.request or {})
+        if not body then return nil, "request must be an object" end
+        if next(body) ~= nil then return nil, "installed takes no request body" end
+        return {operation = operation}, nil
+    end
     return {operation = operation, request = arguments.request}, nil
 end
 return M

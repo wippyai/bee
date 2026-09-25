@@ -1043,8 +1043,9 @@ end
 -- The running sessions of the caller's workspace: bindings valid under the
 -- current listener generation whose intake is not sealed, one per action.
 -- This lists what runs; whether the caller may see or reach a session is
--- the thread owner's membership decision, taken as the caller.
-M.MAX_WORKSPACE_BINDINGS = 256
+-- the thread owner's membership decision, taken as the caller. The scan is
+-- complete and ordered by action, so cursor paging over it is stable;
+-- sessions.latest reduces to one candidate per action in thread/action order.
 -- A listener that was never opened has admitted no session, so a workspace
 -- inspection sees none; a peer lookup still needs the live listener.
 local function running_sessions(workspace_id: string, unopened_is_empty: boolean): ({sessions.Candidate}?, Reply?)
@@ -1057,8 +1058,8 @@ local function running_sessions(workspace_id: string, unopened_is_empty: boolean
     end
     local generation, generation_failure = M.generation(db)
     if not generation then db:release(); return nil, generation_failure end
-    local rows, err = db:query("SELECT * FROM bee_gateway_bindings WHERE workspace_id = ? AND revoked_at IS NULL AND sealed_at IS NULL AND epoch = ? ORDER BY created_at DESC LIMIT ?",
-        {workspace_id, generation.epoch, M.MAX_WORKSPACE_BINDINGS})
+    local rows, err = db:query("SELECT * FROM bee_gateway_bindings WHERE workspace_id = ? AND revoked_at IS NULL AND sealed_at IS NULL AND epoch = ? ORDER BY action_id ASC",
+        {workspace_id, generation.epoch})
     db:release()
     if err or not rows then return nil, fail("STORAGE", "read workspace bindings") end
     local candidates: {sessions.Candidate} = {}

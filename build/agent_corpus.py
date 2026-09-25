@@ -2,12 +2,9 @@
 """Build Bee's offline agent documentation corpus.
 
 An agent inside Bee learns the application authoring contract from the workspace
-tool's guide operation and, until now, nothing else: it cannot look up how the
-runtime's process, tty, registry, sql, http or fs modules work, nor Bee's own
-contracts. This script snapshots the part of https://wippy.ai/llm an application
-author calls, Bee's own contracts from docs/, every component README under src/
-and modules/,
-and one terminal toolkit reference, into an embeddable, read-only filesystem.
+tool's guide operation and from this embeddable, read-only filesystem. It carries
+Bee's own contracts, every component README under src/ and modules/, the terminal
+toolkit, and a small set of runtime references app authors use directly.
 
 Storage shape: `src/corpus/` is declared by the host as one `fs.directory` entry
 (`bee:docs_corpus`) that `wippy.yaml`'s `embed:` list names, so `wippy pack`
@@ -16,16 +13,12 @@ freezes it into the pack as an `fs.embed` volume the runtime serves read-only
 
 Selection rule, stated once and enforced by this table:
 
-  * runtime *module reference*: every published page under `lua/**`, `system/**`
-    and `http/**`, because those are the calls an application author makes and
-    the component kinds behind them. The `lua/**` tree already carries the
-    terminal toolkit's TTY module and the cross-node `events`/`process` pages.
-  * runtime *named pages*: the concept, guide, internals and tutorial pages that
-    explain the registry, entry kinds, cluster membership and terminal UI that
-    the module pages assume.
-  * excluded on purpose: `frontend/**` (browser micro-frontends, a different
-    surface than Bee's terminal applications), `framework/**`, `temporal/**`,
-    `wasm/**` and `about/**`.
+  * runtime references: only the Lua base and type system, channel, contract,
+    process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL
+    and TTY pages used by Bee application authors. The SQL reference includes
+    `sql.builder`.
+  * runtime tutorials, internals, general guides and platform material are out
+    of this app-authoring corpus.
 
   * Bee contracts: the docs/ pages that state an implemented callable
     boundary or the path a frozen artifact travels, including application,
@@ -67,40 +60,21 @@ SCHEMA = "bee.docs-corpus@1"
 MAX_CORPUS_BYTES = 3 * 1024 * 1024
 USER_AGENT = "bee-agent-corpus/1 (+https://bee.wippy.ai)"
 
-RUNTIME_ROOTS = ("lua", "system", "http")
 RUNTIME_PAGES = {
-    "start/llm-brief": "platform",
-    "start/structure": "platform",
-    "concepts/architecture": "platform",
-    "concepts/compute-units": "platform",
-    "concepts/functions": "platform",
-    "concepts/process-model": "process",
-    "concepts/registry": "registry",
-    "concepts/cluster": "cluster",
-    "concepts/security-model": "security",
-    "concepts/workflows": "process",
-    "guides/entry-kinds": "registry",
-    "guides/components": "registry",
-    "guides/cluster": "cluster",
-    "guides/cluster": "cluster",
-    "guides/dependency-management": "registry",
-    "guides/artifacts": "registry",
-    "guides/supervision": "process",
-    "internals/architecture": "platform",
-    "internals/registry": "registry",
-    "internals/kinds": "registry",
-    "internals/modules": "registry",
-    "internals/events": "cluster",
-    "internals/dispatch": "process",
-    "internals/scheduler": "process",
-    "tutorials/hello-world": "platform",
-    "tutorials/processes": "process",
-    "tutorials/channels": "process",
-    "tutorials/supervision": "process",
-    "tutorials/tty": "terminal",
-    "tutorials/facade": "registry",
-    "tutorials/task-queue": "process",
-    "tutorials/echo-service": "http",
+    "lua/core/base": "core",
+    "lua/core/channel": "core",
+    "lua/core/contract": "core",
+    "lua/core/process": "core",
+    "lua/core/registry": "core",
+    "lua/core/time": "core",
+    "lua/data/json": "data",
+    "lua/http/client": "http",
+    "lua/security/security": "security",
+    "lua/security/uuid": "security",
+    "lua/storage/filesystem": "storage",
+    "lua/storage/sql": "storage",
+    "lua/system/tty": "system",
+    "lua/types": "lua",
 }
 # Source paths are organized for readers; IDs remain stable because they are
 # part of the offline tool's durable contract. Do not derive an ID from a path.
@@ -138,33 +112,9 @@ def get(url: str) -> bytes:
         return response.read()
 
 
-def toc_paths() -> "list[str]":
-    document = json.loads(get(f"{BASE}/toc"))
-    pages: "list[str]" = []
-
-    def walk(items):
-        for item in items:
-            if "children" in item:
-                walk(item["children"])
-            elif isinstance(item.get("path"), str):
-                pages.append(item["path"])
-
-    walk(document["items"])
-    return pages
-
-
 def runtime_selection() -> "list[tuple[str, str]]":
-    """Every module page under the selected roots plus the named pages."""
-    selected = {}
-    for path in toc_paths():
-        if path.split("/", 1)[0] in RUNTIME_ROOTS:
-            # lua/core/process -> core, lua/storage/sql -> storage, system/terminal -> component
-            parts = path.split("/")
-            topic = parts[1] if parts[0] == "lua" and len(parts) > 2 else parts[0]
-            selected[path] = topic
-    for path, topic in RUNTIME_PAGES.items():
-        selected.setdefault(path, topic)
-    return sorted(selected.items())
+    """Only the runtime pages named by the app-authoring selection."""
+    return sorted(RUNTIME_PAGES.items())
 
 
 def fetch_runtime(paths: "list[str]") -> "dict[str, bytes]":
@@ -471,7 +421,7 @@ def toolkit_reference() -> bytes:
         "```",
         "",
         "The runtime module pages retained with this toolkit cover process, channel,",
-        "contract, registry, time, JSON, security, UUID, filesystem, SQL, HTTP client",
+        "contract, registry, time, JSON, types, security, UUID, filesystem, SQL, HTTP client",
         "and TTY APIs.",
         "",
         "## Compact frame example",
@@ -543,17 +493,23 @@ def title_of(payload: bytes, fallback: str) -> str:
 
 
 def committed_runtime() -> "list[tuple[str, str, bytes, str]]":
-    """The runtime pages of the committed corpus, each re-verified against its digest."""
+    """The selected committed runtime pages, re-verified against their digests."""
     if not MANIFEST.is_file():
         raise SystemExit("src/corpus/manifest.json is missing; run a networked `make agent-corpus` first")
     pages = []
+    expected = {f"runtime/{path}" for path in RUNTIME_PAGES}
+    seen = set()
     for document in json.loads(MANIFEST.read_text())["documents"]:
-        if not document["id"].startswith("runtime/"):
+        if document["id"] not in expected:
             continue
         payload = (CORPUS / (document["id"] + ".md")).read_bytes()
         if digest(payload) != document["sha256"]:
             raise SystemExit(f"committed {document['id']} does not match its digest; run a networked build")
         pages.append((document["id"], document["topic"], payload, document["source"]))
+        seen.add(document["id"])
+    missing = expected - seen
+    if missing:
+        raise SystemExit(f"selected runtime pages are missing from the committed corpus: {', '.join(sorted(missing))}")
     if not pages:
         raise SystemExit("the committed corpus has no runtime pages; run a networked `make agent-corpus`")
     return pages
@@ -645,17 +601,16 @@ def check() -> int:
 
 
 SELECTION_RULE = (
-    "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** "
-    "(the native modules an application author calls and the component kinds behind them), plus "
-    "the named concept, guide, internals, tutorial and platform pages this project lists; "
-    "frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are "
-    "another product surface, not the terminal application contract. Bee contracts: the docs/ "
+    "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, "
+    "security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes "
+    "sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. "
+    "Bee contracts: the docs/ "
     "pages that state an implemented callable boundary or the path a frozen artifact travels "
     "(application, threads, placement, gateway, carrier, storage, ui, harness, approvals, "
     "registry, platform), excluding repository process and design pages. "
     "Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from "
-    "modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and "
-    "screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest."
+    "modules/application/src, src/apps and compact examples; visualization examples are extracted from "
+    "tests/lua/frame. The corpus is digest-checked with the rest."
 )
 
 
@@ -664,7 +619,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true",
                         help="verify the committed corpus against its manifest without network access")
     parser.add_argument("--local", action="store_true",
-                        help="rebuild the documents generated from this repository and keep the committed runtime pages")
+                        help="rebuild repository-generated documents and keep selected runtime pages")
     arguments = parser.parse_args()
     return check() if arguments.check else build(arguments.local)
 

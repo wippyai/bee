@@ -52,7 +52,7 @@ func TestNativeRemoteMonitorMustObserveClientActorExit(t *testing.T) {
 			}
 			// Monitor and barrier share the runtime's application FIFO class. Seeing
 			// the barrier rules out simply closing the actor before monitor delivery.
-			barrier := relay.NewPackage(watcher, actor.PID(), "bee.monitor.barrier", payload.NewPayload([]byte(`{"barrier":1}`), payload.JSON))
+			barrier := relay.NewPackage(watcher, actor.PID(), "bee.mesh.barrier", payload.NewPayload([]byte(`{"barrier":1}`), payload.JSON))
 			if err := owner.Router.Send(barrier); err != nil {
 				return err
 			}
@@ -60,7 +60,7 @@ func TestNativeRemoteMonitorMustObserveClientActorExit(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if received.Topic != "bee.monitor.barrier" {
+			if received.Topic != "bee.mesh.barrier" {
 				t.Fatal("unexpected barrier")
 			}
 			return nil

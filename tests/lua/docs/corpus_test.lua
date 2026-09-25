@@ -38,16 +38,35 @@ local function define_tests()
             test.not_nil(string.find(rule, "runtime", 1, true))
             test.not_nil(string.find(rule, "component", 1, true))
             test.not_nil(string.find(rule, "toolkit", 1, true))
-            test.is_true(#manifest.documents >= 100)
+            test.not_nil(string.find(rule, "sql.builder", 1, true))
+            local runtime_count = 0
+            local runtime_ids: {[string]: boolean} = {}
             -- Every declared document exists with the declared bytes, so the
             -- corpus cannot silently rot behind its manifest.
             for _, document in ipairs(manifest.documents) do
                 local payload, read_error = volume:readfile(corpus.path(document.id))
                 if not payload then error("missing corpus document " .. document.id .. ": " .. tostring(read_error)) end
                 test.eq(#(payload :: string), document.bytes)
+                if string.sub(document.id, 1, 8) == "runtime/" then
+                    runtime_count = runtime_count + 1
+                    runtime_ids[document.id] = true
+                    test.is_nil(string.find(document.id, "runtime/tutorials/", 1, true))
+                    test.is_nil(string.find(document.id, "runtime/internals/", 1, true))
+                    test.is_nil(string.find(document.id, "runtime/guides/", 1, true))
+                    test.is_nil(string.find(document.id, "runtime/concepts/", 1, true))
+                    test.is_nil(string.find(document.id, "runtime/http/", 1, true))
+                    test.is_nil(string.find(document.id, "runtime/system/", 1, true))
+                end
+            end
+            test.eq(runtime_count, 14)
+            for _, id in ipairs({"runtime/lua/core/base", "runtime/lua/core/channel", "runtime/lua/core/contract",
+                "runtime/lua/core/process", "runtime/lua/core/registry", "runtime/lua/core/time", "runtime/lua/data/json",
+                "runtime/lua/http/client", "runtime/lua/security/security", "runtime/lua/security/uuid",
+                "runtime/lua/storage/filesystem", "runtime/lua/storage/sql", "runtime/lua/system/tty", "runtime/lua/types"}) do
+                test.is_true(runtime_ids[id] == true)
             end
             -- The three questions an agent must be able to answer are present:
-            -- the terminal toolkit, cross-node sync and a runtime module.
+            -- the terminal toolkit, cross-node sync and the SQL builder module.
             test.not_nil(corpus.find(manifest, "toolkit"))
             test.not_nil(corpus.find(manifest, "docs/sync_and_inbox"))
             test.not_nil(corpus.find(manifest, "runtime/lua/core/process"))

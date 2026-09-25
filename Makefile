@@ -378,8 +378,8 @@ cross-session-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/cross_session.py
 
 .PHONY: docs-agent-check agent-corpus agent-corpus-local
-# The embedded documentation corpus: build it from the published runtime docs
-# and Bee's own contracts, or verify the committed snapshot offline.
+# The embedded documentation corpus: build the selected runtime references and
+# Bee's own contracts, or verify the committed snapshot offline.
 agent-corpus:
 	python3 build/agent_corpus.py
 agent-corpus-check:

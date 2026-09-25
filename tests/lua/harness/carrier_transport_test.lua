@@ -287,7 +287,8 @@ local function define_tests()
             }
             local function request(brief: string): machine.Request
                 return {thread_id = "thread", action_id = "action", attempt_id = "attempt", owner_id = "actor", owner_incarnation = 1,
-                    binding_ref = "binding", profile_id = "batch", brief = brief, policy_ref = "policy", resources = {}, environment = {}}
+                    binding_ref = "binding", profile_id = "batch", brief = brief, policy_ref = "policy",
+                    resources = {} :: {placement_types.ResourceGrant}, environment = {} :: {[string]: string}}
             end
             local function profile(mode: string): classify.Profile
                 return {id = "batch", mode = mode, protocol = "stream-json", protocol_revision = "1", supported = true, private_home = true,
@@ -337,7 +338,8 @@ local function define_tests()
             end
             local function request(): machine.Request
                 return {thread_id = "thread", action_id = "action", attempt_id = "attempt", owner_id = "actor", owner_incarnation = 1,
-                    binding_ref = "binding", profile_id = "batch", brief = "follow up", policy_ref = "policy", resources = {}, environment = {}}
+                    binding_ref = "binding", profile_id = "batch", brief = "follow up", policy_ref = "policy",
+                    resources = {} :: {placement_types.ResourceGrant}, environment = {} :: {[string]: string}}
             end
             test.eq(machine.carry_brief(io_for(nil, nil), request(), "codex", "session"), "follow up")
             test.eq(machine.carry_brief(io_for(nil, "bee.threads.service:inbox_list: STORAGE: down"), request(), "codex", "session"), "follow up")

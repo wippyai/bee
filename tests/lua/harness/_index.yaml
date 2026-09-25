@@ -459,6 +459,7 @@ entries:
     principals: bee.test.principals:bound
     test: wippy.test:test
     sends: bee.threads.service:sends
+    gateway: bee.gateway.binding:gateway
     hook_inbox: bee.gateway:hook_inbox
 - name: workspace_catalog_call_policy
   kind: security.policy

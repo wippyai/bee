@@ -16,6 +16,7 @@ local system = require("system")
 local exec = require("exec")
 local base64 = require("base64")
 local sends = require("sends")
+local gateway = require("gateway")
 local hook_inbox = require("hook_inbox")
 local ACTOR = "bee.test.hook_inbox"
 local ROOT = "bee.harness.catalog:project_fixture"
@@ -100,7 +101,7 @@ local function hookpost(url: string, credential: string, body: string): (integer
     local status, payload = 0, ""
     for line in output:gmatch("[^\n]+") do
         local code = line:match("^hookpost_status=(%d+)$")
-        if code then status = tonumber(code) or 0 end
+        if code then status = math.floor(tonumber(code) or 0) end
         local raw = line:match("^hookpost_body=(.*)$")
         if raw then payload = raw end
     end
@@ -232,12 +233,18 @@ local function define_tests()
                 sender_thread_id = source_thread, sender_action_id = source_action, node_id = native, grant_epoch = 1,
                 idempotency_key = fresh("send"), message_id = message_id, content = {text = "reader hello"},
                 payload_digest = sends.payload_digest({message_id = message_id, content = {text = "reader hello"}})}, workspace)
-            local binding = {binding_id = fresh("binding"), subject = ACTOR, thread_id = target_thread, action_id = target_action, attempt_id = "attempt-1", workspace_id = workspace, tools = {"session_inbox"}}
+            local binding: gateway.Binding = {binding_id = fresh("binding"), subject = ACTOR, thread_id = target_thread, action_id = target_action,
+                attempt_id = "attempt-1", owner_incarnation = 1, carrier_epoch = 1, tools = {"session_inbox"}, hooks = {"UserPromptSubmit", "Stop"},
+                epoch = 1, credential_generation = 0, expires_at = "2030-01-01T00:00:00.000Z", revoked = false, sealed = false,
+                workspace_id = workspace, workspace_name = "hook-reader"}
             local context_text, context_error = hook_inbox.context(binding, "UserPromptSubmit")
             if not context_text then error("hook context: " .. tostring(context_error)) end
             test.is_true(context_text:find(tostring(sent.record_id), 1, true) ~= nil, context_text)
-            local quiet, quiet_error = hook_inbox.context({binding_id = fresh("binding"), subject = ACTOR, thread_id = target_thread, action_id = target_action,
-                attempt_id = "attempt-1", workspace_id = workspace, tools = {"thread_read"}}, "UserPromptSubmit")
+            local bare: gateway.Binding = {binding_id = fresh("binding"), subject = ACTOR, thread_id = target_thread, action_id = target_action,
+                attempt_id = "attempt-1", owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"UserPromptSubmit", "Stop"},
+                epoch = 1, credential_generation = 0, expires_at = "2030-01-01T00:00:00.000Z", revoked = false, sealed = false,
+                workspace_id = workspace, workspace_name = "hook-reader"}
+            local quiet, quiet_error = hook_inbox.context(bare, "UserPromptSubmit")
             test.is_nil(quiet)
             test.is_true(tostring(quiet_error):find("session_inbox", 1, true) ~= nil, tostring(quiet_error))
             local idle, idle_error = hook_inbox.context(binding, "PreToolUse")

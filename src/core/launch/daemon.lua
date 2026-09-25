@@ -9,7 +9,7 @@ local io = require("io")
 local system = require("system")
 local logger = require("logger")
 local leases = require("leases")
-local owner_stop = require("owner_stop")
+local command_stop = require("command_stop")
 local types = require("types")
 
 local function main()
@@ -28,26 +28,16 @@ local function main()
     if not node or node == "" or not seed or seed == "" then
         node, seed = "local", "-"
     end
-    -- The runtime waits on this command; a stop from the local supervisor
-    -- ends it after requesting the runtime's graceful shutdown.
-    local stops, stops_error = process.listen(owner_stop.TOPIC, {message = true})
-    if not stops then error(tostring(stops_error)) end
-    local named, name_error = process.registry.register(owner_stop.COMMAND)
-    if not named then error("Register daemon command: " .. tostring(name_error)) end
+    local stops, stops_error = command_stop.open()
+    if not stops then error(stops_error) end
     logger:info("Bee daemon ready", {node = node})
     assert(io.print("BEE_DAEMON_READY " .. node .. " " .. seed .. " " .. self))
     while true do
-        local selected = channel.select({events:case_receive(), stops:case_receive()})
+        local selected = channel.select({events:case_receive(), stops.channel:case_receive()})
         if not selected.ok or (selected.channel == events and selected.value.kind == process.event.CANCEL) then break end
-        if selected.channel == stops and owner_stop.from_supervisor(tostring(selected.value:from()),
-            process.registry.lookup(types.SUPERVISOR_NAME)) then
-            local exited, exit_error = system.exit(0)
-            if not exited then error("Daemon stop: " .. tostring(exit_error)) end
-            break
-        end
+        if selected.channel == stops.channel and command_stop.accept(selected.value) then break end
     end
-    process.registry.unregister(owner_stop.COMMAND)
-    process.unlisten(stops)
+    command_stop.close(stops)
 end
 
 return {main = main}

@@ -20,6 +20,22 @@ local function define_tests()
             test.not_nil(publish)
             test.eq(publish and publish.source_workspace, "src")
         end)
+        test.it("checks a frozen digest without staging through preflight", function()
+            local checked = delivery.decode({operation = "preflight", workspace_id = "ws", source_overlay_id = "src",
+                version = "1.0.1", snapshot_digest = string.rep("b", 64)})
+            test.not_nil(checked)
+            test.eq(checked and checked.operation, "preflight")
+            test.eq(checked and checked.snapshot_digest, string.rep("b", 64))
+            test.is_nil(delivery.decode({operation = "preflight", workspace_id = "ws", source_overlay_id = "src",
+                version = "1.0.1"}))
+            test.is_nil(delivery.decode({operation = "preflight", workspace_id = "ws", source_overlay_id = "src",
+                version = "1.0.1", snapshot_digest = string.rep("b", 64), intent_id = "x"}))
+            local schema = delivery.schema()
+            test.eq(schema.type, "object")
+            local operations = (schema.properties :: {[string]: unknown}).operation :: {[string]: unknown}
+            test.eq(#(operations.enum :: {string}), 3)
+            test.is_true(#(schema.examples :: {unknown}) >= 3)
+        end)
         test.it("refuses unknown operations and misplaced fields", function()
             test.is_nil(delivery.decode({operation = "apply", workspace_id = "ws", source_overlay_id = "src", version = "1"}))
             test.is_nil(delivery.decode({operation = "request", workspace_id = "ws", source_overlay_id = "src",

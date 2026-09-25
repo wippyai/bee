@@ -55,7 +55,7 @@ local function handle(raw: unknown): Result
     -- overlay, reads no store and grants nothing, so it returns before the
     -- caller's overlay ownership is consulted.
     if request.operation == "guide" then
-        return transaction.success(guide.value(), false)
+        return transaction.success(guide.value({section = request.section, include_example = request.include_example}), false)
     end
     local actor = security.actor()
     local action = (request.operation == "read" or request.operation == "list")

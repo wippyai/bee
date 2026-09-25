@@ -44,6 +44,25 @@ local function define_tests()
             invalid.tools[1].policies = {}
             test.is_nil(catalog.decode(invalid))
         end)
+        test.it("validates tool schemas and annotations at admission", function()
+            for _, tool in ipairs(mcp.TOOLS) do
+                local decoded = catalog.decode({tools = {{name = tool.name, operation = tool.operation,
+                    description = tool.description, policies = tool.policies, schema = tool.schema,
+                    annotations = tool.annotations}}, traits = {}})
+                test.not_nil(decoded)
+            end
+            local function declared(schema: unknown, annotations: unknown)
+                return {tools = {{name = "probe", operation = "research:probe", description = "Probe",
+                    policies = {"research:probe_policy"}, schema = schema, annotations = annotations}}, traits = {}}
+            end
+            test.is_nil(catalog.decode(declared({type = "object", properties = {q = {type = "string", bogus = true}}}, {readOnlyHint = true})))
+            test.is_nil(catalog.decode(declared({type = "string"}, {readOnlyHint = true})))
+            test.is_nil(catalog.decode(declared({type = "object"}, {readOnlyHint = "yes"})))
+            test.is_nil(catalog.decode(declared({type = "object"}, {readOnlyHint = true, extraHint = false})))
+            test.is_nil(catalog.decode(declared({type = "object", required = {"missing"}}, {readOnlyHint = true})))
+            test.not_nil(catalog.decode(declared({type = "object", required = {"q"},
+                properties = {q = {type = "string", enum = {"a", "b"}, minLength = 1}}}, {readOnlyHint = true})))
+        end)
         test.it("rejects sparse lists and oversized configuration", function()
             test.is_nil(catalog.decode({tools = {[2] = sample().tools[1]}, traits = {}}))
             local large = sample()

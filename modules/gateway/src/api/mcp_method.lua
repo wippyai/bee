@@ -44,8 +44,11 @@ local function answer(response: http.Response, status: number, body: Object)
     response:set_content_type(http.CONTENT.JSON)
     response:write_json(body)
 end
-local function refused(code: string, message: string): Object
-    return mcp.tool_result(json.encode({ok = false, error = {code = code, message = message}}) or "{}", true)
+-- One normalized tool refusal: the {code, message, field, retryable, remedy}
+-- shape naming the next call, as text and as structured content.
+local function refused(code: string, message: string, field: string?, retryable: boolean?, remedy: string?): Object
+    local fault = mcp.tool_error(code, message, field, retryable == true, remedy)
+    return mcp.tool_result(json.encode(fault) or "{}", true, fault)
 end
 -- The executor that runs a tool as the bound subject under the tool's
 -- host-named scope. The endpoint's own right to invoke these operations
@@ -78,10 +81,23 @@ local function subject_executor(binding: gateway.Binding, tool: mcp.Tool, values
     return scoped, nil
 end
 local function reply_result(reply: unknown, call_error: unknown): Object
-    if call_error then return refused("UNAVAILABLE", tostring(call_error)) end
+    if call_error then return refused("UNAVAILABLE", tostring(call_error), nil, true, "retry the same call") end
     local encoded = json.encode(reply) or "{}"
     local is_error = type(reply) ~= "table" or (reply :: Object).ok ~= true
-    return mcp.tool_result(encoded, is_error)
+    -- Owner replies already carry top-level code/message; surface them in the
+    -- normalized shape with the remedy the owner named, if any.
+    local structured: unknown = reply
+    if type(reply) == "table" then
+        local body = reply :: Object
+        if body.ok ~= true then
+            local fault = bounds.object(body.error) or {}
+            local value = bounds.object(body.value) or {}
+            structured = mcp.tool_error(tostring(fault.code or body.code or "REFUSED"),
+                tostring(fault.message or body.message or "the call was refused"),
+                nil, false, value.remedy ~= nil and tostring(value.remedy) or nil)
+        end
+    end
+    return mcp.tool_result(encoded, is_error, structured)
 end
 -- The running sessions of the caller's workspace that the bound subject may
 -- read, with each thread's title. The thread owner answers get as the
@@ -121,22 +137,55 @@ local function resolve(binding: gateway.Binding, executor: funcs.Executor, addre
     if not target then return nil, refused(code or "NOT_FOUND", message or "no such session") end
     return target, nil
 end
-local function list_sessions(binding: gateway.Binding, executor: funcs.Executor): Object
+local function list_sessions(binding: gateway.Binding, executor: funcs.Executor, request: Object): Object
     local found, failure = reachable(binding, executor)
     if not found then return failure :: Object end
-    local views: {sessions.View} = {}
-    for index, item in ipairs(found.sessions) do
-        if index > sessions.MAX_SESSIONS then break end
-        views[index] = sessions.view(item, found.titles[item.thread_id] or "", binding.action_id)
+    local views: {unknown} = {}
+    for _, item in ipairs(found.sessions) do
+        views[#views + 1] = sessions.view(item, found.titles[item.thread_id] or "", binding.action_id)
     end
-    return reply_result({ok = true, value = {sessions = views, truncated = #found.sessions > sessions.MAX_SESSIONS}}, nil)
+    local cursor = math.floor(tonumber(request.cursor) or 0)
+    local limit = math.floor(tonumber(request.limit) or sessions.PAGE_DEFAULT)
+    if cursor < 0 then cursor = 0 end
+    if limit < 1 or limit > sessions.MAX_SESSIONS then limit = sessions.PAGE_DEFAULT end
+    local page = sessions.page(views, cursor, limit)
+    return reply_result({ok = true, value = {sessions = page.items, next_cursor = page.next_cursor,
+        eof = page.eof, truncated = not page.eof}}, nil)
 end
 local function local_node(): string
     local native, err = system.node.id()
     if err or not native or native == "" then return "local" end
     return native
 end
-local function list_directory(binding: gateway.Binding, executor: funcs.Executor): Object
+local function capabilities(binding: gateway.Binding): Object
+    local bound, surface_error = gateway.surface(binding)
+    if not bound then return reply_result(surface_error, nil) end
+    local config = bound.configuration
+    local available, available_error = catalog.select(config.catalog, config.ceiling, config.base_tools, config.allowed_traits, bound.selection.active)
+    if not available then return refused("DENIED", available_error or "surface is unavailable", nil, false, "call session read for the current surface revision") end
+    local tools: {Object} = {}
+    for _, item in ipairs(available) do
+        tools[#tools + 1] = {name = item.name, description = item.description, policies = item.policies, annotations = item.annotations}
+    end
+    local launchable = false
+    for _, item in ipairs(available) do if item.name == "thread_launch" then launchable = true end end
+    local traits: {Object} = {}
+    for _, trait in ipairs(config.catalog.traits) do
+        traits[#traits + 1] = {id = trait.id, title = trait.title, tools = trait.tools}
+    end
+    return reply_result({ok = true, value = {workspace_id = binding.workspace_id, thread_id = binding.thread_id,
+        action_id = binding.action_id, revision = bound.revision, digest = bound.digest,
+        tools = tools, traits = traits, allowed_traits = config.allowed_traits, active_traits = bound.selection.active,
+        requestable_access = config.access,
+        launch = {allowed = launchable, policy_ref = binding.policy_ref,
+            definitions_tool = launchable and "launch_definitions" or nil},
+        thread_access = {thread_id = binding.thread_id,
+            note = "thread_read, thread_wait and thread_message reach the bound thread; thread_sessions pages the sessions its membership opens"},
+        authoring = {guide_tool = "overlay", guide_operation = "guide",
+            preflight_tool = "delivery", preflight_operation = "preflight",
+            note = "read the capabilities report, then the overlay guide index, then preflight a frozen digest before delivery request"}}}, nil)
+end
+local function list_directory(binding: gateway.Binding, executor: funcs.Executor, request: Object): Object
     local candidates, sessions_error = gateway.workspace_sessions(binding)
     if not candidates then return reply_result(sessions_error, nil) end
     local peers: {sessions.DirectoryCandidate} = {}
@@ -158,10 +207,15 @@ local function list_directory(binding: gateway.Binding, executor: funcs.Executor
             if code ~= "DENIED" and code ~= "NOT_FOUND" then return reply_result(reply, nil) end
         end
     end
-    local views = sessions.directory(peers, binding.action_id)
-    local limited: {sessions.DirectoryView} = {}
-    for index = 1, math.min(#views, sessions.MAX_SESSIONS) do limited[index] = views[index] end
-    return reply_result({ok = true, value = {peers = limited, truncated = #views > sessions.MAX_SESSIONS}}, nil)
+    local views: {unknown} = {}
+    for _, item in ipairs(sessions.directory(peers, binding.action_id)) do views[#views + 1] = item end
+    local cursor = math.floor(tonumber(request.cursor) or 0)
+    local limit = math.floor(tonumber(request.limit) or sessions.PAGE_DEFAULT)
+    if cursor < 0 then cursor = 0 end
+    if limit < 1 or limit > sessions.MAX_SESSIONS then limit = sessions.PAGE_DEFAULT end
+    local page = sessions.page(views, cursor, limit)
+    return reply_result({ok = true, value = {peers = page.items, next_cursor = page.next_cursor,
+        eof = page.eof, truncated = not page.eof}}, nil)
 end
 local function inbox_target(binding: gateway.Binding, address: unknown): (sessions.Candidate?, Object?)
     local object = bounds.object(address)
@@ -176,8 +230,9 @@ end
 local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?): Object
     local executor, failure = subject_executor(binding, tool, values, runtime)
     if not executor then return failure :: Object end
-    if tool.name == "thread_sessions" then return list_sessions(binding, executor) end
-    if tool.name == "session_directory" then return list_directory(binding, executor) end
+    if tool.name == "thread_sessions" then return list_sessions(binding, executor, request) end
+    if tool.name == "session_directory" then return list_directory(binding, executor, request) end
+    if tool.name == "capabilities" then return capabilities(binding) end
     if tool.name == "session_send" or tool.name == "session_reply" then
         local target, missing = inbox_target(binding, request.address)
         if not target then return missing :: Object end
@@ -293,7 +348,8 @@ local function handle(): nil
     local values, values_error = context.compose(config.fixed_context, bound.selection.context, config.dynamic_keys)
     if not values then answer(response, http.STATUS.OK, mcp.result(call.id, refused("DENIED", values_error or "context is unavailable"))); return nil end
     local described: {Object} = {}
-    for _, item in ipairs(available) do described[#described + 1] = {name = item.name, description = item.description, inputSchema = item.schema, annotations = item.annotations} end
+    for _, item in ipairs(available) do described[#described + 1] = {name = item.name, description = item.description,
+        inputSchema = item.schema, outputSchema = mcp.OUTPUT_SCHEMAS[item.name], annotations = item.annotations} end
     if call.method == "tools/list" then
         local listed: {Object} = {}
         for _, item in ipairs(described) do listed[#listed + 1] = item end
@@ -334,7 +390,17 @@ local function handle(): nil
         end
         local revision = bounds.count(request.expected_revision)
         if request.operation ~= "select" or not revision or revision < 1 then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "select needs a positive expected_revision")); return nil end
-        answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(gateway.select_surface(binding, revision, request.active_traits, request.context), nil))); return nil
+        local selected = gateway.select_surface(binding, revision, request.active_traits, request.context)
+        -- Trait selection changes the admitted tool set: the server advertises
+        -- listChanged and names the new revision here, so the client re-lists
+        -- tools and reads session for the current schemas before calling one.
+        if type(selected) == "table" and selected.ok == true then
+            local value = bounds.object(selected.value) or {}
+            value.tools_changed = true
+            value.remedy = "call tools/list, then session read, before the next tools/call"
+            selected = {ok = true, value = value}
+        end
+        answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(selected, nil))); return nil
     end
     local parameters = call.params
     if name == "call_tool" then
@@ -361,6 +427,8 @@ local function handle(): nil
     elseif tool.name == "session_inbox" then arguments, argument_error = mcp.inbox_page_arguments(parameters)
     elseif tool.name == "session_ack" then arguments, argument_error = mcp.inbox_ack_arguments(parameters)
     elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
+    elseif tool.name == "launch_definitions" then arguments, argument_error = mcp.launch_definitions_arguments(parameters, binding.workspace_id)
+    elseif tool.name == "capabilities" then arguments, argument_error = mcp.capabilities_arguments(parameters)
     elseif tool.name == "overlay" then arguments, argument_error = mcp.overlay_arguments(parameters)
     elseif tool.name == "docs" then arguments, argument_error = mcp.docs_arguments(parameters)
     elseif tool.name == "components" then arguments, argument_error = mcp.components_arguments(parameters)
@@ -368,7 +436,7 @@ local function handle(): nil
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters, binding.workspace_id)
     elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)
     else arguments = bounds.object(parameters.arguments); if not arguments then argument_error = "tool arguments must be an object" end end
-    if arguments and (tool.name == "delivery" or tool.name == "publish") then
+    if arguments and (tool.name == "delivery" or tool.name == "publish" or tool.name == "launch_definitions") then
         argument_error = mcp.bound_workspace(arguments, binding.workspace_id)
         if argument_error then arguments = nil end
     end

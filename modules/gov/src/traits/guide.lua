@@ -11,7 +11,7 @@ local workspace_applications = require("workspace_applications")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@8"
+M.REVISION = "bee.governance-component-guide@9"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -236,30 +236,33 @@ function M.delivery_steps(): {string}
     return copied
 end
 
-function M.document(): string
-    local lines: {string} = {}
-    lines[#lines + 1] = "Bee component authoring guide (" .. M.REVISION .. ")"
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "A component pack is one frozen file, " .. M.ENTRIES_PATH
+-- Guide sections, each readable alone. The index names them; a section read
+-- returns one section; the example travels only on explicit request so a
+-- guide read stays small.
+function M.pack_shape(): string
+    return "A component pack is one frozen file, " .. M.ENTRIES_PATH
         .. ", holding a JSON list of complete native registry entries. Each entry has id, kind,"
         .. " an optional meta and a required data; put source, method, modules and imports inside data."
         .. " Source is inline Lua text, never a file URL. Top-level YAML shorthand is not the registry API."
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "A pack may contain process.lua applications, function.lua tools, library.lua support code,"
+end
+function M.pack_contents(): string
+    return "A pack may contain process.lua applications, function.lua tools, library.lua support code,"
         .. " registry.entry declarations and security.policy entries. Installed metadata describes a capability;"
         .. " it never grants that capability. The destination separately constrains namespaces, entry kinds,"
         .. " native modules, policy grants and resource bindings during preflight, and the activation owner alone"
         .. " applies the reviewed overlay. Use the read-only components tool to inspect the effective installed"
         .. " registry and exact Hub package entries, documentation and examples before authoring."
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "An application is one process.lua entry with meta.type bee.application and a"
+end
+function M.application_shape(): string
+    return "An application is one process.lua entry with meta.type bee.application and a"
         .. " meta.application record declaring api_version 1, lifetime view, a nonempty revision and title,"
         .. " and instance_policy singleton or multiple. Metadata describes the application; it never"
         .. " authorizes it. The host separately admits the definition, and the broker lists it only once"
         .. " the effective catalog carries it. Advance the application revision whenever executable source"
         .. " or configuration changes; a revision identifies one exact runnable definition."
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "The process entry carries its Lua source inline and renders with the terminal"
+end
+function M.rendering(): string
+    return "The process entry carries its Lua source inline and renders with the terminal"
         .. " toolkit: tty.events, tty.start, tty.surface, tty.screen_size, tty.canvas with one-based"
         .. " canvas:put, output:present, client.launch, client.ready, and client.checkpoint when the"
         .. " metadata declares a resume_schema. Draw every frame through bee.application:frame, the"
@@ -271,13 +274,10 @@ function M.document(): string
         .. " frame.hit over the hits the frame recorded. Use semantic appearance roles from"
         .. " bee.application:appearance, authenticate appearance messages by their broker sender, and"
         .. " declare exactly the native modules and library imports the source uses."
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = M.visual_style()
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = CONFIG_SHAPE_RULE
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "Every authoring operation except guide names its overlay_id; list without one returns only overlays owned by this caller. The overlay_id is distinct from the agent's runtime workspace."
-    lines[#lines + 1] = "An MCP put carries at most 65,536 decoded bytes of one file. For a larger entries.json,"
+end
+function M.transport(): string
+    return "Every authoring operation except guide names its overlay_id; list without one returns only overlays owned by this caller. The overlay_id is distinct from the agent's runtime workspace."
+        .. " An MCP put carries at most 65,536 decoded bytes of one file. For a larger entries.json,"
         .. " put the first chunk, then append chunks of at most 65,536 bytes. Each append supplies"
         .. " the current expected_revision, a new idempotency_key, offset equal to the current file"
         .. " byte length. The owner computes the assembled SHA-256 digest; result_digest may"
@@ -285,11 +285,12 @@ function M.document(): string
         .. " show the resulting byte count and digest."
         .. " Each file remains bounded to 4 MiB, and the overlay to 16 MiB. Read returns a base64"
         .. " window of up to 16,384 bytes with offset, chunk_bytes and eof; page with offset and limit."
-    lines[#lines + 1] = "Freeze copies the complete measured file set into owned storage and binds it to"
+        .. " Freeze copies the complete measured file set into owned storage and binds it to"
         .. " the overlay identity and revision; it does not change the edit revision, and later edits"
         .. " cannot change a frozen snapshot. Freeze is not approval, installation or execution."
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "After freeze, publication prepare parses " .. M.ENTRIES_PATH
+end
+function M.after_freeze(): string
+    return "After freeze, publication prepare parses " .. M.ENTRIES_PATH
         .. " from that exact snapshot into the canonical artifact (" .. M.SCHEMA
         .. "). Requesting delivery stages the version at this destination and reads its preflight verdict;"
         .. " a refusal names the diagnostic and its remedy. Then a person must " .. join(DELIVERY_STEPS)
@@ -297,6 +298,64 @@ function M.document(): string
         .. " existing host-admitted database when every imported dependency is already installed and no"
         .. " auto-start consumer is present. Governance seals the exact functions and runs them before exposing"
         .. " the complete overlay. New databases, changed applied migrations and schema rollback are refused."
+end
+type Section = {id: string, title: string, body: fun(): string}
+local SECTIONS: {Section} = {
+    {id = "pack", title = "Component pack shape", body = function(): string return M.pack_shape() end},
+    {id = "contents", title = "Pack contents and authority", body = function(): string return M.pack_contents() end},
+    {id = "application", title = "Application entries", body = function(): string return M.application_shape() end},
+    {id = "rendering", title = "Rendering with the terminal toolkit", body = function(): string return M.rendering() end},
+    {id = "style", title = "Visual style and archetypes", body = function(): string return M.visual_style() end},
+    {id = "config", title = "Configuration shapes", body = function(): string return CONFIG_SHAPE_RULE end},
+    {id = "transport", title = "Overlay transport, freeze", body = function(): string return M.transport() end},
+    {id = "delivery", title = "Delivery after freeze", body = function(): string return M.after_freeze() end},
+    {id = "workspace", title = "Delivering to your own workspace", body = function(): string return M.workspace_delivery() end},
+    {id = "docs", title = "Platform documentation", body = function(): string return M.platform_documentation() end},
+}
+function M.section_list(): {{id: string, title: string}}
+    local listed: {{id: string, title: string}} = {}
+    for _, section in ipairs(SECTIONS) do listed[#listed + 1] = {id = section.id, title = section.title} end
+    return listed
+end
+function M.section_text(id: string): string?
+    for _, section in ipairs(SECTIONS) do if section.id == id then return section.body() end end
+    return nil
+end
+-- The short index: revision, what an overlay is, section list and how to
+-- read one section or the example. A full document is built only below.
+function M.index(): string
+    local lines: {string} = {}
+    lines[#lines + 1] = "Bee component authoring guide (" .. M.REVISION .. ")"
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "A component pack is one frozen file, " .. M.ENTRIES_PATH
+        .. ", holding a JSON list of complete native registry entries."
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Sections:"
+    for _, section in ipairs(SECTIONS) do lines[#lines + 1] = "  " .. section.id .. ": " .. section.title end
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Read one section with section set to its id. Request the minimal working"
+        .. " example separately with include_example set; it carries the entries JSON inline."
+    return table.concat(lines, "\n")
+end
+function M.document(): string
+    local lines: {string} = {}
+    lines[#lines + 1] = "Bee component authoring guide (" .. M.REVISION .. ")"
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = M.pack_shape()
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = M.pack_contents()
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = M.application_shape()
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = M.rendering()
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = M.visual_style()
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = CONFIG_SHAPE_RULE
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = M.transport()
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = M.after_freeze()
     lines[#lines + 1] = ""
     lines[#lines + 1] = M.workspace_delivery()
     lines[#lines + 1] = ""
@@ -380,10 +439,29 @@ function M.platform_documentation(): string
 end
 
 -- The value the MCP overlay tool returns for its read-only guide operation.
-function M.value(): {[string]: unknown}
+-- A bare guide read returns the short index with the section list. One
+-- section travels when section names it; the worked example, which embeds the
+-- entries JSON and its Lua source twice, travels only on explicit request.
+function M.value(request: {[string]: unknown}?): {[string]: unknown}
+    local section_id: string? = nil
+    local include_example = false
+    if request ~= nil then
+        if type(request.section) == "string" then section_id = request.section :: string end
+        if request.include_example == true then include_example = true end
+    end
+    if section_id ~= nil then
+        local text = M.section_text(section_id)
+        if not text then return {revision = M.REVISION, error = {code = "NOT_FOUND",
+            message = "unknown guide section " .. section_id, remedy = "read the guide index for section ids"}} end
+        return {revision = M.REVISION, section = section_id, text = text, sections = M.section_list()}
+    end
+    if not include_example then
+        return {revision = M.REVISION, document = M.index(), sections = M.section_list()}
+    end
     local encoded, encode_error = M.example_json()
-    if not encoded then return {revision = M.REVISION, document = M.document(), example_error = tostring(encode_error)} end
-    return {revision = M.REVISION, document = M.document(),
+    if not encoded then return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
+        example_error = tostring(encode_error)} end
+    return {revision = M.REVISION, document = M.index(), sections = M.section_list(),
         example = {path = M.ENTRIES_PATH, entries_json = encoded, definition_id = M.DEFINITION_ID,
             title = M.TITLE, version = M.VERSION, source = M.SOURCE}}
 end

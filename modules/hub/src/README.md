@@ -19,7 +19,10 @@ Requests cannot select credentials, a registry URL, an actor or a host path.
 
 Read operations are `catalog`, `details`, `inspect`, `state`, `files`, `read_file`,
 `installed` and `installed_source`. Catalog keyword defaults to `bee`; an empty keyword clears it.
-`state` returns an exact uninstalled artifact's metadata, entries and resources.
+`inspect` and `state` return entry summaries first, at most 32 per page with a
+`next_offset` cursor, and entry source only on explicit `include_data`; read
+selected source through `files` and `read_file` windows.
+`state` returns an exact uninstalled artifact's metadata, entry summaries and resources.
 `files` and `read_file` read its embedded resource filesystem. These operations
 may populate the native verified cache but do not publish or start the package.
 They expose packaged assets, not a reconstruction of its source repository.

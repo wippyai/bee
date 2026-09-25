@@ -179,15 +179,18 @@ function M.sources(raw_state: unknown, raw_revision: unknown, raw_request: unkno
     elseif request.expected_revision ~= nil or request.offset ~= nil or request.limit ~= nil then
         return nil, "select an entry before paging source"
     end
-    local offset: integer? = 0
-    local limit: integer? = 16384
-    if request.offset ~= nil then offset = bounds.count(request.offset) end
-    if request.limit ~= nil then limit = bounds.count(request.limit) end
-    if not offset or offset > 4194304 or not limit or limit < 1 or limit > 16384 then
-        return nil, "installed source window is out of bounds"
+    local from: integer = 0
+    local length: integer = 16384
+    if request.offset ~= nil then
+        local offset = bounds.count(request.offset)
+        if offset == nil or offset > 4194304 then return nil, "installed source window is out of bounds" end
+        from = offset
     end
-    local from: integer = offset
-    local length: integer = limit
+    if request.limit ~= nil then
+        local limit = bounds.count(request.limit)
+        if limit == nil or limit < 1 or limit > 16384 then return nil, "installed source window is out of bounds" end
+        length = limit
+    end
     local state = bounds.object(raw_state)
     if not state then return nil, "invalid registry state" end
     local raw_entries = state.entries

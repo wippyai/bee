@@ -5,7 +5,8 @@ local base64 = require("base64")
 local bounds = require("bounds")
 local inspection = require("inspection")
 local M = {}
-type Request = {component: string, version: string, resource: string?, path: string, offset: integer, limit: integer, expected_digest: string?}
+type Request = {component: string, version: string, resource: string?, path: string, offset: integer, limit: integer, expected_digest: string?,
+    entry_offset: integer, entry_limit: integer, include_data: boolean}
 type File = {name: string, type: string}
 type Result = {component: string, version: string, digest: string, metadata: unknown?, entries: {unknown}?, resources: {unknown}?,
     files: {File}?, next_offset: integer?, content_base64: string?, offset: integer?, size: number?, eof: boolean?}
@@ -16,7 +17,9 @@ function M.decode(operation: string, raw: unknown): (Request?, string?)
     local allowed = {"component", "version", "expected_digest"}
     if operation == "files" or operation == "read_file" then
         for _, field in ipairs({"resource", "path", "offset", "limit"}) do allowed[#allowed + 1] = field end
-    elseif operation ~= "state" then return nil, "unknown package read" end
+    elseif operation == "state" then
+        for _, field in ipairs({"entry_offset", "entry_limit", "include_data"}) do allowed[#allowed + 1] = field end
+    else return nil, "unknown package read" end
     local extra = bounds.fields(value, allowed)
     if extra then return nil, extra end
     local selected, invalid = inspection.decode({component = value.component, version = value.version})
@@ -44,20 +47,43 @@ function M.decode(operation: string, raw: unknown): (Request?, string?)
             end
         end
     end
+    local entry_offset: integer = 0
+    if value.entry_offset ~= nil then
+        if operation ~= "state" then return nil, "entry paging is only valid on state" end
+        local supplied = bounds.count(value.entry_offset)
+        if supplied == nil then return nil, "entry_offset must be a nonnegative integer" end
+        entry_offset = supplied
+    end
+    local entry_limit: integer = inspection.MAX_ENTRIES_PER_PAGE
+    if value.entry_limit ~= nil then
+        if operation ~= "state" then return nil, "entry paging is only valid on state" end
+        local supplied = bounds.integer(value.entry_limit)
+        if not supplied or supplied < 1 or supplied > inspection.MAX_ENTRIES_PER_PAGE then
+            return nil, "entry_limit must be between 1 and " .. tostring(inspection.MAX_ENTRIES_PER_PAGE)
+        end
+        entry_limit = supplied
+    end
+    local include_data = false
+    if value.include_data ~= nil then
+        if operation ~= "state" then return nil, "entry paging is only valid on state" end
+        if type(value.include_data) ~= "boolean" then return nil, "include_data must be a boolean" end
+        include_data = value.include_data
+    end
     local offset: integer = 0
     if value.offset ~= nil then
         local supplied = bounds.count(value.offset)
         if supplied == nil then return nil, "invalid read offset" end
         offset = supplied
     end
-    local limit: integer = operation == "files" and 100 or 65536
+    local limit: integer = operation == "files" and 100 or 16384
     if value.limit ~= nil then
         local supplied = bounds.integer(value.limit)
-        if not supplied or supplied < 1 or supplied > (operation == "files" and 1000 or 1048576) then return nil, "invalid read limit" end
+        if not supplied or supplied < 1 or supplied > (operation == "files" and 1000 or 16384) then return nil, "invalid read limit" end
         limit = supplied
     end
     return {component = selected.component, version = selected.version, resource = resource, path = path,
-        offset = offset, limit = limit, expected_digest = expected}, nil
+        offset = offset, limit = limit, expected_digest = expected,
+        entry_offset = entry_offset, entry_limit = entry_limit, include_data = include_data}, nil
 end
 
 function M.read(operation: string, raw: unknown): (Result?, string?)
@@ -80,7 +106,17 @@ function M.read(operation: string, raw: unknown): (Result?, string?)
         if not metadata then return finish(nil, tostring(metadata_error)) end
         local resources, resources_error = package:resources()
         if not resources then return finish(nil, tostring(resources_error)) end
-        result.entries, result.metadata, result.resources = entries, metadata, resources
+        local summarized: {inspection.Entry} = {}
+        for _, raw_entry in ipairs(entries) do
+            local entry = bounds.object(raw_entry)
+            local id = entry and bounds.id(entry.id)
+            local kind = entry and bounds.id(entry.kind)
+            if not entry or not id or not kind then return finish(nil, "invalid package entry identity") end
+            summarized[#summarized + 1] = {id = id, kind = kind, meta = {}, data = entry.data}
+        end
+        local page = inspection.page(summarized, request.entry_offset, request.entry_limit, request.include_data)
+        result.entries, result.metadata, result.resources = page.entries, metadata, resources
+        result.next_offset, result.eof = page.next_offset, page.eof
         return finish(result, nil)
     end
     local resource = request.resource

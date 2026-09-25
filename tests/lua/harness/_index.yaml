@@ -852,6 +852,14 @@ entries:
     agent_launch: bee.harness.launch:agent_launch
     agent_protocol: bee.application:agent_protocol
     record: bee.threads.records:record
+- name: launch_definitions_test
+  kind: function.lua
+  source: file://launch_definitions_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
 - name: launch_client_policy
   kind: security.policy
   meta: {type: test_support}

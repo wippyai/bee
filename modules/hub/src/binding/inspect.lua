@@ -41,6 +41,8 @@ function M.read(raw: unknown): (inspection.Inspection?, string?)
         end
         decoded[#decoded + 1] = {id = id, kind = kind, meta = meta, data = entry.data}
     end
-    return {component = request.component, version = version, digest = digest, requirements = result, entries = decoded}, nil
+    local page = inspection.page(decoded, request.entry_offset, request.entry_limit, request.include_data)
+    return {component = request.component, version = version, digest = digest, requirements = result,
+        entries = page.entries, next_offset = page.next_offset, eof = page.eof}, nil
 end
 return M

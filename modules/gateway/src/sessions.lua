@@ -52,6 +52,24 @@ end
 function M.view(item: Candidate, title: string, self_action_id: string): View
     return {session = item.action_id, action_id = item.action_id, attempt_id = item.attempt_id, thread_id = item.thread_id, title = title, self = item.action_id == self_action_id}
 end
+-- A stable cursor page over an already ordered view list. The cursor is an
+-- offset into that order; the reply names the next cursor or its absence.
+function M.page(views: {unknown}, cursor: integer, limit: integer): {items: {unknown}, next_cursor: integer?, eof: boolean}
+    local items: {unknown} = {}
+    local start = cursor + 1
+    for index = start, math.min(start + limit - 1, #views) do items[#items + 1] = views[index] end
+    local consumed = cursor + #items
+    return {items = items, next_cursor = consumed < #views and consumed or nil, eof = consumed >= #views}
+end
+-- The MCP paging arguments both session listings share, decoded once here so
+-- the advertised schema and the accepted cursor cannot drift apart.
+M.PAGE_DEFAULT = 32
+function M.page_schema(): {[string]: unknown}
+    return {cursor = {type = "integer", minimum = 0,
+            description = "offset into the stable session order; omit for the first page"},
+        limit = {type = "integer", minimum = 1, maximum = M.MAX_SESSIONS,
+            description = "page size, at most " .. tostring(M.MAX_SESSIONS)}}
+end
 -- The owner supplies discoverability and current acceptance epoch. A send
 -- grant alone never makes a peer appear in the directory.
 function M.directory(peers: {DirectoryCandidate}, self_action_id: string): {DirectoryView}

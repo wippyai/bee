@@ -205,6 +205,19 @@ local function define_tests()
             test.eq(hooks.classify({}), "unclassified")
             test.eq(hooks.classify(nil), "unclassified")
         end)
+        test.it("advertises the closed event enum and identity fields as the hook schema", function()
+            local schema = hooks.schema()
+            test.eq(schema.type, "object")
+            local properties = schema.properties :: {[string]: unknown}
+            local event = properties.event :: {[string]: unknown}
+            test.eq(#(event.enum :: {string}), #hooks.EVENTS)
+            for _, name in ipairs({"session_id", "turn_id", "prompt_id", "tool_use_id", "agent_id", "tool_name"}) do
+                test.not_nil(properties[name])
+            end
+            test.is_true(#(schema.examples :: {unknown}) >= 2)
+            local normalized = hooks.normalize("PreToolUse", {session_id = "s", tool_use_id = "t", tool_name = "read"})
+            test.not_nil(normalized)
+        end)
     end)
 end
 return require("test").run_cases(define_tests)

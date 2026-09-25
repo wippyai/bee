@@ -68,7 +68,7 @@ def exercise(packed, theme="honey"):
             "actions": ["db.get", "registry.apply", "registry.apply_version", "registry.overlay.apply"],
             "resources": "*", "effect": "allow"}})
         bindings = next(e for e in host["entries"] if e["name"] == "application_admission")["bindings"]
-        next(b for b in bindings if b["definition_id"] == "bee.console:app")["policies"].append("bee:probe_broad_policy")
+        next(b for b in bindings if b["definition_id"] == "bee.console:app")["policies"].append("bee.security:probe_broad_policy")
         host_index.write_text(yaml.safe_dump(host, sort_keys=False))
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
         pack = project / "probe-deployment"

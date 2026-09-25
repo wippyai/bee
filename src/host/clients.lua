@@ -287,6 +287,7 @@ local function deliver_reply(state: State, client: clients.Client, reply: contra
     if not process.send(client.recipient, "bee.host.reply", {version = 1, reply = reply,
         views = inventory.views_message(state.inventory, client.connection_id)}) then detach(state, client, "") end
 end
+
 -- A crashed producer has no pending client request to correlate. Route its
 -- closed reply by the durable display assignment while that fence still
 -- exists, so the person sees the failure after the view is retired.

@@ -123,7 +123,7 @@ local function define_tests()
             for index, arg in ipairs(selected.argv) do
                 if arg == "--allowedTools" then allowed = selected.argv[index + 1] end
             end
-            test.is_true(allowed:find("mcp__bee__session", 1, true) ~= nil)
+            test.eq(allowed, "mcp__bee__session,mcp__bee__docs,mcp__bee__overlay")
             test.eq(quote.line(launch.argv), "-p --output-format stream-json --verbose --include-partial-messages --permission-mode dontAsk --max-turns 2 --model sonnet --effort xhigh -- 'say hi'")
             local _, mode_error = claude_launch.decode({profile_id = "session", brief = "x", permission_mode = "bypassPermissions"})
             test.eq(mode_error, "permission_mode is not one Bee admits")

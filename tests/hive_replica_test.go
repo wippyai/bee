@@ -259,27 +259,11 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			t.Fatal(err)
 		}
 		// This acceptance owns the supervisor lifecycle and supplies the
-		// enrolled peer list directly. Keep the default local service out of
-		// this deliberately explicit composition.
-		if err := os.RemoveAll(filepath.Join(project, "src", "hive", "host")); err != nil {
-			t.Fatal(err)
-		}
-		// The fixture owns supervisor startup, but it still composes the real
-		// Hive sender that the root Sync dependency injects into distribution.
-		hostDir := filepath.Join(project, "src", "hive", "host")
-		if err := os.MkdirAll(hostDir, 0700); err != nil {
-			t.Fatal(err)
-		}
-		sender, err := os.ReadFile(filepath.Join(repository, "src", "hive", "host", "replica_sender.lua"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(hostDir, "replica_sender.lua"), sender, 0600); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(hostDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.hive.host\nentries:\n- name: replica_sender\n  kind: library.lua\n  source: file://replica_sender.lua\n  modules: [hash, base64]\n  imports:\n    hive: bee.hive:client\n    version: bee.sync:version\n    transaction: bee.persist:transaction\n    bounds: bee.sync:bounds\n"), 0600); err != nil {
-			t.Fatal(err)
-		}
+		// enrolled peer list directly. The default local service stays
+		// declared in the composed Hive module but never starts here; the
+		// launch override below keeps it out of this deliberately explicit
+		// composition. The real Hive sender still comes from the composed
+		// module that the root Sync dependency injects into distribution.
 		for _, name := range moduleNames {
 			module := name
 			if err := os.CopyFS(filepath.Join(project, "modules", module), os.DirFS(filepath.Join(repository, "modules", module))); err != nil {
@@ -302,7 +286,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 				t.Fatal(err)
 			}
 
-			approvalsPath := filepath.Join(project, "src", "approvals", "host", "_index.yaml")
+			approvalsPath := filepath.Join(project, "src", "_index.yaml")
 			approvals, err := os.ReadFile(approvalsPath)
 			if err != nil {
 				t.Fatal(err)
@@ -389,7 +373,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		return stagedNode{project: project, state: state}
 	}
 	start := func(i int, node stagedNode) *procRunner {
-		args := []string{"run", "--silent", "hive-replica-probe"}
+		args := []string{"run", "--silent", "--override", "bee.hive:supervisor_service:lifecycle.auto_start=false", "hive-replica-probe"}
 		if agent != nil {
 			args = append(args, "--set", "registry.history_path="+filepath.Join(node.state, "registry.db"))
 		}

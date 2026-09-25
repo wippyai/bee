@@ -9,24 +9,20 @@ decides; a grant may open a direct session.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `client`, and the supervisor-host provenance resource |
+| `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `client`, the supervisor-host provenance resource, and the default host composition (`replica_sender`, `supervisor_service`, `workspaces`) |
 | `bee.hive.registry` | `catalog`, the registry read model for operation exposure and interfaces |
 | `bee.hive.telemetry` | The first open operations: `presence`, `stats`, `catalog_list` |
 | `bee.hive.supervisor` | The root-owned supervisor: hello, admission, forwarding, guarded dispatch, epochs (Astra's lane) |
-| `bee.hive.desktop` and `bee.hive.host` | Root-owned desktop integration and host-selected default service composition |
+| `bee.hive.desktop` | Root-owned desktop integration |
 
 ## Host composition
 
-`bee.hive.host:supervisor_service` is the default `process.service`. It starts
+`bee.hive:supervisor_service` is the default `process.service`. It starts
 `bee.hive.supervisor:main` on `bee.hive:supervisor_host` with an empty
 `configured_nodes` list, so a fresh Bee can route local calls while remaining
-portable and offline. Its lifecycle actor and policies are selected by the
+portable and offline. That default puts no transport credentials or network
+settings in the registry. Its lifecycle actor and policies are selected by the
 host composition, not by an ordinary application.
-
-The `bee/hive` component supplies portable protocol values, the catalog read
-model, client, telemetry operations, and the protected supervisor-host resource.
-It does not select or start a supervisor, desktop, or host policy; the Bee root
-keeps those integration and authority decisions.
 
 An admitted host overlay may replace that service input with peer node IDs and
 an optional validated desktop configuration. TLS, seeds, ports and native

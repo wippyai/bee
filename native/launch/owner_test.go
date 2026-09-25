@@ -97,7 +97,7 @@ func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 	// clients without pre-listing node identities. The bridge's application is
 	// the retained desktop's initial application; the owner selects none, so a
 	// client's command (for example "bee agent") opens the only window.
-	input, present := config.Get("override.bee.hive.host:supervisor_service:input")
+	input, present := config.Get("override.bee.hive:supervisor_service:input")
 	if !present {
 		t.Fatal("supervisor input override is missing")
 	}
@@ -145,7 +145,7 @@ func TestPrepareDaemonComposesNoFolderWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = release() }()
-	input, _ := config.Get("override.bee.hive.host:supervisor_service:input")
+	input, _ := config.Get("override.bee.hive:supervisor_service:input")
 	inputs, ok := input.([]any)
 	if !ok || len(inputs) != 1 {
 		t.Fatalf("supervisor input override = %#v", input)

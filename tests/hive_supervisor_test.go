@@ -244,13 +244,6 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 	if err := os.WriteFile(fixtureManifest, []byte(fixtureText), 0600); err != nil {
 		t.Fatal(err)
 	}
-	hostDir := filepath.Join(source, "hive", "host")
-	if err := os.RemoveAll(hostDir); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.CopyFS(hostDir, os.DirFS(filepath.Join(repository, "src", "hive", "host"))); err != nil {
-		t.Fatal(err)
-	}
 	for _, name := range []string{"application", "node"} {
 		if err := os.CopyFS(filepath.Join(filepath.Dir(source), "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
 			t.Fatal(err)
@@ -261,7 +254,27 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.CopyFS(filepath.Join(source, "approvals", "host"), os.DirFS(filepath.Join(repository, "src/approvals/host"))); err != nil {
+	// The feeds composition stages the production approver policies from the
+	// app root, where the host owns them, instead of a module-side folder.
+	rootIndex, err := os.ReadFile(filepath.Join(repository, "src", "_index.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor := "\n- name: approver_policies\n"
+	start := strings.Index(string(rootIndex), anchor)
+	if start < 0 {
+		t.Fatal("production approver policies left the app root")
+	}
+	rest := string(rootIndex)[start+1:]
+	if end := strings.Index(rest, "\n- name: "); end > 0 {
+		rest = rest[:end] + "\n"
+	}
+	stagedRoot := filepath.Join(source, "_index.yaml")
+	staged, err := os.ReadFile(stagedRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stagedRoot, append(staged, []byte(rest)...), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.CopyFS(filepath.Join(filepath.Dir(source), "modules", "approvals"), os.DirFS(filepath.Join(repository, "modules", "approvals"))); err != nil {
@@ -369,7 +382,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 			verbosity = "--verbose"
 		}
 		args := []string{"run", verbosity}
-		args = append(args, "--override", "bee.hive.host:supervisor_service:lifecycle.auto_start=false")
+		args = append(args, "--override", "bee.hive:supervisor_service:lifecycle.auto_start=false")
 		if feeds {
 			for _, service := range []string{"bee.approvals.service:worker_service", "bee.threads:owner_service", "bee.threads.delivery:waiter_service"} {
 				args = append(args, "--override", service+":lifecycle.auto_start=false")

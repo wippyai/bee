@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: docs_policy
+  kind: security.policy
+  meta:
+    comment: The selected docs facade scope resolves one linked corpus reference and reads only that volume
+  policy:
+    actions: [fs.get, registry.get]
+    resources: [bee.docs:corpus_ref, bee:docs_corpus]
+    effect: allow

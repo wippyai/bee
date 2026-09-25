@@ -42,8 +42,8 @@ end
 local function request(input: Object): types.Request
     local digest = assert(types.digest(input))
     local decoded, err = types.decode_request({protocol_revision = types.REVISION, request_id = "req-" .. uuid.v7(), idempotency_key = "idem",
-        caller_node_id = "laptop", caller_incarnation = "inc-1", owner_ref = {node_id = "forge", service_id = "bee.hive.host"},
-        operation_ref = "bee.hive.host:workspaces", operation_revision = "1", input = input, input_digest = digest,
+        caller_node_id = "laptop", caller_incarnation = "inc-1", owner_ref = {node_id = "forge", service_id = "bee.hive"},
+        operation_ref = "bee.hive:workspaces", operation_revision = "1", input = input, input_digest = digest,
         principal_ref = {issuer = "node:laptop", subject_id = "user-1"},
         principal_assertion = {method = types.ASSERTION_METHOD, audience = "forge", issued_at = "2026-09-08T10:00:00.000Z", expires_at = "2026-09-08T10:05:00.000Z"},
         delegation_refs = {}, deadline = "2026-09-08T10:05:00.000Z"})

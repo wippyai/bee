@@ -15,7 +15,7 @@ local ALLOWED_OPERATIONS: {[string]: boolean} = {
     ["bee.hive.telemetry:presence"] = true,
     ["bee.hive.telemetry:stats"] = true,
     ["bee.hive.telemetry:catalog_list"] = true,
-    ["bee.hive.host:workspaces"] = true,
+    ["bee.hive:workspaces"] = true,
 }
 
 local function operation_namespace(operation_ref: string): string?

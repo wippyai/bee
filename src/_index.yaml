@@ -15,7 +15,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_sender
-    value: bee.hive.host:replica_sender
+    value: bee.hive:replica_sender
   - name: target_exports
     value: bee:sync_exports
 - name: dependency_threads
@@ -363,3 +363,604 @@ entries:
     value: bee:launch_policy_muse_window
   - name: batch_policy
     value: bee:launch_policy_muse_batch
+- name: approver_policies
+  kind: registry.entry
+  meta:
+    type: bee.approval_policies
+    comment: Host-owned approver policies; a request names one, and only its approvers decide it
+  policies:
+  - name: workspace-application-delivery
+    approvers:
+    - definition_id: bee.inbox:app
+    max_ttl_ms: 600000
+- name: credential_sources
+  kind: registry.entry
+  meta:
+    type: bee.credential_sources
+    comment: Host-selected credential sources with audience and provider; optional setup source, destination and
+      format form one supplemental file under the same root
+  data:
+    formats:
+      claude: bee.driver.claude:credential_format
+      codex: bee.driver.codex:credential_format
+      agy: bee.driver.agy:credential_format
+      grok: bee.driver.grok:credential_format
+      muse: bee.driver.muse:credential_format
+    sources:
+    - ref: bee.driver.claude:api_key
+      workspace_id: '*'
+      audience: '*'
+      provider: claude
+      projection_kinds:
+      - environment
+    - ref: bee:machine_login_source
+      workspace_id: '*'
+      audience: '*'
+      provider: codex
+      projection_kinds:
+      - file
+      path: .codex/auth.json
+    - ref: bee:machine_login_source
+      workspace_id: '*'
+      audience: '*'
+      provider: claude
+      projection_kinds:
+      - file
+      path: .claude/.credentials.json
+    - ref: bee:machine_login_source
+      workspace_id: '*'
+      audience: '*'
+      provider: agy
+      projection_kinds:
+      - file
+      path: .gemini/antigravity-cli/antigravity-oauth-token
+      setup_path: .gemini/antigravity-cli/cache/onboarding.json
+    - ref: bee:machine_login_source
+      workspace_id: '*'
+      audience: '*'
+      provider: grok
+      projection_kinds:
+      - file
+      path: .grok/auth.json
+      setup_path: .grok/config.toml
+      setup_destination: .grok/.bee-global-config.toml
+      setup_content_format: opaque
+    - ref: bee:machine_login_source
+      workspace_id: '*'
+      audience: '*'
+      provider: muse
+      projection_kinds:
+      - file
+      path: .config/muse/auth.json
+      setup_path: .config/muse/settings.json
+      setup_destination: .config/muse/.bee-global-settings.json
+      setup_content_format: opaque
+- name: docs_corpus
+  kind: fs.directory
+  directory: ./src/corpus
+  mode: '0500'
+  auto_init: false
+  meta:
+    title: Bee agent documentation corpus
+    comment: The offline platform documentation a bound agent reads through the gateway docs tool; wippy.yaml embed freezes it read-only into the pack. Rebuilt by build/agent_corpus.py.
+- name: gateway_endpoint
+  kind: registry.entry
+  meta:
+    type: bee.gateway_endpoint
+    comment: Native HTTP selects and retains an available loopback port; gateway address resolves it from supervisor
+      state
+  data:
+    address: 127.0.0.1:0
+- name: gateway_listener
+  kind: http.service
+  addr: 127.0.0.1:0
+  lifecycle:
+    auto_start: true
+- name: gateway_router
+  kind: http.router
+  meta:
+    server: bee:gateway_listener
+  prefix: /
+- name: gateway_ready
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: GET
+  path: /ready
+  func: bee.gateway.api:ready_http
+- name: gateway_mcp
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: POST
+  path: /mcp/:action
+  func: bee.gateway.api:mcp_http
+- name: gateway_hook
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: POST
+  path: /hook/:action
+  func: bee.gateway.api:hook_http
+- name: gateway_hook_status
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: GET
+  path: /hook/:action/:event
+  func: bee.gateway.api:hook_status_http
+- name: gateway_hook_mcp
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: POST
+  path: /hook/:action/mcp
+  func: bee.gateway.api:hook_mcp_http
+- name: gateway_workspace_extension
+  kind: contract.binding
+  meta:
+    title: Agent sessions
+    comment: The host attaches each workspace's running agent sessions to the workspace catalog and its viewer
+  contracts:
+  - contract: bee.workspace.catalog:extension
+    methods:
+      describe: bee.gateway.binding:describe
+      search: bee.gateway.binding:search
+- name: harness_setup
+  kind: registry.entry
+  meta:
+    type: bee.harness_setup
+    comment: Host-selected first-use roots keyed by definition-declared resource names
+  data:
+    roots:
+      project: bee:workspace_root
+      session: bee.placement.native:root
+    credentials:
+      claude_api_key:
+        provider: claude
+        source:
+          kind: env_variable
+          ref: bee.driver.claude:api_key
+        optional: true
+      codex_login:
+        provider: codex
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+      muse_login:
+        provider: muse
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+      agy_login:
+        provider: agy
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+      grok_login:
+        provider: grok
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+      claude_login:
+        provider: claude
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+- name: harness_activation
+  kind: registry.entry
+  meta:
+    type: bee.harness_activation
+    comment: Driver bindings this host activates; discovery alone activates nothing
+  data:
+    schema_revision: bee.harness-activation@1
+    bindings:
+    - bee.driver.agy:binding
+    - bee.driver.claude:binding
+    - bee.driver.codex:binding
+    - bee.driver.grok:binding
+    - bee.driver.muse:binding
+- name: launch_policy_managed
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Managed harness launches subject to host-selected execution and credential requirements
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    environment: {}
+    prepare_options:
+      permission_mode: dontAsk
+      max_turns: 1
+- name: launch_policy_claude_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Claude Code window; missing host executable
+      leaves the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      claude: bee.driver.claude:executable
+    environment: {}
+    environment_refs:
+      CLAUDE_CONFIG_DIR: bee.driver.claude:config_home
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - thread_sessions
+    - thread_notify
+    - session_directory
+    - session_send
+    - session_inbox
+    - session_ack
+    - session_reply
+    - overlay
+    - delivery
+    - docs
+    - components
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true
+    prepare_options: {}
+- name: launch_policy_claude_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected one-turn Claude batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {claude: bee.driver.claude:executable}
+    environment: {}
+    environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    profile_options: {effort: [low, medium, high]}
+    profile_instructions: true
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: launch_policy_codex_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Codex window; missing host executable leaves
+      the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      codex: bee.driver.codex:executable
+    environment: {}
+    environment_refs:
+      CODEX_HOME: bee.driver.codex:config_home
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - thread_sessions
+    - thread_notify
+    - session_directory
+    - session_send
+    - session_inbox
+    - session_ack
+    - session_reply
+    - overlay
+    - delivery
+    - docs
+    - components
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+      config_profile: {kind: text, max_bytes: 64}
+    profile_instructions: true
+    prepare_options: {}
+- name: launch_policy_codex_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected read-only Codex batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {codex: bee.driver.codex:executable}
+    environment: {}
+    environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    profile_instructions: true
+    profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
+    prepare_options: {sandbox: read-only}
+- name: launch_policy_codex_named_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected structured Codex route that inherits the host Codex home so a saved profile may name one Codex config profile; read-only, one bounded turn on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {codex: bee.driver.codex:executable}
+    environment: {}
+    environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    profile_instructions: true
+    profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
+    prepare_options: {sandbox: read-only}
+- name: launch_policy_muse_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Muse window; missing host executable leaves
+      the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      muse: bee.driver.muse:executable
+    environment: {}
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - thread_sessions
+    - thread_notify
+    - session_directory
+    - session_send
+    - session_inbox
+    - session_ack
+    - session_reply
+    - overlay
+    - delivery
+    - docs
+    - components
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    hook_command_ref: bee.gateway:hook_executable
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    prepare_options: {}
+- name: launch_policy_muse_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected non-interactive Muse batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {muse: bee.driver.muse:executable}
+    environment: {}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    hook_command_ref: bee.gateway:hook_executable
+    profile_options: {effort: [low, medium, high]}
+    prepare_options: {approval_mode: never, max_steps: 1}
+- name: launch_policy_agy_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Antigravity window; missing host executable
+      leaves the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      agy: bee.driver.agy:executable
+    environment: {}
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - thread_sessions
+    - thread_notify
+    - session_directory
+    - session_send
+    - session_inbox
+    - session_ack
+    - session_reply
+    - overlay
+    - delivery
+    - docs
+    - components
+    gateway_hooks:
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    hook_command_ref: bee.gateway:hook_executable
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true
+    prepare_options: {}
+- name: launch_policy_agy_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected bounded Gemini batch policy with a retained user login and caller-owned thread MCP
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {agy: bee.driver.agy:executable}
+    environment: {}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m}
+- name: launch_policy_grok_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Grok window; missing host executable leaves
+      the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      grok: bee.driver.grok:executable
+    environment: {}
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - thread_sessions
+    - thread_notify
+    - session_directory
+    - session_send
+    - session_inbox
+    - session_ack
+    - session_reply
+    - overlay
+    - delivery
+    - docs
+    - components
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    hook_command_ref: bee.gateway:hook_executable
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true
+    prepare_options: {}
+- name: resource_roots
+  kind: registry.entry
+  meta:
+    type: bee.resource_roots
+    comment: Host-selected roots available to first-use harness setup; driver declarations select only resource
+      names
+  data:
+    roots:
+    - root_ref: bee:workspace_root
+      access: write
+    - root_ref: bee.placement.native:root
+      access: write
+- name: resources_workspace_extension
+  kind: contract.binding
+  meta:
+    title: Resources
+    comment: The host attaches each workspace's resource associations to the workspace catalog and its viewer
+  contracts:
+  - contract: bee.workspace.catalog:extension
+    methods:
+      describe: bee.resources.binding:describe
+      search: bee.resources.binding:search

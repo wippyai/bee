@@ -23,7 +23,7 @@ entries:
   kind: security.policy
   policy:
     actions: [registry.get]
-    resources: [bee.hive.host:supervisor_service]
+    resources: [bee.hive:supervisor_service]
     effect: allow
 - name: client_policy
   kind: security.policy

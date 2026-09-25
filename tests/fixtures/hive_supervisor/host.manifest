@@ -15,7 +15,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_sender
-    value: bee.hive.host:replica_sender
+    value: bee.hive:replica_sender
   - name: target_exports
     value: bee:sync_exports
 - name: sync_exports

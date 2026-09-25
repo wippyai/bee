@@ -867,9 +867,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 12316,
+      "bytes": 13064,
       "id": "docs/mcp_configuration",
-      "sha256": "3989925bc93a7bdb02a89a7555a8f5733b2dc823252660dda4e10c9334288ba3",
+      "sha256": "33084aabb10724b1207df04f63083364c1def1a6020261d493c8a57d8e5e2f75",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -891,9 +891,17 @@
       "topic": "ui"
     },
     {
-      "bytes": 7898,
+      "bytes": 6471,
+      "id": "docs/hub_inspection",
+      "sha256": "479d7d4ae0105e2457f63b7688ec5db43375e2e4cfc6316da3eae7756c8aa97a",
+      "source": "docs/guides/hub.md",
+      "title": "Hub installation and package reads",
+      "topic": "registry"
+    },
+    {
+      "bytes": 9755,
       "id": "docs/distributed_app_delivery",
-      "sha256": "d0abf93bdb5b551df6bfbb93962d7ec0cdc61b78145c4e00549b35f7479098cb",
+      "sha256": "7b734a4da275bfcdaae7950e2c1cb7cf5e4a1b378bc2b52791a8efecac5e596c",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -907,9 +915,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 12073,
+      "bytes": 12432,
       "id": "docs/carrier",
-      "sha256": "854b2282eb46578cea83c1c7f7ba0c43c22e8e0cb030e83030af7c11b3f45d0d",
+      "sha256": "53818d5f131a0cee8f8a6ddb68d85b9fe499f64d4719e779f6beac749e9186e0",
       "source": "docs/reference/agents/carrier.md",
       "title": "Carrier contract",
       "topic": "application"
@@ -931,9 +939,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 19326,
+      "bytes": 22045,
       "id": "docs/application_contracts",
-      "sha256": "d18e85fd016f4593747f3426e23eed5e3aebf2f96a02cc803460c341d0c1b697",
+      "sha256": "bbd62ee78de2b89c33ac93382ecd9f88d7501e1f4a3b1e657ea365c7a9ff04e5",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -1035,9 +1043,9 @@
       "topic": "component"
     },
     {
-      "bytes": 385,
+      "bytes": 693,
       "id": "component/driver:claude",
-      "sha256": "eff68f2442e4d44f537124848b25fc5b7420fad44fe54c53c8df7512a9a042d9",
+      "sha256": "92638be28b2e261e2c15a27b49fd9d779cb84d4ac246b746673bf008c11cdf44",
       "source": "modules/driver-claude/src/README.md",
       "title": "Bee Claude driver",
       "topic": "component"
@@ -1075,9 +1083,9 @@
       "topic": "component"
     },
     {
-      "bytes": 16291,
+      "bytes": 16941,
       "id": "component/gov",
-      "sha256": "95c7901520b2659f0e8953560c8fdf6f2fd60e5c9f06541686a4c74f6a8383af",
+      "sha256": "bc33466aaa5376832ce7df569a1f194acfd809e2b265206280ec02666e0f7fed",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -1099,9 +1107,9 @@
       "topic": "component"
     },
     {
-      "bytes": 5141,
+      "bytes": 5517,
       "id": "component/hub",
-      "sha256": "43cbd6917af5bc969fc686b7a1ca39aeb5e5877b964ea679b95cb21e1ef6d59a",
+      "sha256": "90b264ac4e629b6f9f21db3285c714dfeb8f6fc47c15c4d9a62f2a5fca771173",
       "source": "modules/hub/src/README.md",
       "title": "Hub module management",
       "topic": "component"
@@ -1163,9 +1171,9 @@
       "topic": "component"
     },
     {
-      "bytes": 83094,
+      "bytes": 83379,
       "id": "toolkit",
-      "sha256": "26220ddc67ab4f62a523f2901bef79407eaf1d056d961aad7017181ac7029e8c",
+      "sha256": "29a4f18aae93dcc79dacbfd9d594bfc59b317c4d36c92e2a850c223a99b2c547",
       "source": "generated: modules/application/src, src/apps, modules/gov/src/traits/guide.lua, tests/lua/frame, tests/lua/monitor",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
@@ -1174,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1372147,
-    "documents": 146
+    "bytes": 1385920,
+    "documents": 147
   }
 }

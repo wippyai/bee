@@ -117,6 +117,13 @@ local function define_tests()
             transitive.entries = {entry("shared.util:bounds", "bee/shared", {})}
             transitive.requirements, transitive.migrations = {}, {}
             test.is_true(has(checked(transitive, context), "PROTECTED_KERNEL"))
+            -- A host record composed into the application's own overlay.
+            context.installed_entries = {["bee.gov:admission.demo"] = {id = "bee.gov:admission.demo",
+                kind = "registry.entry", package = "wolfy-j/demo", digest = SHA, references = {"demo:run"},
+                auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {},
+                config_empty = {}}}
+            test.is_true(checked(candidate, context).ready)
+            context.installed_entries = nil
             local selector, _ = fixture()
             selector.requirements[1].targets = {"bee:approver_policies"}
             test.is_true(has(checked(selector, context), "PROTECTED_KERNEL"))

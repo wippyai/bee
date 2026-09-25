@@ -38,7 +38,7 @@ local function valid_schema(value: unknown, depth: integer): boolean
         if not required or required_error then return false end
         local properties = schema.properties ~= nil and bounds.object(schema.properties) or nil
         for _, name in ipairs(required) do
-            if properties and properties[name] == nil then return false end
+            if not properties or properties[name] == nil then return false end
         end
     end
     if schema.items ~= nil and not valid_schema(schema.items, depth + 1) then return false end

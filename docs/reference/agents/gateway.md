@@ -71,9 +71,22 @@ authority.
 
 The host may admit thread_read, thread_wait, thread_message, thread_sessions,
 thread_notify, session_directory, session_send, session_inbox, session_ack,
-session_reply, thread_launch, Governance overlay, Hub components, delivery and
-docs. Each tool receives only bounded arguments. The binding supplies thread,
-subject, action, attempt and context.
+session_reply, thread_launch, launch_definitions, capabilities, Governance
+overlay, Hub components, delivery and docs. Each tool receives only bounded
+arguments. The binding supplies thread, subject, action, attempt and context.
+Tool results carry the JSON reply as text and as structured content with an
+output schema; failures use one normalized error shape
+`{code, message, field, retryable, remedy}` naming the next call. The server
+advertises `listChanged` because trait selection changes the tool set:
+re-list tools and read `session` after `select` before calling one.
+
+capabilities is the read-only report of what the host admits for the caller's
+workspace: the admitted tools with the policy each runs under, the trait
+catalog with allowed, active and requestable traits, the bound workspace and
+thread, launch rights with the launch policy reference, and the authoring
+path (overlay guide, delivery preflight). launch_definitions lists the
+definitions the caller's launch policy admits with placements, overrides and
+saved profile IDs and revisions; it starts nothing.
 
 thread_message always writes a message record through the thread owner.
 Callers cannot choose sender, thread, record family or context. Without
@@ -81,13 +94,15 @@ Callers cannot choose sender, thread, record family or context. Without
 running session's thread, addressed to its action and naming the caller's.
 thread_wait is read-only and does not create an obligation.
 
-thread_sessions lists the live, unsealed bindings of the caller's workspace,
-one per action under its newest carrier epoch, and keeps only those whose
-thread the bound subject can read, as answered by the thread owner's `get`
-run as the subject. thread_notify resolves a session the same way and
-registers the thread owner's one-shot notice on the caller's own thread. An
-unreadable or unknown session is `NOT_FOUND`; a binding without a workspace
-has no peer sessions. See [Configurable managed MCP](../../guides/agents/mcp.md#coordinating-with-other-sessions). thread_launch starts only a
+thread_sessions pages the live, unsealed bindings of the caller's workspace
+in stable action order, one per action under its newest carrier epoch, and
+keeps only those whose thread the bound subject can read, as answered by the
+thread owner's `get` run as the subject. The scan is complete; `cursor` and
+`limit` select a window and the reply names `next_cursor` (absent at the end)
+with `eof`. thread_notify resolves a session the same way and registers the
+thread owner's one-shot notice on the caller's own thread. An unreadable or
+unknown session is `NOT_FOUND`; a binding without a workspace has no peer
+sessions. See [Configurable managed MCP](../../guides/agents/mcp.md#coordinating-with-other-sessions). thread_launch starts only a
 definition named in the caller's launch-policy allow-list, in the binding's
 workspace or in a `workspace_id` the caller's scope may launch into; its child
 is admitted through the ordinary carrier path with its own policy. Its
@@ -95,13 +110,14 @@ optional `thread`, `workdir`, `placement` and saved profile choices decode
 with `bee.application:agent_protocol` and take effect only where the
 definition and its launch policy allow the override.
 
-session_directory lists local live actions in the caller's workspace that the
-host grants `bee.sessions.discover` on. It returns a name and exact
-`{node_id, action_id}` address, grant epoch, current attempt state and latest
-inbox delivery state. The recipient thread owner supplies the epoch and states
-without granting access to its records. A send grant alone does not make a peer
-discoverable. If names collide in historical data, callers use the exact
-address; new live admissions reject a duplicate workspace name.
+session_directory pages local live actions in the caller's workspace that the
+host grants `bee.sessions.discover` on, in stable name order with the same
+cursor paging. It returns a name and exact `{node_id, action_id}` address,
+grant epoch, current attempt state and latest inbox delivery state. The
+recipient thread owner supplies the epoch and states without granting access
+to its records. A send grant alone does not make a peer discoverable. If
+names collide in historical data, callers use the exact address; new live
+admissions reject a duplicate workspace name.
 
 session_send takes an exact address, current `grant_epoch`, retry key,
 `message_id` and bounded content. The gateway supplies the authenticated
@@ -118,7 +134,12 @@ forward across Hive.
 delivery and publish take their destination `workspace_id` from the binding:
 an omitted `workspace_id` is the binding's own workspace, a request naming any
 other workspace is refused, and a binding without a workspace can use neither
-tool.
+tool. delivery has three operations: `preflight` checks a frozen digest
+without staging a version and needs `snapshot_digest`; `request` stages the
+version and reads the destination's preflight verdict and also needs
+`snapshot_digest`; `status` reads a staged version's review, selection and
+activation status. Check a candidate with preflight before requesting
+delivery. delivery stages versions, so it is not annotated read-only.
 
 application_open is available only through the active, approval-granted
 bee.application:runtime trait. It accepts definition_id, literal arguments and

@@ -50,13 +50,13 @@ local function define_tests()
             test.not_nil(string.find(document, "hive", 1, true))
             test.not_nil(string.find(document, "toolkit", 1, true))
             test.not_nil(string.find(document, "docs/guides/ui.md", 1, true))
-            test.not_nil(string.find(document, "src/apps/stylebook/", 1, true))
-            test.not_nil(string.find(document, "canonical runnable", 1, true))
+            test.not_nil(string.find(document, "compact examples", 1, true))
+            test.is_nil(string.find(document, "src/apps/stylebook/", 1, true))
         end)
         test.it("routes every application request to its archetype, the style rules and the kit", function()
             local document = guide.document()
             for _, needle in ipairs({"docs/guides/app-style.md", "80x24", "120x36", "160x48", "frame.size", "frame.layout",
-                "bee.application:viz", "viz = \"bee.application:viz\"", "src/apps/monitor/", "System Monitor", "one-shot"}) do
+                "bee.application:viz", "viz = \"bee.application:viz\"", "tested example", "one-shot"}) do
                 test.eq(needle .. (string.find(document, needle, 1, true) and "" or " missing"), needle)
             end
             test.eq(#guide.ARCHETYPES, 6)

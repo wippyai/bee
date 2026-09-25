@@ -212,6 +212,8 @@ local function output_schema(value: Object): Object
         properties = {ok = {type = "boolean"}, value = value, error = ERROR_SCHEMA}}
 end
 M.OUTPUT_SCHEMAS = {
+    session = output_schema({type = "object"}),
+    call_tool = output_schema({type = "object"}),
     thread_read = output_schema({type = "object"}),
     thread_wait = output_schema({type = "object"}),
     thread_sessions = output_schema({type = "object", additionalProperties = false,

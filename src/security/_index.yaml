@@ -7,12 +7,6 @@ entries:
   - definition_id: bee.settings:app
     policies: [bee.security:ordinary_app_subsystem_boundary]
     appearance_write: true
-  - definition_id: bee.stylebook:app
-    policies: [bee.security:ordinary_app_subsystem_boundary]
-  - definition_id: bee.monitor:app
-    policies:
-    - bee.security:ordinary_app_subsystem_boundary
-    - bee.security.desktop:processes_policy
   - definition_id: bee.processes:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
@@ -134,18 +128,6 @@ entries:
     - bee.hive_host.supervisor:main
     - bee.hive_host:supervisor_host
     effect: deny
-- name: core_spawn_policy
-  kind: security.policy
-  policy:
-    actions:
-    - process.spawn
-    - process.spawn.monitored
-    resources:
-    - bee.host:main
-    - bee.session:main
-    - bee.applications:broker
-    - bee.terminal:main
-    effect: allow
 - name: ordinary_app_subsystem_boundary
   kind: security.policy
   meta:

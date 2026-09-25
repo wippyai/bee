@@ -867,9 +867,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 13064,
+      "bytes": 14135,
       "id": "docs/mcp_configuration",
-      "sha256": "33084aabb10724b1207df04f63083364c1def1a6020261d493c8a57d8e5e2f75",
+      "sha256": "1a776c9b0da5fb76cafac7afe428b5be80bd03ede3221341edfb78e10f5cdd0a",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -923,9 +923,9 @@
       "topic": "application"
     },
     {
-      "bytes": 8528,
+      "bytes": 10036,
       "id": "docs/gateway",
-      "sha256": "6d5e1d9eb45b3903e4b3d5896a2d643f0460f15c18e7a10c756b6dea7b04f996",
+      "sha256": "c1554cfb65e2c6964de424a8c2c9a58d68bbdae067de6d26a3d316b834f9d6f2",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -1107,9 +1107,9 @@
       "topic": "component"
     },
     {
-      "bytes": 5517,
+      "bytes": 5738,
       "id": "component/hub",
-      "sha256": "90b264ac4e629b6f9f21db3285c714dfeb8f6fc47c15c4d9a62f2a5fca771173",
+      "sha256": "fd62327a96a003def9089ff11dd18ffe157402751eef2f6430faddfd842e16a5",
       "source": "modules/hub/src/README.md",
       "title": "Hub module management",
       "topic": "component"
@@ -1182,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1385920,
+    "bytes": 1388720,
     "documents": 147
   }
 }

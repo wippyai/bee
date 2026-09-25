@@ -23,7 +23,7 @@ local function package(name: string, version: string, digest: string, entries: {
     local selected: requirements.Result = {requirements = {}, missing = {}}
     if holes then selected = holes end
     return {component = name, version = version, digest = string.rep(digest, 64),
-        entries = entries or {}, requirements = selected}
+        entries = entries or {}, requirements = selected, next_offset = nil, eof = true}
 end
 
 local function source(items: {[string]: inspect.Inspection}): graph.Source

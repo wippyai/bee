@@ -47,3 +47,16 @@ entries:
     physical: bee.terminal:display
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
+- name: core_spawn_policy
+  kind: security.policy
+  meta: {test_support: true}
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.host:main
+    - bee.session:main
+    - bee.applications:broker
+    - bee.terminal:main
+    effect: allow

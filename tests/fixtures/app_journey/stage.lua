@@ -37,22 +37,56 @@ local function call_api(target: string, request: unknown): Object
     return object(reply.value, target .. " value")
 end
 
-local function workspace_value(operation: string, workspace_id: string, expected_revision: integer?, key: string?, content: string?): Object
+local function workspace_value(operation: string, workspace_id: string, expected_revision: integer?, key: string?, content: string?,
+    offset: integer?, limit: integer?): Object
     local request: Object = {operation = operation, overlay_id = workspace_id}
     if expected_revision ~= nil then request.expected_revision = expected_revision end
     if key then request.idempotency_key = key end
     if operation == "put" then request.path, request.content = "entries.json", content end
-    if operation == "read" then request.path = "entries.json" end
+    if operation == "read" then
+        request.path = "entries.json"
+        if offset ~= nil then request.offset = offset end
+        if limit ~= nil then request.limit = limit end
+    end
     return call_api("bee.governance.binding:overlay_call", request)
 end
 
 local function read_entries(): {Object}
-    local file = workspace_value("read", SOURCE_WORKSPACE, nil, nil, nil)
-    local encoded = file.content_base64
-    if type(encoded) ~= "string" then error("source workspace omitted entries.json") end
-    local bytes, decode_error = base64.decode(encoded)
-    if not bytes or decode_error then error("decode source entries: " .. tostring(decode_error)) end
-    local decoded, json_error = json.decode(bytes)
+    local chunks: {string} = {}
+    local offset = 0
+    local expected_bytes: integer? = nil
+    local expected_digest: string? = nil
+    while true do
+        local file = workspace_value("read", SOURCE_WORKSPACE, nil, nil, nil, offset, 16384)
+        local encoded = file.content_base64
+        if type(encoded) ~= "string" then error("source workspace omitted entries.json bytes") end
+        local bytes, decode_error = base64.decode(encoded)
+        if not bytes or decode_error then error("decode source entries: " .. tostring(decode_error)) end
+        local file_bytes = bounds.count(file.bytes)
+        local file_digest = type(file.digest) == "string" and file.digest or nil
+        if not file_bytes or file_bytes < 1 or file_bytes > 4 * 1024 * 1024
+            or not file_digest or #file_digest ~= 64 or not file_digest:match("^[0-9a-f]+$")
+            or file.offset ~= offset or file.chunk_bytes ~= #bytes or type(file.eof) ~= "boolean" then
+            error("source workspace returned an invalid entries.json window (offset=" .. tostring(file.offset)
+                .. ", chunk_bytes=" .. tostring(file.chunk_bytes) .. ", bytes=" .. tostring(file.bytes)
+                .. ", eof=" .. tostring(file.eof) .. ")")
+        end
+        if expected_bytes == nil then
+            expected_bytes, expected_digest = file_bytes, file_digest
+        elseif file_bytes ~= expected_bytes or file_digest ~= expected_digest then
+            error("source entries changed between read windows")
+        end
+        if #bytes == 0 and file.eof ~= true then error("source workspace returned an empty nonfinal window") end
+        chunks[#chunks + 1] = bytes
+        offset = offset + #bytes
+        if offset > file_bytes then error("source workspace returned bytes beyond entries.json") end
+        if file.eof then
+            if offset ~= file_bytes then error("source workspace ended before entries.json") end
+            break
+        end
+        if offset >= file_bytes then error("source workspace omitted the end of entries.json") end
+    end
+    local decoded, json_error = json.decode(table.concat(chunks))
     if json_error or type(decoded) ~= "table" then error("source entries are not JSON: " .. tostring(json_error)) end
     local entries: {Object} = {}
     for index, raw in ipairs(decoded :: {unknown}) do entries[index] = object(raw, "source entry") end

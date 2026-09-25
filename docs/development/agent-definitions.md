@@ -101,9 +101,19 @@ library `agents` (`modules/application/src/agents.lua`).
    accept the attempt and thread identifiers. `wait` observes thread records
    up to a bounded `wait_ms`.
 3. **Idempotent cancellation and carrier settlement:** `operation = "cancel"`
-   (`agents.cancel`) records an idempotent Bee cancel intent.
+   (`agents.cancel`) records an idempotent Bee cancel intent through the
+   thread/carrier owner (`bee.threads.carrier:cancel_intent`), keyed by the
+   attempt, so the intent survives restart. The checkpoint
+   (`bee.threads.carrier:checkpoint`) carries the intent and
+   `bee.threads.carrier:cancel_status` reads it back for recovery
+   reconciliation.
    - An attempt cancelled before start (admitted without a running carrier) is
-     settled directly as cancelled with `state = "ended"` and `outcome = "cancelled"`.
+     settled directly as cancelled with `state = "ended"` and `outcome = "cancelled"`:
+     with an attempt receipt where its row exists, with the durable intent
+     where admission alone never opened one. A late carrier boot refuses to
+     prepare an attempt with a settled intent (`CONFLICT`).
+   - A running attempt with a recorded intent reads `cancelling` until its
+     terminal carrier record lands.
    - When `wait_ms` is provided, cancellation requests placement stop and
      waits up to `wait_ms` for the terminal carrier record before reporting
      settlement.

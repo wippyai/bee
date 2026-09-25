@@ -137,4 +137,4 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    capability: bee.harness.permission:capability
+    capability: bee.gov:capability_request

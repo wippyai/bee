@@ -1289,7 +1289,7 @@ entries:
   modules: [hash]
   imports:
     test: wippy.test:test
-    capability: bee.harness.permission:capability
+    capability: bee.gov:capability_request
     bounds: bee.threads.records:bounds
 - name: elevation_client_policy
   kind: security.policy

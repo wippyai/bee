@@ -318,6 +318,8 @@ entries:
     description: Read the stored carrier checkpoint, revision and epoch of an attempt
   - name: cancel_intent
     description: Record the durable, idempotent cancel intent of an attempt, reconciled against its terminal carrier record
+  - name: cancel_status
+    description: Read the durable cancel intent of an attempt, for a caller reconciling a cancel across restart
 - name: approvals
   kind: contract.definition
   methods:
@@ -338,6 +340,7 @@ entries:
       commit: bee.threads.carrier:commit
       checkpoint: bee.threads.carrier:checkpoint
       cancel_intent: bee.threads.carrier:cancel_intent
+      cancel_status: bee.threads.carrier:cancel_status
 - name: lifecycle_local
   kind: contract.binding
   contracts:

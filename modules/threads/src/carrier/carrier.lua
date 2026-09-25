@@ -275,9 +275,6 @@ function M.cancel_intent(db: sql.DB, actor: string, request: unknown): Result
     return transaction.write(db, function(tx: sql.Transaction): Result
         local head, member, denied = authority.membership(tx, thread_id, actor)
         if not head or not member then return denied or failure("DENIED", "caller is not a member of the thread") end
-        local attempt, attempt_err = reader.attempt(tx, head.thread_id, attempt_id)
-        if attempt_err then return storage(attempt_err) end
-        if not attempt then return failure("NOT_FOUND", "attempt does not exist") end
         local current, current_err = reader.cancel_intent(tx, head.thread_id, attempt_id)
         if current_err then return storage(current_err) end
         if current and current.state == "ended" then
@@ -307,6 +304,28 @@ function M.cancel_intent(db: sql.DB, actor: string, request: unknown): Result
         if not stored then return storage(stored_err or "read cancel intent") end
         return transaction.success({thread_id = head.thread_id, attempt_id = stored.attempt_id,
             idempotency_key = stored.idempotency_key, state = stored.state, outcome = stored.outcome}, false)
+    end)
+end
+-- cancel_status: the durable cancel intent of one attempt, for a caller
+-- reconciling a cancel across restart. Membership-checked like the
+-- checkpoint; NOT_FOUND when no intent was recorded.
+function M.cancel_status(db: sql.DB, actor: string, request: unknown): Result
+    local object = bounds.object(request)
+    if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"thread_id", "attempt_id"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local thread_id = bounds.id(object.thread_id)
+    local attempt_id = bounds.id(object.attempt_id)
+    if not thread_id then return failure("INVALID_ARGUMENT", "thread_id is not an identifier") end
+    if not attempt_id then return failure("INVALID_ARGUMENT", "attempt_id is not an identifier") end
+    return transaction.read(db, function(tx: sql.Transaction): Result
+        local head, member, denied = authority.membership(tx, thread_id, actor)
+        if not head or not member then return denied or failure("DENIED", "caller is not a member of the thread") end
+        local intent, intent_err = reader.cancel_intent(tx, head.thread_id, attempt_id)
+        if intent_err then return storage(intent_err) end
+        if not intent then return failure("NOT_FOUND", "no cancel intent for the attempt") end
+        return transaction.success({thread_id = head.thread_id, attempt_id = intent.attempt_id,
+            idempotency_key = intent.idempotency_key, state = intent.state, outcome = intent.outcome}, false)
     end)
 end
 -- checkpoint: what the last commit stored, for a carrier resuming.

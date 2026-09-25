@@ -547,7 +547,10 @@ ALTER TABLE bee_thread_inbox_outbox ADD COLUMN outcome TEXT CHECK(outcome IN ('s
 -- A durable, idempotent cancel intent per attempt. The harness records it
 -- through the carrier owner before stopping placement, so the intent
 -- survives restart and recovery reconciles it against the terminal carrier
--- record. An ended intent settles a never-started attempt as cancelled.
+-- record. The intent may precede its attempt row: admission alone creates
+-- no attempt, so a cancel before start records first and the attempt, if
+-- it ever opens, reconciles against it. An ended intent settles a
+-- never-started attempt as cancelled.
 local CANCEL_INTENT_SQL = [[
 CREATE TABLE bee_thread_cancel_intents (
   thread_id TEXT NOT NULL REFERENCES bee_thread_heads(thread_id),
@@ -558,11 +561,11 @@ CREATE TABLE bee_thread_cancel_intents (
   recorded_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   PRIMARY KEY(thread_id, attempt_id),
-  FOREIGN KEY(thread_id, attempt_id)
-    REFERENCES bee_thread_attempts(thread_id, attempt_id),
   CHECK((state = 'cancelling' AND outcome IS NULL)
      OR (state = 'ended' AND outcome = 'cancelled'))
 );
+CREATE INDEX bee_thread_cancel_intent_attempt
+  ON bee_thread_cancel_intents(thread_id, attempt_id);
 ]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},

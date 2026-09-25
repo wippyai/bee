@@ -43,6 +43,48 @@ local function define_tests()
             test.eq(view.self, true)
             test.eq(sessions.view(candidate("b", "b-1", "t2", 1), "Review", "a").self, false)
         end)
+        test.it("uses node and action addresses when workspace names collide", function()
+            local peers = {
+                {session = candidate("a", "a-1", "t1", 1), node_id = "node-1", name = "reviewer", grant_epoch = 3, discoverable = true},
+                {session = candidate("b", "b-1", "t2", 1), node_id = "node-1", name = "reviewer", grant_epoch = 5, discoverable = true},
+            }
+            local listed = sessions.directory(peers, "a")
+            test.eq(#listed, 2)
+            test.eq(listed[1].address.node_id, "node-1")
+            test.eq(listed[1].address.action_id, "a")
+            local named, code = sessions.resolve_directory(listed, "reviewer")
+            test.is_nil(named)
+            test.eq(code, "AMBIGUOUS")
+            local exact = sessions.resolve_directory(listed, {node_id = "node-1", action_id = "b"})
+            test.eq(exact and exact.action_id, "b")
+        end)
+        test.it("hides peers without discover scope even when send is granted, and carries the owner's current epoch", function()
+            local peers = {
+                {session = candidate("a", "a-1", "t1", 1), node_id = "node-1", name = "self", grant_epoch = 2, discoverable = false, sendable = false},
+                {session = candidate("b", "b-1", "t2", 1), node_id = "node-1", name = "send-only", grant_epoch = 4, discoverable = false, sendable = true},
+                {session = candidate("c", "c-1", "t3", 1), node_id = "node-1", name = "visible", grant_epoch = 7, discoverable = true, sendable = false},
+            }
+            local listed = sessions.directory(peers, "a")
+            test.eq(#listed, 2)
+            test.eq(listed[1].action_id, "a")
+            test.eq(listed[2].action_id, "c")
+            test.eq(listed[2].grant_epoch, 7)
+            test.eq(listed[2].sendable, false)
+            local hidden, code = sessions.resolve_directory(listed, {node_id = "node-1", action_id = "b"})
+            test.is_nil(hidden)
+            test.eq(code, "NOT_FOUND")
+        end)
+        test.it("uses the newest carrier binding while preserving the owner's grant epoch", function()
+            local old = candidate("b", "attempt-old", "thread-b", 2)
+            local current = candidate("b", "attempt-current", "thread-b", 3)
+            local latest = sessions.latest({old, current})
+            test.eq(#latest, 1)
+            local listed = sessions.directory({{session = latest[1], node_id = "node-1", name = "Builder", grant_epoch = 9,
+                discoverable = true, sendable = true, attempt_state = "running", delivery_state = "acknowledged"}}, "a")
+            test.eq(listed[1].attempt_id, "attempt-current")
+            test.eq(listed[1].grant_epoch, 9)
+            test.eq(listed[1].delivery_state, "acknowledged")
+        end)
     end)
 end
 local cases = test.run_cases(define_tests)

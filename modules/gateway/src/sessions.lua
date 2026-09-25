@@ -6,8 +6,11 @@
 -- owner's membership rules do.
 local M = {}
 M.MAX_SESSIONS = 64
-type Candidate = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, carrier_epoch: integer}
+type Candidate = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, carrier_epoch: integer, name: string?}
 type View = {session: string, action_id: string, attempt_id: string, thread_id: string, title: string, self: boolean}
+type Address = {node_id: string, action_id: string}
+type DirectoryCandidate = {session: Candidate, node_id: string, name: string, grant_epoch: integer, discoverable: boolean, sendable: boolean?, attempt_state: string?, delivery_state: string?, last_inbox_sequence: integer?}
+type DirectoryView = {name: string, address: Address, action_id: string, attempt_id: string, grant_epoch: integer, sendable: boolean, self: boolean, attempt_state: string?, delivery_state: string?, last_inbox_sequence: integer?}
 -- One candidate per action, the newest carrier epoch winning, ordered by
 -- thread and then action so a listing is stable across calls.
 function M.latest(candidates: {Candidate}): {Candidate}
@@ -48,5 +51,45 @@ function M.resolve(candidates: {Candidate}, address: string): (Candidate?, strin
 end
 function M.view(item: Candidate, title: string, self_action_id: string): View
     return {session = item.action_id, action_id = item.action_id, attempt_id = item.attempt_id, thread_id = item.thread_id, title = title, self = item.action_id == self_action_id}
+end
+-- The owner supplies discoverability and current acceptance epoch. A send
+-- grant alone never makes a peer appear in the directory.
+function M.directory(peers: {DirectoryCandidate}, self_action_id: string): {DirectoryView}
+    local result: {DirectoryView} = {}
+    for _, peer in ipairs(peers) do
+        local item = peer.session
+        if peer.discoverable or item.action_id == self_action_id then
+            result[#result + 1] = {name = peer.name, address = {node_id = peer.node_id, action_id = item.action_id},
+                action_id = item.action_id, attempt_id = item.attempt_id, grant_epoch = peer.grant_epoch,
+                sendable = peer.sendable == true, self = item.action_id == self_action_id,
+                attempt_state = peer.attempt_state, delivery_state = peer.delivery_state, last_inbox_sequence = peer.last_inbox_sequence}
+        end
+    end
+    table.sort(result, function(left: DirectoryView, right: DirectoryView): boolean
+        if left.name ~= right.name then return left.name < right.name end
+        if left.address.node_id ~= right.address.node_id then return left.address.node_id < right.address.node_id end
+        return left.action_id < right.action_id
+    end)
+    return result
+end
+function M.resolve_directory(entries: {DirectoryView}, address: unknown): (DirectoryView?, string?)
+    if type(address) == "table" then
+        local object = address :: {[string]: unknown}
+        if type(object.node_id) ~= "string" or type(object.action_id) ~= "string" then return nil, "INVALID_ARGUMENT" end
+        for _, item in ipairs(entries) do
+            if item.address.node_id == object.node_id and item.address.action_id == object.action_id then return item, nil end
+        end
+        return nil, "NOT_FOUND"
+    end
+    if type(address) ~= "string" then return nil, "INVALID_ARGUMENT" end
+    local found: DirectoryView? = nil
+    for _, item in ipairs(entries) do
+        if item.name == address then
+            if found then return nil, "AMBIGUOUS" end
+            found = item
+        end
+    end
+    if found then return found, nil end
+    return nil, "NOT_FOUND"
 end
 return M

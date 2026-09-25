@@ -31,7 +31,9 @@ use the selected Host address and port; localhost is accepted only for the same
 127.0.0.1 endpoint. Browser origins are refused.
 
 Every admitted attempt has one revocable binding for its subject, action,
-attempt, thread, owner incarnation, carrier epoch, expiry and exact tool set.
+attempt, thread, host-assigned workspace name, owner incarnation, carrier epoch,
+expiry and exact tool set. Names must be unique among live actions in one
+workspace; an omitted name is the action ID.
 The binding is created after durable launch preparation and before placement
 starts. It is not created by a plan, and the carrier cannot choose its subject
 or thread. A replacement carrier may inherit the current binding for its child;
@@ -68,7 +70,8 @@ authority.
 ## Agent tools
 
 The host may admit thread_read, thread_wait, thread_message, thread_sessions,
-thread_notify, thread_launch, Governance overlay, Hub components, delivery and
+thread_notify, session_directory, session_send, session_inbox, session_ack,
+session_reply, thread_launch, Governance overlay, Hub components, delivery and
 docs. Each tool receives only bounded arguments. The binding supplies thread,
 subject, action, attempt and context.
 
@@ -91,6 +94,26 @@ is admitted through the ordinary carrier path with its own policy. Its
 optional `thread`, `workdir`, `placement` and saved profile choices decode
 with `bee.application:agent_protocol` and take effect only where the
 definition and its launch policy allow the override.
+
+session_directory lists local live actions in the caller's workspace that the
+host grants `bee.sessions.discover` on. It returns a name and exact
+`{node_id, action_id}` address, grant epoch, current attempt state and latest
+inbox delivery state. The recipient thread owner supplies the epoch and states
+without granting access to its records. A send grant alone does not make a peer
+discoverable. If names collide in historical data, callers use the exact
+address; new live admissions reject a duplicate workspace name.
+
+session_send takes an exact address, current `grant_epoch`, retry key,
+`message_id` and bounded content. The gateway supplies the authenticated
+sender action and thread and computes the payload digest. The destination
+owner requires a host-selected `bee.sessions.send` policy for the exact
+`<workspace_id>/<node_id>/<action_id>` resource and its own acceptance rule.
+The default send policy grants no address. session_inbox pages the bound
+action's items; session_ack marks one item acknowledged; session_reply commits
+a reply to the original sender's address with an explicit cross-thread
+`in_reply_to` reference and outcome. These tools commit durable records and
+receipts. They do not inject prompts into a running driver, type into a PTY or
+forward across Hive.
 
 delivery and publish take their destination `workspace_id` from the binding:
 an omitted `workspace_id` is the binding's own workspace, a request naming any

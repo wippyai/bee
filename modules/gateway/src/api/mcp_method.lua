@@ -9,12 +9,14 @@ local json = require("json")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
+local system = require("system")
 local gateway = require("gateway")
 local mcp = require("mcp")
 local catalog = require("catalog")
 local context = require("context")
 local sessions = require("sessions")
 local bounds = require("bounds")
+local sends = require("sends")
 type Object = {[string]: unknown}
 type RuntimeGrant = {access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
 local function selected_policy(reference: string): (string?, string?)
@@ -129,10 +131,69 @@ local function list_sessions(binding: gateway.Binding, executor: funcs.Executor)
     end
     return reply_result({ok = true, value = {sessions = views, truncated = #found.sessions > sessions.MAX_SESSIONS}}, nil)
 end
+local function local_node(): string
+    local native, err = system.node.id()
+    if err or not native or native == "" then return "local" end
+    return native
+end
+local function list_directory(binding: gateway.Binding, executor: funcs.Executor): Object
+    local candidates, sessions_error = gateway.workspace_sessions(binding)
+    if not candidates then return reply_result(sessions_error, nil) end
+    local peers: {sessions.DirectoryCandidate} = {}
+    local node_id = local_node()
+    for _, item in ipairs(candidates) do
+        local reply, err = executor:call("bee.threads.service:inbox_describe", {thread_id = item.thread_id, action_id = item.action_id,
+            attempt_id = item.attempt_id, node_id = node_id})
+        if err then return refused("UNAVAILABLE", tostring(err)) end
+        local result = bounds.object(reply)
+        if result and result.ok == true then
+            local value = bounds.object(result.value) or {}
+            peers[#peers + 1] = {session = item, name = item.name or item.action_id, node_id = node_id,
+                grant_epoch = math.floor(tonumber(value.grant_epoch) or 0), discoverable = true,
+                sendable = value.sendable == true, attempt_state = tostring(value.attempt_state or "unknown"),
+                delivery_state = tostring(value.delivery_state or "empty"), last_inbox_sequence = math.floor(tonumber(value.last_inbox_sequence) or 0)}
+        else
+            local fault = result and bounds.object(result.error)
+            local code = fault and tostring(fault.code) or ""
+            if code ~= "DENIED" and code ~= "NOT_FOUND" then return reply_result(reply, nil) end
+        end
+    end
+    local views = sessions.directory(peers, binding.action_id)
+    local limited: {sessions.DirectoryView} = {}
+    for index = 1, math.min(#views, sessions.MAX_SESSIONS) do limited[index] = views[index] end
+    return reply_result({ok = true, value = {peers = limited, truncated = #views > sessions.MAX_SESSIONS}}, nil)
+end
+local function inbox_target(binding: gateway.Binding, address: unknown): (sessions.Candidate?, Object?)
+    local object = bounds.object(address)
+    local node_id = object and bounds.id(object.node_id)
+    local action_id = object and bounds.id(object.action_id)
+    if not node_id or not action_id or node_id ~= local_node() then return nil, refused("NOT_FOUND", "address is not on this node") end
+    local candidates, failure = gateway.workspace_sessions(binding)
+    if not candidates then return nil, reply_result(failure, nil) end
+    for _, item in ipairs(candidates) do if item.action_id == action_id then return item, nil end end
+    return nil, refused("NOT_FOUND", "action address is not in this workspace")
+end
 local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?): Object
     local executor, failure = subject_executor(binding, tool, values, runtime)
     if not executor then return failure :: Object end
     if tool.name == "thread_sessions" then return list_sessions(binding, executor) end
+    if tool.name == "session_directory" then return list_directory(binding, executor) end
+    if tool.name == "session_send" or tool.name == "session_reply" then
+        local target, missing = inbox_target(binding, request.address)
+        if not target then return missing :: Object end
+        local digest, digest_err = sends.payload_digest({message_id = request.message_id, content = request.content})
+        if not digest then return refused("INVALID_ARGUMENT", tostring(digest_err)) end
+        local body: Object = {thread_id = target.thread_id, target_action_id = target.action_id, sender_thread_id = binding.thread_id,
+            sender_action_id = binding.action_id, node_id = local_node(), grant_epoch = request.grant_epoch,
+            idempotency_key = request.idempotency_key, message_id = request.message_id, content = request.content, payload_digest = digest}
+        if tool.name == "session_reply" then body.in_reply_to = request.in_reply_to; body.outcome = request.outcome end
+        local reply, call_error = executor:call(tool.operation, body)
+        return reply_result(reply, call_error)
+    end
+    if tool.name == "session_inbox" or tool.name == "session_ack" then
+        request.thread_id = binding.thread_id
+        request.action_id = binding.action_id
+    end
     if tool.name == "thread_notify" then
         local target, unreachable = resolve(binding, executor, tostring(request.session))
         if not target then return unreachable :: Object end
@@ -294,6 +355,11 @@ local function handle(): nil
     elseif tool.name == "thread_message" then arguments, argument_error = mcp.message_arguments(parameters)
     elseif tool.name == "thread_sessions" then arguments, argument_error = mcp.sessions_arguments(parameters)
     elseif tool.name == "thread_notify" then arguments, argument_error = mcp.notify_arguments(parameters)
+    elseif tool.name == "session_directory" then arguments, argument_error = mcp.sessions_arguments(parameters)
+    elseif tool.name == "session_send" then arguments, argument_error = mcp.inbox_message_arguments(parameters, false)
+    elseif tool.name == "session_reply" then arguments, argument_error = mcp.inbox_message_arguments(parameters, true)
+    elseif tool.name == "session_inbox" then arguments, argument_error = mcp.inbox_page_arguments(parameters)
+    elseif tool.name == "session_ack" then arguments, argument_error = mcp.inbox_ack_arguments(parameters)
     elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
     elseif tool.name == "overlay" then arguments, argument_error = mcp.overlay_arguments(parameters)
     elseif tool.name == "docs" then arguments, argument_error = mcp.docs_arguments(parameters)

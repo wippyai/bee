@@ -16,6 +16,7 @@ local env = require("env")
 local time = require("time")
 local channel = require("channel")
 local json = require("json")
+local system = require("system")
 local placement_fixture = require("placement_fixture")
 local catalog = require("catalog")
 local policy = require("policy")
@@ -34,7 +35,8 @@ local function fresh(prefix: string): string
 end
 local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy", "bee:thread_create_policy", "bee:thread_observe_policy", "bee:thread_lifecycle_policy",
     "bee:thread_carrier_policy", "bee:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee:gateway_manage_policy", "bee:gateway_admit_policy",
-    "bee.harness.catalog:codex_credential_client_policy", "bee:credential_manage_policy", "bee:credential_issue_policy"}
+    "bee.harness.catalog:codex_credential_client_policy", "bee:credential_manage_policy", "bee:credential_issue_policy",
+    "bee.harness.catalog:workspace_catalog_call_policy", "bee:workspace_catalog_manage_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -44,8 +46,8 @@ local function scope(): security.Scope
     end
     return security.new_scope(policies)
 end
-local function call(target: string, request: unknown): Object
-    local reply, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
+local function call_as(actor_id: string, target: string, request: unknown, workspace_id: string?): Object
+    local reply, err = funcs.new():with_actor(principals.actor(actor_id, workspace_id or principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     local value = reply :: Object
     if value.ok ~= true then
@@ -54,6 +56,7 @@ local function call(target: string, request: unknown): Object
     end
     return value.value :: Object
 end
+local function call(target: string, request: unknown): Object return call_as(ACTOR, target, request) end
 local function apply(entry: {[string]: unknown})
     local changes = registry.snapshot():changes()
     changes:update(entry)
@@ -66,6 +69,14 @@ local function setting(id: string, what: string): string
     return value
 end
 local function admit_root()
+    local catalog_roots = assert(registry.get("bee:resource_roots"))
+    local available = (catalog_roots.data :: Object).roots :: {Object}
+    local admitted = false
+    for _, root in ipairs(available) do if root.root_ref == ROOT then admitted = true end end
+    if not admitted then
+        available[#available + 1] = {root_ref = ROOT, access = "write"}
+        apply(catalog_roots)
+    end
     local mode = assert(registry.get("bee.placement.native:resource_mode"))
     mode.data = {mode = "host_configured"}
     apply(mode)
@@ -122,16 +133,16 @@ local function open_gateway()
     local entry = assert(registry.get("bee:gateway_endpoint"))
     call("bee.gateway.binding:open", {address = tostring((entry.data :: Object).address)})
 end
-local function session(binding_ref: string, policy_ref: string, thread_id: string, workspace_id: string, environment: {[string]: string}): Object
+local function session(binding_ref: string, policy_ref: string, thread_id: string, workspace_id: string, environment: {[string]: string}, owner_id: string?): Object
     local placement = placement_fixture.resolve()
     local attempt_id = fresh("attempt")
-    return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = binding_ref,
+    return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = owner_id or ACTOR, owner_incarnation = 1, binding_ref = binding_ref,
         profile_id = "batch", brief = "coordinate", policy_ref = policy_ref, workspace_id = workspace_id,
         resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = environment, working_directory = "project", placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
 end
 local function spawn(request_value: Object): string
-    local pid, err = process.with_context({}):with_actor(principals.actor(ACTOR, request_value.workspace_id)):with_scope(scope()):spawn_monitored(CARRIER, "bee:workers", request_value, "open", process.pid())
+    local pid, err = process.with_context({}):with_actor(principals.actor(tostring(request_value.owner_id), request_value.workspace_id)):with_scope(scope()):spawn_monitored(CARRIER, "bee:workers", request_value, "open", process.pid())
     if not pid then error("spawn carrier: " .. tostring(err)) end
     return tostring(pid)
 end
@@ -159,19 +170,19 @@ local function await_all(pids: {[string]: string}): {[string]: Object}
     end
     return outcomes
 end
-local function records_of(thread_id: string): {Object}
+local function records_of(thread_id: string, actor_id: string?): {Object}
     local all: {Object} = {}
     local cursor = 0
     for _ = 1, 32 do
-        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        local page = call_as(actor_id or ACTOR, "bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
         for _, item in ipairs(page.records :: {Object}) do all[#all + 1] = item end
         if page.has_more ~= true then break end
         cursor = math.floor(page.scanned_through :: number)
     end
     return all
 end
-local function report(thread_id: string): Object
-    for _, item in ipairs(records_of(thread_id)) do
+local function report(thread_id: string, actor_id: string?): Object
+    for _, item in ipairs(records_of(thread_id, actor_id)) do
         if item.kind == "observation" and item.source == "stream" then
             local data = (item.body :: Object).data :: Object
             if data.type == "notice" and data.code == "stderr" then
@@ -192,6 +203,15 @@ local function prepared_binding(thread_id: string): string?
         if item.kind == "attempt.prepared" then return tostring((item.body :: Object).binding_ref) end
     end
     return nil
+end
+local function wait_for_action(thread_id: string, action_id: string, actor_id: string)
+    for _ = 1, 150 do
+        for _, item in ipairs(records_of(thread_id, actor_id)) do
+            if item.kind == "action.admitted" and item.action_id == action_id then return end
+        end
+        time.sleep("100ms")
+    end
+    error("action " .. action_id .. " was not admitted on " .. thread_id .. " for " .. actor_id)
 end
 local function define_tests()
     test.describe("Cross-session coordination", function()
@@ -267,6 +287,71 @@ local function define_tests()
             test.eq(ending.action_id, sender.action_id)
             test.eq(((ending.body :: Object).data :: Object).type, "turn.signal")
             test.eq(((ending.body :: Object).data :: Object).phase, "ended")
+        end)
+        test.it("delivers and replies between independent window actors without thread membership", function()
+            admit_root()
+            bind_policies()
+            open_gateway()
+            local label = fresh("inbox-ws")
+            local workspace = tostring(call("bee.workspace.catalog:create", {label = label, root_ref = ROOT,
+                subpath = label, create_directory = true}).workspace_id)
+            local waiter_actor = "bee.test.cross_session.waiter"
+            local waiter_thread = tostring(call_as(waiter_actor, "bee.threads.service:create", {thread_id = fresh("inbox-waiter-thread"),
+                idempotency_key = fresh("key"), title = "Independent B"}, workspace).thread_id)
+            local sender_thread = tostring(call_as(ACTOR, "bee.threads.service:create", {thread_id = fresh("inbox-sender-thread"),
+                idempotency_key = fresh("key"), title = "Independent A"}, workspace).thread_id)
+            local streams = setting("bee.harness.catalog:fixture_streams", "BEE_FIXTURE_STREAMS")
+            local waiter = session("bee.driver.claude:binding", WAITER_POLICY, waiter_thread, workspace,
+                {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_PEER_ROLE = "inbox_waiter", BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl"}, waiter_actor)
+            local sender = session(CODEX_BINDING, SENDER_POLICY, sender_thread, workspace,
+                {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_PEER_ROLE = "inbox_sender", BEE_FIXTURE_STREAM = streams .. "/codex/exec-json-1/plain.jsonl"})
+            sender.projections = {codex_projection(workspace, tostring(sender.attempt_id))}
+            local pids = {waiter = spawn(waiter), sender = spawn(sender)}
+            local admitted, admission_error = pcall(function()
+                wait_for_action(waiter_thread, tostring(waiter.action_id), waiter_actor)
+                wait_for_action(sender_thread, tostring(sender.action_id), ACTOR)
+            end)
+            if not admitted then await_all(pids); error(tostring(admission_error)) end
+            local denied, denied_error = funcs.new():with_actor(principals.actor(ACTOR, workspace)):with_scope(scope()):call("bee.threads.service:get", {thread_id = waiter_thread})
+            if denied_error then error(tostring(denied_error)) end
+            test.eq(((denied :: Object).error :: Object).code, "DENIED")
+            call_as(waiter_actor, "bee.threads.service:inbox_accept", {thread_id = waiter_thread, action_id = waiter.action_id,
+                sender_id = ACTOR, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
+            call_as(ACTOR, "bee.threads.service:inbox_accept", {thread_id = sender_thread, action_id = sender.action_id,
+                sender_id = waiter_actor, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
+            local native = system.node.id()
+            if not native or native == "" then error("native node identity is unavailable") end
+            local selected = assert(registry.get("bee:gateway_session_send_denied_policy"))
+            local policy_data = selected.data :: Object
+            local definition = policy_data.policy :: Object
+            definition.resources = {workspace .. "/" .. native .. "/" .. tostring(waiter.action_id),
+                workspace .. "/" .. native .. "/" .. tostring(sender.action_id)}
+            apply(selected)
+            local outcomes = await_all(pids)
+            test.eq((outcomes.waiter.settlement :: Object).outcome, "succeeded")
+            test.eq((outcomes.sender.settlement :: Object).outcome, "succeeded")
+            local waiting = report(waiter_thread, waiter_actor)
+            local sending = report(sender_thread, ACTOR)
+            if not waiting.self or not sending.self then
+                error("inbox fixture directory: waiter=" .. tostring(json.encode(waiting)) .. " sender=" .. tostring(json.encode(sending)))
+            end
+            test.eq(waiting.self, waiter.action_id)
+            test.eq(waiting.peer, sender.action_id)
+            test.eq(waiting.sent_ok, true)
+            test.eq(waiting.replayed, true)
+            test.eq(waiting.replay_record_id, (waiting.sent :: Object).record_id)
+            test.eq(sending.request_text, "hello")
+            test.eq(sending.ack_ok, true)
+            test.eq(sending.reply_ok, true)
+            test.eq(waiting.reply_text, "world")
+            test.eq(waiting.ack_ok, true)
+            test.eq((waiting.reply_correlation :: Object).record_id, (waiting.sent :: Object).record_id)
+            test.eq((waiting.reply_correlation :: Object).thread_id, sender_thread)
+            local inbox_records = 0
+            for _, item in ipairs(records_of(sender_thread, ACTOR)) do
+                if item.kind == "message" and (item.body :: Object).message_id == "inbox-hello" then inbox_records = inbox_records + 1 end
+            end
+            test.eq(inbox_records, 1)
         end)
     end)
 end

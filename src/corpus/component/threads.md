@@ -13,11 +13,11 @@ actor.
 |---|---|
 | `bee.threads` | Contracts (`journal`, `authority`, `lifecycle`, `delivery`, `projection`, `carrier`), local bindings, the journal client and methods, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
 | `bee.threads.records` | Pure typed decoders for the seven record families, bounds, the canonical record encoder and canonical JSON for request identity; no I/O |
-| `bee.threads.service` | The authority: access facade, authority and lifecycle operations, one-shot notices, and one `function.lua` per method in `<name>_method.lua` |
+| `bee.threads.service` | The authority: access facade, authority, action inbox and lifecycle operations, one-shot notices, and owner methods |
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (10 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
+| `bee.threads.persist` | The owned store: checked migration ledger (11 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
 
 ## Dependency interface
 
@@ -43,6 +43,8 @@ storage access. Rights the host grants on the caller's scope, checked with
 | `bee.threads.observe` | submitting observations as a producer (`stream`, `hook`, `transcript`, `mcp`) |
 | `bee.threads.carrier` | claiming a carrier epoch and committing checkpointed records for an attempt |
 | `bee.threads.lifecycle` | admitting actions, starting attempts, turns and receipts |
+| `bee.sessions.send` | sending to one exact workspace/node/action inbox address accepted by that action's thread owner |
+| `bee.sessions.discover` | describing one exact action address without reading its thread |
 
 Membership roles are checked inside the commit transaction: `owner`
 administers membership and closes, `participant` reads and submits,
@@ -70,6 +72,17 @@ once under the watcher's identity. A message may address sessions by
 subscriptions carry the owner incarnation established by
 `bee.threads:owner` at startup. The recap is folded from records only.
 
+An action inbox has its own ordered sequence on its thread. `inbox_accept`
+lets the thread owner set exact sender or sender-class rules under an epoch.
+`inbox_send` verifies the authenticated source action, host send grant,
+recipient rule, workspace, node, epoch and capacity, then commits the message
+record and inbox item together. `inbox_list` and `inbox_ack` are restricted to
+the action's admitted principal. `inbox_reply` commits a cross-thread reply
+into the original sender's inbox and marks the request replied in one local
+transaction. Neither send nor discovery enrolls the caller as a member.
+The current states written are committed, acknowledged and replied; offered
+and transport_accepted are reserved for later driver delivery work.
+
 ## Storage
 
 Migrations are an inline ledger checked on every open, one transaction per
@@ -80,7 +93,8 @@ owner, obligations, claim batches, deliveries, dispatch intents,
 subscriptions, pages), 5 `projection` (checkpoints), 6 `carrier`, 7
 `approvals`, 8 `owner_authority`, 9 `notices`, 10 `workspace_attribution`
 (the owning workspace on each head, attributed from application owners, and
-the index `list_workspace` walks). Records are stored
+the index `list_workspace` walks), 11 `action_inbox` (acceptance epochs, rules
+and ordered items). Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and
 indexes in one transaction; identical retries replay the stored reply and

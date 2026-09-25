@@ -203,6 +203,14 @@ local WORKSPACE_SESSIONS_SQL = [[
 CREATE INDEX bee_gateway_bindings_workspace_live
     ON bee_gateway_bindings(workspace_id, created_at) WHERE revoked_at IS NULL AND workspace_id IS NOT NULL;
 ]]
+-- The admitting host may assign a workspace-local name. Existing sessions
+-- retain their action ID as their stable default name.
+local SESSION_NAMES_SQL = [[
+ALTER TABLE bee_gateway_bindings ADD COLUMN workspace_name TEXT;
+UPDATE bee_gateway_bindings SET workspace_name = action_id WHERE workspace_name IS NULL;
+CREATE INDEX bee_gateway_bindings_workspace_name
+    ON bee_gateway_bindings(workspace_id, workspace_name) WHERE revoked_at IS NULL AND workspace_id IS NOT NULL;
+]]
 function M.all(): {Migration}
     return {{id = 1, name = "gateway", sql = GATEWAY_SQL, rebuild = false}, {id = 2, name = "drain_deadline", sql = DRAIN_SQL, rebuild = false},
         {id = 3, name = "credentials", sql = CREDENTIALS_SQL, rebuild = true}, {id = 4, name = "materialization", sql = MATERIALIZATION_SQL, rebuild = false},
@@ -213,6 +221,7 @@ function M.all(): {Migration}
         {id = 10, name = "access_grants", sql = ACCESS_SQL, rebuild = false},
         {id = 11, name = "binding_policy", sql = POLICY_SQL, rebuild = false},
         {id = 12, name = "binding_origin_view", sql = ORIGIN_VIEW_SQL, rebuild = false},
-        {id = 13, name = "workspace_sessions", sql = WORKSPACE_SESSIONS_SQL, rebuild = false}}
+        {id = 13, name = "workspace_sessions", sql = WORKSPACE_SESSIONS_SQL, rebuild = false},
+        {id = 14, name = "session_names", sql = SESSION_NAMES_SQL, rebuild = false}}
 end
 return M

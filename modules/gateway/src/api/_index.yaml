@@ -40,7 +40,7 @@ entries:
   kind: function.lua
   source: file://mcp_method.lua
   method: handle
-  modules: [http, json, funcs, security, registry]
+  modules: [http, json, funcs, security, registry, system]
   imports:
     gateway: bee.gateway.binding:gateway
     mcp: bee.gateway:mcp
@@ -48,5 +48,6 @@ entries:
     context: bee.gateway:context
     sessions: bee.gateway:sessions
     bounds: bee.threads.records:bounds
+    sends: bee.threads.service:sends
   security:
-    policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy]
+    policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:node_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy]

@@ -16,6 +16,15 @@ entries:
 - name: tool_message_policy_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Linked host policy for the built-in bound-thread message tool}
+- name: tool_inbox_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for action inbox owner calls}
+- name: tool_discover_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for workspace peer discovery}
+- name: tool_send_grant_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked exact host send grant policy for action addresses}
 - name: tool_launch_policy_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Linked host policy for the built-in managed-launch tool}

@@ -418,15 +418,22 @@ entries:
   source: file://cross_session_acceptance_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "240s"}
-  modules: [funcs, security, process, registry, env, time, channel, json]
+  modules: [funcs, security, process, registry, env, time, channel, json, system]
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:credential_store_policy]
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:credential_store_policy, bee.gateway.security:node_policy]
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
+- name: workspace_catalog_call_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.workspace.catalog:create]
+    effect: allow
 - name: cross_session_claude_policy
   kind: registry.entry
   meta:
@@ -445,7 +452,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, thread_notify]
+    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply]
 - name: cross_session_codex_policy
   kind: registry.entry
   meta:
@@ -465,7 +472,7 @@ entries:
     environment: {}
     prepare_options: {sandbox: read-only}
     provider_ref: bee.harness.catalog:codex_fixture_provider
-    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message]
+    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, session_directory, session_send, session_inbox, session_ack, session_reply]
 - name: gateway_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -533,7 +540,7 @@ entries:
     carrier_process: bee.harness.carrier:process
     machine: bee.harness.carrier:machine
   security:
-    policies: [bee:carrier_policy]
+    policies: [bee:carrier_policy, bee:workspace_host_lease_policy]
 - name: carrier_test
   kind: function.lua
   source: file://carrier_test.lua

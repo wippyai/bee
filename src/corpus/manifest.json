@@ -867,9 +867,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 11039,
+      "bytes": 12299,
       "id": "docs/mcp_configuration",
-      "sha256": "4726738fbd8ea6cdabb06a2152c93dca7fdbe7c31cefb8dc65b2f482f0493f79",
+      "sha256": "e6ae3fac4397f73a6c24d9818dc6df5ce9d36d632e27add0c4953c6c1bfed0a2",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -915,9 +915,9 @@
       "topic": "application"
     },
     {
-      "bytes": 7042,
+      "bytes": 8528,
       "id": "docs/gateway",
-      "sha256": "c779a7a687b4d53139f6311068e40171ae87400daec0ec16fa013b97e98f9b0c",
+      "sha256": "6d5e1d9eb45b3903e4b3d5896a2d643f0460f15c18e7a10c756b6dea7b04f996",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -963,9 +963,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 17176,
+      "bytes": 19996,
       "id": "docs/threads",
-      "sha256": "073d91171f5d0508f05a13d8788a503dbb3961cf8f75ac349b629f58130cf5ce",
+      "sha256": "69d655dea950cfc14cc5abe4d72a19b825e9d1fc6975cfe96b2cf0329749442f",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -1075,9 +1075,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3899,
+      "bytes": 4619,
       "id": "component/gateway",
-      "sha256": "953075fa5038c13f0906e7d1ab3b47b835971ccca77cca919b19f9ddd508c762",
+      "sha256": "7fa562743bf582fcb9d2bd1e3b11e20040c76a91195f295bae0769c9aedb8fc1",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -1163,9 +1163,9 @@
       "topic": "component"
     },
     {
-      "bytes": 5670,
+      "bytes": 6674,
       "id": "component/threads",
-      "sha256": "cc54879b6e4570d47f7e949095245667a23a2f9c7df0320ec5e0977573f503da",
+      "sha256": "ebf6d7007ce67e7ba9f3a3446e1bd33568e76670d415e2ed5a2eacb0763515d2",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -1182,7 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-    "bytes": 1361701,
+    "bytes": 1368991,
     "documents": 147
   }
 }

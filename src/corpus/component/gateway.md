@@ -9,6 +9,8 @@ through supervisor state. Agent
 profiles declare `thread_read`, `thread_wait`, `thread_message`,
 `thread_sessions` and `thread_notify` (find, address and be told about other
 running sessions of the workspace whose threads the subject reads), the
+`session_directory`, `session_send`, `session_inbox`, `session_ack` and
+`session_reply` tools for separately owned action inboxes, the
 caller-owned Governance `overlay` tool, and `thread_launch`, which starts one
 host-allow-listed managed launch in the caller's own workspace and returns the
 child's thread, action and attempt. The host may admit any subset; no default
@@ -34,6 +36,15 @@ gateway request. The underlying overlay store keeps its own larger
 limits for non-MCP callers.
 All four default profiles include the `thread_message` write. Claude/Codex also
 declare lifecycle hooks.
+
+The host may assign a workspace-local name at admission; an omitted name is
+the action ID, and another live action cannot reuse it. Directory entries use
+exact `{node_id, action_id}` addresses and show only peers the subject may
+discover, with attempt and latest inbox delivery state. The send tool needs
+the host's `bee.sessions.send` grant on the exact workspace/node/action
+resource and the target owner must accept the sender. The default send policy
+grants no address. Inbox tools commit and read durable items; they do not push
+messages into a driver or forward them over Hive.
 
 The default remains `127.0.0.1:0`. A host may explicitly select a loopback or
 RFC1918 IPv4 interface for a local container, with its corresponding readiness

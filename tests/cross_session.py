@@ -1,13 +1,8 @@
-"""Cross-session coordination acceptance with scripted fixture providers and no account.
+"""Cross-session acceptance with scripted fixture providers and no account.
 
-Two managed agents of different drivers run in one workspace, each on its own
-thread and reaching Bee only through its own gateway tools: a waiter under the
-Claude driver and a sender under the Codex driver. The waiter finds the sender
-through thread_sessions, registers thread_notify on it, tells it "ready" and
-blocks in thread_wait. The sender waits for "ready" and answers "go ahead" to
-the waiter's session with thread_message. The waiter wakes with the message,
-and when the sender's turn ends the thread owner delivers a notice on the
-waiter's own thread that its thread_wait sees.
+One case exercises shared-owner thread tools and notices. A second case uses
+independent actors and threads to exercise discovery, accepted inbox sends,
+deduplication, acknowledgment and cross-thread replies through their MCP tools.
 
 Only the acceptance runs: every other test entry of the composed suites is
 dropped, while their test-support entries (fixture policies, placement
@@ -27,9 +22,12 @@ import yaml
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from workspace import RUNTIME, fixture_workspace  # noqa: E402
 
-SUITES = ("placement", "harness", "driver", "credentials", "threads", "gateway", "managed")
+SUITES = ("placement", "harness", "driver", "credentials", "threads", "gateway", "managed", "principals")
 TEST = "cross_session_acceptance_test"
-ACCEPTANCE = "wakes a waiting session with a peer's message and tells it when the peer's turn ends"
+ACCEPTANCES = (
+    "wakes a waiting session with a peer's message and tells it when the peer's turn ends",
+    "delivers and replies between independent window actors without thread membership",
+)
 
 
 def only_acceptance(tests):
@@ -65,11 +63,10 @@ def main():
                 print(line[:400])
         if run.returncode != 0:
             sys.exit(run.returncode)
-        if not re.search(r"^\s+o .*" + re.escape(ACCEPTANCE), out, re.M):
-            sys.exit("the cross-session acceptance did not pass: " + ACCEPTANCE)
-        print("Cross-session threads (fixture providers, no account): a Claude-driver session finds a Codex-driver "
-              "peer by session, the peer's message wakes its thread_wait, and a one-shot notice on its own thread "
-              "tells it when the peer's turn ended")
+        for acceptance in ACCEPTANCES:
+            if not re.search(r"^\s+o .*" + re.escape(acceptance), out, re.M):
+                sys.exit("the cross-session acceptance did not pass: " + acceptance)
+        print("Cross-session threads (fixture providers, no account): shared-owner notice and independent-action inbox reply passed")
 
 
 if __name__ == "__main__":

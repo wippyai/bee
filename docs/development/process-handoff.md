@@ -33,7 +33,9 @@ and announces readiness after the presenter renders. The replacement replays
 accepted tabs from committed layout and receives a fresh terminal grant.
 `make client-upgrade-check` and `make retained-client-upgrade-check` change the
 client definition while two live shells remain attached in source and packed
-launches.
+launches. If the wire checkpoint is incompatible, the authenticated child is
+still replaced from its last committed layout under the supervisor's retained
+display identity. `make retained-client-fallback-check` checks that recovery.
 
 The application broker drains checkpoint persistence and exits after its owner
 acknowledges replacement. The workspace host starts a new broker and restores

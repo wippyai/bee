@@ -200,7 +200,7 @@ local function main(mode: string?)
         log:info("RETAINED_SUPERVISOR_PROBE_COMPLETE")
         return
     end
-    if mode == "client-upgrade" then
+    if mode == "client-upgrade" or mode == "client-fallback" then
         command(first_screen, "printf 'RETAINED_BEFORE_FIRST_%s_END\\n' \"$$\"")
         wait_text(first_screen, "RETAINED_BEFORE_FIRST_")
         local first_before = table.concat(assert(first_screen:snapshot()).rows, "\n")
@@ -209,7 +209,7 @@ local function main(mode: string?)
         wait_text(extra_screen, "RETAINED_BEFORE_EXTRA_")
         local extra_before = table.concat(assert(extra_screen:snapshot()).rows, "\n")
         extra_shell = assert(extra_before:match("RETAINED_BEFORE_EXTRA_(%d+)_END"))
-        for revision = 1, 3 do
+        for revision = 1, mode == "client-upgrade" and 3 or 1 do
             local entry = assert(registry.get("bee.client:main"))
             entry.meta.handoff_probe = "retained-client-definition-changed-" .. tostring(revision)
             local changes = assert(registry.snapshot()):changes()
@@ -247,7 +247,7 @@ local function main(mode: string?)
     local before_rejoin = assert(extra_screen:snapshot()).rows[1]
     assert(extra_screen:send({type = "key", key = "f12", key_type = "f12", action = "press"}))
     local replaced = false
-    if mode == "client-upgrade" then
+    if mode == "client-upgrade" or mode == "client-fallback" then
         local selected = channel.select({replaced_clients:case_receive(), time.after("5s"):case_receive()})
         if selected.ok and selected.channel == replaced_clients then
             local message = selected.value
@@ -358,5 +358,6 @@ local function checked_main(mode: string?)
     end
 end
 return {main = checked_main, client_upgrade = function() checked_main("client-upgrade") end,
+    client_fallback = function() checked_main("client-fallback") end,
     host_fallback = function() checked_main("host-fallback") end,
     broker_fallback = function() checked_main("broker-fallback") end}

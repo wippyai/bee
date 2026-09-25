@@ -85,8 +85,12 @@ function M.request_replace(state: State, sender: string, data: unknown): boolean
     for _, child in pairs(state.children) do
         if child.resource.pid == sender then
             local saved = handoff.decode(data, tostring(process.pid()), state.host, state.workspace_id)
-            if not saved or saved.display_id ~= child.id or child.replace or child.host_replacing
-                or (child.phase ~= "running" and child.phase ~= "render") then return true end
+            if child.replace or child.host_replacing
+                or (child.phase ~= "running" and child.phase ~= "render")
+                or (saved and saved.display_id ~= child.id) then return true end
+            -- The child saved its layout before asking. An incompatible wire
+            -- checkpoint cannot grant an identity, but its authenticated PID
+            -- still names this reservation; reopen that durable store.
             child.replace = true
             send(sender, "bee.client.replace_ack", {version = 1, workspace_id = state.workspace_id,
                 display_id = child.id})

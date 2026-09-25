@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False, host_prompt=False, session_failure=False, session_upgrade=False, failed_session_upgrade=False, client_upgrade=False, broker_upgrade=False, host_upgrade=False, host_upgrade_fallback=False, broker_upgrade_fallback=False, _transfer_failure=None):
+def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False, host_prompt=False, session_failure=False, session_upgrade=False, failed_session_upgrade=False, client_upgrade=False, client_upgrade_fallback=False, broker_upgrade=False, host_upgrade=False, host_upgrade_fallback=False, broker_upgrade_fallback=False, _transfer_failure=None):
     if transfer_probe and _transfer_failure is None:
         for failure in ("success", "source", "target"):
             run(command=command, shared_store=shared_store, storage_delay=storage_delay, launch_exit=launch_exit,
@@ -263,6 +263,12 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             anchor = '                process.upgrade("", owner, width, height, preferences, initial, saved)\n'
             assert code.count(anchor) == 1
             session.write_text(code.replace(anchor, '                if width == 100 then saved.version = 2 end\n' + anchor, 1))
+        if client_upgrade_fallback:
+            client = project / "src/client/main.lua"
+            code = client.read_text()
+            anchor = '                        send(owner, "bee.client.replace", checkpoint)\n'
+            assert code.count(anchor) == 1
+            client.write_text(code.replace(anchor, '                        checkpoint.version = 2\n' + anchor, 1))
         if host_upgrade_fallback:
             host_source = project / "src/host/main.lua"
             code = host_source.read_text()
@@ -414,6 +420,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
                                           else "DESKTOP_TRANSFER_SAVE_FAILURE_PROBE_COMPLETE") if transfer_probe else "DESKTOP_CLIENT_PROBE_COMPLETE",
                 "retained-supervisor-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
                 "retained-client-upgrade-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
+                "retained-client-fallback-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
                 "retained-host-fallback-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
                 "retained-broker-fallback-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
                 "thread-status-probe": "THREAD_STATUS_PROBE_COMPLETE",
@@ -421,13 +428,16 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             assert marker in logs, logs
             if launch_exit:
                 assert ((folder if packed else project) / "fault-launch-evidence").read_text() == "committed"
-            if command in ("retained-supervisor-probe", "retained-client-upgrade-probe", "retained-host-fallback-probe"):
+            if command in ("retained-supervisor-probe", "retained-client-upgrade-probe", "retained-client-fallback-probe", "retained-host-fallback-probe"):
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
     if transfer_probe:
         print(f"Display transfer source/pack ({_transfer_failure}): real window menu, exact retained shell PID/state, neighbor unaffected, client layouts" + (" and source F12" if _transfer_failure == "success" else " and failed-display restart"))
         return
     if command == "retained-client-upgrade-probe":
         print("Retained client replacement source/pack: definition change reattaches both live shells")
+        return
+    if command == "retained-client-fallback-probe":
+        print("Retained client fallback source/pack: invalid replacement schema restores both desktops from durable layouts")
         return
     if command == "retained-host-fallback-probe":
         print("Retained host fallback source/pack: incompatible checkpoint restarts host and reattaches both desktops")

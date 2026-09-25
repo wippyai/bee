@@ -971,9 +971,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 20551,
+      "bytes": 20568,
       "id": "docs/workspace_catalog",
-      "sha256": "fa7d6e68573234551f519286451601c18d2ca1cd5dffd0108acd400f1e426198",
+      "sha256": "2db610fb49ad505fa474ff12c9bedec4f0801b78afca9ebdb6eee094de1f4f26",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -1131,9 +1131,9 @@
       "topic": "component"
     },
     {
-      "bytes": 18041,
+      "bytes": 18107,
       "id": "component/placement:native",
-      "sha256": "f64982545138bac16f9b57c28c22206028552d225e01a1ddd78c8119a5112fcf",
+      "sha256": "4566c693b2bdbe1f2fe2a90535186e257f85792c62de302a1fd124ef69b29a97",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"

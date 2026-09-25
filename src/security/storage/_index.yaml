@@ -60,9 +60,9 @@ entries:
   meta:
     comment: Attached to the catalog operations only; they enter the execution scope after authorizing the caller
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee:workspace_catalog_scope") || (action == "funcs.call" && resource == "bee.workspace.catalog:backend")'
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.security.storage:workspace_catalog_scope") || (action == "funcs.call" && resource == "bee.workspace.catalog:backend")'
     actions: [funcs.security, security.policy_group.get, funcs.call]
-    resources: [security, bee:workspace_catalog_scope, bee.workspace.catalog:backend]
+    resources: [security, bee.security.storage:workspace_catalog_scope, bee.workspace.catalog:backend]
     effect: allow
 - name: workspace_catalog_store_policy
   kind: security.policy

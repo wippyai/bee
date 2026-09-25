@@ -67,7 +67,7 @@ func stageHiveSupervisorDesktop(t *testing.T, source string) {
 
 // Uses actual native peer authentication and process provenance. The only
 // configured identities are native nodes; no supervisor PID is passed at boot.
-func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService bool) (string, string) {
+func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	t.Helper()
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -311,7 +311,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	sourceSnapshot, fixtureSnapshot := freezeHiveSupervisorSource(t, root, false)
+	sourceSnapshot, fixtureSnapshot := freezeHiveSupervisorSource(t, root)
 	if feeds {
 		stageHiveFeeds(t, sourceSnapshot, fixtureSnapshot)
 	}

@@ -47,8 +47,7 @@ entries:
 - name: target_root
   kind: ns.requirement
   meta:
-    comment: Filesystem root that holds attempt homes and retained sessions
-  default: bee.placement.native:root
+    comment: Filesystem root that holds attempt homes and retained sessions; the host supplies bee:placement_root, whose volume mount the host owns
   targets:
   - entry: bee.placement.native:root_ref
     path: .resource_ref
@@ -400,11 +399,6 @@ entries:
   file: ${env:bee.placement.native:db_path}
   lifecycle:
     auto_start: true
-- name: root
-  kind: fs.directory
-  directory: ${env:bee.placement.native:root_path}
-  auto_init: true
-  mode: '0700'
 - name: host_files
   kind: fs.directory
   meta:

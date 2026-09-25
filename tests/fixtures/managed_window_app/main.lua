@@ -689,7 +689,7 @@ M.retained = function()
             root_ref = "bee.managed_window_fixture:session_root", subpath = "", allowed_access = "write"})
         local actor = security.actor()
         if not actor then error("fixture has no authenticated actor") end
-        local vol = assert(fs.get("bee.placement.native:root"))
+        local vol = assert(fs.get("bee:placement_root"))
         -- Retained sessions are owned by the launch principal that created
         -- them, so the key derives from the application instance, never from
         -- this launcher.

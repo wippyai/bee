@@ -3,7 +3,8 @@
 Native placement: one admitted launch becomes one attempt, run as a native
 child under a runner process this module owns. Receipts live in an owned
 SQLite store opened through `bee.persist`; attempt homes and retained
-session directories live under a placement-owned root.
+session directories live under the host-owned `bee:placement_root`
+volume, linked through the `target_root` requirement.
 
 | Slice | Responsibility |
 |---|---|

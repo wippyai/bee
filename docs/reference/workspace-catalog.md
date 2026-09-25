@@ -102,7 +102,7 @@ action; host-named policies `bee.security.storage:workspace_catalog_read_policy`
 node workspace store (their storage boundary denies it), so each operation
 authorizes the caller for the decoded request and then runs the private
 backend `bee.workspace.catalog:backend` under the execution scope
-`bee:workspace_catalog_scope`, which holds the store, the admitted roots list,
+`bee.security.storage:workspace_catalog_scope`, which holds the store, the admitted roots list,
 the root volumes, the host-name lookup and the extension calls. The backend
 refuses callers outside that scope.
 

@@ -47,7 +47,7 @@ end
 local function main()
     -- The guide is the product surface an agent reads over MCP. Read it here
     -- through the same facade, not from this fixture.
-    local published = call_api("bee.governance.binding:overlay_call", {operation = "guide"})
+    local published = call_api("bee.governance.binding:overlay_call", {operation = "guide", include_example = true})
     local document = bounds.text(published.document, 65536)
     if not document or not document:find(guide.ENTRIES_PATH, 1, true) then
         error("the guide document does not name " .. guide.ENTRIES_PATH)

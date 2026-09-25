@@ -891,15 +891,9 @@
       "topic": "ui"
     },
     {
-<<<<<<< HEAD
-      "bytes": 7895,
+      "bytes": 7898,
       "id": "docs/distributed_app_delivery",
-      "sha256": "b62a59b039dd6b6d17ac510bea2e86bf696149d9d9444d2aab59c67f23610321",
-=======
-      "bytes": 6170,
-      "id": "docs/distributed_app_delivery",
-      "sha256": "8fe72d2f47914c0a89d8f51cd0eea8014d0645156b881a397fd95622bdc64f8a",
->>>>>>> 40d3057 (Clean up Hive capture and documentation)
+      "sha256": "296b30cdd2b4e261f8a347b0af3453b28e73bdd8263ae975ec5170b86eebcd6b",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -1188,11 +1182,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
   "totals": {
-<<<<<<< HEAD
-    "bytes": 1371905,
-=======
-    "bytes": 1361974,
->>>>>>> 40d3057 (Clean up Hive capture and documentation)
+    "bytes": 1371942,
     "documents": 147
   }
 }

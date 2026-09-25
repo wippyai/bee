@@ -36,11 +36,13 @@ so closing a terminal leaves it running. Several Bees can join into a Hive.
 Linux and macOS, amd64 and arm64:
 
 ```sh
-curl -fsSL https://bee.wippy.ai/install.sh | sh -s -- --version 0.0.1-alpha.1
+curl -fsSL https://bee.wippy.ai/install.sh | sh
 ```
 
-Without `--version` the installer takes the latest stable release, and alphas
-are prereleases. It verifies the archive's SHA-256 checksum and places `bee` in
+The installer follows GitHub's latest release link, which skips releases marked
+as prereleases. The current alpha is selected because GitHub marks it as a
+regular release. Use `--version VERSION` to select a specific release. The
+installer verifies the archive's SHA-256 checksum and puts `bee` in
 `~/.local/bin`. Archives are also on
 [GitHub Releases](https://github.com/wippyai/bee/releases).
 
@@ -51,9 +53,14 @@ cd my-project
 bee
 ```
 
-Each project directory gets its own state and owner. Keys: **F1** Start menu,
-**Alt+Tab** switch apps, **F11** maximize, **Ctrl+Q** detach, **F12** replace
-the presenter. Detaching leaves the project's owner running; `bee stop` ends it.
+Each project directory gets its own state and background owner. The first frame
+is an empty desktop; **F1** opens Start. **Alt+Tab** switches apps, **F11**
+maximizes, **F12** replaces the presenter, and **Ctrl+Q** detaches with the
+message `Bee is still running; bee stop ends it`. Stop the owner with:
+
+```sh
+bee stop
+```
 
 Managed agents:
 
@@ -73,27 +80,40 @@ Attach from another terminal:
 ```sh
 bee desktops                  # list displays of the running owner
 bee observe                   # watch without control
+bee client                    # join with control
 bee attach WORKSPACE DISPLAY  # take control of one display
 ```
 
-Manage the running node's workspaces:
+Use the workspace and display IDs from `bee desktops` for `bee attach`.
+`bee observe` and `bee client` join a running node without starting one. After
+`bee stop`, `bee daemon` runs the node in the foreground without a folder
+workspace. From another terminal in that directory, `bee client` opens its
+workspace picker; **Ctrl+]** returns to the picker.
+
+Manage the running node's workspaces from another terminal:
 
 ```sh
 bee workspace roots                                   # roots the host admits
 bee workspace create Api bee:workspace_root/api --new-folder
 bee workspace list
 bee workspace archive WORKSPACE
+bee workspace restore WORKSPACE
 ```
+
+`bee workspace list --archived` shows archived IDs; `--after CURSOR` pages longer
+lists. Archive only when the workspace host is stopped.
 
 Join another Bee's Hive:
 
 ```sh
 bee hive invite               # on the hive node: prints a single-use invite
 bee hive join INVITE          # on the joining node, with its owner stopped
-bee hive peers
+bee hive peers                # on either node: show the peer session
 ```
 
-`bee --help` lists every command.
+`bee --help` lists the remaining Hive, process and runtime commands and their
+arguments. The [native command grammar](docs/operations/native.md#command-grammar)
+explains the launch routes.
 
 ## Build
 
@@ -108,13 +128,6 @@ make standalone
 ```
 
 Bee builds from unpatched runtime main, pinned in `wippy.build.json`.
-
-| Path | Contents |
-|---|---|
-| [`src/core`](src/core) | Workspace, application, desktop and client lifecycle |
-| [`src/apps`](src/apps) | Bundled applications |
-| [`modules`](modules) | Components: gateway, threads, hub, governance, placement, hive and drivers |
-| [`native`](native) | Launch facts and OS I/O events |
 
 Read the [agent guide](docs/development/agent-guide.md) and
 [conventions](docs/development/conventions.md) before changing code.

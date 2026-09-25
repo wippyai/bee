@@ -164,6 +164,7 @@ end
 
 local function first_brief(source_workspace: string, marker: string, round: string): string
     return "Author one small Bee desktop application through Bee MCP. "
+        .. "Use only the Bee MCP tools named below; local file and shell tools cannot access this application's overlay. "
         .. "Read session, then request access with traits [app:author], idempotency_key author-access-" .. round
         .. " and reason Author the Bee application. The host operator approves that exact request; poll access_status until it is granted. "
         .. "Select active_traits [app:read, app:author] with the current revision and context {round: \"" .. round .. "\"}. "
@@ -180,9 +181,12 @@ local function first_brief(source_workspace: string, marker: string, round: stri
         .. "resume_schema agent-app.v1 and restart_policy automatic. "
         .. "The window paints three lines and nothing else: row 1 is exactly " .. MARKER_LINE .. ", "
         .. "row 2 is Count: followed by a space and the counter, row 3 is Saved: followed by a space and the counter of the last checkpoint the broker acknowledged. "
+        .. "For each paint, create tty.canvas(width, height), put the three strings on it, and pass canvas:rows() to output:present; passing the canvas object itself does not render. "
+        .. "Call tty.start before obtaining tty.events and tty.surface. In the lifecycle branch compare the kind only with process.event.CANCEL, following the example app. "
         .. "The counter starts at 0, the acknowledged counter starts at -1. Every key press that is not a release increments the counter, repaints and checkpoints. "
-        .. "A close event checkpoints. A resize repaints at the new size. The checkpoint state is the JSON object {\"count\": <counter>}. "
+        .. "A close event checkpoints and stays in the event loop; it must not break, return or close the surface. A resize repaints at the new size. The checkpoint state is the JSON object {\"count\": <counter>}. "
         .. "A start whose resume_state is not empty restores the counter from it and refuses a state it did not write. "
+        .. "Bee's typed Lua does not narrow table fields after type checks: copy decoded.count into a local, check that local is a number, and cast it to number before math.floor. "
         .. "Call client.ready once after the first paint, and leave the loop on the process CANCEL lifecycle event. "
         .. "Finally call thread_message with idempotency_key report-" .. round .. ", message_id " .. marker
         .. ", message_kind progress, recipient_ids [" .. ACTOR .. "] and content {text: the frozen digest, artifact_ref: the frozen digest}. "
@@ -191,13 +195,18 @@ end
 
 local function repair_brief(source_workspace: string, marker: string, round: string): string
     return "Your previous attempt at this Bee application was refused by the host review. "
+        .. "Use only Bee MCP tools; local file and shell tools cannot access this application's overlay. "
         .. "Read the bound thread with thread_read from cursor 0: the newest message from " .. ACTOR
         .. " carries the exact findings, and the earlier messages carry the history of this work. "
         .. "Read session, then request access with traits [app:author], idempotency_key repair-access-" .. round
         .. " and reason Repair the Bee application. Poll access_status until the host operator grants it. "
         .. "Select active_traits [app:read, app:author] with the current revision and context {round: \"" .. round .. "\"}. "
         .. "Read app_docs topics contract, client, example and view again for anything the findings touch. "
+        .. "For numeric resume state, narrow a local copy of decoded.count and cast it to number before math.floor; checking a table field alone leaves it typed any. "
         .. "Fix every finding. Keep the behaviour the earlier version already had right; do not replace the application with a stub. "
+        .. "Render with output:present(canvas:rows()); output:present(canvas) does not render. "
+        .. "Start tty before reading its events, and compare lifecycle events only with process.event.CANCEL. "
+        .. "A close event only checkpoints and stays in the loop. Only process CANCEL ends the app; ending on close discards its restorable window. "
         .. "Continue in the existing overlay " .. source_workspace .. ". Call overlay list first. "
         .. "If the earlier attempt ended before creating it, create it at expected_revision 0; otherwise read its current entries.json without a snapshot digest. "
         .. "Put the complete corrected entries.json at the revision returned by list or create with idempotency_key entries-" .. round
@@ -211,12 +220,13 @@ end
 
 local function update_brief(source_workspace: string, marker: string, round: string): string
     return "Update the Bee application you already authored and that the person already applied. "
-        .. "Read the bound thread with thread_read from cursor 0 so you retain the complete authoring and review history. "
+        .. "Use only Bee MCP tools. Do not call view_file or run_command: those local tools cannot access this application's overlay. "
+        .. "Read the bound thread with thread_read from cursor 0 through its latest page once, then make the edit without rereading it. "
         .. "Read session, then request access with traits [app:author], idempotency_key update-access-" .. round
         .. " and reason Update the Bee application. Poll access_status until the host operator grants it. "
         .. "Select active_traits [app:read, app:author] with the current revision and context {round: \"" .. round .. "\"}. "
-        .. "Read app_docs topics contract and client. In the existing overlay " .. source_workspace
-        .. ", call overlay list, then read the current entries.json without a snapshot digest. Preserve its one application and all behaviour. "
+        .. "You already read the Bee application docs while authoring. In the existing overlay " .. source_workspace
+        .. ", call overlay list, then read the current entries.json without a snapshot digest. Make this one edit now; preserve its one application and all behaviour. "
         .. "Change the first painted line from exactly " .. MARKER_LINE .. " to exactly " .. UPDATE_MARKER_LINE
         .. " and advance meta.application.revision from 1 to 2 because the executable definition changed. "
         .. "Keep id " .. DEFINITION_ID .. ", title " .. TITLE .. ", resume_schema agent-app.v1 and every destination ceiling unchanged. "
@@ -390,7 +400,15 @@ local function main()
         or (updating and update_brief(source_workspace, marker, round) or first_brief(source_workspace, marker, round))
     if findings ~= "" then
         deliver_findings(findings, round)
-        if not (plain and plain ~= "") then brief = repair_brief(source_workspace, marker, round) end
+        if not (plain and plain ~= "") then
+            if updating then
+                brief = update_brief(source_workspace, marker, round)
+                    .. "The previous update was refused. The host also put these findings on the bound thread: " .. findings
+                    .. " Correct them before freezing. "
+            else
+                brief = repair_brief(source_workspace, marker, round)
+            end
+        end
     end
 
     local started = call("bee.harness.launch:start", {request_id = "agent-app-" .. round,
@@ -409,9 +427,15 @@ local function main()
     if not snapshot_digest then
         -- An attempt that ends without the frozen digest is reviewed like any
         -- other refused round: the host tells the agent what it observed.
-        report.findings = "your attempt ended without reporting a frozen snapshot digest on the bound thread. "
-            .. "Author the application through the Bee MCP tools, freeze the overlay and report the digest "
-            .. "with thread_message before you answer."
+        if updating then
+            report.findings = "your update ended without reporting a frozen snapshot digest on the bound thread. "
+                .. "Use overlay list and read to inspect the existing entries.json; change only the painted marker and application revision, "
+                .. "put it at the current overlay revision, freeze, and report the new digest with thread_message before you answer."
+        else
+            report.findings = "your attempt ended without reporting a frozen snapshot digest on the bound thread. "
+                .. "Author the application through the Bee MCP tools, freeze the overlay and report the digest "
+                .. "with thread_message before you answer."
+        end
         if terminal ~= "" then
             report.findings = tostring(report.findings) .. " The host observed the attempt end as " .. terminal .. "."
         end

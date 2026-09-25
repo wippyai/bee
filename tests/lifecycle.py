@@ -114,9 +114,9 @@ def run():
                     ui.key(b"\x0e")
                 assert ui.screen.display[0].count("stubborn") == 2, ui.text()
                 ui.key(b"\x17")
-                ui.wait_until(lambda: ui.screen.display[0].count("stubborn") == 1,
-                              "one remaining stubborn tab")
-                assert "READY / probe:stubborn" in ui.text(), ui.text()
+                ui.wait_until(lambda: ui.screen.display[0].count("stubborn") == 1
+                              and "READY / probe:stubborn" in ui.text(),
+                              "one remaining ready stubborn view")
                 ui.key(b"\x0e")
                 ui.wait("Original application has stopped")
                 assert ui.screen.display[0].count("stubborn") == 1, ui.text()

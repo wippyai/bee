@@ -338,19 +338,35 @@ only on the destination reply; the destination deduplicates on the sender's
 stable key, so a lost reply repeats the delivery rather than duplicating the
 message, and only the row's sender claims or settles it.
 
-The destination admits `inbox_describe` and `inbox_send` for mapped
-principals under the host-selected scope. Lookup returns the address with
-workspace, epoch, attempt and delivery state through the owner-or-discover
-gate. A forwarded send re-authorizes workspace, send grant, target action
-and epoch for the mapped principal: the sender action lives on the caller
-node, so the sender action claim is attested by the authenticated caller
-while acceptance, grant, action admission, epoch and digest are re-checked
-against destination state, and the commit records the caller node. A local
-actor naming a foreign caller node is denied. Cross-node replies, remote
-notice registration and remote watches are not forwarded; destination
-notices and watches still settle on forwarded commits. The pump daemon and
-gateway routing of remote addresses are follow-ups; until they exist the
-gateway answers remote addresses as not found.
+The destination admits `inbox_describe`, `inbox_send`, `inbox_reply`,
+`notify` and the bounded `delivery:watch` for mapped principals under the
+host-selected scope. Lookup returns the address with workspace, epoch,
+attempt and delivery state through the owner-or-discover gate. A forwarded
+send re-authorizes workspace, send grant, target action and epoch for the
+mapped principal: the sender action lives on the caller node, so the sender
+action claim is attested by the authenticated caller while acceptance,
+grant, action admission, epoch and digest are re-checked against
+destination state, and the commit records the caller node. A local actor
+naming a foreign caller node is denied. A cross-node reply is a forwarded
+send that also carries its reply correlation: the node that received the
+request validates the correlation against its own inbox item and marks it
+replied before anything crosses the wire, and the destination re-authorizes
+the mapped principal against its own acceptance, grant, action and epoch
+when it commits. A forwarded notice registers the mapped principal's
+one-shot watch on a thread it is a member of on the destination, and a
+forwarded `delivery:watch` reads one bounded page; in both cases the
+destination thread owner still decides membership, and a principal it has
+not admitted is denied whatever the payload says. Destination notices and
+watches still settle on forwarded commits. The outbox pump is a supervised
+`bee.threads.service:pump_worker` process: it leases due rows across every
+sender, delivers each through the destination's admission and settles only
+on the destination's own reply, so an unknown outcome settles nothing and
+the lease lapses. Its transport is host-selected through the `sender`
+requirement: the bundled host links `bee.hive.service:inbox_sender`, and a
+composition that links no sender leaves due rows queued and reports each
+delivery unknown. The gateway still answers a remote session_send address as
+not found, because routing a remote address there needs a destination action
+resolution the gateway does not hold; that is a follow-up.
 
 ## Carrier and projections
 

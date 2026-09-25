@@ -1,5 +1,6 @@
 -- MIT. Migration work is a pure exact receipt; these tests perform no writes.
 local test = require("test")
+local KERNEL = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
 local migration_work = require("migration_work")
 local artifact = require("artifact")
 local canonical = require("canonical")
@@ -41,7 +42,7 @@ local function fixture(existing_database: boolean?): (artifact.Artifact, preflig
         policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
         kinds = {["db.sql.sqlite"] = true, ["function.lua"] = true}, databases = {[target_db] = true},
         grants = {}, modules = {}, database_bindings = bindings,
-        entries = destination_entries, installed_entries = nil, applied = {}, exact_expansion = true,
+        entries = destination_entries, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL,
         migration_barrier = false, auto_start = true}
     return exact, candidate, context
 end

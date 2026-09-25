@@ -7,6 +7,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
 local application_admission = require("application_admission")
+local protected_kernel = require("protected_kernel")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -480,6 +481,13 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
     -- excludes unrelated boot-local registry state while retaining every
     -- collision and binding input used by preflight.
     local relevant_ids: {[string]: boolean} = {}
+    local kernel_raw: unknown = nil
+    for _, entry in ipairs(captured.entries) do
+        if entry.id == protected_kernel.ID then kernel_raw = entry end
+    end
+    local kernel, kernel_error = protected_kernel.decode(kernel_raw)
+    if not kernel then return nil, nil, kernel_error end
+    relevant_ids[protected_kernel.ID] = true
     for _, raw in ipairs(candidate_entries) do
         local item = raw :: Object
         for _, reference in ipairs(item.references :: {string}) do relevant_ids[reference] = true end
@@ -509,6 +517,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
 
     local context, context_error = policy_context(policy, captured, base_digest :: string, current)
     if not context then return nil, nil, context_error end
+    context.protected = kernel
     if policy.applications then
         if policy.workspace_id ~= spec.workspace_id or policy.source_node ~= source
             or policy.source_workspace ~= spec.source_workspace or not bounds.id(policy.overlay_owner) then

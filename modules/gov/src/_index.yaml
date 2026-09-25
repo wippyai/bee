@@ -32,7 +32,10 @@ entries:
   kind: library.lua
   source: file://preflight.lua
   modules: [hash, json]
-  imports: {canonical: bee.sync:canonical}
+  imports: {canonical: bee.sync:canonical, protected_kernel: bee.gov:protected_kernel}
+- name: protected_kernel
+  kind: library.lua
+  source: file://protected_kernel.lua
 - name: capability_catalog
   kind: library.lua
   source: file://capability_catalog.lua
@@ -40,9 +43,9 @@ entries:
   kind: library.lua
   source: file://capability_files.lua
   modules: [hash]
-- name: capability_contracts
+- name: capability_gateway
   kind: library.lua
-  source: file://capability_contracts.lua
+  source: file://capability_gateway.lua
   imports:
     bounds: bee.threads.records:bounds
 - name: capability_containment
@@ -58,6 +61,7 @@ entries:
     capability_catalog: bee.gov:capability_catalog
     capability_containment: bee.gov:capability_containment
     capability_files: bee.gov:capability_files
+    capability_gateway: bee.gov:capability_gateway
 - name: capability_request
   kind: library.lua
   source: file://capability_request.lua
@@ -174,6 +178,18 @@ entries:
   targets:
   - entry: bee.gov:approval_consume_policy_ref
     path: .resource_ref
+- name: target_workspace_folder_read
+  kind: ns.requirement
+  meta: {comment: Host-selected workspace catalog read operation that names a workspace's folder for file grants; absent selection fails closed}
+  targets:
+  - entry: bee.gov:workspace_folder_read_ref
+    path: .resource_ref
+- name: target_workspace_folder_policy
+  kind: ns.requirement
+  meta: {comment: Host-selected policy that lets the destination read workspace folders for file grants; absent selection fails closed}
+  targets:
+  - entry: bee.gov:workspace_folder_policy_ref
+    path: .resource_ref
 - name: activation_profile_decoder
   kind: library.lua
   source: file://activation_profiles.lua
@@ -233,6 +249,7 @@ entries:
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
     application_admission: bee.gov:governed_application_admission
+    protected_kernel: bee.gov:protected_kernel
 - name: overlay_resolver
   kind: library.lua
   source: file://overlay_resolver.lua
@@ -242,6 +259,7 @@ entries:
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
     application_admission: bee.gov:governed_application_admission
+    protected_kernel: bee.gov:protected_kernel
     capability_catalog: bee.gov:capability_catalog
     capability_grants: bee.gov:capability_grants
     capability_files: bee.gov:capability_files
@@ -262,3 +280,9 @@ entries:
 - name: approval_consume_policy_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Host-selected approval consume policy; absent link fails closed}
+- name: workspace_folder_read_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected workspace catalog read operation; absent link fails closed}
+- name: workspace_folder_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Host-selected workspace folder read policy; absent link fails closed}

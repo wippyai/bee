@@ -36,8 +36,9 @@ local function inspect()
     local volumes = (installed.volumes or {}) :: {{[string]: unknown}}
     assert(#volumes == 1)
     assert(volumes[1].kind == "fs.directory")
-    assert(volumes[1].directory == "shared")
-    assert(volumes[1].readonly == true)
+    local volume_config = volumes[1].data :: {[string]: unknown}
+    assert(volume_config.directory == "shared")
+    assert(volume_config.readonly == true)
     local databases = (installed.databases or {}) :: {{[string]: unknown}}
     assert(#databases == 1)
     assert(databases[1].kind == "db.sql.sqlite")

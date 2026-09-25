@@ -28,6 +28,21 @@ entries:
     actions: [funcs.call, bee.gov.delivery.read, bee.gov.delivery.activate]
     resources: '*'
     effect: allow
+- name: gateway_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, security.actor.create]
+    resources: '*'
+    effect: allow
+- name: gateway_test
+  kind: function.lua
+  source: file://gateway_test.lua
+  method: run
+  modules: [funcs, security]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:gateway_test_policy]}
+  imports: {test: wippy.test:test}
 - name: destination_public_test
   kind: function.lua
   source: file://destination_public_test.lua
@@ -326,9 +341,9 @@ entries:
   imports:
     test: wippy.test:test
     capability_files: bee.gov:capability_files
-- name: capability_contracts_test
+- name: capability_gateway_test
   kind: function.lua
-  source: file://capability_contracts_test.lua
+  source: file://capability_gateway_test.lua
   method: run
   modules: [registry, hash]
   meta: {type: test, suite: bee}
@@ -336,7 +351,7 @@ entries:
     test: wippy.test:test
     capability_catalog: bee.gov:capability_catalog
     capability_grants: bee.gov:capability_grants
-    capability_contracts: bee.gov:capability_contracts
+    capability_gateway: bee.gov:capability_gateway
 - name: workspace_test
   kind: function.lua
   source: file://workspace_test.lua

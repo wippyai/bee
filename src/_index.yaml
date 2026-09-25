@@ -155,6 +155,16 @@ entries:
   hide_logs: true
   lifecycle:
     auto_start: true
+- name: protected_kernel
+  kind: registry.entry
+  meta:
+    type: bee.protected_kernel
+    comment: Host trust map no overlay profile can open; preflight refuses edits to these definitions, their transitive code dependencies and requirement selectors aimed at them
+  data:
+    revision: 1
+    namespaces: [bee.gov, bee.governance, bee.security, bee.approvals, bee.apps, bee.launch]
+    entries: ['bee:protected_kernel', 'bee:approver_policies', 'bee:capability_catalog', 'bee.env:gov_activation_profiles',
+      'bee.env:gov_publication_profiles', 'bee.deps:gov', 'bee.deps:approvals']
 - name: approver_policies
   kind: registry.entry
   meta:

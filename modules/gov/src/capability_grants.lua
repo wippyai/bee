@@ -6,6 +6,7 @@ local hash = require("hash")
 local catalog = require("capability_catalog")
 local containment = require("capability_containment")
 local files = require("capability_files")
+local gateway = require("capability_gateway")
 
 local M = {}
 M.SCHEMA = "bee.governance-capability-grants@1"
@@ -15,7 +16,7 @@ M.PREFIX = "bee.gov.grants:"
 local PRIOR_PREFIX = "bee.governance.grants:"
 type Object = {[string]: unknown}
 type Proposal = {capabilities: {Object}, policies: {Object}, bindings: {Object},
-    volumes: {Object}, databases: {Object}, thread_access: string, digest: string}
+    volumes: {Object}, databases: {Object}, folder: Object?, thread_access: string, digest: string}
 
 local function sha(raw: unknown): string?
     if type(raw) ~= "string" or #raw ~= 64 or not raw:match("^[0-9a-f]+$") then return nil end
@@ -76,27 +77,10 @@ local function string_list(raw: unknown, pattern: string): {string}?
     return result
 end
 
-local function valid_prefix(raw: string): boolean
-    if raw:sub(1, 1) ~= "/" or #raw > 160 or raw:find("\\", 1, true) or raw:find("//", 1, true) then
-        return false
-    end
-    if #raw > 1 and raw:sub(-1) == "/" then return false end
-    for segment in raw:gmatch("[^/]+") do
-        if segment == "." or segment == ".." or not segment:match("^[A-Za-z0-9_.-]+$") then
-            return false
-        end
-    end
-    return true
-end
-
-local function regex_escape(raw: string): string
-    return raw:gsub("(%W)", "\\%1")
-end
-
 -- Each catalog entry materializes into generated host entries: a policy plus
 -- the host-created volume or database it authorizes. Other catalog entries
 -- remain review vocabulary until their resource and owner boundaries arrive.
-local function policy(owner: string, grant: Object, id: string): (Object?, Object?, Object?, string?)
+local function policy(owner: string, grant: Object, id: string, folder: unknown): (Object?, Object?, Object?, string?)
     local scope = bounds.object(grant.scope)
     if not scope then return nil, nil, nil, "capability scope is malformed" end
     if grant.capability == "threads.read" and grant.operation == "threads.read"
@@ -110,8 +94,8 @@ local function policy(owner: string, grant: Object, id: string): (Object?, Objec
         and (grant.operation == "files.read" or grant.operation == "files.write")
         and grant.resource == "workspace" and type(scope.subpath) == "string" then
         local writable = grant.capability == "workspace.files.write"
-        local volume, volume_error = files.volume(owner, scope.subpath, writable)
-        local generated, policy_error = volume and files.file_policy(owner, scope.subpath, writable, id) or nil
+        local volume, volume_error = files.volume(owner, folder, scope.subpath, writable)
+        local generated, policy_error = volume and files.file_policy(owner, folder, scope.subpath, writable, id) or nil
         if not volume or not generated then
             return nil, nil, nil, volume_error or policy_error or "workspace file grant is not installable"
         end
@@ -144,65 +128,39 @@ local function policy(owner: string, grant: Object, id: string): (Object?, Objec
             data = {policy = {actions = {"bee.harness.launch"}, resources = definitions,
                 effect = "allow"}}}, nil, nil, nil
     end
+    -- The runtime cannot pair a contract binding with its method or an HTTP
+    -- method with its origin, so these grants let the application call the
+    -- host gateway, which checks the exact approved scope from this record.
     if grant.capability == "contract.call" and grant.operation == "contract.call"
-        and type(grant.resource) == "string" then
-        local binding: string = grant.resource :: string
-        if not binding:match("^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$") then
-            return nil, nil, nil, "contract call grant names an invalid binding"
-        end
-        local call_methods = string_list(scope.methods, "^[A-Za-z][A-Za-z0-9_]*$")
-        if not call_methods then
-            return nil, nil, nil, "contract call grant names no valid methods"
-        end
-        local clauses: {string} = {}
-        for _, name in ipairs(call_methods) do clauses[#clauses + 1] = 'resource == "' .. name .. '"' end
-        local expression = '(action == "contract.open" && resource == "' .. binding .. '")'
-            .. ' || (action == "contract.call" && (' .. table.concat(clauses, " || ") .. "))"
-        return {id = id, kind = "security.policy.expr",
-            meta = {comment = "Host-generated exact contract call grant"},
-            data = {policy = {expression = expression,
-                actions = {"contract.open", "contract.call"},
-                resources = {binding}, effect = "allow"}}}, nil, nil, nil
+        and bounds.id(grant.resource) and string_list(scope.methods, "^[A-Za-z][A-Za-z0-9_]*$") then
+        return {id = id, kind = "security.policy", meta = {comment = "Host-generated contract gateway grant"},
+            data = {policy = {actions = {"funcs.call"}, resources = {gateway.CONTRACT_CALL},
+                effect = "allow"}}}, nil, nil, nil
     end
     if grant.capability == "http.api" and grant.operation == "http.request"
-        and type(grant.resource) == "string" and type(scope.path_prefix) == "string" then
-        local origin: string = grant.resource :: string
-        local prefix: string = scope.path_prefix :: string
-        local authority = origin:match("^https://(.+)$")
-        local host, port = authority and authority:match("^([A-Za-z0-9.%-]+):([0-9]+)$") or nil
-        if not authority then
-            return nil, nil, nil, "scoped HTTP grant names an invalid origin or path prefix"
-        end
-        if not host then host = authority:match("^[A-Za-z0-9.%-]+$") end
-        local port_number = tonumber(port or "")
-        if not host or (port and (not port_number or port_number == 0 or port_number > 65535))
-            or not valid_prefix(prefix) then
-            return nil, nil, nil, "scoped HTTP grant names an invalid origin or path prefix"
-        end
-        -- The runtime authorizes http_client.request on the URL alone, so the
-        -- generated expression pins the approved origin and path prefix; the
-        -- approved methods stay review-visible and containment-gated.
-        local expression = 'action == "http_client.request" && resource matches "^'
-            .. regex_escape(origin) .. regex_escape(prefix) .. '([?#].*)?$"'
-        return {id = id, kind = "security.policy.expr",
-            meta = {comment = "Host-generated scoped HTTP egress grant"},
-            data = {policy = {expression = expression, actions = {"http_client.request"},
-                resources = {origin}, effect = "allow"}}}, nil, nil, nil
+        and type(grant.resource) == "string" and type(scope.path_prefix) == "string"
+        and string_list(scope.methods, "^[A-Z]+$") then
+        return {id = id, kind = "security.policy", meta = {comment = "Host-generated HTTP gateway grant"},
+            data = {policy = {actions = {"funcs.call"}, resources = {gateway.HTTP_REQUEST},
+                effect = "allow"}}}, nil, nil, nil
     end
     return nil, nil, nil, "capability has no installed enforcement in this slice"
 end
 
+-- The workspace folder is part of the measured set whenever a volume is
+-- rooted in it, so a moved workspace cannot reuse a grant for its old tree.
 local function digest_shape(capabilities: {Object}, bindings: {Object}, policies: {Object},
-    volumes: {Object}, databases: {Object}): Object
+    volumes: {Object}, databases: {Object}, folder: unknown): Object
     local shape: Object = {capabilities = capabilities, bindings = bindings, policies = policies,
         thread_access = "none"}
-    if #volumes > 0 then shape.volumes = volumes end
+    if #volumes > 0 then shape.volumes, shape.folder = volumes, folder end
     if #databases > 0 then shape.databases = databases end
     return shape
 end
 
+-- folder is the host-resolved workspace folder file grants are rooted in.
 function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unknown,
-    requirements_raw: unknown, prior: boolean?): (Proposal?, string?)
+    requirements_raw: unknown, prior: boolean?, folder: unknown?): (Proposal?, string?)
     local owner, app = bounds.id(owner_raw), bounds.id(app_raw)
     local rows = list(requirements_raw, 8)
     if not owner or not app or not rows then return nil, "capability proposal identity is invalid" end
@@ -214,6 +172,7 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
     local databases: {Object} = table.create(1, 0)
     local volume_ids: {[string]: boolean} = {}
     local database_ids: {[string]: boolean} = {}
+    local requirement_of: {[Object]: string} = {}
     local seen: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
         local item = bounds.object(raw)
@@ -236,9 +195,10 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
         if #resolved ~= 1 then return nil, "capability template needs unsupported policy count" end
         local id = policy_id(owner :: string, requirement_id :: string, prior and PRIOR_PREFIX or nil)
         if not id then return nil, "measure generated policy identity" end
-        local generated, volume, database, policy_error = policy(owner :: string, resolved[1], id)
+        local generated, volume, database, policy_error = policy(owner :: string, resolved[1], id, folder)
         if not generated then return nil, policy_error end
         seen[requirement_id] = true
+        requirement_of[resolved[1]] = requirement_id :: string
         capabilities[#capabilities + 1] = resolved[1]
         policies[#policies + 1] = generated
         bindings[#bindings + 1] = {requirement_id = requirement_id, policy_id = id}
@@ -257,8 +217,10 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
             end
         end
     end
+    -- Capabilities follow their bindings' requirement order, so a record
+    -- pairs each grant with the requirement that asked for it.
     table.sort(capabilities, function(a: Object, b: Object): boolean
-        return tostring(a.capability) .. tostring(a.resource) < tostring(b.capability) .. tostring(b.resource)
+        return requirement_of[a] < requirement_of[b]
     end)
     table.sort(policies, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
     table.sort(bindings, function(a: Object, b: Object): boolean
@@ -266,10 +228,12 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
     end)
     table.sort(volumes, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
     table.sort(databases, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
-    local set_digest = digest(digest_shape(capabilities, bindings, policies, volumes, databases))
+    local rooted: Object? = nil
+    if #volumes > 0 then rooted = bounds.object(folder) end
+    local set_digest = digest(digest_shape(capabilities, bindings, policies, volumes, databases, rooted))
     if not set_digest then return nil, "measure capability proposal" end
     return {capabilities = capabilities, policies = policies, bindings = bindings,
-        volumes = volumes, databases = databases, thread_access = "none", digest = set_digest}, nil
+        volumes = volumes, databases = databases, folder = rooted, thread_access = "none", digest = set_digest}, nil
 end
 
 function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
@@ -290,7 +254,7 @@ function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
         policies = proposal.policies, thread_access = proposal.thread_access,
         digest = proposal.digest, approval_id = approval_id, revision = revision,
         artifact_digest = artifact_digest, version = version}
-    if #proposal.volumes > 0 then stored.volumes = proposal.volumes end
+    if #proposal.volumes > 0 then stored.volumes, stored.folder = proposal.volumes, proposal.folder end
     if #proposal.databases > 0 then stored.databases = proposal.databases end
     return {id = id, kind = "registry.entry", meta = {type = M.SCHEMA}, data = stored}, nil
 end
@@ -335,7 +299,7 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
         end
     end
     local actual = digest(digest_shape(capabilities :: {Object}, bindings :: {Object},
-        policies :: {Object}, volumes :: {Object}, databases :: {Object}))
+        policies :: {Object}, volumes :: {Object}, databases :: {Object}, data.folder))
     if actual ~= data.digest then return nil, "installed capability digest differs from the stored set" end
     local capacity: integer = #bindings > 0 and #bindings or 1
     local reproduced: {Object} = table.create(capacity, 0)
@@ -350,7 +314,8 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
                 template_revision = grant.template_revision, catalog_revision = vocabulary.revision,
                 target = app_raw, path = ".security.policies +="}}
     end
-    local resolved, resolve_error = M.propose(vocabulary, owner, app_raw, reproduced, item.id == prior_id)
+    local resolved, resolve_error = M.propose(vocabulary, owner, app_raw, reproduced, item.id == prior_id,
+        data.folder)
     if not resolved or resolved.digest ~= data.digest then
         return nil, resolve_error or "installed capability digest differs from host templates"
     end

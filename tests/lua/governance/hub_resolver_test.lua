@@ -3,6 +3,7 @@
 -- boundaries as the destination host without granting this test a registry
 -- writer or an execution capability.
 local test = require("test")
+local KERNEL = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
 local artifact = require("artifact")
 local resolver = require("hub_resolver")
 
@@ -57,6 +58,8 @@ local function deps_fixture(policy: Object?): (Object, Spec, {root: Object?, cap
         entry("app:claimed", "vendor/app", "stale-preview-value"),
         entry("app:removed", "vendor/app", "removed-by-preview"),
         entry("host:db", "host/base", "database"),
+        {id = "bee:protected_kernel", kind = "registry.entry", registry = {owner = "host/base"},
+            meta = {type = "bee.protected_kernel"}, data = KERNEL},
     }
     local updated_entry = entry("app:claimed", "vendor/app", "registry-owner")
     local preview_entry = entry("app:new", "vendor/app", "preview-created")
@@ -207,7 +210,7 @@ local function define_tests()
                 packages = {["vendor/app"] = false}, namespaces = {app = false},
                 kinds = {["function.lua"] = false}, databases = {["host:db"] = true},
                 grants = {}, modules = {}, entries = {}, applied = {},
-                exact_expansion = true, migration_barrier = true,
+                exact_expansion = true, protected = KERNEL, migration_barrier = true,
             }
             local deps, spec = deps_fixture(denied)
             local candidate, context, err = resolver.resolve_with(deps, spec)

@@ -11,7 +11,7 @@ local workspace_applications = require("workspace_applications")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@9"
+M.REVISION = "bee.governance-component-guide@10"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -375,6 +375,12 @@ function M.workspace_delivery(): string
         .. " preflight with the remedy. Freeze, then call the delivery tool with operation request, your"
         .. " source_overlay_id, a version and the frozen snapshot_digest; workspace_id defaults to your"
         .. " own workspace. A later version is a new freeze and a new delivery request with a higher version."
+        .. " Request a host catalog capability with an ns.requirement entry whose meta names value_kind"
+        .. " security.policy, the capability, its parameters and a reason, targeting your application entry at"
+        .. " .security.policies +=; the person approves it at installation. At run time, call"
+        .. " bee.gov.binding:granted_resources for the identities of your granted file volumes (by subpath) and"
+        .. " database (by name), and make approved contract calls and HTTP requests through"
+        .. " bee.gov.binding:contract_call and bee.gov.binding:http_request; never embed a grant identity."
 end
 
 -- The application archetypes of docs/guides/app-style.md: the request each

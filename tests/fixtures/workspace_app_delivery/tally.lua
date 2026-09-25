@@ -10,10 +10,6 @@ local funcs = require("funcs")
 local fs = require("fs")
 local sql = require("sql")
 
--- Installed grant identities from the person's approval; the host confines
--- the volume to the approved subroot and the database to its dedicated file.
-local VOLUME_ID = "__TALLY_VOLUME_ID__"
-local DATABASE_ID = "__TALLY_DATABASE_ID__"
 
 local HINTS = frame.hints({{key = "Enter", verb = "add one"}, {key = "r", verb = "reset"}, {key = "Esc", verb = "exit"}})
 
@@ -22,11 +18,21 @@ local function main(value: unknown)
     if not launch then error("Invalid launch") end
     local owned, read_error = funcs.call("bee.threads.service:list", {limit = 1})
     if read_error or not owned or owned.ok ~= true then error("Owned thread read grant is unavailable") end
-    local volume, volume_error = fs.get(VOLUME_ID)
+    -- The host confines the granted volume to the approved subroot and the
+    -- database to its dedicated file; their identities come from the host.
+    local granted, granted_error = funcs.call("bee.gov.binding:granted_resources", {})
+    local resources = type(granted) == "table" and granted.ok == true and type(granted.value) == "table"
+        and granted.value or nil
+    if granted_error or not resources or type(resources.volumes) ~= "table" or type(resources.databases) ~= "table" then
+        error("Installed grant identities are unavailable")
+    end
+    local volume_id, database_id = resources.volumes.shared, resources.databases.tally
+    if type(volume_id) ~= "string" or type(database_id) ~= "string" then error("Installed grant identities are unavailable") end
+    local volume, volume_error = fs.get(volume_id)
     if volume_error or not volume then error("Workspace file grant is unavailable") end
     local greeting, greeting_error = volume:readfile("/greeting.txt")
     if greeting_error or type(greeting) ~= "string" or greeting == "" then error("Workspace greeting is unavailable") end
-    local db, db_error = sql.get(DATABASE_ID)
+    local db, db_error = sql.get(database_id)
     if db_error or not db then error("Application database grant is unavailable") end
     local _, schema_error = db:execute("CREATE TABLE IF NOT EXISTS tally_rows(n INTEGER, note TEXT)")
     if schema_error then error("Application database schema is unavailable") end

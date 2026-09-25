@@ -24,9 +24,11 @@ SHARDS = 4
 LAUNCH_GROUP = {"bee.harness.catalog:launch_test", "bee.harness.catalog:permission_carrier_test"}
 
 
-def test_entries():
+def test_entries(suites=None):
     entries = []
     for index in sorted((ROOT / "tests/lua").rglob("_index.yaml")):
+        if suites is not None and index.relative_to(ROOT / "tests/lua").parts[0] not in suites:
+            continue
         document = yaml.safe_load(index.read_text())
         entries.extend(document["namespace"] + ":" + entry["name"]
                        for entry in document.get("entries", []) if entry.get("meta", {}).get("type") == "test")
@@ -63,19 +65,21 @@ def environment(folder):
             "PATH": str(fixture_bin) + os.pathsep + os.environ.get("PATH", "")}
 
 
-def run_shard(index, folder, entries):
+def run_shard(index, folder, entries, timeout=None):
     started = time.monotonic()
     result = subprocess.run([
         str(RUNTIME), "test", "--host", "bee:terminal", "--override",
         "bee.hive_host:supervisor_service:lifecycle.auto_start=false",
         "test", *entries,
-    ], cwd=folder, env=environment(folder), capture_output=True, text=True)
+    ], cwd=folder, env=environment(folder), capture_output=True, text=True, timeout=timeout)
     output = result.stdout + result.stderr
     plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", output)
     selected = re.search(r"(\d+) tests in \d+ suites", plain)
     cases = re.findall(r"(\d+) tests\s+[\d.]+s", plain)
-    valid = result.returncode == 0 and selected is not None and int(selected.group(1)) == len(entries) and bool(cases)
-    return index, len(entries), int(cases[-1]) if cases else 0, time.monotonic() - started, valid, output
+    passed = re.findall(r"(\d+) passed\s+[\d.]+(?:ms|s)", plain)
+    count = int(cases[-1]) if cases else int(passed[-1]) if passed else 0
+    valid = result.returncode == 0 and selected is not None and int(selected.group(1)) == len(entries) and count > 0
+    return index, len(entries), count, time.monotonic() - started, valid, output
 
 
 def main():

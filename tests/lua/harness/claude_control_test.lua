@@ -23,6 +23,7 @@ local adapter = require("adapter")
 local approvals = require("approvals")
 local launch = require("launch")
 local placement_fixture = require("placement_fixture")
+local principals = require("principals")
 local ACTOR = "bee.test.claude_control"
 local APPROVER = "bee.test.approver"
 local POLICY = "bee.harness.catalog:claude_control_fixture_policy"
@@ -60,7 +61,7 @@ local function reply_value(target: string, result: unknown, err: unknown): Objec
     return reply.value :: Object
 end
 local function call(target: string, request: unknown): Object
-    local result, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call(target, request)
+    local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope(carrier_scope)):call(target, request)
     return reply_value(target, result, err)
 end
 local function approve_call(target: string, request: unknown): Object
@@ -160,6 +161,9 @@ local function executable_digest(path: string): string
     return measure_executable(path).digest
 end
 local function prepare_host(claude: string, port: string, ttl_ms: integer)
+    local mode = assert(registry.get("bee.placement.native:resource_mode"))
+    mode.data = {mode = "host_configured"}
+    apply(mode)
     local pinned = real_adapter()
     local snapshot = assert(catalog.snapshot())
     local usable = assert(catalog.usable(snapshot))
@@ -350,7 +354,7 @@ local function define_tests()
                     test.is_nil(json.encode(item):find(SENTINEL, 1, true))
                 end
                 local recorded = shell("cat " .. record)
-                if not recorded:find('"x_api_key": "' .. SENTINEL .. '"', 1, true) then error(name .. ": the endpoint saw no api key") end
+                if not recorded:find('"x_api_key":"' .. SENTINEL .. '"', 1, true) then error(name .. ": the endpoint saw no api key") end
                 settlement.effects = marker_count(marker)
                 shell("rm -f " .. PROJECT .. "/" .. marker)
                 local evidence: {string} = {}

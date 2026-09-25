@@ -28,6 +28,7 @@ local codex_configuration = require("codex_configuration")
 local configuration = require("configuration")
 local placement_fixture = require("placement_fixture")
 local quote = require("quote")
+local principals = require("principals")
 local ACTOR = "bee.test.gateway_harness"
 local CLAUDE_POLICY = "bee.harness.catalog:claude_gateway_policy"
 local CODEX_POLICY = "bee.harness.catalog:codex_gateway_policy"
@@ -62,7 +63,7 @@ local function scope(): security.Scope
 end
 local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): Object
-    local result, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
+    local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     local reply = result :: {ok: boolean, error: {code: string, message: string}?, value: unknown}
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
@@ -94,6 +95,15 @@ end
 local function write_file(path: string, content: string)
     local encoded = assert(base64.encode(content))
     shell("printf '%s' '" .. encoded .. "' | base64 -d > " .. quote.line({path}))
+end
+local function endpoint_offered(recorded: string, wanted: string): boolean
+    for line in recorded:gmatch("[^\n]+") do
+        local item = json.decode(line) :: Object
+        for _, name in ipairs((item.mcp_tools or {}) :: {string}) do
+            if name == wanted then return true end
+        end
+    end
+    return false
 end
 local function apply(entry: Object)
     local changes = registry.snapshot():changes()
@@ -278,6 +288,9 @@ type Harness = {name: string, bin: string, binding: string, policy: string, sour
 -- loopback model endpoint selected by the host, the root and the sentinel
 -- source admitted. The gateway endpoint is the composition's own.
 local function prepare_host(harness: Harness, port: string)
+    local mode = assert(registry.get("bee.placement.native:resource_mode"))
+    mode.data = {mode = "host_configured"}
+    apply(mode)
     local entry = registry.get(harness.policy)
     if not entry then error(harness.policy) end
     local data = entry.data :: Object
@@ -313,12 +326,12 @@ local function through_placement(harness: Harness)
     local evidence = evidence_of(attempt_id)
     local kinds = kinds_of(evidence)
     -- Discovery: the endpoint was offered the gateway tools by the harness.
-    if not recorded:find('"mcp_tools": ["thread_read", "thread_wait"]', 1, true) and not recorded:find('"mcp_tools": ["thread_wait", "thread_read"]', 1, true) then
+    if not endpoint_offered(recorded, "thread_read") or not endpoint_offered(recorded, "thread_wait") then
         error(harness.name .. ": the endpoint saw no gateway tools: [" .. recorded:sub(1, 600) .. "]; settlement " .. tostring(settlement.outcome) .. " " .. tostring(settlement.reason) .. "; evidence " .. table.concat(kinds, ","))
     end
     -- The read: the harness called thread_read through the gateway and
     -- handed the owner's page, its records included, back to the model.
-    if not recorded:find('"tool_result": true', 1, true) or not recorded:find('\\"records\\":[', 1, true) then
+    if not recorded:find('"tool_result":true', 1, true) or not recorded:find('\\"records\\":[', 1, true) then
         local details: {string} = {}
         for index, item in ipairs(evidence) do details[index] = tostring(item.kind) .. "=" .. tostring(item.detail):sub(1, 120) end
         error(harness.name .. ": no thread read came back through the gateway: [" .. recorded:sub(1, 1500) .. "]; stream: " .. stream_summary(thread_id):sub(1, 2000) .. "; evidence: " .. table.concat(details, " ; "))
@@ -440,8 +453,8 @@ local function without_variable(harness: Harness)
     executor:release()
     stop_endpoint()
     local recorded = shell("cat " .. record)
-    if not recorded:find('"path": "/v1/', 1, true) then
-        error(harness.name .. " did not reach the model endpoint; exit " .. tostring(exit_code) .. "; command " .. quote.line(argv) .. "; home " .. shell("ls -la " .. root .. "/home; cat " .. root .. "/home/.claude.json 2>/dev/null"):sub(1, 500) .. "; stdout: " .. output:sub(1, 600) .. "; stderr: " .. errors:sub(1, 600))
+    if not recorded:find('"path":"/v1/', 1, true) then
+        error(harness.name .. " did not reach the model endpoint; exit " .. tostring(exit_code) .. "; command " .. quote.line(argv) .. "; stdout: " .. output:sub(1, 600) .. "; stderr: " .. errors:sub(1, 600))
     end
     local checked = call("bee.gateway.binding:check", {binding_id = binding_id})
     test.eq(tonumber(checked.presented_count), 0)
@@ -450,7 +463,9 @@ local function without_variable(harness: Harness)
     if harness.name == "claude" then
         if not output:find('"name":"bee","status":"failed"', 1, true) then error("claude reported no failed gateway server; stdout: " .. output:sub(1, 600) .. "; stderr: " .. errors:sub(1, 600)) end
     else
-        if recorded:find('"mcp_tools": ["thread', 1, true) then error("codex offered gateway tools without a credential: " .. recorded:sub(1, 600)) end
+        if endpoint_offered(recorded, "thread_read") or endpoint_offered(recorded, "thread_wait") then
+            error("codex offered gateway tools without a credential: " .. recorded:sub(1, 600))
+        end
     end
     leak_free(output, harness.name .. " output")
     leak_free(errors, harness.name .. " stderr")
@@ -545,7 +560,7 @@ local function hooks_through_gateway(harness: Harness)
         for _, file in ipairs(files) do write_file(root .. "/home/" .. file.path, file.content) end
         local hashes = drive_app_server(home .. "/.codex", work)
         if next(hashes) == nil then error("codex app-server listed no generated hooks") end
-        local decoded, decode_error = codex_launch.decode({profile_id = "batch", brief = "read the thread", sandbox = "read-only", gateway_tools = {"thread_read", "thread_wait"}, gateway_hooks = HOOK_EVENTS})
+        local decoded, decode_error = codex_launch.decode({profile_id = "batch", brief = "read the thread", sandbox = "read-only", gateway_tools = {"thread_read", "thread_wait"}, gateway_hooks = HOOK_EVENTS, config_profile = "bee"})
         if not decoded then error(tostring(decode_error)) end
         local specification = codex_launch.specification(decoded)
         argv[1] = harness.bin
@@ -575,7 +590,7 @@ local function hooks_through_gateway(harness: Harness)
     local elapsed_ms = time.now():sub(started_at):milliseconds()
     stop_endpoint()
     local recorded = shell("cat " .. record)
-    if not recorded:find('"tool_result": true', 1, true) then error(harness.name .. " with hooks did not complete the read: [" .. recorded:sub(1, 600) .. "]; stdout " .. output:sub(1, 400) .. "; stderr " .. errors:sub(1, 400)) end
+    if not recorded:find('"tool_result":true', 1, true) then error(harness.name .. " with hooks did not complete the read: [" .. recorded:sub(1, 600) .. "]; stdout " .. output:sub(1, 400) .. "; stderr " .. errors:sub(1, 400)) end
     local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding_id})
     local seen: {[string]: Object} = {}
     for _, item in ipairs(queue.hooks :: {Object}) do seen[tostring(item.event)] = item end

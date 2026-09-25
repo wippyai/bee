@@ -32,6 +32,7 @@ from tui_smoke import Desktop  # noqa: E402
 from workspace import ROOT, RUNTIME, classic_workspace, database_environment, workspace_checkpoint  # noqa: E402
 
 ROUNDS = 3
+UPDATE_ROUNDS = 4
 # The cold first boot of a full composition, the budget the sibling desktop
 # acceptances (tests/app_journey.py, tests/delivery_review.py) already use.
 COLD_BOOT = 30
@@ -572,7 +573,7 @@ def review_and_apply(folder, project, staged, change, exercise_app, evidence, ph
             step_boundary = frame_boundary(ui)
             ui.key(b"x")
             _, step_frame = wait_frame(ui, step_boundary,
-                                       re.compile(r"\n Activation (?:consuming|authorized|applying|settled)\s*\n"),
+                                       re.compile(r"\n Activation (?:consuming|authorized|applying|settled)\b"),
                                        timeout=COLD_BOOT)
             if "settled  applied" in "\n".join(step_frame):
                 break
@@ -662,12 +663,13 @@ def exercise():
     shutil.copytree(ROOT / "tests/fixtures/agent_app", project / "src/probe")
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") == "1":
         # The replica fixture supplies an enrolled supervisor explicitly.
-        # Keep the default offline service stopped in that composition.
-        hive_module = project / "modules/hive/src/_index.yaml"
-        staged_hive = yaml.safe_load(hive_module.read_text())
-        service = next(item for item in staged_hive["entries"] if item["name"] == "supervisor_service")
+        # Keep the real Hive sender in bee.hive and disable only the protected
+        # service entry for this fixture's explicitly managed supervisor.
+        hive_host_index = project / "src/hive_host/_index.yaml"
+        hive_host = yaml.safe_load(hive_host_index.read_text())
+        service = next(item for item in hive_host["entries"] if item["name"] == "supervisor_service")
         service["lifecycle"]["auto_start"] = False
-        hive_module.write_text(yaml.safe_dump(staged_hive, sort_keys=False))
+        hive_host_index.write_text(yaml.safe_dump(hive_host, sort_keys=False))
         shutil.copytree(ROOT / "tests/fixtures/hive_replica", project / "src/replica_probe")
         shutil.rmtree(project / "src/replica_probe/host_environment")
         source_probe = project / "src/replica_probe/_index.yaml"
@@ -680,7 +682,7 @@ def exercise():
         shutil.copy2(ROOT / name, project / name)
     configure_source_node(project)
     stage_material(project)
-    set_variable(project, "src/driver/agy/_index.yaml", "executable", "BEE_AGENT_APP_AGY")
+    set_variable(project, "modules/driver-agy/src/_index.yaml", "executable", "BEE_AGENT_APP_AGY")
     set_variable(project, "src/environment/_index.yaml", "machine_home", "BEE_AGENT_APP_HOME")
     admit_docs_tool(project)
     assert_overlay_authority(project)
@@ -749,20 +751,25 @@ def exercise():
               + DEFINITION_ID + " as " + staged["version"] + "; evidence in " + str(folder))
         return
 
-    write_inputs(project, round="update", source_workspace=source_workspace,
-                 launch_workspace=workspace_id, update=True)
-    started = time.monotonic()
-    updated = author(project, folder, "update")
-    record_seconds(folder, evidence, "provider_seconds", "v2.update", started)
-    assert not updated["findings"], updated["findings"]
+    updated, findings = None, ""
+    for update_number in range(1, UPDATE_ROUNDS + 1):
+        label = "update" if update_number == 1 else "update-" + str(update_number)
+        write_inputs(project, round=label, source_workspace=source_workspace,
+                     launch_workspace=workspace_id, update=True, findings=findings)
+        started = time.monotonic()
+        updated = author(project, folder, label)
+        record_seconds(folder, evidence, "provider_seconds", "v2." + label, started)
+        findings = contract_findings(updated) or candidate_findings(folder, project, updated["entries"], label) or ""
+        if not findings:
+            break
+        print("Update " + label + " returns to the agent: " + findings.splitlines()[0])
+    assert updated is not None and not findings, "the agent did not reach a ready update in " + str(UPDATE_ROUNDS) + " rounds: " + findings
     assert updated["workspace_revision"] > first_revision, updated
     assert updated["thread_sequence"] > report["thread_sequence"], updated
     assert updated["snapshot_digest"] != report["snapshot_digest"], updated
     assert updated["artifact_digest"] != report["artifact_digest"], updated
     application = updated["entries"][0]["meta"]["application"]
     assert application["revision"] == "2", application
-    findings = contract_findings(updated) or candidate_findings(folder, project, updated["entries"], "update")
-    assert not findings, findings
     write_inputs(project, round="update", source_workspace=source_workspace,
                  launch_workspace=workspace_id, destination_workspace=workspace_id,
                  version="2.0.0", snapshot_digest=updated["snapshot_digest"],

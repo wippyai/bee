@@ -59,7 +59,8 @@ local function define_tests()
             local record = root .. "/endpoint.jsonl"
             local endpoint_executor = assert(exec.get("bee:placement_executor"))
             local _ = shell("mkdir -p " .. root .. "/home/.codex " .. root .. "/work")
-            local endpoint, endpoint_error = endpoint_executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record)
+            local endpoint, endpoint_error = endpoint_executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record,
+                {env = {BEE_ENDPOINT_TEXT = "done"}})
             if not endpoint then error("endpoint: " .. tostring(endpoint_error)) end
             local endpoint_out = endpoint:stdout_stream()
             local endpoint_started, endpoint_start_error = endpoint:start()
@@ -128,7 +129,7 @@ local function define_tests()
             endpoint_out:close()
             endpoint_executor:release()
             local recorded = shell("cat " .. record)
-            if not recorded:find('"path": "/v1/responses"', 1, true) or not recorded:find('"authorization": "Bearer ' .. SENTINEL .. '"', 1, true) or not out:find('"type":"thread.started"', 1, true) then
+            if not recorded:find('"path":"/v1/responses"', 1, true) or not recorded:find('"authorization":"Bearer ' .. SENTINEL .. '"', 1, true) or not out:find('"type":"thread.started"', 1, true) then
                 local config_written = shell("cat " .. root .. "/home/.codex/config.toml")
                 error("authentication path not proven; exit " .. tostring(exit_code) .. "; endpoint [" .. recorded:sub(1, 300):gsub(SENTINEL, "<sentinel>") .. "]; config [" .. config_written:sub(1, 300) .. "]; stdout [" .. out:sub(1, 400):gsub(SENTINEL, "<sentinel>") .. "]; stderr [" .. err:sub(1, 600):gsub(SENTINEL, "<sentinel>") .. "]")
             end

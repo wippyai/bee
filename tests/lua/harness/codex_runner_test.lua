@@ -21,6 +21,7 @@ local policy = require("policy")
 local launch = require("launch")
 local placement = require("placement")
 local placement_fixture = require("placement_fixture")
+local principals = require("principals")
 local ACTOR = "bee.test.codex_carrier"
 local POLICY = "bee.harness.catalog:codex_fixture_policy"
 local BARE_POLICY = "bee.harness.catalog:codex_fixture_policy_bare"
@@ -49,7 +50,7 @@ local function scope(): security.Scope
 end
 local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): Object
-    local result, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
+    local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     local reply = result :: {ok: boolean, error: {code: string, message: string}?, value: unknown}
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
@@ -148,6 +149,9 @@ local function measured(): (string, string, string)
     error("the Codex binding is not usable on this host")
 end
 local function prepare_host(port: string, codex: string)
+    local mode = assert(registry.get("bee.placement.native:resource_mode"))
+    mode.data = {mode = "host_configured"}
+    apply(mode)
     local provider = registry.get(PROVIDER)
     if not provider then error("provider entry") end
     local provider_data = provider.data :: Object
@@ -345,7 +349,7 @@ local function define_tests()
             test.neq(settlement.outcome, "succeeded")
             local recorded = shell("cat " .. record)
             local kinds = evidence_kinds(attempt_id)
-            if not recorded:find('"path": "/v1/responses"', 1, true) or not recorded:find('"authorization": "Bearer ' .. SENTINEL .. '"', 1, true) then
+            if not recorded:find('"path":"/v1/responses"', 1, true) or not recorded:find('"authorization":"Bearer ' .. SENTINEL .. '"', 1, true) then
                 local notices: {string} = {}
                 for _, item in ipairs(records_of(thread_id)) do
                     local body = item.body :: Object
@@ -387,20 +391,29 @@ local function define_tests()
             provider_data.model = "gpt-5-codex"
             apply(provider)
             local resumed = await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", changed_request, "resume", nil), "changed provider")
-            test.is_nil(resumed.value)
+            if resumed.value then
+                local stored = call("bee.threads.carrier:checkpoint", {thread_id = changed_thread, attempt_id = changed_attempt})
+                error("changed provider resumed: " .. json.encode(resumed.value):sub(1, 700)
+                    .. "; crash " .. tostring(crashed.error) .. "; stored " .. json.encode(stored):sub(1, 700))
+            end
             if not tostring(resumed.error):find("no longer digests as recorded", 1, true) then
                 local stored = call("bee.threads.carrier:checkpoint", {thread_id = changed_thread, attempt_id = changed_attempt})
                 error("resume did not refuse the changed provider: " .. tostring(resumed.error) .. "; crash " .. tostring(crashed.error) .. "; stored " .. json.encode(stored):sub(1, 600))
             end
             provider_data.model = previous_model
             apply(provider)
-            -- The selected driver refuses missing provider input before placement
-            -- records an intent or starts a native child.
-            local bare = await_carrier(spawn_carrier("bee.harness.carrier:process", request(thread(), fresh("attempt"), BARE_POLICY, {}), "open", nil), "bare policy")
-            test.is_nil(bare.value)
-            if not tostring(bare.error):find("DENIED: driver configure: codex configuration needs the selected provider", 1, true) then
-                error("bare policy did not refuse: " .. tostring(bare.error))
-            end
+            -- A policy without a provider is supported for an existing Codex
+            -- login. This private-home fixture has neither login nor projected
+            -- credential, so it must fail without materializing provider data.
+            local bare_attempt = fresh("attempt")
+            local endpoint_before = shell("cat " .. record)
+            local bare = await_carrier(spawn_carrier("bee.harness.carrier:process", request(thread(), bare_attempt, BARE_POLICY, {}), "open", nil), "bare policy")
+            if not bare.value then error("bare policy did not settle: " .. tostring(bare.error)) end
+            test.eq((bare.value.settlement :: Object).outcome, "failed")
+            local bare_kinds = evidence_kinds(bare_attempt)
+            test.is_false(has(bare_kinds, "configuration.materialized"))
+            test.is_false(has(bare_kinds, "credential.materialized"))
+            test.eq(shell("cat " .. record), endpoint_before)
             stop_endpoint()
             shell("rm -rf " .. root)
             test.eq(launch.CODEX_AUTHENTICATION, "unproven")

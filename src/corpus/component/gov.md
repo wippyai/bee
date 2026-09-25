@@ -75,8 +75,8 @@ authoring overlay slot on the node. Exhaustion fails explicitly; there is no
 eviction, garbage collection or ownership transfer yet. Frozen content and
 receipts are durable; they do not imply activation,
 approval, or automatic restoration of runtime definitions. This virtual file API
-does not mount a host directory or execute WASM. Hive transfer, inbox requests,
-plugin dispatch and new-database allocation remain unimplemented.
+does not mount a host directory or execute WASM. Hive transfer, inbox requests
+and plugin dispatch remain unimplemented.
 
 `make governance-workspace-check` proves the public route with distinct actors
 and two boots of the same database: binary round trips, denied caller/foreign
@@ -240,8 +240,10 @@ confinement.
 The activation configuration may carry one `workspace_applications` rule
 beside its explicit rows, and the publication configuration a matching
 `workspace_applications: true`. `activation_profiles.select` returns an
-explicit row for a source, or else instantiates the rule for an overlay this
-node authored whose name `workspace_applications` accepts: component and
+explicit row for a source, or else instantiates the rule for an overlay whose
+name `workspace_applications` accepts, authored on this node or, while the
+rule's `hive` flag is set, received over Hive; a name stays with the source
+node whose desired activation holds its slot. The instance has component and
 namespace `app.<overlay_id>`, the application `app.<overlay_id>:app`, the
 rule's approval policy, kinds, modules, base admission policies and thread access,
 and a private overlay owner per destination workspace. The instance is
@@ -251,7 +253,12 @@ admission binding; its recorded thread access also selects the application
 binding. Activation writes the generated policies, requirement defaults, grant
 record and admission in one registry overlay transaction. It reuses a contained
 live grant after measuring and checking a later artifact, while widening
-requests a new permission approval. The instance
+requests a new permission approval. File grants root in the destination
+workspace's folder from the node catalog; contract and HTTP grants authorize
+only the capability gateway (`bee.gov.binding:contract_call`,
+`bee.gov.binding:http_request`), which checks the caller's own live record.
+Preflight also refuses edits to the host `bee:protected_kernel` trust map, its
+transitive code dependencies and requirement selectors aimed at it. The instance
 sets `allow.auto_start: false`, and preflight refuses any entry declaring
 `lifecycle.auto_start` under such a policy (`AUTO_START_DENIED`); an explicit
 row admits auto start unless it sets that field to `false`. Availability

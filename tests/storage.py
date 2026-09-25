@@ -707,11 +707,14 @@ def client_storage():
         host = project / "src/environment/_index.yaml"
         configuration = yaml.safe_load(host.read_text())
         next(e for e in configuration["entries"] if e["name"] == "client_db")["file"] = "${env:bee:client_db_path}"
+        host.write_text(yaml.safe_dump(configuration, sort_keys=False))
+        root_index = project / "src/_index.yaml"
+        configuration = yaml.safe_load(root_index.read_text())
         configuration["entries"] += [
             {"name": "client_db_path", "kind": "env.variable", "storage": "bee.environment:workspace_environment",
              "variable": "BEE_CLIENT_DB", "default": str(root / "build-client.db"), "readonly": True},
         ]
-        host.write_text(yaml.safe_dump(configuration, sort_keys=False))
+        root_index.write_text(yaml.safe_dump(configuration, sort_keys=False))
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)

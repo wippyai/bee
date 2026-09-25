@@ -1029,6 +1029,16 @@ func writeReport(prefix string, report object) {
 	if err != nil {
 		return
 	}
+	if os.Getenv("BEE_FIXTURE_REPORT_STREAM") == "1" {
+		// Keep the fixture report ahead of the captured terminal envelope in
+		// the same stdout stream. Stderr and stdout have no cross-pipe order.
+		frame, frameErr := json.Marshal(object{"type": "system", "subtype": "informational",
+			"level": "info", "content": prefix + ":" + string(encoded)})
+		if frameErr == nil {
+			fmt.Fprintln(os.Stdout, string(frame))
+		}
+		return
+	}
 	fmt.Fprintf(os.Stderr, "%s:%s\n", prefix, encoded)
 }
 

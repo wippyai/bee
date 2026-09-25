@@ -117,6 +117,7 @@ end
 local function request(thread_id: string, attempt_id: string, environment: {[string]: string}, subpath: string?, policy_ref: string?): Object
     local placement = placement_fixture.resolve()
     environment.BEE_FIXTURE_GATEWAY = "1"
+    environment.BEE_FIXTURE_REPORT_STREAM = "1"
     if environment.BEE_FIXTURE_STREAM == nil then environment.BEE_FIXTURE_STREAM = stream("plain.jsonl") end
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = BINDING,
         profile_id = "batch", brief = "ping", policy_ref = policy_ref or POLICY, resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = subpath or "", access = "write", purpose = "project"}},
@@ -181,7 +182,7 @@ local function await_paused_or_exit(paused: Channel<process.Message>, pid: strin
         end
     end
 end
--- The fixture child's report, one stderr line the carrier records as a notice.
+-- The fixture child's report is an asynchronously committed stream notice.
 local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
     local cursor = 0
@@ -193,21 +194,40 @@ local function records_of(thread_id: string): {Object}
     end
     return all
 end
-local function report(thread_id: string, attempt_id: string?): Object
-    for _, item in ipairs(records_of(thread_id)) do
-        if item.kind == "observation" and item.source == "stream" then
-            local data = (item.body :: Object).data :: Object
-            if data.type == "notice" and data.code == "stderr" then
-                local text = tostring((data.content :: Object).text)
-                local start = text:find("gateway:", 1, true)
-                if start then
-                    local decoded, err = json.decode(text:sub(start + 8))
-                    if err or type(decoded) ~= "table" then error("gateway report unreadable: " .. text) end
-                    return decoded :: Object
+local function notice(thread_id: string, prefix: string): Object?
+    local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
+    local cursor = 0
+    while true do
+        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        for _, item in ipairs(page.records :: {Object}) do
+            if item.kind == "observation" and item.source == "stream" then
+                local data = (item.body :: Object).data :: Object
+                if data.type == "notice" and (data.code == "stderr" or data.code == "informational") then
+                    local text = tostring((data.content :: Object).text)
+                    local envelope = json.decode(text)
+                    if type(envelope) == "table" and type((envelope :: Object).content) == "string" then
+                        text = (envelope :: Object).content :: string
+                    end
+                    local start = text:find(prefix, 1, true)
+                    if start then
+                        local decoded, err = json.decode(text:sub(start + #prefix))
+                        if err or type(decoded) ~= "table" then error(prefix .. " report unreadable: " .. text) end
+                        return decoded :: Object
+                    end
                 end
             end
         end
+        cursor = math.floor(tonumber(page.scanned_through) or cursor)
+        if page.has_more ~= true then
+            local remaining = guard_ms - math.floor(time.now():unix_nano() / 1000000)
+            if remaining <= 0 then return nil end
+            call("bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
+        end
     end
+end
+local function report(thread_id: string, attempt_id: string?): Object
+    local found = notice(thread_id, "gateway:")
+    if found then return found end
     local kinds: {string} = {}
     if attempt_id then
         local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 128})
@@ -277,21 +297,9 @@ end
 -- The fixture child's hook report and the hook records the carrier
 -- committed for a thread.
 local function hook_report(thread_id: string): Object
-    for _, item in ipairs(records_of(thread_id)) do
-        if item.kind == "observation" and item.source == "stream" then
-            local data = (item.body :: Object).data :: Object
-            if data.type == "notice" and data.code == "stderr" then
-                local text = tostring((data.content :: Object).text)
-                local start = text:find("hooks:", 1, true)
-                if start then
-                    local decoded, err = json.decode(text:sub(start + 6))
-                    if err or type(decoded) ~= "table" then error("hook report unreadable: " .. text) end
-                    return decoded :: Object
-                end
-            end
-        end
-    end
-    error("no hook report in thread " .. thread_id)
+    local found = notice(thread_id, "hooks:")
+    if not found then error("no hook report in thread " .. thread_id) end
+    return found
 end
 local function hook_records(thread_id: string): {Object}
     local list: {Object} = {}

@@ -124,6 +124,45 @@ local function define_tests()
             foreign.targets = {"app.other:app"}
             test.is_nil(grants.propose(vocabulary(), OWNER, APP, {foreign}))
         end)
+        test.it("materializes child thread messaging on its owner verbs", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
+                {request("threads.message", {scope = "children"})}))
+            test.eq(#proposed.capabilities, 1)
+            test.eq(proposed.capabilities[1].operation, "threads.message")
+            test.eq(#proposed.policies, 1)
+            local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
+            test.eq((body.actions :: {string})[1], "funcs.call")
+        end)
+        test.it("materializes managed agent launch on the exact definitions", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
+                {request("agents.launch", {definitions = {"acme:research"}})}))
+            test.eq(#proposed.capabilities, 1)
+            test.eq(proposed.capabilities[1].operation, "agents.launch")
+            local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
+            test.eq((body.actions :: {string})[1], "bee.harness.launch")
+            local resources = body.resources :: {string}
+            test.eq(#resources, 1)
+            test.eq(resources[1], "acme:research")
+        end)
+        test.it("materializes scoped HTTP egress on its origin and path prefix", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
+                {request("http.api", {origin = "https://api.example.com",
+                    methods = {"GET"}, path_prefix = "/v1"})}))
+            test.eq(#proposed.capabilities, 1)
+            test.eq(proposed.capabilities[1].operation, "http.request")
+            test.eq(proposed.policies[1].kind, "security.policy.expr")
+            local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
+            local expression = body.expression :: string
+            test.is_true(expression:find("http_client.request", 1, true) ~= nil)
+            test.is_true(expression:find("api", 1, true) ~= nil)
+            test.is_true(expression:find("/v1", 1, true) ~= nil)
+            test.is_true(expression:find("\\.", 1, true) ~= nil)
+            test.is_nil(expression:find("http://", 1, true))
+        end)
+        test.it("keeps Hive exposure as review vocabulary without installable enforcement", function()
+            test.is_nil(grants.propose(vocabulary(), OWNER, APP,
+                {request("hive.expose", {contract = "app.notes:api", methods = {"get"}})}))
+        end)
     end)
 end
 return test.run_cases(define_tests)

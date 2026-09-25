@@ -209,12 +209,29 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             local id = policy and bounds.id(policy.id) or nil
             if not id or (not id:match("^bee%.gov%.grants:policy%.[0-9a-f]+$")
                 and not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$"))
-                or policy.kind ~= "security.policy" or policy_ids[id] then
+                or (policy.kind ~= "security.policy" and policy.kind ~= "security.policy.expr")
+                or policy_ids[id] then
                 return nil, nil, nil, "generated capability policy is invalid"
             end
             policy_ids[id] = true
             local data = bounds.object(policy.data)
             local inner = data and bounds.object(data.policy) or nil
+            local actions = inner and inner.actions or nil
+            if type(actions) == "table" then
+                for _, action in ipairs(actions :: {unknown}) do
+                    if type(action) ~= "string" or #action == 0 or #action > 80
+                        or (action :: string):find("%c") then
+                        return nil, nil, nil, "generated capability policy action is invalid"
+                    end
+                end
+            end
+            if policy.kind == "security.policy.expr" then
+                local expression = inner and inner.expression or nil
+                if type(expression) ~= "string" or #expression == 0 or #expression > 1024
+                    or (expression :: string):find("%c") then
+                    return nil, nil, nil, "generated capability policy expression is invalid"
+                end
+            end
             local resources = inner and inner.resources or nil
             if type(resources) == "table" then
                 for _, resource in ipairs(resources :: {unknown}) do

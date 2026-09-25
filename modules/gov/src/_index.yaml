@@ -40,6 +40,11 @@ entries:
   kind: library.lua
   source: file://capability_files.lua
   modules: [hash]
+- name: capability_contracts
+  kind: library.lua
+  source: file://capability_contracts.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: capability_containment
   kind: library.lua
   source: file://capability_containment.lua

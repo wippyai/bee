@@ -141,7 +141,19 @@ SQLite store outside the readable tree with a `db.get`-only policy on that
 store. The shipped module ceiling includes `funcs` so the installed policy can
 authorize calls to the Threads owner, which checks the application's actor
 membership, plus `fs` and `sql` so file and database grants are callable
-through the granted identities shown at approval.
+through the granted identities shown at approval. A child-thread message
+grant authorizes calls to the Threads owner's message verbs, which check the
+caller's membership; a launch grant authorizes `bee.harness.launch` on exactly
+the approved definitions through the application launch facade, which binds
+the attempt to the caller's workspace and admits no inherited app grant. A
+contract grant authorizes `contract.open` on the exact binding and
+`contract.call` on the exact methods; the callee owner still checks the
+authenticated caller and workspace against the installed grant record before
+using its own authority, so a grant for one binding never reaches another. An
+HTTP grant authorizes `http_client.request` on URLs under the approved origin
+and path prefix; the approved methods stay review-visible and
+containment-gated because the runtime authorizes the URL alone. Hive exposure
+remains host-published review vocabulary with no app-installable enforcement.
 
 On approval, one registry overlay transaction installs host-owned policies in
 `bee.gov.grants`, fills the requirement defaults, and records the grant
@@ -161,8 +173,8 @@ generated grant policies add exactly the approved file, database and thread
 reach. `store.memory` and `store` are outside this ceiling. These are ceilings,
 not a grant to launch any agent definition: launch remains subject to the
 host's separate definition and application policies. Although the catalog
-describes launch, thread message, contract, HTTP and Hive requests, this rule
-does not install those grants.
+also describes Hive exposure, this rule does not install that grant: Hive
+exposure stays host-published.
 
 ### Can a workspace application get its own database?
 
@@ -184,15 +196,14 @@ Code building the application from its written spec.
 
 ## Limits
 
-Service templates (thread messaging, agent launch, contract calls, scoped
-HTTP, Hive exposure) are later work. The installed file, database and thread
-grants are registry authority for the selected application scope. Runtime
-agent elevation is implemented through the gateway `request_capability` and
-`capability_status` tools: an approval bound to the authenticated thread and
-attempt consumes once and writes one thread-actor resources grant the
-attempt's placement resolves. Active revocation fencing is implemented: an
-epoch advance reports its fenced attempts, and an owner fence withdraws the
-fenced instance's thread delegation before stopping it.
+Hive exposure is later work. The installed file, database, thread, launch,
+contract and HTTP grants are registry authority for the selected application
+scope. Runtime agent elevation is implemented through the gateway
+`request_capability` and `capability_status` tools: an approval bound to the
+authenticated thread and attempt consumes once and writes one thread-actor
+resources grant the attempt's placement resolves. Active revocation fencing is
+implemented: an epoch advance reports its fenced attempts, and an owner fence
+withdraws the fenced instance's thread delegation before stopping it.
 
 Destination migration execution requires a captured immutable registry view and
 is not supplied by ordinary overlay activation. Automatic Hive enrollment and

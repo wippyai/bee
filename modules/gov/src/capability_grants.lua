@@ -60,6 +60,39 @@ function M.reserved(raw: unknown): boolean
         or raw:sub(1, #PRIOR_PREFIX) == PRIOR_PREFIX)
 end
 
+local function string_list(raw: unknown, pattern: string): {string}?
+    if type(raw) ~= "table" then return nil end
+    local result: {string} = {}
+    local seen: {[string]: boolean} = {}
+    for _, item in ipairs(raw :: {unknown}) do
+        if type(item) ~= "string" or not (item :: string):match(pattern) or seen[item :: string] then
+            return nil
+        end
+        seen[item :: string] = true
+        result[#result + 1] = item :: string
+    end
+    if #result == 0 or #result > 16 then return nil end
+    table.sort(result)
+    return result
+end
+
+local function valid_prefix(raw: string): boolean
+    if raw:sub(1, 1) ~= "/" or #raw > 160 or raw:find("\\", 1, true) or raw:find("//", 1, true) then
+        return false
+    end
+    if #raw > 1 and raw:sub(-1) == "/" then return false end
+    for segment in raw:gmatch("[^/]+") do
+        if segment == "." or segment == ".." or not segment:match("^[A-Za-z0-9_.-]+$") then
+            return false
+        end
+    end
+    return true
+end
+
+local function regex_escape(raw: string): string
+    return raw:gsub("(%W)", "\\%1")
+end
+
 -- Each catalog entry materializes into generated host entries: a policy plus
 -- the host-created volume or database it authorizes. Other catalog entries
 -- remain review vocabulary until their resource and owner boundaries arrive.
@@ -92,6 +125,69 @@ local function policy(owner: string, grant: Object, id: string): (Object?, Objec
             return nil, nil, nil, database_error or policy_error or "application database grant is not installable"
         end
         return generated, nil, database, nil
+    end
+    if grant.capability == "threads.message" and grant.operation == "threads.message"
+        and grant.resource == "threads" and scope.scope == "children" then
+        return {id = id, kind = "security.policy", meta = {comment = "Host-generated child thread message grant"},
+            data = {policy = {actions = {"funcs.call"},
+                resources = {"bee.threads.service:send", "bee.threads.service:notify"},
+                effect = "allow"}}}, nil, nil, nil
+    end
+    if grant.capability == "agents.launch" and grant.operation == "agents.launch"
+        and grant.resource == "managed_agents" then
+        local definitions = string_list(scope.definitions, "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$")
+        if not definitions then
+            return nil, nil, nil, "managed agent launch grant names no valid definitions"
+        end
+        return {id = id, kind = "security.policy",
+            meta = {comment = "Host-generated managed agent launch grant"},
+            data = {policy = {actions = {"bee.harness.launch"}, resources = definitions,
+                effect = "allow"}}}, nil, nil, nil
+    end
+    if grant.capability == "contract.call" and grant.operation == "contract.call"
+        and type(grant.resource) == "string" then
+        local binding: string = grant.resource :: string
+        if not binding:match("^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$") then
+            return nil, nil, nil, "contract call grant names an invalid binding"
+        end
+        local call_methods = string_list(scope.methods, "^[A-Za-z][A-Za-z0-9_]*$")
+        if not call_methods then
+            return nil, nil, nil, "contract call grant names no valid methods"
+        end
+        local clauses: {string} = {}
+        for _, name in ipairs(call_methods) do clauses[#clauses + 1] = 'resource == "' .. name .. '"' end
+        local expression = '(action == "contract.open" && resource == "' .. binding .. '")'
+            .. ' || (action == "contract.call" && (' .. table.concat(clauses, " || ") .. "))"
+        return {id = id, kind = "security.policy.expr",
+            meta = {comment = "Host-generated exact contract call grant"},
+            data = {policy = {expression = expression,
+                actions = {"contract.open", "contract.call"},
+                resources = {binding}, effect = "allow"}}}, nil, nil, nil
+    end
+    if grant.capability == "http.api" and grant.operation == "http.request"
+        and type(grant.resource) == "string" and type(scope.path_prefix) == "string" then
+        local origin: string = grant.resource :: string
+        local prefix: string = scope.path_prefix :: string
+        local authority = origin:match("^https://(.+)$")
+        local host, port = authority and authority:match("^([A-Za-z0-9.%-]+):([0-9]+)$") or nil
+        if not authority then
+            return nil, nil, nil, "scoped HTTP grant names an invalid origin or path prefix"
+        end
+        if not host then host = authority:match("^[A-Za-z0-9.%-]+$") end
+        local port_number = tonumber(port or "")
+        if not host or (port and (not port_number or port_number == 0 or port_number > 65535))
+            or not valid_prefix(prefix) then
+            return nil, nil, nil, "scoped HTTP grant names an invalid origin or path prefix"
+        end
+        -- The runtime authorizes http_client.request on the URL alone, so the
+        -- generated expression pins the approved origin and path prefix; the
+        -- approved methods stay review-visible and containment-gated.
+        local expression = 'action == "http_client.request" && resource matches "^'
+            .. regex_escape(origin) .. regex_escape(prefix) .. '([?#].*)?$"'
+        return {id = id, kind = "security.policy.expr",
+            meta = {comment = "Host-generated scoped HTTP egress grant"},
+            data = {policy = {expression = expression, actions = {"http_client.request"},
+                resources = {origin}, effect = "allow"}}}, nil, nil, nil
     end
     return nil, nil, nil, "capability has no installed enforcement in this slice"
 end

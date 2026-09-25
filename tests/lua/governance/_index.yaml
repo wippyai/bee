@@ -326,6 +326,17 @@ entries:
   imports:
     test: wippy.test:test
     capability_files: bee.gov:capability_files
+- name: capability_contracts_test
+  kind: function.lua
+  source: file://capability_contracts_test.lua
+  method: run
+  modules: [registry, hash]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    capability_catalog: bee.gov:capability_catalog
+    capability_grants: bee.gov:capability_grants
+    capability_contracts: bee.gov:capability_contracts
 - name: workspace_test
   kind: function.lua
   source: file://workspace_test.lua

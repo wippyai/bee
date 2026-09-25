@@ -189,6 +189,46 @@ local function define_tests()
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, dangling))
         end)
+        test.it("installs exact contract and HTTP expressions and refuses malformed ones", function()
+            local state: State = {entries = {}, generation = 1, conflicts = 0}
+            local call_id = "bee.gov.grants:policy." .. string.rep("a", 64)
+            local web_id = "bee.gov.grants:policy." .. string.rep("b", 64)
+            local portable = {{id = "app.notes:app", kind = "process.lua",
+                meta = {type = "bee.application"}, data = {source = "return true"}},
+                {id = "app.notes:call", kind = "ns.requirement",
+                    meta = {capability = "contract.call", value_kind = "security.policy"},
+                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}},
+                {id = "app.notes:web", kind = "ns.requirement",
+                    meta = {capability = "http.api", value_kind = "security.policy"},
+                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
+            local generated = {policies = {
+                {id = call_id, kind = "security.policy.expr",
+                    data = {policy = {expression = '(action == "contract.open" && resource == "app.peer:api")'
+                        .. ' || (action == "contract.call" && (resource == "get"))',
+                        actions = {"contract.open", "contract.call"}, resources = {"app.peer:api"},
+                        effect = "allow"}}},
+                {id = web_id, kind = "security.policy.expr",
+                    data = {policy = {expression = 'action == "http_client.request" && resource matches '
+                        .. '"^https://api\\.example\\.com/v1([?#].*)?$"',
+                        actions = {"http_client.request"}, resources = {"https://api.example.com"},
+                        effect = "allow"}}}},
+                bindings = {{requirement_id = "app.notes:call", policy_id = call_id},
+                    {requirement_id = "app.notes:web", policy_id = web_id}},
+                record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
+                    kind = "registry.entry", data = {digest = string.rep("f", 64)}}}
+            local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.gov:overlay", portable, nil, generated))
+            test.eq(applied.overlay_entries, 6)
+            test.not_nil(state.entries[call_id])
+            test.not_nil(state.entries[web_id])
+            local expressionless = {policies = {{id = call_id, kind = "security.policy.expr",
+                data = {policy = {actions = {"contract.open"}, resources = {"app.peer:api"},
+                    effect = "allow"}}}},
+                bindings = {{requirement_id = "app.notes:call", policy_id = call_id}},
+                record = generated.record}
+            test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.gov:overlay", portable, nil, expressionless))
+        end)
 
         test.it("measures and reconciles an overlay entry near the 256 KiB artifact limit", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}

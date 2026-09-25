@@ -12,7 +12,7 @@ local function define_tests()
         test.it("names the artifact file and one process.lua application entry", function()
             local value = guide.value()
             test.eq(value.revision, guide.REVISION)
-            local document = value.document :: string
+            local document = guide.document()
             test.not_nil(string.find(document, "entries.json", 1, true))
             test.not_nil(string.find(document, "process.lua", 1, true))
             test.not_nil(string.find(document, "bee.application", 1, true))
@@ -23,7 +23,7 @@ local function define_tests()
             test.not_nil(string.find(document, "existing host-admitted database", 1, true))
         end)
         test.it("names the workspace delivery rule and follows it in its example", function()
-            local document = guide.value().document :: string
+            local document = guide.document()
             test.not_nil(string.find(document, naming.RULE, 1, true))
             test.not_nil(string.find(document, "workspace_id defaults to your own workspace", 1, true))
             test.not_nil(string.find(document, "create overlay " .. guide.OVERLAY_ID, 1, true))
@@ -33,7 +33,7 @@ local function define_tests()
             test.eq((guide.example()[1] :: {[string]: unknown}).id, identity.definition_id)
         end)
         test.it("points at the offline platform documentation the docs tool reads", function()
-            local document = guide.value().document :: string
+            local document = guide.document()
             -- An agent that reads the application contract must be told where
             -- the platform documentation is and how to look things up.
             test.not_nil(string.find(document, "docs tool", 1, true))
@@ -54,7 +54,7 @@ local function define_tests()
             test.not_nil(string.find(document, "canonical runnable", 1, true))
         end)
         test.it("routes every application request to its archetype, the style rules and the kit", function()
-            local document = guide.value().document :: string
+            local document = guide.document()
             for _, needle in ipairs({"docs/guides/app-style.md", "80x24", "120x36", "160x48", "frame.size", "frame.layout",
                 "bee.application:viz", "viz = \"bee.application:viz\"", "src/apps/monitor/", "System Monitor", "one-shot"}) do
                 test.eq(needle .. (string.find(document, needle, 1, true) and "" or " missing"), needle)
@@ -80,7 +80,30 @@ local function define_tests()
                     test.not_nil(string.find(rule, kind .. " reads " .. field .. " as a named object", 1, true))
                 end
             end
-            test.not_nil(string.find(guide.value().document :: string, rule, 1, true))
+            test.not_nil(string.find(guide.document(), rule, 1, true))
+        end)
+        test.it("returns a short index first, sections on request and the example separately", function()
+            local index = guide.value()
+            test.eq(index.revision, guide.REVISION)
+            local short = index.document :: string
+            test.is_true(#short < 1500)
+            test.is_nil((index :: {[string]: unknown}).example)
+            test.not_nil(string.find(short, "entries.json", 1, true))
+            local sections = index.sections :: {{[string]: string}}
+            test.is_true(#sections >= 8)
+            for _, section in ipairs(guide.section_list()) do
+                test.not_nil(string.find(short, section.id, 1, true))
+                local read = guide.value({section = section.id})
+                test.eq(read.section, section.id)
+                test.eq(read.text, guide.section_text(section.id))
+                test.is_nil((read :: {[string]: unknown}).example)
+            end
+            local unknown = guide.value({section = "no-such-section"})
+            test.not_nil((unknown :: {[string]: unknown}).error)
+            local example = guide.value({include_example = true})
+            local entry = (example :: {[string]: unknown}).example :: {[string]: unknown}
+            test.eq(entry.definition_id, guide.DEFINITION_ID)
+            test.not_nil(string.find(entry.entries_json :: string, "process.lua", 1, true))
         end)
         test.it("carries one measurable example entry with inline source", function()
             local encoded = guide.example_json()

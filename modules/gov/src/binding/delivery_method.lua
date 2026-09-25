@@ -29,6 +29,7 @@ local ACTIONS: {[string]: string} = {
     request = "bee.governance.delivery.manage",
     status = "bee.governance.delivery.read",
     publish = "bee.governance.delivery.publish",
+    preflight = "bee.governance.delivery.manage",
 }
 
 function M.required_action(raw: unknown): string?
@@ -140,6 +141,30 @@ local function request_operation(workspace_id: string, source_workspace: string,
         human_steps_where = {review = "Overlays", approve = "Approvals", open = "start menu"}}, false)
 end
 
+-- Check a frozen candidate without staging a version: resolve the host
+-- profile, parse the exact snapshot into its canonical artifact and report
+-- its measure. A candidate that fails here fails request the same way; a
+-- candidate that passes still needs request to stage it and read the
+-- destination's own preflight verdict.
+local function preflight_operation(workspace_id: string, source_workspace: string,
+    version: string, snapshot_digest: string): Result
+    local profile, profile_error = profile_for(workspace_id, source_workspace)
+    if not profile then return profile_error :: Result end
+    local component = bounds.text(profile.component, 160)
+    if not component or component == "" then return failure("BLOCKED", "publication profile names no component") end
+    local prepared, prepare_error = forward(PUBLICATION, {operation = "prepare", workspace_id = workspace_id,
+        component = component, version = version, snapshot_digest = snapshot_digest})
+    if not prepared then return prepare_error :: Result end
+    local descriptor = object(prepared.descriptor)
+    if not descriptor then return failure("INTERNAL", "publication returned no descriptor") end
+    return transaction.success({staged = false, version = version, source_overlay_id = source_workspace,
+        component = component, artifact_digest = descriptor.digest, descriptor = descriptor,
+        snapshot_digest = snapshot_digest,
+        human_steps = {"request delivery to stage this version and read its preflight verdict",
+            "review the plan in Overlays", "select it there", "prepare the activation there",
+            "approve it in Approvals", "let the activation owner apply the overlay", "open it from the start menu"},
+        human_steps_where = {review = "Overlays", approve = "Approvals", open = "start menu"}}, false)
+end
 -- Read the staged plan and, when an intent is named, its activation status.
 local function status_operation(workspace_id: string, source_workspace: string, version: string,
     source_node: string?, intent_id: string?): Result
@@ -191,6 +216,9 @@ function M.call(raw: unknown): Result
     end
     if operation == "request" then
         return request_operation(workspace_id, source_workspace, version, request.snapshot_digest :: string)
+    end
+    if operation == "preflight" then
+        return preflight_operation(workspace_id, source_workspace, version, request.snapshot_digest :: string)
     end
     if operation == "status" then
         return status_operation(workspace_id, source_workspace, version,

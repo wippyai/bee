@@ -4,7 +4,8 @@ local M = {}
 type Operation = "create" | "put" | "append" | "remove" | "list" | "read" | "freeze" | "guide"
 type Request = {operation: Operation, workspace_id: string, expected_revision: integer?,
     idempotency_key: string?, path: string?, content: string?, snapshot_digest: string?,
-    offset: integer?, limit: integer?, result_digest: string?, owned: boolean?}
+    offset: integer?, limit: integer?, result_digest: string?, owned: boolean?,
+    section: string?, include_example: boolean?}
 local function path(value: unknown): string?
     if type(value) ~= "string" or #value == 0 or #value > 240 or value:find("%c")
         or value:find(":", 1, true) or value:find("\\", 1, true) then return nil end
@@ -26,11 +27,22 @@ function M.decode(raw: unknown): (Request?, string?)
         -- A direct caller sends operation alone; the MCP argument decoder
         -- carries the empty sentinel this request returns. Both are accepted,
         -- and no workspace identity is ever consulted for the guide.
-        local extra = bounds.fields(value, {"operation", "workspace_id"})
+        local extra = bounds.fields(value, {"operation", "workspace_id", "section", "include_example"})
         if extra then return nil, extra end
         -- The facade returns the guide before any workspace is consulted,
         -- so this request carries no workspace identity.
         local request: Request = {operation = "guide", workspace_id = ""}
+        if value.section ~= nil then
+            local section = bounds.line(value.section, 64)
+            if not section or not section:match("^[a-z0-9_%-]+$") then
+                return nil, "section must be a guide section id from the guide index"
+            end
+            request.section = section
+        end
+        if value.include_example ~= nil then
+            if type(value.include_example) ~= "boolean" then return nil, "include_example must be a boolean" end
+            request.include_example = value.include_example
+        end
         return request, nil
     end
     local allowed: {string} = {"operation", "workspace_id"}
@@ -117,6 +129,39 @@ function M.decode(raw: unknown): (Request?, string?)
     return request, nil
 end
 
+-- The MCP input schema, generated from the same per-operation fields decode
+-- enforces. guide names no overlay_id; list without overlay_id returns the
+-- caller's own overlay IDs, with one returns its files.
+function M.overlay_schema(text_bound: integer, base64_bound: integer): {[string]: unknown}
+    local identity = {type = "string", minLength = 1, maxLength = 160}
+    return {type = "object", additionalProperties = false, required = {"operation"},
+        properties = {
+            operation = {type = "string", enum = {"guide", "create", "list", "read", "put", "append", "remove", "freeze"},
+                description = "guide reads this destination's authoring contract; list without overlay_id "
+                    .. "returns your own overlay IDs, list with one returns its files"},
+            overlay_id = identity,
+            expected_revision = {type = "integer", minimum = 0, maximum = 9007199254740990},
+            idempotency_key = identity,
+            path = {type = "string", minLength = 1, maxLength = 240},
+            offset = {type = "integer", minimum = 0, maximum = 4194304},
+            limit = {type = "integer", minimum = 1, maximum = 16384},
+            result_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
+            content = {type = "string", maxLength = text_bound},
+            content_base64 = {type = "string", maxLength = base64_bound},
+            snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
+            section = {type = "string", pattern = "^[a-z0-9_-]+$", maxLength = 64,
+                description = "guide section id from the guide index; without it guide returns the index"},
+            include_example = {type = "boolean",
+                description = "guide only: include the worked example with its entries JSON inline"},
+        },
+        examples = {
+            {operation = "guide"},
+            {operation = "list"},
+            {operation = "read", overlay_id = "counter", path = "entries.json", offset = 0, limit = 16384},
+            {operation = "put", overlay_id = "counter", expected_revision = 0,
+                idempotency_key = "counter-1", path = "entries.json", content = "[]"},
+        }}
+end
 -- The authoring surface calls the durable object an overlay. Storage keeps its
 -- workspace identity internally; this one boundary translates the public name
 -- without accepting both dialects.
@@ -124,7 +169,8 @@ function M.decode_overlay(raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "request must be an object" end
     local extra = bounds.fields(value, {"operation", "overlay_id", "expected_revision", "idempotency_key",
-        "path", "content", "content_base64", "snapshot_digest", "offset", "limit", "result_digest"})
+        "path", "content", "content_base64", "snapshot_digest", "offset", "limit", "result_digest",
+        "section", "include_example"})
     -- Unknown fields name exactly what the caller sent. This is a strict
     -- boundary, not an alias for an older dialect.
     if extra then return nil, extra end

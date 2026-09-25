@@ -81,6 +81,19 @@ local function define_tests()
             candidate.entries[1].auto_start = false
             test.is_true(checked(candidate, context).ready)
         end)
+        test.it("refuses app-shipped actor and group selectors on every entry kind", function()
+            local candidate, context = fixture()
+            for _, kind in ipairs({"process.lua", "function.lua", "library.lua"}) do
+                candidate.entries[1].kind = kind
+                context.kinds[kind] = true
+                candidate.entries[1].security_actor = true
+                candidate.entries[1].security_groups = false
+                test.is_true(has(checked(candidate, context), "SECURITY_DENIED"))
+                candidate.entries[1].security_actor = false
+                candidate.entries[1].security_groups = true
+                test.is_true(has(checked(candidate, context), "SECURITY_DENIED"))
+            end
+        end)
         test.it("measures an exact destination plan without executing it", function()
             local candidate, context = fixture()
             local report = checked(candidate, context)

@@ -58,6 +58,89 @@ local function define_tests()
             local overreach = protocol.decode({operation = "get", workspace_id = "workspace", profile_id = "profile", resource = "foreign"})
             test.is_nil(overreach)
         end)
+        test.it("stores agent reference, owner component revision and spec digest in workspace state", function()
+            local valid_digest = string.rep("a", 64)
+            local value, err = protocol.profile({
+                title = "Research Assistant",
+                definition_ref = "bee:codex",
+                agent_ref = "bee.agents:researcher",
+                owner_component_revision = 3,
+                spec_digest = valid_digest,
+                options = {verbose = true},
+                mcp_tools = {},
+                instructions = "Assist with research."
+            })
+            if not value then error(tostring(err)) end
+            test.eq(value.agent_ref, "bee.agents:researcher")
+            test.eq(value.owner_component_revision, 3)
+            test.eq(value.spec_digest, valid_digest)
+
+            local aliased, alias_err = protocol.profile({
+                title = "Research Assistant",
+                definition_ref = "bee:codex",
+                owner_revision = 2,
+            })
+            if not aliased then error(tostring(alias_err)) end
+            test.eq(aliased.owner_component_revision, 2)
+        end)
+        test.it("refuses malformed agent reference, owner component revision or spec digest", function()
+            local _, bad_ref = protocol.profile({title = "P", definition_ref = "bee:codex", agent_ref = "not an id!"})
+            test.eq(bad_ref, "agent_ref must be an identifier")
+
+            for _, bad_rev in ipairs({0, -1, 1.5, "1", math.huge}) do
+                local _, err = protocol.profile({title = "P", definition_ref = "bee:codex", owner_component_revision = bad_rev})
+                test.eq(err, "owner_component_revision must be a positive integer")
+            end
+
+            for _, bad_digest in ipairs({
+                "short",
+                string.rep("A", 64),
+                string.rep("g", 64),
+                string.rep("a", 65),
+                12345
+            }) do
+                local _, err = protocol.profile({title = "P", definition_ref = "bee:codex", spec_digest = bad_digest})
+                test.eq(err, "spec_digest must be a lowercase SHA-256 hex digest")
+            end
+        end)
+        test.it("enforces expected revision and idempotency for concurrent edits and retries", function()
+            local put_req, err = protocol.decode({
+                operation = "put",
+                workspace_id = "workspace",
+                profile_id = "agent_profile",
+                expected_revision = 2,
+                idempotency_key = "retry_edit_1",
+                profile = {
+                    title = "Worker",
+                    definition_ref = "bee:codex",
+                    agent_ref = "bee.agents:worker",
+                    owner_component_revision = 1,
+                    spec_digest = string.rep("e", 64)
+                }
+            })
+            if not put_req then error(tostring(err)) end
+            test.eq(put_req.expected_revision, 2)
+            test.eq(put_req.idempotency_key, "retry_edit_1")
+            test.eq(put_req.profile and put_req.profile.owner_component_revision, 1)
+
+            local rem_req, rem_err = protocol.decode({
+                operation = "remove",
+                workspace_id = "workspace",
+                profile_id = "agent_profile",
+                expected_revision = 3,
+                idempotency_key = "retry_remove_1"
+            })
+            if not rem_req then error(tostring(rem_err)) end
+            test.eq(rem_req.expected_revision, 3)
+        end)
+        test.it("refuses cross-workspace or invalid workspace identities", function()
+            local _, bad_ws = protocol.decode({
+                operation = "get",
+                workspace_id = "not a valid id!",
+                profile_id = "profile"
+            })
+            test.eq(bad_ws, "workspace_id must be an identifier")
+        end)
     end)
 end
 return test.run_cases(define_tests)

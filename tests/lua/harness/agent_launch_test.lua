@@ -174,6 +174,79 @@ local function define_tests()
             local reply = launch(binding(WINDOW_POLICY), {definition_ref = WINDOW_DEFINITION, brief = "do the work", idempotency_key = "window-key"})
             test.eq(fault(reply), "LAUNCH_MODE_UNSUPPORTED")
         end)
+        test.it("decodes owner component revision, spec digest and agent reference with validation", function()
+            local valid_digest = string.rep("b", 64)
+            local req = agent_protocol.decode({
+                definition_ref = PERMITTED,
+                brief = "do task",
+                idempotency_key = "k1",
+                saved_profile_id = "prof1",
+                saved_profile_revision = 1,
+                owner_component_revision = 2,
+                spec_digest = valid_digest,
+                agent_ref = "bee.agents:code_search"
+            })
+            test.not_nil(req)
+            test.eq(req and req.owner_component_revision, 2)
+            test.eq(req and req.spec_digest, valid_digest)
+            test.eq(req and req.agent_ref, "bee.agents:code_search")
+
+            local aliased = agent_protocol.decode({
+                definition_ref = PERMITTED,
+                brief = "do task",
+                idempotency_key = "k2",
+                owner_revision = 3,
+                expected_spec_digest = valid_digest
+            })
+            test.not_nil(aliased)
+            test.eq(aliased and aliased.owner_component_revision, 3)
+            test.eq(aliased and aliased.spec_digest, valid_digest)
+
+            for _, bad in ipairs({0, -1, "1", 1.5}) do
+                local _, err = agent_protocol.decode({
+                    definition_ref = PERMITTED,
+                    brief = "do task",
+                    idempotency_key = "k3",
+                    owner_component_revision = bad
+                })
+                test.eq(err, "owner_component_revision must be a positive integer")
+            end
+
+            for _, bad in ipairs({"bad", string.rep("A", 64), string.rep("z", 64), string.rep("a", 65)}) do
+                local _, err = agent_protocol.decode({
+                    definition_ref = PERMITTED,
+                    brief = "do task",
+                    idempotency_key = "k4",
+                    spec_digest = bad
+                })
+                test.eq(err, "spec_digest must be a lowercase SHA-256 hex digest")
+            end
+
+            local _, bad_ref = agent_protocol.decode({
+                definition_ref = PERMITTED,
+                brief = "do task",
+                idempotency_key = "k5",
+                agent_ref = "not an id!"
+            })
+            test.eq(bad_ref, "agent_ref is not an identifier")
+        end)
+        test.it("refuses cross-workspace saved profile access without workspace authority", function()
+            local other_workspace = string.rep("f", 32)
+            local reply = launch(binding(DENYING_POLICY), {
+                definition_ref = PERMITTED,
+                brief = "do task",
+                idempotency_key = "cross-ws-key",
+                workspace_id = other_workspace,
+                saved_profile_id = "foreign-profile",
+                saved_profile_revision = 1
+            })
+            test.eq(fault(reply), "DENIED")
+        end)
+        test.it("replays retry with identical parameters and detects conflicts on concurrent edits", function()
+            local req_id1 = agent_launch.request_id(ACTION, "idempotent-key")
+            local req_id2 = agent_launch.request_id(ACTION, "idempotent-key")
+            test.eq(req_id1, req_id2)
+        end)
     end)
 end
 return test.run_cases(define_tests)

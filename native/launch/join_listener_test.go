@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/wippyai/bee/native/hive/invite"
 	"github.com/wippyai/bee/native/hive/meshtls"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 type fakeMembership struct {
@@ -125,5 +127,80 @@ func TestJoinListenerRefusesWithoutPinning(t *testing.T) {
 	}
 	if len(redeem.calls) != 1 {
 		t.Fatalf("the supervisor was asked for malformed requests: %v", redeem.calls)
+	}
+}
+
+// A peer that comes back at a new gossip address has its persisted seed
+// rewritten, so the next boot seeds it where it now is. The rewrite is
+// identity-pinned: a member whose gossiped key differs from the pin is ignored.
+func TestPeerSeedsFollowAPeerThatMoves(t *testing.T) {
+	state := t.TempDir()
+	if _, release, err := prepareOwner(state, true); err != nil {
+		t.Fatal(err)
+	} else if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	peer, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeOwnerFile(filepath.Join(ownerPeersDirectory(state), "bee-owner-peer.pub"),
+		[]byte(base64.RawStdEncoding.EncodeToString(peer)+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	membership := fakeMembership{local: clusterapi.NodeInfo{ID: ownerNodeName(state), Addr: "127.0.0.1:4100"},
+		others: []clusterapi.NodeInfo{{ID: "bee-owner-peer", Addr: "127.0.0.1:4200",
+			Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: base64.RawStdEncoding.EncodeToString(peer)}}}}
+	if err := recordAddresses(state, membership); err != nil {
+		t.Fatal(err)
+	}
+	if _, seeds := prepareBindPort(t, state); seeds != "127.0.0.1:4200" {
+		t.Fatalf("seeds = %q, want the peer's first address", seeds)
+	}
+	// The peer restarts with a new address; the same pinned key reports it.
+	membership.others[0].Addr = "127.0.0.1:4300"
+	if err := recordAddresses(state, membership); err != nil {
+		t.Fatal(err)
+	}
+	if _, seeds := prepareBindPort(t, state); seeds != "127.0.0.1:4300" {
+		t.Fatalf("seeds = %q, want the peer's new address", seeds)
+	}
+	// The node's own gossip port is remembered for the next boot.
+	if port, _ := prepareBindPort(t, state); port != 4100 {
+		t.Fatalf("remembered gossip port = %d, want 4100", port)
+	}
+}
+
+// The republisher only tells the mesh about a changed address, and publishes
+// the internode endpoint and dial direction together.
+func TestRepublishAddressOnlyOnChange(t *testing.T) {
+	state := t.TempDir()
+	if _, release, err := prepareOwner(state, true); err != nil {
+		t.Fatal(err)
+	} else if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	published, err := resolveAdvertiseAddress(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	membership := &recordingMembership{}
+	listener := &joinListenerComponent{state: state, published: published}
+	if err := listener.republishAddress(membership); err != nil {
+		t.Fatal(err)
+	}
+	if len(membership.meta) != 0 {
+		t.Fatalf("an unchanged address was republished: %#v", membership.meta)
+	}
+	listener.published = netip.MustParseAddr("203.0.113.1")
+	if err := listener.republishAddress(membership); err != nil {
+		t.Fatal(err)
+	}
+	if membership.meta[internode.MetadataAdvertiseAddr] != published.String() ||
+		membership.meta[internode.MetadataAdvertisePort] != "4100" {
+		t.Fatalf("republished meta = %#v, want %s", membership.meta, published)
+	}
+	if listener.published != published {
+		t.Fatalf("tracked address = %v, want %v", listener.published, published)
 	}
 }

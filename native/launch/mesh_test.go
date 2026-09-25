@@ -81,46 +81,47 @@ func TestPrepareOwnerSelectsMeshTLS(t *testing.T) {
 	}
 }
 
-func TestOwnerCanAdvertiseAnAssignedExternalMeshAddress(t *testing.T) {
-	var external netip.Addr
-	addresses, err := net.InterfaceAddrs()
+// The owner picks its own advertise address: a Tailscale address when one is
+// present, otherwise the first non-virtual LAN address, otherwise loopback.
+// No environment variable participates, and the pick is persisted.
+func TestOwnerPicksAndPersistsItsMeshAddress(t *testing.T) {
+	state := t.TempDir()
+	assigned, err := assignedInterfaceAddresses()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, address := range addresses {
-		if network, ok := address.(*net.IPNet); ok {
-			if candidate, ok := netip.AddrFromSlice(network.IP); ok && candidate.Unmap().Is4() && candidate.IsGlobalUnicast() && !candidate.IsLoopback() {
-				external = candidate.Unmap()
-				break
-			}
-		}
-	}
-	if !external.IsValid() {
-		t.Skip("no external IPv4 address on this host")
-	}
-	t.Setenv("BEE_MESH_ADDRESS", external.String())
-	config, release, err := prepareOwner(t.TempDir(), true)
+	tailnet, _ := tailscaleIdentity()
+	want := pickAdvertiseAddress(assigned, tailnet)
+	config, release, err := prepareOwner(state, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = release() }()
 	section := config.Sub("cluster")
-	for key, want := range map[string]string{
-		"membership.bind_addr": "0.0.0.0", "internode.bind_addr": "0.0.0.0",
-		"membership.advertise_addr": external.String(), "internode.advertise_addr": external.String(),
-	} {
-		got, _ := section.Get(key)
-		if got != want {
-			t.Errorf("%s = %v, want %s", key, got, want)
+	for key := range map[string]bool{"membership.advertise_addr": true, "internode.advertise_addr": true} {
+		if got := section.GetString(key, ""); got != want.String() {
+			t.Errorf("%s = %q, want %q", key, got, want)
 		}
+	}
+	for key, wantBind := range map[string]string{"membership.bind_addr": wantBindAddress(want), "internode.bind_addr": wantBindAddress(want)} {
+		if got := section.GetString(key, ""); got != wantBind {
+			t.Errorf("%s = %q, want %q", key, got, wantBind)
+		}
+	}
+	recorded, ok, err := readAdvertise(ownerDirectory(state))
+	if err != nil || !ok || recorded != want {
+		t.Fatalf("persisted advertise = %v %v %v, want %v", recorded, ok, err, want)
 	}
 }
 
-func TestOwnerRejectsUnassignedMeshAddress(t *testing.T) {
-	t.Setenv("BEE_MESH_ADDRESS", "203.0.113.254")
-	if _, _, err := prepareOwner(t.TempDir(), true); err == nil {
-		t.Fatal("accepted an unassigned mesh address")
+func wantBindAddress(address netip.Addr) string {
+	if address.IsLoopback() {
+		return address.String()
 	}
+	if address.Is4() {
+		return "0.0.0.0"
+	}
+	return "::"
 }
 
 // splitCredential returns a credential's leaf and the public key of its private key.
@@ -177,7 +178,7 @@ func TestPrepareOwnerBootsAJoinedNodeIntoItsHive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	leaf, err := hive.Issue(public, []netip.Addr{meshAddress}, now)
+	leaf, err := hive.Issue(public, []netip.Addr{netip.MustParseAddr("127.0.0.1")}, now)
 	if err != nil {
 		t.Fatal(err)
 	}

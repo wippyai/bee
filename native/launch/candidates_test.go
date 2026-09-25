@@ -9,7 +9,7 @@ import (
 	"github.com/wippyai/bee/native/hive/invite"
 )
 
-func TestJoinCandidatesPreferExplicitAndTailnetThenInterfaces(t *testing.T) {
+func TestJoinCandidatesPreferTailnetThenInterfaces(t *testing.T) {
 	primary := netip.MustParseAddrPort("127.0.0.1:4200")
 	assigned := []interfaceAddress{
 		{name: "docker0", address: netip.MustParseAddr("172.17.0.1")},
@@ -18,9 +18,8 @@ func TestJoinCandidatesPreferExplicitAndTailnetThenInterfaces(t *testing.T) {
 		{name: "eth0", address: netip.MustParseAddr("fe80::1")},
 		{name: "eth0", address: netip.MustParseAddr("2001:db8::4")},
 	}
-	got := selectJoinCandidates(primary, assigned, []netip.Addr{netip.MustParseAddr("100.70.10.28")}, "bee.example.ts.net", []netip.Addr{netip.MustParseAddr("203.0.113.4")})
+	got := selectJoinCandidates(primary, assigned, []netip.Addr{netip.MustParseAddr("100.70.10.28")}, "bee.example.ts.net")
 	want := []invite.Candidate{
-		{Kind: "explicit", Scope: "external", Endpoint: "203.0.113.4:4200"},
 		{Kind: "tailnet", Scope: "tailnet", Endpoint: "100.70.10.28:4200"},
 		{Kind: "magicdns", Scope: "tailnet", Endpoint: "bee.example.ts.net:4200"},
 		{Kind: "interface", Scope: "lan", Endpoint: "192.168.2.4:4200"},
@@ -43,7 +42,7 @@ func TestJoinCandidatesBoundAndDeduplicateAcrossInterfaces(t *testing.T) {
 	for i := 1; i <= 20; i++ {
 		assigned = append(assigned, interfaceAddress{name: "eth0", address: netip.AddrFrom4([4]byte{10, 0, 0, byte(i)})})
 	}
-	got := selectJoinCandidates(primary, assigned, nil, "", nil)
+	got := selectJoinCandidates(primary, assigned, nil, "")
 	if len(got) != invite.MaxCandidates {
 		t.Fatalf("candidate count = %d", len(got))
 	}
@@ -57,9 +56,8 @@ func TestJoinCandidatesBoundAndDeduplicateAcrossInterfaces(t *testing.T) {
 func TestMeshCertificateCoversCandidateIPAddresses(t *testing.T) {
 	selected := netip.MustParseAddr("127.0.0.1")
 	assigned := []interfaceAddress{{name: "eth0", address: netip.MustParseAddr("192.168.1.4")}, {name: "tailscale0", address: netip.MustParseAddr("fd7a:115c:a1e0::4")}}
-	explicit := []netip.Addr{netip.MustParseAddr("203.0.113.9")}
-	got := meshCertificateAddresses(selected, assigned, explicit)
-	want := []netip.Addr{selected, explicit[0], assigned[0].address, assigned[1].address}
+	got := meshCertificateAddresses(selected, assigned)
+	want := []netip.Addr{selected, assigned[0].address, assigned[1].address}
 	if len(got) != len(want) {
 		t.Fatalf("addresses = %v", got)
 	}

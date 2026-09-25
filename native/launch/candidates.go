@@ -5,11 +5,9 @@ package launch
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/netip"
-	"os"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -48,26 +46,6 @@ func assignedInterfaceAddresses() ([]interfaceAddress, error) {
 				}
 			}
 		}
-	}
-	return result, nil
-}
-
-func explicitJoinAddresses() ([]netip.Addr, error) {
-	value := strings.TrimSpace(os.Getenv("BEE_HIVE_ADDRESSES"))
-	if value == "" {
-		return nil, nil
-	}
-	parts := strings.Split(value, ",")
-	if len(parts) > invite.MaxCandidates {
-		return nil, errors.New("BEE_HIVE_ADDRESSES has too many addresses")
-	}
-	result := make([]netip.Addr, 0, len(parts))
-	for _, part := range parts {
-		address, err := netip.ParseAddr(strings.TrimSpace(part))
-		if err != nil || address.Zone() != "" || !address.IsGlobalUnicast() || address.IsLoopback() || address.IsLinkLocalUnicast() {
-			return nil, errors.New("BEE_HIVE_ADDRESSES requires comma-separated external IP addresses")
-		}
-		result = append(result, address.Unmap())
 	}
 	return result, nil
 }
@@ -115,7 +93,7 @@ func virtualInterface(name string) bool {
 
 // selectJoinCandidates is deterministic, deduplicated and bounded. A candidate
 // says where to attempt TLS; it never grants authority or asserts reachability.
-func selectJoinCandidates(primary netip.AddrPort, assigned []interfaceAddress, tailnet []netip.Addr, magicDNS string, explicit []netip.Addr) []invite.Candidate {
+func selectJoinCandidates(primary netip.AddrPort, assigned []interfaceAddress, tailnet []netip.Addr, magicDNS string) []invite.Candidate {
 	result := make([]invite.Candidate, 0, invite.MaxCandidates)
 	seen := map[string]bool{primary.String(): true}
 	add := func(kind, scope, endpoint string) {
@@ -131,9 +109,6 @@ func selectJoinCandidates(primary netip.AddrPort, assigned []interfaceAddress, t
 	}
 	port := primary.Port()
 	endpoint := func(address netip.Addr) string { return netip.AddrPortFrom(address.Unmap(), port).String() }
-	for _, address := range explicit {
-		add("explicit", "external", endpoint(address))
-	}
 	for _, address := range tailnet {
 		if slices.ContainsFunc(assigned, func(item interfaceAddress) bool { return item.address == address }) {
 			add("tailnet", "tailnet", endpoint(address))
@@ -164,24 +139,17 @@ func joinCandidates(primary netip.AddrPort) ([]invite.Candidate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("inspect network interfaces: %w", err)
 	}
-	explicit, err := explicitJoinAddresses()
-	if err != nil {
-		return nil, err
-	}
 	tailnet, magicDNS := tailscaleIdentity()
-	return selectJoinCandidates(primary, assigned, tailnet, magicDNS, explicit), nil
+	return selectJoinCandidates(primary, assigned, tailnet, magicDNS), nil
 }
 
-func meshCertificateAddresses(selected netip.Addr, assigned []interfaceAddress, explicit []netip.Addr) []netip.Addr {
+func meshCertificateAddresses(selected netip.Addr, assigned []interfaceAddress) []netip.Addr {
 	result := []netip.Addr{selected}
 	add := func(address netip.Addr) {
 		address = address.Unmap()
 		if len(result) < maxJoinAddresses && address.IsValid() && address.Zone() == "" && !address.IsUnspecified() && !slices.Contains(result, address) {
 			result = append(result, address)
 		}
-	}
-	for _, address := range explicit {
-		add(address)
 	}
 	for _, item := range assigned {
 		if !virtualInterface(item.name) {
@@ -201,9 +169,5 @@ func selectedMeshCertificateAddresses(selected netip.Addr) ([]netip.Addr, error)
 	if err != nil {
 		return nil, err
 	}
-	explicit, err := explicitJoinAddresses()
-	if err != nil {
-		return nil, err
-	}
-	return meshCertificateAddresses(selected, assigned, explicit), nil
+	return meshCertificateAddresses(selected, assigned), nil
 }

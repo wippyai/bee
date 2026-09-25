@@ -22,7 +22,9 @@ import (
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
+	"github.com/wippyai/runtime/api/event"
 	"github.com/wippyai/runtime/api/logs"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 // joinHost is the native host of the owner's join listener. The supervisor
@@ -45,6 +47,11 @@ type joinListenerComponent struct {
 	address netip.Addr
 	cancel  context.CancelFunc
 	done    chan struct{}
+	// published is the advertise address this boot last told the mesh about.
+	// The component republishes it through Membership.UpdateMeta when the
+	// host's own pick changes, so peers learn the new internode endpoint
+	// without a restart.
+	published netip.Addr
 }
 
 // joinListener serves invite redemption for the owner of state and records the
@@ -114,7 +121,14 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	l.cancel, l.done = cancel, make(chan struct{})
 	a := &admitter{state: l.state, node: l.node, authority: authority, membership: membership, redeem: redeem}
+	// The node states where it can be reached and whether it expects to be
+	// dialed, through the membership metadata the runtime re-broadcasts. The
+	// dial hint is additive: a runtime without the internode dial-direction
+	// hook ignores an unknown key.
+	publishMeshMeta(membership, l.address, meshDialHint(l.state))
+	l.published = l.address
 	served, recorded := make(chan struct{}), make(chan struct{})
+	updates := subscribeNodeUpdates(lifetime, ctx)
 	go func() {
 		defer close(served)
 		defer redeem.Close()
@@ -130,9 +144,16 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 			if err := recordAddresses(l.state, membership); err != nil {
 				log.Warn("hive address record failed", zap.Error(err))
 			}
+			if err := l.republishAddress(membership); err != nil {
+				log.Warn("hive address republish failed", zap.Error(err))
+			}
 			select {
 			case <-lifetime.Done():
 				return
+			case <-updates:
+				if err := recordAddresses(l.state, membership); err != nil {
+					log.Warn("hive address record failed", zap.Error(err))
+				}
 			case <-ticker.C:
 			}
 		}
@@ -143,6 +164,77 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 		close(l.done)
 	}()
 	return nil
+}
+
+// republishAddress tells the mesh about a new advertise address when the
+// host's own pick changed since the last publication. The runtime's internode
+// service reacts to the NodeUpdated event by dialing the new endpoint, so a
+// DHCP lease change or a Tailscale toggle needs no restart.
+func (l *joinListenerComponent) republishAddress(membership clusterapi.Membership) error {
+	address, err := resolveAdvertiseAddress(l.state)
+	if err != nil {
+		return err
+	}
+	if address == l.published {
+		return nil
+	}
+	publishMeshMeta(membership, address, meshDialHint(l.state))
+	l.published = address
+	return nil
+}
+
+// publishMeshMeta advertises this node's internode endpoint and dial
+// direction. The port is the one the runtime actually bound, read back from
+// the local node's metadata.
+func publishMeshMeta(membership clusterapi.Membership, address netip.Addr, hint string) {
+	meta := map[string]string{}
+	if port := membership.LocalNode().Meta[internode.MetadataPort]; port != "" {
+		meta[internode.MetadataAdvertiseAddr] = address.String()
+		meta[internode.MetadataAdvertisePort] = port
+	}
+	if hint != "" {
+		meta[dialMetadataKey] = hint
+	}
+	if len(meta) > 0 {
+		membership.UpdateMeta(meta)
+	}
+}
+
+// subscribeNodeUpdates reports peer join, leave and metadata changes from the
+// event bus. The peer address files are rewritten on every report, so a peer
+// that restarts with a new address is seeded at its new address on the next
+// boot. A bus is optional: without one the periodic record still runs.
+func subscribeNodeUpdates(lifetime context.Context, ctx context.Context) <-chan struct{} {
+	updates := make(chan struct{}, 1)
+	bus := event.GetBus(ctx)
+	if bus == nil {
+		return updates
+	}
+	events := make(chan event.Event, 16)
+	subscriber, err := bus.Subscribe(lifetime, clusterapi.System, events)
+	if err != nil {
+		return updates
+	}
+	go func() {
+		defer bus.Unsubscribe(context.WithoutCancel(lifetime), subscriber)
+		for {
+			select {
+			case <-lifetime.Done():
+				return
+			case message := <-events:
+				switch message.Kind {
+				case clusterapi.NodeJoined, clusterapi.NodeLeft, clusterapi.NodeUpdated:
+				default:
+					continue
+				}
+				select {
+				case updates <- struct{}{}:
+				default:
+				}
+			}
+		}
+	}()
+	return updates
 }
 
 func (l *joinListenerComponent) Stop(context.Context) error {

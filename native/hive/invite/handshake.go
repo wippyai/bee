@@ -17,6 +17,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 )
@@ -46,6 +47,11 @@ type Request struct {
 	// Key is the base64 public key the hive node certifies for the joiner's
 	// mesh credential; it is separate from the joiner's identity key.
 	Key string `json:"tls_key"`
+	// Observed is the IP the hive node saw on this authenticated TCP
+	// connection. The listener writes it from the accepted socket before the
+	// handler runs; a value arriving on the wire is overwritten and is never
+	// trusted.
+	Observed string `json:"observed,omitempty"`
 }
 
 // Admission is what the hive node returns to an admitted joiner: its node, the
@@ -58,6 +64,10 @@ type Admission struct {
 	Secret      string `json:"secret"`
 	Certificate string `json:"certificate"`
 	Authorities string `json:"authorities"`
+	// Observed is the IP the hive node saw the joiner connect from. The joiner
+	// uses it to learn its own reachable address when that IP is assigned
+	// locally, and to mark itself NATed when it is not.
+	Observed string `json:"observed,omitempty"`
 }
 
 // Refused is a definite refusal by the hive node.
@@ -241,11 +251,22 @@ func DialCandidates(ctx context.Context, line Invite, identity ed25519.PrivateKe
 	switch {
 	case reply.Refused != nil && reply.Admission == nil:
 		return Admission{}, nil, Candidate{}, reply.Refused
-	case reply.Admission != nil && reply.Refused == nil && reply.Admission.Version == Version && reply.Admission.Node == line.Node:
+	case reply.Admission != nil && reply.Refused == nil && reply.Admission.Version == Version && reply.Admission.Node == line.Node &&
+		validObserved(reply.Admission.Observed):
 		return *reply.Admission, selected.pinned, selected.candidate, nil
 	default:
 		return Admission{}, nil, Candidate{}, errors.New("hive node sent an invalid admission")
 	}
+}
+
+// validObserved accepts an absent observed address, or a bare IP literal the
+// hive node reported.
+func validObserved(value string) bool {
+	if value == "" {
+		return true
+	}
+	address, err := netip.ParseAddr(value)
+	return err == nil && address.Zone() == "" && !address.IsUnspecified()
 }
 
 // Serve accepts joiners on listener as identity until ctx ends. Each
@@ -309,6 +330,12 @@ func serve(ctx context.Context, connection *tls.Conn, handler Handler) {
 	if err := readMessage(connection, &request); err != nil {
 		return
 	}
+	// The accepted socket is the only trustworthy statement of where this
+	// joiner connects from, so the listener replaces whatever the wire said.
+	request.Observed = ""
+	if host, _, err := net.SplitHostPort(connection.RemoteAddr().String()); err == nil {
+		request.Observed = host
+	}
 	if request.Version != Version {
 		_ = writeMessage(connection, response{Refused: &Refused{Code: "UNSUPPORTED_SCHEMA", Message: "unsupported invite handshake version"}})
 		return
@@ -321,5 +348,8 @@ func serve(ctx context.Context, connection *tls.Conn, handler Handler) {
 		return
 	}
 	admission.Version = Version
+	// The listener owns the observed address: whatever the handler said is
+	// replaced with what the accepted socket actually showed.
+	admission.Observed = request.Observed
 	_ = writeMessage(connection, response{Admission: &admission})
 }

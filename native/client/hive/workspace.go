@@ -9,7 +9,7 @@ import (
 )
 
 // The workspace commands of the owner supervisor
-// (src/hive/supervisor/workspace_commands.lua). Each runs one operation of the
+// (src/hive_host/supervisor/workspace_commands.lua). Each runs one operation of the
 // node workspace catalog; the owner authorizes it under its host's policy.
 const (
 	WorkspaceService = "bee.workspace"

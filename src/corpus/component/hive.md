@@ -117,7 +117,7 @@ host-selected external IP hints, such as forwarded Windows host addresses, to
 the invite; it does not configure the runtime's one advertised mesh address.
 The runtime currently does not retry a set of authenticated mesh paths, expose
 the live path to `bee hive peers`, or reverse-dial through the join channel.
-The [reachability notes](../../../docs/operations/hive-reach.notes.md) describe
+The [reachability guide](../../../docs/operations/hive-reachability.md) describe
 the required runtime extension and the UDP limitation of Windows portproxy.
 Peer membership does not
 grant access to remote desktops or destination overlay activation. A desktop

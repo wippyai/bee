@@ -261,8 +261,17 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "resources"), filepath.Join(root, "src", "security", "resources")); err != nil {
 		return err
 	}
+	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "threads"), filepath.Join(root, "src", "security", "threads")); err != nil {
+		return err
+	}
 	hostEntries := make([]map[string]interface{}, 0, 1)
-	hostEntries = append(hostEntries, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
+	hostEntries = append(hostEntries,
+		map[string]interface{}{"name": "workers", "kind": "process.host", "host": map[string]interface{}{"workers": 2, "max_processes": 8}, "lifecycle": map[string]interface{}{"auto_start": true}},
+		map[string]interface{}{"name": "dependency_threads", "kind": "ns.dependency", "component": "bee/threads", "version": "0.1.0-dev",
+			"parameters": []map[string]interface{}{{"name": "process_host", "value": "bee:workers"}, {"name": "waiter_policies", "value": []string{"bee.security.threads:thread_waiter_policy"}}}},
+		map[string]interface{}{"name": "dependency_resources", "kind": "ns.dependency", "component": "bee/resources", "version": "0.1.0-dev",
+			"parameters": []map[string]interface{}{{"name": "target_roots", "value": "bee:resource_roots"}}},
+		map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
 	if !dropRoots {
 		hostEntries = append(hostEntries, map[string]interface{}{"name": "resource_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.resource_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}, {"root_ref": "bee.placement.native:unrelated_env_root", "access": "write"}}}})
 		if err := resourcesModuleWrite(folder, filepath.Join("src", "placement", "_index.yaml"), resourcesModuleIndex{
@@ -304,6 +313,9 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "credentials"), filepath.Join(root, "src", "security", "credentials")); err != nil {
 		return err
 	}
+	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "threads"), filepath.Join(root, "src", "security", "threads")); err != nil {
+		return err
+	}
 	hostEntries := make([]map[string]interface{}, 0, 4)
 	// The host selects the placement binding recorded on projection receipts
 	// without admitting placement execution into this closure.
@@ -331,7 +343,11 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 			"data": map[string]interface{}{"schema_revision": "bee.credential-format@1", "environment_destination": "ANTHROPIC_API_KEY"},
 		})
 	}
-	hostEntries = append(hostEntries, sources, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
+	hostEntries = append(hostEntries,
+		map[string]interface{}{"name": "workers", "kind": "process.host", "host": map[string]interface{}{"workers": 2, "max_processes": 8}, "lifecycle": map[string]interface{}{"auto_start": true}},
+		map[string]interface{}{"name": "dependency_threads", "kind": "ns.dependency", "component": "bee/threads", "version": "0.1.0-dev",
+			"parameters": []map[string]interface{}{{"name": "process_host", "value": "bee:workers"}, {"name": "waiter_policies", "value": []string{"bee.security.threads:thread_waiter_policy"}}}},
+		sources, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
 	if err := resourcesModuleWrite(folder, filepath.Join("src", "host", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee", Entries: hostEntries}); err != nil {
 		return err
 	}

@@ -277,6 +277,17 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 	if err := os.WriteFile(stagedRoot, append(staged, []byte(rest)...), 0600); err != nil {
 		t.Fatal(err)
 	}
+	// The approvals module takes its policies only through the dependency,
+	// mirroring the production bee.deps wiring.
+	staged, err = os.ReadFile(stagedRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dependency := "- name: dependency_approvals\n  kind: ns.dependency\n  component: bee/approvals\n" +
+		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee:approver_policies\n"
+	if err := os.WriteFile(stagedRoot, append(staged, []byte(dependency)...), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.CopyFS(filepath.Join(filepath.Dir(source), "modules", "approvals"), os.DirFS(filepath.Join(repository, "modules", "approvals"))); err != nil {
 		t.Fatal(err)
 	}

@@ -56,7 +56,6 @@ entries:
   kind: ns.requirement
   meta:
     comment: Process host that runs attempt runners and the supervision sweeper
-  default: bee:workers
   targets:
   - entry: bee.placement.native:runner_host_ref
     path: .host_ref

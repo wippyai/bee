@@ -18,6 +18,9 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
 - name: hub
   kind: ns.dependency
   component: bee/hub

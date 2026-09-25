@@ -18,6 +18,13 @@ entries:
     value: bee.hive:replica_sender
   - name: target_exports
     value: bee:sync_exports
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: 0.1.0-dev
+  parameters:
+  - name: process_host
+    value: bee:workers
 - name: sync_exports
   kind: registry.entry
   meta:

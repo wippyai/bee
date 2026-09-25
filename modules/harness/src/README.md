@@ -83,8 +83,9 @@ grant path, which verifies the root digest before issuing a grant.
 
 The `process_host` requirement links `bee.harness:carrier_host_ref.host_ref`.
 Launch start resolves that process host before admission and refuses an unlinked
-or missing host. The bundled host defaults to `bee:workers`; another assembly
-can supply its own host. This reference grants no permission: the host-selected
+or missing host. The requirement carries no default; the bundled host supplies
+`bee:workers` through its `bee.deps:harness` parameters and another assembly
+supplies its own host the same way. This reference grants no permission: the host-selected
 spawn policy must independently allow the carrier and selected host.
 
 The entry policies still bind `bee:carrier_policy` and

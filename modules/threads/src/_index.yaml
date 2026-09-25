@@ -20,7 +20,6 @@ entries:
   kind: ns.requirement
   meta:
     comment: Process host that runs the module's owner process
-  default: bee:workers
   targets:
   - entry: bee.threads:owner_service
     path: .host

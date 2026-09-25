@@ -3,230 +3,6 @@
   "ceiling_bytes": 3145728,
   "documents": [
     {
-      "bytes": 8834,
-      "id": "runtime/concepts/architecture",
-      "sha256": "0f21e2371d7ce052fc2e9132b69d9d67b748096ad8c3614cd32bb48f1a0b9e59",
-      "source": "https://wippy.ai/llm/path/en/concepts/architecture",
-      "title": "Application Architecture",
-      "topic": "platform"
-    },
-    {
-      "bytes": 5365,
-      "id": "runtime/concepts/cluster",
-      "sha256": "1fadd0e9011628e8c60e1253ae87d60229489143d4ff0e8ea720f3355743557c",
-      "source": "https://wippy.ai/llm/path/en/concepts/cluster",
-      "title": "Cluster",
-      "topic": "cluster"
-    },
-    {
-      "bytes": 3775,
-      "id": "runtime/concepts/compute-units",
-      "sha256": "04ed9243fa5fc02eb1be567f6971b35587aa003a30655b57a97abebea8cef826",
-      "source": "https://wippy.ai/llm/path/en/concepts/compute-units",
-      "title": "Compute Units",
-      "topic": "platform"
-    },
-    {
-      "bytes": 5381,
-      "id": "runtime/concepts/functions",
-      "sha256": "b575b112889e728cee1f096b86006e9d15c2e791f05d906dc7c5f2e12fa65172",
-      "source": "https://wippy.ai/llm/path/en/concepts/functions",
-      "title": "Functions",
-      "topic": "platform"
-    },
-    {
-      "bytes": 6631,
-      "id": "runtime/concepts/process-model",
-      "sha256": "8fd53f9a764797b446cc0251481f17d6ed5c6287b59716e797a55ee64652aa9f",
-      "source": "https://wippy.ai/llm/path/en/concepts/process-model",
-      "title": "Process Model",
-      "topic": "process"
-    },
-    {
-      "bytes": 3182,
-      "id": "runtime/concepts/registry",
-      "sha256": "51cca941716cab30710439c08ad052296776f555a4ecc3dd4e3f242ddbdd1236",
-      "source": "https://wippy.ai/llm/path/en/concepts/registry",
-      "title": "Registry",
-      "topic": "registry"
-    },
-    {
-      "bytes": 15513,
-      "id": "runtime/concepts/security-model",
-      "sha256": "46f43f3dced3473d335aab6f5429a70bd3fc55db44cc77af315ff065bbf1c9bf",
-      "source": "https://wippy.ai/llm/path/en/concepts/security-model",
-      "title": "Security Model - Process Isolation, Capability Control, and Data Boundaries",
-      "topic": "security"
-    },
-    {
-      "bytes": 6874,
-      "id": "runtime/concepts/workflows",
-      "sha256": "c1da72ec5825fe73774ec43c727ad9436d17476bf0a8386926e358373716ce80",
-      "source": "https://wippy.ai/llm/path/en/concepts/workflows",
-      "title": "Workflows",
-      "topic": "process"
-    },
-    {
-      "bytes": 11410,
-      "id": "runtime/guides/artifacts",
-      "sha256": "2b10eaa5f4bcdea6b94e6f5b7bdc102e8918d0daff999fc3ee05066e41cdcec8",
-      "source": "https://wippy.ai/llm/path/en/guides/artifacts",
-      "title": "Build-time artifacts",
-      "topic": "registry"
-    },
-    {
-      "bytes": 21583,
-      "id": "runtime/guides/cluster",
-      "sha256": "0b8a6919438cb56676673e1d8f7636006c531f8732754729a8ae23d8349f0581",
-      "source": "https://wippy.ai/llm/path/en/guides/cluster",
-      "title": "Cluster",
-      "topic": "cluster"
-    },
-    {
-      "bytes": 7629,
-      "id": "runtime/guides/components",
-      "sha256": "08717a3cf856e14c7b6bc055747dcc3128fff2278a95f0ea3812bfd116a60698",
-      "source": "https://wippy.ai/llm/path/en/guides/components",
-      "title": "Building Components",
-      "topic": "registry"
-    },
-    {
-      "bytes": 13772,
-      "id": "runtime/guides/dependency-management",
-      "sha256": "a97c6a62b289075fa06ec779cb9b28c9cc9c9a1be1174ba43ccc8069ebc5fce6",
-      "source": "https://wippy.ai/llm/path/en/guides/dependency-management",
-      "title": "Dependency Management",
-      "topic": "registry"
-    },
-    {
-      "bytes": 21260,
-      "id": "runtime/guides/entry-kinds",
-      "sha256": "1c09c5545d914bb84a8652a415c6a55c929d4701eabf6f128141b6be0d63717c",
-      "source": "https://wippy.ai/llm/path/en/guides/entry-kinds",
-      "title": "Entry Kinds Reference",
-      "topic": "registry"
-    },
-    {
-      "bytes": 9670,
-      "id": "runtime/guides/supervision",
-      "sha256": "269145c9b706d54e017355cd8259899e61cc2914957021f39500619dfd2c5ee7",
-      "source": "https://wippy.ai/llm/path/en/guides/supervision",
-      "title": "Supervision",
-      "topic": "process"
-    },
-    {
-      "bytes": 10436,
-      "id": "runtime/http/endpoint",
-      "sha256": "19f7d6c2a10d62cf617e0180619bf3161d6af7e8027d0ee4aad852a99f58d049",
-      "source": "https://wippy.ai/llm/path/en/http/endpoint",
-      "title": "HTTP Endpoints",
-      "topic": "http"
-    },
-    {
-      "bytes": 8741,
-      "id": "runtime/http/middleware",
-      "sha256": "d7c0c6032ac54c95e13e5bba5058ac35d89e2a1da32b0b1a958137761ac3e082",
-      "source": "https://wippy.ai/llm/path/en/http/middleware",
-      "title": "HTTP Middleware",
-      "topic": "http"
-    },
-    {
-      "bytes": 9125,
-      "id": "runtime/http/router",
-      "sha256": "2483aedc6d2f4893afa9a68de06fbb78831b633a70979652a07f5b58803ee0f5",
-      "source": "https://wippy.ai/llm/path/en/http/router",
-      "title": "Routing",
-      "topic": "http"
-    },
-    {
-      "bytes": 7431,
-      "id": "runtime/http/server",
-      "sha256": "d5d51c5efd61880d04300f8f06c674d1469fa167b6bca89c69b5e21ca595919d",
-      "source": "https://wippy.ai/llm/path/en/http/server",
-      "title": "HTTP Server",
-      "topic": "http"
-    },
-    {
-      "bytes": 9209,
-      "id": "runtime/http/sse",
-      "sha256": "a795cc9cf852017a2a32169a2ba491691b3bcf2859ce8ccac7e019ba3dbe0a67",
-      "source": "https://wippy.ai/llm/path/en/http/sse",
-      "title": "Server-Sent Events",
-      "topic": "http"
-    },
-    {
-      "bytes": 4763,
-      "id": "runtime/http/static",
-      "sha256": "85c3e385011be38eaa035e2e592a9e0bbf9566dc1444fa3b399c1f9e0b26f67d",
-      "source": "https://wippy.ai/llm/path/en/http/static",
-      "title": "Static Files",
-      "topic": "http"
-    },
-    {
-      "bytes": 8052,
-      "id": "runtime/http/websocket-relay",
-      "sha256": "398f89756b70bbf9b47240d59925ae83fb3094da60ae2db58e4cb212f98d9c42",
-      "source": "https://wippy.ai/llm/path/en/http/websocket-relay",
-      "title": "WebSocket Relay",
-      "topic": "http"
-    },
-    {
-      "bytes": 7781,
-      "id": "runtime/internals/architecture",
-      "sha256": "05a1bf144460a514c5b9f3f6506c35b1a01aaba488ec9c6d7d5a624b81f2626a",
-      "source": "https://wippy.ai/llm/path/en/internals/architecture",
-      "title": "Architecture",
-      "topic": "platform"
-    },
-    {
-      "bytes": 5313,
-      "id": "runtime/internals/dispatch",
-      "sha256": "54db13f8c703ff512d344a94ba8261fbc45594bdef7e7afd3e0a5e5315fb7e80",
-      "source": "https://wippy.ai/llm/path/en/internals/dispatch",
-      "title": "Command Dispatch",
-      "topic": "process"
-    },
-    {
-      "bytes": 8712,
-      "id": "runtime/internals/events",
-      "sha256": "31ccaae3a6819b9bed821815f2a57d66a5eb57ded2ba68011606aa44d66fa543",
-      "source": "https://wippy.ai/llm/path/en/internals/events",
-      "title": "Event Bus",
-      "topic": "cluster"
-    },
-    {
-      "bytes": 4431,
-      "id": "runtime/internals/kinds",
-      "sha256": "7f228600dea5c868795547bb6fac1027eb4e200a51a59e2959a782701f8661c0",
-      "source": "https://wippy.ai/llm/path/en/internals/kinds",
-      "title": "Entry Listeners and Observers",
-      "topic": "registry"
-    },
-    {
-      "bytes": 12146,
-      "id": "runtime/internals/modules",
-      "sha256": "18074b947998fc8477ce69c4d67074eb0e839cf4c1b3d4b3b7812f67dae77b7a",
-      "source": "https://wippy.ai/llm/path/en/internals/modules",
-      "title": "Lua Modules",
-      "topic": "registry"
-    },
-    {
-      "bytes": 9048,
-      "id": "runtime/internals/registry",
-      "sha256": "1cf6c4ab387a64b0f01801afbe930d81e3fb68cbaed38fb5a994a25e460acab7",
-      "source": "https://wippy.ai/llm/path/en/internals/registry",
-      "title": "Registry Internals",
-      "topic": "registry"
-    },
-    {
-      "bytes": 7294,
-      "id": "runtime/internals/scheduler",
-      "sha256": "37b71af62fff996b351dd1528bc4fc5dabff7cfce98c1b0177e26853da01bd01",
-      "source": "https://wippy.ai/llm/path/en/internals/scheduler",
-      "title": "Scheduler",
-      "topic": "process"
-    },
-    {
       "bytes": 11631,
       "id": "runtime/lua/core/base",
       "sha256": "03c7e0a289e3c871b32a05be3a80324ccfeba2c9fe90f3b1b703033b5c145347",
@@ -243,59 +19,11 @@
       "topic": "core"
     },
     {
-      "bytes": 1435,
-      "id": "runtime/lua/core/context",
-      "sha256": "3b44232223f2e6b9e0f6e40f5284b49ccd1046ea4027734e68d31c870d49a475",
-      "source": "https://wippy.ai/llm/path/en/lua/core/context",
-      "title": "Request Context",
-      "topic": "core"
-    },
-    {
       "bytes": 8563,
       "id": "runtime/lua/core/contract",
       "sha256": "e40407fde97e44a32b460aab6a23b4012eb265e3bc64b199811a9d5b7813e5a9",
       "source": "https://wippy.ai/llm/path/en/lua/core/contract",
       "title": "Contracts",
-      "topic": "core"
-    },
-    {
-      "bytes": 3723,
-      "id": "runtime/lua/core/errors",
-      "sha256": "ca0be60fad63cc947f4794bc9f1e7b04400bdeeb1268f92d9f4cec2bacc7747d",
-      "source": "https://wippy.ai/llm/path/en/lua/core/errors",
-      "title": "Errors",
-      "topic": "core"
-    },
-    {
-      "bytes": 4143,
-      "id": "runtime/lua/core/events",
-      "sha256": "9305a7d8b7d2a2b33143eb3f1abb11905fa3e0b8b17b034aa1fa08dfde3ddd09",
-      "source": "https://wippy.ai/llm/path/en/lua/core/events",
-      "title": "Event Bus",
-      "topic": "core"
-    },
-    {
-      "bytes": 11997,
-      "id": "runtime/lua/core/funcs",
-      "sha256": "4234d166bcea3dbb465252f880fa98641e0b5485b62c7046f8fcabb030c13ca2",
-      "source": "https://wippy.ai/llm/path/en/lua/core/funcs",
-      "title": "Function Invocation",
-      "topic": "core"
-    },
-    {
-      "bytes": 4280,
-      "id": "runtime/lua/core/future",
-      "sha256": "c7b75428d3f3ea744d6245aa7b50320108dd82f68b01125e6ed42bddab0f7ce7",
-      "source": "https://wippy.ai/llm/path/en/lua/core/future",
-      "title": "Futures",
-      "topic": "core"
-    },
-    {
-      "bytes": 8336,
-      "id": "runtime/lua/core/pg",
-      "sha256": "b920302d74c3bae0d36c946a0ed6c71422befda02b5e4831a419f94bea8e485d",
-      "source": "https://wippy.ai/llm/path/en/lua/core/pg",
-      "title": "Process Groups",
       "topic": "core"
     },
     {
@@ -315,52 +43,12 @@
       "topic": "core"
     },
     {
-      "bytes": 3546,
-      "id": "runtime/lua/core/stream",
-      "sha256": "1ce017f6c3e4fcc6f9b5083fc2751bdc17328728636eee6cc84b34367344820f",
-      "source": "https://wippy.ai/llm/path/en/lua/core/stream",
-      "title": "Streams",
-      "topic": "core"
-    },
-    {
       "bytes": 15860,
       "id": "runtime/lua/core/time",
       "sha256": "6eacaae6aeacdff457b2ef116b46b38a9bdd69897027496a542b330909481a3a",
       "source": "https://wippy.ai/llm/path/en/lua/core/time",
       "title": "Time & Duration",
       "topic": "core"
-    },
-    {
-      "bytes": 9135,
-      "id": "runtime/lua/data/archive",
-      "sha256": "9aa3280e2a98f969fb44129cf3961a55ea337f919811e4c06959f0fc15cb655a",
-      "source": "https://wippy.ai/llm/path/en/lua/data/archive",
-      "title": "Archive",
-      "topic": "data"
-    },
-    {
-      "bytes": 3667,
-      "id": "runtime/lua/data/base64",
-      "sha256": "ead7365cf3943a4cf2fb24ccd68f55b0ed5e83631b7d2fef66d75f72f27c9688",
-      "source": "https://wippy.ai/llm/path/en/lua/data/base64",
-      "title": "Base64 Encoding",
-      "topic": "data"
-    },
-    {
-      "bytes": 13678,
-      "id": "runtime/lua/data/compress",
-      "sha256": "d6e054626107cfb33163bcb3fc9b21b6c18d4b4e8b0be1ebaf4469fda72cc211",
-      "source": "https://wippy.ai/llm/path/en/lua/data/compress",
-      "title": "Compression",
-      "topic": "data"
-    },
-    {
-      "bytes": 8389,
-      "id": "runtime/lua/data/excel",
-      "sha256": "d613a0819b1ab3146318c53809a4ba50f127dcb986431e503319cdabaf5d4884",
-      "source": "https://wippy.ai/llm/path/en/lua/data/excel",
-      "title": "Excel Spreadsheets",
-      "topic": "data"
     },
     {
       "bytes": 5939,
@@ -371,108 +59,12 @@
       "topic": "data"
     },
     {
-      "bytes": 5101,
-      "id": "runtime/lua/data/payload",
-      "sha256": "9f2167a4dfee27ca3fe9cbdb9142d8f59900065d92aad4e1f805ee244e08f3c3",
-      "source": "https://wippy.ai/llm/path/en/lua/data/payload",
-      "title": "Payload Encoding",
-      "topic": "data"
-    },
-    {
-      "bytes": 3818,
-      "id": "runtime/lua/data/yaml",
-      "sha256": "4a865c29d089f26ff5b673ed22c211a22629e6926a95a75861533e3fc11644fd",
-      "source": "https://wippy.ai/llm/path/en/lua/data/yaml",
-      "title": "YAML Encoding",
-      "topic": "data"
-    },
-    {
-      "bytes": 8996,
-      "id": "runtime/lua/dynamic/eval",
-      "sha256": "1b0e5facb51c77edc4e6640d319293d6dee4dbe6fbf7baf4f4c9b14d1e40b2f8",
-      "source": "https://wippy.ai/llm/path/en/lua/dynamic/eval",
-      "title": "Dynamic Evaluation",
-      "topic": "dynamic"
-    },
-    {
-      "bytes": 11553,
-      "id": "runtime/lua/dynamic/exec",
-      "sha256": "380428a0729dce75a9937028a130641ffb325a4feb445455bcf9758e86d56e50",
-      "source": "https://wippy.ai/llm/path/en/lua/dynamic/exec",
-      "title": "Command Execution",
-      "topic": "dynamic"
-    },
-    {
-      "bytes": 4941,
-      "id": "runtime/lua/dynamic/expression",
-      "sha256": "b530f9a005593808bca7330f01640ad05787854ad01428743a7b8c0669ee5aac",
-      "source": "https://wippy.ai/llm/path/en/lua/dynamic/expression",
-      "title": "Expression Language",
-      "topic": "dynamic"
-    },
-    {
-      "bytes": 6896,
-      "id": "runtime/lua/entries",
-      "sha256": "adb497b46a1d1f769048c51982c5d423d199993f6777e048fa732281cac823a4",
-      "source": "https://wippy.ai/llm/path/en/lua/entries",
-      "title": "Lua Entry Kinds",
-      "topic": "lua"
-    },
-    {
       "bytes": 16200,
       "id": "runtime/lua/http/client",
       "sha256": "46bf6e73acd219ad85d3b18295b13693a2d9ee84c4636a8e8e1cb66d01515d2e",
       "source": "https://wippy.ai/llm/path/en/lua/http/client",
       "title": "HTTP Client",
       "topic": "http"
-    },
-    {
-      "bytes": 10687,
-      "id": "runtime/lua/http/html",
-      "sha256": "670e671cacdf0eda8de995bce26db54eee75db9f5bc0e704ed479221c41b74d7",
-      "source": "https://wippy.ai/llm/path/en/lua/http/html",
-      "title": "HTML Sanitization",
-      "topic": "http"
-    },
-    {
-      "bytes": 21466,
-      "id": "runtime/lua/http/http",
-      "sha256": "717fe1fb5bb59e319806e9fb81fa2701d82eda787d9325379cc74a9911bd6a33",
-      "source": "https://wippy.ai/llm/path/en/lua/http/http",
-      "title": "HTTP",
-      "topic": "http"
-    },
-    {
-      "bytes": 12803,
-      "id": "runtime/lua/http/websocket",
-      "sha256": "2dfd3449fa8c8154104b62fa58db9860a18d7692f8a5361b33109d0fe9da6444",
-      "source": "https://wippy.ai/llm/path/en/lua/http/websocket",
-      "title": "WebSocket Client",
-      "topic": "http"
-    },
-    {
-      "bytes": 4795,
-      "id": "runtime/lua/overview",
-      "sha256": "fbe8f2eb364a82734406bd27d21e12558f36849949990c7194ca581b304015c3",
-      "source": "https://wippy.ai/llm/path/en/lua/overview",
-      "title": "Lua Runtime",
-      "topic": "lua"
-    },
-    {
-      "bytes": 8685,
-      "id": "runtime/lua/security/crypto",
-      "sha256": "b3241b822d03646a63b6d1b3b89c5bdf769243a5b9f36529eaf64f1467edb038",
-      "source": "https://wippy.ai/llm/path/en/lua/security/crypto",
-      "title": "Encryption & Signing",
-      "topic": "security"
-    },
-    {
-      "bytes": 5759,
-      "id": "runtime/lua/security/hash",
-      "sha256": "d582305fde10029102356ff6b890c5afe9a3dbf9f3a1a22f60bd008a8e43f5ae",
-      "source": "https://wippy.ai/llm/path/en/lua/security/hash",
-      "title": "Hash Functions",
-      "topic": "security"
     },
     {
       "bytes": 11686,
@@ -491,35 +83,11 @@
       "topic": "security"
     },
     {
-      "bytes": 9255,
-      "id": "runtime/lua/storage/cdc",
-      "sha256": "2bbdf300b03b332d0c69213afae0d134b382088a13e5297df6d39926b712306b",
-      "source": "https://wippy.ai/llm/path/en/lua/storage/cdc",
-      "title": "CDC",
-      "topic": "storage"
-    },
-    {
-      "bytes": 19529,
-      "id": "runtime/lua/storage/cloud",
-      "sha256": "300101dfb1dbd524589c3abfff6e17352dc35d4e3acefc7f9e7563fe4e288626",
-      "source": "https://wippy.ai/llm/path/en/lua/storage/cloud",
-      "title": "Cloud Storage",
-      "topic": "storage"
-    },
-    {
       "bytes": 9808,
       "id": "runtime/lua/storage/filesystem",
       "sha256": "20d492952217970fc925a0d710a047f5f61a1e78dd3cba12ce231f892559cbbb",
       "source": "https://wippy.ai/llm/path/en/lua/storage/filesystem",
       "title": "Filesystem",
-      "topic": "storage"
-    },
-    {
-      "bytes": 6043,
-      "id": "runtime/lua/storage/queue",
-      "sha256": "38aed37e56ac9ca2983d7be2169576cd3f205897978e1192b37787889ca116be",
-      "source": "https://wippy.ai/llm/path/en/lua/storage/queue",
-      "title": "Message Queue",
       "topic": "storage"
     },
     {
@@ -531,100 +99,12 @@
       "topic": "storage"
     },
     {
-      "bytes": 9369,
-      "id": "runtime/lua/storage/store",
-      "sha256": "10d7fdc8bed7e681b332ed20c5fd545d1244f06ac3b42aa505a58d991cd140c7",
-      "source": "https://wippy.ai/llm/path/en/lua/storage/store",
-      "title": "Key-Value Store",
-      "topic": "storage"
-    },
-    {
-      "bytes": 3722,
-      "id": "runtime/lua/system/env",
-      "sha256": "54d09c0accd200089504b3fc9f55249258acb8f2d38acea9c852ac0cbc1cbc7b",
-      "source": "https://wippy.ai/llm/path/en/lua/system/env",
-      "title": "Environment Variables",
-      "topic": "system"
-    },
-    {
-      "bytes": 8468,
-      "id": "runtime/lua/system/hub",
-      "sha256": "d9000b9cd46ecc15181d2209b8076ca38c6db075191106d021ff846666546eb3",
-      "source": "https://wippy.ai/llm/path/en/lua/system/hub",
-      "title": "Hub",
-      "topic": "system"
-    },
-    {
-      "bytes": 4080,
-      "id": "runtime/lua/system/io",
-      "sha256": "b5afc1923b9686751e5f9a1a7008566089b5d08e76dcbbbdedd5d2723004617c",
-      "source": "https://wippy.ai/llm/path/en/lua/system/io",
-      "title": "Terminal I/O",
-      "topic": "system"
-    },
-    {
-      "bytes": 2924,
-      "id": "runtime/lua/system/logger",
-      "sha256": "dda54edb66655c98cc03754526eb443c0fd81d3c2e12d5386a86d864624bc90e",
-      "source": "https://wippy.ai/llm/path/en/lua/system/logger",
-      "title": "Logging",
-      "topic": "system"
-    },
-    {
-      "bytes": 3856,
-      "id": "runtime/lua/system/metrics",
-      "sha256": "7afa84d0d072e4bc648eb4e1bcbf6322ba1a9989b8cdb6e16029bb7d6fd79b8b",
-      "source": "https://wippy.ai/llm/path/en/lua/system/metrics",
-      "title": "Metrics & Telemetry",
-      "topic": "system"
-    },
-    {
-      "bytes": 5633,
-      "id": "runtime/lua/system/ostime",
-      "sha256": "aadf34bb8858c930af6e4cb2c3d0024ff0121dd99dc07f7764e59fedab0619c6",
-      "source": "https://wippy.ai/llm/path/en/lua/system/ostime",
-      "title": "OS Time",
-      "topic": "system"
-    },
-    {
-      "bytes": 16317,
-      "id": "runtime/lua/system/system",
-      "sha256": "aef195f703b61af66380f2e3d80cb48cbf4d1799d4a3123f7817beedd6f91b05",
-      "source": "https://wippy.ai/llm/path/en/lua/system/system",
-      "title": "System",
-      "topic": "system"
-    },
-    {
       "bytes": 22652,
       "id": "runtime/lua/system/tty",
       "sha256": "888cef2390ce7ff6a9e3a31611616ff3f96bad767e5c451e60759d6019143ba0",
       "source": "https://wippy.ai/llm/path/en/lua/system/tty",
       "title": "TTY",
       "topic": "system"
-    },
-    {
-      "bytes": 4105,
-      "id": "runtime/lua/text/template",
-      "sha256": "0b56a30c8c92e06b3335b4b97c7fe179fad583f383cf1d3e55d4ce709ba8ce6b",
-      "source": "https://wippy.ai/llm/path/en/lua/text/template",
-      "title": "Template Engine",
-      "topic": "text"
-    },
-    {
-      "bytes": 12626,
-      "id": "runtime/lua/text/text",
-      "sha256": "b20abb34c348590bd51a327127362548d78195177a1ea6f4990f8e5c4d53399f",
-      "source": "https://wippy.ai/llm/path/en/lua/text/text",
-      "title": "Text Processing",
-      "topic": "text"
-    },
-    {
-      "bytes": 16267,
-      "id": "runtime/lua/text/treesitter",
-      "sha256": "f7210308e3ad067722602dc50f81c03563eb5f85fd24ffc1174e0b7dad359750",
-      "source": "https://wippy.ai/llm/path/en/lua/text/treesitter",
-      "title": "Tree-sitter Parsing",
-      "topic": "text"
     },
     {
       "bytes": 12334,
@@ -635,206 +115,6 @@
       "topic": "lua"
     },
     {
-      "bytes": 4980,
-      "id": "runtime/lua/why-lua",
-      "sha256": "afad83c51b949e0fa86258da430da0cfefc618565f5918862e3f04dfa9484272",
-      "source": "https://wippy.ai/llm/path/en/lua/why-lua",
-      "title": "Why Wippy Uses Lua",
-      "topic": "lua"
-    },
-    {
-      "bytes": 16395,
-      "id": "runtime/start/llm-brief",
-      "sha256": "90a4d40c8bad253f799c89a0b269b30a3b0e64448befa08d2c3bea37dd76de0a",
-      "source": "https://wippy.ai/llm/path/en/start/llm-brief",
-      "title": "LLM Brief",
-      "topic": "platform"
-    },
-    {
-      "bytes": 7993,
-      "id": "runtime/start/structure",
-      "sha256": "a218de599d21a258d8444b3703f06aaaed5b15daf260a4f7277ed67a83801659",
-      "source": "https://wippy.ai/llm/path/en/start/structure",
-      "title": "YAML & Project Structure",
-      "topic": "platform"
-    },
-    {
-      "bytes": 10503,
-      "id": "runtime/system/cdc",
-      "sha256": "1d1380f34498e4bb52a49f69fed9526b461100e17462d372426dc904f770ec11",
-      "source": "https://wippy.ai/llm/path/en/system/cdc",
-      "title": "Change Data Capture",
-      "topic": "system"
-    },
-    {
-      "bytes": 4470,
-      "id": "runtime/system/cloudstorage",
-      "sha256": "6a94b928deef9fbb97cc6a6d89862f488c9c90d0090f8bf089b134235990b47a",
-      "source": "https://wippy.ai/llm/path/en/system/cloudstorage",
-      "title": "Cloud Storage",
-      "topic": "system"
-    },
-    {
-      "bytes": 8715,
-      "id": "runtime/system/database",
-      "sha256": "40a99e553b9f2a69949db3f04b146d834e6107c1c4d83b1554f18d7fd5a210b5",
-      "source": "https://wippy.ai/llm/path/en/system/database",
-      "title": "Database System",
-      "topic": "system"
-    },
-    {
-      "bytes": 8055,
-      "id": "runtime/system/env",
-      "sha256": "a53f77366d3ffe2e1eae1d1269e50e885d3cede318a45d16e833563a26f9ca4b",
-      "source": "https://wippy.ai/llm/path/en/system/env",
-      "title": "Environment System",
-      "topic": "system"
-    },
-    {
-      "bytes": 5750,
-      "id": "runtime/system/exec",
-      "sha256": "ea05ad5ba78078460064980c7fa5e4008d81ec32fb0c3d49d571f3d81730bfff",
-      "source": "https://wippy.ai/llm/path/en/system/exec",
-      "title": "Executor",
-      "topic": "system"
-    },
-    {
-      "bytes": 2889,
-      "id": "runtime/system/filesystem",
-      "sha256": "4f4b468515d3bbcfc3f288730f5d05ee03304821e31311af6211acc3070ae691",
-      "source": "https://wippy.ai/llm/path/en/system/filesystem",
-      "title": "Filesystem",
-      "topic": "system"
-    },
-    {
-      "bytes": 8638,
-      "id": "runtime/system/network",
-      "sha256": "dc0110e210ca2811d70300fb05cdc35dd0bff46de4e56ad8ce32aa48b50f8431",
-      "source": "https://wippy.ai/llm/path/en/system/network",
-      "title": "Network Overlays",
-      "topic": "system"
-    },
-    {
-      "bytes": 5389,
-      "id": "runtime/system/process-groups",
-      "sha256": "7f9dbe7ccf04b10b20a05a7fa5817e777f2beb9e8aa25c1c1aec09e0aba97788",
-      "source": "https://wippy.ai/llm/path/en/system/process-groups",
-      "title": "Process Groups",
-      "topic": "system"
-    },
-    {
-      "bytes": 3451,
-      "id": "runtime/system/process-host",
-      "sha256": "a8e5505cca8d5a82cbc983ac6341e8b2438c8498d5cad57f6d4c85ffc2a1b1c3",
-      "source": "https://wippy.ai/llm/path/en/system/process-host",
-      "title": "Process Host",
-      "topic": "system"
-    },
-    {
-      "bytes": 12201,
-      "id": "runtime/system/queue",
-      "sha256": "c9999e2df4f2117b3cb796e0d9731175b6d5755ba9fd23509b5c44a657429eee",
-      "source": "https://wippy.ai/llm/path/en/system/queue",
-      "title": "Queue",
-      "topic": "system"
-    },
-    {
-      "bytes": 23923,
-      "id": "runtime/system/security",
-      "sha256": "752d5af0fa96109e51e99bd44074010973770671b37f56601d620973966878c8",
-      "source": "https://wippy.ai/llm/path/en/system/security",
-      "title": "Security Model",
-      "topic": "system"
-    },
-    {
-      "bytes": 5684,
-      "id": "runtime/system/store",
-      "sha256": "22cc4ec566c66c071ac42782155bc1552ca76cfa000f6bf553ed74eb55272b03",
-      "source": "https://wippy.ai/llm/path/en/system/store",
-      "title": "Store (Key-Value)",
-      "topic": "system"
-    },
-    {
-      "bytes": 4395,
-      "id": "runtime/system/template",
-      "sha256": "70ab98570dd30572737c3c3ea5ab1aec79773c8137c394db7989a1ccd6978292",
-      "source": "https://wippy.ai/llm/path/en/system/template",
-      "title": "Template Engine",
-      "topic": "system"
-    },
-    {
-      "bytes": 3939,
-      "id": "runtime/system/terminal",
-      "sha256": "7f8838d98116defbce95944711aa543b14d9dcccb7bbd248dc16c64e4c5c66ef",
-      "source": "https://wippy.ai/llm/path/en/system/terminal",
-      "title": "Terminal",
-      "topic": "system"
-    },
-    {
-      "bytes": 6785,
-      "id": "runtime/tutorials/channels",
-      "sha256": "9f65698d0adf1423631937d45c2b9e1e2f633209975009e877fa94c7a2d4dcef",
-      "source": "https://wippy.ai/llm/path/en/tutorials/channels",
-      "title": "Channels and Concurrency Primer",
-      "topic": "process"
-    },
-    {
-      "bytes": 11542,
-      "id": "runtime/tutorials/echo-service",
-      "sha256": "7406b5f2d5150bc82d3a3f37d4d242073779533d266e1fd6905e9214de5a1674",
-      "source": "https://wippy.ai/llm/path/en/tutorials/echo-service",
-      "title": "Echo Service",
-      "topic": "http"
-    },
-    {
-      "bytes": 7833,
-      "id": "runtime/tutorials/facade",
-      "sha256": "7c3c2a7744cf3824e8713636957223a1f49783f187e66c1a792bf5f6a3713101",
-      "source": "https://wippy.ai/llm/path/en/tutorials/facade",
-      "title": "Frontend Facade",
-      "topic": "registry"
-    },
-    {
-      "bytes": 3494,
-      "id": "runtime/tutorials/hello-world",
-      "sha256": "3059cb60dabda6d230521fc0fbb55d01d90fe2034418f8db4d46cf57a904ec2f",
-      "source": "https://wippy.ai/llm/path/en/tutorials/hello-world",
-      "title": "Hello World",
-      "topic": "platform"
-    },
-    {
-      "bytes": 13350,
-      "id": "runtime/tutorials/processes",
-      "sha256": "d3c78e638109ca2ea5a718569b7caea001575514ace4d68e41ad14a9e542a7c4",
-      "source": "https://wippy.ai/llm/path/en/tutorials/processes",
-      "title": "Processes and Messaging Primer",
-      "topic": "process"
-    },
-    {
-      "bytes": 23258,
-      "id": "runtime/tutorials/supervision",
-      "sha256": "a24a2fab9fbc5f7d3a16ed511a3be81643269e64645526b22ac5766affac9f6b",
-      "source": "https://wippy.ai/llm/path/en/tutorials/supervision",
-      "title": "Process Supervision Recipes",
-      "topic": "process"
-    },
-    {
-      "bytes": 12369,
-      "id": "runtime/tutorials/task-queue",
-      "sha256": "d1012e89e2fb17df83a488983ff890c1318c08b7b7c8634d132943f11c73583f",
-      "source": "https://wippy.ai/llm/path/en/tutorials/task-queue",
-      "title": "Task Queue",
-      "topic": "process"
-    },
-    {
-      "bytes": 23004,
-      "id": "runtime/tutorials/tty",
-      "sha256": "3fe964dbee7853d3071ad7e0ae60d172eb8474201208f985d0dd607672441d17",
-      "source": "https://wippy.ai/llm/path/en/tutorials/tty",
-      "title": "Terminal UI",
-      "topic": "terminal"
-    },
-    {
       "bytes": 3795,
       "id": "docs/readme",
       "sha256": "bd26306e3b443a2aa4800a00f2f8f32acc36f351b0ecbf97e721e4b0ceef2fe3",
@@ -843,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 6026,
+      "bytes": 5957,
       "id": "docs/agent_guide",
-      "sha256": "6f08298a4fe3427abfb4069a05c40d3bf59f2d37f7ab0a8550a08430ff24058f",
+      "sha256": "72b42b6b36df45722570e734817e4a485f4824c972e4771c98c3b1a663cd4215",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -875,9 +155,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 15614,
+      "bytes": 15574,
       "id": "docs/app_style",
-      "sha256": "20040738b420350ddd814cf6697ce1f24b4bc813127ea82a94adf939cd8aff27",
+      "sha256": "e5d1ee17d0920054348cd94448c9db84ca06805168d50b0ec9d0f8004e23718e",
       "source": "docs/guides/app-style.md",
       "title": "Application visual style",
       "topic": "ui"
@@ -907,9 +187,9 @@
       "topic": "application"
     },
     {
-      "bytes": 8980,
+      "bytes": 8764,
       "id": "docs/ui_brand_book",
-      "sha256": "2e7234d3f46a3de81e0f35349f6aedb3a77bb0766a39b216f3db899d329db2d1",
+      "sha256": "4e50260962f018007d9056eb424a37dd8fddac5f0afbdea1e42b3894dc3040f4",
       "source": "docs/guides/ui.md",
       "title": "Bee UI brand book",
       "topic": "ui"
@@ -1171,18 +451,18 @@
       "topic": "component"
     },
     {
-      "bytes": 83379,
+      "bytes": 32490,
       "id": "toolkit",
-      "sha256": "29a4f18aae93dcc79dacbfd9d594bfc59b317c4d36c92e2a850c223a99b2c547",
-      "source": "generated: modules/application/src, src/apps, modules/gov/src/traits/guide.lua, tests/lua/frame, tests/lua/monitor",
+      "sha256": "722d1b60bf65114e4e152ce5b3becbd2262d7ea5851761baea4eecdd00bd683c",
+      "source": "generated: modules/application/src, src/apps, tests/lua/frame",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
     }
   ],
   "schema": "bee.docs-corpus@1",
-  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and modules/gov/src/traits/guide.lua, with the visualization kit's examples and screens taken from the golden tests tests/lua/frame and tests/lua/monitor, and digest-checked with the rest.",
+  "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 1388720,
-    "documents": 147
+    "bytes": 545117,
+    "documents": 57
   }
 }

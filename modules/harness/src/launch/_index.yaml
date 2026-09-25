@@ -222,6 +222,7 @@ entries:
     actions: [funcs.call]
     resources: [bee.harness.launch:start, bee.harness.launch:admit, bee.harness.launch:resolve, bee.harness.launch:setup, bee.harness.profiles:call,
       bee.threads.service:get, bee.threads.service:create, bee.threads.service:receipt, bee.resources.binding:grant, bee.credentials.binding:issue_projection, bee.threads.carrier:checkpoint,
+      bee.threads.carrier:cancel_intent, bee.threads.carrier:cancel_status,
       bee.resources.binding:associate, bee.credentials.binding:define, bee.threads.delivery:watch, bee.placement.native.binding:stop]
     effect: allow
 - name: agent_launch_execution_action_policy

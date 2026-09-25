@@ -62,7 +62,7 @@ func TestPublisherUsesRetainedNativeEndpointUnderOwnerLock(t *testing.T) {
 	ctx := ctxapi.WithAppContext(context.Background(), ctxapi.NewAppContext())
 	ctx = clusterapi.WithMembership(ctx, stack.Membership)
 	dir := filepath.Join(state, "discovery")
-	publisher, err := Publisher(dir, sample().Execution, strings.Repeat("c", 32))
+	publisher, err := Publisher(dir, sample().Execution, strings.Repeat("c", 32), false)
 	if err != nil {
 		t.Fatal(err)
 	}

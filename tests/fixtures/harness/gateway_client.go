@@ -335,7 +335,11 @@ func runGatewayAt(url, authorization string) int {
 		reportSurface(client, url, authorization, report)
 	}
 	if role := os.Getenv("BEE_FIXTURE_PEER_ROLE"); role != "" {
-		reportPeer(url, authorization, report, role)
+		if strings.HasPrefix(role, "inbox_") {
+			reportInboxPeer(url, authorization, report, role)
+		} else {
+			reportPeer(url, authorization, report, role)
+		}
 	}
 	if waitMS, err := strconv.Atoi(os.Getenv("BEE_FIXTURE_GATEWAY_WAIT")); err == nil && waitMS > 0 {
 		reportWait(client, url, authorization, report, readValue, waitMS)
@@ -891,6 +895,85 @@ func reportPeer(url, authorization string, report object, role string) {
 		sent := call("thread_message", object{"idempotency_key": "go-ahead-" + self, "message_id": "go-ahead-" + self, "message_kind": "notification",
 			"session": peer, "content": object{"text": "go ahead"}})
 		report["go_ahead_sent"] = sent["ok"]
+	}
+}
+
+// Two independently owned actions coordinate only through their own inbox
+// tools. The fixture polls because driver push is a later slice.
+func reportInboxPeer(url, authorization string, report object, role string) {
+	ident := 300
+	call := func(name string, args object) object {
+		ident++
+		return outcome(rpcWithTimeout(nil, url, authorization, "tools/call", object{"name": name, "arguments": args}, ident, 20*time.Second))
+	}
+	var self, peer object
+	for attempt := 0; attempt < 120 && (self == nil || peer == nil); attempt++ {
+		listed := mustObject(call("session_directory", object{})["value"])
+		items, _ := listed["peers"].([]any)
+		for _, raw := range items {
+			item := mustObject(raw)
+			if item["self"] == true {
+				self = item
+			} else if peer == nil {
+				peer = item
+			}
+		}
+		if self == nil || peer == nil {
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+	if self == nil || peer == nil {
+		report["directory_failed"] = true
+		return
+	}
+	report["self"] = self["action_id"]
+	report["peer"] = peer["action_id"]
+	report["peer_address"] = peer["address"]
+	report["peer_epoch"] = peer["grant_epoch"]
+	awaitItem := func(kind string) object {
+		for attempt := 0; attempt < 120; attempt++ {
+			listed := mustObject(call("session_inbox", object{"after_sequence": 0, "limit": 64})["value"])
+			items, _ := listed["items"].([]any)
+			for _, raw := range items {
+				item := mustObject(raw)
+				if stringField(item, "message_kind") == kind {
+					return item
+				}
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		return nil
+	}
+	if role == "inbox_waiter" {
+		args := object{"address": peer["address"], "grant_epoch": peer["grant_epoch"], "idempotency_key": "inbox-hello", "message_id": "inbox-hello", "content": object{"text": "hello"}}
+		first := call("session_send", args)
+		report["sent_ok"] = first["ok"]
+		report["sent"] = first["value"]
+		replay := call("session_send", args)
+		report["replayed"] = replay["replayed"]
+		report["replay_record_id"] = mustObject(replay["value"])["record_id"]
+		answer := awaitItem("reply")
+		if answer == nil {
+			report["reply_missing"] = true
+			return
+		}
+		report["reply_text"] = stringField(mustObject(answer["content"]), "text")
+		report["reply_record_id"] = answer["record_id"]
+		report["reply_correlation"] = answer["in_reply_to"]
+		report["ack_ok"] = call("session_ack", object{"inbox_sequence": answer["inbox_sequence"], "idempotency_key": "ack-reply"})["ok"]
+	} else if role == "inbox_sender" {
+		request := awaitItem("request")
+		if request == nil {
+			report["request_missing"] = true
+			return
+		}
+		report["request_text"] = stringField(mustObject(request["content"]), "text")
+		report["request_record_id"] = request["record_id"]
+		report["ack_ok"] = call("session_ack", object{"inbox_sequence": request["inbox_sequence"], "idempotency_key": "ack-request"})["ok"]
+		answered := call("session_reply", object{"address": peer["address"], "grant_epoch": peer["grant_epoch"], "idempotency_key": "inbox-reply", "message_id": "inbox-reply",
+			"content": object{"text": "world"}, "in_reply_to": object{"thread_id": request["thread_id"], "record_id": request["record_id"]}, "outcome": "succeeded"})
+		report["reply_ok"] = answered["ok"]
+		report["reply"] = answered["value"]
 	}
 }
 

@@ -1659,7 +1659,7 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 	if err = first.send("\r"); err != nil {
 		return err
 	}
-	for _, detail := range []string{"Configured folder", "No instructions", "9 tools configured"} {
+	for _, detail := range []string{"Configured folder", "No instructions", "14 tools configured"} {
 		if err = first.waitFor(detail, 5*time.Second); err != nil {
 			return fmt.Errorf("recovery profile summary: %w", err)
 		}
@@ -2895,7 +2895,7 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 				return fmt.Errorf("select profile step %d: %w", step+1, err)
 			}
 		}
-		for _, detail := range []string{"Configured folder", "No instructions", "9 tools configured"} {
+		for _, detail := range []string{"Configured folder", "No instructions", "14 tools configured"} {
 			if err := ui.waitFor(detail, 5*time.Second); err != nil {
 				return fmt.Errorf("selected profile summary: %w", err)
 			}

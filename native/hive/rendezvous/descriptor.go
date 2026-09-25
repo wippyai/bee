@@ -23,17 +23,22 @@ import (
 
 const MaxBytes = 4096
 
+// ClientRevision is the local client protocol this owner can answer. An absent
+// value identifies a descriptor published before owners advertised this bound.
+const ClientRevision = "bee.hive@1"
+
 var ErrDescriptor = errors.New("invalid Bee mesh rendezvous descriptor")
 
 // Descriptor contains public discovery data only. Execution identifies one
 // owner invocation; reconnect must verify a live owner and request fresh grants.
 type Descriptor struct {
-	Version   int    `json:"version"`
-	Execution string `json:"execution"`
-	Node      string `json:"node"`
-	Gossip    string `json:"gossip"`
-	Transport string `json:"transport"`
-	PublicKey string `json:"public_key"`
+	Version        int    `json:"version"`
+	Execution      string `json:"execution"`
+	Node           string `json:"node"`
+	Gossip         string `json:"gossip"`
+	Transport      string `json:"transport"`
+	PublicKey      string `json:"public_key"`
+	ClientRevision string `json:"client_revision,omitempty"`
 	// Supervisor is the owner's Hive supervisor process address
 	// ({node@bee.hive:supervisor_host|uniq}). A raft-disabled owner never
 	// publishes the cluster-wide name, so a local client addresses the
@@ -57,6 +62,7 @@ func (d Descriptor) Endpoint() Descriptor {
 	d.Supervisor = ""
 	d.Join = ""
 	d.Launch = ""
+	d.ClientRevision = ""
 	return d
 }
 
@@ -79,6 +85,14 @@ func (d Descriptor) validate() error {
 	}
 	if _, err := hex.DecodeString(d.Execution); err != nil {
 		return ErrDescriptor
+	}
+	if len(d.ClientRevision) > 64 {
+		return ErrDescriptor
+	}
+	for _, r := range d.ClientRevision {
+		if r < 33 || r > 126 {
+			return ErrDescriptor
+		}
 	}
 	for _, r := range d.Node {
 		if r < 33 || r > 126 {
@@ -209,7 +223,7 @@ func Decode(data []byte) (Descriptor, error) {
 	if err != nil || first != json.Delim('{') {
 		return Descriptor{}, ErrDescriptor
 	}
-	fields := make(map[string]json.RawMessage, 9)
+	fields := make(map[string]json.RawMessage, 10)
 	for dec.More() {
 		token, err := dec.Token()
 		if err != nil {
@@ -220,7 +234,7 @@ func Decode(data []byte) (Descriptor, error) {
 			return Descriptor{}, ErrDescriptor
 		}
 		switch name {
-		case "version", "execution", "node", "gossip", "transport", "public_key", "supervisor", "join", "launch":
+		case "version", "execution", "node", "gossip", "transport", "public_key", "client_revision", "supervisor", "join", "launch":
 		default:
 			return Descriptor{}, ErrDescriptor
 		}
@@ -235,7 +249,7 @@ func Decode(data []byte) (Descriptor, error) {
 	// listens and its supervisor address once the supervisor has registered,
 	// and names its launch identity when a client started it.
 	required := 6
-	for _, optional := range []string{"supervisor", "join", "launch"} {
+	for _, optional := range []string{"client_revision", "supervisor", "join", "launch"} {
 		if fields[optional] != nil {
 			required++
 		}

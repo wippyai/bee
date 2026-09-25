@@ -96,6 +96,39 @@ entries:
     path: .security.policies +=
   - entry: bee.gateway.security:tool_policy_read_policy
     path: .policy.resources +=
+- name: target_tool_inbox_policy
+  kind: ns.requirement
+  meta: {comment: Host-selected owner call policy for the action inbox tools}
+  default: bee.gateway.security:inbox_call_policy
+  targets:
+  - entry: bee.gateway.registry:tool_inbox_policy_ref
+    path: .resource_ref
+  - entry: bee.gateway.api:mcp_http
+    path: .security.policies +=
+  - entry: bee.gateway.security:tool_policy_read_policy
+    path: .policy.resources +=
+- name: target_tool_discover_policy
+  kind: ns.requirement
+  meta: {comment: Host-selected scope for peers an action may discover}
+  default: bee.gateway.security:discover_none_policy
+  targets:
+  - entry: bee.gateway.registry:tool_discover_policy_ref
+    path: .resource_ref
+  - entry: bee.gateway.api:mcp_http
+    path: .security.policies +=
+  - entry: bee.gateway.security:tool_policy_read_policy
+    path: .policy.resources +=
+- name: target_tool_send_grant_policy
+  kind: ns.requirement
+  meta: {comment: Host-selected exact workspace/node/action send grant; default denies all addresses}
+  default: bee.gateway.security:send_none_policy
+  targets:
+  - entry: bee.gateway.registry:tool_send_grant_policy_ref
+    path: .resource_ref
+  - entry: bee.gateway.api:mcp_http
+    path: .security.policies +=
+  - entry: bee.gateway.security:tool_policy_read_policy
+    path: .policy.resources +=
 - name: target_tool_launch_policy
   kind: ns.requirement
   meta: {comment: Host-selected managed-launch policy for the built-in MCP tool}

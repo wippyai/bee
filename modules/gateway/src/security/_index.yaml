@@ -8,6 +8,27 @@ entries:
     actions: [db.get]
     resources: []
     effect: allow
+- name: node_policy
+  kind: security.policy
+  meta: {comment: The MCP action address names this runtime's native node}
+  policy:
+    actions: [system.read]
+    resources: [node]
+    effect: allow
+- name: inbox_call_policy
+  kind: security.policy
+  meta: {comment: Default owner method calls for action inbox tools; domain authority remains at the Threads owner}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:inbox_send, bee.threads.service:inbox_reply, bee.threads.service:inbox_list,
+      bee.threads.service:inbox_ack, bee.threads.service:inbox_describe]
+    effect: allow
+- name: discover_none_policy
+  kind: security.policy
+  policy: {actions: [bee.sessions.discover], resources: [unassigned-session-address], effect: allow}
+- name: send_none_policy
+  kind: security.policy
+  policy: {actions: [bee.sessions.send], resources: [unassigned-session-address], effect: allow}
 - name: database_ref_policy
   kind: security.policy
   meta: {comment: Gateway store resolution reads only its component-owned database reference}
@@ -63,7 +84,7 @@ entries:
   meta: {comment: The MCP adapter reads only its component-owned links to the selected built-in tool policies}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway.registry:tool_read_policy_ref, bee.gateway.registry:tool_message_policy_ref, bee.gateway.registry:tool_launch_policy_ref, bee.gateway.registry:tool_overlay_policy_ref, bee.gateway.registry:tool_docs_policy_ref, bee.gateway.registry:tool_components_policy_ref, bee.gateway.registry:tool_delivery_policy_ref, bee.gateway.registry:tool_publish_policy_ref, bee.gateway.registry:tool_application_open_policy_ref]
+    resources: [bee.gateway.registry:tool_read_policy_ref, bee.gateway.registry:tool_message_policy_ref, bee.gateway.registry:tool_inbox_policy_ref, bee.gateway.registry:tool_discover_policy_ref, bee.gateway.registry:tool_send_grant_policy_ref, bee.gateway.registry:tool_launch_policy_ref, bee.gateway.registry:tool_overlay_policy_ref, bee.gateway.registry:tool_docs_policy_ref, bee.gateway.registry:tool_components_policy_ref, bee.gateway.registry:tool_delivery_policy_ref, bee.gateway.registry:tool_publish_policy_ref, bee.gateway.registry:tool_application_open_policy_ref]
     effect: allow
 - name: access_call_policy
   kind: security.policy

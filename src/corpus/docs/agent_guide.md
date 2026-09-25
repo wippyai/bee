@@ -73,9 +73,10 @@ The host keeps application execution independent from presentation. A producer
 may be ready without a presenter, a client may observe a retained desktop, and
 attachments carry recipient-bound observation, input and resize authority.
 Detaching a client does not stop admitted applications. A stale attachment
-loses its authority. The public client and local host are implemented; remote
-workspace composition, public Hive enrollment/discovery, destination Hub
-transfer/install, and managed headless or Docker launch remain unfinished.
+loses its authority. The public client, local host and explicit Hive invite
+join are implemented; remote workspace composition, automatic Hive enrollment
+and discovery, destination Hub transfer/install, and managed headless or Docker
+launch remain unfinished.
 Keep those operations labeled as proposals until their acceptance contracts
 exist.
 

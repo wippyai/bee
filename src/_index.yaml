@@ -65,6 +65,12 @@ entries:
     value: bee:gateway_tool_read_policy
   - name: target_tool_message_policy
     value: bee:gateway_tool_message_policy
+  - name: target_tool_inbox_policy
+    value: bee:gateway_tool_inbox_policy
+  - name: target_tool_discover_policy
+    value: bee:gateway_session_discover_policy
+  - name: target_tool_send_grant_policy
+    value: bee:gateway_session_send_denied_policy
   - name: target_tool_launch_policy
     value: bee:gateway_tool_launch_policy
   - name: target_tool_overlay_policy

@@ -45,12 +45,16 @@ const (
 // publisher that mirrors the trusted client and peer directories into the
 // supervisor's admission entry.
 func ownerComponents(state, execution, launch string) ([]boot.Component, error) {
-	directory := filepath.Join(state, rendezvous.DirectoryName)
-	rendezvousPublisher, err := rendezvous.Publisher(directory, execution, launch)
+	address, err := selectedMeshAddress()
 	if err != nil {
 		return nil, err
 	}
-	listener, err := joinListener(state)
+	directory := filepath.Join(state, rendezvous.DirectoryName)
+	rendezvousPublisher, err := rendezvous.Publisher(directory, execution, launch, !address.IsLoopback())
+	if err != nil {
+		return nil, err
+	}
+	listener, err := joinListener(state, address)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +94,10 @@ func prepareOwner(state string, folder bool) (boot.Config, func() error, error) 
 // prepareLockedOwner builds the owner's boot configuration while it holds the
 // owner lock.
 func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
+	address, err := selectedMeshAddress()
+	if err != nil {
+		return nil, err
+	}
 	directory := ownerDirectory(state)
 	trustedPath := ownerTrustedDirectory(state)
 	if err := privatefile.EnsurePrivateDir(trustedPath); err != nil {
@@ -110,7 +118,7 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 		return nil, err
 	}
 	node := ownerNodeName(state)
-	mesh, err := prepareMesh(state, time.Now())
+	mesh, err := prepareMesh(state, time.Now(), address)
 	if err != nil {
 		return nil, err
 	}
@@ -131,16 +139,16 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 		"name":                                node,
 		"raft.enabled":                        false,
 		"raft.role":                           "client",
-		"membership.bind_addr":                meshAddress.String(),
+		"membership.bind_addr":                meshBindAddress(address).String(),
 		"membership.bind_port":                mesh.port,
-		"membership.advertise_addr":           meshAddress.String(),
+		"membership.advertise_addr":           address.String(),
 		"membership.join_addrs":               mesh.seeds,
 		"membership.secret_file":              mesh.secret,
 		"membership.secret_key":               "",
-		"internode.bind_addr":                 meshAddress.String(),
+		"internode.bind_addr":                 meshBindAddress(address).String(),
 		"internode.bind_port":                 0,
 		"internode.auto_port":                 true,
-		"internode.advertise_addr":            meshAddress.String(),
+		"internode.advertise_addr":            address.String(),
 		"internode.advertise_port":            0,
 		"internode.identity_key_file":         keyPath,
 		"internode.identity_key":              "",

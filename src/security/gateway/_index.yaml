@@ -78,6 +78,28 @@ entries:
     - bee.threads.service:notify
     - bee.threads.service:get
     effect: allow
+- name: gateway_tool_inbox_policy
+  kind: security.policy
+  meta: {comment: Bound agents call only action inbox owner methods; each method checks its own action, workspace and acceptance}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:inbox_send, bee.threads.service:inbox_reply, bee.threads.service:inbox_list,
+      bee.threads.service:inbox_ack, bee.threads.service:inbox_describe]
+    effect: allow
+- name: gateway_session_discover_policy
+  kind: security.policy
+  meta: {comment: Workspace peers may discover local action addresses through the owner; the owner checks the caller workspace}
+  policy:
+    actions: [bee.sessions.discover]
+    resources: '*'
+    effect: allow
+- name: gateway_session_send_denied_policy
+  kind: security.policy
+  meta: {comment: No session send grant until the host selects an exact address policy}
+  policy:
+    actions: [bee.sessions.send]
+    resources: [unassigned-session-address]
+    effect: allow
 - name: gateway_tool_launch_policy
   kind: security.policy
   meta:

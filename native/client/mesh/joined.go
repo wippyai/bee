@@ -184,11 +184,7 @@ func awaitOwner(ctx context.Context, stack *stackpkg.Stack, expected rendezvous.
 				if member.ID != expected.Node {
 					continue
 				}
-				actual, err := rendezvous.Capture(member, expected.Execution)
-				if err != nil {
-					return err
-				}
-				if actual != expected.Endpoint() {
+				if !expected.MatchesNode(member) {
 					return rendezvous.ErrOwnerChanged
 				}
 				return nil

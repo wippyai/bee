@@ -22,10 +22,13 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {read: string, message: string, launch: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string}
+type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
     read = "bee.gateway.registry:tool_read_policy_ref",
     message = "bee.gateway.registry:tool_message_policy_ref",
+    inbox = "bee.gateway.registry:tool_inbox_policy_ref",
+    discover = "bee.gateway.registry:tool_discover_policy_ref",
+    send_grant = "bee.gateway.registry:tool_send_grant_policy_ref",
     launch = "bee.gateway.registry:tool_launch_policy_ref",
     overlay = "bee.gateway.registry:tool_overlay_policy_ref",
     docs = "bee.gateway.registry:tool_docs_policy_ref",
@@ -66,6 +69,30 @@ local TOOLS: {Tool} = {
             session = {type = "string", minLength = 1, maxLength = 160},
             idempotency_key = {type = "string", minLength = 1, maxLength = 160},
         }}},
+    {name = "session_directory", description = "List local agents in your workspace that your host permits you to discover. Each entry has a host-assigned name, an exact node/action address, current acceptance epoch, attempt state and latest inbox delivery state; discovery grants no thread read or send permission.", operation = "bee.threads.service:inbox_describe",
+        policies = {TOOL_POLICY_REFS.inbox, TOOL_POLICY_REFS.discover, TOOL_POLICY_REFS.send_grant},
+        schema = {type = "object", additionalProperties = false, properties = table.create(0, 1)}, annotations = READ_ANNOTATIONS},
+    {name = "session_send", description = "Commit one request into an action's durable inbox by exact node/action address and current grant_epoch. The host must grant bee.sessions.send for that workspace/node/action, and the recipient owner must accept your action's sender. Delivery is committed, not yet offered to a running model.", operation = "bee.threads.service:inbox_send",
+        policies = {TOOL_POLICY_REFS.inbox, TOOL_POLICY_REFS.send_grant}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"address", "grant_epoch", "idempotency_key", "message_id", "content"}, properties = {
+            address = {type = "object", additionalProperties = false, required = {"node_id", "action_id"}, properties = {node_id = {type = "string"}, action_id = {type = "string"}}},
+            grant_epoch = {type = "integer", minimum = 1}, idempotency_key = {type = "string"}, message_id = {type = "string"},
+            content = {type = "object", additionalProperties = false, properties = {text = {type = "string"}, artifact_ref = {type = "string"}}}}}},
+    {name = "session_inbox", description = "Page your own action's durable inbox in inbox sequence order; this does not mark items acknowledged.", operation = "bee.threads.service:inbox_list",
+        policies = {TOOL_POLICY_REFS.inbox}, annotations = READ_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, properties = {after_sequence = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64}}}},
+    {name = "session_ack", description = "Acknowledge one item in your own action inbox by inbox_sequence. Acknowledgment is an explicit agent action.", operation = "bee.threads.service:inbox_ack",
+        policies = {TOOL_POLICY_REFS.inbox}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"inbox_sequence", "idempotency_key"}, properties = {
+            inbox_sequence = {type = "integer", minimum = 1}, idempotency_key = {type = "string"}}}},
+    {name = "session_reply", description = "Commit a correlated reply into the original sender's action inbox. The in_reply_to reference identifies the request in your own inbox; both owners' checks run in one local transaction.", operation = "bee.threads.service:inbox_reply",
+        policies = {TOOL_POLICY_REFS.inbox, TOOL_POLICY_REFS.send_grant}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"address", "grant_epoch", "idempotency_key", "message_id", "content", "in_reply_to", "outcome"}, properties = {
+            address = {type = "object", additionalProperties = false, required = {"node_id", "action_id"}, properties = {node_id = {type = "string"}, action_id = {type = "string"}}},
+            grant_epoch = {type = "integer", minimum = 1}, idempotency_key = {type = "string"}, message_id = {type = "string"},
+            content = {type = "object", additionalProperties = false, properties = {text = {type = "string"}, artifact_ref = {type = "string"}}},
+            in_reply_to = {type = "object", additionalProperties = false, required = {"thread_id", "record_id"}, properties = {thread_id = {type = "string"}, record_id = {type = "string"}}},
+            outcome = {type = "string", enum = {"succeeded", "failed", "cancelled", "uncertain"}}}}},
     {name = "thread_launch", description = "Start one host-allow-listed managed agent, in your own workspace or in workspace_id when your host lets you launch there. By default it joins your thread; thread names an existing thread you belong to (thread_id) or a new one (title). workdir names a workspace resource (resource) or a folder under a root the host admits (root_ref, path). placement is native or docker; a placement this host does not provide is refused with PLACEMENT_UNAVAILABLE. A saved profile (saved_profile_id, saved_profile_revision) selects preferences for its definition. Each choice is refused unless the definition and its launch policy allow it. The child holds its workspace's host while it runs. Returns the admitted definition and title, submitted brief, and child thread, action and attempt IDs for thread_read, thread_message, thread_notify and thread_wait.", operation = "bee.harness.launch:agent_launch_call",
         policies = {TOOL_POLICY_REFS.launch}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"definition_ref", "brief", "idempotency_key"}, properties = {
@@ -303,6 +330,52 @@ function M.notify_arguments(params: Object): (Object?, string?)
     local key = bounds.id(arguments.idempotency_key)
     if not key then return nil, "idempotency_key is required and must be an identifier" end
     return {session = session, idempotency_key = key}, nil
+end
+
+function M.inbox_message_arguments(params: Object, reply: boolean): (Object?, string?)
+    local object = bounds.object(params.arguments)
+    if not object then return nil, "arguments must be an object" end
+    local extra = bounds.fields(object, {"address", "grant_epoch", "idempotency_key", "message_id", "content", "in_reply_to", "outcome"})
+    if extra then return nil, extra end
+    local address = bounds.object(object.address)
+    if not address or bounds.fields(address, {"node_id", "action_id"}) then return nil, "address must contain only node_id and action_id" end
+    local node_id, action_id = bounds.id(address.node_id), bounds.id(address.action_id)
+    local key, message_id = bounds.id(object.idempotency_key), bounds.id(object.message_id)
+    local epoch = bounds.integer(object.grant_epoch)
+    if not node_id or not action_id or not key or not message_id or not epoch or epoch < 1 then
+        return nil, "exact address, grant_epoch, idempotency_key and message_id are required"
+    end
+    if reply ~= (object.in_reply_to ~= nil) or (reply and object.outcome == nil) or (not reply and object.outcome ~= nil) then
+        return nil, "reply correlation and outcome belong to session_reply only"
+    end
+    local submitted: Object = {message_id = message_id, message_kind = reply and "reply" or "request", sender_id = "gateway-mcp-subject",
+        recipient_ids = {}, recipient_action_ids = {action_id}, content = object.content}
+    if reply then submitted.in_reply_to = object.in_reply_to; submitted.outcome = object.outcome end
+    local decoded, invalid = message.decode(submitted)
+    if not decoded then return nil, "message: " .. tostring(invalid) end
+    local result: Object = {address = {node_id = node_id, action_id = action_id}, grant_epoch = epoch, idempotency_key = key,
+        message_id = message_id, content = decoded.content}
+    if decoded.in_reply_to then result.in_reply_to = decoded.in_reply_to end
+    if decoded.outcome then result.outcome = decoded.outcome end
+    return result, nil
+end
+function M.inbox_page_arguments(params: Object): (Object?, string?)
+    local object = bounds.object(params.arguments) or {}
+    local extra = bounds.fields(object, {"after_sequence", "limit"})
+    if extra then return nil, extra end
+    local after = object.after_sequence == nil and 0 or bounds.integer(object.after_sequence)
+    local limit = object.limit == nil and 64 or bounds.integer(object.limit)
+    if not after or after < 0 or not limit or limit < 1 or limit > 64 then return nil, "after_sequence and limit are outside inbox bounds" end
+    return {after_sequence = after, limit = limit}, nil
+end
+function M.inbox_ack_arguments(params: Object): (Object?, string?)
+    local object = bounds.object(params.arguments)
+    if not object then return nil, "arguments must be an object" end
+    local extra = bounds.fields(object, {"inbox_sequence", "idempotency_key"})
+    if extra then return nil, extra end
+    local sequence, key = bounds.integer(object.inbox_sequence), bounds.id(object.idempotency_key)
+    if not sequence or sequence < 1 or not key then return nil, "inbox_sequence and idempotency_key are required" end
+    return {inbox_sequence = sequence, idempotency_key = key}, nil
 end
 
 -- Launch arguments are the launch facade's own bounded request; the endpoint

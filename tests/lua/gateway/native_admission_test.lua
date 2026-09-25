@@ -150,6 +150,16 @@ local function define_tests()
                 local selected = wait_for_listener()
                 local admitted = raw_call(caller(true, false), "bee.gateway.binding:admit", admit_request("authorized"))
                 if not admitted.ok then error("authorized admission: " .. tostring(admitted.error and (admitted.error :: Object).message)) end
+                local first_name = admit_request("named-one")
+                first_name.workspace_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                first_name.workspace_name = "Builder"
+                test.is_true(raw_call(caller(true, false), "bee.gateway.binding:admit", first_name).ok)
+                local collision = admit_request("named-two")
+                collision.workspace_id = first_name.workspace_id
+                collision.workspace_name = "Builder"
+                local refused_name = raw_call(caller(true, false), "bee.gateway.binding:admit", collision)
+                test.is_false(refused_name.ok)
+                test.eq((refused_name.error :: Object).code, "CONFLICT")
                 local first = row(db)
                 test.eq(first.epoch, 1)
                 test.eq(first.address, selected.address)

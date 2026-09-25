@@ -109,6 +109,12 @@ bee hive join INVITE          # on the joining node, with its owner stopped
 bee hive peers                # on either node: show the peer session
 ```
 
+For nodes on different machines, start each owner with `BEE_MESH_ADDRESS` set
+to an IP address assigned to that machine and reachable by the other node.
+Set it for `bee hive join` on the joining machine as well. Bee listens on all
+interfaces of that IP family so local loopback clients can attach, and
+advertises only the selected address to peers.
+
 `bee --help` lists the remaining Hive, process and runtime commands and their
 arguments. The [native command grammar](docs/operations/native.md#command-grammar)
 explains the launch routes.

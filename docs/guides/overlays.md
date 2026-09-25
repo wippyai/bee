@@ -131,7 +131,7 @@ workspace application delivery still requires approval for each version and
 uses its current host-selected admission policies.
 
 Destination migration execution requires a captured immutable registry view and
-is not supplied by ordinary overlay activation. Public Hive enrollment and
+is not supplied by ordinary overlay activation. Automatic Hive enrollment and
 discovery, remote workspace composition, destination Hub package transfer and
 installation, and managed headless launch remain separate boundaries.
 

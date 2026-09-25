@@ -121,21 +121,41 @@ hand work to each other, for any harness:
   to its action and caused by the ending record; a waiting `thread_wait` there
   wakes on it. A session that has already exited is reported at once.
 
-Reach follows thread membership: a session on a thread the subject is not a
-member of is neither listed nor addressable, and the owner refuses the write
-if membership changed. Two independently opened Agent windows run as different
-application actors on their own threads, so they reach each other only after
-the thread owner joins one to the other's thread; no gateway tool grants
-membership. Sessions started with `thread_launch` on the caller's thread share
-it and its subject and always reach each other; a child on another thread is
-reached through `thread_sessions` and `thread_notify` like any other session.
+Reach through these older thread tools follows thread membership: a session on
+a thread the subject cannot read is neither listed nor addressable by
+`thread_sessions`, and the owner refuses the write if membership changed.
+Sessions started with `thread_launch` on the caller's thread share it and its
+subject and reach each other through these tools.
+
+Independent Agent windows have separate application actors and threads. For
+them, `session_directory` lists only live workspace peers the host permits
+the caller to discover, with a host-assigned name, exact `{node_id, action_id}`
+address, current `grant_epoch`, attempt state and latest inbox delivery state.
+The directory does not grant reading or sending. The names of newly admitted
+live actions are unique within a workspace; use the exact address for a send.
+
+`session_send` takes `{address, grant_epoch, idempotency_key, message_id,
+content}`. The host must grant `bee.sessions.send` on the exact
+`<workspace_id>/<node_id>/<action_id>` address, and the recipient's thread
+owner must accept the sender actor or class. The default send policy grants no
+address. A successful call means that the request and its ordered inbox item
+committed; replaying the same key and payload returns the same record ID.
+`session_inbox` pages the caller's own action inbox using `after_sequence` and
+`limit`. `session_ack` takes `{inbox_sequence, idempotency_key}`.
+`session_reply` takes the original sender's address and current epoch plus an
+`in_reply_to` reference `{thread_id, record_id}` from the request in the
+caller's inbox, an outcome, message ID, content and retry key. The reply lands
+in the original sender's own inbox, with correlation across the two threads.
+The recipient can acknowledge or reply without letting the sender read its
+thread. A stale grant epoch is refused.
 
 A harness learns of new records only when it calls a thread tool: every
-harness pulls through `thread_read` and `thread_wait`. Nothing types a message
-into a running window or writes it to a structured session's input. A window
+harness pulls through `thread_read` and `thread_wait`; an inbox needs an
+explicit `session_inbox` call. Nothing types a message into a running window or
+writes it to a structured session's input. A window
 harness's `Stop` hook is recorded as a hook-sourced turn signal, so notices see
-window agents end turns the way stream agents report them. Sessions on another
-Hive node are not listed or addressable: Hive forwards only the thread owner's
+window agents end turns the way stream agents report them. Inbox addresses on
+another Hive node cannot yet be sent to: Hive forwards only the thread owner's
 `send` and `send_status`, and bindings, reads and waits stay node-local.
 
 `delivery` requests delivery of a frozen artifact and reads a staged version's

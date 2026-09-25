@@ -382,9 +382,37 @@ local function define_tests()
             local message_schema = (mcp.tool("thread_message") :: mcp.Tool).schema
             test.not_nil((message_schema.properties :: {[string]: unknown}).session)
         end)
+        test.it("decodes exact action inbox tools without accepting caller identity or thread overrides", function()
+            local directory = mcp.tool("session_directory")
+            test.eq(directory and directory.operation, "bee.threads.service:inbox_describe")
+            test.eq(directory and directory.policies[2], mcp.TOOL_POLICY_REFS.discover)
+            local send = mcp.tool("session_send")
+            test.eq(send and send.operation, "bee.threads.service:inbox_send")
+            test.eq(send and send.policies[2], mcp.TOOL_POLICY_REFS.send_grant)
+            local base = {address = {node_id = "node-a", action_id = "action-b"}, grant_epoch = 3,
+                idempotency_key = "key", message_id = "m1", content = {text = "hello"}}
+            local parsed = mcp.inbox_message_arguments({arguments = base}, false)
+            test.eq(parsed and (parsed.address :: {[string]: unknown}).action_id, "action-b")
+            local forged: {[string]: unknown} = {}
+            for key, value in pairs(base) do forged[key] = value end
+            forged.sender_action_id = "forged"
+            local _, refused = mcp.inbox_message_arguments({arguments = forged}, false)
+            test.eq(refused, "unknown field sender_action_id")
+            local reply: {[string]: unknown} = {}
+            for key, value in pairs(base) do reply[key] = value end
+            reply.in_reply_to = {thread_id = "thread-b", record_id = "record-b"}
+            reply.outcome = "succeeded"
+            test.not_nil(mcp.inbox_message_arguments({arguments = reply}, true))
+            local _, missing = mcp.inbox_message_arguments({arguments = base}, true)
+            test.is_true(tostring(missing):find("reply correlation", 1, true) ~= nil)
+            local ack = mcp.inbox_ack_arguments({arguments = {inbox_sequence = 8, idempotency_key = "ack-8"}})
+            test.eq(ack and ack.inbox_sequence, 8)
+            local _, outside = mcp.inbox_page_arguments({arguments = {after_sequence = 0, limit = 65}})
+            test.eq(outside, "after_sequence and limit are outside inbox bounds")
+        end)
         test.it("holds a binding valid only under its epoch, before expiry and until revoked", function()
             local binding: gateway.Binding = {binding_id = "b", subject = "s", action_id = "a", attempt_id = "t", thread_id = "th", owner_incarnation = 1, carrier_epoch = 1, credential_generation = 1,
-                tools = {"thread_read"}, hooks = {}, epoch = 2, expires_at = "2999-01-01T00:00:00.000Z", revoked = false, sealed = false}
+                tools = {"thread_read"}, hooks = {}, epoch = 2, expires_at = "2999-01-01T00:00:00.000Z", revoked = false, sealed = false, workspace_name = "a"}
             local ok = gateway.valid(binding, {epoch = 2, restarts = 0})
             test.is_true(ok)
             local _, epoch = gateway.valid(binding, {epoch = 3, restarts = 0})

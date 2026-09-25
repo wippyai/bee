@@ -29,8 +29,8 @@ local function scope_for(grants: {string}): security.Scope
 end
 -- grants name host policies such as bee:thread_create_policy; the client
 -- policy only permits calling the service functions.
-function M.principal(id: string, grants: {string}): Client
-    local actor = security.new_actor(id)
+function M.principal(id: string, grants: {string}, workspace_id: string?): Client
+    local actor = security.new_actor(id, workspace_id and {workspace_id = workspace_id} or {})
     local scope = scope_for(grants)
     local function call(self: Client, operation: string, request: {[string]: unknown}): Reply
         local target = SERVICE .. operation

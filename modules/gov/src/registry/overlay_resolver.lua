@@ -7,6 +7,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
 local application_admission = require("application_admission")
+local capability_catalog = require("capability_catalog")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -150,6 +151,8 @@ local function measured_entry(entry: Entry, package: string, registry_default_me
     local lifecycle = object(data.lifecycle)
     return {id = clean.id, kind = clean.kind, package = package, digest = digest,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
+        security_actor = security ~= nil and security.actor ~= nil,
+        security_groups = security ~= nil and security.groups ~= nil,
         grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
         config_empty = config_empty}, nil
 end
@@ -167,12 +170,30 @@ local function path_value(entry: Entry, path: unknown): (unknown?, string?)
     return value, nil
 end
 
-local function requirement(entry: Entry, package: string, final: {[string]: Entry}): (Object?, string?)
+local function requirement(entry: Entry, package: string, final: {[string]: Entry}, catalog: unknown): (Object?, string?)
     local data = object(entry.data) or entry
     local targets, targets_error = dense(data.targets, "requirement targets", 64)
     if not targets then return nil, targets_error end
     local result_targets: {string} = {}
     local selected: string? = nil
+    local meta = object(entry.meta)
+    local capability = meta and meta.capability or nil
+    local capability_request: Object? = nil
+    if capability ~= nil then
+        if not meta or meta.value_kind ~= "security.policy" or type(capability) ~= "string"
+            or not capability:match("^[a-z][a-z0-9_.-]*$") or #capability > 80
+            or type(meta.reason) ~= "string" or #meta.reason == 0 or #meta.reason > 512
+            or meta.reason:find("%c") or #targets ~= 1 or data.default ~= nil then
+            return nil, "capability requirement metadata is invalid"
+        end
+        local normalized, normalize_error = capability_catalog.normalize(catalog, capability, meta.parameters)
+        if not normalized then return nil, normalize_error or "capability parameters are invalid" end
+        local template = catalog.capabilities[capability]
+        capability_request = {capability = capability, parameters = normalized, reason = meta.reason,
+            catalog_revision = catalog.revision, template_revision = template.revision}
+    elseif meta and (meta.parameters ~= nil or meta.reason ~= nil) then
+        return nil, "capability requirement metadata is incomplete"
+    end
     for _, raw in ipairs(targets) do
         local target = object(raw)
         local target_id = target and bounds.id(target.entry) or nil
@@ -180,17 +201,28 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         result_targets[#result_targets + 1] = target_id
         local destination = object(final[target_id])
         if not destination then return nil, "requirement target entry is absent: " .. target_id end
-        local binding, binding_error = path_value(destination :: Entry, target.path)
-        local value = bounds.id(binding)
-        if not value then return nil, binding_error or "requirement target has no selected binding" end
-        if selected and selected ~= value then return nil, "requirement targets disagree on the selected binding" end
-        selected = value
+        if capability_request then
+            local request_namespace = (entry.id :: string):match("^([^:]+):")
+            local target_namespace = target_id:match("^([^:]+):")
+            local target_meta = object(destination.meta)
+            if target.path ~= ".security.policies +=" or target_namespace ~= request_namespace
+                or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.application" then
+                return nil, "capability requirement must append policies to its own application"
+            end
+            capability_request.target = target_id
+            capability_request.path = target.path
+        else
+            local binding, binding_error = path_value(destination :: Entry, target.path)
+            local value = bounds.id(binding)
+            if not value then return nil, binding_error or "requirement target has no selected binding" end
+            if selected and selected ~= value then return nil, "requirement targets disagree on the selected binding" end
+            selected = value
+        end
     end
     table.sort(result_targets)
-    local meta = object(entry.meta)
     local expected = meta and bounds.id(meta.value_kind) or nil
     return {id = entry.id, package = package, value = selected, expected_kind = expected,
-        targets = result_targets}, nil
+        targets = result_targets, capability_request = capability_request}, nil
 end
 
 local function policy_context(policy: Policy, captured: Captured, base_digest: string,
@@ -348,7 +380,16 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     end
     for _, entry in ipairs(incoming) do
         if entry.kind == "ns.requirement" then
-            local item, item_error = requirement(entry, component :: string, final)
+            local meta = object(entry.meta)
+            local catalog: unknown = nil
+            if meta and meta.capability ~= nil then
+                catalog = current_raw["bee:capability_catalog"]
+                if not catalog then return nil, nil, "host capability catalog is absent" end
+                local decoded, catalog_error = capability_catalog.decode(catalog)
+                if not decoded then return nil, nil, catalog_error end
+                catalog = decoded
+            end
+            local item, item_error = requirement(entry, component :: string, final, catalog)
             if not item then return nil, nil, item_error end
             requirements[#requirements + 1] = item
         end
@@ -368,6 +409,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         for _, target in ipairs(item.targets :: {string}) do relevant_ids[target] = true end
         local value = bounds.id(item.value)
         if value then relevant_ids[value] = true end
+        if item.capability_request then relevant_ids["bee:capability_catalog"] = true end
     end
     for _, raw in ipairs(candidate_migrations) do
         local item = raw :: Object

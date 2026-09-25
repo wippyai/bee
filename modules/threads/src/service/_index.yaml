@@ -253,3 +253,52 @@ entries:
     types: bee.threads.service:types
   security:
     policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: inbox
+  kind: library.lua
+  source: file://inbox.lua
+  modules: [sql, system]
+  imports:
+    bounds: bee.threads.records:bounds
+    access: bee.threads.service:access
+    message: bee.threads.records:message
+    record: bee.threads.records:record
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+    sends: bee.threads.service:sends
+- name: inbox_accept
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: accept
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+- name: inbox_describe
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: describe
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+- name: inbox_send
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: send
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+- name: inbox_reply
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: reply
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+- name: inbox_list
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: list
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+- name: inbox_ack
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: ack
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
+  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}

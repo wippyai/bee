@@ -18,7 +18,7 @@ entries:
     profiles: []
     workspace_applications:
       approval_policy: workspace-application-delivery
-      kinds: [process.lua, library.lua]
+      kinds: [process.lua, library.lua, ns.requirement]
       modules: [tty, process, channel, json, time, uuid, base64, hash]
       policies: [bee:ordinary_app_subsystem_boundary]
       thread_access: none

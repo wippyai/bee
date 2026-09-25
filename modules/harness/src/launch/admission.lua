@@ -39,6 +39,7 @@ type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
     saved_profile_id: string?,
     saved_profile_revision: integer?,
+    owner_component_revision: integer?,
     title: string,
     definition_ref: string,
     definition_digest: string,
@@ -63,6 +64,7 @@ type Plan = {
     -- legacy routes without an agent reference.
     agent_ref: string?,
     agent_digest: string?,
+    spec_digest: string?,
     agent_tools: {string}?,
     agent_model: string?,
     declined_tuning: {string}?,
@@ -73,11 +75,16 @@ type Admitted = {
     request_id: string, thread_id: string, action_id: string, attempt_id: string,
     session_ref: string?,
     carrier: string?, mode: string?, started_at: string?,
+    saved_profile_revision: integer?,
+    owner_component_revision: integer?,
 }
 type Continuation = {origin_request_id: string, previous_attempt_id: string, thread_id: string, reauthorize: boolean?}
 type Request = {
     saved_profile_id: string?,
     saved_profile_revision: integer?,
+    owner_component_revision: integer?,
+    agent_ref: string?,
+    spec_digest: string?,
     request_id: string,
     definition_ref: string,
     workspace_id: string,
@@ -194,7 +201,7 @@ local function agent_preferences(selected: Selected?, closure: agent_resolver.Cl
     end
     return {options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
 end
-local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?): (Plan?, Reply?, placement_types.Preferences?)
+local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?): (Plan?, Reply?, placement_types.Preferences?)
     local definition_ref = launch.ref
     local chosen = launch.default_mode
     if mode and mode ~= chosen then
@@ -233,11 +240,38 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local checked: agent_resolver.Checked? = nil
     local effective = preference_value(selected)
     local launch_policy: policy.Policy
-    if launch.agent_ref then
+    local effective_agent_ref = (selected and selected.profile and selected.profile.agent_ref) or launch.agent_ref or req_agent_ref
+    if selected and selected.profile and selected.profile.agent_ref then
+        if launch.agent_ref and selected.profile.agent_ref ~= launch.agent_ref then
+            return nil, fail("CONFLICT", "saved profile agent reference differs from launch definition")
+        end
+        if req_agent_ref and selected.profile.agent_ref ~= req_agent_ref then
+            return nil, fail("CONFLICT", "requested agent reference differs from saved profile")
+        end
+    elseif launch.agent_ref and req_agent_ref and launch.agent_ref ~= req_agent_ref then
+        return nil, fail("CONFLICT", "requested agent reference differs from launch definition")
+    end
+
+    local effective_owner_rev = (selected and selected.profile and selected.profile.owner_component_revision) or req_owner_rev
+    if selected and selected.profile and selected.profile.owner_component_revision and req_owner_rev then
+        if selected.profile.owner_component_revision ~= req_owner_rev then
+            return nil, fail("CONFLICT", "requested owner component revision differs from saved profile")
+        end
+    end
+
+    if effective_agent_ref then
         local host_policy, host_error = policy.decode(launch.policy_ref, policy_entry, nil, nil)
         if not host_policy then return nil, fail("NOT_FOUND", host_error or "policy") end
-        local closure, closure_code, closure_error = agent_resolver.resolve(pinned, launch.agent_ref)
+        local closure, closure_code, closure_error = agent_resolver.resolve(pinned, effective_agent_ref)
         if not closure then return nil, fail(closure_code or "UNAVAILABLE", closure_error or "agent definition") end
+        if selected and selected.profile and selected.profile.spec_digest then
+            if selected.profile.spec_digest ~= closure.digest then
+                return nil, fail("CONFLICT", "saved profile spec digest differs from resolved agent closure")
+            end
+        end
+        if req_spec_digest and req_spec_digest ~= closure.digest then
+            return nil, fail("CONFLICT", "requested spec digest differs from resolved agent closure")
+        end
         agent = closure
         local route, route_code, route_error = agent_resolver.check_route(closure,
             {driver_id = binding and binding.driver_id or "", model_map = host_policy.agent_model_map,
@@ -296,7 +330,8 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest, placement_methods = placement.methods,
         provider = provider_digest, mode = chosen, saved_profile = selected,
         agent = agent and agent.digest or nil, agent_model = checked and checked.model or nil,
-        declined_tuning = checked and checked.declined or nil})
+        declined_tuning = checked and checked.declined or nil,
+        owner_component_revision = effective_owner_rev})
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
     return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
@@ -304,7 +339,9 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         placement_methods = placement.methods, placement_kind = placement.placement_kind, overrides = overrides,
         catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest,
         saved_profile_id = selected and selected.profile_id or nil, saved_profile_revision = selected and selected.revision or nil,
+        owner_component_revision = effective_owner_rev,
         agent_ref = agent and agent.ref or nil, agent_digest = agent and agent.digest or nil,
+        spec_digest = agent and agent.digest or nil,
         agent_tools = agent and agent.tool_names or nil, agent_model = checked and checked.model or nil,
         declined_tuning = checked and checked.declined or nil}, nil, effective
 end
@@ -317,7 +354,7 @@ function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?): 
     if not plan then return nil, refused end
     return plan, nil
 end
-function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?): (Plan?, Reply?)
+function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?): (Plan?, Reply?)
     local selected: Selected? = nil
     if saved_id or saved_revision then
         if not workspace or not saved_id or not saved_revision or saved_revision < 1 then return nil, fail("INVALID", "saved profile needs workspace, identity and revision") end
@@ -329,14 +366,14 @@ function M.resolve(definition_ref: string, mode: string?, workspace: string?, sa
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, refused = resolve(pinned, launch, mode, selected)
+    local plan, refused = resolve(pinned, launch, mode, selected, agent_ref, owner_component_revision, spec_digest)
     if not plan then return nil, refused end
     return plan, nil
 end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "thread_title", "placement", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id", "origin_view"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "thread_title", "placement", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id", "origin_view", "agent_ref", "owner_component_revision", "owner_revision", "spec_digest"})
     if unknown_field then return nil, unknown_field end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
@@ -346,6 +383,26 @@ function M.decode_request(value: unknown): (Request?, string?)
     if object.saved_profile_id ~= nil or object.saved_profile_revision ~= nil then
         if not saved_id or not saved_revision or saved_revision < 1 then return nil, "saved profile needs identity and positive revision" end
         if object.expected_plan_digest == nil then return nil, "saved profile needs the selected launch plan digest" end
+    end
+    local agent_ref: string? = nil
+    if object.agent_ref ~= nil then
+        agent_ref = bounds.id(object.agent_ref)
+        if not agent_ref then return nil, "agent_ref is not an identifier" end
+    end
+    local owner_component_revision: integer? = nil
+    local rev_raw = object.owner_component_revision ~= nil and object.owner_component_revision or object.owner_revision
+    if rev_raw ~= nil then
+        local count = bounds.count(rev_raw)
+        if not count or count < 1 then return nil, "owner_component_revision must be a positive integer" end
+        owner_component_revision = count
+    end
+    local spec_digest: string? = nil
+    if object.spec_digest ~= nil then
+        local digest = bounds.text(object.spec_digest, 64)
+        if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
+            return nil, "spec_digest must be a lowercase SHA-256 hex digest"
+        end
+        spec_digest = digest
     end
     local brief = bounds.text(object.brief, M.MAX_BRIEF_BYTES)
     if not brief then return nil, "brief must be bounded text" end
@@ -417,7 +474,8 @@ function M.decode_request(value: unknown): (Request?, string?)
     end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id,
         thread_title = thread_title, placement = placement, saved_profile_id = saved_id, saved_profile_revision = saved_revision,
-        expected_plan_digest = expected_plan_digest, continuation = previous, parent_action_id = parent_action_id, origin_view = origin_view}, nil
+        expected_plan_digest = expected_plan_digest, continuation = previous, parent_action_id = parent_action_id, origin_view = origin_view,
+        agent_ref = agent_ref, owner_component_revision = owner_component_revision, spec_digest = spec_digest}, nil
 end
 -- The durable identities of a request: the same request id always names
 -- the same action and attempt.
@@ -444,13 +502,19 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     if request.saved_profile_id and request.saved_profile_revision then
         local found, refused = selected_profile(request.workspace_id, request.saved_profile_id, request.saved_profile_revision, request.definition_ref)
         if not found then return nil, refused end
+        if request.owner_component_revision and found.profile.owner_component_revision and found.profile.owner_component_revision ~= request.owner_component_revision then
+            return nil, fail("CONFLICT", "saved profile owner component revision changed; select it again")
+        end
+        if request.spec_digest and found.profile.spec_digest and found.profile.spec_digest ~= request.spec_digest then
+            return nil, fail("CONFLICT", "saved profile spec digest changed; select it again")
+        end
         selected = found
     end
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, request.definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected)
+    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected, request.agent_ref, request.owner_component_revision, request.spec_digest)
     if not plan then return nil, plan_refused end
     if request.expected_plan_digest and request.expected_plan_digest ~= plan.plan_digest then
         return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
@@ -570,7 +634,9 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
         previous_attempt_id = previous and previous.previous_attempt_id or nil, reauthorize = previous and previous.reauthorize or nil, origin_view = request.origin_view}
     return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,
-        thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref}, nil
+        thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref,
+        saved_profile_revision = plan.saved_profile_revision,
+        owner_component_revision = plan.owner_component_revision}, nil
 end
 -- External callers keep the operation reply; local execution paths consume
 -- the typed admitted request without decoding our own value a second time.

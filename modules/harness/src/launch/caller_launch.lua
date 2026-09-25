@@ -71,7 +71,8 @@ function M.start(caller: Caller, request: agent_protocol.Launch, definition: def
     -- exact plan the caller's authority admitted and not one that changed
     -- underneath.
     local resolved, resolve_error = funcs.call(M.RESOLVE, {definition_ref = request.definition_ref, mode = definition.default_mode, workspace_id = caller.workspace_id,
-        saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision})
+        saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
+        agent_ref = request.agent_ref, owner_component_revision = request.owner_component_revision, spec_digest = request.spec_digest})
     if resolve_error then return fail("UNAVAILABLE", tostring(resolve_error)) end
     local plan, resolve_fault = reply_of(resolved)
     if not plan then return fail(resolve_fault.code, resolve_fault.message) end
@@ -111,7 +112,8 @@ function M.start(caller: Caller, request: agent_protocol.Launch, definition: def
     local started, start_error = funcs.call(M.START, {request_id = request_id, definition_ref = request.definition_ref, workspace_id = caller.workspace_id,
         brief = request.brief, thread_id = thread_id, thread_title = thread_title, workdir = workdir_name, placement = request.placement,
         saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
-        parent_action_id = caller.parent_action_id, expected_plan_digest = plan_digest, origin_view = caller.origin_view})
+        parent_action_id = caller.parent_action_id, expected_plan_digest = plan_digest, origin_view = caller.origin_view,
+        agent_ref = request.agent_ref, owner_component_revision = request.owner_component_revision, spec_digest = request.spec_digest})
     if start_error then return fail("UNAVAILABLE", tostring(start_error)) end
     local admitted, start_fault = reply_of(started)
     if not admitted then return fail(start_fault.code, start_fault.message) end
@@ -121,6 +123,7 @@ function M.start(caller: Caller, request: agent_protocol.Launch, definition: def
     -- the exact bounded brief that selected it, so a caller can label the
     -- child without re-resolving a registry entry.
     return {ok = true, error = nil, value = {thread_id = child_thread, action_id = child_action, attempt_id = child_attempt,
-        definition_ref = definition.ref, title = definition.title, brief = request.brief}}
+        definition_ref = definition.ref, title = definition.title, brief = request.brief,
+        saved_profile_revision = plan.saved_profile_revision, owner_component_revision = plan.owner_component_revision}}
 end
 return M

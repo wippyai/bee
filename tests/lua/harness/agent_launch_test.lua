@@ -226,7 +226,7 @@ local function define_tests()
                 definition_ref = PERMITTED,
                 brief = "do task",
                 idempotency_key = "k5",
-                agent_ref = "not an id!"
+                agent_ref = "bad\0ref"
             })
             test.eq(bad_ref, "agent_ref is not an identifier")
         end)

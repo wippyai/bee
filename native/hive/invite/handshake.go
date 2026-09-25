@@ -136,9 +136,9 @@ func writeMessage(connection net.Conn, value any) error {
 	return err
 }
 
-// Dial redeems invite as identity. It pins the hive node's identity key by the
-// invite fingerprint before sending the secret, and returns the hive node's
-// admission with that pinned key, or the hive node's definite refusal.
+// Dial redeems invite as identity, trying every bounded candidate. It pins the
+// hive node's identity key before sending the secret and returns its admission
+// with that pinned key, or its definite refusal.
 func Dial(ctx context.Context, invite Invite, identity ed25519.PrivateKey, request Request) (Admission, ed25519.PublicKey, error) {
 	admission, pinned, _, err := DialCandidates(ctx, invite, identity, request)
 	return admission, pinned, err

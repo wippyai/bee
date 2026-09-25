@@ -29,6 +29,7 @@ class Pair:
         self.remote_root = result.stdout.strip()
         if not self.remote_root.startswith("/home/") or "/bee-reach/hive-remote-" not in self.remote_root:
             raise RuntimeError("unexpected remote test state path")
+        self.started = set()
 
     def call(self, side, name, *args, check=True, timeout=180):
         if side == "local":
@@ -65,10 +66,12 @@ class Pair:
     def direction(self, inviter):
         joiner = "remote" if inviter == "local" else "local"
         name = "from-wsl" if inviter == "local" else "from-remote"
+        self.started.add((inviter, name))
         invite = self.call(inviter, name, "hive", "invite").stdout.strip()
         if not INVITE.fullmatch(invite):
             raise RuntimeError("invite command did not return exactly one token")
         inviter_node, _ = self.peers(inviter, name)
+        self.started.add((joiner, name))
         joined = self.call(joiner, name, "hive", "join", invite).stdout.strip()
         if not joined.startswith("Joined the hive of "):
             raise RuntimeError("join command did not report an established session")
@@ -78,12 +81,11 @@ class Pair:
         print(f"{inviter} invite / {joiner} join: both supervisor sessions established", flush=True)
 
     def cleanup(self):
-        for side in ("local", "remote"):
-            for name in ("from-wsl", "from-remote"):
-                try:
-                    self.call(side, name, "stop", check=False, timeout=30)
-                except (OSError, subprocess.TimeoutExpired):
-                    pass
+        for side, name in sorted(self.started):
+            try:
+                self.call(side, name, "stop", check=False, timeout=30)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
 
 
 def main():

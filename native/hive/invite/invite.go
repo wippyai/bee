@@ -23,7 +23,10 @@ import (
 // Scheme prefixes every invite line.
 const Scheme = "bee-hive"
 
+// MaxCandidates bounds alternate endpoints after the URL's primary address.
 const MaxCandidates = 8
+
+// MaxInviteBytes bounds the complete pasteable token.
 const MaxInviteBytes = 1536
 
 // Candidate is a transport hint. The identity fingerprint, not this address,
@@ -134,7 +137,8 @@ func (i Invite) valid() bool {
 		i.Address.Addr().Zone() == "" && !i.Address.Addr().IsUnspecified() && ValidNode(i.Node) && lowerHex(i.Fingerprint, 64)
 }
 
-// String renders the one-line invite:
+// String renders the one-line invite, followed by optional URL-escaped
+// candidate hints:
 //
 //	bee-hive://ID:SECRET@HOST:PORT/NODE?key=FINGERPRINT
 func (i Invite) String() string {

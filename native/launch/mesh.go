@@ -85,13 +85,6 @@ func meshBindAddress(address netip.Addr) netip.Addr {
 	return netip.IPv6Unspecified()
 }
 
-func meshLocalAddress(address netip.Addr) netip.Addr {
-	if address.Is6() {
-		return netip.IPv6Loopback()
-	}
-	return netip.MustParseAddr("127.0.0.1")
-}
-
 // joinedRecord is the persisted outcome of a hive join.
 type joinedRecord struct {
 	Node        string `json:"node"`

@@ -115,6 +115,14 @@ Set it for `bee hive join` on the joining machine as well. Bee listens on all
 interfaces of that IP family so local loopback clients can attach, and
 advertises only the selected address to peers.
 
+To let a joined peer open this node's desktop in Hive Manager, stop this
+node's owner and restart it with `BEE_DESKTOP_ALLOWED_PEERS` set to the exact
+comma-separated node IDs selected from `bee hive peers`. Each named node must
+already be pinned by a Hive join. This grants remote desktop control and
+observation to those nodes; a join alone grants neither. The grant ends when
+the owner retires that peer's pin, and a changed selection takes effect on
+owner restart.
+
 `bee --help` lists the remaining Hive, process and runtime commands and their
 arguments. The [native command grammar](docs/operations/native.md#command-grammar)
 explains the launch routes.

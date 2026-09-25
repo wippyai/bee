@@ -192,7 +192,7 @@ local function main(configuration: unknown)
         local configured = enrollment.configured_view(state)
         local_clients = enrollment.set(desired.nodes, boot, configured)
         hive_peers = enrollment.set(desired.peers, boot, configured)
-        if desktop then desktop_owner.enroll(desktop, local_clients, now_ms) end
+        if desktop then desktop_owner.enroll(desktop, local_clients, hive_peers, now_ms) end
     end
     local function discover(now_ms: integer)
         local remotes: {string} = {}

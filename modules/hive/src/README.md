@@ -109,7 +109,11 @@ by default. A host can select an assigned, reachable IP address with
 `BEE_MESH_ADDRESS` for both owner startup and `bee hive join`; this permits an
 explicit invite to join nodes on different machines. The local descriptor
 still uses loopback aliases for same-machine clients. Peer membership does not
-grant access to remote desktops or destination overlay activation.
+grant access to remote desktops or destination overlay activation. A desktop
+owner can separately select up to 64 exact pinned peers with
+`BEE_DESKTOP_ALLOWED_PEERS=NODE[,NODE...]` when it starts. Its bridge admits
+those nodes only while their peer pins remain in the host enrollment. A Hive
+Manager on an admitted node can then control or observe that owner's desktop.
 
 ## Client
 

@@ -97,6 +97,15 @@ address, mesh secret and authority pool. The joiner pins the hive node, writes
 owner and waits until the two supervisors hold an established session. A node
 that already joined a hive, or that other nodes joined, refuses to join.
 
+The owner can grant its desktop to exact pinned Hive peers at boot with
+`BEE_DESKTOP_ALLOWED_PEERS=NODE[,NODE...]`. Up to 64 distinct node IDs are
+accepted. An invalid, duplicate, self, or unpinned node refuses startup. The
+bridge also requires the peer's current host enrollment and retires its
+attachments when the pin is removed. This host selection permits the Hive
+Manager on a selected peer to control or observe this node's workspaces; the
+invite and peer pin alone grant no desktop access. Change the selection by
+stopping and restarting the owner with the new environment value.
+
 `leave` needs no owner: it removes `hive/peers/NODE.pub`, and the joined record
 when NODE is the hive this node joined. The owner's enrollment publisher then
 retires the peer and its session ends; the next owner boot of a node that left

@@ -40,7 +40,7 @@ type State = {
     activations: Channel<process.Message>, switches: Channel<process.Message>,
     observers: Channel<process.Message>, catalog: catalog.State, spawn_scope: security.Scope, executor: funcs.Executor,
     folder: Served?, served: {[string]: Served}, workspaces: {[string]: Served}, served_count: integer,
-    allowed: {[string]: boolean}, enrolled: {[string]: boolean},
+    allowed: {[string]: boolean}, allowed_peers: {[string]: boolean}, enrolled: {[string]: boolean}, peers: {[string]: boolean},
     clients: {[string]: Client}, receipts: {[string]: Receipt}, client_count: integer, receipt_count: integer,
     retiring: {[string]: Retiring}, expires_at: time.Time, stopped: boolean,
 }
@@ -77,8 +77,8 @@ local function spawn(state: State, selection: unknown): (string?, string?)
     if not pid then return nil, tostring(err) end
     return tostring(pid), nil
 end
--- Configuration is an explicit host grant to selected native nodes, not an
--- inference from transport authentication, discovery, metadata or a PID prefix.
+-- Configuration contains separate static native-node and revocable Hive-peer
+-- grants. Neither is inferred from transport, discovery, metadata or a PID.
 function M.start(config: protocol.Configuration, node: string): State
     if not security.can("bee.desktop.host", "bee.desktop") then error("Host did not authorize desktop admission") end
     local expiry = time.parse(FORMAT, config.expires_at)
@@ -87,6 +87,11 @@ function M.start(config: protocol.Configuration, node: string): State
     for _, peer in ipairs(config.allowed_nodes) do
         if peer == node then error("Native desktop client must have its own node identity") end
         allowed[peer] = true
+    end
+    local allowed_peers: {[string]: boolean} = {}
+    for _, peer in ipairs(config.allowed_peers) do
+        if peer == node then error("Hive desktop peer must have its own node identity") end
+        allowed_peers[peer] = true
     end
     local ready = listen("bee.retained.ready")
     local results = listen("bee.retained.result")
@@ -119,7 +124,7 @@ function M.start(config: protocol.Configuration, node: string): State
     local state: State = {config = config, node = node, bridge_name = bridge_name, owner_name = owner_name, ready = ready, results = results,
         copies = copies, launches = launches, activations = activations, switches = switches, observers = observers,
         catalog = catalog.new(), spawn_scope = spawn_scope, executor = executor, folder = nil, served = {}, workspaces = {}, served_count = 0,
-        allowed = allowed, enrolled = {}, clients = {}, receipts = {}, client_count = 0, receipt_count = 0, retiring = {}, expires_at = expiry,
+        allowed = allowed, allowed_peers = allowed_peers, enrolled = {}, peers = {}, clients = {}, receipts = {}, client_count = 0, receipt_count = 0, retiring = {}, expires_at = expiry,
         stopped = false}
     -- A daemon's bridge composes no folder workspace; it serves only leased ones.
     if not config.folder then return state end
@@ -312,14 +317,14 @@ end
 function M.observe(state: State, message: process.Message)
     announce(state, tostring(message:from()))
 end
--- Only a native sender from an explicitly admitted client node enters
--- this route: a node the host grant names, or, when the host selected local
--- clients, a node the host currently enrolls. Unknown clients continue to the
--- ordinary supervisor refusal path.
+-- Only a native sender from an explicitly admitted client node enters this
+-- route: a statically granted node, a granted and currently enrolled Hive
+-- peer, or a local client the host currently enrolls.
 function M.admits(state: State, sender: string): boolean
     local node, host = types.pid_parts(sender)
     if not node or host ~= protocol.CLIENT_HOST then return false end
     if state.allowed[node] == true then return true end
+    if state.allowed_peers[node] == true and state.peers[node] == true then return true end
     return state.config.local_clients == true and state.enrolled[node] == true
 end
 -- client_host reports whether a sender speaks from the native desktop client
@@ -331,14 +336,19 @@ end
 function M.handles(state: State, message: process.Message): boolean
     return M.admits(state, tostring(message:from()))
 end
--- enroll installs the host's current local client enrollment and revokes the
--- attachments of every node that left it.
-function M.enroll(state: State, nodes: {[string]: boolean}, now: integer)
+-- enroll installs the host's current local-client and Hive-peer enrollments
+-- and revokes attachments whose node lost its selected grant.
+function M.enroll(state: State, nodes: {[string]: boolean}, peers: {[string]: boolean}, now: integer)
     local enrolled: {[string]: boolean} = {}
     for node, present in pairs(nodes) do
         if present then enrolled[node] = true end
     end
     state.enrolled = enrolled
+    local active: {[string]: boolean} = {}
+    for node, present in pairs(peers) do
+        if present then active[node] = true end
+    end
+    state.peers = active
     for recipient, client in pairs(state.clients) do
         if not M.admits(state, recipient) then revoke(state, client, now) end
     end

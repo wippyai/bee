@@ -62,7 +62,7 @@ local function reader(binding: gateway.Binding): (funcs.Executor?, string?)
     local admitted = false
     for _, name in ipairs(binding.tools) do if name == "session_inbox" then admitted = true end end
     if not admitted then return nil, "the binding did not admit session_inbox" end
-    local entry, entry_error = registry.get("bee.gateway.registry:tool_inbox_policy_ref")
+    local entry, entry_error = registry.get("bee.gateway:tool_inbox_policy_ref")
     if entry_error or not entry then return nil, "built-in tool policy reference is unavailable" end
     local data = bounds.object(entry.data)
     local selected = data and bounds.id(data.resource_ref)

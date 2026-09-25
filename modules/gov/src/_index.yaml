@@ -39,6 +39,15 @@ entries:
 - name: capability_containment
   kind: library.lua
   source: file://capability_containment.lua
+- name: capability_grants
+  kind: library.lua
+  source: file://capability_grants.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    capability_catalog: bee.governance:capability_catalog
+    capability_containment: bee.governance:capability_containment
 - name: delivery_protocol
   kind: library.lua
   source: file://delivery_protocol.lua

@@ -386,6 +386,7 @@ entries:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy, bee.security.credentials:credential_store_policy]
   imports:
     test: wippy.test:test
+    principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     claude_launch: bee.driver.claude:launch
@@ -1220,6 +1221,7 @@ entries:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy, bee.security.credentials:credential_store_policy]
   imports:
     test: wippy.test:test
+    principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     launch: bee.driver.claude:launch
@@ -1275,6 +1277,7 @@ entries:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.approvals:approval_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy]
   imports:
     test: wippy.test:test
+    principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
     approvals: bee.approvals:service
@@ -1312,6 +1315,7 @@ entries:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy, bee.security.credentials:credential_store_policy]
   imports:
     test: wippy.test:test
+    principals: bee.test.principals:bound
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     launch: bee.driver.codex:launch

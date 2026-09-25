@@ -20,6 +20,7 @@ local catalog = require("catalog")
 local policy = require("policy")
 local launch = require("launch")
 local placement_fixture = require("placement_fixture")
+local principals = require("principals")
 local ACTOR = "bee.test.claude_carrier"
 local POLICY = "bee.harness.catalog:claude_auth_fixture_policy"
 local SOURCE = "bee.harness.catalog:claude_sentinel_key"
@@ -46,7 +47,7 @@ local function scope(): security.Scope
 end
 local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): Object
-    local result, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
+    local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     local reply = result :: {ok: boolean, error: {code: string, message: string}?, value: unknown}
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
@@ -146,6 +147,9 @@ end
 -- policy environment, admit the root and the sentinel source. Nothing here
 -- is chosen by the launch request.
 local function prepare_host(port: string, claude: string)
+    local mode = assert(registry.get("bee.placement.native:resource_mode"))
+    mode.data = {mode = "host_configured"}
+    apply(mode)
     local entry = registry.get(POLICY)
     if not entry then error(POLICY) end
     local data = entry.data :: Object
@@ -296,7 +300,7 @@ local function define_tests()
             local evidence = evidence_of(attempt_id)
             local kinds: {string} = {}
             for _, item in ipairs(evidence) do kinds[#kinds + 1] = tostring(item.kind) end
-            if not recorded:find('"path": "/v1/messages', 1, true) or not recorded:find('"x_api_key": "' .. SENTINEL .. '"', 1, true) then
+            if not recorded:find('"path":"/v1/messages', 1, true) or not recorded:find('"x_api_key":"' .. SENTINEL .. '"', 1, true) then
                 error("endpoint saw no api key: [" .. recorded:sub(1, 300):gsub(SENTINEL, "<sentinel>") .. "]; settlement " .. tostring(settlement.outcome) .. " " .. tostring(settlement.reason) .. "; evidence " .. table.concat(kinds, ","))
             end
             local materialized = false

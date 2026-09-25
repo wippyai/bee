@@ -1202,6 +1202,9 @@ func endpoint(record string, hold time.Duration) error {
 		status := http.StatusOK
 		contentType := "text/event-stream"
 		switch {
+		case r.URL.Path == "/api/hello":
+			contentType = "application/json"
+			payload = []byte(`{"status":"ok"}`)
 		case mcpTool != "":
 			if responsesAPI {
 				if hasResult {

@@ -51,7 +51,7 @@ func projectReplacements(t *testing.T, repository string) map[string]string {
 // The fixture supplies the desktop supervisor's explicit input and owns its
 // lifecycle, so the composition's default supervisor service stays stopped;
 // that service is tested separately.
-const desktopSupervisorOverride = "bee.hive:supervisor_service:lifecycle.auto_start=false"
+const desktopSupervisorOverride = "bee.hive_host:supervisor_service:lifecycle.auto_start=false"
 
 func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	binary := os.Getenv("BEE_HIVE_SUPERVISOR_RUNTIME")

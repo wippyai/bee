@@ -97,7 +97,7 @@ The client loads Wippy's standard EVENTUAL name component before membership
 starts, so it participates in the initial native name exchange. Its lifecycle
 ends before mesh shutdown; it opens no application registry or workspace store.
 `Actor.OwnerSupervisor(ctx)` resolves the existing
-`bee.hive.supervisor/<owner-node>` name and validates its node, protected host and
+`bee.hive_host.supervisor/<owner-node>` name and validates its node, protected host and
 nonempty process identity. It returns an address only. Missing names do not start
 an owner, and discovery does not grant admission or terminal rights. The actor's
 lifetime and caller cancellation still fence lookups. Public launch is unchanged.

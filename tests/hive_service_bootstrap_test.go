@@ -67,22 +67,22 @@ func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
 	if service == nil {
 		t.Fatal("missing default Hive supervisor service")
 	}
-	if service.Kind != "process.service" || service.Process != "bee.hive.supervisor:main" || service.Host != "bee.hive:supervisor_host" {
+	if service.Kind != "process.service" || service.Process != "bee.hive_host.supervisor:main" || service.Host != "bee.hive_host:supervisor_host" {
 		t.Fatalf("unexpected Hive service binding: kind=%q process=%q host=%q", service.Kind, service.Process, service.Host)
 	}
 	if service.Lifecycle.AutoStart == nil || !*service.Lifecycle.AutoStart {
 		t.Fatal("Hive supervisor service must auto-start")
 	}
-	if service.Lifecycle.Security.Actor.ID != "bee.hive.supervisor" {
+	if service.Lifecycle.Security.Actor.ID != "bee.hive_host.supervisor" {
 		t.Fatalf("Hive supervisor service actor = %q", service.Lifecycle.Security.Actor.ID)
 	}
 	wantPolicies := []string{
 		"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
 		"bee.security.hive:hive_policy_exposure_policy", "bee.security.hive:hive_dispatch_policy", "bee.security.hive:hive_names_policy",
 		"bee.security.hive:hive_advertise_policy", "bee.security.hive:hive_execute_policy", "bee.security.hive:hive_invite_policy", "bee.security.hive:workspace_command_policy",
-		"bee.hive.desktop:host_policy", "bee.security.desktop:desktop_catalog_policy", "bee.security.desktop:desktop_catalog_resource_policy",
+		"bee.hive_host.desktop:host_policy", "bee.security.desktop:desktop_catalog_policy", "bee.security.desktop:desktop_catalog_resource_policy",
 		"bee.security.storage:workspace_catalog_read_policy",
-		"bee.hive.desktop:catalog_call_policy",
+		"bee.hive_host.desktop:catalog_call_policy",
 	}
 	if len(service.Lifecycle.Security.Policies) != len(wantPolicies) {
 		t.Fatalf("Hive supervisor service policy count = %d", len(service.Lifecycle.Security.Policies))

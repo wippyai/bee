@@ -3,7 +3,7 @@
 Native placement: one admitted launch becomes one attempt, run as a native
 child under a runner process this module owns. Receipts live in an owned
 SQLite store opened through `bee.persist`; attempt homes and retained
-session directories live under the host-owned `bee:placement_root`
+session directories live under the host-owned `bee.placement.native:root`
 volume, linked through the `target_root` requirement.
 
 | Slice | Responsibility |
@@ -18,7 +18,7 @@ volume, linked through the `target_root` requirement.
    A host policy selecting another placement is refused before the native
    capability probe or intent, even when a direct caller omits its placement
    hint. Calling the native operation does not override host selection.
-   A request for `bee:machine_home` is admitted only when the pinned host launch
+   A request for `bee.environment:machine_home` is admitted only when the pinned host launch
    policy explicitly sets `allow_host_home: true`; profile metadata cannot grant
    that filesystem authority.
    A retained session home has one holder per owner/session pair: another
@@ -177,10 +177,10 @@ cleanup. Retained session homes remain available for a subsequent admitted attem
 
 ## Resource modes
 
-The host selects the mode in `bee.placement.native:resource_mode`; a
+The host selects the mode in `bee:placement_resource_mode`; a
 request cannot. The shipped default is `granted`, so managed Agent resources
 are validated through their authority on use. In `host_configured` mode
-`bee.placement.native:admitted_roots`
+`bee:placement_admitted_roots`
 lists the `fs.directory` roots a launch may name with the widest access the
 host allows, `prepare` checks the caller, the root, the subpath and the
 access mode against that list, and a request's `grant_ref` is correlation

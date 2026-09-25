@@ -155,7 +155,7 @@ local function stage_version(workspace_id: string, workspace: string, version: s
 end
 
 local function main()
-    local activation = assert(registry.get("bee.governance:activation_profiles"))
+    local activation = assert(registry.get("bee:governance_activation_profiles"))
     local data = object(activation.data, "activation profiles")
     local first = object((data.profiles :: {unknown})[1], "initial activation profile")
     local workspace_id = bounds.id(first.workspace_id)

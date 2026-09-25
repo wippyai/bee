@@ -12,7 +12,7 @@ local hash = require("hash")
 local types = require("types")
 local bounds = require("bounds")
 local M = {}
-M.ENTRY = "bee.hive.supervisor:principal_mappings"
+M.ENTRY = "bee.hive_host.supervisor:principal_mappings"
 M.ENTRY_TYPE = "bee.hive.principal_mappings"
 M.ACTOR_PREFIX = "bee.hive.member."
 -- The identity encoding: sha256 over the issuer, a newline and the

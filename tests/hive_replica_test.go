@@ -392,7 +392,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		return stagedNode{project: project, state: state}
 	}
 	start := func(i int, node stagedNode) *procRunner {
-		args := []string{"run", "--silent", "--override", "bee.hive:supervisor_service:lifecycle.auto_start=false", "hive-replica-probe"}
+		args := []string{"run", "--silent", "--override", "bee.hive_host:supervisor_service:lifecycle.auto_start=false", "hive-replica-probe"}
 		if agent != nil {
 			args = append(args, "--set", "registry.history_path="+filepath.Join(node.state, "registry.db"))
 		}

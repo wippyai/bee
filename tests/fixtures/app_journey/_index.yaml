@@ -3,7 +3,7 @@ namespace: bee.app_journey_probe
 entries:
 - name: destination_workspace
   kind: env.variable
-  storage: bee:workspace_environment
+  storage: bee.environment:workspace_environment
   variable: BEE_APP_JOURNEY_WORKSPACE
   readonly: true
 - name: operator_policy

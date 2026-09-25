@@ -61,7 +61,7 @@ function M.handle(value: unknown): types.Reply
         policies[index] = policy
     end
     local caller = funcs.new():with_actor(security.new_actor(mapping.actor_id)):with_scope(security.new_scope(policies))
-    local verdict, verdict_error = caller:call("bee.hive.supervisor:invoke_check", {operation_ref = request.operation_ref})
+    local verdict, verdict_error = caller:call("bee.hive_host.supervisor:invoke_check", {operation_ref = request.operation_ref})
     if verdict_error then logger:named("bee.hive.policy"):error("Policy invocation check failed", {cause = tostring(verdict_error):sub(1, 1024)}) end
     if verdict_error or type(verdict) ~= "table" or verdict.allowed ~= true then return denied(id, "DENIED", "principal may not invoke the operation") end
     local current = catalog.resolve(request.operation_ref)

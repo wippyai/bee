@@ -92,8 +92,8 @@ entries:
       short: Prove the threads module closure boots without the desktop
       security:
         actor: {id: threads-isolation}
-        policies: [bee:thread_read_client_policy, bee:thread_write_client_policy, bee:probe_registry_policy,
-          bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy]
+        policies: [bee.security.threads:thread_read_client_policy, bee.security.threads:thread_write_client_policy, bee:probe_registry_policy,
+          bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy]
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads

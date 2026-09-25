@@ -19,7 +19,7 @@ func workspacesFixture(t *testing.T) (*Workspaces, *scripted) {
 }
 
 func workspaceRow(id, state string) map[string]any {
-	return map[string]any{"workspace_id": id, "label": "Second", "root_ref": "bee:workspace_root", "subpath": "second", "state": state,
+	return map[string]any{"workspace_id": id, "label": "Second", "root_ref": "bee.environment:workspace_root", "subpath": "second", "state": state,
 		"created_at": "2026-09-24T00:00:00.000Z", "last_used_at": "2026-09-24T00:00:00.000Z"}
 }
 
@@ -34,13 +34,13 @@ func TestWorkspacesCallTheWorkspaceServiceOfTheOwner(t *testing.T) {
 			"value": workspaceRow(id, "active")})
 		s.replies <- mesh.Message{From: ownerPID, Topic: replyTopic, Body: raw}
 	}()
-	row, err := w.Create(callContext(t), NewWorkspace{Label: "Second", Root: "bee:workspace_root", Subpath: "second", CreateDirectory: true})
-	if err != nil || row.ID != id || row.Folder() != "bee:workspace_root/second" {
+	row, err := w.Create(callContext(t), NewWorkspace{Label: "Second", Root: "bee.environment:workspace_root", Subpath: "second", CreateDirectory: true})
+	if err != nil || row.ID != id || row.Folder() != "bee.environment:workspace_root/second" {
 		t.Fatalf("create = %+v, %v", row, err)
 	}
 	call := <-done
 	if call.Owner.Service != WorkspaceService || call.Owner.Node != "owner" || call.Target.Ref != WorkspaceCreate ||
-		string(call.Input) != `{"label":"Second","root_ref":"bee:workspace_root","subpath":"second","create_directory":true}` || len(call.Key) != 32 {
+		string(call.Input) != `{"label":"Second","root_ref":"bee.environment:workspace_root","subpath":"second","create_directory":true}` || len(call.Key) != 32 {
 		t.Fatalf("call = %+v", call)
 	}
 }
@@ -58,7 +58,7 @@ func TestWorkspacesDecodeTheCatalogAnswers(t *testing.T) {
 	if page, err := w.List(callContext(t), "archived", "", 50); err != nil || len(page.Items) != 0 || page.Next != "" {
 		t.Fatalf("empty list = %+v, %v", page, err)
 	}
-	answer(s, map[string]any{"roots": []any{map[string]any{"root_ref": "bee:workspace_root", "access": "write"}}}, nil)
+	answer(s, map[string]any{"roots": []any{map[string]any{"root_ref": "bee.environment:workspace_root", "access": "write"}}}, nil)
 	roots, err := w.Roots(callContext(t))
 	if err != nil || len(roots) != 1 || roots[0].Access != "write" {
 		t.Fatalf("roots = %+v, %v", roots, err)

@@ -20,7 +20,7 @@ end
 local manager = funcs.new():with_actor(security.new_actor("bee.test.hive_workspaces_manager")):with_scope(scope({
     "bee.workspace.catalog:call_test_policy", "bee.security.storage:workspace_catalog_read_policy", "bee.security.storage:workspace_catalog_manage_policy"}))
 -- The supervisor dispatches as itself under the host's Hive policies.
-local supervisor = funcs.new():with_actor(security.new_actor("bee.hive.supervisor")):with_scope(scope({
+local supervisor = funcs.new():with_actor(security.new_actor("bee.hive_host.supervisor")):with_scope(scope({
     "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.security.hive:hive_dispatch_policy"}))
 
 local function admit()
@@ -42,8 +42,8 @@ end
 local function request(input: Object): types.Request
     local digest = assert(types.digest(input))
     local decoded, err = types.decode_request({protocol_revision = types.REVISION, request_id = "req-" .. uuid.v7(), idempotency_key = "idem",
-        caller_node_id = "laptop", caller_incarnation = "inc-1", owner_ref = {node_id = "forge", service_id = "bee.hive"},
-        operation_ref = "bee.hive:workspaces", operation_revision = "1", input = input, input_digest = digest,
+        caller_node_id = "laptop", caller_incarnation = "inc-1", owner_ref = {node_id = "forge", service_id = "bee.hive_host"},
+        operation_ref = "bee.hive_host:workspaces", operation_revision = "1", input = input, input_digest = digest,
         principal_ref = {issuer = "node:laptop", subject_id = "user-1"},
         principal_assertion = {method = types.ASSERTION_METHOD, audience = "forge", issued_at = "2026-09-08T10:00:00.000Z", expires_at = "2026-09-08T10:05:00.000Z"},
         delegation_refs = {}, deadline = "2026-09-08T10:05:00.000Z"})
@@ -51,7 +51,7 @@ local function request(input: Object): types.Request
     return decoded
 end
 local function dispatch(input: Object): types.Reply
-    local result, err = supervisor:call("bee.hive.supervisor:dispatch_probe", request(input))
+    local result, err = supervisor:call("bee.hive_host.supervisor:dispatch_probe", request(input))
     if err then error(tostring(err)) end
     local reply = types.decode_reply(result)
     if not reply then error("invalid reply envelope") end

@@ -15,7 +15,7 @@ local WORKSPACE = string.rep("b", 32)
 local DEFINITION = "bee.console:app"
 
 local function running(marker: string): boolean
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local probe = assert(executor:exec("pgrep -f " .. marker))
     assert(probe:start())
     local code = probe:wait()

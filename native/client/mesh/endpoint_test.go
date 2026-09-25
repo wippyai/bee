@@ -56,11 +56,11 @@ func endpointNode(t *testing.T) (context.Context, *relaysys.Node, *relaysys.Rout
 func TestEndpointExchangesControlWithTheNodeSupervisor(t *testing.T) {
 	ctx, node, router, names := endpointNode(t)
 	requests := make(chan Message, 1)
-	if err := node.RegisterHost("bee.hive:supervisor_host", cancellableCapture{requestCapture{requests}}); err != nil {
+	if err := node.RegisterHost("bee.hive_host:supervisor_host", cancellableCapture{requestCapture{requests}}); err != nil {
 		t.Fatal(err)
 	}
-	supervisor := pid.PID{Node: "owner", Host: "bee.hive:supervisor_host", UniqID: "supervisor"}
-	if _, err := names.Register("bee.hive.supervisor", supervisor); err != nil {
+	supervisor := pid.PID{Node: "owner", Host: "bee.hive_host:supervisor_host", UniqID: "supervisor"}
+	if _, err := names.Register("bee.hive_host.supervisor", supervisor); err != nil {
 		t.Fatal(err)
 	}
 	endpoint, err := OpenEndpoint(ctx, "bee.hive:join_host")
@@ -93,7 +93,7 @@ func TestEndpointExchangesControlWithTheNodeSupervisor(t *testing.T) {
 		t.Fatalf("endpoint received %+v, %v", received, err)
 	}
 	// A package claiming another node's sender is not kept.
-	foreign := relay.NewPackage(pid.PID{Node: "elsewhere", Host: "bee.hive:supervisor_host", UniqID: "x"}, endpoint.PID(), "bee.hive.reply", payload.New(map[string]any{"ok": true}))
+	foreign := relay.NewPackage(pid.PID{Node: "elsewhere", Host: "bee.hive_host:supervisor_host", UniqID: "x"}, endpoint.PID(), "bee.hive.reply", payload.New(map[string]any{"ok": true}))
 	if err := router.Send(foreign); err != nil {
 		t.Fatal(err)
 	}

@@ -23,7 +23,7 @@ local function main()
         policies[#policies + 1] = assert(security.policy(name))
     end
     local supervisor = tostring(assert(process.with_options({}):with_context({["bee.retained_owner"] = owner})
-        :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""}, "bee.console:app")))
+        :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", owner, {root_ref = "bee.environment:workspace_root", subpath = ""}, "bee.console:app")))
     local deadline = time.after("10s")
     local selected = channel.select({ready:case_receive(), events:case_receive(), deadline:case_receive()})
     assert(selected.ok and selected.channel == ready, "Retained supervisor did not become ready")
@@ -32,7 +32,7 @@ local function main()
     local value: unknown = message:payload():data()
     assert(type(value) == "table" and type(value.workspace_id) == "string" and type(value.desktop_id) == "string")
     local workspace_id, desktop_id = value.workspace_id, value.desktop_id
-    local initial_store, open_error = store.open("bee:client_db", workspace_id)
+    local initial_store, open_error = store.open("bee.environment:client_db", workspace_id)
     if not initial_store then error(tostring(open_error)) end
     local initial_layout = store.read(initial_store)
     assert(initial_layout and initial_layout.appearance_mode == "inherit", "Fresh primary display did not inherit node defaults")

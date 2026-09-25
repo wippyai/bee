@@ -73,10 +73,10 @@ local function admit_root()
         available[#available + 1] = {root_ref = ROOT, access = "write"}
         apply(catalog_roots)
     end
-    local mode = assert(registry.get("bee.placement.native:resource_mode"))
+    local mode = assert(registry.get("bee:placement_resource_mode"))
     mode.data = {mode = "host_configured"}
     apply(mode)
-    local entry = assert(registry.get("bee.placement.native:admitted_roots"))
+    local entry = assert(registry.get("bee:placement_admitted_roots"))
     local roots = (entry.data :: Object).roots :: {Object}
     for _, root in ipairs(roots) do
         if root.root_ref == ROOT then return end
@@ -317,7 +317,7 @@ local function define_tests()
                 sender_id = waiter_actor, allow = true, expected_epoch = 0, idempotency_key = fresh("accept")}, workspace)
             local native = system.node.id()
             if not native or native == "" then error("native node identity is unavailable") end
-            local selected = assert(registry.get("bee:gateway_session_send_denied_policy"))
+            local selected = assert(registry.get("bee.security.gateway:gateway_session_send_denied_policy"))
             local policy_data = selected.data :: Object
             local definition = policy_data.policy :: Object
             definition.resources = {workspace .. "/" .. native .. "/" .. tostring(waiter.action_id),

@@ -11,10 +11,10 @@ local function define_tests()
             test.eq(query and query.after, "cursor")
             test.is_nil(workspace_pages.query({version = 1, op = "workspaces", request_id = ""}))
             test.is_nil(workspace_pages.query({version = 1, op = "workspaces", request_id = "r1", label = ""}))
-            test.is_nil(workspace_pages.query({version = 1, op = "workspaces", request_id = "r1", root_ref = "bee:workspace_root"}))
+            test.is_nil(workspace_pages.query({version = 1, op = "workspaces", request_id = "r1", root_ref = "bee.environment:workspace_root"}))
         end)
         test.it("decodes a catalog page and keeps the folder's unnamed row", function()
-            local page = workspace_pages.decode({ok = true, value = {items = {{workspace_id = ID, label = "", root_ref = "bee:workspace_root"}},
+            local page = workspace_pages.decode({ok = true, value = {items = {{workspace_id = ID, label = "", root_ref = "bee.environment:workspace_root"}},
                 next_after = "cursor-2"}})
             test.eq(page and #page.items, 1)
             test.eq(page and page.items[1].label, "")

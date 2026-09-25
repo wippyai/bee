@@ -74,9 +74,9 @@ storage fields, but those are not public authoring vocabulary.
 
 A fresh install delivers an application a workspace's own agent authors to
 that workspace without host configuration, and still only after the person
-approves it. The shipped `bee.governance:publication_profiles` sets
+approves it. The shipped `bee:governance_publication_profiles` sets
 `workspace_applications: true`, and the shipped
-`bee.governance:activation_profiles` carries a `workspace_applications` rule:
+`bee:governance_activation_profiles` carries a `workspace_applications` rule:
 the approval policy (`workspace-application-delivery`, decided in Approvals by
 the person, as `bee:approver_policies` ships it), the admitted entry kinds and
 native modules, and the admission policies and thread access of the one

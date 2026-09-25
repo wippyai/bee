@@ -67,7 +67,7 @@ def run_shard(index, folder, entries):
     started = time.monotonic()
     result = subprocess.run([
         str(RUNTIME), "test", "--host", "bee:terminal", "--override",
-        "bee.hive:supervisor_service:lifecycle.auto_start=false",
+        "bee.hive_host:supervisor_service:lifecycle.auto_start=false",
         "test", *entries,
     ], cwd=folder, env=environment(folder), capture_output=True, text=True)
     output = result.stdout + result.stderr

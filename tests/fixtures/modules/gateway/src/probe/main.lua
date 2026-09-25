@@ -118,9 +118,9 @@ local function prove_endpoint_call_scope()
     end
     -- The docs tool reads the one embedded corpus and reaches no other volume.
     assert(scope:evaluate(actor, "fs.get", "bee:docs_corpus") == "allow", "docs corpus read is absent")
-    assert(scope:evaluate(actor, "fs.get", "bee:workspace_root") ~= "allow", "docs policy reaches an unrelated filesystem")
+    assert(scope:evaluate(actor, "fs.get", "bee.environment:workspace_root") ~= "allow", "docs policy reaches an unrelated filesystem")
     assert(scope:evaluate(actor, "registry.get", "bee.docs:corpus_ref") == "allow", "docs corpus reference is absent")
-    assert(scope:evaluate(actor, "registry.get", "bee:workspace_root") ~= "allow", "docs policy reaches an unrelated registry entry")
+    assert(scope:evaluate(actor, "registry.get", "bee.environment:workspace_root") ~= "allow", "docs policy reaches an unrelated registry entry")
     assert(scope:evaluate(actor, "bee.governance.overlay.read", "any-overlay") == "allow", "overlay read is absent")
     assert(scope:evaluate(actor, "bee.governance.overlay.write", "any-overlay") == "allow", "overlay write is absent")
     for _, target in ipairs({"bee.threads.service:create", "bee.gateway.binding:materialize", "bee.hub.binding:call", "arbitrary:operation"}) do

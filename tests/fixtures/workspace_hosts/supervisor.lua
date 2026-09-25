@@ -45,7 +45,7 @@ function M.main()
     local function spawn_host_with_policies(resource: string, policies: {security.Policy}): string
         local scope = security.new_scope(policies)
         local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
-            :with_scope(scope):spawn_monitored("bee.host:main", "bee:workers", self, {root_ref = "bee:workspace_root", subpath = ""}, resource)))
+            :with_scope(scope):spawn_monitored("bee.host:main", "bee:workers", self, {root_ref = "bee.environment:workspace_root", subpath = ""}, resource)))
         return host
     end
 

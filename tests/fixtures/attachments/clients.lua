@@ -398,7 +398,7 @@ function M.main(fail_commit: boolean?)
     end
     local host = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
         :with_context({["bee.host_owner"] = owner, ["bee.test.fail_renderer_once"] = true,
-            ["bee.test.fail_transfer_commit"] = fail_commit == true}):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""})))
+            ["bee.test.fail_transfer_commit"] = fail_commit == true}):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.environment:workspace_root", subpath = ""})))
     local started = assert(ready:receive())
     assert(started:from() == host)
     local boot: unknown = started:payload():data()

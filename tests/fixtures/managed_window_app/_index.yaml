@@ -225,5 +225,5 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [fs.get]
-    resources: [bee:placement_root]
+    resources: [bee.placement.native:root]
     effect: allow

@@ -18,9 +18,9 @@ PROBE = r'''local storage = require("store")
 local assignments = require("assignments")
 
 local function main()
-    local left, left_error = storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""})
+    local left, left_error = storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""})
     if not left then error(tostring(left_error)) end
-    local right, right_error = storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""})
+    local right, right_error = storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""})
     if not right then error(tostring(right_error)) end
     if left.load ~= nil or left.save ~= nil then error("legacy storage aliases remain") end
 
@@ -127,7 +127,7 @@ return {main = main}
 EXHAUSTION_PROBE = r'''local storage = require("store")
 local assignments = require("assignments")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local transfer = assert(assignments.open(workspace))
     local prepared, prepare_error = transfer:prepare({request_id = "revision-overflow", view_id = "view-17", instance_id = "instance-17", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 9007199254740990})
     assert(not prepared and prepare_error and prepare_error:find("exhausted"))
@@ -139,7 +139,7 @@ return {main = main}
 ASSIGNMENT_PREPARE = r'''local storage = require("store")
 local assignments = require("assignments")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local transfers = assert(assignments.open(workspace))
     assert(transfers:claim({view_id = "restart-view", instance_id = "restart-instance", display_id = "display-a"}))
     assert(transfers:prepare({request_id = "restart-transfer", view_id = "restart-view", instance_id = "restart-instance", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1}))
@@ -151,7 +151,7 @@ return {main = main}
 ASSIGNMENT_PREPARED = r'''local storage = require("store")
 local assignments = require("assignments")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local value = assert(assert(assignments.open(workspace)):get({view_id = "restart-view", instance_id = "restart-instance"}))
     assert(value.assignment.display_id == "display-a" and value.assignment.revision == 1)
     assert(value.intent and value.intent.request_id == "restart-transfer" and value.intent.phase == "prepared")
@@ -163,7 +163,7 @@ return {main = main}
 ASSIGNMENT_COMMIT_FAILS = r'''local storage = require("store")
 local assignments = require("assignments")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local committed, commit_error = assert(assignments.open(workspace)):commit({request_id = "restart-transfer", view_id = "restart-view", instance_id = "restart-instance"})
     assert(not committed and commit_error and commit_error:find("forced receipt failure"))
     assert(workspace:close())
@@ -174,7 +174,7 @@ return {main = main}
 ASSIGNMENT_COMMIT = r'''local storage = require("store")
 local assignments = require("assignments")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local committed = assert(assert(assignments.open(workspace)):commit({request_id = "restart-transfer", view_id = "restart-view", instance_id = "restart-instance"}))
     assert(committed.assignment.display_id == "display-b" and committed.assignment.revision == 2 and committed.intent and committed.intent.phase == "committed")
     assert(workspace:close())
@@ -185,7 +185,7 @@ return {main = main}
 ASSIGNMENT_HISTORY = r'''local storage = require("store")
 local assignments = require("assignments")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local transfers = assert(assignments.open(workspace))
     assert(transfers:claim({view_id = "history-view", instance_id = "history-instance", display_id = "display-a"}))
     local source, target, expected = "display-a", "display-b", 1
@@ -207,7 +207,7 @@ return {main = main}
 ASSIGNMENT_HISTORY_REPLAY = r'''local storage = require("store")
 local assignments = require("assignments")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local transfers = assert(assignments.open(workspace))
     local before = assert(transfers:get({view_id = "history-view", instance_id = "history-instance"}))
     local replay = assert(transfers:prepare({request_id = "history-1", view_id = "history-view", instance_id = "history-instance", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1}))
@@ -228,7 +228,7 @@ return {main = main}
 THREAD_BINDING_PREPARE = r'''local storage = require("store")
 local thread_bindings = require("thread_bindings")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local bindings = assert(thread_bindings.open(workspace))
     local function make(instance_id, thread_id, definition_id, actor_id, idempotency_key)
         return {instance_id = instance_id, thread_id = thread_id, definition_id = definition_id, actor_id = actor_id,
@@ -280,7 +280,7 @@ return {main = main}
 THREAD_BINDING_ACTIVE = r'''local storage = require("store")
 local thread_bindings = require("thread_bindings")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local bindings = assert(thread_bindings.open(workspace))
     local before = assert(bindings:get("bound-instance"))
     assert(before.binding_revision == 1 and before.state == "pending")
@@ -318,7 +318,7 @@ return {main = main}
 THREAD_BINDING_REVOKE = r'''local storage = require("store")
 local thread_bindings = require("thread_bindings")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local bindings = assert(thread_bindings.open(workspace))
     local before = assert(bindings:get("bound-instance"))
     assert(before.binding_revision == 3 and before.state == "active" and before.membership_revision == 11)
@@ -384,7 +384,7 @@ return {main = main}
 THREAD_BINDING_RESTART = r'''local storage = require("store")
 local thread_bindings = require("thread_bindings")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local bindings = assert(thread_bindings.open(workspace))
     local revoked = assert(bindings:get("bound-instance"))
     assert(revoked.thread_id == "bound-thread" and revoked.definition_id == "app:one"
@@ -520,7 +520,7 @@ def main():
             assert [row[0] for row in migration] == [1, 2, 3, 4, 5, 6, 7, 8]
             checksum = migration[0][2]
             state = connection.execute(
-                "SELECT generation, value FROM workspace_state WHERE workspace_id = (SELECT workspace_id FROM workspaces WHERE root_ref = 'bee:workspace_root' AND subpath = '')"
+                "SELECT generation, value FROM workspace_state WHERE workspace_id = (SELECT workspace_id FROM workspaces WHERE root_ref = 'bee.environment:workspace_root' AND subpath = '')"
             ).fetchone()
             assert state[0] >= 3
             assert state[1] == '{"version":1,"probe":"final"}'
@@ -534,7 +534,7 @@ def main():
         assert "checksum changed" in run_probe(project, folder, expect_success=False)
         with sqlite3.connect(database) as connection:
             assert connection.execute(
-                "SELECT value FROM workspace_state WHERE workspace_id = (SELECT workspace_id FROM workspaces WHERE root_ref = 'bee:workspace_root' AND subpath = '')"
+                "SELECT value FROM workspace_state WHERE workspace_id = (SELECT workspace_id FROM workspaces WHERE root_ref = 'bee.environment:workspace_root' AND subpath = '')"
             ).fetchone()[0] == '{"version":1,"probe":"final"}'
             connection.execute(
                 "UPDATE workspace_schema_migrations SET checksum = ? WHERE id = 1",
@@ -556,7 +556,7 @@ def main():
 
         def identity(path):
             with sqlite3.connect(path) as db:
-                return db.execute("SELECT workspace_id FROM workspaces WHERE root_ref='bee:workspace_root' AND subpath=''").fetchone()[0]
+                return db.execute("SELECT workspace_id FROM workspaces WHERE root_ref='bee.environment:workspace_root' AND subpath=''").fetchone()[0]
 
         original_id = identity(database)
         run_probe(project, folder)
@@ -621,7 +621,7 @@ def main():
         migration4_probe = r'''local storage = require("store")
 local thread_bindings = require("thread_bindings")
 local function main()
-    local workspace = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local workspace = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local bindings = assert(thread_bindings.open(workspace))
     local expected = {
         ["legacy-pending"] = {thread_id = "thread-pending", actor_id = "actor:pending", revision = 4, key = "legacy-key-pending"},
@@ -664,7 +664,7 @@ return {main = main}
             db.execute("INSERT INTO workspace_schema_migrations VALUES (1, 'workspace_state_v1', ?, 'before')", (checksum,))
             db.execute("INSERT INTO workspace_state VALUES (1, 1, 7, ?, 'before')", ('{"version":1,"probe":"legacy"}',))
         # Open only: prove migration leaves the envelope and generation untouched.
-        (probe / "main.lua").write_text('local storage = require("store")\nlocal function main() local s = assert(storage.open(nil, {root_ref = "bee:workspace_root", subpath = ""})); assert(s:identity()); s:close() end\nreturn {main = main}\n')
+        (probe / "main.lua").write_text('local storage = require("store")\nlocal function main() local s = assert(storage.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""})); assert(s:identity()); s:close() end\nreturn {main = main}\n')
         store_file = project / "src/storage/store.lua"
         healthy_store = store_file.read_text()
         seed = "VALUES (1, lower(hex(randomblob(16))))"
@@ -685,12 +685,12 @@ return {main = main}
 
         # A catalog without the classic row cannot silently mint another ID.
         with sqlite3.connect(database) as db:
-            db.execute("DELETE FROM workspaces WHERE root_ref='bee:workspace_root' AND subpath=''")
+            db.execute("DELETE FROM workspaces WHERE root_ref='bee.environment:workspace_root' AND subpath=''")
         assert "not in the node catalog" in run_probe(project, folder, expect_success=False)
         with sqlite3.connect(database) as db:
             assert db.execute("SELECT count(*) FROM workspaces").fetchone()[0] == 0
             db.execute("PRAGMA ignore_check_constraints = ON")
-            db.execute("INSERT INTO workspaces VALUES ('malformed', '', 'bee:workspace_root', '', 'active', 'now', 'now')")
+            db.execute("INSERT INTO workspaces VALUES ('malformed', '', 'bee.environment:workspace_root', '', 'active', 'now', 'now')")
         assert "identity is invalid" in run_probe(project, folder, expect_success=False)
 
     print("Storage: WAL, migration ledger integrity/newer-version rejection, generation CAS, close behavior, stable identity, legacy upgrade/rollback, relocation, fresh identity and missing or corrupt catalog identity denial; immutable application/thread binding replay, CAS transitions, restart recovery and revoked tombstones")
@@ -708,7 +708,7 @@ def client_storage():
         configuration = yaml.safe_load(host.read_text())
         next(e for e in configuration["entries"] if e["name"] == "client_db")["file"] = "${env:bee:client_db_path}"
         configuration["entries"] += [
-            {"name": "client_db_path", "kind": "env.variable", "storage": "bee:workspace_environment",
+            {"name": "client_db_path", "kind": "env.variable", "storage": "bee.environment:workspace_environment",
              "variable": "BEE_CLIENT_DB", "default": str(root / "build-client.db"), "readonly": True},
         ]
         host.write_text(yaml.safe_dump(configuration, sort_keys=False))

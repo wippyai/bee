@@ -51,7 +51,7 @@ func (a *Actor) PinSupervisor(p pid.PID) { a.pinned = p }
 // identity for this actor's owner.
 func (a *Actor) pinnedSupervisor() (pid.PID, bool) {
 	p := a.pinned
-	if p.Node != a.owner || p.Host != "bee.hive:supervisor_host" || p.UniqID == "" {
+	if p.Node != a.owner || p.Host != "bee.hive_host:supervisor_host" || p.UniqID == "" {
 		return pid.PID{}, false
 	}
 	return p, true
@@ -77,14 +77,14 @@ func (a *Actor) OwnerSupervisor(ctx context.Context) (pid.PID, error) {
 	if names == nil {
 		return pid.PID{}, errors.New("mesh client: native naming unavailable")
 	}
-	found, err := names.Lookup(ctx, "bee.hive.supervisor/"+a.owner)
+	found, err := names.Lookup(ctx, "bee.hive_host.supervisor/"+a.owner)
 	if err != nil {
 		return pid.PID{}, err
 	}
 	if !found.Found {
 		return pid.PID{}, errors.New("mesh client: owner supervisor not discovered")
 	}
-	if found.PID.Node != a.owner || found.PID.Host != "bee.hive:supervisor_host" || found.PID.UniqID == "" {
+	if found.PID.Node != a.owner || found.PID.Host != "bee.hive_host:supervisor_host" || found.PID.UniqID == "" {
 		return pid.PID{}, errors.New("mesh client: invalid owner supervisor address")
 	}
 	return found.PID, nil

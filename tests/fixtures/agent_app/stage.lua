@@ -62,7 +62,7 @@ end
 -- profile: a plan the destination still lists resolves against the profile it
 -- was staged under.
 local function configure(workspace_id: string, local_node: string, source_workspace: string)
-    local publication = registry.get("bee.governance:publication_profiles")
+    local publication = registry.get("bee:governance_publication_profiles")
     if not publication then error("publication profiles are unavailable") end
     local publication_data = object(publication.data)
     local publication_profiles: {unknown} = {}
@@ -77,7 +77,7 @@ local function configure(workspace_id: string, local_node: string, source_worksp
     publication_data.profiles = publication_profiles
     publication.data = publication_data
 
-    local activation = registry.get("bee.governance:activation_profiles")
+    local activation = registry.get("bee:governance_activation_profiles")
     if not activation then error("activation profiles are unavailable") end
     local activation_data = object(activation.data)
     local activation_profiles: {unknown} = {}

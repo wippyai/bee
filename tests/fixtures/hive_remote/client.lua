@@ -104,7 +104,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     local client1_pid = tostring(assert(process.with_options({terminal = grant})
         :with_context({["bee.client_owner"] = self})
         :with_scope(client_scope)
-        :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee:client_db",
+        :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee.environment:client_db",
             "bee.console:app", {version = 1, quit_mode = "detach", fullscreen = true})))
 
     local c1_ready_msg = hop(client_readies, "client 1 ready")
@@ -266,7 +266,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     local client2_pid = tostring(assert(process.with_options({terminal = grant2})
         :with_context({["bee.client_owner"] = self})
         :with_scope(client_scope)
-        :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee:client_db",
+        :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee.environment:client_db",
             nil, {version = 1, quit_mode = "detach", fullscreen = true})))
 
     local c2_ready_msg = hop(client_readies, "client 2 ready")

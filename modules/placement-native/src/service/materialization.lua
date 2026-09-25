@@ -45,8 +45,8 @@ function M.required_file_missing(request: types.LaunchRequest): string?
         if directory == nil then
             local home = request.environment.HOME
             if home ~= nil and home == "" then home = nil end
-            if home == nil and request.environment_refs.HOME == "bee:machine_home" then
-                local resolved, resolve_error = env.get("bee:machine_home")
+            if home == nil and request.environment_refs.HOME == "bee.environment:machine_home" then
+                local resolved, resolve_error = env.get("bee.environment:machine_home")
                 if not resolve_error and type(resolved) == "string" and resolved ~= "" then home = resolved end
             end
             if home == nil then return "the launch requires " .. file.path .. " and its host home is unavailable" end
@@ -74,7 +74,7 @@ function M.environment_conflict(request: types.LaunchRequest): string?
     end
     for name, owner in pairs(owners) do
         local inherited_home = name == "HOME" and request.environment[name] == nil
-            and request.environment_refs[name] == "bee:machine_home"
+            and request.environment_refs[name] == "bee.environment:machine_home"
         if not inherited_home and (request.environment[name] ~= nil or request.environment_refs[name] ~= nil) then
             return "environment destination " .. name .. " is owned by " .. owner
         end
@@ -89,7 +89,7 @@ local function resolve_environment(request: types.LaunchRequest, home: string): 
         if err or type(value) ~= "string" then return nil, "environment " .. name .. " unavailable from " .. ref end
         values[name] = value
     end
-    if request.environment_refs.HOME == "bee:machine_home" then
+    if request.environment_refs.HOME == "bee.environment:machine_home" then
         local selected = values.HOME
         if not selected or selected:sub(1, 1) ~= "/" or selected:find("[%z\r\n]") then
             return nil, "host user home is unavailable"

@@ -11,7 +11,7 @@ entries:
   kind: security.policy
   policy:
     actions: [process.registry.register, process.registry.unregister, process.registry.register.eventual, process.registry.unregister.eventual]
-    resources: [bee.hive.supervisor, 'bee.hive.supervisor/*']
+    resources: [bee.hive_host.supervisor, 'bee.hive_host.supervisor/*']
     effect: allow
 - name: inspect
   kind: security.policy
@@ -23,7 +23,7 @@ entries:
   kind: security.policy
   policy:
     actions: [registry.get]
-    resources: [bee.hive:supervisor_service]
+    resources: [bee.hive_host:supervisor_service]
     effect: allow
 - name: client_policy
   kind: security.policy
@@ -49,6 +49,6 @@ entries:
   modules: [process, time, channel, uuid]
   imports:
     types: bee.hive:types
-    protocol: bee.hive.desktop:protocol
+    protocol: bee.hive_host.desktop:protocol
     contract: bee.protocol:application
-    display: bee.hive.desktop:display
+    display: bee.hive_host.desktop:display

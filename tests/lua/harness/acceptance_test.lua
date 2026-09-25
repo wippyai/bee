@@ -39,7 +39,7 @@ end
 -- request is observed and returns the line, or nil to stay silent.
 local function drive(pinned: adapter.Adapter, respond: (adapter.Request) -> string?): Run
     local executable, stream = fixture()
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc, exec_error = executor:exec(executable, {env = {BEE_FIXTURE_STREAM = stream, BEE_FIXTURE_PERMISSION = REQUEST_ID, BEE_FIXTURE_PERMISSION_TIMEOUT = "1"}})
     if not proc then error("exec fixture: " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -156,7 +156,7 @@ local function define_tests()
         end)
         test.it("measures the fixture for an acceptance record and refuses a record for another fixture", function()
             local _, stream = fixture()
-            local executor = assert(exec.get("bee.placement.native:executor"))
+            local executor = assert(exec.get("bee:placement_executor"))
             local proc = assert(executor:exec("cat " .. stream))
             local stdout = proc:stdout_stream()
             assert(proc:start())

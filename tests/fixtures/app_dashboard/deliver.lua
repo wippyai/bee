@@ -69,13 +69,13 @@ local function authored(id: string, name: string): Object
 end
 
 local function configure_host(workspace_id: string, local_node: string)
-    local pub_entry = assert(registry.get("bee.governance:publication_profiles"))
+    local pub_entry = assert(registry.get("bee:governance_publication_profiles"))
     local pub_data = object(pub_entry.data)
     pub_data.profiles = {{workspace_id = workspace_id, source_workspace = SOURCE_WORKSPACE,
         component = COMPONENT, overlay_owner = OVERLAY_OWNER}}
     pub_entry.data = pub_data
 
-    local act_entry = assert(registry.get("bee.governance:activation_profiles"))
+    local act_entry = assert(registry.get("bee:governance_activation_profiles"))
     local act_data = object(act_entry.data)
     act_data.profiles = {{workspace_id = workspace_id, source_node = local_node,
         source_workspace = SOURCE_WORKSPACE, component = COMPONENT, resolver = "overlay",

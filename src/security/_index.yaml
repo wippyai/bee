@@ -131,8 +131,8 @@ entries:
     - bee.applications:broker
     - bee.terminal:main
     - bee.hive:supervisor
-    - bee.hive.supervisor:main
-    - bee.hive:supervisor_host
+    - bee.hive_host.supervisor:main
+    - bee.hive_host:supervisor_host
     effect: deny
 - name: core_spawn_policy
   kind: security.policy

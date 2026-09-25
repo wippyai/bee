@@ -47,7 +47,7 @@ local function read_all(stream): string
     return content
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -71,7 +71,7 @@ local function real_adapter(): adapter.Adapter
 end
 -- The endpoint answers one Bash tool_use of the given command, then text.
 local function start_endpoint(record: string, command: string): (string, any, any)
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
     assert(proc:start())
@@ -89,7 +89,7 @@ local function open(pinned: adapter.Adapter, claude: string, port: string, work:
     local decoded, decode_error = launch.decode({profile_id = "batch", brief = "leave a marker", permission_mode = "default", max_turns = 3, permission_exchange = true})
     if not decoded then error(tostring(decode_error)) end
     local specification = launch.specification(decoded)
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local command = claude
     for _, argument in ipairs(specification.argv) do command = command .. " " .. argument end
     local proc, err = executor:exec(command, {work_dir = work, env = {PATH = "/usr/bin:/bin", HOME = home, ANTHROPIC_API_KEY = SENTINEL, ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port}})

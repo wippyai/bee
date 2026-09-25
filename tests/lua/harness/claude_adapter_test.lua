@@ -24,7 +24,7 @@ local function capture_path(): string
     return streams .. "/claude/stream-json-2/control.jsonl"
 end
 local function read_file(path: string): string
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc = assert(executor:exec("cat " .. path))
     local stdout = proc:stdout_stream()
     assert(proc:start())

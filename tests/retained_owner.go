@@ -193,7 +193,7 @@ func desktopAdmission(root string) (string, error) {
 	expires := time.Now().Add(time.Hour).UTC().Format("2006-01-02T15:04:05.000Z07:00")
 	config := fmt.Sprintf(`version: "1.0"
 override:
-  "bee.hive:supervisor_service:input":
+  "bee.hive_host:supervisor_service:input":
   - configured_nodes: []
     desktop:
       execution: %s

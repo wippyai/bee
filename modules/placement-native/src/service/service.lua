@@ -230,7 +230,7 @@ end
 -- Check the pinned policy at every native authorization boundary so a policy
 -- update cannot turn an already-recorded request into an unapproved launch.
 local function host_home_authorization(pinned: registry.Snapshot, request: types.LaunchRequest): string?
-    if request.environment_refs.HOME ~= "bee:machine_home" then return nil end
+    if request.environment_refs.HOME ~= "bee.environment:machine_home" then return nil end
     local policy_entry = resolver.entry(pinned, request.policy_ref)
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
     local policy_data = policy_entry and bounds.object(policy_entry.data) or nil
@@ -243,7 +243,7 @@ end
 -- rechecked.  Both the ordinary runner and the native window use this seam;
 -- callers never supply a gateway materialization key as authority.
 function M.authorize_materialization(attempt: types.Attempt, row: store.Row, request: types.LaunchRequest, gateway_binding: string?): (string?, Reply?)
-    if request.environment_refs.HOME == "bee:machine_home" then
+    if request.environment_refs.HOME == "bee.environment:machine_home" then
         local pinned, pin_error = resolver.pin()
         if not pinned then
             return nil, fail("UNAVAILABLE", pin_error or "pin registry for HOME authorization")

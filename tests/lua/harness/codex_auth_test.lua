@@ -23,7 +23,7 @@ end
 -- Runs one shell command line; the command carries no single quotes, and
 -- values that might are passed through the environment.
 local function shell(command: string, environment: {[string]: string}?): (string, integer)
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'", {env = environment or {}})
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -57,7 +57,7 @@ local function define_tests()
             test.is_true(version:find("codex", 1, true) ~= nil)
             local root = ".wippy/codex-auth-" .. tostring(math.floor(time.now():unix_nano() / 1000))
             local record = root .. "/endpoint.jsonl"
-            local endpoint_executor = assert(exec.get("bee.placement.native:executor"))
+            local endpoint_executor = assert(exec.get("bee:placement_executor"))
             local _ = shell("mkdir -p " .. root .. "/home/.codex " .. root .. "/work")
             local endpoint, endpoint_error = endpoint_executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record)
             if not endpoint then error("endpoint: " .. tostring(endpoint_error)) end
@@ -92,7 +92,7 @@ local function define_tests()
             for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
             local home = shell("cd " .. root .. "/home && pwd")
             home = home:gsub("%s+$", "")
-            local executor = assert(exec.get("bee.placement.native:executor"))
+            local executor = assert(exec.get("bee:placement_executor"))
             local proc, proc_error = executor:exec(quote.line(argv), {work_dir = root .. "/work", env = {HOME = home, CODEX_HOME = home .. "/.codex", OPENAI_API_KEY = SENTINEL, PATH = "/usr/bin:/bin"}})
             if not proc then error("exec codex: " .. tostring(proc_error)) end
             local stdout = proc:stdout_stream()

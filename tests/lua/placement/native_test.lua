@@ -112,7 +112,7 @@ local function admit_grok_login_source(source: string)
     if not applied then error("admit Grok login source: " .. tostring(apply_error)) end
 end
 local function resource_mode(mode: string)
-    local entry = registry.get("bee.placement.native:resource_mode")
+    local entry = registry.get("bee:placement_resource_mode")
     if not entry then error("resource mode entry") end
     local data = entry.data :: {[string]: unknown}
     data.mode = mode
@@ -286,7 +286,7 @@ local function kinds(attempt_id: string): {string}
     return list
 end
 local function alive(pid: string): boolean
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc = assert(executor:exec("sh -c 'kill -0 " .. pid .. " 2>/dev/null && echo alive || echo gone'"))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -297,7 +297,7 @@ local function alive(pid: string): boolean
     return output:find("alive", 1, true) ~= nil
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee.placement.native:executor"))
+    local executor = assert(exec.get("bee:placement_executor"))
     local proc = assert(executor:exec(quote.line({"sh", "-c", command})))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -352,7 +352,7 @@ local function define_tests()
             end
         end)
         test.it("reports a rejected OS group signal instead of claiming success", function()
-            local executor, executor_error = exec.get("bee.placement.native:executor")
+            local executor, executor_error = exec.get("bee:placement_executor")
             if not executor then error(tostring(executor_error)) end
             local child, child_error = executor:exec("sh -c 'echo $$; exec sleep 30'", {process_group = true})
             if not child then executor:release(); error(tostring(child_error)) end
@@ -380,7 +380,7 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         resource_mode("host_configured")
-        admit_root("bee.placement.native:admitted_roots")
+        admit_root("bee:placement_admitted_roots")
         admit_root("bee:resource_roots")
         activate_fixture_binding()
         local measured = value(service.capabilities())
@@ -443,7 +443,7 @@ local function define_tests()
         end)
         test.it("inherits only the host-selected user home while keeping placement files private", function()
             local unapproved = launch({"sh", "-c", "true"}, "direct_process")
-            unapproved.environment_refs = {HOME = "bee:machine_home"}
+            unapproved.environment_refs = {HOME = "bee.environment:machine_home"}
             local refused = call(OWNER, "prepare", unapproved)
             test.is_false(refused.ok)
             test.eq(refused.error and refused.error.code, "DENIED")
@@ -451,9 +451,9 @@ local function define_tests()
             local refused_db = assert(store.open())
             test.is_nil(store.row(refused_db, tostring(unapproved.attempt_id)))
             refused_db:release()
-            local original = registry.get("bee:machine_home")
+            local original = registry.get("bee.environment:machine_home")
             if not original then error("machine home binding is missing") end
-            local changed = registry.get("bee:machine_home")
+            local changed = registry.get("bee.environment:machine_home")
             if not changed then error("machine home binding is missing") end
             changed.data = {storage = "bee.placement.native:sentinel_storage",
                 variable = "BEE_TEST_INHERITED_HOME", default = "/tmp", readonly = true}
@@ -464,7 +464,7 @@ local function define_tests()
             local ok, err = pcall(function()
                 local request = retained_launch(OWNER, fresh("inherited-session"), "unused")
                 request.launch.argv = {"-c", 'test "$HOME" = /tmp'}
-                request.environment_refs = {HOME = "bee:machine_home"}
+                request.environment_refs = {HOME = "bee.environment:machine_home"}
                 local prepared = attempt_of(call(OWNER, "prepare", request))
                 test.eq(value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).private_home, false)
                 attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
@@ -492,7 +492,7 @@ local function define_tests()
             for key, item in pairs(original_policy :: {[string]: unknown}) do revoked[key] = item end
             revoked.allow_host_home = false
             local request = retained_launch(OWNER, fresh("revoked-home-session"), "must-not-run")
-            request.environment_refs = {HOME = "bee:machine_home"}
+            request.environment_refs = {HOME = "bee.environment:machine_home"}
             local prepared = attempt_of(call(OWNER, "prepare", request))
             local ok, failure = pcall(function()
                 policy_entry.data = revoked

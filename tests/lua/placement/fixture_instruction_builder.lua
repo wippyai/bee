@@ -27,7 +27,7 @@ function M.build(args: unknown): string
     end
 
     -- 4. Check denial of placement exec authority
-    local executor, _ = exec.get("bee.placement.native:executor")
+    local executor, _ = exec.get("bee:placement_executor")
     if executor then
         executor:release()
         error("placement exec authority was NOT denied")

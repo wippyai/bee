@@ -22,7 +22,7 @@ local function main()
     end
 
     local host = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-        :with_context({["bee.host_owner"] = self}):spawn_monitored("bee.host:main", "bee:workers", self, {root_ref = "bee:workspace_root", subpath = ""})))
+        :with_context({["bee.host_owner"] = self}):spawn_monitored("bee.host:main", "bee:workers", self, {root_ref = "bee.environment:workspace_root", subpath = ""})))
 
     local started = assert(ready:receive())
     assert(tostring(started:from()) == host, "Ready sender mismatch")

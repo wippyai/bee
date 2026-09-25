@@ -15,7 +15,7 @@ import (
 	"github.com/wippyai/runtime/api/pid"
 )
 
-var ownerPID = pid.PID{Node: "owner", Host: "bee.hive:supervisor_host", UniqID: "one"}
+var ownerPID = pid.PID{Node: "owner", Host: "bee.hive_host:supervisor_host", UniqID: "one"}
 
 type scripted struct {
 	sent      atomic.Int32

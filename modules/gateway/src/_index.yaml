@@ -40,14 +40,12 @@ entries:
 - name: target_listener
   kind: ns.requirement
   meta: {comment: Host-selected HTTP listener whose supervisor state supplies the native endpoint identity}
-  default: bee:gateway_listener
   targets:
   - entry: bee.gateway:listener_ref
     path: .resource_ref
 - name: target_endpoint
   kind: ns.requirement
   meta: {comment: Host-selected endpoint configuration; it describes a destination and never grants a caller network authority}
-  default: bee:gateway_endpoint
   targets:
   - entry: bee.gateway.registry:endpoint_ref
     path: .resource_ref

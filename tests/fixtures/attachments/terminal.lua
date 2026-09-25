@@ -12,7 +12,7 @@ function M.main()
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local controller_status = assert(process.listen("bee.controller.status", {message = true}))
-    local database = assert(store.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
+    local database = assert(store.open(nil, {root_ref = "bee.environment:workspace_root", subpath = ""}))
     local workspace_id = assert(database:identity())
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee.security.desktop:broker_policy", "bee.security:core_spawn_boundary", "bee.attachment_probe:naming_policy"}) do

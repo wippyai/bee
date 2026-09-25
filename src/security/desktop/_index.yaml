@@ -149,7 +149,7 @@ entries:
     - bee.client.desktops.read
     - bee.client.desktops.allocate
     resources:
-    - bee:client_db
+    - bee.environment:client_db
     effect: allow
 - name: retained_supervisor_spawn_policy
   kind: security.policy

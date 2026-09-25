@@ -85,7 +85,7 @@ local function main(configuration: unknown)
     local invitations = invites.new()
     local started = time.now()
     local function elapsed(): integer return math.floor(time.now():sub(started):milliseconds()) end
-    local log = logger:named("bee.hive.supervisor")
+    local log = logger:named("bee.hive_host.supervisor")
     local function send(recipient: string, topic: string, value: unknown): boolean
         local sent, err = process.send(recipient, topic, value)
         if not sent or err then log:warn("Hive delivery rejected", {topic = topic}) end
@@ -121,7 +121,7 @@ local function main(configuration: unknown)
     -- established peer or a host enrollment, so publication grants nothing.
     local function advertise(now_ms: integer)
         if native_node == "" or advertised or advertising then return end
-        local future, future_error = funcs.async("bee.hive.supervisor:advertise", {name = distributed_name, pid = self})
+        local future, future_error = funcs.async("bee.hive_host.supervisor:advertise", {name = distributed_name, pid = self})
         if not future or future_error then
             log:warn("Hive name publication unavailable")
             last_advertisement = now_ms
@@ -447,13 +447,13 @@ local function main(configuration: unknown)
             -- A forwarded thread operation runs as the actor the host maps
             -- the verified principal to; everything else takes the open
             -- dispatch. A local caller never reaches the thread path here.
-            local worker = "bee.hive.supervisor:execute"
+            local worker = "bee.hive_host.supervisor:execute"
             if sender_node ~= native_node and request.operation_ref == replica_admission.OPERATION then
-                worker = "bee.hive.supervisor:admit_replica"
+                worker = "bee.hive_host.supervisor:admit_replica"
             elseif sender_node ~= native_node and thread_admission.OPERATIONS[request.operation_ref] then
-                worker = "bee.hive.supervisor:admit_thread"
+                worker = "bee.hive_host.supervisor:admit_thread"
             elseif policy_admission.admits(request.operation_ref) then
-                worker = "bee.hive.supervisor:admit_policy"
+                worker = "bee.hive_host.supervisor:admit_policy"
             end
             local future, err = funcs.async(worker, request)
             if not future or err then failed(sender, id, "UNAVAILABLE", "operation dispatch unavailable"); return end

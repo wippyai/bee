@@ -19,7 +19,7 @@ local function scope(names: {string}): security.Scope
     return security.new_scope(policies)
 end
 -- The supervisor holds only the call to the worker; the worker holds the catalog grants.
-local supervisor = funcs.new():with_actor(security.new_actor("bee.hive.supervisor")):with_scope(scope({"bee.security.hive:workspace_command_policy"}))
+local supervisor = funcs.new():with_actor(security.new_actor("bee.hive_host.supervisor")):with_scope(scope({"bee.security.hive:workspace_command_policy"}))
 
 local function admit()
     local entry = registry.get("bee:resource_roots")

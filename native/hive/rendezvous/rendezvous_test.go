@@ -225,14 +225,14 @@ func TestDescriptorSupervisorAddress(t *testing.T) {
 	}
 	// The published supervisor address must name this node and the supervisor
 	// host; anything else is refused so a descriptor cannot redirect a client.
-	base.Supervisor = "{forge@bee.hive:supervisor_host|0x1}"
+	base.Supervisor = "{forge@bee.hive_host:supervisor_host|0x1}"
 	if err := base.validate(); err != nil {
 		t.Fatalf("valid supervisor address refused: %v", err)
 	}
 	for _, bad := range []string{
-		"{other@bee.hive:supervisor_host|0x1}",
+		"{other@bee.hive_host:supervisor_host|0x1}",
 		"{forge@bee:workers|0x1}",
-		"{forge@bee.hive:supervisor_host|}",
+		"{forge@bee.hive_host:supervisor_host|}",
 		"not-a-pid",
 	} {
 		invalid := base
@@ -247,7 +247,7 @@ func TestDescriptorSupervisorAddress(t *testing.T) {
 // must decode it, and a null or repeated address stays refused.
 func TestDescriptorDecodesPublishedSupervisorAddress(t *testing.T) {
 	published := sample()
-	published.Supervisor = "{forge@bee.hive:supervisor_host|0x1}"
+	published.Supervisor = "{forge@bee.hive_host:supervisor_host|0x1}"
 	data, err := json.Marshal(published)
 	if err != nil {
 		t.Fatal(err)
@@ -259,14 +259,14 @@ func TestDescriptorDecodesPublishedSupervisorAddress(t *testing.T) {
 	if decoded != published {
 		t.Fatalf("decoded descriptor = %#v, want %#v", decoded, published)
 	}
-	withoutField := bytes.Replace(data, []byte(`,"supervisor":"{forge@bee.hive:supervisor_host|0x1}"`), nil, 1)
+	withoutField := bytes.Replace(data, []byte(`,"supervisor":"{forge@bee.hive_host:supervisor_host|0x1}"`), nil, 1)
 	if _, err := Decode(withoutField); err != nil {
 		t.Fatalf("descriptor without a supervisor address refused: %v", err)
 	}
 	for _, bad := range [][]byte{
-		bytes.Replace(data, []byte(`"{forge@bee.hive:supervisor_host|0x1}"`), []byte(`null`), 1),
-		append(data[:len(data)-1:len(data)-1], []byte(`,"supervisor":"{forge@bee.hive:supervisor_host|0x2}"}`)...),
-		bytes.Replace(data, []byte(`"{forge@bee.hive:supervisor_host|0x1}"`), []byte(`"{other@bee.hive:supervisor_host|0x1}"`), 1),
+		bytes.Replace(data, []byte(`"{forge@bee.hive_host:supervisor_host|0x1}"`), []byte(`null`), 1),
+		append(data[:len(data)-1:len(data)-1], []byte(`,"supervisor":"{forge@bee.hive_host:supervisor_host|0x2}"}`)...),
+		bytes.Replace(data, []byte(`"{forge@bee.hive_host:supervisor_host|0x1}"`), []byte(`"{other@bee.hive_host:supervisor_host|0x1}"`), 1),
 	} {
 		if _, err := Decode(bad); err == nil {
 			t.Fatalf("descriptor %s was accepted", bad)
@@ -278,7 +278,7 @@ func TestDescriptorDecodesPublishedSupervisorAddress(t *testing.T) {
 // supervisor address is a hint the membership never carries.
 func TestEndpointMatchesTheLiveMembershipCapture(t *testing.T) {
 	published := sample()
-	published.Supervisor = "{forge@bee.hive:supervisor_host|0x1}"
+	published.Supervisor = "{forge@bee.hive_host:supervisor_host|0x1}"
 	node := cluster.NodeInfo{ID: published.Node, Addr: published.Gossip, Meta: cluster.NodeMeta{
 		internode.MetadataPublicKey: published.PublicKey,
 		internode.MetadataPort:      "40002",
@@ -302,7 +302,7 @@ func TestEndpointMatchesTheLiveMembershipCapture(t *testing.T) {
 // is not part of the identity membership authenticates.
 func TestDescriptorJoinListenerAddress(t *testing.T) {
 	published := sample()
-	published.Supervisor = "{forge@bee.hive:supervisor_host|0x1}"
+	published.Supervisor = "{forge@bee.hive_host:supervisor_host|0x1}"
 	published.Join = "127.0.0.1:4410"
 	data, err := json.Marshal(published)
 	if err != nil {

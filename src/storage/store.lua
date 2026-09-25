@@ -164,7 +164,7 @@ CREATE TABLE workspaces (
     UNIQUE (root_ref, subpath)
 );
 INSERT INTO workspaces (workspace_id, label, root_ref, subpath, state, created_at, last_used_at)
-SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), '', 'bee:workspace_root', '', 'active',
+SELECT (SELECT workspace_id FROM workspace_identity WHERE singleton = 1), '', 'bee.environment:workspace_root', '', 'active',
     strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
 CREATE TABLE workspace_state_v6 (
     workspace_id TEXT NOT NULL PRIMARY KEY CHECK (length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
@@ -278,7 +278,7 @@ CREATE TABLE workspace_folder (
 INSERT INTO workspace_folder (singleton, created)
 SELECT 1, 1 - (SELECT fresh FROM temp.workspace_migration_run);
 DELETE FROM workspaces
-WHERE root_ref = 'bee:workspace_root' AND subpath = ''
+WHERE root_ref = 'bee.environment:workspace_root' AND subpath = ''
     AND (SELECT fresh FROM temp.workspace_migration_run) = 1
 ]]
 

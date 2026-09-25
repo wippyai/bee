@@ -17,7 +17,7 @@ local function receipt(extra: {[string]: unknown}?): {[string]: unknown}
         workspace_id = TARGET.workspace_id,
         desktop_id = TARGET.desktop_id,
         session_id = "session-1",
-        recipient = "{node-2@bee.hive.desktop:display_host|agent}",
+        recipient = "{node-2@bee.hive_host.desktop:display_host|agent}",
         mode = "control",
         mount_ref = "mount-1",
         expires_at = "2026-09-21T00:00:00.000Z",
@@ -29,7 +29,7 @@ end
 local function define_tests()
     test.describe("Hive foreground display", function()
         test.it("accepts only a receipt for its exact target, recipient and mode", function()
-            local recipient = "{node-2@bee.hive.desktop:display_host|agent}"
+            local recipient = "{node-2@bee.hive_host.desktop:display_host|agent}"
             local target, target_error = display.target("node-1", TARGET.owner_execution, TARGET.workspace_id, TARGET.desktop_id, "control")
             if not target then error(tostring(target_error)) end
             local accepted = display.receipt(receipt(), target, recipient)
@@ -37,7 +37,7 @@ local function define_tests()
             test.eq(accepted and accepted.session_id, "session-1")
             test.eq(accepted and accepted.mount_ref, "mount-1")
             test.is_nil(display.receipt(receipt({workspace_id = "dddddddddddddddddddddddddddddddd"}), target, recipient))
-            test.is_nil(display.receipt(receipt({recipient = "{node-3@bee.hive.desktop:display_host|agent}"}), target, recipient))
+            test.is_nil(display.receipt(receipt({recipient = "{node-3@bee.hive_host.desktop:display_host|agent}"}), target, recipient))
             test.is_nil(display.receipt(receipt({mode = "observe"}), target, recipient))
             test.is_nil(display.receipt(receipt({mount_ref = "bad\nmount"}), target, recipient))
             test.is_nil(display.receipt(receipt({unexpected = true}), target, recipient))

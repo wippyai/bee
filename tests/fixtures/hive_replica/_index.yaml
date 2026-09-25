@@ -30,14 +30,14 @@ entries:
   policy:
     actions: [process.registry.register, process.registry.unregister, process.registry.register.eventual,
       process.registry.unregister.eventual, process.registry.lookup]
-    resources: [bee.hive.supervisor, 'bee.hive.supervisor/*']
+    resources: [bee.hive_host.supervisor, 'bee.hive_host.supervisor/*']
     effect: allow
 - name: execute_policy
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_policy,
-      bee.hive.supervisor:admit_replica, bee.hive.supervisor:advertise]
+    resources: [bee.hive_host.supervisor:execute, bee.hive_host.supervisor:admit_policy,
+      bee.hive_host.supervisor:admit_replica, bee.hive_host.supervisor:advertise]
     effect: allow
 - name: replica_policy
   kind: security.policy

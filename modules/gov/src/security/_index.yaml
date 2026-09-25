@@ -63,10 +63,10 @@ entries:
     effect: allow
 - name: publication_profiles_read_policy
   kind: security.policy
-  meta: {comment: The selected publication-profile entry readable by the delivery facade}
+  meta: {comment: The selected publication-profile entry readable by the delivery facade; target_publication_profiles fills the resource}
   policy:
     actions: [registry.get]
-    resources: [bee.governance:publication_profiles]
+    resources: []
     effect: allow
 - name: delivery_node_read_policy
   kind: security.policy

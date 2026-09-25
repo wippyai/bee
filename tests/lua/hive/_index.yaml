@@ -8,8 +8,8 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive.supervisor:peers
-    enrollment: bee.hive.supervisor:enrollment
+    peers: bee.hive_host.supervisor:peers
+    enrollment: bee.hive_host.supervisor:enrollment
     types: bee.hive:types
 - name: peer_restart_test
   kind: function.lua
@@ -18,7 +18,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive.supervisor:peers
+    peers: bee.hive_host.supervisor:peers
     types: bee.hive:types
 - name: invites_test
   kind: function.lua
@@ -27,7 +27,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    invites: bee.hive.supervisor:invites
+    invites: bee.hive_host.supervisor:invites
 - name: probe_exposure_policy
   kind: security.policy
   meta: {type: test_support}
@@ -166,7 +166,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    principals: bee.hive.supervisor:principals
+    principals: bee.hive_host.supervisor:principals
 - name: thread_admission_test
   kind: function.lua
   source: file://thread_admission_test.lua
@@ -178,8 +178,8 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    principals: bee.hive.supervisor:principals
-    thread_admission: bee.hive.supervisor:thread_admission
+    principals: bee.hive_host.supervisor:principals
+    thread_admission: bee.hive_host.supervisor:thread_admission
     harness: bee.threads:harness
     sends: bee.threads.service:sends
 - name: desktop_catalog_test
@@ -191,8 +191,8 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    protocol: bee.hive.desktop:protocol
-    catalog: bee.hive.desktop:catalog
+    protocol: bee.hive_host.desktop:protocol
+    catalog: bee.hive_host.desktop:catalog
 - name: desktop_display_test
   kind: function.lua
   source: file://desktop_display_test.lua
@@ -200,7 +200,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    display: bee.hive.desktop:display
+    display: bee.hive_host.desktop:display
 - name: desktop_enrollment_test
   kind: function.lua
   source: file://desktop_enrollment_test.lua
@@ -209,10 +209,10 @@ entries:
   modules: [process, channel, time, security, funcs]
   imports:
     test: wippy.test:test
-    owner: bee.hive.desktop:owner
-    catalog: bee.hive.desktop:catalog
-    protocol: bee.hive.desktop:protocol
-    enrollment: bee.hive.supervisor:enrollment
+    owner: bee.hive_host.desktop:owner
+    catalog: bee.hive_host.desktop:catalog
+    protocol: bee.hive_host.desktop:protocol
+    enrollment: bee.hive_host.supervisor:enrollment
 - name: display_standin
   kind: process.lua
   source: file://display_standin.lua
@@ -243,20 +243,20 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    owner: bee.hive.desktop:owner
-    catalog: bee.hive.desktop:catalog
-    protocol: bee.hive.desktop:protocol
+    owner: bee.hive_host.desktop:owner
+    catalog: bee.hive_host.desktop:catalog
+    protocol: bee.hive_host.desktop:protocol
 - name: desktop_daemon_test
   kind: function.lua
   source: file://desktop_daemon_test.lua
   method: run
   meta: {type: test, suite: bee}
   security:
-    policies: [bee.hive.desktop:host_policy]
+    policies: [bee.hive_host.desktop:host_policy]
   imports:
     test: wippy.test:test
-    owner: bee.hive.desktop:owner
-    protocol: bee.hive.desktop:protocol
+    owner: bee.hive_host.desktop:owner
+    protocol: bee.hive_host.desktop:protocol
 - name: desktop_remote_test
   kind: function.lua
   source: file://desktop_remote_test.lua
@@ -265,8 +265,8 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    remote: bee.hive.desktop:remote
-    display: bee.hive.desktop:display
+    remote: bee.hive_host.desktop:remote
+    display: bee.hive_host.desktop:display
 - name: desktop_viewer_test
   kind: function.lua
   source: file://desktop_viewer_test.lua
@@ -275,4 +275,4 @@ entries:
   modules: [process, channel, time]
   imports:
     test: wippy.test:test
-    protocol: bee.hive.desktop:protocol
+    protocol: bee.hive_host.desktop:protocol

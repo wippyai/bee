@@ -155,7 +155,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         databases.write_text(yaml.safe_dump(database_entries, sort_keys=False))
         config = project / "src/_index.yaml"
         value = yaml.safe_load(config.read_text())
-        value["entries"].append({"name": "client_db_path", "kind": "env.variable", "storage": "bee:workspace_environment",
+        value["entries"].append({"name": "client_db_path", "kind": "env.variable", "storage": "bee.environment:workspace_environment",
                                  "variable": "BEE_CLIENT_DB", "default": str(root / "build-client.db"), "readonly": True})
         config.write_text(yaml.safe_dump(value, sort_keys=False))
         if command in ("thread-status-probe", "retained-supervisor-probe"):

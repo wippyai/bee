@@ -112,7 +112,7 @@ local function config_entries(): {unknown}
 end
 
 local function configure(workspace_id: string, local_node: string)
-    local publication = assert(registry.get("bee.governance:publication_profiles"))
+    local publication = assert(registry.get("bee:governance_publication_profiles"))
     local publication_data = object(publication.data)
     publication_data.profiles = {
         {workspace_id = workspace_id, source_workspace = READY_WORKSPACE,
@@ -123,7 +123,7 @@ local function configure(workspace_id: string, local_node: string)
             component = CONFIG_COMPONENT, overlay_owner = CONFIG_OVERLAY}}
     publication.data = publication_data
 
-    local activation = assert(registry.get("bee.governance:activation_profiles"))
+    local activation = assert(registry.get("bee:governance_activation_profiles"))
     local activation_data = object(activation.data)
     activation_data.profiles = {
         {workspace_id = workspace_id, source_node = local_node, source_workspace = READY_WORKSPACE,

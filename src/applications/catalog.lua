@@ -152,7 +152,7 @@ function M.read(workspace_id: string): Selection
         local entry = pinned:get(id)
         return entry and entry :: Entry or nil
     end
-    local profile_entry = lookup("bee.governance:activation_profiles")
+    local profile_entry = lookup("bee:governance_activation_profiles")
     if not profile_entry or profile_entry.kind ~= "registry.entry" then error("Invalid activation profiles") end
     local configuration, configuration_error = activation_profiles.decode(profile_entry.data)
     if not configuration then error("Invalid activation profiles: " .. tostring(configuration_error)) end

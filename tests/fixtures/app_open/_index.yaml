@@ -128,9 +128,9 @@ entries:
     thread_binding: bee.applications:thread_binding
   security:
     policies: [bee.app_open_probe:operator_policy, bee.app_open_probe:operator_call_policy,
-      bee:gateway_manage_policy,
-      bee:approval_decide_policy, bee.inbox:client_policy, bee:thread_authority_client_policy,
-      bee:thread_create_policy, bee:thread_observe_policy,
+      bee.security.gateway:gateway_manage_policy,
+      bee.security.approvals:approval_decide_policy, bee.inbox:client_policy, bee.security.threads:thread_authority_client_policy,
+      bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy,
       bee.harness.launch:agent_launch_execution_action_policy]
 - name: operator_service
   kind: process.service
@@ -141,7 +141,7 @@ entries:
     security:
       actor: {id: bee.app_open.operator}
       policies: [bee.app_open_probe:operator_policy, bee.app_open_probe:operator_call_policy,
-        bee:gateway_manage_policy,
-        bee:approval_decide_policy, bee.inbox:client_policy, bee:thread_authority_client_policy,
-        bee:thread_create_policy, bee:thread_observe_policy,
+        bee.security.gateway:gateway_manage_policy,
+        bee.security.approvals:approval_decide_policy, bee.inbox:client_policy, bee.security.threads:thread_authority_client_policy,
+        bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy,
         bee.harness.launch:agent_launch_execution_action_policy]

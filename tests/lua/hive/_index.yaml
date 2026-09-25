@@ -174,7 +174,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, registry, time, uuid]
   security:
-    policies: [bee.hive:mapping_test_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy, bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.hive:mapping_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
   imports:
     test: wippy.test:test
     types: bee.hive:types

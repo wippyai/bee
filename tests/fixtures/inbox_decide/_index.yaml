@@ -38,8 +38,8 @@ entries:
   security:
     policies:
     - bee.inbox_decide_probe:seed_policy
-    - bee:approval_request_policy
-    - bee:approval_consume_policy
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
   meta:
     command:
       name: inbox-decide-seed
@@ -59,8 +59,8 @@ entries:
   security:
     policies:
     - bee.inbox_decide_probe:seed_policy
-    - bee:approval_request_policy
-    - bee:approval_consume_policy
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
   meta:
     command:
       name: inbox-decide-consume

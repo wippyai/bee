@@ -26,7 +26,7 @@ entries:
       name: app-admission-probe
       security:
         actor: {id: app-admission-test}
-        policies: [bee:broker_policy, bee:core_spawn_policy, bee.admission_probe:writer]
+        policies: [bee.security.desktop:broker_policy, bee.security:core_spawn_policy, bee.admission_probe:writer]
 - name: app
   kind: process.lua
   source: file://app.lua

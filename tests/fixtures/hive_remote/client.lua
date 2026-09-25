@@ -94,7 +94,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
 
     assert(io.print("BEE_HIVE_REMOTE client_ready " .. self))
 
-    local client_scope = scope({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy"})
+    local client_scope = scope({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy", "bee.security.storage:client_storage_policy"})
 
     -- Step 1: Open actual Terminal from desktop path with initial app bootstrap
     local screen, disp_err = tty.viewport({width = 100, height = 32})
@@ -454,8 +454,8 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
         if not display then error("tty.viewport failed: " .. tostring(disp_err)) end
         local grant = assert(display:grant())
 
-        local pres_policy, pol_err = security.policy("bee:presenter_policy")
-        if not pres_policy then error("Missing bee:presenter_policy: " .. tostring(pol_err)) end
+        local pres_policy, pol_err = security.policy("bee.security.desktop:presenter_policy")
+        if not pres_policy then error("Missing bee.security.desktop:presenter_policy: " .. tostring(pol_err)) end
         local pres_scope, scope_err = security.new_scope({pres_policy})
         if not pres_scope then error("security.new_scope failed: " .. tostring(scope_err)) end
 

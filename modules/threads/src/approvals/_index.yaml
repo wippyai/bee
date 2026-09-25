@@ -22,4 +22,4 @@ entries:
     ingress: bee.threads.approvals:ingress
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]

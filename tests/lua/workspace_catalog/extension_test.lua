@@ -31,9 +31,9 @@ local function executor(id: string, names: {string}): funcs.Executor
     return funcs.new():with_actor(security.new_actor(id)):with_scope(security.new_scope(policies))
 end
 
-local manager = executor("bee.test.extension_manager", {"bee.workspace.catalog:call_test_policy", "bee:workspace_catalog_read_policy",
-    "bee:workspace_catalog_manage_policy", "bee.workspace.catalog:resources_call_test_policy", "bee:resource_manage_policy"})
-local reader = executor("bee.test.extension_reader", {"bee.workspace.catalog:call_test_policy", "bee:workspace_catalog_read_policy"})
+local manager = executor("bee.test.extension_manager", {"bee.workspace.catalog:call_test_policy", "bee.security.storage:workspace_catalog_read_policy",
+    "bee.security.storage:workspace_catalog_manage_policy", "bee.workspace.catalog:resources_call_test_policy", "bee.security.resources:resource_manage_policy"})
+local reader = executor("bee.test.extension_reader", {"bee.workspace.catalog:call_test_policy", "bee.security.storage:workspace_catalog_read_policy"})
 local stranger = executor("bee.test.extension_stranger", {"bee.workspace.catalog:resources_call_test_policy"})
 
 local function call(client: funcs.Executor, target: string, value: unknown): Reply

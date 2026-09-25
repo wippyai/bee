@@ -46,7 +46,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "120s"}
   modules: [funcs, security, tty]
   security:
-    policies: [bee.threads:client_test_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy]
+    policies: [bee.threads:client_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy]
   imports:
     test: wippy.test:test
     model: bee.timeline:model

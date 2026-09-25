@@ -47,7 +47,7 @@ local function define_tests()
         end)
         test.it("uses host context for profile grants and refuses a foreign request", function()
             local grants: {security.Policy} = {}
-            for _, name in ipairs({"bee.harness.profiles:test_call", "bee:profile_workspace_policy", "bee:profile_context_boundary"}) do
+            for _, name in ipairs({"bee.harness.profiles:test_call", "bee.security.harness:profile_workspace_policy", "bee.security.harness:profile_context_boundary"}) do
                 local policy, err = security.policy(name)
                 if not policy then error(tostring(err)) end
                 grants[#grants + 1] = policy

@@ -65,7 +65,7 @@ local function main(value: unknown)
     for _, topic in ipairs(DRAINED) do drained[#drained + 1] = assert(process.listen(topic, {message = true})) end
     local events = assert(process.events())
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error(tostring(policy_error)) end
         policies[#policies + 1] = policy

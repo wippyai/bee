@@ -102,9 +102,9 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
-    local broker_policy, broker_error = security.policy("bee:broker_policy")
+    local broker_policy, broker_error = security.policy("bee.security.desktop:broker_policy")
     if not broker_policy then error(tostring(broker_error)) end
-    local boundary, boundary_error = security.policy("bee:core_spawn_boundary")
+    local boundary, boundary_error = security.policy("bee.security:core_spawn_boundary")
     if not boundary then error(tostring(boundary_error)) end
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})

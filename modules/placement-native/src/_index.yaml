@@ -235,7 +235,7 @@ entries:
     quote: bee.driver.kit:quote
     types: bee.placement:types
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_runner_policy, bee:credential_materialize_policy, bee:gateway_materialize_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_runner_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_materialize_policy]
 - name: window
   kind: library.lua
   source: file://service/window.lua
@@ -265,7 +265,7 @@ entries:
     auto_start: true
     security:
       actor: {id: bee.placement.sweeper}
-      policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:placement_sweeper_policy, bee:gateway_supervision_policy]
+      policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.placement:placement_sweeper_policy, bee.security.gateway:gateway_supervision_policy]
 - name: binding
   kind: contract.binding
   contracts:
@@ -292,7 +292,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: start
   kind: function.lua
   source: file://binding/start_method.lua
@@ -300,7 +300,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: status
   kind: function.lua
   source: file://binding/status_method.lua
@@ -308,7 +308,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: stop
   kind: function.lua
   source: file://binding/stop_method.lua
@@ -316,7 +316,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: capabilities
   kind: function.lua
   source: file://binding/capabilities_method.lua
@@ -324,7 +324,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: measure_executable
   kind: function.lua
   source: file://binding/measure_executable_method.lua
@@ -332,7 +332,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: close_stdin
   kind: function.lua
   source: file://binding/close_stdin_method.lua
@@ -340,7 +340,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: reconcile
   kind: function.lua
   source: file://binding/reconcile_method.lua
@@ -348,7 +348,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: cleanup
   kind: function.lua
   source: file://binding/cleanup_method.lua
@@ -356,7 +356,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: evidence
   kind: function.lua
   source: file://binding/evidence_method.lua
@@ -364,7 +364,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: attach
   kind: function.lua
   source: file://binding/attach_method.lua
@@ -372,7 +372,7 @@ entries:
   imports:
     service: bee.placement.native:service
   security:
-    policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee:gateway_supervision_policy]
+    policies: [bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
 - name: environment
   kind: env.storage.os
   lifecycle:

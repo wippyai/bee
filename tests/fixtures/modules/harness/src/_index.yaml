@@ -8,12 +8,6 @@ entries:
 - name: terminal
   kind: terminal.host
   lifecycle: {auto_start: true}
-- name: carrier_policy
-  kind: security.policy
-  policy: {actions: [funcs.call], resources: '*', effect: deny}
-- name: launch_spawn_policy
-  kind: security.policy
-  policy: {actions: [process.spawn], resources: '*', effect: deny}
 - name: probe_policy
   kind: security.policy
   policy: {actions: [registry.get, registry.find], resources: '*', effect: allow}

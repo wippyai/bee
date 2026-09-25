@@ -86,9 +86,9 @@ local function main(owner: string, initial_preferences: unknown)
     local coordinators: {[string]: BindingCoordinator} = {}
     local recovery_received = false
     local binding_requests: {[string]: string} = {}
-    local membership_policy = assert(security.policy("bee:application_thread_membership_policy"))
+    local membership_policy = assert(security.policy("bee.security.threads:application_thread_membership_policy"))
     local membership_scope = security.new_scope({membership_policy})
-    local facade_policy = assert(security.policy("bee:application_thread_facade_policy"))
+    local facade_policy = assert(security.policy("bee.security.threads:application_thread_facade_policy"))
     local facade_scope = security.new_scope({facade_policy})
     local function thread_call(actor_id: string, target: string, request: unknown)
         local actor, actor_error = security.new_actor(actor_id)
@@ -228,15 +228,15 @@ local function main(owner: string, initial_preferences: unknown)
             local next_bindings = selected.bindings
             local next_items = selected.items
             local next_scopes: {[string]: security.Scope} = {}
-            local base, base_error = security.policy("bee:base_app_policy")
+            local base, base_error = security.policy("bee.security:base_app_policy")
             if base_error then error(tostring(base_error)) end
-            local boundary, boundary_error = security.policy("bee:app_boundary_policy")
+            local boundary, boundary_error = security.policy("bee.security:app_boundary_policy")
             if boundary_error then error(tostring(boundary_error)) end
-            local scope_boundary, scope_boundary_error = security.policy("bee:scope_managing_app_boundary")
+            local scope_boundary, scope_boundary_error = security.policy("bee.security:scope_managing_app_boundary")
             if scope_boundary_error then error(tostring(scope_boundary_error)) end
-            local private_core, private_error = security.policy("bee:core_spawn_boundary")
+            local private_core, private_error = security.policy("bee.security:core_spawn_boundary")
             if private_error then error(tostring(private_error)) end
-            local storage_boundary, storage_error = security.policy("bee:workspace_storage_boundary")
+            local storage_boundary, storage_error = security.policy("bee.security.storage:workspace_storage_boundary")
             if storage_error then error(tostring(storage_error)) end
             for _, binding in ipairs(next_bindings) do
                 local selected_boundary: security.Policy = binding.scope_management and scope_boundary or boundary

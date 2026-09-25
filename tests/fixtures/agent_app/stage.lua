@@ -93,7 +93,7 @@ local function configure(workspace_id: string, local_node: string, source_worksp
         overlay_owner = OVERLAY_OWNER, approval_policy = APPROVAL_POLICY,
         parameters = table.create(1, 0),
         applications = {{definition_id = "bee.agent_app_demo:app",
-            policies = {"bee:ordinary_app_subsystem_boundary"}, thread_access = "observe_post"}},
+            policies = {"bee.security:ordinary_app_subsystem_boundary"}, thread_access = "observe_post"}},
         allow = {packages = {COMPONENT}, namespaces = {NAMESPACE}, kinds = {"process.lua"},
             databases = table.create(1, 0), grants = table.create(1, 0),
             modules = {"tty", "process", "channel", "json"}}}

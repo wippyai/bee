@@ -23,9 +23,9 @@ entries:
   method: main
   modules: [funcs, json, http_client, time, env, logger, security]
   security:
-    policies: [bee.gateway_container:policy, bee:gateway_admit_policy,
-      bee:gateway_materialize_policy, bee:gateway_supervision_policy, bee.gateway.security:readiness_policy,
-      bee:thread_create_policy, bee.gateway_container:callback_policy]
+    policies: [bee.gateway_container:policy, bee.security.gateway:gateway_admit_policy,
+      bee.security.gateway:gateway_materialize_policy, bee.security.gateway:gateway_supervision_policy, bee.gateway.security:readiness_policy,
+      bee.security.threads:thread_create_policy, bee.gateway_container:callback_policy]
   meta:
     command:
       name: gateway-container-probe

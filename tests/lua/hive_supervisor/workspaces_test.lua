@@ -18,10 +18,10 @@ local function scope(names: {string}): security.Scope
     return security.new_scope(policies)
 end
 local manager = funcs.new():with_actor(security.new_actor("bee.test.hive_workspaces_manager")):with_scope(scope({
-    "bee.workspace.catalog:call_test_policy", "bee:workspace_catalog_read_policy", "bee:workspace_catalog_manage_policy"}))
+    "bee.workspace.catalog:call_test_policy", "bee.security.storage:workspace_catalog_read_policy", "bee.security.storage:workspace_catalog_manage_policy"}))
 -- The supervisor dispatches as itself under the host's Hive policies.
 local supervisor = funcs.new():with_actor(security.new_actor("bee.hive.supervisor")):with_scope(scope({
-    "bee:hive_catalog_policy", "bee:hive_exposure_policy", "bee:hive_dispatch_policy"}))
+    "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.security.hive:hive_dispatch_policy"}))
 
 local function admit()
     local entry = registry.get("bee:resource_roots")

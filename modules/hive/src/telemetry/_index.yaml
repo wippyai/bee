@@ -24,7 +24,7 @@ entries:
           cluster_size: {type: integer}
           sampled_at: {type: string}
   security:
-    policies: [bee:hive_telemetry_policy]
+    policies: [bee.security.hive:hive_telemetry_policy]
 - name: stats
   kind: function.lua
   source: file://stats.lua
@@ -54,7 +54,7 @@ entries:
           cpu_count: {type: integer}
           sampled_at: {type: string}
   security:
-    policies: [bee:hive_telemetry_policy]
+    policies: [bee.security.hive:hive_telemetry_policy]
 - name: catalog_list
   kind: function.lua
   source: file://catalog_list.lua
@@ -83,4 +83,4 @@ entries:
           next_after_operation_ref: {type: string}
           unavailable: {type: string}
   security:
-    policies: [bee:hive_catalog_policy, bee:hive_exposure_policy]
+    policies: [bee.security.hive:hive_catalog_policy, bee.security.hive:hive_exposure_policy]

@@ -49,13 +49,13 @@ end
 local function define_tests()
     test.describe("Host policy isolation and boundary enforcement", function()
         test.it("allows the native Hive supervisor to release the eventual name it publishes", function()
-            local scope = {"bee:hive_names_policy"}
+            local scope = {"bee.security.hive:hive_names_policy"}
             test.is_true(call_can(scope, "process.registry.register.eventual", "bee.hive.supervisor/Antares"))
             test.is_true(call_can(scope, "process.registry.unregister.eventual", "bee.hive.supervisor/Antares"))
-            test.is_false(call_can({"bee:base_app_policy"}, "process.registry.unregister.eventual", "bee.hive.supervisor/Antares"))
+            test.is_false(call_can({"bee.security:base_app_policy"}, "process.registry.unregister.eventual", "bee.hive.supervisor/Antares"))
         end)
         test.it("limits waiter startup to its own name and reply delivery", function()
-            local scope = {"bee:thread_waiter_policy"}
+            local scope = {"bee.security.threads:thread_waiter_policy"}
             test.is_true(call_can(scope, "process.registry.register", "bee.threads.waiter"))
             test.is_true(call_can(scope, "process.send", "waiting:actor"))
             test.is_false(call_can(scope, "process.registry.register", "bee.hive.supervisor"))
@@ -68,35 +68,35 @@ local function define_tests()
         end)
         test.it("limits Hive desktop bootstrap to its selected policies", function()
             local scope = {"bee.hive.desktop:host_policy"}
-            for _, name in ipairs({"bee:host_policy", "bee:desktop_policy",
-                "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy",
-                "bee:desktop_catalog_resource_policy"}) do
+            for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:desktop_policy",
+                "bee.security.desktop:retained_supervisor_spawn_policy", "bee.security.desktop:desktop_catalog_policy",
+                "bee.security.desktop:desktop_catalog_resource_policy"}) do
                 test.is_true(call_can(scope, "security.policy.get", name))
             end
-            test.is_false(call_can(scope, "security.policy.get", "bee:workspace_storage_policy"))
+            test.is_false(call_can(scope, "security.policy.get", "bee.security.storage:workspace_storage_policy"))
             test.is_false(call_can(scope, "security.policy.get", "foreign:policy"))
             test.is_false(call_can(scope, "db.get", "bee:client_db"))
             test.is_false(call_can(scope, "funcs.call", "bee.client:allocate_desktop"))
         end)
 
         test.it("constrains broker_policy to worker host while retaining nonhost actions", function()
-            evaluate_host_policy("bee:broker_policy", "process.spawn", "bee.apps:welcome")
+            evaluate_host_policy("bee.security.desktop:broker_policy", "process.spawn", "bee.apps:welcome")
         end)
 
         test.it("constrains desktop_policy to worker host while retaining nonhost actions", function()
-            evaluate_host_policy("bee:desktop_policy", "tty.mount", "screen")
-            test.is_true(call_can({"bee:desktop_policy"}, "registry.find", "bee.launch_definition"))
+            evaluate_host_policy("bee.security.desktop:desktop_policy", "tty.mount", "screen")
+            test.is_true(call_can({"bee.security.desktop:desktop_policy"}, "registry.find", "bee.launch_definition"))
         end)
 
         test.it("constrains host_policy to worker host while retaining nonhost actions", function()
-            evaluate_host_policy("bee:host_policy", "process.monitor", "target:process")
+            evaluate_host_policy("bee.security.desktop:host_policy", "process.monitor", "target:process")
         end)
 
         test.it("evaluates reconstructed host scope (host_policy + host_spawn_policy + workspace_storage_policy)", function()
             local scope = {
-                "bee:host_policy",
-                "bee:host_spawn_policy",
-                "bee:workspace_storage_policy",
+                "bee.security.desktop:host_policy",
+                "bee.security.desktop:host_spawn_policy",
+                "bee.security.storage:workspace_storage_policy",
             }
             -- Worker host passes, protected and foreign host fail
             test.is_true(call_can(scope, "process.host", "bee:workers"))
@@ -114,8 +114,8 @@ local function define_tests()
 
         test.it("evaluates reconstructed broker scope (broker_policy + core_spawn_boundary)", function()
             local scope = {
-                "bee:broker_policy",
-                "bee:core_spawn_boundary",
+                "bee.security.desktop:broker_policy",
+                "bee.security:core_spawn_boundary",
             }
             -- Worker host passes, protected and foreign host fail
             test.is_true(call_can(scope, "process.host", "bee:workers"))
@@ -134,7 +134,7 @@ local function define_tests()
         test.it("defeats broad fixture host allow via core_spawn_boundary explicit deny", function()
             local scope = {
                 "bee.host_policy_test:fixture_broad_host_policy",
-                "bee:core_spawn_boundary",
+                "bee.security:core_spawn_boundary",
             }
             -- Worker passes
             test.is_true(call_can(scope, "process.host", "bee:workers"))
@@ -147,7 +147,7 @@ local function define_tests()
         test.it("defeats broad fixture spawn allow via core_spawn_boundary explicit deny", function()
             local scope = {
                 "bee.host_policy_test:fixture_broad_spawn_policy",
-                "bee:core_spawn_boundary",
+                "bee.security:core_spawn_boundary",
             }
             -- Spawning supervisor entries is strictly denied
             for _, action in ipairs({"process.spawn", "process.spawn.monitored", "process.spawn.linked", "process.exec"}) do
@@ -162,9 +162,9 @@ local function define_tests()
 
         test.it("confirms ordinary app scope gains no host authority", function()
             local scope = {
-                "bee:base_app_policy",
-                "bee:app_boundary_policy",
-                "bee:core_spawn_boundary",
+                "bee.security:base_app_policy",
+                "bee.security:app_boundary_policy",
+                "bee.security:core_spawn_boundary",
             }
             -- App scope cannot host workers, supervisor, or foreign hosts
             test.is_false(call_can(scope, "process.host", "bee:workers"))

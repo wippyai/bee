@@ -10,7 +10,7 @@ local WORKSPACE = string.rep("a", 32)
 local FOREIGN = string.rep("b", 32)
 local OWNER = "bee.catalog_test:overlay"
 local APP = "bee.catalog_test:app"
-local POLICY = "bee:ordinary_app_subsystem_boundary"
+local POLICY = "bee.security:ordinary_app_subsystem_boundary"
 local DIGEST = string.rep("c", 64)
 
 type Object = {[string]: unknown}

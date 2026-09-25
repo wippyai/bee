@@ -3,7 +3,7 @@ local test = require("test")
 local registry = require("registry")
 local security = require("security")
 local funcs = require("funcs")
-local BASE = {"bee:base_app_policy", "bee:app_boundary_policy", "bee:core_spawn_boundary", "bee:workspace_storage_boundary"}
+local BASE = {"bee.security:base_app_policy", "bee.security:app_boundary_policy", "bee.security:core_spawn_boundary", "bee.security.storage:workspace_storage_boundary"}
 local function probe(names: {string}): {[string]: boolean}
     local policies: {security.Policy} = {}
     for _, name in ipairs(BASE) do
@@ -29,7 +29,7 @@ end
 local function define_tests()
     test.describe("Execution component admission", function()
         test.it("keeps every ordinary binding's subsystem deny effective even against a broad allow", function()
-            local entry = registry.get("bee:application_admission")
+            local entry = registry.get("bee.security:application_admission")
             if not entry then error("missing application admission") end
             local data = entry.data :: {bindings: {{definition_id: string, policies: {string}}}}
             for _, binding in ipairs(data.bindings) do
@@ -44,7 +44,7 @@ local function define_tests()
             end
         end)
         test.it("checks the managed window's actual binding without granting core store access", function()
-            local entry = registry.get("bee:application_admission")
+            local entry = registry.get("bee.security:application_admission")
             if not entry then error("missing application admission") end
             local data = entry.data :: {bindings: {{definition_id: string, policies: {string}}}}
             local found = false
@@ -69,7 +69,7 @@ local function define_tests()
         test.it("requires explicit execution access and always denies the core stores", function()
             local denied = probe({"bee.harness.catalog:scope_probe_allow"})
             test.is_false(denied["bee.placement.native:db"])
-            local allowed = probe({"bee.harness.catalog:scope_probe_allow", "bee:placement_store_policy"})
+            local allowed = probe({"bee.harness.catalog:scope_probe_allow", "bee.security.placement:placement_store_policy"})
             test.is_true(allowed["bee.placement.native:db"])
             test.is_false(allowed["bee.resources:db"])
             test.is_false(allowed["bee.credentials:db"])

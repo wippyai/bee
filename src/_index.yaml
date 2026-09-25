@@ -22,7 +22,7 @@ entries:
     auto_start: true
     security:
       actor: {id: bee.workspace.hosts}
-      policies: [bee:host_policy, bee:local_supervisor_spawn_policy, bee:workspace_host_manager_policy]
+      policies: [bee.security.desktop:host_policy, bee.security.desktop:local_supervisor_spawn_policy, bee.security.desktop:workspace_host_manager_policy]
   meta:
     comment: Starts a node workspace host when a lease first asks for it, stops it after 15 minutes unleased, and keeps at most 64 live
 - name: governance_recovery_service

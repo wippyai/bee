@@ -5,7 +5,7 @@
 -- answer.
 local test = require("test")
 local harness = require("harness")
-local AUTHORITY = {"bee:thread_create_policy", "bee:thread_observe_policy", "bee:thread_lifecycle_policy", "bee:thread_approval_policy"}
+local AUTHORITY = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_approval_policy"}
 local function request_body(approval_id: string): {[string]: unknown}
     return {approval_id = approval_id, request_kind = "permission", requester_id = "bee.test.requester", operation_ref = "bee.hive.telemetry:stats",
         prompt = {text = "Allow stats?"}, response_schema = {type = "object", additionalProperties = false, properties = {option = {type = "string"}}},

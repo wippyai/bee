@@ -45,7 +45,7 @@ end
 -- A caller is bound to the workspace it acts in, as host-issued principals are.
 local function caller(actor: string, workspace_id: unknown)
     local policies: {security.Policy} = {}
-    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee:resource_manage_policy", "bee:resource_grant_policy", "bee:credential_manage_policy", "bee:credential_issue_policy", "bee.placement.native:builder_test_caller_policy"}) do
+    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.security.resources:resource_manage_policy", "bee.security.resources:resource_grant_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy", "bee.placement.native:builder_test_caller_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy

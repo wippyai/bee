@@ -13,7 +13,7 @@ entries:
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee:docs_policy]
+    policies: [bee.security.docs:docs_policy]
   meta:
     type: tool
     title: Platform documentation

@@ -11,8 +11,8 @@ local function define_tests()
         test.it("serves bounded telemetry and retains authority after rejected calls", function()
             local events = assert(process.events())
             local policies: {security.Policy} = {}
-            for _, name in ipairs({"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy",
-                "bee:hive_dispatch_policy", "bee.hive.supervisor:execute_policy", "bee.hive.supervisor:local_name_policy"}) do
+            for _, name in ipairs({"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
+                "bee.security.hive:hive_dispatch_policy", "bee.hive.supervisor:execute_policy", "bee.hive.supervisor:local_name_policy"}) do
                 local policy, err = security.policy(name)
                 if not policy then error(tostring(err)) end
                 policies[#policies + 1] = policy

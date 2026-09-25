@@ -135,7 +135,7 @@ def main():
                 "name": "main", "kind": "process.lua", "source": "file://main.lua", "method": "main",
                 "modules": ["sql", "contract", "process"], "imports": {"journal": "bee.threads:client"},
                 "meta": {"command": {"name": "journal-probe", "security": {"actor": {"id": "journal-test"}}}},
-                "security": {"policies": ["bee:thread_read_client_policy", "bee:thread_write_client_policy", "bee.journal_probe:spawn_policy"]},
+                "security": {"policies": ["bee.security.threads:thread_read_client_policy", "bee.security.threads:thread_write_client_policy", "bee.journal_probe:spawn_policy"]},
             }, {"name": "spawn_policy", "kind": "security.policy", "policy": {
                 "actions": ["process.spawn", "process.spawn.monitored", "process.host", "process.monitor"],
                 "resources": "*", "effect": "allow"}}]}))
@@ -185,7 +185,7 @@ def main():
                 "modules": ["contract", "uuid", "io"],
                 "imports": {},
                 "meta": {"command": {"name": "lifecycle-probe", "security": {"actor": {"id": "lifecycle-test"}}}},
-                "security": {"policies": ["bee:thread_authority_client_policy", "bee:thread_delivery_client_policy", "bee.lifecycle_probe:create_policy"]},
+                "security": {"policies": ["bee.security.threads:thread_authority_client_policy", "bee.security.threads:thread_delivery_client_policy", "bee.lifecycle_probe:create_policy"]},
             }, {"name": "create_policy", "kind": "security.policy", "policy": {
                 "actions": ["bee.threads.create"], "resources": ["lifecycle-thread"], "effect": "allow"}}]}))
         subprocess.run([str(RUNTIME), "lint", "--ns", "bee.lifecycle_probe"], cwd=folder, check=True)

@@ -41,4 +41,4 @@ entries:
   source: file://method.lua
   method: handle
   imports: {service: bee.harness.profiles:service}
-  security: {policies: [bee:profile_store_policy]}
+  security: {policies: [bee.security.harness:profile_store_policy]}

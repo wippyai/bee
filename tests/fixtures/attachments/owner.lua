@@ -38,9 +38,9 @@ local function run_probe(mode: string?)
     local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
     local database = assert(store.open(nil, {root_ref = "bee:workspace_root", subpath = ""}))
     local workspace_id = assert(database:identity())
-    local broker_policy, policy_error = security.policy("bee:broker_policy")
+    local broker_policy, policy_error = security.policy("bee.security.desktop:broker_policy")
     if policy_error then error(tostring(policy_error)) end
-    local boundary, boundary_error = security.policy("bee:core_spawn_boundary")
+    local boundary, boundary_error = security.policy("bee.security:core_spawn_boundary")
     if boundary_error then error(tostring(boundary_error)) end
     local naming_policy, naming_error = security.policy("bee.attachment_probe:naming_policy")
     if naming_error then error(tostring(naming_error)) end

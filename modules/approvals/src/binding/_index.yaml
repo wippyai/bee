@@ -8,13 +8,13 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: feed_snapshot
   kind: function.lua
   source: file://feed_snapshot_method.lua
   method: handle
   imports: {service: bee.approvals:service}
-  security: {policies: [bee:approval_store_policy]}
+  security: {policies: [bee.security.approvals:approval_store_policy]}
   meta:
     hive: policy
     hive_operation:
@@ -43,7 +43,7 @@ entries:
   source: file://feed_read_after_method.lua
   method: handle
   imports: {service: bee.approvals:service}
-  security: {policies: [bee:approval_store_policy]}
+  security: {policies: [bee.security.approvals:approval_store_policy]}
   meta:
     hive: policy
     hive_operation:
@@ -82,7 +82,7 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: withdraw
   kind: function.lua
   meta:
@@ -97,7 +97,7 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: consume
   kind: function.lua
   source: file://consume_method.lua
@@ -105,7 +105,7 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: revalidate
   kind: function.lua
   source: file://revalidate_method.lua
@@ -113,7 +113,7 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: read
   kind: function.lua
   meta:
@@ -128,7 +128,7 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: inbox
   kind: function.lua
   source: file://inbox_method.lua
@@ -136,7 +136,7 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: list
   kind: function.lua
   source: file://list_method.lua
@@ -144,7 +144,7 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: reconcile
   kind: function.lua
   source: file://reconcile_method.lua
@@ -152,7 +152,7 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua
@@ -160,7 +160,7 @@ entries:
   imports:
     service: bee.approvals:service
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]
 - name: deliveries
   kind: function.lua
   source: file://deliveries_method.lua
@@ -171,4 +171,4 @@ entries:
     service: bee.approvals:service
     outbox: bee.approvals.persist:outbox
   security:
-    policies: [bee:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy]

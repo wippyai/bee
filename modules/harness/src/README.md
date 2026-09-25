@@ -88,8 +88,8 @@ or missing host. The requirement carries no default; the bundled host supplies
 supplies its own host the same way. This reference grants no permission: the host-selected
 spawn policy must independently allow the carrier and selected host.
 
-The entry policies still bind `bee:carrier_policy` and
-`bee:launch_spawn_policy`. Independent installation must supply those reviewed
+The entry policies still bind `bee.security.harness:carrier_policy` and
+`bee.security.harness:launch_spawn_policy`. Independent installation must supply those reviewed
 policies; host binding alone does not install or authorize Hub or Hive access.
 
 ## Agent profile picker

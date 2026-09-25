@@ -83,8 +83,8 @@ local function run()
     local ready = assert(process.listen("bee.retained.ready", {message = true}))
     local results = assert(process.listen("bee.retained.result", {message = true}))
 
-    local manager = tostring(assert(process.with_options({}):with_scope(scope({"bee:host_policy", "bee:local_supervisor_spawn_policy",
-        "bee:workspace_host_manager_policy"})):spawn_monitored("bee.launch:host_manager", "bee:workers", {cap = 2, idle_ms = IDLE_MS})))
+    local manager = tostring(assert(process.with_options({}):with_scope(scope({"bee.security.desktop:host_policy", "bee.security.desktop:local_supervisor_spawn_policy",
+        "bee.security.desktop:workspace_host_manager_policy"})):spawn_monitored("bee.launch:host_manager", "bee:workers", {cap = 2, idle_ms = IDLE_MS})))
     local registered = time.after("5s")
     while not process.registry.lookup(leases.MANAGER) do
         local selected = channel.select({time.after("20ms"):case_receive(), registered:case_receive()})
@@ -95,8 +95,8 @@ local function run()
     -- The retained desktop supervisor the desktop bridge would start for this
     -- workspace, with the bridge's spawn scope.
     local supervisor = tostring(assert(process.with_options({}):with_context({["bee.retained_owner"] = self})
-        :with_scope(scope({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy",
-            "bee:desktop_catalog_resource_policy", "bee:workspace_host_lease_policy"}))
+        :with_scope(scope({"bee.security.desktop:host_policy", "bee.security.desktop:desktop_policy", "bee.security.desktop:retained_supervisor_spawn_policy", "bee.security.desktop:desktop_catalog_policy",
+            "bee.security.desktop:desktop_catalog_resource_policy", "bee.security.desktop:workspace_host_lease_policy"}))
         :spawn_monitored("bee.launch:retained", "bee:workers", self, {workspace_id = workspace_id})))
     local announced = await(ready, events, supervisor, "desktop readiness", function(data: unknown): boolean
         return type(data) == "table" and data.workspace_id == workspace_id

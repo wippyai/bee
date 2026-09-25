@@ -31,8 +31,8 @@ entries:
       security:
         actor: {id: bee.test.docs_agent}
   security:
-    policies: [bee.docs_agent:policy, bee:gateway_manage_policy, bee:thread_authority_client_policy,
-      bee:thread_lifecycle_client_policy, bee:thread_create_policy]
+    policies: [bee.docs_agent:policy, bee.security.gateway:gateway_manage_policy, bee.security.threads:thread_authority_client_policy,
+      bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy]
 - name: policy
   kind: security.policy
   meta:

@@ -34,7 +34,7 @@ entries:
   modules: &operation_modules [funcs, security]
   imports: &operation_imports
     protocol: bee.workspace.catalog:protocol
-  security: &operation_security {policies: [bee:workspace_catalog_facade_policy]}
+  security: &operation_security {policies: [bee.security.storage:workspace_catalog_facade_policy]}
 - name: read
   kind: function.lua
   source: file://operations.lua

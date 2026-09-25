@@ -25,17 +25,17 @@ changed: re-admission, never silent retargeting) or `RESOURCE_NOT_LOCAL`
 | `registry/` | The linked database/root reference reader, including the narrow environment resolution used to digest admitted roots |
 
 Actions: `bee.resources.manage` (associate, list, revoke any, revoke_all;
-host policy `bee:resource_manage_policy`), `bee.resources.grant` (take a
+host policy `bee.security.resources:resource_manage_policy`), `bee.resources.grant` (take a
 grant as oneself, only in the workspace the caller's host-issued identity is
-bound to through `actor.meta.workspace_id`; `bee:resource_grant_policy`), `bee.resources.resolve`
-(placement services only; `bee:resource_resolve_policy` is attached to the
+bound to through `actor.meta.workspace_id`; `bee.security.resources:resource_grant_policy`), `bee.resources.resolve`
+(placement services only; `bee.security.resources:resource_resolve_policy` is attached to the
 placement service entries). `describe` (a workspace's associations as
 `{title, items [{label, detail}], total}`, at most 50) and `search`
 (associations whose name starts with `text`) answer callers holding
 `bee.workspaces.read` on the workspace; they have the shape of a workspace
 catalog extension, and the host binds them to that contract as
 `bee:resources_workspace_extension`. Resource root path interpolation uses the narrow
-`bee:resource_environment_policy` and resolves before the root digest is
+`bee.security.resources:resource_environment_policy` and resolves before the root digest is
 stored or checked; unrelated environment variables remain inaccessible.
 Revocation stops future authorization; an
 attempt already holding a materialized resource is fenced by the placement

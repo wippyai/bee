@@ -57,7 +57,7 @@ entries:
     auto_start: true
     security:
       actor: {id: bee.threads.waiter}
-      policies: [bee:thread_waiter_policy]
+      policies: [bee.security.threads:thread_waiter_policy]
     restart:
       max_attempts: 10
 - name: claim
@@ -69,7 +69,7 @@ entries:
     claims: bee.threads.delivery:claims
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: dispatch
   kind: function.lua
   source: file://dispatch_method.lua
@@ -79,7 +79,7 @@ entries:
     claims: bee.threads.delivery:claims
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: ack
   kind: function.lua
   source: file://ack_method.lua
@@ -89,7 +89,7 @@ entries:
     claims: bee.threads.delivery:claims
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: release
   kind: function.lua
   source: file://release_method.lua
@@ -99,7 +99,7 @@ entries:
     claims: bee.threads.delivery:claims
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: expire
   kind: function.lua
   source: file://expire_method.lua
@@ -109,7 +109,7 @@ entries:
     claims: bee.threads.delivery:claims
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: reconcile
   kind: function.lua
   source: file://reconcile_method.lua
@@ -119,7 +119,7 @@ entries:
     claims: bee.threads.delivery:claims
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: subscribe
   kind: function.lua
   source: file://subscribe_method.lua
@@ -129,7 +129,7 @@ entries:
     subscriptions: bee.threads.delivery:subscriptions
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: page
   kind: function.lua
   source: file://page_method.lua
@@ -139,7 +139,7 @@ entries:
     subscriptions: bee.threads.delivery:subscriptions
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: ack_page
   kind: function.lua
   source: file://ack_page_method.lua
@@ -149,7 +149,7 @@ entries:
     subscriptions: bee.threads.delivery:subscriptions
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: unsubscribe
   kind: function.lua
   source: file://unsubscribe_method.lua
@@ -159,7 +159,7 @@ entries:
     subscriptions: bee.threads.delivery:subscriptions
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: close_subscription
   kind: function.lua
   source: file://close_subscription_method.lua
@@ -169,7 +169,7 @@ entries:
     subscriptions: bee.threads.delivery:subscriptions
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: forget_subscription
   kind: function.lua
   source: file://forget_subscription_method.lua
@@ -179,7 +179,7 @@ entries:
     subscriptions: bee.threads.delivery:subscriptions
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: resume
   kind: function.lua
   source: file://resume_method.lua
@@ -189,7 +189,7 @@ entries:
     subscriptions: bee.threads.delivery:subscriptions
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: wait
   kind: function.lua
   source: file://wait_method.lua
@@ -199,7 +199,7 @@ entries:
     waits: bee.threads.delivery:waits
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: watch
   kind: function.lua
   source: file://watch_method.lua
@@ -210,7 +210,7 @@ entries:
     waits: bee.threads.delivery:waits
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: session
   kind: library.lua
   source: file://session.lua

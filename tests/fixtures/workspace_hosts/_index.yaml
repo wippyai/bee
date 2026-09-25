@@ -34,7 +34,7 @@ entries:
       short: Bounded acceptance supervisor for dual workspace hosts in one runtime
       security:
         actor: {id: workspace_hosts.supervisor}
-        policies: [bee:host_policy, bee.workspace_hosts:supervisor_spawn_policy]
+        policies: [bee.security.desktop:host_policy, bee.workspace_hosts:supervisor_spawn_policy]
 - name: delayed_supervisor
   kind: process.lua
   source: file://delayed_supervisor.lua
@@ -50,7 +50,7 @@ entries:
       short: Delayed broker host timeout regression
       security:
         actor: {id: workspace_hosts.delayed_supervisor}
-        policies: [bee:host_policy, bee.workspace_hosts:supervisor_spawn_policy, bee.workspace_hosts:first_storage_policy, bee:application_open_facade_policy]
+        policies: [bee.security.desktop:host_policy, bee.workspace_hosts:supervisor_spawn_policy, bee.workspace_hosts:first_storage_policy, bee.security:application_open_facade_policy]
 - name: node_storage_policy
   kind: security.policy
   policy:
@@ -87,7 +87,7 @@ entries:
       short: Two logical workspaces served by two hosts against one node database
       security:
         actor: {id: workspace_hosts.logical_supervisor}
-        policies: [bee:host_policy, bee.workspace_hosts:supervisor_spawn_policy, bee.workspace_hosts:node_storage_policy,
+        policies: [bee.security.desktop:host_policy, bee.workspace_hosts:supervisor_spawn_policy, bee.workspace_hosts:node_storage_policy,
           bee.workspace_hosts:logical_probe_policy, bee.workspace_hosts:resource_call_policy]
 - name: lazy_spawn_policy
   kind: security.policy
@@ -112,8 +112,8 @@ entries:
       short: Workspace hosts started on the first lease, stopped when idle, restored and evicted at the cap
       security:
         actor: {id: workspace_hosts.lazy_supervisor}
-        policies: [bee:host_policy, bee.workspace_hosts:lazy_spawn_policy, bee:workspace_storage_policy,
-          bee:workspace_host_lease_policy, bee:workspace_host_manager_policy]
+        policies: [bee.security.desktop:host_policy, bee.workspace_hosts:lazy_spawn_policy, bee.security.storage:workspace_storage_policy,
+          bee.security.desktop:workspace_host_lease_policy, bee.security.desktop:workspace_host_manager_policy]
 - name: attach_spawn_policy
   kind: security.policy
   policy:
@@ -135,8 +135,8 @@ entries:
       short: A desktop supervisor selected by workspace identity leases its host through the node host manager
       security:
         actor: {id: workspace_hosts.attach_supervisor}
-        policies: [bee:host_policy, bee.workspace_hosts:attach_spawn_policy, bee:workspace_storage_policy,
-          bee:workspace_host_lease_policy, bee:workspace_host_manager_policy, bee.workspace_hosts:logical_probe_policy]
+        policies: [bee.security.desktop:host_policy, bee.workspace_hosts:attach_spawn_policy, bee.security.storage:workspace_storage_policy,
+          bee.security.desktop:workspace_host_lease_policy, bee.security.desktop:workspace_host_manager_policy, bee.workspace_hosts:logical_probe_policy]
 - name: attach_recipient
   kind: process.lua
   source: file://attach_recipient.lua

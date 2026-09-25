@@ -52,7 +52,7 @@ entries:
   security:
     policies:
     - bee.app_journey_probe:operator_policy
-    - bee:approval_consume_policy
+    - bee.security.approvals:approval_consume_policy
   meta:
     command:
       name: app-journey-deliver
@@ -60,7 +60,7 @@ entries:
         actor: {id: bee.app_journey.operator}
         policies:
         - bee.app_journey_probe:operator_policy
-        - bee:approval_consume_policy
+        - bee.security.approvals:approval_consume_policy
 - name: stage
   kind: process.lua
   source: file://stage.lua

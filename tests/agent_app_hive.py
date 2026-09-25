@@ -105,7 +105,7 @@ def configure_destination(project, workspace_id=None, source_node="node-1"):
     admission = next(item for item in security["entries"] if item["name"] == "application_admission")
     if not any(item["definition_id"] == DEFINITION_ID for item in admission["bindings"]):
         admission["bindings"].append({"definition_id": DEFINITION_ID,
-                                      "policies": ["bee:ordinary_app_subsystem_boundary"]})
+                                      "policies": ["bee.security:ordinary_app_subsystem_boundary"]})
     security_path.write_text(yaml.safe_dump(security, sort_keys=False))
 
 

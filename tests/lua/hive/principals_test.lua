@@ -16,7 +16,7 @@ local function define_tests()
     test.describe("Principal mappings", function()
         test.it("decodes an exact table and refuses actors outside the member namespace, repeated pairs and foreign subjects", function()
             local decoded, err = principals.decode({mappings = {
-                {issuer = "node-a", subject_id = subject("node-a", "1"), policies = {"bee:thread_observe_policy"}},
+                {issuer = "node-a", subject_id = subject("node-a", "1"), policies = {"bee.security.threads:thread_observe_policy"}},
                 {issuer = "node-a", subject_id = subject("node-a", "2")},
             }})
             if not decoded then error(tostring(err)) end
@@ -29,7 +29,7 @@ local function define_tests()
             test.eq(named_error, "mappings[1]: unknown field actor_id")
             local _, repeat_error = principals.decode({mappings = {
                 {issuer = "node-a", subject_id = subject("node-a", "1")},
-                {issuer = "node-a", subject_id = subject("node-a", "1"), policies = {"bee:thread_observe_policy"}},
+                {issuer = "node-a", subject_id = subject("node-a", "1"), policies = {"bee.security.threads:thread_observe_policy"}},
             }})
             test.is_true(tostring(repeat_error):find("repeats issuer node-a", 1, true) ~= nil)
             local _, foreign_error = principals.decode({mappings = {{issuer = "node-a", subject_id = subject("node-z", "1")}}})
@@ -52,7 +52,7 @@ local function define_tests()
             test.is_nil(principals.resolve(decoded, {issuer = "node-z", subject_id = subject("node-a", "1")}))
             test.is_nil(principals.resolve(decoded, {issuer = "node-a", subject_id = subject("node-a", "3")}))
             -- A later table keeps every admitted pair's actor and only changes which pairs are admitted and under which policies.
-            local changed = decoded_of({mappings = {{issuer = "node-a", subject_id = subject("node-a", "2"), policies = {"bee:thread_observe_policy"}}}})
+            local changed = decoded_of({mappings = {{issuer = "node-a", subject_id = subject("node-a", "2"), policies = {"bee.security.threads:thread_observe_policy"}}}})
             test.is_nil(principals.resolve(changed, {issuer = "node-a", subject_id = subject("node-a", "1")}))
             test.eq((principals.resolve(changed, {issuer = "node-a", subject_id = subject("node-a", "2")}) or {}).actor_id, beta and beta.actor_id)
         end)

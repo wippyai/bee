@@ -40,9 +40,9 @@ entries:
   - name: target_activation_profiles
     value: bee:governance_activation_profiles
   - name: target_approval_request_policy
-    value: bee:approval_request_policy
+    value: bee.security.approvals:approval_request_policy
   - name: target_approval_consume_policy
-    value: bee:approval_consume_policy
+    value: bee.security.approvals:approval_consume_policy
 - name: gateway
   kind: ns.dependency
   component: bee/gateway
@@ -57,33 +57,33 @@ entries:
   - name: target_hook_storage
     value: bee.harness.host:environment
   - name: target_approval_request_policy
-    value: bee:approval_request_policy
+    value: bee.security.approvals:approval_request_policy
   - name: target_approval_consume_policy
-    value: bee:approval_consume_policy
+    value: bee.security.approvals:approval_consume_policy
   - name: target_tool_read_policy
-    value: bee:gateway_tool_read_policy
+    value: bee.security.gateway:gateway_tool_read_policy
   - name: target_tool_message_policy
-    value: bee:gateway_tool_message_policy
+    value: bee.security.gateway:gateway_tool_message_policy
   - name: target_tool_inbox_policy
-    value: bee:gateway_tool_inbox_policy
+    value: bee.security.gateway:gateway_tool_inbox_policy
   - name: target_tool_discover_policy
-    value: bee:gateway_session_discover_policy
+    value: bee.security.gateway:gateway_session_discover_policy
   - name: target_tool_send_grant_policy
-    value: bee:gateway_session_send_denied_policy
+    value: bee.security.gateway:gateway_session_send_denied_policy
   - name: target_tool_launch_policy
-    value: bee:gateway_tool_launch_policy
+    value: bee.security.gateway:gateway_tool_launch_policy
   - name: target_tool_overlay_policy
-    value: bee:gateway_tool_overlay_policy
+    value: bee.security.gateway:gateway_tool_overlay_policy
   - name: target_tool_docs_policy
-    value: bee:gateway_tool_docs_policy
+    value: bee.security.gateway:gateway_tool_docs_policy
   - name: target_tool_components_policy
-    value: bee:gateway_tool_components_policy
+    value: bee.security.gateway:gateway_tool_components_policy
   - name: target_tool_delivery_policy
-    value: bee:gateway_tool_delivery_policy
+    value: bee.security.gateway:gateway_tool_delivery_policy
   - name: target_tool_publish_policy
-    value: bee:gateway_tool_publish_policy
+    value: bee.security.gateway:gateway_tool_publish_policy
   - name: target_tool_application_open_policy
-    value: bee:gateway_tool_application_open_policy
+    value: bee.security.gateway:gateway_tool_application_open_policy
 - name: hive
   kind: ns.dependency
   component: bee/hive

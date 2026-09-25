@@ -64,8 +64,8 @@ the workspace that holds `path` itself. The directory is read once per page and
 only the page's names are kept; a root the host does not admit is `FORBIDDEN`
 and a path that is not a folder `NOT_FOUND`. These are what a folder picker needs
 to offer a `create` or a launch folder. Browsing a root is its own action,
-`bee.workspaces.browse`: `bee:workspace_catalog_manage_policy` grants it with
-management, and `bee:workspace_folder_browse_policy` grants it with the
+`bee.workspaces.browse`: `bee.security.storage:workspace_catalog_manage_policy` grants it with
+management, and `bee.security.storage:workspace_folder_browse_policy` grants it with the
 catalog read `roots` needs and nothing else, which the Agent window holds for
 its folder choice. `bee.application:folder_picker` is the shared picker model
 and table both the Workspaces create flow and the Agent profile form use.
@@ -97,8 +97,8 @@ refuses with `BUSY` while a host is registered for the workspace. Repeating
 either change returns the row unchanged.
 
 **Authority.** The operations run for any caller whose scope allows their
-action; host-named policies `bee:workspace_catalog_read_policy` and
-`bee:workspace_catalog_manage_policy` grant them. Applications cannot open the
+action; host-named policies `bee.security.storage:workspace_catalog_read_policy` and
+`bee.security.storage:workspace_catalog_manage_policy` grant them. Applications cannot open the
 node workspace store (their storage boundary denies it), so each operation
 authorizes the caller for the decoded request and then runs the private
 backend `bee.workspace.catalog:backend` under the execution scope
@@ -117,7 +117,7 @@ starts and owns its one workspace host, and the manager reports that host as
 served (`managed = false`) instead of starting a second one.
 
 A lease is a process-registry name `bee.workspace.lease/<id>` its holder
-registers under the host-named policy `bee:workspace_host_lease_policy`.
+registers under the host-named policy `bee.security.desktop:workspace_host_lease_policy`.
 `bee.application:host_leases.acquire(workspace_id, timeout)` registers the name,
 sends `bee.workspace.hosts.acquire` to the registered manager
 `bee.workspace.hosts` and waits for `bee.workspace.hosts.result`
@@ -185,7 +185,7 @@ detaching. F9 opens the connection panel and W its workspace menu: one catalog
 page at a time (`/` searches labels, PgUp/PgDn page, the shown workspace is
 marked, Enter switches). The display's client process reads the pages with
 `bee.workspace.catalog:list` and `:search` under host-selected grants
-(`bee:client_workspace_catalog_call_policy`, `bee:workspace_catalog_read_policy`)
+(`bee.security.desktop:client_workspace_catalog_call_policy`, `bee.security.storage:workspace_catalog_read_policy`)
 and sends the switch to its retained supervisor, which forwards it, naming the
 display, to the bridge (`bee.retained.switch`). The bridge moves the display's
 controlling client: it starts or reuses the target workspace's leased
@@ -219,12 +219,12 @@ The command joins the owner as an enrolled local client and calls service
 `bee.workspace` (`bee.workspace:list`, `:roots`, `:create`, `:archive`,
 `:restore`) on the owner's Hive supervisor. The supervisor serves it only to
 an enrolled local client of its own node and only while the host grants it
-`bee.workspaces.command` on the operation (`bee:workspace_command_policy`,
+`bee.workspaces.command` on the operation (`bee.security.hive:workspace_command_policy`,
 selected for the supervisor service). It runs the command on its worker
 `bee.hive.supervisor:workspace_command`, which again requires that grant from
 its caller and calls the catalog operation under the policies the host attaches
-to the worker (`bee:workspace_catalog_read_policy`,
-`bee:workspace_catalog_manage_policy`, `bee:workspace_command_catalog_policy`);
+to the worker (`bee.security.storage:workspace_catalog_read_policy`,
+`bee.security.storage:workspace_catalog_manage_policy`, `bee.security.hive:workspace_command_catalog_policy`);
 neither the client nor the supervisor holds catalog authority. The catalog still
 decodes and authorizes every request. Catalog refusals come back as Hive faults
 whose message keeps the catalog code (`FORBIDDEN: root ... is not admitted`); a
@@ -246,7 +246,7 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   it; otherwise it shows a workspace picker (one catalog page, `/` label
   search, PgUp/PgDn paging, Enter to open). Ctrl+] detaches and returns to the
   picker; Ctrl+Q leaves.
-- **Hive member**: `bee.hive.host:workspaces` is an open Hive operation that
+- **Hive member**: `bee.hive:workspaces` is an open Hive operation that
   pages a node's catalog (`{label?, after?, limit?}` to `{node_id, workspaces,
   next_after?}`, each row with whether a host serves it); the Hive app lists and
   searches the selected node's workspaces through it. A Hive display client
@@ -269,7 +269,7 @@ Today a node's bridge admits a native display client only from a node its host
 grant names (`desktop.allowed_nodes`) or, with `local_clients`, from a node its
 local enrollment lists. Native launch configures `allowed_nodes` empty, so a
 peer that joined the hive through `bee hive invite` and `bee hive join` reaches
-the node's open operations (such as `bee.hive.host:workspaces`) but not its
+the node's open operations (such as `bee.hive:workspaces`) but not its
 desktops, and the Hive Manager's remote view is refused there. The proposal:
 the owner's enrollment already writes `{nodes, peers}` from its pinned peer keys;
 the bridge would admit display clients from a pinned peer only when the joining
@@ -311,8 +311,8 @@ page holds it. S (Serve) holds a host
 lease on the selected workspace while the viewer stays open, so the node host
 manager starts its host; S again, or closing the viewer, releases it.
 
-Its admission binding grants `bee:workspace_catalog_read_policy`,
-`bee:workspace_catalog_manage_policy`, `bee:thread_workspace_list_policy`,
-`bee:workspace_host_lease_policy` and `bee.workspaces:client_policy`, which may
+Its admission binding grants `bee.security.storage:workspace_catalog_read_policy`,
+`bee.security.storage:workspace_catalog_manage_policy`, `bee.security.threads:thread_workspace_list_policy`,
+`bee.security.desktop:workspace_host_lease_policy` and `bee.workspaces:client_policy`, which may
 call only the catalog operations it uses (`list`, `search`, `inspect`,
 `archive`, `restore`, `create`, `roots`, `folders`) and `list_workspace`.

@@ -16,7 +16,7 @@ local function define_tests()
             local workspace = "0123456789abcdef0123456789abcdef"
             local scenes = assert(process.listen("bee.desktop.scene", {message = true}))
             local events = assert(process.events())
-            local policy, policy_error = security.policy("bee:session_policy")
+            local policy, policy_error = security.policy("bee.security.desktop:session_policy")
             if not policy then error(tostring(policy_error)) end
             local scope = security.new_scope({policy})
             local owner = tostring(process.pid())

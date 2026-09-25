@@ -39,7 +39,7 @@ entries:
       name: attachment-probe
       security:
         actor: {id: attachment-test}
-        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:workspace_storage_policy, bee.attachment_probe:observation_policy]
+        policies: [bee.security.desktop:desktop_policy, bee.security:core_spawn_policy, bee.security.storage:workspace_storage_policy, bee.attachment_probe:observation_policy]
 - name: observation
   kind: library.lua
   source: file://observation.lua

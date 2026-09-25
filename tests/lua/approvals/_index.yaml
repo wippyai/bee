@@ -35,7 +35,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, time, sql, process, uuid]
   security:
-    policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee:approval_store_policy, bee:approval_request_policy, bee:approval_decide_policy, bee:approval_consume_policy, bee:approval_owner_policy]
+    policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   imports:
     test: wippy.test:test
     service: bee.approvals:service

@@ -62,7 +62,7 @@ def bind_admission(project):
     document = yaml.safe_load(index.read_text())
     admission = next(entry for entry in document["entries"] if entry["name"] == "application_admission")
     admission["bindings"].append({"definition_id": DEFINITION_ID,
-                                  "policies": ["bee:ordinary_app_subsystem_boundary",
+                                  "policies": ["bee.security:ordinary_app_subsystem_boundary",
                                                "bee.app_open_probe:recheck_policy",
                                                "bee.app_open_probe:operator_signal_policy"],
                                   "thread_access": "observe_post"})
@@ -85,14 +85,14 @@ def assert_overlay_authority(project):
             identity = f'{document["namespace"]}:{entry["name"]}'
             (granted if policy.get("effect") == "allow" else denied).add(identity)
     assert granted == {"bee.governance.security:destination_service_policy"}, granted
-    assert denied == {"bee:app_boundary_policy", "bee:scope_managing_app_boundary"}, denied
+    assert denied == {"bee.security:app_boundary_policy", "bee.security:scope_managing_app_boundary"}, denied
 
 
 def assert_delivery_has_no_overlay_authority(project):
     """The agent's delivery and publish surfaces reach publication and
     destination staging; they grant no overlay write, which is the activation
     owner's alone."""
-    wanted = {"bee:gateway_tool_delivery_policy", "bee:gateway_tool_publish_policy",
+    wanted = {"bee.security.gateway:gateway_tool_delivery_policy", "bee.security.gateway:gateway_tool_publish_policy",
               "bee.governance.security:delivery_facade_policy"}
     seen = set()
     indexes = list((project / "src").rglob("_index.yaml")) + list((project / "modules/gov/src").rglob("_index.yaml"))

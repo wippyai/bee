@@ -87,8 +87,8 @@ local function queue_renderer(state: State, child: Child, renderer: Renderer)
 end
 function M.new(owner: string, host: string, route: string, workspace_id: string, default_id: string, resources: desktops.State): State
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy",
-        "bee:client_workspace_catalog_call_policy", "bee:workspace_catalog_read_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy", "bee.security.storage:client_storage_policy", "bee.security.desktop:client_node_defaults_call_policy", "bee.security.desktop:client_node_defaults_read_policy",
+        "bee.security.desktop:client_workspace_catalog_call_policy", "bee.security.storage:workspace_catalog_read_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
     return {owner = owner, host = host, route = route, workspace_id = workspace_id, default_id = default_id,

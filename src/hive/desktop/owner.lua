@@ -68,8 +68,8 @@ local function scope_of(names: {string}): (security.Scope?, string?)
     end
     return security.new_scope(policies), nil
 end
-local SPAWN_POLICIES = {"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy",
-    "bee:desktop_catalog_resource_policy", "bee:workspace_host_lease_policy"}
+local SPAWN_POLICIES = {"bee.security.desktop:host_policy", "bee.security.desktop:desktop_policy", "bee.security.desktop:retained_supervisor_spawn_policy", "bee.security.desktop:desktop_catalog_policy",
+    "bee.security.desktop:desktop_catalog_resource_policy", "bee.security.desktop:workspace_host_lease_policy"}
 local function spawn(state: State, selection: unknown): (string?, string?)
     local self = tostring(process.pid())
     local pid, err = process.with_options({}):with_context({["bee.retained_owner"] = self})

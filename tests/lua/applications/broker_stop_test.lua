@@ -32,8 +32,8 @@ local function define_tests()
             local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
-                ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee:broker_policy")),
-                assert(security.policy("bee:core_spawn_boundary"))}))
+                ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
+                assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)

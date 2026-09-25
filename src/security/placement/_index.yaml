@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee
+namespace: bee.security.placement
 entries:
 - name: placement_store_policy
   kind: security.policy

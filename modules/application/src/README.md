@@ -17,7 +17,7 @@ application, select a workspace, open a store, or grant access to a thread.
 | `folder_picker` | A folder picker over the roots the host admits through the workspace catalog's `roots` and `folders` operations: the pure paging and navigation model and its table on the frame |
 | `agent_protocol` | The typed request that starts a managed agent, shared by `agents`, the gateway's `thread_launch` and the harness that admits it |
 | `agents` | Managed agents for applications and agents: `launch` one on an existing or a new thread with a chosen working directory and placement, read its `status`, `wait` for it through its thread and `cancel` it, all as the caller's own actor through `bee.harness.launch:agent_call`; the host grants `bee.harness.launch` on each definition a caller may start |
-| `host_leases` | Leases on node-managed workspace hosts: the holder registers a lease name, asks the node host manager for a workspace's host and releases it; the manager answers only the holder of that name, and the host policy `bee:workspace_host_lease_policy` decides who may name leases |
+| `host_leases` | Leases on node-managed workspace hosts: the holder registers a lease name, asks the node host manager for a workspace's host and releases it; the manager answers only the holder of that name, and the host policy `bee.security.desktop:workspace_host_lease_policy` decides who may name leases |
 
 Applications still run as standalone processes. The host admits their exact
 definition and policies; the broker supplies execution identity and durable

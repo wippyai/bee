@@ -45,7 +45,7 @@ entries:
   imports:
     admission: bee.harness.launch:admission
   security:
-    policies: [bee:launch_spawn_policy]
+    policies: [bee.security.harness:launch_spawn_policy]
 - name: selection
   kind: library.lua
   source: file://selection.lua

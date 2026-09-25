@@ -53,7 +53,7 @@ local function define_tests()
             -- With the host's launch grant the facade binds the call to that
             -- workspace and the backend decides as it does for the caller's own.
             local granted = funcs.new():with_actor(security.new_actor(AGENT)):with_scope(security.new_scope({
-                assert(security.policy(FACADE_POLICY)), assert(security.policy("bee:workspace_launch_policy"))}))
+                assert(security.policy(FACADE_POLICY)), assert(security.policy("bee.security.harness:workspace_launch_policy"))}))
             local executor = assert(granted:with_context({[BINDING_KEY] = binding(DENYING_POLICY)}))
             local reply, err = executor:call(CALL, {definition_ref = PERMITTED, brief = "work elsewhere", idempotency_key = "elsewhere", workspace_id = other})
             if err then error(tostring(err)) end

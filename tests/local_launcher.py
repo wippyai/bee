@@ -56,7 +56,7 @@ def run():
         document = yaml.safe_load(index.read_text())
         entry = next(e for e in document["entries"] if e["name"] == "local")
         entry["meta"] = {"command": {"name": "local-client-probe", "short": "Local entry acceptance", "security": {
-            "actor": {"id": "bee.local"}, "policies": ["bee:desktop_policy", "bee:client_spawn_policy",
+            "actor": {"id": "bee.local"}, "policies": ["bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy",
                 "bee:local_probe_db", "bee:local_probe_spawn"]}}}
         command_entry = next(e for e in document["entries"] if e["name"] == "local_command")
         command_entry["meta"] = {"command": {"name": "local-command-probe", "short": "Local handler acceptance",
@@ -408,8 +408,8 @@ def public_migration():
         document["entries"].extend(yaml.safe_load((legacy / "_index.yaml").read_text())["entries"])
         next(e for e in document["entries"] if e["name"] == "main")["meta"] = {"command": {
             "name": "legacy-desktop-probe", "short": "Migration baseline", "security": {
-                "actor": {"id": "bee.local"}, "policies": ["bee:desktop_policy", "bee:core_spawn_policy",
-                    "bee:workspace_storage_policy"]}}}
+                "actor": {"id": "bee.local"}, "policies": ["bee.security.desktop:desktop_policy", "bee.security:core_spawn_policy",
+                    "bee.security.storage:workspace_storage_policy"]}}}
         index.write_text(yaml.safe_dump(document, sort_keys=False))
         pack = root / "migration-deployment"
         pack_deployment(project, pack)

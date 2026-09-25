@@ -43,7 +43,7 @@ entries:
     notices: bee.threads.service:notices
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: authority
   kind: library.lua
   source: file://authority.lua
@@ -82,7 +82,7 @@ entries:
     authority: bee.threads.service:authority
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: get
   kind: function.lua
   source: file://get_method.lua
@@ -92,7 +92,7 @@ entries:
     authority: bee.threads.service:authority
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: list
   kind: function.lua
   source: file://list_method.lua
@@ -102,7 +102,7 @@ entries:
     authority: bee.threads.service:authority
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: list_workspace
   kind: function.lua
   source: file://list_workspace_method.lua
@@ -112,7 +112,7 @@ entries:
     authority: bee.threads.service:authority
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: join
   kind: function.lua
   source: file://join_method.lua
@@ -122,7 +122,7 @@ entries:
     authority: bee.threads.service:authority
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: leave
   kind: function.lua
   source: file://leave_method.lua
@@ -132,7 +132,7 @@ entries:
     authority: bee.threads.service:authority
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: close
   kind: function.lua
   source: file://close_method.lua
@@ -142,7 +142,7 @@ entries:
     authority: bee.threads.service:authority
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: record
   kind: function.lua
   source: file://record_method.lua
@@ -152,7 +152,7 @@ entries:
     authority: bee.threads.service:authority
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: read_after
   kind: function.lua
   source: file://read_after_method.lua
@@ -162,7 +162,7 @@ entries:
     authority: bee.threads.service:authority
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: admit_action
   kind: function.lua
   source: file://admit_action_method.lua
@@ -172,7 +172,7 @@ entries:
     lifecycle: bee.threads.service:lifecycle
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: prepare_attempt
   kind: function.lua
   source: file://prepare_attempt_method.lua
@@ -182,7 +182,7 @@ entries:
     lifecycle: bee.threads.service:lifecycle
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: start_attempt
   kind: function.lua
   source: file://start_attempt_method.lua
@@ -192,7 +192,7 @@ entries:
     lifecycle: bee.threads.service:lifecycle
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: request_turn
   kind: function.lua
   source: file://request_turn_method.lua
@@ -202,7 +202,7 @@ entries:
     lifecycle: bee.threads.service:lifecycle
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: end_turn
   kind: function.lua
   source: file://end_turn_method.lua
@@ -212,7 +212,7 @@ entries:
     lifecycle: bee.threads.service:lifecycle
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: receipt
   kind: function.lua
   source: file://receipt_method.lua
@@ -222,7 +222,7 @@ entries:
     lifecycle: bee.threads.service:lifecycle
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: sends
   kind: library.lua
   source: file://send.lua
@@ -242,7 +242,7 @@ entries:
     send: bee.threads.service:sends
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: send_status
   kind: function.lua
   source: file://send_status_method.lua
@@ -252,7 +252,7 @@ entries:
     send: bee.threads.service:sends
     types: bee.threads.service:types
   security:
-    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: inbox
   kind: library.lua
   source: file://inbox.lua
@@ -271,34 +271,34 @@ entries:
   source: file://inbox_method.lua
   method: accept
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
-  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: inbox_describe
   kind: function.lua
   source: file://inbox_method.lua
   method: describe
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
-  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: inbox_send
   kind: function.lua
   source: file://inbox_method.lua
   method: send
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
-  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: inbox_reply
   kind: function.lua
   source: file://inbox_method.lua
   method: reply
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
-  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: inbox_list
   kind: function.lua
   source: file://inbox_method.lua
   method: list
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
-  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: inbox_ack
   kind: function.lua
   source: file://inbox_method.lua
   method: ack
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
-  security: {policies: [bee:thread_storage_policy, bee:thread_resource_policy, bee:thread_node_policy]}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}

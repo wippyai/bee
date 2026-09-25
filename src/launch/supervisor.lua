@@ -94,7 +94,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         if not events then error(tostring(event_error)) end
         assert(process.monitor(retained_owner or client))
         local policies: {security.Policy} = {}
-        for _, name in ipairs({"bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"}) do
+        for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"}) do
             local policy, err = security.policy(name)
             if not policy then error(tostring(err)) end
             policies[#policies + 1] = policy
@@ -198,8 +198,8 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             advance("client_boot")
             if retained_owner then
                 local client_policies: {security.Policy} = {}
-                for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy",
-        "bee:client_workspace_catalog_call_policy", "bee:workspace_catalog_read_policy"}) do
+                for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy", "bee.security.storage:client_storage_policy", "bee.security.desktop:client_node_defaults_call_policy", "bee.security.desktop:client_node_defaults_read_policy",
+        "bee.security.desktop:client_workspace_catalog_call_policy", "bee.security.storage:workspace_catalog_read_policy"}) do
                     client_policies[#client_policies + 1] = assert(security.policy(name))
                 end
                 local started, start_error = desktops.start(retained,

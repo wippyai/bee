@@ -271,13 +271,32 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			}
 		}
 		if i == 0 && agent == nil {
-			governancePath := filepath.Join(project, "modules", "gov", "src", "_index.yaml")
+			governancePath := filepath.Join(project, "src", "_index.yaml")
 			governance, err := os.ReadFile(governancePath)
 			if err != nil {
 				t.Fatal(err)
 			}
-			oldProfiles := "- name: activation_profiles\n  kind: registry.entry\n  meta:\n    type: bee.governance.activation_profiles\n    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications this node's agents author for their own workspace, applied only after the person approves each version in Approvals; remote artifacts cannot edit this entry\n  data:\n    profiles: []\n    workspace_applications:\n      approval_policy: workspace-application-delivery\n      kinds: [process.lua, library.lua, ns.requirement]\n      modules: [tty, process, channel, json, time, uuid, base64, hash]\n      policies: [bee:ordinary_app_subsystem_boundary]\n      thread_access: none"
-			newProfiles := "- name: activation_profiles\n  kind: registry.entry\n  meta:\n    type: bee.governance.activation_profiles\n    comment: Host-selected destination mappings and capability ceilings; workspace_applications is the ceiling for applications this node's agents author for their own workspace, applied only after the person approves each version in Approvals; remote artifacts cannot edit this entry\n  data:\n    profiles:\n    - workspace_id: workspace-node-0\n      source_node: node-1\n      source_workspace: shared/application\n      component: private/bee-demo\n      resolver: overlay\n      overlay_owner: bee.replica_probe:activation_overlay\n      approval_policy: local-install\n      parameters: []\n      allow:\n        packages: [private/bee-demo]\n        namespaces: [private.bee_demo]\n        kinds: [function.lua]\n        databases: []\n        grants: []\n        modules: []\n    workspace_applications:\n      approval_policy: workspace-application-delivery\n      kinds: [process.lua, library.lua, ns.requirement]\n      modules: [tty, process, channel, json, time, uuid, base64, hash]\n      policies: [bee:ordinary_app_subsystem_boundary]\n      thread_access: none"
+			oldProfiles := `    profiles: []
+    workspace_applications:
+      approval_policy: workspace-application-delivery`
+			newProfiles := `    profiles:
+    - workspace_id: workspace-node-0
+      source_node: node-1
+      source_workspace: shared/application
+      component: private/bee-demo
+      resolver: overlay
+      overlay_owner: bee.replica_probe:activation_overlay
+      approval_policy: local-install
+      parameters: []
+      allow:
+        packages: [private/bee-demo]
+        namespaces: [private.bee_demo]
+        kinds: [function.lua]
+        databases: []
+        grants: []
+        modules: []
+    workspace_applications:
+      approval_policy: workspace-application-delivery`
 			updated := strings.Replace(string(governance), oldProfiles, newProfiles, 1)
 			if updated == string(governance) {
 				t.Fatal("stage destination activation profile")

@@ -24,7 +24,7 @@ entries:
   method: run
   meta: {type: test, suite: bee, timeout: '30s'}
   security:
-    policies: [bee:placement_store_policy]
+    policies: [bee.security.placement:placement_store_policy]
   imports:
     test: wippy.test:test
     types: bee.placement:types
@@ -37,7 +37,7 @@ entries:
   meta: {type: test, suite: bee, timeout: '30s'}
   modules: [process, time, json]
   security:
-    policies: [bee:placement_store_policy]
+    policies: [bee.security.placement:placement_store_policy]
   imports:
     test: wippy.test:test
     store: bee.placement.native:store

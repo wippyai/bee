@@ -31,9 +31,9 @@ function M.main()
     local restores = assert(process.listen("bee.host.restore_result", {message = true}))
     local events = assert(process.events())
 
-    local host_policy, host_err = security.policy("bee:host_policy")
+    local host_policy, host_err = security.policy("bee.security.desktop:host_policy")
     if not host_policy then error(tostring(host_err)) end
-    local host_spawn_policy, spawn_err = security.policy("bee:host_spawn_policy")
+    local host_spawn_policy, spawn_err = security.policy("bee.security.desktop:host_spawn_policy")
     if not host_spawn_policy then error(tostring(spawn_err)) end
     local first_storage_policy, first_err = security.policy("bee.workspace_hosts:first_storage_policy")
     if not first_storage_policy then error(tostring(first_err)) end

@@ -17,7 +17,7 @@ entries:
     status_driver: bee.session:status
     status_reader: bee.application:status_reader
   security:
-    policies: [bee:session_policy, bee:session_status_policy]
+    policies: [bee.security.desktop:session_policy, bee.security.desktop:session_status_policy]
 
 - name: status
   kind: library.lua

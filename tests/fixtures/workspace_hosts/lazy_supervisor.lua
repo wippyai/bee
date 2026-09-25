@@ -83,7 +83,7 @@ local function seed(workspace_id: string, events: Channel<process.Event>): (stri
     local checkpoints = assert(process.listen("bee.host.checkpoint", {message = true}))
     local self = tostring(process.pid())
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
-        :with_scope(scope({"bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"}))
+        :with_scope(scope({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"}))
         :spawn_monitored("bee.host:main", "bee:workers", self, {workspace_id = workspace_id})))
     local function await(subscription: Channel<process.Message>, what: string, accept: (unknown) -> boolean): unknown
         local deadline = time.after("15s")
@@ -133,8 +133,8 @@ local function main()
     local _, instance_id = seed(a, events)
     eq(#applications(a), 1, "seeded applications")
 
-    local manager = tostring(assert(process.with_options({}):with_scope(scope({"bee:host_policy", "bee:local_supervisor_spawn_policy",
-        "bee:workspace_host_manager_policy"})):spawn_monitored("bee.launch:host_manager", "bee:workers", {cap = 2, idle_ms = IDLE_MS})))
+    local manager = tostring(assert(process.with_options({}):with_scope(scope({"bee.security.desktop:host_policy", "bee.security.desktop:local_supervisor_spawn_policy",
+        "bee.security.desktop:workspace_host_manager_policy"})):spawn_monitored("bee.launch:host_manager", "bee:workers", {cap = 2, idle_ms = IDLE_MS})))
     local deadline = time.after("5s")
     while not process.registry.lookup(leases.MANAGER) do
         local selected = channel.select({time.after("20ms"):case_receive(), deadline:case_receive()})
@@ -199,7 +199,7 @@ local function main()
     local self = tostring(process.pid())
     local ready = assert(process.listen("bee.host.ready", {message = true}))
     local direct = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
-        :with_scope(scope({"bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"}))
+        :with_scope(scope({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"}))
         :spawn_monitored("bee.host:main", "bee:workers", self, {workspace_id = b})))
     await_served(b, true, "10s")
     local external = assert(leases.acquire(b, "15s"))

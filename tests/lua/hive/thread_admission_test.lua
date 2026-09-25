@@ -28,8 +28,8 @@ local function subject(number: string): string
     return "{" .. REMOTE .. "@bee:workers|0x" .. number .. "}"
 end
 local ALPHA, BETA = subject("a1"), subject("a2")
-local MEMBER_POLICIES = {"bee:thread_observe_policy", "bee:thread_lifecycle_policy", "bee:hive_thread_invoke_policy"}
-local UNINVOKING = {"bee:thread_observe_policy", "bee:thread_lifecycle_policy"}
+local MEMBER_POLICIES = {"bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.hive:hive_thread_invoke_policy"}
+local UNINVOKING = {"bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy"}
 local function install(mappings: {Object})
     local entry = registry.get(principals.ENTRY)
     if not entry then error("mappings entry") end

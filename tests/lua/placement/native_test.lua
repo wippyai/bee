@@ -47,7 +47,7 @@ end
 -- A caller is bound to the workspace it acts in, as host-issued principals are.
 local function caller(actor: string, workspace_id: unknown)
     local policies: {security.Policy} = {}
-    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee:resource_manage_policy", "bee:resource_grant_policy", "bee:credential_manage_policy", "bee:credential_issue_policy"}) do
+    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.security.resources:resource_manage_policy", "bee.security.resources:resource_grant_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
@@ -82,7 +82,7 @@ local function admit_login_source(source: string)
     local data = entry.data :: {[string]: unknown}
     local list = data.sources :: {{[string]: unknown}}
     list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "codex", projection_kinds = {"file"}}
-    local file_policy = registry.get("bee:credential_file_policy")
+    local file_policy = registry.get("bee.security.credentials:credential_file_policy")
     if not file_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
@@ -102,7 +102,7 @@ local function admit_grok_login_source(source: string)
     list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "grok", projection_kinds = {"file"},
         path = ".grok/auth.json", setup_path = ".grok/config.toml",
         setup_destination = ".grok/.bee-global-config.toml", setup_content_format = "opaque"}
-    local file_policy = registry.get("bee:credential_file_policy")
+    local file_policy = registry.get("bee.security.credentials:credential_file_policy")
     if not file_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()

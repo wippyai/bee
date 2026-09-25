@@ -24,7 +24,7 @@ declare an icon, slash-separated menu group, role and bounded
 they never grant authority. Executable or configuration changes require a new
 revision, and one revision identifies one exact runnable definition.
 
-The protected `bee:application_admission.bindings` selection supplies shipped
+The protected `bee.security:application_admission.bindings` selection supplies shipped
 definitions, policy IDs and grants such as `appearance_write` and
 `application_stop`. A reviewed governed overlay may add a
 workspace-local definition through the host's
@@ -72,8 +72,8 @@ clear future admission without terminating existing instances.
 
 The optional protected `scope_management` binding field defaults to `false`;
 unknown fields and nonboolean values are rejected. Ordinary applications use
-`bee:app_boundary_policy`. The reviewed native harness application may use
-`bee:scope_managing_app_boundary` to construct call scopes from policies it
+`bee.security:app_boundary_policy`. The reviewed native harness application may use
+`bee.security:scope_managing_app_boundary` to construct call scopes from policies it
 already holds. That is a host trust decision, not application metadata, and is
 not a confinement guarantee. Driver configuration still runs with an empty
 scope, denying store, executor and nested function calls. Native execution
@@ -119,7 +119,7 @@ does not mutate thread obligations or delivery history.
 
 An application starts a managed agent with `bee.application:agents`, which
 calls `bee.harness.launch:agent_call` as the application's own actor. The host
-decides what it may start: it attaches `bee:agent_call_policy` (the call) and a
+decides what it may start: it attaches `bee.security.harness:agent_call_policy` (the call) and a
 policy granting `bee.harness.launch` on each launch definition the application
 may start to its admission binding. The request is
 `bee.application:agent_protocol`'s launch: `definition_ref`, `brief`,

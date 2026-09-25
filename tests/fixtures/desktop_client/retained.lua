@@ -19,7 +19,7 @@ local function main()
     local events = assert(process.events())
     local forged = assert(process.listen("forged.sent", {message = true}))
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:desktop_policy", "bee.security.desktop:retained_supervisor_spawn_policy", "bee.security.desktop:desktop_catalog_policy", "bee.security.desktop:desktop_catalog_resource_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
     local supervisor = tostring(assert(process.with_options({}):with_context({["bee.retained_owner"] = owner})

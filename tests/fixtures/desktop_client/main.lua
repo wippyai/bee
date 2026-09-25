@@ -97,7 +97,7 @@ local function main(mode: string?)
     local events, event_error = process.events()
     if not events then error(tostring(event_error)) end
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
-        "bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"})):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""})))
+        "bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"})):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee:workspace_root", subpath = ""})))
     local host_ready = assert(hosts:receive())
     assert(tostring(host_ready:from()) == host)
     local data: unknown = host_ready:payload():data()
@@ -140,7 +140,7 @@ local function main(mode: string?)
                 arguments = label == "left" and {"env", "BEE_LAUNCH_LITERAL=space ; $HOME", "bash", "--noprofile", "--norc", "-i"}
                     or {"bash", "--noprofile", "--norc", "-i"},
                 legacy_desktop = label == "left" and launch and legacy_desktop or nil}}
-        local client_scope = scope({"bee:desktop_policy", "bee:client_spawn_policy",
+        local client_scope = scope({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy",
             "bee.desktop_client_probe:" .. label .. "_policy"})
         local desktop, start_error = desktops.start(retained_desktops, selection, client_scope)
         if not desktop then error(tostring(start_error)) end
@@ -382,7 +382,7 @@ local function main(mode: string?)
         local screen, screen_error = tty.viewport({width = 100, height = 32})
         if not screen then error(tostring(screen_error)) end
         local pid = tostring(assert(process.with_options({terminal = assert(screen:grant())})
-            :with_scope(scope({"bee:desktop_policy"})):spawn_monitored(
+            :with_scope(scope({"bee.security.desktop:desktop_policy"})):spawn_monitored(
                 "bee.desktop_client_probe:physical", "bee:workers", owner)))
         local booted = assert(physical_boot:receive())
         assert(tostring(booted:from()) == pid)

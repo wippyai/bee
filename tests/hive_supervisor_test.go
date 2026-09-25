@@ -82,6 +82,11 @@ func freezeHiveSupervisorSource(t *testing.T, root string, includeDefaultService
 	if err := os.CopyFS(filepath.Join(sourceSnapshot, "hive"), os.DirFS(filepath.Join(repository, "src/hive"))); err != nil {
 		t.Fatal(err)
 	}
+	// The staged supervisor boots the production service declaration, so it
+	// stages the production app policies the service lifecycle selects.
+	if err := os.CopyFS(filepath.Join(sourceSnapshot, "security"), os.DirFS(filepath.Join(repository, "src/security"))); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"hive", "persist", "sync", "threads"} {
 		if err := os.CopyFS(filepath.Join(root, "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
 			t.Fatal(err)

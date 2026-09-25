@@ -68,7 +68,7 @@ is typed. The operations, all implemented by the Bee root's supervisor
 | `bee hive leave NODE` | the node's operator | retires the peer's pin; the Session ends |
 
 Every supervisor operation also requires the host policy
-`bee:hive_invite_policy` (action `hive.invite`); without it every invite
+`bee.security.hive:hive_invite_policy` (action `hive.invite`); without it every invite
 operation is refused. Invites live in the supervisor process, so an owner
 restart voids every outstanding invite and an unknown invite is refused.
 

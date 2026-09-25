@@ -41,21 +41,21 @@ local function caller(id: string, grants: {string}, metadata: {[string]: string 
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return funcs.new():with_actor(security.new_actor(id, metadata)):with_scope(scope(names))
 end
-local requester = caller(REQUESTER, {"bee:approval_request_policy", "bee:approval_consume_policy", "bee:thread_create_policy", "bee:thread_observe_policy", "bee:thread_storage_policy", "bee:thread_resource_policy"})
+local requester = caller(REQUESTER, {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_storage_policy", "bee.security.threads:thread_resource_policy"})
 local launcher = thread_harness.principal(REQUESTER, thread_harness.ALL)
 local stranger = thread_harness.principal("bee.test.stranger", thread_harness.ALL)
-local other_requester = caller(OTHER_REQUESTER, {"bee:approval_request_policy"})
-local alice = caller(ALICE, {"bee:approval_decide_policy"})
-local bob = caller(BOB, {"bee:approval_decide_policy"})
-local carol = caller("bee.test.carol", {"bee:approval_decide_policy"})
+local other_requester = caller(OTHER_REQUESTER, {"bee.security.approvals:approval_request_policy"})
+local alice = caller(ALICE, {"bee.security.approvals:approval_decide_policy"})
+local bob = caller(BOB, {"bee.security.approvals:approval_decide_policy"})
+local carol = caller("bee.test.carol", {"bee.security.approvals:approval_decide_policy"})
 local outsider = caller(OUTSIDER, {})
-local manager = caller(MANAGER, {"bee:approval_manage_policy"})
+local manager = caller(MANAGER, {"bee.security.approvals:approval_manage_policy"})
 local INBOX_ACTOR = "bee.application:0123456789abcdef0123456789abcdef:inbox-instance"
-local inbox_app = caller(INBOX_ACTOR, {"bee:approval_decide_policy"},
+local inbox_app = caller(INBOX_ACTOR, {"bee.security.approvals:approval_decide_policy"},
     {definition_id = "bee.inbox:app", workspace_id = "0123456789abcdef0123456789abcdef"})
 local other_app = caller("bee.application:0123456789abcdef0123456789abcdef:other-instance",
-    {"bee:approval_decide_policy"}, {definition_id = "bee.settings:app"})
-local owner = caller(OUTBOX, {"bee:approval_owner_policy", "bee:thread_approval_policy", "bee:thread_approval_client_policy", "bee:thread_storage_policy", "bee:thread_resource_policy"})
+    {"bee.security.approvals:approval_decide_policy"}, {definition_id = "bee.settings:app"})
+local owner = caller(OUTBOX, {"bee.security.approvals:approval_owner_policy", "bee.security.threads:thread_approval_policy", "bee.security.threads:thread_approval_client_policy", "bee.security.threads:thread_storage_policy", "bee.security.threads:thread_resource_policy"})
 local function call(client: funcs.Executor, method: string, value: unknown): service.Reply
     local reply, err = client:call("bee.approvals.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end

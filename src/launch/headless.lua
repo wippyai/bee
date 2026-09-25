@@ -14,7 +14,7 @@ local function main()
     local function run()
         local events = assert(process.events())
         local policies: {security.Policy} = {}
-        for _, name in ipairs({"bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"}) do
+        for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"}) do
             policies[#policies + 1] = assert(security.policy(name))
         end
         local self = tostring(process.pid())

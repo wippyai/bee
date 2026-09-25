@@ -20,6 +20,16 @@ entries:
     open_protocol: bee.applications:open_protocol
     binding_protocol: bee.host:binding_protocol
     execution: bee.applications:execution
+    handoff: bee.host:handoff
+- name: handoff
+  kind: library.lua
+  source: file://handoff.lua
+  imports:
+    contract: bee.protocol:application
+    inventory: bee.host:inventory
+    decode: bee.protocol:decode
+    protocol: bee.host:protocol
+    questions: bee.interaction:delivery
 - name: inventory
   kind: library.lua
   source: file://inventory.lua

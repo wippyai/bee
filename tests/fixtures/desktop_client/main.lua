@@ -97,6 +97,10 @@ local function main(mode: string?)
     local host_questions = assert(process.listen("bee.interaction.state", {message = true}))
     local session_restarted = assert(process.listen("bee.client.session_restarted", {message = true}))
     local client_replacements = assert(process.listen("bee.client.replace", {message = true}))
+    local broker_replacements = assert(process.listen("bee.host.broker_replaced", {message = true}))
+    local host_upgrades = assert(process.listen("bee.host.upgraded", {message = true}))
+    local host_upgrading = assert(process.listen("bee.host.upgrading", {message = true}))
+    local app_checkpoints = assert(process.listen("bee.host.checkpoint", {message = true}))
     local events, event_error = process.events()
     if not events then error(tostring(event_error)) end
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
@@ -195,6 +199,85 @@ local function main(mode: string?)
     end
     local left, left_screen, left_resource = start("left", 100, true)
     local right, right_screen, right_resource = start("right", 120, true)
+    if mode == "host-upgrade" then
+        command(left_screen, "printf 'HOST_BEFORE_LEFT_%s_END\\n' \"$$\"")
+        wait_text(left_screen, "HOST_BEFORE_LEFT_")
+        local left_before = table.concat(assert(left_screen:snapshot()).rows, "\n")
+        local left_shell = assert(left_before:match("HOST_BEFORE_LEFT_(%d+)_END"))
+        command(right_screen, "printf 'HOST_BEFORE_RIGHT_%s_END\\n' \"$$\"")
+        wait_text(right_screen, "HOST_BEFORE_RIGHT_")
+        local right_before = table.concat(assert(right_screen:snapshot()).rows, "\n")
+        local right_shell = assert(right_before:match("HOST_BEFORE_RIGHT_(%d+)_END"))
+        local entry = assert(registry.get("bee.host:main"))
+        entry.meta.handoff_probe = "host-definition-changed"
+        local changes = assert(registry.snapshot()):changes()
+        changes:update(entry)
+        assert(changes:apply())
+        local draining = channel.select({host_upgrading:case_receive(), events:case_receive(), time.after("5s"):case_receive()})
+        assert(draining.ok and draining.channel == host_upgrading, "Workspace host did not request a supervised drain")
+        local drain_message = draining.value
+        assert(tostring(drain_message:from()) == host)
+        local drain: unknown = drain_message:payload():data()
+        assert(type(drain) == "table" and drain.version == 1 and drain.schema == 1
+            and drain.workspace_id == workspace_id and type(drain.request_id) == "string")
+        assert(process.send(host, "bee.host.upgrade_ack", {version = 1, schema = 1,
+            workspace_id = workspace_id, request_id = drain.request_id}))
+        local upgraded = channel.select({host_upgrades:case_receive(), events:case_receive(), time.after("10s"):case_receive()})
+        if upgraded.ok and upgraded.channel == events then
+            error("Workspace host handoff event from " .. tostring(upgraded.value.from)
+                .. ": " .. tostring(decode.exit_error(upgraded.value.result)))
+        end
+        assert(upgraded.ok and upgraded.channel == host_upgrades, "Workspace host did not upgrade")
+        assert(tostring(upgraded.value:from()) == host, "Workspace host changed PID")
+        local value: unknown = upgraded.value:payload():data()
+        assert(type(value) == "table" and value.version == 1 and value.schema == 1 and value.workspace_id == workspace_id)
+        command(left_screen, "printf 'HOST_AFTER_LEFT_%s_END\\n' \"$$\"")
+        wait_text(left_screen, "HOST_AFTER_LEFT_" .. left_shell .. "_END")
+        command(right_screen, "printf 'HOST_AFTER_RIGHT_%s_END\\n' \"$$\"")
+        wait_text(right_screen, "HOST_AFTER_RIGHT_" .. right_shell .. "_END")
+    end
+    if mode == "broker-upgrade" then
+        key(left_screen, "f1")
+        wait_text(left_screen, "Tools")
+        click_text(left_screen, "Tools")
+        wait_text(left_screen, "Settings")
+        click_text(left_screen, "Settings")
+        wait_text(left_screen, "BEE SETTINGS")
+        local checkpoint = channel.select({app_checkpoints:case_receive(), time.after("5s"):case_receive()})
+        assert(checkpoint.ok and checkpoint.channel == app_checkpoints, "Automatic application did not commit its checkpoint")
+        assert(tostring(checkpoint.value:from()) == host)
+        local previous_broker = ""
+        for revision = 1, 3 do
+            local entry = assert(registry.get("bee.applications:broker"))
+            entry.meta.handoff_probe = "broker-definition-changed-" .. tostring(revision)
+            local changes = assert(registry.snapshot()):changes()
+            changes:update(entry)
+            assert(changes:apply())
+            local selected = channel.select({broker_replacements:case_receive(), events:case_receive(), time.after("15s"):case_receive()})
+            assert(selected.ok and selected.channel == broker_replacements, "Broker definition change did not complete supervised replacement")
+            local notice = selected.value
+            assert(tostring(notice:from()) == host)
+            local value: unknown = notice:payload():data()
+            assert(type(value) == "table" and value.version == 1 and value.workspace_id == workspace_id
+                and value.schema == 1 and type(value.broker) == "string" and value.broker ~= previous_broker)
+            previous_broker = value.broker
+            wait_text(left_screen, "BEE SETTINGS")
+            wait_text(right_screen, "No applications open")
+        end
+        key(left_screen, "end")
+        wait_text(left_screen, "BEE SETTINGS")
+        process.terminate(left)
+        process.terminate(right)
+        local cleanup_deadline = time.after("5s")
+        while next(retained_desktops.desktops) ~= nil do
+            local stopped = channel.select({events:case_receive(), cleanup_deadline:case_receive()})
+            assert(stopped.ok and stopped.channel == events, "Broker replacement left desktop resources live")
+            desktops.exited(retained_desktops, stopped.value)
+        end
+        process.terminate(host)
+        log:info("DESKTOP_CLIENT_PROBE_COMPLETE")
+        return
+    end
     if mode == "client-upgrade" then
         command(left_screen, "printf 'CLIENT_BEFORE_left_%s_END\\n' \"$$\"")
         wait_text(left_screen, "CLIENT_BEFORE_left_")

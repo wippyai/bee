@@ -30,6 +30,12 @@ function M.new(workspace_id: string): State
     if not contract.workspace_id(workspace_id) then error("Invalid inventory workspace") end
     return {workspace_id = workspace_id, catalog_revision = 0, views_revision = 0, catalog = {}, views = {}}
 end
+-- A replacement broker has no surviving native viewports. Keep revisions
+-- monotonic so clients accept its rebuilt inventory under existing admissions.
+function M.empty(state: State): State
+    return {workspace_id = state.workspace_id, catalog_revision = next_revision(state.catalog_revision),
+        views_revision = next_revision(state.views_revision), catalog = {}, views = {}}
+end
 function M.set_catalog(state: State, value: unknown): State?
     local items = decode.catalog(value)
     if not items then return nil end

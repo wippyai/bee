@@ -12,6 +12,7 @@ local uuid = require("uuid")
 local store = require("store")
 local catalog = require("catalog")
 local leases = require("leases")
+local registry = require("registry")
 
 local ROOT = "bee.environment:workspace_root"
 local IDLE_MS = 600
@@ -76,12 +77,15 @@ local function await(subscription: Channel<process.Message>, events: Channel<pro
     end
 end
 
-local function run()
+local function run(fallback: boolean)
     local events = assert(process.events())
     local self = tostring(process.pid())
     local workspace_id = created("attach", "attach-" .. uuid.v7())
     local ready = assert(process.listen("bee.retained.ready", {message = true}))
     local results = assert(process.listen("bee.retained.result", {message = true}))
+    local upgrades = assert(process.listen("bee.retained.host_upgraded", {message = true}))
+    local replacements = assert(process.listen("bee.retained.host_replaced", {message = true}))
+    local clients = assert(process.listen("bee.retained.replaced", {message = true}))
 
     local manager = tostring(assert(process.with_options({}):with_scope(scope({"bee.security.desktop:host_policy", "bee.security.desktop:local_supervisor_spawn_policy",
         "bee.security.desktop:workspace_host_manager_policy"})):spawn_monitored("bee.launch:host_manager", "bee:workers", {cap = 2, idle_ms = IDLE_MS})))
@@ -120,6 +124,29 @@ local function run()
     end) :: {[string]: unknown}
     eq(attached.error_code, "", "attachment refusal " .. tostring(attached.error))
     if type(attached.mount) ~= "string" or attached.mount == "" then error("attachment has no mount") end
+    local definition = assert(registry.get("bee.host:main"))
+    definition.meta.handoff_probe = "leased-host-definition-changed"
+    local changes = assert(registry.snapshot()):changes()
+    changes:update(definition)
+    assert(changes:apply())
+    if fallback then
+        local replaced = await(replacements, events, supervisor, "leased host replacement", function(data: unknown): boolean
+            return type(data) == "table" and data.version == 1 and data.schema == 1
+                and data.workspace_id == workspace_id and type(data.host) == "string" and data.host ~= host
+        end) :: {[string]: unknown}
+        host = tostring(replaced.host)
+        eq(served(workspace_id), host, "leased host replacement registration")
+        await(clients, events, supervisor, "leased desktop reattachment", function(data: unknown): boolean
+            return type(data) == "table" and data.version == 1 and data.schema == 1
+                and data.workspace_id == workspace_id and data.display_id == desktop_id
+        end)
+    else
+        await(upgrades, events, supervisor, "leased host upgrade", function(data: unknown): boolean
+            return type(data) == "table" and data.version == 1 and data.schema == 1
+                and data.workspace_id == workspace_id and data.host == host
+        end)
+        eq(served(workspace_id), host, "same-PID leased host after definition change")
+    end
     local detach_id = "detach-" .. uuid.v7()
     assert(process.send(supervisor, "bee.retained.request", {version = 1, workspace_id = workspace_id, desktop_id = desktop_id,
         request_id = detach_id, recipient = recipient, op = "detach"}))
@@ -145,16 +172,16 @@ local function run()
     await_served(workspace_id, false, "10s")
 
     process.terminate(manager)
-    for _, subscription in ipairs({ready, results}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({ready, results, upgrades, replacements, clients}) do process.unlisten(subscription) end
     logger:info("ACCEPTANCE VERIFIED: desktops attach through the host manager: a lease starts the host, admission is relayed, the host stops after release")
 end
 
-local function main()
-    local ok, err = pcall(run)
+local function main(fallback: boolean?)
+    local ok, err = pcall(run, fallback == true)
     if not ok then
         logger:error("ACCEPTANCE FAILED", {error = tostring(err)})
         error(err)
     end
 end
 
-return {main = main}
+return {main = main, fallback = function() main(true) end}

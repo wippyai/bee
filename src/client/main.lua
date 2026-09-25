@@ -68,6 +68,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local presentations = listen("bee.host.presentation")
         local catalogs = listen("bee.host.catalog")
         local views = listen("bee.host.views")
+        local broker_replacements = listen("bee.host.broker_replaced")
         local assignment_updates = listen("bee.host.assignments")
         local transfer_results = listen("bee.host.transfer_result")
         local replies = listen("bee.host.reply")
@@ -554,7 +555,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     controls:case_receive(), requests:case_receive(), commands:case_receive(), scenes:case_receive(), launch_requests:case_receive(),
                     acknowledgements:case_receive(), updates:case_receive(), question_states:case_receive(),
                     question_results:case_receive(), answers:case_receive(), appearance_requests:case_receive(),
-                    supervisor_controls:case_receive(), copy_results:case_receive(), attachment_updates:case_receive()}
+                    supervisor_controls:case_receive(), copy_results:case_receive(), attachment_updates:case_receive(), broker_replacements:case_receive()}
                 -- Once saved for local shutdown, retain the physical display but
                 -- stop consuming app removals and scene edits. Host cleanup must
                 -- not overwrite the layout that will be restored on next boot.
@@ -914,6 +915,17 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     elseif selected.channel == views and sender == host then
                         local value = inventory.views(data)
                         if value then observe(value) end
+                    elseif selected.channel == broker_replacements and sender == host then
+                        if type(data) == "table" and data.version == 1 and data.schema == 1
+                            and data.workspace_id == workspace_id and data.connection_id == connection_id
+                            and contract.text(data.broker, 160) then
+                            bindings = {}
+                            for _, view in ipairs(live) do
+                                local key = tab(view.view_id, view.instance_id)
+                                local target = key and targets[key] or nil
+                                if target then bind(target) end
+                            end
+                        end
                     elseif selected.channel == requests and sender == presenter and active then
                         local request = contract.request(data)
                         if request and request.workspace_id == workspace_id and (request.op == "open" or request.op == "close") then

@@ -160,28 +160,20 @@ local function main(mode: string?)
     command(extra_screen, "bee_extra=separate; printf 'OWNER_EXTRA_%s_OK\\n' \"$bee_extra\"")
     wait_text(extra_screen, "OWNER_EXTRA_separate_OK")
     local extra_shell = ""
-    if mode == "client-upgrade" then
-        command(first_screen, "printf 'RETAINED_BEFORE_FIRST_%s_END\\n' \"$$\"")
-        wait_text(first_screen, "RETAINED_BEFORE_FIRST_")
-        local first_before = table.concat(assert(first_screen:snapshot()).rows, "\n")
-        local first_shell = assert(first_before:match("RETAINED_BEFORE_FIRST_(%d+)_END"))
-        command(extra_screen, "printf 'RETAINED_BEFORE_EXTRA_%s_END\\n' \"$$\"")
-        wait_text(extra_screen, "RETAINED_BEFORE_EXTRA_")
-        local extra_before = table.concat(assert(extra_screen:snapshot()).rows, "\n")
-        extra_shell = assert(extra_before:match("RETAINED_BEFORE_EXTRA_(%d+)_END"))
-        local entry = assert(registry.get("bee.client:main"))
-        entry.meta.handoff_probe = "retained-client-definition-changed"
+    if mode == "host-fallback" or mode == "broker-fallback" then
+        local definition = mode == "host-fallback" and "bee.host:main" or "bee.applications:broker"
+        local entry = assert(registry.get(definition))
+        entry.meta.handoff_probe = "retained-definition-changed"
         local changes = assert(registry.snapshot()):changes()
         changes:update(entry)
         assert(changes:apply())
         local updated: {[string]: boolean} = {}
-        local timeout = time.after("12s")
+        local timeout = time.after("15s")
         while not updated[desktop_id] or not updated[extra_id] do
             local selected = channel.select({replaced_clients:case_receive(), events:case_receive(), timeout:case_receive()})
-            assert(selected.ok and selected.channel ~= timeout, "Retained clients did not reattach after definition change")
+            assert(selected.ok and selected.channel ~= timeout, "Retained desktops did not reattach after replacement")
             if selected.channel == events then
-                local event = selected.value
-                assert(tostring(event.from) ~= supervisor, "Retained supervisor exited during client replacement")
+                assert(tostring(selected.value.from) ~= supervisor, "Retained supervisor exited during host fallback")
             else
                 local message = selected.value
                 assert(tostring(message:from()) == supervisor)
@@ -197,10 +189,60 @@ local function main(mode: string?)
                 assert(tostring(assert(displays:receive()):from()) == recipient)
             end
         end
-        command(first_screen, "printf 'RETAINED_UPGRADE_FIRST_%s_END\\n' \"$$\"")
-        wait_text(first_screen, "RETAINED_UPGRADE_FIRST_" .. first_shell .. "_END")
-        command(extra_screen, "printf 'RETAINED_UPGRADE_EXTRA_%s_END\\n' \"$$\"")
-        wait_text(extra_screen, "RETAINED_UPGRADE_EXTRA_" .. extra_shell .. "_END")
+        storage("list", nil, "OK", 2)
+        assert(launch(extra, "terminal", {}, extra_id) == "")
+        wait_text(extra_screen, "$ ")
+        command(extra_screen, "printf 'HOST_FALLBACK_OK\\n'")
+        wait_text(extra_screen, "HOST_FALLBACK_OK")
+        assert(process.terminate(supervisor))
+        first_screen:close()
+        extra_screen:close()
+        log:info("RETAINED_SUPERVISOR_PROBE_COMPLETE")
+        return
+    end
+    if mode == "client-upgrade" then
+        command(first_screen, "printf 'RETAINED_BEFORE_FIRST_%s_END\\n' \"$$\"")
+        wait_text(first_screen, "RETAINED_BEFORE_FIRST_")
+        local first_before = table.concat(assert(first_screen:snapshot()).rows, "\n")
+        local first_shell = assert(first_before:match("RETAINED_BEFORE_FIRST_(%d+)_END"))
+        command(extra_screen, "printf 'RETAINED_BEFORE_EXTRA_%s_END\\n' \"$$\"")
+        wait_text(extra_screen, "RETAINED_BEFORE_EXTRA_")
+        local extra_before = table.concat(assert(extra_screen:snapshot()).rows, "\n")
+        extra_shell = assert(extra_before:match("RETAINED_BEFORE_EXTRA_(%d+)_END"))
+        for revision = 1, 3 do
+            local entry = assert(registry.get("bee.client:main"))
+            entry.meta.handoff_probe = "retained-client-definition-changed-" .. tostring(revision)
+            local changes = assert(registry.snapshot()):changes()
+            changes:update(entry)
+            assert(changes:apply())
+            local updated: {[string]: boolean} = {}
+            local timeout = time.after("12s")
+            while not updated[desktop_id] or not updated[extra_id] do
+                local selected = channel.select({replaced_clients:case_receive(), events:case_receive(), timeout:case_receive()})
+                assert(selected.ok and selected.channel ~= timeout, "Retained clients did not reattach after definition change")
+                if selected.channel == events then
+                    local event = selected.value
+                    assert(tostring(event.from) ~= supervisor, "Retained supervisor exited during client replacement")
+                else
+                    local message = selected.value
+                    assert(tostring(message:from()) == supervisor)
+                    local value: unknown = message:payload():data()
+                    assert(type(value) == "table" and value.version == 1 and value.schema == 1
+                        and value.workspace_id == workspace_id and type(value.pid) == "string")
+                    updated[value.display_id] = true
+                    local changed_id: string = value.display_id :: string
+                    local recipient = changed_id == desktop_id and first or extra
+                    local mount, code = request(recipient, "attach", "control", changed_id)
+                    assert(code == "", "Physical grant reissue failed: " .. code)
+                    assert(process.send(recipient, "physical.configure", {mount = mount}))
+                    assert(tostring(assert(displays:receive()):from()) == recipient)
+                end
+            end
+            command(first_screen, "printf 'RETAINED_UPGRADE_FIRST_%s_END\\n' \"$$\"")
+            wait_text(first_screen, "RETAINED_UPGRADE_FIRST_" .. first_shell .. "_END")
+            command(extra_screen, "printf 'RETAINED_UPGRADE_EXTRA_%s_END\\n' \"$$\"")
+            wait_text(extra_screen, "RETAINED_UPGRADE_EXTRA_" .. extra_shell .. "_END")
+        end
     end
     local before_rejoin = assert(extra_screen:snapshot()).rows[1]
     assert(extra_screen:send({type = "key", key = "f12", key_type = "f12", action = "press"}))
@@ -315,4 +357,6 @@ local function checked_main(mode: string?)
         error(failure)
     end
 end
-return {main = checked_main, client_upgrade = function() checked_main("client-upgrade") end}
+return {main = checked_main, client_upgrade = function() checked_main("client-upgrade") end,
+    host_fallback = function() checked_main("host-fallback") end,
+    broker_fallback = function() checked_main("broker-fallback") end}

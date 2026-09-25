@@ -77,6 +77,9 @@ function M.restart(state: State, desktop: Desktop): (string?, string?)
     desktop.pid, desktop.selection = pid, resumed
     return pid, nil
 end
+function M.rehost(desktop: Desktop, host: string)
+    desktop.selection.host = host
+end
 function M.retire(state: State, desktop: Desktop)
     for key, candidate in pairs(state.desktops) do
         if candidate == desktop then

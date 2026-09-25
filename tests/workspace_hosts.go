@@ -108,6 +108,9 @@ func run() error {
 		// through a fixture-owned manager; the node's own manager stays stopped.
 		command, budget = "workspace-hosts-attach-supervisor", 90*time.Second
 		overrides = []string{"-o", "bee:workspace_hosts:lifecycle.auto_start=false"}
+	case "--attach-fallback":
+		command, budget = "workspace-hosts-attach-fallback", 90*time.Second
+		overrides = []string{"-o", "bee:workspace_hosts:lifecycle.auto_start=false"}
 	default:
 		return fmt.Errorf("unknown mode %q", mode)
 	}
@@ -141,6 +144,21 @@ func run() error {
 	// Copy fixture into src/workspace_hosts
 	if err := os.CopyFS(filepath.Join(root, "src", "workspace_hosts"), os.DirFS("tests/fixtures/workspace_hosts")); err != nil {
 		return fmt.Errorf("copy fixture: %w", err)
+	}
+	if mode == "--attach-fallback" {
+		path := filepath.Join(root, "src", "host", "main.lua")
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		anchor := "                    process.upgrade(\"\", owner, workspace, database_resource, saved)"
+		if strings.Count(string(contents), anchor) != 1 {
+			return fmt.Errorf("workspace host fallback injection point changed")
+		}
+		code := strings.Replace(string(contents), anchor, "                    saved.version = 2\n"+anchor, 1)
+		if err := os.WriteFile(path, []byte(code), 0600); err != nil {
+			return err
+		}
 	}
 	if delayed {
 		// Replace only the disposable composition's broker to deliver a reply

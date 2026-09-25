@@ -81,6 +81,30 @@ entries:
     command:
       name: retained-client-upgrade-probe
       short: Verify retained client definition replacement
+- name: retained_host_fallback
+  kind: process.lua
+  source: file://retained.lua
+  method: host_fallback
+  modules: [process, security, tty, time, channel, logger, registry]
+  imports: {store: bee.client:store}
+  security:
+    policies: [bee.desktop_client_probe:root_policy]
+  meta:
+    command:
+      name: retained-host-fallback-probe
+      short: Verify retained host replacement after incompatible checkpoint
+- name: retained_broker_fallback
+  kind: process.lua
+  source: file://retained.lua
+  method: broker_fallback
+  modules: [process, security, tty, time, channel, logger, registry]
+  imports: {store: bee.client:store}
+  security:
+    policies: [bee.desktop_client_probe:root_policy]
+  meta:
+    command:
+      name: retained-broker-fallback-probe
+      short: Verify retained broker replacement after startup failure
 - name: status
   kind: process.lua
   source: file://status.lua

@@ -65,6 +65,12 @@ entries:
     actions: [funcs.security, security.actor.create, security.scope.create, security.policy.get]
     resources: '*'
     effect: allow
+- name: attach_update_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.snapshot, registry.apply]
+    resources: ['*']
+    effect: allow
 - name: resource_call_policy
   kind: security.policy
   policy:
@@ -124,7 +130,7 @@ entries:
   kind: process.lua
   source: file://attach_supervisor.lua
   method: main
-  modules: [process, channel, security, time, uuid, logger]
+  modules: [process, channel, security, time, uuid, logger, registry]
   imports:
     store: bee.storage:store
     catalog: bee.storage:catalog
@@ -136,7 +142,26 @@ entries:
       security:
         actor: {id: workspace_hosts.attach_supervisor}
         policies: [bee.security.desktop:host_policy, bee.workspace_hosts:attach_spawn_policy, bee.security.storage:workspace_storage_policy,
-          bee.security.desktop:workspace_host_lease_policy, bee.security.desktop:workspace_host_manager_policy, bee.workspace_hosts:logical_probe_policy]
+          bee.security.desktop:workspace_host_lease_policy, bee.security.desktop:workspace_host_manager_policy, bee.workspace_hosts:logical_probe_policy,
+          bee.workspace_hosts:attach_update_policy]
+- name: attach_fallback
+  kind: process.lua
+  source: file://attach_supervisor.lua
+  method: fallback
+  modules: [process, channel, security, time, uuid, logger, registry]
+  imports:
+    store: bee.storage:store
+    catalog: bee.storage:catalog
+    leases: bee.application:host_leases
+  meta:
+    command:
+      name: workspace-hosts-attach-fallback
+      short: An incompatible leased host checkpoint reattaches its desktop
+      security:
+        actor: {id: workspace_hosts.attach_supervisor}
+        policies: [bee.security.desktop:host_policy, bee.workspace_hosts:attach_spawn_policy, bee.security.storage:workspace_storage_policy,
+          bee.security.desktop:workspace_host_lease_policy, bee.security.desktop:workspace_host_manager_policy, bee.workspace_hosts:logical_probe_policy,
+          bee.workspace_hosts:attach_update_policy]
 - name: attach_recipient
   kind: process.lua
   source: file://attach_recipient.lua

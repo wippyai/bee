@@ -98,7 +98,7 @@ local function define_tests()
             test.eq(ended_item.items[1].delivery_status, "undeliverable")
         end)
         test.it("offers one ordered item under a carrier epoch and redelivers its identity after a crash", function()
-            local grants = {"bee:thread_create_policy", "bee:thread_lifecycle_policy", "bee:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
+            local grants = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
             local sender = harness.principal("push-sender", grants, WORKSPACE)
             local target = harness.principal("push-target", grants, WORKSPACE)
             local sender_thread = harness.thread(sender, "sender")
@@ -120,7 +120,7 @@ local function define_tests()
                     content = content, payload_digest = assert(sends.payload_digest({message_id = id, content = content}))}))
             end
             local offer = {thread_id = target_thread, action_id = "target", attempt_id = "target-attempt", carrier_epoch = first_epoch}
-            local no_carrier = harness.principal("push-target", {"bee:thread_create_policy", "bee:thread_lifecycle_policy"}, WORKSPACE)
+            local no_carrier = harness.principal("push-target", {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy"}, WORKSPACE)
             test.eq(harness.code(no_carrier:call("inbox_offer", offer)), "DENIED")
             test.eq(harness.code(sender:call("inbox_offer", offer)), "DENIED")
             local first = harness.value(target:call("inbox_offer", offer))
@@ -159,7 +159,7 @@ local function define_tests()
             test.eq(harness.value(target:call("inbox_offer", offer)).empty, true)
         end)
         test.it("records restart status when a live attempt settles with an unacknowledged item", function()
-            local grants = {"bee:thread_create_policy", "bee:thread_lifecycle_policy", "bee:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
+            local grants = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
             local sender = harness.principal("restart-sender", grants, WORKSPACE)
             local target = harness.principal("restart-target", grants, WORKSPACE)
             local sender_thread = harness.thread(sender, "sender")

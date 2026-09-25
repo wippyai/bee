@@ -124,12 +124,21 @@ session_send takes an exact address, current `grant_epoch`, retry key,
 sender action and thread and computes the payload digest. The destination
 owner requires a host-selected `bee.sessions.send` policy for the exact
 `<workspace_id>/<node_id>/<action_id>` resource and its own acceptance rule.
-The default send policy grants no address. session_inbox pages the bound
+The bundled Bee host grants managed agents a send attempt to actions in their
+own workspace; the destination owner checks the authenticated workspace and
+recipient's acceptance. Another host may select the bundled deny policy or a
+narrower exact-address policy. session_inbox pages the bound
 action's items; session_ack marks one item acknowledged; session_reply commits
 a reply to the original sender's address with an explicit cross-thread
 `in_reply_to` reference and outcome. These tools commit durable records and
-receipts. They do not inject prompts into a running driver, type into a PTY or
-forward across Hive.
+receipts. A fixture-enabled Claude structured carrier can insert an identified
+item between turns through its fenced stdin controller. Shipped production
+policies leave that path disabled pending executable acceptance. The gateway
+does not type into a PTY or forward inbox messages across Hive.
+`session_send` and `session_inbox` expose the persisted `delivery_status`:
+`waiting_for_restart` when the target has no live attempt and `undeliverable`
+when its action has ended. These statuses do not change the item's receipt
+`state` or grant an automatic restart.
 
 delivery and publish take their destination `workspace_id` from the binding:
 an omitted `workspace_id` is the binding's own workspace, a request naming any

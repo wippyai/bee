@@ -52,7 +52,8 @@ local function define_tests()
             local session: machine.Session = {plan = selected, turn_id = "turn:attempt:1", turn_open = true, epoch = 1, revision = 0,
                 checkpoint = point, decoder = stream_json.new(machine.MAX_FRAME_BYTES), normalizer = {terminal = terminal}, terminal = terminal,
                 stream_ended = false, exit = nil, eof = {stdout = false, stderr = false}, runner = "runner", settled = nil, recovered = false,
-                output = "open", pending_hint = nil, placement_evidence = 0, stderr_sequence = 0, last_sequence = {stdout = 0, stderr = 0}, held_from = nil}
+                output = "open", pending_hint = nil, placement_evidence = 0, stderr_sequence = 0, last_sequence = {stdout = 0, stderr = 0}, held_from = nil,
+                dropping_stdout = false}
             local offer: machine.Offer = {thread_id = "thread", action_id = "action", record_id = "record-1", inbox_sequence = 1,
                 payload_digest = string.rep("a", 64), message_id = "message-1", message_kind = "request", sender_action_id = "sender",
                 sender_thread_id = "sender-thread", sender_node_id = "local-node", content = {text = "hello"}, state = "offered", dispatch = true, offer_count = 1}

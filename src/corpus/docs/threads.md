@@ -174,24 +174,44 @@ the current epoch, the recipient's acceptance, and the caller's host-granted
 `<workspace_id>/<node_id>/<action_id>` resource. The owner checks these facts,
 the local node, the source action's admitted principal, both threads'
 workspace, and inbox capacity inside the write transaction. A stale epoch is
-`CONFLICT`; lack of a grant or acceptance is `DENIED`. Host policy selection
-grants no send address by default.
+`CONFLICT`; lack of a grant or acceptance is `DENIED`. The bundled host selects
+a same-workspace send policy for managed agents. Another host may select the
+deny policy or a narrower address policy. The destination owner checks the
+authenticated workspace and recipient acceptance on every send.
 
 The owner assigns a record ID and stores the SHA-256 digest of the canonical
 `{message_id, content}` payload with each item. Retrying the same actor,
 destination thread and idempotency key with the same request returns the
 stored receipt; a different request conflicts. Each action holds at most 2,048
-inbox items. The current local state path is `committed` to `acknowledged` or
-`replied`. The schema also defines `offered` and `transport_accepted` for later
-carrier work; neither state is written by this implementation. A commit does
-not claim delivery to a running model.
+inbox items. The target carrier may call `inbox_offer` for only the oldest
+outstanding item under its current attempt and carrier epoch. A replacement
+carrier reoffers the same record ID and digest. `inbox_transport` records that
+the transport accepted the offered input under that fence. An agent's own
+`inbox_ack` or correlated reply advances it to `acknowledged` or `replied`.
+Transport acceptance does not claim delivery to a running model.
+Each item also reports a persisted `delivery_status`. A send to an action with
+no live attempt records `waiting_for_restart`; a send to an ended action records
+`undeliverable`. These statuses leave the committed record and inbox sequence
+intact. An attempt receipt marks outstanding items `waiting_for_restart`; an
+action receipt marks them `undeliverable`. A later admitted carrier offer clears
+the restart blocker. The raw
+receipt `state` still follows `committed`, `offered`, `transport_accepted`, then
+`acknowledged` or `replied`.
 
 `inbox_reply` commits a reply in the original sender's action inbox and marks
 the referenced request `replied` in the same local transaction. Its explicit
 `in_reply_to` points to the request record on the other thread; the owner
 verifies the two admitted actions and the request before accepting it. Ordinary
-`record` replies still settle only same-thread recipient obligations. There is
-no driver push, PTY injection or Hive forwarding for action inboxes yet.
+`record` replies still settle only same-thread recipient obligations.
+
+The owner wakes the thread waiter on an inbox commit. A fixture-enabled
+Claude structured carrier checks the oldest item on wake and at a bounded
+poll interval, then writes its identified stream-json user message between
+turns. Its write journal and transport receipt survive carrier replacement;
+acknowledgment still requires the agent's own `inbox_ack` or reply. Shipped
+production launch policies do not enable this push path pending executable
+acceptance. Other structured drivers and PTY windows currently need an
+explicit `session_inbox` call; Hive forwarding remains separate.
 
 `inbox_describe` returns only an action address, current grant epoch, attempt
 state and latest inbox delivery state. A caller may describe another action
@@ -335,7 +355,9 @@ the head column and its index and attributes existing threads whose owner is
 an application principal (`bee.application:<workspace_id>:<instance_id>`) to
 that workspace; every other existing thread stays node-level.
 Migration 11 (`action_inbox`) adds acceptance epochs, rules and ordered inbox
-items without changing prior records.
+items without changing prior records. Migration 12 (`action_inbox_push`) adds
+fenced offer and transport receipt fields. Migration 13
+(`action_inbox_delivery_status`) records restart and ended-action blockers.
 Applied migrations and their checksums are immutable. The owner keeps all
 table access behind typed contract methods; callers do not query another
 subsystem's tables or reset the database to bypass a migration failure.

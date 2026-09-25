@@ -147,9 +147,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 14135,
+      "bytes": 14372,
       "id": "docs/mcp_configuration",
-      "sha256": "1a776c9b0da5fb76cafac7afe428b5be80bd03ede3221341edfb78e10f5cdd0a",
+      "sha256": "b2640697e551d18675a0a22f0f4ec679766878a4ba69d596d20e1dcc0d3cf839",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -203,9 +203,9 @@
       "topic": "application"
     },
     {
-      "bytes": 10036,
+      "bytes": 10717,
       "id": "docs/gateway",
-      "sha256": "c1554cfb65e2c6964de424a8c2c9a58d68bbdae067de6d26a3d316b834f9d6f2",
+      "sha256": "0607ba6897fc9b1d069f6364907dde0ba29a8047464bf4e025087bb72fbd3b16",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 20013,
+      "bytes": 21578,
       "id": "docs/threads",
-      "sha256": "e00aa2266912dc6f42b33cc3fab29b6156afe5b1727b8e47cb8585e31ea09e68",
+      "sha256": "bbad424f384c5e3329eea2ea0a15122d1296b251258d3e61271768a47645e040",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -323,9 +323,9 @@
       "topic": "component"
     },
     {
-      "bytes": 693,
+      "bytes": 1004,
       "id": "component/driver:claude",
-      "sha256": "92638be28b2e261e2c15a27b49fd9d779cb84d4ac246b746673bf008c11cdf44",
+      "sha256": "93f1b6d961bbe12f6c5572f3658e42fd7947ed4c98004256c5305d32d63d3773",
       "source": "modules/driver-claude/src/README.md",
       "title": "Bee Claude driver",
       "topic": "component"
@@ -355,9 +355,9 @@
       "topic": "component"
     },
     {
-      "bytes": 4619,
+      "bytes": 4841,
       "id": "component/gateway",
-      "sha256": "7fa562743bf582fcb9d2bd1e3b11e20040c76a91195f295bae0769c9aedb8fc1",
+      "sha256": "b2ba230fc6a32be22442d6facc6c8c53a7583aa55a42eee55f6e032028ee8656",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -371,9 +371,9 @@
       "topic": "component"
     },
     {
-      "bytes": 18611,
+      "bytes": 19333,
       "id": "component/harness",
-      "sha256": "55f8c0d08fb28df2f20e22431ee931d7881e85fa87ec9224a033212638ca0398",
+      "sha256": "4c2329d2bb0dfe0a34accb730afcf6325f5169aadb92132d36e9ab967df9f2cd",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -443,9 +443,9 @@
       "topic": "component"
     },
     {
-      "bytes": 6708,
+      "bytes": 7471,
       "id": "component/threads",
-      "sha256": "fe0a06e48b45954d882c046ae71a9941369a9362276f3ce25d612389c04fad1c",
+      "sha256": "80d606a00c3cd9f4b480d1500bc7eadeca2cf019b8dd031d777b4072d4030435",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -462,7 +462,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 550028,
+    "bytes": 554529,
     "documents": 57
   }
 }

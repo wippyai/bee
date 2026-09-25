@@ -287,6 +287,22 @@ entries:
     preflight: bee.governance:preflight
     canonical: bee.sync:canonical
     artifact: bee.governance:artifact
+- name: capability_catalog_test
+  kind: function.lua
+  source: file://capability_catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    capability_catalog: bee.governance:capability_catalog
+- name: capability_containment_test
+  kind: function.lua
+  source: file://capability_containment_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    capability_containment: bee.governance:capability_containment
 - name: workspace_test
   kind: function.lua
   source: file://workspace_test.lua

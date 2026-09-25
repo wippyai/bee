@@ -100,6 +100,49 @@ local function define_tests()
             test.is_false(facts.context.auto_start)
             test.is_true(denied.AUTO_START_DENIED)
         end)
+        test.it("measures actor and groups for preflight refusal", function()
+            local deps, spec = fixture(nil)
+            changes(spec, {{id = "private.app:main", kind = "function.lua", data = {
+                source = "return true", security = {actor = "private.app:owner", groups = {"private.app:admins"}}}}})
+            local facts = resolve(deps, spec)
+            local measured = (facts.candidate.entries :: {Object})[1]
+            test.is_true(measured.security_actor)
+            test.is_true(measured.security_groups)
+            local report = assert(preflight.check(facts.candidate :: preflight.Candidate, facts.context :: preflight.Context))
+            test.is_false(report.ready)
+            local denied = false
+            for _, diagnostic in ipairs(report.diagnostics) do
+                if diagnostic.code == "SECURITY_DENIED" then denied = true end
+            end
+            test.is_true(denied)
+        end)
+        test.it("retains a capability requirement and validates its app policy append target", function()
+            local deps, spec = fixture(nil)
+            local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
+                data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
+            local request: Entry = {id = "private.app:files", kind = "ns.requirement",
+                meta = {value_kind = "security.policy", capability = "workspace.files.read",
+                    parameters = {subpath = "docs"}, reason = "Render documentation"},
+                data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
+            changes(spec, {app, request})
+            local facts = resolve(deps, spec)
+            local capability = (facts.candidate.requirements :: {Object})[1].capability_request :: Object
+            test.eq(capability.capability, "workspace.files.read")
+            test.eq((capability.parameters :: Object).subpath, "docs")
+            test.eq(capability.reason, "Render documentation")
+            test.eq(capability.target, "private.app:main")
+            test.eq(capability.path, ".security.policies +=")
+            for _, bad_path in ipairs({".security.policies", ".security.groups +=", ".security.policies += .other"}) do
+                (request.data :: Object).targets = {{entry = "private.app:main", path = bad_path}}
+                changes(spec, {app, request})
+                local candidate = resolver.resolve_with(deps, spec)
+                test.is_nil(candidate)
+            end
+            (request.data :: Object).targets = {{entry = "private.app:main", path = ".security.policies +="}}
+            (request.meta :: Object).value_kind = "security.actor"
+            changes(spec, {app, request})
+            test.is_nil(resolver.resolve_with(deps, spec))
+        end)
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture :: () -> (Captured?, string?))()

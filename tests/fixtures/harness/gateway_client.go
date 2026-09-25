@@ -904,7 +904,9 @@ func reportPeer(url, authorization string, report object, role string) {
 }
 
 // Two independently owned actions coordinate only through their own inbox
-// tools. The fixture polls because driver push is a later slice.
+// tools. Each side blocks in the server wait on its own thread and reads
+// its inbox after the wake; the reported wait status names the wake, so a
+// reply that arrived by polling would fail the acceptance, not hide in it.
 func reportInboxPeer(url, authorization string, report object, role string) {
 	ident := 300
 	call := func(name string, args object) object {
@@ -936,7 +938,16 @@ func reportInboxPeer(url, authorization string, report object, role string) {
 	report["peer_address"] = peer["address"]
 	report["peer_epoch"] = peer["grant_epoch"]
 	awaitItem := func(kind string) object {
-		for attempt := 0; attempt < 120; attempt++ {
+		cursor := 0
+		for waits := 1; waits <= 12; waits++ {
+			started := time.Now()
+			waited := mustObject(call("thread_wait", object{"after_sequence": cursor, "wait_ms": 5000})["value"])
+			report[kind+"_wait_status"] = waited["status"]
+			report[kind+"_wait_ms"] = time.Since(started).Milliseconds()
+			report[kind+"_waits"] = waits
+			if moved, ok := waited["head_sequence"].(float64); ok {
+				cursor = int(moved)
+			}
 			listed := mustObject(call("session_inbox", object{"after_sequence": 0, "limit": 64})["value"])
 			items, _ := listed["items"].([]any)
 			for _, raw := range items {
@@ -945,7 +956,6 @@ func reportInboxPeer(url, authorization string, report object, role string) {
 					return item
 				}
 			}
-			time.Sleep(250 * time.Millisecond)
 		}
 		return nil
 	}

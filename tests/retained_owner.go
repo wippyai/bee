@@ -154,22 +154,27 @@ local decode = require("decode")
 local function main()
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
+    local started, started_error = process.listen("bee.retained_owner_probe.ready", {message = true})
+    if not started then error(tostring(started_error)) end
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:retained_owner_spawn_policy", "bee.security.desktop:retained_owner_name_policy", "bee.security.desktop:retained_owner_node_policy"}) do
+    for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:retained_owner_spawn_policy", "bee.security.desktop:retained_owner_name_policy", "bee.security.desktop:retained_owner_node_policy", "bee.security.desktop:owner_command_stop_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error(tostring(policy_error)) end
         policies[#policies + 1] = policy
     end
     local owner, owner_error = process.with_options({}):with_scope(security.new_scope(policies))
-        :spawn_monitored("bee.launch:owner", "bee:terminal")
+        :spawn_monitored("bee.launch:owner", "bee:terminal", tostring(process.pid()))
     if not owner then error(tostring(owner_error)) end
-    local wait = time.after("100ms")
-    local selected = channel.select({wait:case_receive(), events:case_receive()})
-    if not selected.ok or selected.channel ~= wait then error("Retained owner exited before cancellation") end
+    local startup_guard = time.after("120s")
+    local selected = channel.select({started:case_receive(), events:case_receive(), startup_guard:case_receive()})
+    if not selected.ok or selected.channel ~= started or tostring(selected.value:from()) ~= tostring(owner) then
+        error("Retained owner did not register its command before cancellation")
+    end
+    process.unlisten(started)
     assert(io.print("BEE_RETAINED_OWNER_STOPPING"))
     local stopped, stopped_error = process.cancel(owner, "retained owner acceptance")
     if not stopped then error(tostring(stopped_error)) end
-    local deadline = time.after("5s")
+    local deadline = time.after("120s")
     while true do
         selected = channel.select({events:case_receive(), deadline:case_receive()})
         if not selected.ok or selected.channel == deadline then error("Retained owner did not stop") end
@@ -213,7 +218,25 @@ func writeProbe(root string) error {
 	if err := os.WriteFile(filepath.Join(directory, "_index.yaml"), []byte(probeIndex), 0600); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(directory, "main.lua"), []byte(probeSource), 0600)
+	if err := os.WriteFile(filepath.Join(directory, "main.lua"), []byte(probeSource), 0600); err != nil {
+		return err
+	}
+	// Only this disposable source copy reports the command-registration event
+	// to its probe; the ordinary boot path and portable deployment do not signal.
+	ownerPath := filepath.Join(root, "src", "launch", "owner.lua")
+	owner, err := os.ReadFile(ownerPath)
+	if err != nil {
+		return err
+	}
+	code := string(owner)
+	entry := "local function main()"
+	registration := "    if not stops then error(stops_error) end"
+	if strings.Count(code, entry) != 1 || strings.Count(code, registration) != 1 {
+		return fmt.Errorf("retained owner probe injection point changed")
+	}
+	code = strings.Replace(code, entry, "local function main(probe_pid: string?)", 1)
+	code = strings.Replace(code, registration, registration+"\n    if probe_pid then assert(process.send(probe_pid, \"bee.retained_owner_probe.ready\", {})) end", 1)
+	return os.WriteFile(ownerPath, []byte(code), 0600)
 }
 
 func run() error {

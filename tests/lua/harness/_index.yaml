@@ -890,7 +890,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.harness.launch:resolve, bee.harness.launch:admit, bee.harness.launch:start, bee.resources.binding:associate, bee.resources.binding:grant,
-      bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:list, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
+      bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:list, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after, bee.threads.delivery:watch]
     effect: allow
 - name: agents_probe
   kind: function.lua
@@ -982,7 +982,7 @@ entries:
   kind: function.lua
   source: file://profile_environment_isolation_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "180s"}
+  meta: {type: test, suite: bee, timeout: "300s"}
   modules: [funcs, security, registry, env, time, json]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]

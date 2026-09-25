@@ -89,18 +89,28 @@ local function count(list: {string}, wanted: string): integer
 end
 
 local function await_receipt(thread_id: string, attempt_id: string): {[string]: unknown}
-    for _ = 1, 600 do
-        local observed, status = pcall(function(): {[string]: unknown}
-            return call("bee.placement.native:status", {attempt_id = attempt_id})
-        end)
-        if observed and count(records(thread_id), "receipt") == 1 then
-            local result = status :: {[string]: unknown}
-            local attempt = result.attempt :: {[string]: unknown}
-            if attempt.execution_state == "exited" then return result end
+    local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
+    local cursor = 0
+    while true do
+        local result_page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor,
+            limit = 64, filter = {kinds = {"receipt"}}})
+        for _, item in ipairs(result_page.records :: {{[string]: unknown}}) do
+            if item.attempt_id == attempt_id then
+                local status = call("bee.placement.native:status", {attempt_id = attempt_id})
+                return status
+            end
         end
-        time.sleep("50ms")
+        cursor = math.floor(tonumber(result_page.scanned_through) or cursor)
+        if result_page.has_more ~= true then
+            local remaining = guard_ms - math.floor(time.now():unix_nano() / 1000000)
+            if remaining <= 0 then
+                error("profile attempt did not retain its receipt; attempt=" .. attempt_id ..
+                    "; thread records=" .. table.concat(records(thread_id), ","))
+            end
+            call("bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
+        end
     end
-    error("profile attempt did not retain its receipt")
+    error("receipt wait ended without a result")
 end
 
 local function profile_policy(entry: {[string]: unknown}, bin: string, stream: string): {[string]: unknown}

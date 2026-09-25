@@ -1,6 +1,6 @@
 # Process code handoff
 
-Bee currently supports a same-PID code handoff for the desktop session. The
+Bee supports a same-PID code handoff for the desktop session. The
 runtime delivers `OUTDATED` only after the session opts in. The session drains
 accepted desktop commands and binding updates before calling `process.upgrade`
 for its own definition. It passes a version-one checkpoint containing the
@@ -26,17 +26,53 @@ remain attached. `make session-fallback-check` exercises a session exit.
 The session Lua tests check schema rejection, queued-command acknowledgements,
 and same-PID readiness.
 
-Live handoff for the retained owner, workspace host, desktop client, application
-broker, Hive supervisors and module services is **proposed, not implemented**.
-Those owners retain live resources and in-flight work that need their own
-versioned checkpoints and coordinated fallback. In particular, a broker owns
-native viewports and a client owns the physical terminal surface; their runtime
-handles cannot be treated as serialized state or as authorization. The other
-RSI design slices, including service reconciliation, rollback and native
-cutover, are also proposals rather than callable operations.
+The desktop client checkpoints a version-one layout and requests an acknowledged
+supervised replacement on `OUTDATED`. Its supervisor keeps the viewport and
+physical attachments, starts a new client, admits the same display identity,
+and announces readiness after the presenter renders. The replacement replays
+accepted tabs from committed layout and receives a fresh terminal grant.
+`make client-upgrade-check` and `make retained-client-upgrade-check` change the
+client definition while two live shells remain attached in source and packed
+launches.
 
-The retained owner currently runs as a `terminal.host` command. The pinned
-runtime delivers `OUTDATED` through `process.host` schedulers, so opting that
-command into upgrades would not receive definition-change events. An owner
-handoff first needs a supervised process boundary that receives invalidation
-and can restart an incompatible checkpoint without dropping its desktops.
+The application broker drains checkpoint persistence and exits after its owner
+acknowledges replacement. The workspace host starts a new broker and restores
+automatic application records. Viewport grants belong to the old broker and
+are reissued through the owner's existing admission path; manual executions
+are not restarted automatically. `make broker-upgrade-check` checks automatic
+Settings recovery and the retained desktop after a live definition change.
+If a replacement broker cannot start, the retained supervisor restarts the
+workspace host from its durable checkpoint and reattaches its desktops;
+`make retained-broker-fallback-check` exercises that failure in source and
+packed launches.
+
+The workspace host drains client routes, open requests and broker work before
+a same-PID `process.upgrade`. Its version-one checkpoint includes the broker
+identity, catalog and view revisions, admitted clients, assignment revision and
+questions. The new code validates the owner and workspace before announcing
+`bee.host.upgraded`. If it rejects the checkpoint, the supervisor keeps its
+viewports, starts a host from durable workspace state, restarts retained
+clients and admits them again. The node host manager performs the same owner
+acknowledgement and replacement for leased hosts while preserving leases.
+`make host-upgrade-check` checks same-PID readiness with live shells;
+`make retained-host-fallback-check` checks incompatible checkpoint recovery.
+`make leased-host-upgrade-check` checks a live definition change through the
+node host manager while a desktop lease and attachment remain held.
+`make leased-host-fallback-check` checks an incompatible leased host checkpoint
+and desktop reattachment under the same lease.
+
+The retained owner command runs on `terminal.host`, which does not receive
+`OUTDATED`. It keeps the route and workspace supervisor while a code-bearing
+owner controller runs from the same `bee.launch:owner` definition on
+`bee:workers`. Definition invalidation makes that
+controller send a version-one route checkpoint, wait for command acknowledgement
+and exit. The command starts the new definition and sends its current workspace
+identity; an incompatible checkpoint falls back to a fresh controller while
+the command, workspace host and desktop clients stay attached. The command
+reobserves bridge readiness after controller replacement. `make
+retained-owner-check` checks a live definition change and incompatible
+checkpoint fallback in the source owner, plus packed owner startup.
+
+Hive supervisor and module service handoff, generation rollback and native
+binary cutover remain proposals. Viewport handles and registry metadata are
+never checkpoint authority or permission grants.

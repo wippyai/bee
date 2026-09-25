@@ -215,9 +215,11 @@ def apply_staged_in_ui(ui, staged, root, expected_capability=None):
         ui.key(b"j")
     else:
         raise AssertionError("exact replacement approval is absent\n" + ui.text())
-    if expected_capability:
-        ui.wait("Change: added: " + expected_capability, timeout=20)
-        ui.wait("Capability: " + expected_capability, timeout=20)
+    expected_capabilities = ([expected_capability] if isinstance(expected_capability, str)
+                             else list(expected_capability or []))
+    for capability in expected_capabilities:
+        ui.wait("Change: added: " + capability, timeout=20)
+        ui.wait("Capability: " + capability, timeout=20)
     ui.key(b"a")
     ui.wait("Approve this request?", timeout=20)
     ui.key(b"\t")

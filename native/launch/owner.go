@@ -164,9 +164,6 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 		"internode.tls.key_file":              transport.KeyFile,
 		"internode.tls.ca_file":               transport.CAFile,
 	}
-	if hint := meshDialHint(state); hint != "" {
-		cluster["membership.meta."+dialMetadataKey] = hint
-	}
 	desktop := map[string]any{
 		"execution":     execution,
 		"expires_at":    ownerExpiry(),

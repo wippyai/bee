@@ -94,8 +94,17 @@ the person, as `bee:approver_policies` ships it), the admitted entry kinds and
 native modules, and the admission policies and thread access of the one
 application entry.
 
-The rule applies only to an overlay this node authored whose name is lowercase
-letters, digits and underscores starting with a letter. Overlay `todo` gets
+The rule applies to an overlay whose name is lowercase letters, digits and
+underscores starting with a letter, authored on this node or, while the rule's
+`hive` flag is `true` (the shipped value), received over Hive from another
+node. A Hive-received overlay is admitted the same way on its destination: the
+destination instantiates its own profile and capability catalog, its own
+person approves the first install, and it installs its own grants. Grants
+never travel with an artifact: an upgrade reuses only the destination's own
+installed grant record under the same containment rule as a local upgrade. An
+application name belongs to the source node whose activation holds it; an
+overlay with the same name from another node is refused instead of replacing
+it. With `hive: false` the rule covers only overlays this node authored. Overlay `todo` gets
 component and namespace `app.todo`, the application entry `app.todo:app` under
 the ordinary application boundary, and the private overlay owner
 `bee.gov.apps:<workspace_id>.todo`. Nothing under the
@@ -128,10 +137,32 @@ operation/resource/scope values, compare two resolved grant sets semantically,
 and render host-authored permission text with combined read-to-egress lines.
 For workspace application delivery, the host resolves these values before
 approval and shows the full set, changes from the installed grant, and any
-combined data flows in Approvals. Only `threads.read` with `scope: owned` has
-an installable policy in this slice; unsupported requests fail resolution. The
-shipped module ceiling includes `funcs` so the installed policy can authorize
-calls to the Threads owner, which checks the application's actor membership.
+combined data flows in Approvals. `threads.read` with `scope: owned`,
+`workspace.files.read`, `workspace.files.write` and `app.database` have
+installable host entries; the remaining templates are review vocabulary until
+their resource and owner boundaries arrive, and unsupported requests fail
+resolution. A file grant installs a host-created `fs.directory` at a verified
+workspace subroot: the pinned runtime confines traversal and symlinks below
+that root, a read grant is read-only at the filesystem boundary, and private
+paths and Bee state (`.wippy`) are refused, including ancestor subroots that
+would expose them. A database grant installs a host-provisioned dedicated
+SQLite store outside the readable tree with a `db.get`-only policy on that
+store. The shipped module ceiling includes `funcs` so the installed policy can
+authorize calls to the Threads owner, which checks the application's actor
+membership, plus `fs` and `sql` so file and database grants are callable
+through the granted identities shown at approval. A child-thread message
+grant authorizes calls to the Threads owner's message verbs, which check the
+caller's membership; a launch grant authorizes `bee.harness.launch` on exactly
+the approved definitions through the application launch facade, which binds
+the attempt to the caller's workspace and admits no inherited app grant. A
+contract grant authorizes `contract.open` on the exact binding and
+`contract.call` on the exact methods; the callee owner still checks the
+authenticated caller and workspace against the installed grant record before
+using its own authority, so a grant for one binding never reaches another. An
+HTTP grant authorizes `http_client.request` on URLs under the approved origin
+and path prefix; the approved methods stay review-visible and
+containment-gated because the runtime authorizes the URL alone. Hive exposure
+remains host-published review vocabulary with no app-installable enforcement.
 
 On approval, one registry overlay transaction installs host-owned policies in
 `bee.gov.grants`, fills the requirement defaults, and records the grant
@@ -142,22 +173,27 @@ its resolved set is contained in the installed grant, it reuses that approval
 and installs only the requested subset. Widening asks the person to approve
 the delta; refusal leaves the installed version and grant intact.
 
-The shipped `workspace_applications` ceiling admits only `process.lua` and
-`library.lua` entries. Native imports are limited to `tty`, `process`,
-`channel`, `json`, `time`, `uuid`, `base64` and `hash`. The application binding
-gets `bee.security:ordinary_app_subsystem_boundary` and `thread_access: none`.
-`db.sql.sqlite`, `store.memory`, `sql` and `store` are outside this ceiling.
-These are ceilings, not a grant to launch any agent definition: launch remains
-subject to the host's separate definition and application policies. Although
-the catalog describes app database, launch and thread requests, this rule does
-not provision an app database or install requested launch or thread grants.
+The shipped `workspace_applications` ceiling admits `process.lua`,
+`library.lua` and `ns.requirement` entries. Native imports are limited to
+`tty`, `process`, `channel`, `json`, `time`, `uuid`, `base64`, `hash`, `funcs`,
+`fs` and `sql`. The application binding gets
+`bee.security:ordinary_app_subsystem_boundary` and `thread_access: none`; the
+generated grant policies add exactly the approved file, database and thread
+reach. `store.memory` and `store` are outside this ceiling. These are ceilings,
+not a grant to launch any agent definition: launch remains subject to the
+host's separate definition and application policies. Although the catalog
+also describes Hive exposure, this rule does not install that grant: Hive
+exposure stays host-published.
 
 ### Can a workspace application get its own database?
 
-No app-owned SQL or KV database is provisioned for a workspace application.
-The implemented durable state is an opt-in application checkpoint of at most
-65,536 bytes. It survives workspace restart for an automatic instance; closing
-the live view removes its resume record, so it is not a durable app database.
+Yes, through the `app.database` capability: the destination binds the
+requested logical name to a host-provisioned dedicated SQLite store, runs the
+application's migrations against it in append-only order before the
+application starts, and admits only that store through the generated policy.
+The opt-in application checkpoint of at most 65,536 bytes remains for small
+resume state. Closing the live view removes its resume record, while the
+database file persists.
 
 A person reviews the staged plan in Start › Tools › Overlays, selects and
 prepares it there, approves the request in Start › Tools › Approvals, and lets
@@ -169,9 +205,9 @@ Code building the application from its written spec.
 
 ## Limits
 
-File and database provisioning and contract gateways are later work. The
-installed `threads.read` policy is registry authority for the selected
-application scope. Runtime agent elevation is implemented through the gateway
+Hive exposure is later work. The installed file, database, thread, launch,
+contract and HTTP grants are registry authority for the selected application
+scope. Runtime agent elevation is implemented through the gateway
 `request_capability` and `capability_status` tools: an approval bound to the
 authenticated thread and attempt consumes once and writes one thread-actor
 resources grant the attempt's placement resolves. Active revocation fencing is

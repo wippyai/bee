@@ -70,7 +70,7 @@ func runHive(ctx context.Context, out io.Writer, client *hive.Join, directory st
 			if err != nil {
 				return err
 			}
-			return wslInviteNotice(os.Stderr, owner, address, command)
+			return wslInviteNotice(os.Stderr, owner, address)
 		}
 		if _, err := fmt.Fprintln(out, line.String()); err != nil {
 			return err
@@ -79,7 +79,7 @@ func runHive(ctx context.Context, out io.Writer, client *hive.Join, directory st
 		if err != nil {
 			return err
 		}
-		return wslInviteNotice(os.Stderr, owner, address, command)
+		return wslInviteNotice(os.Stderr, owner, address)
 	case hiveInvites:
 		records, err := client.Invites(ctx)
 		if err != nil {
@@ -123,7 +123,7 @@ func runHive(ctx context.Context, out io.Writer, client *hive.Join, directory st
 
 // wslInviteNotice prints the informational WSL2 NAT notice for an invite this
 // owner just minted. It prints nothing on a host that is not a WSL2 NAT guest.
-func wslInviteNotice(errOut io.Writer, owner rendezvous.Descriptor, join netip.AddrPort, command hiveCommand) error {
+func wslInviteNotice(errOut io.Writer, owner rendezvous.Descriptor, join netip.AddrPort) error {
 	guest := wslNATAddress()
 	if guest == "" {
 		return nil

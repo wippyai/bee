@@ -49,7 +49,7 @@ entries:
     type: bee.capability_catalog
     comment: Host-owned review vocabulary and templates; declarations are not grants
   data:
-    revision: 1
+    revision: 2
     never: [exec, env, credentials, registry.write, security.policy.write, security.scope.manage, approvals.decide, core.database, lifecycle.auto_start]
     capabilities:
     - id: workspace.files.read
@@ -61,6 +61,15 @@ entries:
       - {operation: files.read, resource: workspace, scope: {subpath: '$subpath'}}
       resources:
       - {kind: fs.directory, mode: readonly, source: verified_workspace_subroot}
+    - id: workspace.files.write
+      revision: 1
+      parameters: {subpath: relative_subpath}
+      text: Write workspace files under {subpath}
+      confirm: explicit
+      policies:
+      - {operation: files.write, resource: workspace, scope: {subpath: '$subpath'}}
+      resources:
+      - {kind: fs.directory, mode: readwrite, source: verified_workspace_subroot}
     - id: app.database
       revision: 1
       parameters: {name: name}

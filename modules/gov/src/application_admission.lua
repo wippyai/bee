@@ -254,7 +254,8 @@ function M.project(raw: unknown): (Measurement?, string?)
             local id = entry and registry_id(entry.id) or nil
             if not entry or not id or (not id:match("^bee%.gov%.grants:policy%.[0-9a-f]+$")
                 and not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$"))
-                or generated[id] or entry.kind ~= "security.policy" then
+                or generated[id]
+                or (entry.kind ~= "security.policy" and entry.kind ~= "security.policy.expr") then
                 return nil, "generated application policy is invalid"
             end
             generated[id] = entry

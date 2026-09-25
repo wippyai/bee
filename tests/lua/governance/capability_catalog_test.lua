@@ -27,9 +27,10 @@ local function define_tests()
             local decoded = assert(catalog.decode(shipped))
             local count = 0
             for _ in pairs(decoded.capabilities) do count = count + 1 end
-            test.eq(count, 8)
+            test.eq(count, 9)
             test.is_true(decoded.never.credentials)
             test.eq(decoded.capabilities["hive.expose"].confirm, "explicit")
+            test.eq(decoded.capabilities["workspace.files.write"].confirm, "explicit")
             local database = assert(catalog.resolve(decoded, "app.database", {name = "journal"}))
             local api = assert(catalog.resolve(decoded, "http.api", {
                 origin = "https://api.example.com", methods = {"POST"}, path_prefix = "/upload"}))

@@ -280,7 +280,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			}
 		}
 		if i == 0 && agent == nil {
-			governancePath := filepath.Join(project, "src", "_index.yaml")
+			governancePath := filepath.Join(project, "src", "env", "_index.yaml")
 			governance, err := os.ReadFile(governancePath)
 			if err != nil {
 				t.Fatal(err)
@@ -341,11 +341,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		}
 		lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
 		for _, name := range moduleNames {
-			component := name
-			if name == "gov" {
-				component = "governance"
-			}
-			lock += "- name: bee/" + component + "\n  version: 0.1.0-dev\n"
+			lock += "- name: bee/" + name + "\n  version: 0.1.0-dev\n"
 		}
 		if err := os.WriteFile(filepath.Join(project, "wippy.lock"), []byte(lock), 0600); err != nil {
 			t.Fatal(err)
@@ -374,11 +370,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		}
 		replacements := map[string]string{}
 		for _, name := range moduleNames {
-			component := name
-			if name == "gov" {
-				component = "governance"
-			}
-			replacements["bee/"+component] = "./modules/" + name
+			replacements["bee/"+name] = "./modules/" + name
 		}
 		config["workspace"] = map[string]any{"replacements": replacements}
 		data, err := json.Marshal(config)

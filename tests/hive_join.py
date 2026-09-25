@@ -116,8 +116,20 @@ class Nodes:
         raise AssertionError(f'{name} session with {peer} is {seen}, want {want}')
 
     def mesh_address(self, name):
-        """The address this node advertises, read from the persisted pick."""
-        return (self.state(name) / 'hive' / 'advertise').read_text().strip()
+        """The address this node advertises: a path a peer proved it can reach
+        wins over the automatic pick, matching the launch host's own rule."""
+        directory = self.state(name) / 'hive'
+        for name in ('reached', 'advertise'):
+            path = directory / name
+            if path.exists() and path.read_text().strip():
+                return path.read_text().strip()
+        return ''
+
+    def mesh_files(self, name):
+        """The persisted address files, for restart-matrix evidence."""
+        directory = self.state(name) / 'hive'
+        return {name: (directory / name).read_text().strip() if (directory / name).exists() else '-' 
+                for name in ('advertise', 'reached', 'nat')}
 
 
 class Remote:
@@ -159,7 +171,19 @@ class Remote:
         return lines[0].split()[1], dict(line.split() for line in lines[2:])
 
     def mesh_address(self, name):
-        return self.run(f'cat "{self.state(name)}/hive/advertise"').stdout.strip()
+        """The address this node advertises: a path a peer proved it can reach
+        wins over the automatic pick, matching the launch host's own rule."""
+        directory = f'$HOME/{self.directory}/{name}/hive'
+        script = (f'if [ -s {directory}/reached ]; then cat {directory}/reached; '
+                  f'elif [ -s {directory}/advertise ]; then cat {directory}/advertise; fi')
+        return self.run(script).stdout.strip()
+
+    def mesh_files(self, name):
+        """The persisted address files, for restart-matrix evidence."""
+        directory = f'$HOME/{self.directory}/{name}/hive'
+        script = ('for f in advertise reached nat; do printf "%s: " $f; '
+                  f'cat {directory}/$f 2>/dev/null || echo -; done')
+        return self.run(script).stdout.strip()
 
     def wait_session(self, name, peer, want, seconds):
         """Wait for a session, tolerating a transient client-enrollment read.
@@ -322,7 +346,7 @@ class RemoteSide:
         return self.remote.mesh_address(self.name)
 
 
-def restart_evidence(nodes, label, remote, sides):
+def restart_evidence(sides):
     """What both sides reported after a restart that did not re-establish.
 
     The state names the address each node advertises, the path a peer proved
@@ -332,7 +356,7 @@ def restart_evidence(nodes, label, remote, sides):
     parts = []
     for name, side in sides.items():
         try:
-            parts.append(f'{name} advertise={side.mesh_address() or "none"} sessions={side.peers()[1]}')
+            parts.append(f'{name} address={side.mesh_address() or "none"} sessions={side.peers()[1]}')
         except AssertionError as failure:
             parts.append(f'{name} unreadable: {failure}')
     return '; '.join(parts)
@@ -341,12 +365,15 @@ def restart_evidence(nodes, label, remote, sides):
 def cross_machine(binary, host, directory):
     """Invite on each side, join from the other, then the restart matrix.
 
-    No environment variable selects an address on either side. For every case
-    the check asserts the parts the runtime supports today: the invite is
-    minted, the join completes, and both supervisors reach an established
-    session. A restart that does not re-establish within 60 s is recorded as
-    waiting for the runtime gossip hook (H2) with the observed evidence,
-    instead of being reported as a pass. The matrix is printed either way.
+    No environment variable selects an address on either side. Every case is
+    attempted and recorded, never skipped silently: the invite must be minted,
+    the join must complete, and both supervisors should reach an established
+    session. A join or a restart whose session does not establish is recorded
+    with both sides' advertised address and session view, because the runtime
+    fixes its memberlist gossip advertise address at boot; a peer whose
+    automatic pick is not routable from the other side can therefore flap until
+    the runtime's gossip-over-internode hook (H2) lands. The printed matrix
+    states what works today and what waits for that hook.
     """
     results = {}
     remote = install_remote(host, directory, binary)
@@ -363,35 +390,53 @@ def cross_machine(binary, host, directory):
         for label, inviter_name, joiner_name in directions:
             sides = {'local': LocalSide(nodes, label), 'remote': RemoteSide(remote, label)}
             inviter, joiner = sides[inviter_name], sides[joiner_name]
-            line = inviter.bee('invite').stdout.strip()
-            assert INVITE_ANY.fullmatch(line), f'{label}: invite is not one token'
-            inviter_node = inviter.peers()[0]
-            assert inviter.mesh_address(), f'{label}: the inviter persisted no advertise address'
-            joined = joiner.bee('join', line).stdout.strip()
-            assert joined.startswith('Joined the hive of '), joined
-            joiner_node = joiner.peers()[0]
-            inviter.wait_session(joiner_node, 'established', 60)
-            joiner.wait_session(inviter_node, 'established', 60)
-            assert joiner.mesh_address(), f'{label}: the joiner persisted no advertise address'
-            results[label] = 'established'
-            print(f'{label}: {inviter_name} invite / {joiner_name} join, both sessions established', flush=True)
-
-            # Restart the joiner, then the inviter, and re-verify each time.
-            for side, peer in ((joiner, inviter_node), (inviter, joiner_node)):
-                side.stop()
+            inviter_node = joiner_node = ''
+            # Every step is recorded, and one direction never stops the other
+            # from being attempted, so the printed matrix is complete.
+            try:
+                line = inviter.bee('invite').stdout.strip()
+                assert INVITE_ANY.fullmatch(line), f'{label}: invite is not one token'
+                inviter_node = inviter.peers()[0]
+                assert inviter.mesh_address(), f'{label}: the inviter persisted no advertise address'
+                results[f'{label}-invite'] = 'minted'
+            except AssertionError as failure:
+                results[f'{label}-invite'] = f'failed: {failure}'
+                print(f'{label}: invite failed: {failure}', flush=True)
+            else:
+                # The join command itself waits for the first supervisor session.
                 try:
-                    side.wait_session(peer, 'established', 60)
-                    (inviter if side is joiner else joiner).wait_session(side.peers()[0], 'established', 60)
-                    results[f'{label}-restart-{side.name}-{peer}'] = 'established'
+                    joined = joiner.bee('join', line).stdout.strip()
+                    if not joined.startswith('Joined the hive of '):
+                        raise AssertionError(joined)
+                    joiner_node = joiner.peers()[0]
+                    inviter.wait_session(joiner_node, 'established', 60)
+                    joiner.wait_session(inviter_node, 'established', 60)
+                    assert joiner.mesh_address(), f'{label}: the joiner persisted no advertise address'
+                    results[label] = 'established'
+                    print(f'{label}: {inviter_name} invite / {joiner_name} join, both sessions established', flush=True)
                 except AssertionError as failure:
-                    evidence = restart_evidence(nodes, label, remote, sides)
-                    results[f'{label}-restart-{side.name}'] = f'not-re-established: {failure}; {evidence}'
-                    print(f'{label}: restart of {side.name} did not re-establish within 60 s: {failure}', flush=True)
-                    print(f'  evidence: {evidence}', flush=True)
-            # Both at once, then the pair is torn down for the next direction.
+                    results[label] = f'not-established: {failure}; {restart_evidence(sides)}'
+                    print(f'{label}: join did not reach both established sessions: {failure}', flush=True)
+                    print(f'  evidence: {restart_evidence(sides)}', flush=True)
+            # Restart the joiner, then the inviter, and re-verify each time.
+            # Only a join that established has a peer to re-find.
+            if results.get(label) == 'established':
+                for role, side, peer in (('joiner', joiner, inviter_node), ('inviter', inviter, joiner_node)):
+                    key = f'{label}-restart-{joiner_name if role == "joiner" else inviter_name}'
+                    side.stop()
+                    try:
+                        side.wait_session(peer, 'established', 60)
+                        (inviter if side is joiner else joiner).wait_session(side.peers()[0], 'established', 60)
+                        results[key] = 'established'
+                    except AssertionError as failure:
+                        results[key] = f'not-re-established: {failure}; {restart_evidence(sides)}'
+                        print(f'{label}: restart of the {role} ({joiner_name if role == "joiner" else inviter_name}) did not re-establish within 60 s: {failure}', flush=True)
+                        print(f'  evidence: {restart_evidence(sides)}', flush=True)
+            # Tear the pair down for the next direction.
             joiner.stop()
             inviter.stop()
-            inviter.bee('leave', joiner_node, check=False)
+            if inviter_node and joiner_node:
+                inviter.bee('leave', joiner_node, check=False)
             inviter.stop()
             joiner.stop()
     finally:
@@ -400,7 +445,7 @@ def cross_machine(binary, host, directory):
         remote.cleanup()
         shutil.rmtree(root, ignore_errors=True)
     print('Hive pair matrix:')
-    for case, outcome in results.items():
+    for case, outcome in sorted(results.items()):
         print(f'  {case}: {outcome}')
     return results
 

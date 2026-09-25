@@ -75,8 +75,8 @@ authoring overlay slot on the node. Exhaustion fails explicitly; there is no
 eviction, garbage collection or ownership transfer yet. Frozen content and
 receipts are durable; they do not imply activation,
 approval, or automatic restoration of runtime definitions. This virtual file API
-does not mount a host directory or execute WASM. Hive transfer, inbox requests,
-plugin dispatch and new-database allocation remain unimplemented.
+does not mount a host directory or execute WASM. Hive transfer, inbox requests
+and plugin dispatch remain unimplemented.
 
 `make governance-workspace-check` proves the public route with distinct actors
 and two boots of the same database: binary round trips, denied caller/foreign

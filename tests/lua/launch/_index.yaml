@@ -43,6 +43,14 @@ entries:
     test: wippy.test:test
     hosts: bee.launch:hosts
     leases: bee.application:host_leases
+- name: holdings_test
+  kind: function.lua
+  source: file://holdings_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    hosts: bee.launch:hosts
 - name: switch_relay
   kind: process.lua
   source: file://switch_relay.lua

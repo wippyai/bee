@@ -180,7 +180,7 @@ func TestPrepareOwnerDesktopPeerGrantRequiresPinnedPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = release() }()
-	input, _ := config.Get("override.bee.hive.host:supervisor_service:input")
+	input, _ := config.Get("override.bee.hive_host:supervisor_service:input")
 	settings := input.([]any)[0].(map[string]any)
 	bridge := settings["desktop"].(map[string]any)
 	if static := bridge["allowed_nodes"].([]any); len(static) != 0 {

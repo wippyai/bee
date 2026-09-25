@@ -535,6 +535,15 @@ CREATE TABLE bee_thread_inbox_outbox (
 );
 CREATE INDEX bee_thread_inbox_outbox_due ON bee_thread_inbox_outbox(state, next_attempt_ms);
 ]]
+-- Cross-node replies reuse the forwarding outbox: a reply is a forwarded
+-- send that also names the inbox request it answers, so the destination can
+-- re-check the same correlation a local reply does. The columns are nullable
+-- because ordinary sends leave them empty.
+local ACTION_INBOX_OUTBOX_REPLY_SQL = [[
+ALTER TABLE bee_thread_inbox_outbox ADD COLUMN in_reply_to_thread_id TEXT;
+ALTER TABLE bee_thread_inbox_outbox ADD COLUMN in_reply_to_record_id TEXT;
+ALTER TABLE bee_thread_inbox_outbox ADD COLUMN outcome TEXT CHECK(outcome IN ('succeeded','failed','cancelled','uncertain'));
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -550,6 +559,7 @@ local list: {Migration} = {
     {id = 12, name = "action_inbox_push", sql = ACTION_INBOX_PUSH_SQL, rebuild = false},
     {id = 13, name = "action_inbox_delivery_status", sql = ACTION_INBOX_DELIVERY_STATUS_SQL, rebuild = false},
     {id = 14, name = "action_inbox_outbox", sql = ACTION_INBOX_OUTBOX_SQL, rebuild = false},
+    {id = 15, name = "action_inbox_outbox_reply", sql = ACTION_INBOX_OUTBOX_REPLY_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

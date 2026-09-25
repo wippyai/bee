@@ -112,8 +112,14 @@ end
 function M.watch(db: sql.DB, actor: string, request: unknown): Result
     local object = bounds.object(request)
     if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"thread_id", "after_sequence", "wait_ms", "transport_budget_ms"})
+    -- caller_node_id is the authenticated caller attestation a forwarded
+    -- request carries; the admission already verified it, and the owner
+    -- accepts it so a cross-node watch is not rejected for naming its caller.
+    local unknown_field = bounds.fields(object, {"thread_id", "after_sequence", "wait_ms", "transport_budget_ms", "caller_node_id"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    if object.caller_node_id ~= nil and not bounds.id(object.caller_node_id) then
+        return failure("INVALID_ARGUMENT", "caller_node_id is not an identifier")
+    end
     local thread_id = bounds.id(object.thread_id)
     if not thread_id then return failure("INVALID_ARGUMENT", "thread_id is not an identifier") end
     local after = bounds.cursor(object.after_sequence)

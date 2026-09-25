@@ -121,6 +121,17 @@ entries:
       - {operation: hive.expose, resource: '$contract', scope: {methods: '$methods'}}
       resources:
       - {kind: contract.binding, mode: hive, source: host_selected_contract}
+- name: thread_outbox_pump_service
+  kind: process.service
+  process: bee.threads.service:pump_worker
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.threads.pump}
+      policies: [bee.security.threads:thread_outbox_pump_policy]
+    restart:
+      max_attempts: 10
 - name: sync_distribution_service
   kind: process.service
   process: bee.sync.service:distribution_worker

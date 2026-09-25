@@ -11,7 +11,7 @@ decides; a grant may open a direct session.
 |---|---|
 | `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `client`, the supervisor-host provenance resource, and the default host composition (`replica_sender`, `supervisor_service`, `workspaces`) |
 | `bee.hive.registry` | `catalog`, the registry read model for operation exposure and interfaces |
-| `bee.hive.telemetry` | The first open operations: `presence`, `stats`, `catalog_list` |
+| `bee.hive.telemetry` | The open operations: `presence`, `stats`, `catalog_list`, and the root's `bee.hive.api:workspaces` and `bee.hive.api:holdings` |
 | `bee.hive.supervisor` | The root-owned supervisor: hello, admission, forwarding, guarded dispatch, epochs (Astra's lane) |
 | `bee.hive.desktop` | Root-owned desktop integration |
 

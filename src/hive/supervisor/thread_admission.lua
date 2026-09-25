@@ -24,14 +24,40 @@ local M = {}
 M.OPERATION_REVISION = "1"
 M.EXPOSURE_MODE = "policy"
 M.OWNER_SERVICE = "bee.threads"
+-- The exact owner service each forwarded operation must name.
+local OWNER_SERVICE_BY_OPERATION: {[string]: string} = {
+    ["bee.threads.service:send"] = "bee.threads",
+    ["bee.threads.service:send_status"] = "bee.threads",
+    ["bee.threads.service:inbox_describe"] = "bee.threads",
+    ["bee.threads.service:inbox_send"] = "bee.threads",
+    ["bee.threads.service:inbox_reply"] = "bee.threads",
+    ["bee.threads.service:notify"] = "bee.threads",
+    ["bee.threads.delivery:watch"] = "bee.threads.delivery",
+}
+-- Every forwarded thread operation, by reference. Each is owned by the
+-- service its namespace names; a request may not choose another owner.
 M.OPERATIONS = {["bee.threads.service:send"] = true, ["bee.threads.service:send_status"] = true,
-    ["bee.threads.service:inbox_describe"] = true, ["bee.threads.service:inbox_send"] = true}
+    ["bee.threads.service:inbox_describe"] = true, ["bee.threads.service:inbox_send"] = true,
+    ["bee.threads.service:inbox_reply"] = true, ["bee.threads.service:notify"] = true,
+    ["bee.threads.delivery:watch"] = true}
 local fields_by_operation: {[string]: {string}} = {
     ["bee.threads.service:send"] = {"thread_id", "idempotency_key", "caller_node_id", "payload_digest", "message", "context"},
     ["bee.threads.service:send_status"] = {"thread_id", "idempotency_key", "caller_node_id"},
     ["bee.threads.service:inbox_describe"] = {"thread_id", "action_id", "node_id", "attempt_id", "caller_node_id"},
     ["bee.threads.service:inbox_send"] = {"thread_id", "target_action_id", "sender_thread_id", "sender_action_id", "node_id", "workspace_id",
         "grant_epoch", "idempotency_key", "message_id", "content", "payload_digest", "caller_node_id"},
+    -- A cross-node reply commits into the original sender's inbox on this node
+    -- exactly as a send does, so the destination re-checks workspace, grant,
+    -- target action, epoch and the reply's own correlation.
+    ["bee.threads.service:inbox_reply"] = {"thread_id", "target_action_id", "sender_thread_id", "sender_action_id", "node_id", "workspace_id",
+        "grant_epoch", "idempotency_key", "message_id", "content", "payload_digest", "in_reply_to", "outcome", "caller_node_id"},
+    -- A cross-node notice registers the mapped principal's watch on a thread it
+    -- is a member of on this node; membership is still the owner's decision.
+    ["bee.threads.service:notify"] = {"thread_id", "idempotency_key", "target_thread_id", "target_action_id", "watcher_action_id", "caller_node_id"},
+    -- A bounded cross-node watch reads one page of a thread on this node; the
+    -- owner re-applies membership, and the wait is bounded by the owner's own
+    -- ceiling before any reply.
+    ["bee.threads.delivery:watch"] = {"thread_id", "after_sequence", "wait_ms", "transport_budget_ms", "caller_node_id"},
 }
 M.FIELDS = fields_by_operation
 M.RESERVED = {"actor", "actor_id", "principal", "principal_id", "principal_ref", "scope", "policies", "owner_id"}
@@ -48,7 +74,14 @@ function M.admit(local_node: string, request: types.Request, mappings: principal
     if not M.OPERATIONS[request.operation_ref] then return nil, types.fault("UNSUPPORTED_CAPABILITY", "operation " .. request.operation_ref .. " is not a thread operation") end
     if not security.can(catalog.exposure_action(M.EXPOSURE_MODE), request.operation_ref) then return nil, types.fault("DENIED", "the host does not expose " .. request.operation_ref .. " to forwarded principals") end
     if request.owner_ref.node_id ~= local_node then return nil, types.fault("DENIED", "request owner is not on this node") end
-    if request.owner_ref.service_id ~= M.OWNER_SERVICE then return nil, types.fault("INVALID_ARGUMENT", "owner must be the " .. M.OWNER_SERVICE .. " service") end
+    -- Each forwarded operation binds its exact owner service: a request may
+    -- not retarget a thread operation onto another service. The thread owner
+    -- serves the inbox operations and the reply/notice/watch extensions; the
+    -- delivery namespace serves only the bounded remote watch.
+    local owner_service = OWNER_SERVICE_BY_OPERATION[request.operation_ref]
+    if not owner_service or request.owner_ref.service_id ~= owner_service then
+        return nil, types.fault("INVALID_ARGUMENT", "owner service does not match the operation")
+    end
     if request.operation_revision ~= M.OPERATION_REVISION then return nil, types.fault("CONFLICT", "operation revision mismatch") end
     local fields = fields_by_operation[request.operation_ref]
     if not fields then return nil, types.fault("UNSUPPORTED_CAPABILITY", "operation " .. request.operation_ref .. " has no payload contract") end

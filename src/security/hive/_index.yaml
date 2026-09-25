@@ -33,6 +33,7 @@ entries:
     - bee.hive.telemetry:stats
     - bee.hive.telemetry:catalog_list
     - bee.hive.api:workspaces
+    - bee.hive.api:holdings
     - bee.threads:capabilities
     effect: allow
 - name: hive_policy_exposure_policy
@@ -105,6 +106,9 @@ entries:
     - bee.threads.service:send_status
     - bee.threads.service:inbox_describe
     - bee.threads.service:inbox_send
+    - bee.threads.service:inbox_reply
+    - bee.threads.service:notify
+    - bee.threads.delivery:watch
     - bee.hive.supervisor:invoke_check
     effect: allow
 - name: hive_thread_exposure_policy
@@ -120,6 +124,9 @@ entries:
     - bee.threads.service:send_status
     - bee.threads.service:inbox_describe
     - bee.threads.service:inbox_send
+    - bee.threads.service:inbox_reply
+    - bee.threads.service:notify
+    - bee.threads.delivery:watch
     effect: allow
 - name: hive_supervisor_policy
   kind: security.policy
@@ -140,6 +147,7 @@ entries:
     - bee.hive.telemetry:stats
     - bee.hive.telemetry:catalog_list
     - bee.hive.api:workspaces
+    - bee.hive.api:holdings
     - bee.threads:capabilities
     effect: allow
 - name: hive_supervisor_spawn_deny

@@ -262,3 +262,11 @@ entries:
     resources: '*'
     expression: action == "process.send" || resource == "bee.threads.waiter"
     effect: allow
+- name: thread_outbox_pump_policy
+  kind: security.policy
+  meta:
+    comment: Selected by the host for the forwarding pump; it reaches the shared outbox tables and nothing else, and the host links its transport separately
+  policy:
+    actions: [db.get, registry.get, system.read, process.registry.lookup, process.listen, process.unlisten, process.send, channel.select]
+    resources: '*'
+    effect: allow

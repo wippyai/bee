@@ -58,11 +58,11 @@ local function current_mappings(): principals.Mappings
     if not mappings then error(tostring(err)) end
     return mappings
 end
-local function forwarded(operation: string, input: Object, subject_id: string, extra: Object?): types.Request
+local function forwarded(operation: string, input: Object, subject_id: string, extra: Object?, service: string?): types.Request
     local now = time.now()
     local digest = assert(types.digest(input))
     local value: Object = {protocol_revision = types.REVISION, request_id = "req-" .. key():sub(1, 8), idempotency_key = key(), caller_node_id = REMOTE, caller_incarnation = "1",
-        owner_ref = {node_id = local_node(), service_id = "bee.threads", resource_ref = input.thread_id}, operation_ref = operation, operation_revision = "1", input = input, input_digest = digest,
+        owner_ref = {node_id = local_node(), service_id = service or "bee.threads", resource_ref = input.thread_id}, operation_ref = operation, operation_revision = "1", input = input, input_digest = digest,
         principal_ref = {issuer = REMOTE, subject_id = subject_id},
         principal_assertion = {method = types.ASSERTION_METHOD, audience = local_node(), issued_at = now:utc():format(FORMAT), expires_at = now:add("20s"):utc():format(FORMAT)},
         delegation_refs = {}, deadline = now:add("20s"):utc():format(FORMAT)}
@@ -136,12 +136,14 @@ local function define_tests()
             changed.message_id = "m-2"
             changed.payload_digest = assert(sends.payload_digest({message_id = "m-2", content = content}))
             test.eq(harness.code(sender:call("inbox_send", changed)), "CONFLICT")
-            -- Cross-node replies are refused, not silently queued.
+            -- A cross-node reply must name an inbox request this node received
+            -- and answered from its own action; a correlation that matches
+            -- nothing is denied, never queued.
             local reply: {[string]: unknown} = {}
             for name, item in pairs(request) do reply[name] = item end
-            reply.in_reply_to = {thread_id = dest_thread, record_id = "record-0"}
+            reply.in_reply_to = {thread_id = sender_thread, record_id = "record-0"}
             reply.outcome = "succeeded"
-            test.eq(harness.code(sender:call("inbox_reply", reply)), "INVALID_ARGUMENT")
+            test.eq(harness.code(sender:call("inbox_reply", reply)), "DENIED")
             -- Settle the row so later cases start from an empty outbox.
             local cleanup = harness.value(sender:call("inbox_outbox_claim", {holder = "pump-1"}))
             test.eq(#cleanup.deliveries, 1)
@@ -243,6 +245,50 @@ local function define_tests()
             for name, item in pairs(input) do tampered[name] = item end
             tampered.payload_digest = string.rep("0", 64)
             test.eq(code(admitted(forwarded("bee.threads.service:inbox_send", tampered, ALPHA))), "INVALID_ARGUMENT")
+        end)
+        test.it("forwards a reply, a notice and a bounded watch to the destination owner", function()
+            local sender_thread, dest_thread = threads()
+            local content = {text = "reply me"}
+            local input = send_payload(dest_thread, sender_thread, "remote-action", WORKSPACE, 1, harness.key(), "m-r1", content)
+            value(admitted(forwarded("bee.threads.service:inbox_send", input, ALPHA)))
+            local page = harness.value(owner:call("inbox_list", {thread_id = dest_thread, action_id = "action-b", after_sequence = 0}))
+            local record_id = tostring((page.items[1] :: Object).record_id)
+            -- The destination re-checks the reply correlation and commits the
+            -- reply under the authenticated caller node.
+            local reply_payload: Object = {thread_id = dest_thread, target_action_id = "action-b", sender_thread_id = sender_thread,
+                sender_action_id = "remote-action", node_id = local_node(), workspace_id = WORKSPACE, grant_epoch = 1, idempotency_key = harness.key(),
+                message_id = "m-r2", content = {text = "answer"}, payload_digest = assert(sends.payload_digest({message_id = "m-r2", content = {text = "answer"}})),
+                in_reply_to = {thread_id = dest_thread, record_id = record_id}, outcome = "succeeded"}
+            local replied = value(admitted(forwarded("bee.threads.service:inbox_reply", reply_payload, ALPHA)))
+            test.eq(replied.state, "committed")
+            -- The destination still re-authorizes the mapped principal: a reply
+            -- at a stale epoch or naming another workspace is denied, whatever
+            -- correlation it carries. (Its correlation was validated on the
+            -- sender node, which is where the request item lives.)
+            local stale: Object = {}
+            for name, item in pairs(reply_payload) do stale[name] = item end
+            stale.idempotency_key = harness.key()
+            stale.message_id = "m-r3"
+            stale.payload_digest = assert(sends.payload_digest({message_id = "m-r3", content = {text = "answer"}}))
+            stale.grant_epoch = 9
+            test.eq(code(admitted(forwarded("bee.threads.service:inbox_reply", stale, ALPHA))), "CONFLICT")
+            -- A forwarded notice registers the mapped principal's watch on a
+            -- thread it is a member of; a principal the destination has not
+            -- admitted as a member is denied, whatever the payload says.
+            local member = harness.principal(ALPHA_ACTOR, GRANTS, WORKSPACE)
+            local watcher = harness.thread(member, "Watcher")
+            harness.value(member:call("admit_action", {thread_id = watcher, idempotency_key = harness.key(), action_id = "watch-action", admitted = admitted_for(ALPHA_ACTOR)}))
+            local notify = {thread_id = watcher, idempotency_key = harness.key(), target_thread_id = dest_thread, target_action_id = "action-b", watcher_action_id = "watch-action"}
+            test.eq(code(admitted(forwarded("bee.threads.service:notify", notify, ALPHA))), "DENIED")
+            -- Once the owner admits the member on the destination thread, the
+            -- same forwarded notice registers a pending watch.
+            harness.value(owner:call("join", {thread_id = dest_thread, idempotency_key = harness.key(), member_id = ALPHA_ACTOR, role = "participant", expected_revision = 1}))
+            local accepted = value(admitted(forwarded("bee.threads.service:notify", notify, ALPHA)))
+            test.eq(accepted.state, "pending")
+            -- A forwarded bounded watch reads one page of the destination thread.
+            local watch = value(admitted(forwarded("bee.threads.delivery:watch",
+                {thread_id = dest_thread, after_sequence = 0, wait_ms = 0, transport_budget_ms = 0}, ALPHA, nil, "bee.threads.delivery")))
+            test.not_nil(watch.status)
         end)
         test.it("settles destination notices and watches on a forwarded commit", function()
             local sender_thread, dest_thread = threads()

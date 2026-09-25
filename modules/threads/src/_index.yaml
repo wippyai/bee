@@ -32,6 +32,13 @@ entries:
   targets:
   - entry: bee.threads.delivery:waiter_service
     path: .lifecycle.security.policies
+- name: sender
+  kind: ns.requirement
+  meta:
+    comment: Host-selected forwarding sender for the outbox pump; the independent Threads owner has no transport default, and with no sender due rows stay queued
+  targets:
+  - entry: bee.threads.service:pump_worker
+    path: .imports.sender
 - name: database_ref
   kind: registry.entry
   meta:

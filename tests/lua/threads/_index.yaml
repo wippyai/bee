@@ -249,3 +249,11 @@ entries:
     harness: bee.threads:harness
     database: bee.threads.persist:database
     reader: bee.threads.persist:reader
+- name: pump_test
+  kind: function.lua
+  source: file://pump_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    pump: bee.threads.service:pump

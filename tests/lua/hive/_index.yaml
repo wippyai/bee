@@ -113,6 +113,15 @@ entries:
   modules: [process]
   imports:
     types: bee.hive:types
+- name: holdings_test
+  kind: function.lua
+  source: file://holdings_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, process, time]
+  imports:
+    test: wippy.test:test
+    leases: bee.application:host_leases
 - name: types_test
   kind: function.lua
   source: file://types_test.lua

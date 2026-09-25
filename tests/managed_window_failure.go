@@ -341,7 +341,7 @@ func run() error {
 	if err := os.WriteFile(indexPath, indexData, 0600); err != nil {
 		return err
 	}
-	hostPath := filepath.Join(dir, "src", "harness", "host", "_index.yaml")
+	hostPath := filepath.Join(dir, "src", "_index.yaml")
 	host, err := os.ReadFile(hostPath)
 	if err != nil {
 		return err

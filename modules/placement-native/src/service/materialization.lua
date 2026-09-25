@@ -62,10 +62,9 @@ end
 -- sign-in flow after prepare, so this examines existence only at prepare time.
 -- All declared paths are already decoded as safe relative paths.
 function M.login_notice(request: types.LaunchRequest, selected_home: string,
-    is_file: (string) -> boolean?, projected_login_present: boolean?): types.LoginNotice?
+    is_file: (string) -> boolean?, projected_login_path: string?): types.LoginNotice?
     local login = request.launch.login
     if request.profile_id ~= "window" or not login then return nil end
-    if projected_login_present == true then return nil end
     if selected_home:sub(1, 1) ~= "/" then return nil end
     for _, file in ipairs(login.files) do
         local directory = request.environment[file.variable]
@@ -78,13 +77,15 @@ function M.login_notice(request: types.LaunchRequest, selected_home: string,
         -- A relative override depends on the eventual working directory and
         -- cannot be diagnosed from this home without guessing.
         if directory:sub(1, 1) ~= "/" or directory:find("[%z\r\n]") then return nil end
-        local present = is_file(directory .. "/" .. file.path)
+        local path = directory .. "/" .. file.path
+        if path == projected_login_path then return nil end
+        local present = is_file(path)
         if present == nil or present == true then return nil end
     end
     return {code = "LOGIN_REQUIRED", provider = login.provider, command = login.command}
 end
 function M.prepare_login_notice(request: types.LaunchRequest, private_home: string,
-    projected_login_present: boolean?): types.LoginNotice?
+    projected_login_path: string?): types.LoginNotice?
     if request.profile_id ~= "window" or not request.launch.login then return nil end
     local selected_home = private_home
     if request.environment_refs.HOME == "bee:machine_home" then
@@ -100,7 +101,7 @@ function M.prepare_login_notice(request: types.LaunchRequest, private_home: stri
         if info then return info.type == "file" and info.is_dir ~= true end
         if stat_error and stat_error:kind() == errors.NOT_FOUND then return false end
         return nil
-    end, projected_login_present)
+    end, projected_login_path)
 end
 -- Native placement selects either its private home or the host's user home.
 -- Arbitrary HOME values remain refused; an admitted gateway owns its tokens.

@@ -143,7 +143,7 @@ end
 -- Checks one credential projection's bindings without bytes. File logins are
 -- meaningful only in a caller-selected retained home: an attempt home would
 -- discard them on cleanup.
-local function check_projection(request: types.LaunchRequest, projection_id: string): (Reply?, string?, boolean?, string?)
+local function check_projection(request: types.LaunchRequest, projection_id: string): (Reply?, string?, boolean?, string?, string?)
     local raw, call_error = funcs.call(resources.CREDENTIAL_CHECK, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id, attempt_id = request.attempt_id})
     if call_error or type(raw) ~= "table" then return fail("UNAVAILABLE", "credential broker did not answer for projection " .. projection_id), nil end
     local reply = raw :: Reply
@@ -160,7 +160,7 @@ local function check_projection(request: types.LaunchRequest, projection_id: str
     if not source or projection.destination ~= (source.path:match("[^/]+$") :: string) then
         return fail("DENIED", "projection " .. projection_id .. " has invalid file login metadata"), nil
     end
-    return nil, "file", projection.source_present == true, source.source.provider
+    return nil, "file", projection.source_present == true, source.source.provider, source.path
 end
 -- Checks the gateway binding an attempt holds under its attached carrier
 -- epoch; bindings, never bytes.
@@ -374,17 +374,19 @@ function M.prepare(value: unknown): Reply
     local resolved_grants, resources_refused = admit_resources(request)
     if not resolved_grants then return resources_refused :: Reply end
     local file_projection = false
-    local projected_login_present = false
+    local projected_login_path: string? = nil
     for _, projection_id in ipairs(request.projections) do
-        local refused, kind, present, provider = check_projection(request, projection_id)
+        local refused, kind, present, provider, path = check_projection(request, projection_id)
         if refused then return refused end
         if kind == "file" then
             if file_projection then return fail("DENIED", "only one file credential projection may select a retained home") end
             file_projection = true
-            if present and request.launch.login and provider == request.launch.login.provider then projected_login_present = true end
+            if present and request.launch.login and provider == request.launch.login.provider and path then
+                projected_login_path = home_directory .. "/" .. path
+            end
         end
     end
-    local login_notice = materialization.prepare_login_notice(request, home_directory, projected_login_present)
+    local login_notice = materialization.prepare_login_notice(request, home_directory, projected_login_path)
     local prepare_pinned, prepare_pin_error = resolver.pin()
     if not prepare_pinned then return fail("UNAVAILABLE", prepare_pin_error or "pin registry") end
     local selected_placement, placement_error = placement_resolver.resolve(prepare_pinned, request.placement_binding_ref)

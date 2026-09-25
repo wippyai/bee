@@ -164,7 +164,7 @@ function M.read(volume: fs.FS, manifest: Manifest, id: string, section: string?,
         local found = false
         for line in (payload .. "\n"):gmatch("([^\n]*)\n") do
             local candidate = heading_of(line)
-            if candidate and M.anchor(candidate) == section then start = index; found = true; heading = candidate; break end
+            if candidate and M.anchor(candidate) == section then start = index + offset; found = true; heading = candidate; break end
             index = index + #line + 1
         end
         if not found then return nil, "unknown section anchor" end

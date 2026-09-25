@@ -33,7 +33,24 @@ local function source(): {versions: (string, integer) -> ({string}?, boolean?, s
     artifact: (string, string) -> (inspection.Inspection?, string?)}
     return {versions = catalog.available,
         artifact = function(component: string, version: string): (inspection.Inspection?, string?)
-            return inspect.read({component = component, version = version})
+            -- Dependency planning reads every entry payload, so it walks all
+            -- summary pages with data explicitly; agent-facing reads stop at
+            -- the first summary page.
+            local collected: {inspection.Entry} = {}
+            local offset: integer? = 0
+            local head: inspection.Inspection? = nil
+            while offset ~= nil do
+                local page, problem = inspect.read({component = component, version = version,
+                    include_data = true, entry_offset = offset, entry_limit = inspection.MAX_ENTRIES_PER_PAGE})
+                if not page then return nil, problem end
+                head = head or page
+                for _, entry in ipairs(page.entries) do collected[#collected + 1] = entry end
+                if #collected > 4096 then return nil, "artifact entry count exceeds planning bound" end
+                offset = page.next_offset
+            end
+            if not head then return nil, "artifact inspection returned no pages" end
+            return {component = head.component, version = head.version, digest = head.digest,
+                requirements = head.requirements, entries = collected, next_offset = nil, eof = true}, nil
         end}
 end
 

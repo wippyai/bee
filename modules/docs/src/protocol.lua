@@ -96,4 +96,27 @@ function M.decode(raw: unknown): (Request?, string?)
     end
     return request, nil
 end
+-- The MCP input schema, generated from the same bounds the decoder enforces
+-- so the advertised contract cannot drift from what read accepts.
+function M.schema(): {[string]: unknown}
+    local id = {type = "string", minLength = 1, maxLength = M.MAX_ID_BYTES}
+    local topic = {type = "string", pattern = "^[a-z0-9_-]+$", maxLength = 64}
+    return {type = "object", additionalProperties = false, required = {"operation"},
+        properties = {
+            operation = {type = "string", enum = {"list", "search", "read"}},
+            topic = topic,
+            query = {type = "string", minLength = 1, maxLength = M.MAX_QUERY_BYTES},
+            id = id,
+            section = {type = "string", pattern = "^[a-z0-9_-]+$", maxLength = 120},
+            offset = {type = "integer", minimum = 0},
+            limit = {type = "integer", minimum = 1, maximum = M.MAX_READ_BYTES,
+                description = "list accepts at most " .. tostring(M.MAX_LIST) .. ", search at most "
+                    .. tostring(M.MAX_RESULTS) .. ", read at most " .. tostring(M.MAX_READ_BYTES)},
+        },
+        examples = {
+            {operation = "list", topic = "terminal", offset = 0, limit = M.MAX_LIST},
+            {operation = "search", query = "tty.canvas", limit = M.MAX_RESULTS},
+            {operation = "read", id = "toolkit", section = "lifecycle", offset = 0, limit = 4000},
+        }}
+end
 return M

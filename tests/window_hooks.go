@@ -133,7 +133,7 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 		}
 	}
 
-	compositionFile := filepath.Join(tempDir, "src", "_index.yaml")
+	compositionFile := filepath.Join(tempDir, "src", "deps", "_index.yaml")
 	gatewayBytes, err = os.ReadFile(compositionFile)
 	if err != nil {
 		return "", err

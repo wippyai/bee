@@ -376,4 +376,5 @@ entries:
     canonical: bee.sync:canonical
     artifact: bee.gov:artifact
     overlay_resolver: bee.gov:overlay_resolver
+    capability_grants: bee.gov:capability_grants
     preflight: bee.gov:preflight

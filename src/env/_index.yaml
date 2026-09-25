@@ -58,3 +58,4 @@ entries:
       modules: [tty, process, channel, json, time, uuid, base64, hash, funcs, fs, sql, http_client, contract]
       policies: [bee.security:ordinary_app_subsystem_boundary]
       thread_access: none
+      hive: true

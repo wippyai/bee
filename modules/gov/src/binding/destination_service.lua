@@ -77,39 +77,46 @@ local function selected(config: Configuration, workspace_id: string, source_node
     local installed: unknown = nil
     local vocabulary: capability_catalog.Catalog? = nil
     local owner_hint: string? = nil
-    if source_node == config.node_id then
-        local workspace_identity = workspace_applications.identity(workspace_id, source_workspace)
-        local prior_owner = workspace_applications.prior_owner(workspace_id, source_workspace)
-        if prior_owner then
-            local prior_id = capability_grants.prior_record_id(prior_owner)
-            if (prior_id and registry.get(prior_id)) then owner_hint = prior_owner end
-            if activation_store then
-                local desired = activations.desired(activation_store, prior_owner)
-                if desired.ok then owner_hint = prior_owner
-                elseif desired.code ~= "NOT_FOUND" then return nil, desired.message end
-            end
+    local slot_source: string? = nil
+    local workspace_identity = workspace_applications.identity(workspace_id, source_workspace)
+    local prior_owner = workspace_applications.prior_owner(workspace_id, source_workspace)
+    if prior_owner then
+        local prior_id = capability_grants.prior_record_id(prior_owner)
+        if (prior_id and registry.get(prior_id)) then owner_hint = prior_owner end
+        if activation_store then
+            local desired = activations.desired(activation_store, prior_owner)
+            if desired.ok then owner_hint = prior_owner
+            elseif desired.code ~= "NOT_FOUND" then return nil, desired.message end
         end
-        local owner = owner_hint or (workspace_identity and workspace_identity.overlay_owner)
-        local id = owner and (owner_hint and capability_grants.prior_record_id(owner)
-            or capability_grants.record_id(owner)) or nil
-        if id then
-            installed = registry.get(id)
-            if installed then
-                local raw_catalog = registry.get("bee:capability_catalog")
-                local decoded, catalog_error = capability_catalog.decode(raw_catalog)
-                if not decoded then return nil, catalog_error end
-                vocabulary = decoded
-                local record, record_error = capability_grants.decode(installed, owner,
-                    workspace_id, workspace_identity.definition_id, decoded)
-                if not record then return nil, record_error end
-                local live, live_error = capability_grants.live(record,
-                    function(entry_id: string): unknown return registry.get(entry_id) end)
-                if not live then return nil, live_error end
-            end
+    end
+    local owner = owner_hint or (workspace_identity and workspace_identity.overlay_owner)
+    if owner and activation_store then
+        local desired = activations.desired(activation_store, owner)
+        if desired.ok then
+            local held = bounds.object(desired.value)
+            slot_source = held and bounds.id(held.source_node) or nil
+            if not slot_source then return nil, "desired activation source is malformed" end
+        elseif desired.code ~= "NOT_FOUND" then return nil, desired.message end
+    end
+    local id = owner and (owner_hint and capability_grants.prior_record_id(owner)
+        or capability_grants.record_id(owner)) or nil
+    if id then
+        installed = registry.get(id)
+        if installed then
+            local raw_catalog = registry.get("bee:capability_catalog")
+            local decoded, catalog_error = capability_catalog.decode(raw_catalog)
+            if not decoded then return nil, catalog_error end
+            vocabulary = decoded
+            local record, record_error = capability_grants.decode(installed, owner,
+                workspace_id, workspace_identity.definition_id, decoded)
+            if not record then return nil, record_error end
+            local live, live_error = capability_grants.live(record,
+                function(entry_id: string): unknown return registry.get(entry_id) end)
+            if not live then return nil, live_error end
         end
     end
     return activation_profiles.select(config, workspace_id, source_node, source_workspace,
-        installed, vocabulary, owner_hint)
+        installed, vocabulary, owner_hint, slot_source)
 end
 
 local function migration_binding(profile_value: Profile, target: string): (DatabaseBinding?, string?)

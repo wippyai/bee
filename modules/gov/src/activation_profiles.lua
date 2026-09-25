@@ -22,8 +22,11 @@ type DecodedProfile = {workspace_id: string, source_node: string, source_workspa
     auto_start: boolean}
 -- The host's rule for applications a workspace's own agents deliver to it:
 -- one profile per eligible local overlay, derived by workspace_applications.
+-- With hive admission the same rule covers a Hive-received overlay from
+-- another node: the destination instantiates its own profile, asks its own
+-- person and installs its own grants, which never travel with the artifact.
 type Template = {approval_policy: string, kinds: {string}, modules: {string}, policies: {string},
-    thread_access: string}
+    thread_access: string, hive: boolean}
 type DecodedConfiguration = {profiles: {DecodedProfile}, workspace_applications: Template?}
 type Profile = {workspace_id: string, source_node: string, source_workspace: string,
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
@@ -187,10 +190,13 @@ local function template(raw: unknown): (Template?, string?)
     if raw == nil then return nil, nil end
     local value = bounds.object(raw)
     if not value then return nil, "workspace applications profile must be an object" end
-    local extra = bounds.fields(value, {"approval_policy", "kinds", "modules", "policies", "thread_access"})
+    local extra = bounds.fields(value, {"approval_policy", "kinds", "modules", "policies", "thread_access", "hive"})
     if extra then return nil, "workspace applications profile: " .. extra end
     local approval_policy = bounds.id(value.approval_policy)
     if not approval_policy then return nil, "workspace applications profile names no approval policy" end
+    if value.hive ~= nil and type(value.hive) ~= "boolean" then
+        return nil, "workspace applications profile hive admission must be a boolean"
+    end
     local kinds, kinds_error = sorted_set(value.kinds, "workspace application kinds")
     local modules, modules_error = sorted_set(value.modules, "workspace application modules")
     if not kinds or not modules then return nil, kinds_error or modules_error end
@@ -198,20 +204,29 @@ local function template(raw: unknown): (Template?, string?)
     local granted, grant_error = application_admission.grant(value.policies, value.thread_access)
     if not granted then return nil, "workspace application admission: " .. tostring(grant_error) end
     return {approval_policy = approval_policy, kinds = kinds, modules = modules,
-        policies = granted.policies, thread_access = granted.thread_access}, nil
+        policies = granted.policies, thread_access = granted.thread_access,
+        hive = value.hive ~= false}, nil
 end
 
 local function empty_list(): {unknown}
     return table.create(1, 0)
 end
 
--- One eligible local overlay's profile, built as host configuration and
+local function missing(workspace_id: string, source_node: string, source_workspace: string): string
+    return "this workspace has no activation profile for overlay " .. source_workspace .. " from node "
+        .. source_node .. "; a host adds one to bee.env:gov_activation_profiles"
+        .. " (workspace " .. workspace_id .. ")"
+end
+
+-- One eligible overlay's profile, built as host configuration and
 -- decoded by the same rules as an explicit row.
 local function instantiate(rule: Template, workspace_id: string, source_node: string,
     source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?,
     owner_hint: string?): (DecodedProfile?, Object?, string?)
     local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace)
-    if not identity then return nil, nil, identity_error end
+    if not identity then
+        return nil, nil, tostring(identity_error) .. "; " .. missing(workspace_id, source_node, source_workspace)
+    end
     if owner_hint and owner_hint == workspace_applications.prior_owner(workspace_id, source_workspace) then
         identity.overlay_owner = owner_hint
     end
@@ -282,12 +297,6 @@ local function measure(decoded_profile: DecodedProfile, policy: Object, node_id:
         auto_start = decoded_profile.auto_start, policy_digest = policy_digest}, nil
 end
 
-local function missing(workspace_id: string, source_node: string, source_workspace: string): string
-    return "this workspace has no activation profile for overlay " .. source_workspace .. " from node "
-        .. source_node .. "; a host adds one to bee.env:gov_activation_profiles"
-        .. " (workspace " .. workspace_id .. ")"
-end
-
 -- Decode the complete host configuration without requiring a local node
 -- identity. The result is suitable for consumers that need the configured
 -- selection and ceilings but do not measure a destination authorization policy.
@@ -332,37 +341,49 @@ end
 
 -- The one host profile for a source at a destination workspace: an explicit
 -- row, or else the workspace-applications rule for an overlay this node
--- authored. The refusal names what a host configures.
+-- authored or, with hive admission, a Hive-received overlay from another
+-- node. Either way the destination selects its own profile and its own
+-- installed grant record; nothing a source sends selects authority. One
+-- workspace application name belongs to the source node that holds its
+-- activation slot, so another source cannot replace it as an upgrade. The
+-- refusal names what a host configures.
+local function derived(rule: Template?, workspace_id: string, source_node: string, source_workspace: string,
+    node_id: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?,
+    owner_hint: string?, slot_source: string?): (DecodedProfile?, Object?, string?)
+    if not rule or (source_node ~= node_id and not rule.hive) then
+        return nil, nil, missing(workspace_id, source_node, source_workspace)
+    end
+    if slot_source ~= nil and slot_source ~= source_node then
+        return nil, nil, "workspace application " .. source_workspace .. " is installed from node " .. slot_source
+            .. "; an overlay from node " .. source_node .. " cannot replace it (workspace " .. workspace_id .. ")"
+    end
+    return instantiate(rule, workspace_id, source_node, source_workspace, installed_raw, vocabulary, owner_hint)
+end
+
 function M.select_decoded(configuration: DecodedConfiguration, workspace_id: string, source_node: string,
     source_workspace: string, node_id: string, installed_raw: unknown?,
     vocabulary: capability_catalog.Catalog?, owner_hint: string?): (DecodedProfile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
-    local rule = configuration.workspace_applications
-    if rule and source_node == node_id then
-        local item, _, instantiate_error = instantiate(rule, workspace_id, source_node, source_workspace,
-            installed_raw, vocabulary, owner_hint)
-        return item, instantiate_error
-    end
-    return nil, missing(workspace_id, source_node, source_workspace)
+    local item, _, derive_error = derived(configuration.workspace_applications, workspace_id, source_node,
+        source_workspace, node_id, installed_raw, vocabulary, owner_hint, nil)
+    return item, derive_error
 end
 
--- The measured form of select_decoded, for the destination owner.
+-- The measured form of select_decoded, for the destination owner. slot_source
+-- is the source node of the desired activation the derived owner already
+-- holds, when one exists.
 function M.select(configuration: Configuration, workspace_id: string, source_node: string,
     source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?,
-    owner_hint: string?): (Profile?, string?)
+    owner_hint: string?, slot_source: string?): (Profile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
-    local rule = configuration.workspace_applications
-    if rule and source_node == configuration.node_id then
-        local item, policy, instantiate_error = instantiate(rule, workspace_id, source_node, source_workspace,
-            installed_raw, vocabulary, owner_hint)
-        if not item or not policy then return nil, instantiate_error end
-        return measure(item, policy, configuration.node_id)
-    end
-    return nil, missing(workspace_id, source_node, source_workspace)
+    local item, policy, derive_error = derived(configuration.workspace_applications, workspace_id, source_node,
+        source_workspace, configuration.node_id, installed_raw, vocabulary, owner_hint, slot_source)
+    if not item or not policy then return nil, derive_error end
+    return measure(item, policy, configuration.node_id)
 end
 
 return M

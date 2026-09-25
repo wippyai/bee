@@ -3,6 +3,7 @@
 local test = require("test")
 local artifact = require("artifact")
 local resolver = require("overlay_resolver")
+local capability_grants = require("capability_grants")
 local preflight = require("preflight")
 local canonical = require("canonical")
 local hash = require("hash")
@@ -251,6 +252,49 @@ local function define_tests()
             test.is_nil((facts.context.grants :: Object)["bee.gov.grants:policy." .. SHA])
             test.is_true(assert(preflight.check(facts.candidate :: preflight.Candidate,
                 facts.context :: preflight.Context)).ready)
+        end)
+
+        test.it("asks the destination person for a first Hive-received plan and reads only its own grants", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                base_policy_digest = SHA, workspace_application = true,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["process.lua"] = true, ["ns.requirement"] = true}, databases = {},
+                grants = {}, modules = {}, applied = {}, migration_barrier = false,
+                workspace_id = "workspace-destination", overlay_owner = "bee.apps:workspace-destination",
+                source_node = "node-source", source_workspace = "author/app",
+                applications = {{definition_id = "private.app:main",
+                    policies = {"bee:ordinary-policy"}, thread_access = "none"}}}
+            local deps, spec = fixture(policy)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
+                policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
+                data = {},
+                registry = {owner = "bee/host"}}
+            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+                meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
+                data = {revision = 1, never = {"exec"}, capabilities = {{id = "threads.read",
+                    revision = 1, confirm = "standard", parameters = {scope = "owned_scope"},
+                    text = "Read owned threads", policies = {{operation = "threads.read",
+                        resource = "threads", scope = {scope = "$scope"}}}, resources = {}}}}}
+            changes(spec, {{id = "private.app:main", kind = "process.lua",
+                meta = {type = "bee.application"}, data = {source = "return true"}},
+                {id = "private.app:threads", kind = "ns.requirement",
+                    meta = {value_kind = "security.policy", capability = "threads.read",
+                        parameters = {scope = "owned"}, reason = "Show threads"},
+                    data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}})
+            local remote = resolve(deps, spec)
+            local review = remote.context.capability_review :: Object
+            test.is_true(review.requires_approval)
+            test.is_nil(remote.context.capability_installed)
+            test.is_true(assert(preflight.check(remote.candidate :: preflight.Candidate,
+                remote.context :: preflight.Context)).ready)
+            captured.entries[#captured.entries + 1] = {id = assert(capability_grants.record_id(
+                "bee.apps:workspace-destination")), kind = "registry.entry",
+                registry = {owner = "bee.gov:overlay"},
+                data = {digest = string.rep("b", 64)}}
+            local stale, _, stale_error = resolver.resolve_with(deps, spec)
+            test.is_nil(stale)
+            test.is_true(tostring(stale_error):find("installed capability", 1, true) ~= nil)
         end)
 
         test.it("binds an application database grant to its provisioned store", function()

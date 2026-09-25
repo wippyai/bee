@@ -1,6 +1,8 @@
 -- MIT. A workspace's own agents deliver applications to it under one host
 -- rule: an eligible local overlay gets exactly the ceilings the host names,
--- a foreign source or an ineligible name gets none, and explicit rows win.
+-- a Hive-received overlay gets its own destination profile, one name stays
+-- with the source node that holds it, an ineligible name gets none, and
+-- explicit rows win.
 local test = require("test")
 local profiles = require("activation_profiles")
 local naming = require("workspace_applications")
@@ -112,15 +114,41 @@ local function define_tests()
             test.eq((binding.policies :: {string})[1], requested.policies[1].id)
             test.eq((binding.policies :: {string})[2], "bee.security:ordinary_app_subsystem_boundary")
             test.eq(binding.thread_access, requested.thread_access)
+            local remote = assert(profiles.select(configuration, WORKSPACE, "node-remote", "tally", installed,
+                vocabulary, nil, "node-remote"))
+            test.is_true(remote.grants[requested.policies[1].id :: string])
             local denied = profiles.select(configuration, WORKSPACE, NODE, "tally",
                 {id = installed.id, kind = installed.kind, meta = installed.meta, data = {digest = "bad"}}, vocabulary)
             test.is_nil(denied)
         end)
-        test.it("grants nothing to another node's overlay or an ineligible name", function()
+        test.it("admits a Hive-received overlay under its own destination profile", function()
             local config = assert(profiles.configuration(configured(), NODE))
-            local foreign, foreign_refusal = profiles.select(config, WORKSPACE, "node-remote", "tally")
-            test.is_nil(foreign)
-            test.not_nil(string.find(foreign_refusal :: string, "bee.env:gov_activation_profiles", 1, true))
+            local remote = assert(profiles.select(config, WORKSPACE, "node-remote", "tally"))
+            test.eq(remote.source_node, "node-remote")
+            test.eq(remote.component, "app.tally")
+            test.eq(remote.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".tally")
+            test.is_true(next(remote.grants) == nil)
+            local held = assert(profiles.select(config, WORKSPACE, "node-remote", "tally", nil, nil, nil,
+                "node-remote"))
+            test.eq(held.policy_digest, remote.policy_digest)
+            local hijack, hijack_refusal = profiles.select(config, WORKSPACE, "node-remote", "tally", nil, nil,
+                nil, NODE)
+            test.is_nil(hijack)
+            test.not_nil(string.find(hijack_refusal :: string, "cannot replace it", 1, true))
+            local displaced, displaced_refusal = profiles.select(config, WORKSPACE, NODE, "tally", nil, nil, nil,
+                "node-remote")
+            test.is_nil(displaced)
+            test.not_nil(string.find(displaced_refusal :: string, "installed from node node-remote", 1, true))
+            local closed = configured()
+            local closed_rule = closed.workspace_applications :: Object
+            closed_rule.hive = false
+            local refused, refusal = profiles.select(
+                assert(profiles.configuration(closed, NODE)), WORKSPACE, "node-remote", "tally")
+            test.is_nil(refused)
+            test.not_nil(string.find(refusal :: string, "bee.env:gov_activation_profiles", 1, true))
+        end)
+        test.it("grants nothing to an ineligible name or a missing rule", function()
+            local config = assert(profiles.configuration(configured(), NODE))
             local invalid, invalid_refusal = profiles.select(config, WORKSPACE, NODE, "Tally App")
             test.is_nil(invalid)
             test.not_nil(string.find(invalid_refusal :: string, "app.<overlay_id>", 1, true))
@@ -152,7 +180,9 @@ local function define_tests()
             test.eq(chosen.overlay_owner, "bee.vendor:tally")
             local derived = assert(profiles.select_decoded(decoded, WORKSPACE, NODE, "notes", NODE))
             test.eq(derived.component, "app.notes")
-            test.is_nil(profiles.select_decoded(decoded, WORKSPACE, "node-remote", "notes", NODE))
+            local remote = assert(profiles.select_decoded(decoded, WORKSPACE, "node-remote", "notes", NODE))
+            test.eq(remote.source_node, "node-remote")
+            test.eq(remote.component, "app.notes")
         end)
         test.it("rejects a rule that widens authority by shape", function()
             local unknown_field = configured()

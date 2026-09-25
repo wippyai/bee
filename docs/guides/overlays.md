@@ -94,8 +94,17 @@ the person, as `bee:approver_policies` ships it), the admitted entry kinds and
 native modules, and the admission policies and thread access of the one
 application entry.
 
-The rule applies only to an overlay this node authored whose name is lowercase
-letters, digits and underscores starting with a letter. Overlay `todo` gets
+The rule applies to an overlay whose name is lowercase letters, digits and
+underscores starting with a letter, authored on this node or, while the rule's
+`hive` flag is `true` (the shipped value), received over Hive from another
+node. A Hive-received overlay is admitted the same way on its destination: the
+destination instantiates its own profile and capability catalog, its own
+person approves the first install, and it installs its own grants. Grants
+never travel with an artifact: an upgrade reuses only the destination's own
+installed grant record under the same containment rule as a local upgrade. An
+application name belongs to the source node whose activation holds it; an
+overlay with the same name from another node is refused instead of replacing
+it. With `hive: false` the rule covers only overlays this node authored. Overlay `todo` gets
 component and namespace `app.todo`, the application entry `app.todo:app` under
 the ordinary application boundary, and the private overlay owner
 `bee.gov.apps:<workspace_id>.todo`. Nothing under the

@@ -790,8 +790,9 @@ func countThreadWork(state string) error {
 // rawManagedAliasRefusal proves that a managed alias with raw arguments is
 // refused without work. The owner resolves the alias, so the first launch
 // also boots the retained owner under the cold-start budget the other
-// first-launch scenarios use; the second launch joins that owner and must
-// refuse promptly.
+// first-launch scenarios use; that owner retains no desktop, so the refusing
+// client stops it. A launch against an owner a desktop keeps running must
+// refuse promptly and leave that owner running.
 func rawManagedAliasRefusal(binary string) error {
 	root, err := os.MkdirTemp("", "bee-native-agent-raw-alias-")
 	if err != nil {
@@ -806,13 +807,35 @@ func rawManagedAliasRefusal(binary string) error {
 	if err := refuseRawAlias(binary, project, state, home, 25*time.Second); err != nil {
 		return fmt.Errorf("cold owner: %w", err)
 	}
-	if owners, err := ownerPids(binary, state); err != nil {
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		owners, err := ownerPids(binary, state)
+		if err != nil {
+			return err
+		}
+		if len(owners) == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			return errors.New("the refused launch left the owner it started for that command running")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	holder, err := newDesktop(binary, project, state, home)
+	if err != nil {
 		return err
-	} else if len(owners) == 0 {
-		return errors.New("the refused launch did not leave its retained owner running")
+	}
+	defer holder.close()
+	if err := holder.waitFor("No applications open", 25*time.Second); err != nil {
+		return fmt.Errorf("desktop holding the owner: %w", err)
 	}
 	if err := refuseRawAlias(binary, project, state, home, 5*time.Second); err != nil {
 		return fmt.Errorf("retained owner: %w", err)
+	}
+	if owners, err := ownerPids(binary, state); err != nil {
+		return err
+	} else if len(owners) == 0 {
+		return errors.New("a refused launch stopped an owner another client uses")
 	}
 	if _, err := os.Stat(filepath.Join(state, "threads.db")); err == nil {
 		return countThreadWork(state)

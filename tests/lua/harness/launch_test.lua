@@ -22,6 +22,10 @@ local hook_records = require("hook_records")
 local placement_store = require("placement_store")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
+local AGENT_DEFINITION = "bee.harness.catalog:agent_fixture_definition"
+local AGENT_POLICY = "bee.harness.catalog:agent_fixture_policy"
+local AGENT_REVIEWER = "bee.harness.catalog:agent_reviewer"
+local AGENT_TRAIT = "bee.harness.catalog:agent_repository_trait"
 local RETAINED_DEFINITION = "bee.harness.catalog:retained_fixture_definition"
 local EMPTY_DEFINITION = "bee.harness.catalog:setup_empty_definition"
 local POLICY = "bee.harness.catalog:fixture_policy"
@@ -86,6 +90,24 @@ local function apply(entry: {[string]: unknown})
     changes:update(entry)
     local applied, err = changes:apply()
     if not applied then error("apply: " .. tostring(err)) end
+end
+-- Temporarily replaces one entry's data, restoring it whatever the body does.
+local function with_entry(ref: string, mutate: (changed: {[string]: unknown}) -> (), body: () -> ())
+    local entry = assert(registry.get(ref))
+    local original = entry.data
+    local changed: {[string]: unknown} = {}
+    for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+    mutate(changed)
+    entry.data = changed
+    apply(entry)
+    local ok, failure = pcall(body)
+    entry.data = original
+    apply(entry)
+    if not ok then error(tostring(failure)) end
+end
+local function refusal_message(reply: admission.Reply): string
+    if reply.ok then error("expected a failure, got success") end
+    return tostring(reply.error and reply.error.message)
 end
 local function carrier_io(): machine.IO
     return {
@@ -1502,6 +1524,107 @@ local function define_tests()
             apply(entry)
             policy_entry.data = original_policy
             apply(policy_entry)
+        end)
+        test.it("resolves an agent route to a hashed closure and admits its exact tools, prompt and mapped model", function()
+            local first = value(call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})) :: {[string]: unknown}
+            test.eq(first.agent_ref, AGENT_REVIEWER)
+            local digest = first.agent_digest
+            test.eq(type(digest), "string")
+            test.eq(#(digest :: string), 64)
+            test.eq(first.agent_model, "claude-mapped")
+            local declined = first.declined_tuning :: {unknown}
+            test.eq(#declined, 1)
+            test.eq(declined[1], "temperature")
+            local agent_tools = first.agent_tools :: {unknown}
+            test.eq(#agent_tools, 2)
+            test.eq(agent_tools[1], "FileReport")
+            test.eq(agent_tools[2], "FileRead")
+            local second = value(call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})) :: {[string]: unknown}
+            test.eq(second.agent_digest, digest)
+            test.eq(second.plan_digest, first.plan_digest)
+            local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("agent-admit"),
+                definition_ref = AGENT_DEFINITION, workspace_id = workspace, brief = "review fixture"})) :: admission.Admitted
+            test.eq(admitted.plan.agent_digest, digest)
+            local carrier_request = admitted.request :: {[string]: unknown}
+            local preferences = carrier_request.preferences :: {[string]: unknown}
+            local tools = preferences.mcp_tools :: {unknown}
+            test.eq(#tools, 2)
+            test.eq(tools[1], "FileReport")
+            test.eq(tools[2], "FileRead")
+            test.eq((preferences.options :: {[string]: unknown}).model, "claude-mapped")
+            local instructions = tostring(preferences.instructions)
+            test.is_true(instructions:find("Review the supplied change.", 1, true) ~= nil)
+            test.is_true(instructions:find("Use the approved repository tools.", 1, true) ~= nil)
+            test.is_true(instructions:find("repo: workspace", 1, true) ~= nil)
+        end)
+        test.it("refuses a changed agent reference before admission", function()
+            local selected = value(call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})) :: {[string]: unknown}
+            with_entry(AGENT_REVIEWER, function(data) data.prompt = "Changed review prompt." end, function()
+                local changed = value(call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})) :: {[string]: unknown}
+                test.neq(changed.plan_digest, selected.plan_digest)
+                test.neq(changed.agent_digest, selected.agent_digest)
+                local refused = call("bee.harness.launch:admit", {request_id = fresh("agent-changed"), definition_ref = AGENT_DEFINITION,
+                    workspace_id = workspace, brief = "review fixture", expected_plan_digest = selected.plan_digest})
+                test.eq(code(refused), "CONFLICT")
+            end)
+        end)
+        test.it("never reduces a trait to its prompt", function()
+            with_entry(AGENT_TRAIT, function(data) data.wrappers = {"bee.harness.catalog:agent_wrapper"} end, function()
+                local refused = call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})
+                test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
+                local message = refusal_message(refused)
+                test.is_true(message:find("agent_repository_trait", 1, true) ~= nil)
+                test.is_true(message:find("wrappers", 1, true) ~= nil)
+            end)
+        end)
+        test.it("refuses unknown agent fields", function()
+            with_entry(AGENT_REVIEWER, function(data) data.bogus_field = true end, function()
+                test.eq(code(call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})), "INVALID")
+            end)
+        end)
+        test.it("refuses a model the host never mapped and a driver that takes no model", function()
+            with_entry(AGENT_REVIEWER, function(data) data.model = "unmapped-model" end, function()
+                local refused = call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})
+                test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
+                test.is_true(refusal_message(refused):find("unmapped-model", 1, true) ~= nil)
+            end)
+            with_entry(AGENT_DEFINITION, function(data)
+                data.binding_ref = "bee.driver.codex:binding"
+                data.profile_id = "batch"
+            end, function()
+                local refused = call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})
+                test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
+                test.is_true(refusal_message(refused):find("codex", 1, true) ~= nil)
+            end)
+        end)
+        test.it("declines only owner-permitted tuning hints", function()
+            with_entry(AGENT_REVIEWER, function(data) data.tuning = {temperature = 0.2, top_k = 1} end, function()
+                local refused = call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})
+                test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
+                test.is_true(refusal_message(refused):find("top_k", 1, true) ~= nil)
+            end)
+        end)
+        test.it("refuses delegates outside host admission", function()
+            with_entry(AGENT_POLICY, function(data) data.agent_delegates = {} end, function()
+                local refused = call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})
+                test.eq(code(refused), "FORBIDDEN")
+                test.is_true(refusal_message(refused):find("agent_helper", 1, true) ~= nil)
+            end)
+        end)
+        test.it("refuses saved profile tools outside the agent and options claiming its model", function()
+            local workspace_id, saved_id = workspace, fresh("agent-profile")
+            value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
+                expected_revision = 0, idempotency_key = fresh("save"),
+                profile = {title = "Outside tools", definition_ref = AGENT_DEFINITION, options = {}, mcp_tools = {"thread_read"}}}))
+            local outside = call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
+                saved_profile_id = saved_id, saved_profile_revision = 1})
+            test.eq(code(outside), "FORBIDDEN")
+            value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
+                expected_revision = 1, idempotency_key = fresh("save"),
+                profile = {title = "Claimed model", definition_ref = AGENT_DEFINITION, options = {model = "sneaky"}, mcp_tools = {}}}))
+            local claimed = call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
+                saved_profile_id = saved_id, saved_profile_revision = 2})
+            test.eq(code(claimed), "FORBIDDEN")
         end)
         restore_host()
     end)

@@ -693,6 +693,116 @@ entries:
     session_resource: session
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: agent_read_tool
+  kind: function.lua
+  source: file://agent_fixture_tool.lua
+  method: handle
+  meta:
+    type: tool
+    title: Read a file
+    llm_alias: FileRead
+    llm_description: Read a file through the review contract.
+    input_schema: '{"type":"object","properties":{"path":{"type":"string"}},"required":["path"],"additionalProperties":false}'
+    output_schema: '{"type":"object"}'
+    mcp: {required_scopes: [review.read]}
+- name: agent_report_tool
+  kind: function.lua
+  source: file://agent_fixture_tool.lua
+  method: handle
+  meta:
+    type: tool
+    title: Report a review
+    llm_alias: FileReport
+    llm_description: Return a review through the review contract.
+    input_schema: '{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false}'
+    output_schema: '{"type":"object"}'
+    mcp: {required_scopes: [review.write]}
+- name: agent_repository_trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Repository
+    test_support: true
+    comment: Framework trait fixture; prompt, one function tool and context
+  data:
+    prompt: Use the approved repository tools.
+    tools: [bee.harness.catalog:agent_read_tool]
+    context: {repo: workspace}
+- name: agent_helper
+  kind: registry.entry
+  meta:
+    type: agent.gen1
+    title: Helper
+    test_support: true
+    comment: Delegate target fixture with no capabilities of its own
+  data:
+    prompt: Help with a subtask.
+    traits: []
+    tools: []
+    delegates: []
+    memory: []
+    context: {}
+- name: agent_reviewer
+  kind: registry.entry
+  meta:
+    type: agent.gen1
+    title: Reviewer
+    test_support: true
+    comment: Framework agent fixture with a trait, tools, a delegate, a mapped model and one declinable tuning hint
+  data:
+    prompt: Review the supplied change.
+    traits: [bee.harness.catalog:agent_repository_trait]
+    tools: [bee.harness.catalog:agent_report_tool]
+    delegates: [bee.harness.catalog:agent_helper]
+    memory: []
+    context: {repo: workspace}
+    model: review-model
+    tuning: {temperature: 0.2}
+    declinable: [temperature]
+- name: agent_fixture_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Claude fixture policy extended with the host-approved agent model map, admitted delegates and agent gateway tools
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [FileRead, FileReport]
+    profile_options: {model: [claude-mapped]}
+    profile_instructions: true
+    agent_model_map: {review-model: claude-mapped}
+    agent_delegates: [bee.harness.catalog:agent_helper]
+- name: agent_fixture_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The Claude fixture as a framework agent route
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agent-fixture
+    title: Agent fixture
+    command_names: [agent-fixture]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:agent_fixture_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+    agent_ref: bee.harness.catalog:agent_reviewer
 - name: setup_empty_definition
   kind: registry.entry
   meta:

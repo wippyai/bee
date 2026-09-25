@@ -9,6 +9,13 @@ entries:
     resources:
     - bee.threads:db
     effect: allow
+- name: thread_node_policy
+  kind: security.policy
+  meta: {comment: Action inbox destination checks the runtime's native node identity}
+  policy:
+    actions: [system.read]
+    resources: [node]
+    effect: allow
 - name: thread_resource_policy
   kind: security.policy
   policy:

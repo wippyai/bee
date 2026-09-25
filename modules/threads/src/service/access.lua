@@ -10,6 +10,8 @@ M.LIFECYCLE = "bee.threads.lifecycle"
 M.CARRIER = "bee.threads.carrier"
 M.APPROVAL = "bee.threads.approval"
 M.WORKSPACE = "bee.threads.workspace"
+M.INBOX_SEND = "bee.sessions.send"
+M.INBOX_DISCOVER = "bee.sessions.discover"
 -- The authenticated actor; a payload never selects it.
 function M.actor(): string?
     local actor = security.actor()
@@ -29,6 +31,8 @@ end
 function M.may_list_workspace(workspace_id: string): boolean
     return security.can(M.WORKSPACE, workspace_id)
 end
+function M.may_send(address: string): boolean return security.can(M.INBOX_SEND, address) end
+function M.may_discover(address: string): boolean return security.can(M.INBOX_DISCOVER, address) end
 function M.may_create(thread_id: string): boolean
     return security.can(M.CREATE, thread_id)
 end

@@ -443,6 +443,49 @@ UPDATE bee_thread_heads SET workspace_id = substr(owner_actor, 17, 32)
 CREATE INDEX bee_thread_heads_workspace
   ON bee_thread_heads(workspace_id, thread_id) WHERE workspace_id IS NOT NULL;
 ]]
+-- An action owns a separately ordered inbox. Acceptance revisions fence
+-- addresses handed out before an owner changes its allow list. Delivery
+-- states beyond committed are reserved for later carrier integration.
+local ACTION_INBOX_SQL = [[
+CREATE TABLE bee_thread_inbox_epochs (
+  thread_id TEXT NOT NULL,
+  action_id TEXT NOT NULL,
+  grant_epoch INTEGER NOT NULL CHECK(grant_epoch > 0),
+  next_sequence INTEGER NOT NULL DEFAULT 1 CHECK(next_sequence > 0),
+  PRIMARY KEY(thread_id, action_id),
+  FOREIGN KEY(thread_id, action_id) REFERENCES bee_thread_actions(thread_id, action_id)
+);
+CREATE TABLE bee_thread_inbox_rules (
+  thread_id TEXT NOT NULL,
+  action_id TEXT NOT NULL,
+  sender_kind TEXT NOT NULL CHECK(sender_kind IN ('actor','class')),
+  sender_value TEXT NOT NULL,
+  PRIMARY KEY(thread_id, action_id, sender_kind, sender_value),
+  FOREIGN KEY(thread_id, action_id) REFERENCES bee_thread_inbox_epochs(thread_id, action_id)
+);
+CREATE TABLE bee_thread_inbox_items (
+  thread_id TEXT NOT NULL,
+  action_id TEXT NOT NULL,
+  inbox_sequence INTEGER NOT NULL CHECK(inbox_sequence > 0),
+  record_id TEXT NOT NULL UNIQUE REFERENCES bee_thread_records(record_id),
+  payload_digest TEXT NOT NULL CHECK(length(payload_digest) = 64),
+  sender_actor TEXT NOT NULL,
+  sender_action_id TEXT NOT NULL,
+  sender_node_id TEXT NOT NULL,
+  sender_thread_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('committed','offered','transport_accepted','acknowledged','replied')),
+  in_reply_to_thread_id TEXT,
+  in_reply_to_record_id TEXT,
+  reply_thread_id TEXT,
+  reply_record_id TEXT,
+  PRIMARY KEY(thread_id, action_id, inbox_sequence),
+  FOREIGN KEY(thread_id, action_id) REFERENCES bee_thread_inbox_epochs(thread_id, action_id),
+  CHECK((in_reply_to_thread_id IS NULL) = (in_reply_to_record_id IS NULL)),
+  CHECK((reply_thread_id IS NULL) = (reply_record_id IS NULL))
+);
+CREATE INDEX bee_thread_inbox_sender ON bee_thread_inbox_items(sender_actor, sender_action_id, record_id);
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -454,6 +497,7 @@ local list: {Migration} = {
     {id = 8, name = "owner_authority", sql = OWNER_AUTHORITY_SQL, rebuild = false},
     {id = 9, name = "notices", sql = NOTICES_SQL, rebuild = false},
     {id = 10, name = "workspace_attribution", sql = WORKSPACE_SQL, rebuild = false},
+    {id = 11, name = "action_inbox", sql = ACTION_INBOX_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

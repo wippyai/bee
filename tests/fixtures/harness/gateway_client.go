@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -904,7 +905,9 @@ func reportPeer(url, authorization string, report object, role string) {
 }
 
 // Two independently owned actions coordinate only through their own inbox
-// tools. The fixture polls because driver push is a later slice.
+// tools. Each side blocks in the server wait on its own thread and reads
+// its inbox after the wake; the reported wait status names the wake, so a
+// reply that arrived by polling would fail the acceptance, not hide in it.
 func reportInboxPeer(url, authorization string, report object, role string) {
 	ident := 300
 	call := func(name string, args object) object {
@@ -936,7 +939,16 @@ func reportInboxPeer(url, authorization string, report object, role string) {
 	report["peer_address"] = peer["address"]
 	report["peer_epoch"] = peer["grant_epoch"]
 	awaitItem := func(kind string) object {
-		for attempt := 0; attempt < 120; attempt++ {
+		cursor := 0
+		for waits := 1; waits <= 12; waits++ {
+			started := time.Now()
+			waited := mustObject(call("thread_wait", object{"after_sequence": cursor, "wait_ms": 5000})["value"])
+			report[kind+"_wait_status"] = waited["status"]
+			report[kind+"_wait_ms"] = time.Since(started).Milliseconds()
+			report[kind+"_waits"] = waits
+			if moved, ok := waited["head_sequence"].(float64); ok {
+				cursor = int(moved)
+			}
 			listed := mustObject(call("session_inbox", object{"after_sequence": 0, "limit": 64})["value"])
 			items, _ := listed["items"].([]any)
 			for _, raw := range items {
@@ -945,7 +957,6 @@ func reportInboxPeer(url, authorization string, report object, role string) {
 					return item
 				}
 			}
-			time.Sleep(250 * time.Millisecond)
 		}
 		return nil
 	}
@@ -1024,9 +1035,58 @@ func rpcWithTimeout(_ *httpClient, url string, authorization string, method stri
 	})
 }
 
+// runHookPost posts a raw hook payload to a hook URL with its hook credential and
+// reports the status line and body, so hook response contracts stay
+// observable without a driver binary.
+func runHookPost(args []string) int {
+	if len(args) < 3 {
+		fmt.Fprintln(os.Stderr, "hookpost needs url, credential and body")
+		return 2
+	}
+	raw, err := base64.StdEncoding.DecodeString(args[2])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "hookpost body:", err)
+		return 2
+	}
+	var request *http.Request
+	request, err = http.NewRequest("POST", args[0], bytes.NewReader(raw))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "hookpost request:", err)
+		return 1
+	}
+	request.Header.Set("Authorization", "Bearer " + args[1])
+	request.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{DisableKeepAlives: true}}
+	var replied *http.Response
+	replied, err = client.Do(request)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "hookpost post:", err)
+		return 1
+	}
+	defer replied.Body.Close()
+	var body []byte
+	body, err = io.ReadAll(replied.Body)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "hookpost read:", err)
+		return 1
+	}
+	fmt.Printf("hookpost_status=%d\nhookpost_body=%s\n", replied.StatusCode, strings.TrimSpace(string(body)))
+	return 0
+}
+
 func writeReport(prefix string, report object) {
 	encoded, err := json.Marshal(report)
 	if err != nil {
+		return
+	}
+	if os.Getenv("BEE_FIXTURE_REPORT_STREAM") == "1" {
+		// Keep the fixture report ahead of the captured terminal envelope in
+		// the same stdout stream. Stderr and stdout have no cross-pipe order.
+		frame, frameErr := json.Marshal(object{"type": "system", "subtype": "informational",
+			"level": "info", "content": prefix + ":" + string(encoded)})
+		if frameErr == nil {
+			fmt.Fprintln(os.Stdout, string(frame))
+		}
 		return
 	}
 	fmt.Fprintf(os.Stderr, "%s:%s\n", prefix, encoded)
@@ -1283,6 +1343,8 @@ func main() {
 		status = runGateway(os.Args[2])
 	case "codex":
 		status = runCodexGateway(os.Args[2])
+	case "hookpost":
+		status = runHookPost(os.Args[2:])
 	}
 	if status != 0 {
 		os.Exit(status)

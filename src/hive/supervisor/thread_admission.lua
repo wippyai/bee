@@ -1,12 +1,15 @@
 -- MIT. Thread-operation admission at the destination. After ingress
 -- verified the caller node, its incarnation and the principal assertion,
--- a forwarded send or send_status runs as the actor the host maps that
--- principal to, under the scope the host selected for it, with the caller
--- node the ingress authenticated. The payload selects none of those: a
--- caller node it carries must match, and actor or scope fields refuse the
--- request. The destination thread owner then checks membership and
--- commits under its own identity rules; nothing here substitutes a
--- service actor or grants beyond the mapping's policies.
+-- a forwarded send, send_status, inbox lookup or inbox send runs as the
+-- actor the host maps that principal to, under the scope the host
+-- selected for it, with the caller node the ingress authenticated. The
+-- payload selects none of those: a caller node it carries must match,
+-- and actor or scope fields refuse the request. The destination thread
+-- owner then checks membership and commits under its own identity rules;
+-- the inbox owner re-checks workspace, send grant, target action and
+-- epoch for the mapped principal instead of a local sender action.
+-- Nothing here substitutes a service actor or grants beyond the
+-- mapping's policies.
 local funcs = require("funcs")
 local security = require("security")
 local time = require("time")
@@ -21,10 +24,14 @@ local M = {}
 M.OPERATION_REVISION = "1"
 M.EXPOSURE_MODE = "policy"
 M.OWNER_SERVICE = "bee.threads"
-M.OPERATIONS = {["bee.threads.service:send"] = true, ["bee.threads.service:send_status"] = true}
+M.OPERATIONS = {["bee.threads.service:send"] = true, ["bee.threads.service:send_status"] = true,
+    ["bee.threads.service:inbox_describe"] = true, ["bee.threads.service:inbox_send"] = true}
 local fields_by_operation: {[string]: {string}} = {
     ["bee.threads.service:send"] = {"thread_id", "idempotency_key", "caller_node_id", "payload_digest", "message", "context"},
     ["bee.threads.service:send_status"] = {"thread_id", "idempotency_key", "caller_node_id"},
+    ["bee.threads.service:inbox_describe"] = {"thread_id", "action_id", "node_id", "attempt_id", "caller_node_id"},
+    ["bee.threads.service:inbox_send"] = {"thread_id", "target_action_id", "sender_thread_id", "sender_action_id", "node_id", "workspace_id",
+        "grant_epoch", "idempotency_key", "message_id", "content", "payload_digest", "caller_node_id"},
 }
 M.FIELDS = fields_by_operation
 M.RESERVED = {"actor", "actor_id", "principal", "principal_id", "principal_ref", "scope", "policies", "owner_id"}

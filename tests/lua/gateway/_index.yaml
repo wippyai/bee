@@ -65,6 +65,7 @@ entries:
   imports:
     test: wippy.test:test
     hooks: bee.gateway:hooks
+    hook_inbox: bee.gateway:hook_inbox
     configuration: bee.driver:configuration
     codex_configuration: bee.driver.codex:configuration
 - name: mcp_test

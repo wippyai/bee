@@ -85,18 +85,23 @@ func meshBindAddress(address netip.Addr) netip.Addr {
 	return netip.IPv6Unspecified()
 }
 
-func meshLocalAddress(address netip.Addr) netip.Addr {
-	if address.Is6() {
-		return netip.IPv6Loopback()
-	}
-	return netip.MustParseAddr("127.0.0.1")
-}
-
 // joinedRecord is the persisted outcome of a hive join.
 type joinedRecord struct {
 	Node        string `json:"node"`
 	Gossip      string `json:"gossip"`
 	Authorities string `json:"authorities"`
+	JoinPath    string `json:"join_path,omitempty"`
+}
+
+// gossipSeedForPath uses the authenticated TCP route's peer IP with the
+// runtime gossip port. This handles an alternate interface or a forwarded
+// host address during the initial join, without trusting an unverified hint.
+func gossipSeedForPath(gossip netip.AddrPort, verifiedPath string) netip.AddrPort {
+	path, err := netip.ParseAddrPort(verifiedPath)
+	if err != nil || path.Addr().IsLoopback() || path.Addr().IsUnspecified() {
+		return gossip
+	}
+	return netip.AddrPortFrom(path.Addr(), gossip.Port())
 }
 
 // lockOwner takes the owner lock of state, refusing while another owner runs
@@ -130,6 +135,12 @@ func readJoined(state string) (joinedRecord, bool, error) {
 	}
 	if _, err := netip.ParseAddrPort(record.Gossip); err != nil {
 		return joinedRecord{}, false, errors.New("joined hive record is invalid")
+	}
+	if record.JoinPath != "" {
+		path, err := netip.ParseAddrPort(record.JoinPath)
+		if err != nil || path.Port() == 0 || path.Addr().IsUnspecified() {
+			return joinedRecord{}, false, errors.New("joined hive record is invalid")
+		}
 	}
 	if _, err := meshtls.Authorities([]byte(record.Authorities)); err != nil {
 		return joinedRecord{}, false, errors.New("joined hive record is invalid")
@@ -222,9 +233,9 @@ func prepareMesh(state string, now time.Time, address netip.Addr) (meshBoot, err
 		if err != nil {
 			return meshBoot{}, err
 		}
-		addresses := []netip.Addr{address}
-		if !address.IsLoopback() {
-			addresses = append(addresses, meshLocalAddress(address))
+		addresses, err := selectedMeshCertificateAddresses(address)
+		if err != nil {
+			return meshBoot{}, err
 		}
 		leaf, err := authority.Issue(public, addresses, now)
 		if err != nil {

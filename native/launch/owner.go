@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wippyai/bee/native/hive/invite"
 	"github.com/wippyai/bee/native/hive/meshtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
@@ -128,6 +129,10 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 	if err := privatefile.EnsurePrivateDir(peersPath); err != nil {
 		return nil, err
 	}
+	allowedPeers, err := selectedDesktopPeers(state)
+	if err != nil {
+		return nil, err
+	}
 	peerSource := clusterapi.PeerKeySource(func(nodeID string) (ed25519.PublicKey, bool) {
 		if key, ok := resolveTrustedKey(trustedPath, nodeID); ok {
 			return key, true
@@ -166,6 +171,9 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 		"local_clients": true,
 		"folder":        folder,
 	}
+	if len(allowedPeers) > 0 {
+		desktop["allowed_peers"] = allowedPeers
+	}
 	// The supervisor service takes one input object. The override key is
 	// namespace:entry:path, and the entry declares its input as a list, so the
 	// whole input is replaced with the owner-selected configuration.
@@ -180,6 +188,33 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 			"bee.hive.service:supervisor_service:input": supervisorInput,
 		}),
 	), nil
+}
+
+// selectedDesktopPeers is a host-selected grant to exact, pinned Hive nodes.
+// The supervisor also requires a live peer enrollment before admitting a
+// client from one of these nodes, so retiring a pin revokes its desktop grant.
+func selectedDesktopPeers(state string) ([]any, error) {
+	value := os.Getenv("BEE_DESKTOP_ALLOWED_PEERS")
+	allowed := []any{}
+	if value == "" {
+		return allowed, nil
+	}
+	parts := strings.Split(value, ",")
+	if len(parts) > 64 {
+		return nil, errors.New("BEE_DESKTOP_ALLOWED_PEERS exceeds 64 nodes")
+	}
+	seen := make(map[string]bool, len(parts))
+	for _, node := range parts {
+		if !invite.ValidNode(node) || node == ownerNodeName(state) || seen[node] {
+			return nil, fmt.Errorf("BEE_DESKTOP_ALLOWED_PEERS contains an invalid or duplicate node %q", node)
+		}
+		if _, pinned := resolveTrustedKey(ownerPeersDirectory(state), node); !pinned {
+			return nil, fmt.Errorf("BEE_DESKTOP_ALLOWED_PEERS node %q is not a pinned Hive peer", node)
+		}
+		seen[node] = true
+		allowed = append(allowed, node)
+	}
+	return allowed, nil
 }
 
 // ownerExpiry is the desktop-configuration expiry. The owner admits local

@@ -2,6 +2,7 @@
 -- enrolls its actor as a member and never confers thread read authority.
 local sql = require("sql")
 local system = require("system")
+local json = require("json")
 local bounds = require("bounds")
 local access = require("access")
 local message = require("message")
@@ -10,6 +11,7 @@ local reader = require("reader")
 local transaction = require("transaction")
 local authority = require("authority")
 local sends = require("sends")
+local outbox = require("outbox")
 local M = {}
 type Result = transaction.Result
 type Object = {[string]: unknown}
@@ -150,7 +152,7 @@ end
 function M.describe(db: sql.DB, actor: string, request: unknown): Result
     local object = bounds.object(request)
     if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
-    local extra = bounds.fields(object, {"thread_id", "action_id", "node_id", "attempt_id"})
+    local extra = bounds.fields(object, {"thread_id", "action_id", "node_id", "attempt_id", "caller_node_id"})
     if extra then return failure("INVALID_ARGUMENT", extra) end
     local thread_id, action_id, node_id = bounds.id(object.thread_id), bounds.id(object.action_id), bounds.id(object.node_id)
     if not thread_id or not action_id or not node_id then return failure("INVALID_ARGUMENT", "thread, action and node address are required") end
@@ -162,7 +164,12 @@ function M.describe(db: sql.DB, actor: string, request: unknown): Result
     return transaction.read(db, function(tx: sql.Transaction): Result
         local head, owner, refused = target(tx, thread_id, action_id)
         if not head then return refused or failure("NOT_FOUND", "target unavailable") end
-        if node_id ~= node() or not head.workspace_id or head.workspace_id ~= access.workspace() then return failure("NOT_FOUND", "target unavailable") end
+        if node_id ~= node() or not head.workspace_id then return failure("NOT_FOUND", "target unavailable") end
+        -- A hive-forwarded lookup carries no local workspace: the host's
+        -- principal mapping is the trust decision, and the owner-or-discover
+        -- gate below still decides. The workspace travels in the answer so
+        -- a forwarded send can bind it.
+        if head.workspace_id ~= access.workspace() and not access.forwarded(actor) then return failure("NOT_FOUND", "target unavailable") end
         local resource = address(head.workspace_id :: string, node_id, action_id)
         if actor ~= owner and not access.may_discover(resource) then return failure("DENIED", "target is not discoverable") end
         local current, current_err = epoch(tx, thread_id, action_id)
@@ -176,24 +183,62 @@ function M.describe(db: sql.DB, actor: string, request: unknown): Result
         end
         local latest, latest_err = rows(tx, "SELECT state, delivery_block, inbox_sequence FROM bee_thread_inbox_items WHERE thread_id = ? AND action_id = ? ORDER BY inbox_sequence DESC LIMIT 1", {thread_id, action_id})
         if not latest then return latest_err or storage("read latest inbox state") end
-        return transaction.success({node_id = node_id, action_id = action_id, grant_epoch = current, attempt_state = state,
+        return transaction.success({node_id = node_id, action_id = action_id, workspace_id = head.workspace_id, grant_epoch = current, attempt_state = state,
             delivery_state = latest[1] and delivery_status(latest[1]) or "empty", last_inbox_sequence = latest[1] and latest[1].inbox_sequence or 0,
             sendable = access.may_send(resource)}, false)
     end)
+end
+-- forward_enqueue: the sender-side route for a cross-node send. The
+-- message persists to the durable outbox addressed at its node and never
+-- touches a same-named local thread. A resent send replays its row: the
+-- same forwarding identity returns the row's current state, anything else
+-- under the key conflicts, exactly like a local idempotent replay.
+type ForwardSpec = {target_action: string, sender_thread: string, sender_action: string, node_id: string, workspace_id: string?,
+    grant_epoch: integer, message_id: string, content: unknown, digest: string}
+local function forward_enqueue(tx: sql.Transaction, actor: string, mutation: authority.Mutation, spec: ForwardSpec): Result
+    if not spec.workspace_id then return failure("INVALID_ARGUMENT", "a cross-node send binds the destination workspace") end
+    local source, source_err = own_action(tx, actor, spec.sender_thread, spec.sender_action)
+    if not source then return source_err or failure("DENIED", "sender action unavailable") end
+    local existing, find_err = outbox.find(tx, spec.sender_thread, actor, mutation.idempotency_key)
+    if find_err then return find_err end
+    if existing then
+        local same = tostring(existing.dest_node_id) == spec.node_id and tostring(existing.dest_thread_id) == mutation.thread_id
+            and tostring(existing.dest_action_id) == spec.target_action and tostring(existing.message_id) == spec.message_id
+            and tostring(existing.payload_digest) == spec.digest and tostring(existing.dest_workspace_id) == spec.workspace_id
+            and math.floor(tonumber(existing.grant_epoch) or 0) == spec.grant_epoch
+        if not same then return failure("CONFLICT", "idempotency_key was used by a different request") end
+        local retry_err = outbox.retry(tx, existing)
+        if retry_err then return retry_err end
+        local current, current_err = outbox.find(tx, spec.sender_thread, actor, mutation.idempotency_key)
+        if current_err then return current_err end
+        if not current then return failure("INTERNAL", "forwarded send is missing") end
+        return transaction.success({queued = true, outbox = outbox.view(current)}, false)
+    end
+    local encoded, encode_error = json.encode(spec.content)
+    if not encoded then return failure("INVALID_ARGUMENT", "forwarded content is not encodable: " .. tostring(encode_error)) end
+    local queued, enqueue_err = outbox.enqueue(tx, {sender_thread_id = spec.sender_thread, sender_actor = actor, sender_action_id = spec.sender_action,
+        sender_node_id = node(), dest_node_id = spec.node_id, dest_workspace_id = spec.workspace_id, dest_thread_id = mutation.thread_id,
+        dest_action_id = spec.target_action, grant_epoch = spec.grant_epoch, idempotency_key = mutation.idempotency_key,
+        message_id = spec.message_id, content_json = encoded, payload_digest = spec.digest})
+    if enqueue_err then return enqueue_err end
+    if not queued then return failure("INTERNAL", "forwarded send was not queued") end
+    return transaction.success({queued = true, outbox = outbox.view(queued)}, false)
 end
 local function send(db: sql.DB, actor: string, request: unknown, is_reply: boolean): Result
     local mutation, invalid = authority.mutation(request)
     if not mutation then return invalid or failure("INVALID_ARGUMENT", "invalid request") end
     local object = bounds.object(request) or {}
-    local extra = bounds.fields(object, {"thread_id", "target_action_id", "sender_thread_id", "sender_action_id", "node_id", "grant_epoch",
-        "idempotency_key", "message_id", "content", "payload_digest", "in_reply_to", "outcome"})
+    local extra = bounds.fields(object, {"thread_id", "target_action_id", "sender_thread_id", "sender_action_id", "node_id", "workspace_id", "grant_epoch",
+        "idempotency_key", "message_id", "content", "payload_digest", "in_reply_to", "outcome", "caller_node_id"})
     if extra then return failure("INVALID_ARGUMENT", extra) end
     local target_action = bounds.id(object.target_action_id)
     local sender_thread = bounds.id(object.sender_thread_id)
     local sender_action = bounds.id(object.sender_action_id)
     local node_id = bounds.id(object.node_id)
+    local claimed_workspace = bounds.id(object.workspace_id)
     local grant_epoch = bounds.integer(object.grant_epoch)
     local message_id = bounds.id(object.message_id)
+    local caller_node = bounds.id(object.caller_node_id)
     if not target_action or not sender_thread or not sender_action or not node_id or not grant_epoch or grant_epoch < 1 or not message_id then
         return failure("INVALID_ARGUMENT", "destination, sender action, node, epoch and message_id are required")
     end
@@ -203,22 +248,40 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
     if is_reply ~= (object.in_reply_to ~= nil) or (is_reply and object.outcome == nil) or (not is_reply and object.outcome ~= nil) then
         return failure("INVALID_ARGUMENT", "reply correlation and outcome must accompany a reply only")
     end
+    if is_reply and node_id ~= node() then return failure("INVALID_ARGUMENT", "cross-node replies are not forwarded") end
     local submitted: Object = {message_id = message_id, message_kind = is_reply and "reply" or "request", sender_id = actor,
         sender_action_id = sender_action, recipient_ids = {}, recipient_action_ids = {target_action}, content = object.content}
     if is_reply then submitted.in_reply_to = object.in_reply_to; submitted.outcome = object.outcome end
     local decoded, decode_err = message.decode(submitted)
     if not decoded then return failure("INVALID_ARGUMENT", decode_err or "invalid message") end
     return transaction.write(db, function(tx: sql.Transaction): Result
+        -- A send names its destination node: a remote node persists to the
+        -- durable outbox here and never commits to a same-named local
+        -- thread, while the destination commits only for its own node.
+        if node_id ~= node() then return forward_enqueue(tx, actor, mutation, {target_action = target_action :: string, sender_thread = sender_thread :: string,
+            sender_action = sender_action :: string, node_id = node_id :: string, workspace_id = claimed_workspace, grant_epoch = grant_epoch :: integer,
+            message_id = message_id :: string, content = object.content, digest = digest :: string}) end
+        -- A hive-forwarded send arrives with the authenticated caller node.
+        -- The sender action lives on that node, so the destination
+        -- re-authorizes the mapped principal against its own acceptance,
+        -- grant, action and epoch instead of a local sender action.
+        local forwarded = caller_node ~= nil and caller_node ~= node()
         local head, recipient, refused = target(tx, mutation.thread_id, target_action)
         if not head then return refused or failure("NOT_FOUND", "destination unavailable") end
         if head.state ~= "open" then return failure("INVALID_STATE", "destination thread is closed") end
-        if node_id ~= node() then return failure("NOT_FOUND", "destination node is not local: " .. node_id .. "/" .. node()) end
-        if not head.workspace_id or head.workspace_id ~= access.workspace() then return failure("DENIED", "sender and recipient workspaces differ") end
+        if forwarded then
+            if not access.forwarded(actor) then return failure("DENIED", "a cross-node send requires a hive-mapped principal") end
+            if not claimed_workspace or claimed_workspace ~= head.workspace_id then return failure("DENIED", "forwarded send names a different workspace") end
+        elseif not head.workspace_id or head.workspace_id ~= access.workspace() then
+            return failure("DENIED", "sender and recipient workspaces differ")
+        end
         if not access.may_send(address(head.workspace_id, node_id, target_action)) then return failure("DENIED", "no host send grant for address") end
         local blocked, block_err = delivery_block(tx, mutation.thread_id, target_action)
         if block_err then return block_err end
-        local source, source_err = own_action(tx, actor, sender_thread, sender_action)
-        if not source then return source_err or failure("DENIED", "sender action unavailable") end
+        if not forwarded then
+            local source, source_err = own_action(tx, actor, sender_thread, sender_action)
+            if not source then return source_err or failure("DENIED", "sender action unavailable") end
+        end
         local replayed, replay_err = authority.replay(tx, actor, is_reply and "inbox_reply" or "inbox_send", mutation)
         if replay_err then return storage(replay_err) end
         if replayed then return replayed end
@@ -264,9 +327,13 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
         if not recorded then return failure("INTERNAL", recorded_err or "inbox record invalid") end
         local committed, commit_err = authority.commit_record(tx, head, "message", actor, "bee", recorded, {}, nil, nil, 0)
         if not committed then return commit_err or failure("INTERNAL", "commit failed") end
+        -- The sender node is the authenticated caller node for a forwarded
+        -- send and this node otherwise; the sender action itself is
+        -- attested by the caller node for a forward and owned locally.
+        local sender_node = forwarded and (caller_node :: string) or (node_id :: string)
         local insert_err = execute(tx, "INSERT INTO bee_thread_inbox_items (thread_id, action_id, inbox_sequence, record_id, payload_digest, sender_actor, sender_action_id, sender_node_id, sender_thread_id, message_id, state, delivery_block, in_reply_to_thread_id, in_reply_to_record_id) " ..
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?, ?, ?)",
-            {mutation.thread_id, target_action, sequence, committed.record_id, digest, actor, sender_action, node_id, sender_thread, message_id,
+            {mutation.thread_id, target_action, sequence, committed.record_id, digest, actor, sender_action, sender_node, sender_thread, message_id,
                 blocked or sql.NULL, decoded.in_reply_to and decoded.in_reply_to.thread_id or sql.NULL, decoded.in_reply_to and decoded.in_reply_to.record_id or sql.NULL})
         if insert_err then return insert_err end
         local advance_err = execute(tx, "UPDATE bee_thread_inbox_epochs SET next_sequence = ? WHERE thread_id = ? AND action_id = ?",

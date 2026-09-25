@@ -37,6 +37,7 @@ type IncomingRequest = types.Call | types.Request
 type IncomingReply = types.Reply
 type IncomingHello = types.Hello
 type Retry = {hello: types.Hello, sent_at: integer}
+type LifetimeTarget = {node: string, pid: string}
 type Route = {
     id: string, original_id: string, recipient: string, origin: string, fingerprint: string,
     operation_ref: string, idempotency_key: string,
@@ -100,6 +101,10 @@ local function main(configuration: unknown)
     if not replies then error(tostring(reply_error)) end
     local hellos, hello_error = process.listen(types.TOPIC_HELLO, {message = true, type = IncomingHello})
     if not hellos then error(tostring(hello_error)) end
+    local lifetimes, lifetime_error = process.listen(desktop_protocol.LIFETIME, {message = true})
+    if not lifetimes then error(tostring(lifetime_error)) end
+    local lifetime_exits, exit_error = process.listen(desktop_protocol.LIFETIME_EXIT, {message = true})
+    if not lifetime_exits then error(tostring(exit_error)) end
     local events, events_error = process.events()
     if not events then error(tostring(events_error)) end
     local tick = time.ticker("1s")
@@ -107,6 +112,10 @@ local function main(configuration: unknown)
     local routes: {[string]: Route} = {}
     local origins: {[string]: string} = {}
     local caller_routes: {[string]: integer} = {}
+    -- A local display's direct remote attach is covered by a local monitor.
+    -- Remote monitors report node loss, but not an individual remote EXIT.
+    local display_lifetimes: {[string]: {[string]: LifetimeTarget}} = {}
+    local lifetime_count = 0
     local retries: {[string]: Retry} = {}
     local route_count, execution_count = 0, 0
     local distributed_name = types.SUPERVISOR_NAME .. "/" .. node
@@ -165,6 +174,82 @@ local function main(configuration: unknown)
             end
         end
     end
+    local function lifetime_reply(sender: string, ticket: string, accepted: boolean, reason: string)
+        send(sender, desktop_protocol.LIFETIME_REPLY .. ticket, {ticket = ticket, ok = accepted, error = reason})
+    end
+    local function lifetime_request(message: process.Message)
+        local sender = tostring(message:from())
+        local source_node, source_host = types.pid_parts(sender)
+        if source_node ~= native_node or source_host ~= desktop_protocol.CLIENT_HOST then return end
+        local data: unknown = message:payload():data()
+        local object = bounds.object(data)
+        if not object or bounds.fields(object, {"version", "op", "ticket", "owner_node"}) or object.version ~= 1 then return end
+        local ticket = bounds.id(object.ticket)
+        if not ticket then return end
+        if #ticket ~= 32 or ticket:find("[^0-9a-f]") then return end
+        if object.op == "unregister" and object.owner_node == nil then
+            local registered = display_lifetimes[sender]
+            if registered and registered[ticket] then
+                registered[ticket] = nil
+                lifetime_count = lifetime_count - 1
+                if not next(registered) then display_lifetimes[sender] = nil; process.unmonitor(sender) end
+            end
+            return
+        end
+        if object.op ~= "register" then return end
+        local owner_node = bounds.id(object.owner_node)
+        if not owner_node or owner_node == node or owner_node:find("[/\\]") or owner_node:find("%.%.") then
+            lifetime_reply(sender, ticket, false, "destination node is invalid")
+            return
+        end
+        local destination = process.registry.lookup(types.SUPERVISOR_NAME .. "/" .. owner_node)
+        if not destination then lifetime_reply(sender, ticket, false, "destination supervisor is not advertised"); return end
+        local destination_node, destination_host = types.pid_parts(tostring(destination))
+        if destination_node ~= owner_node or destination_host ~= types.SUPERVISOR_HOST then
+            lifetime_reply(sender, ticket, false, "destination supervisor name is invalid"); return
+        end
+        local registered = display_lifetimes[sender]
+        if registered and registered[ticket] then
+            lifetime_reply(sender, ticket, registered[ticket].node == owner_node and registered[ticket].pid == tostring(destination), "lifetime ticket belongs to another owner")
+            return
+        end
+        if lifetime_count >= 256 then lifetime_reply(sender, ticket, false, "display lifetime capacity reached"); return end
+        if not registered then
+            local monitored, monitor_error = process.monitor(sender)
+            if not monitored or monitor_error then lifetime_reply(sender, ticket, false, "local display cannot be monitored"); return end
+            registered = {}
+            display_lifetimes[sender] = registered
+        end
+        registered[ticket] = {node = owner_node, pid = tostring(destination)}
+        lifetime_count = lifetime_count + 1
+        lifetime_reply(sender, ticket, true, "")
+    end
+    local function lifetime_exit(message: process.Message, now_ms: integer)
+        if not desktop then return end
+        local sender = tostring(message:from())
+        local source_node, source_host = types.pid_parts(sender)
+        if not source_node or source_host ~= types.SUPERVISOR_HOST then return end
+        if not desktop_owner.allows_node(desktop, source_node) then return end
+        local data: unknown = message:payload():data()
+        local object = bounds.object(data)
+        if not object or bounds.fields(object, {"version", "recipient"}) or object.version ~= 1 then return end
+        local recipient = bounds.id(object.recipient)
+        if not recipient then return end
+        local recipient_node, recipient_host = types.pid_parts(recipient)
+        if recipient_node ~= source_node or recipient_host ~= desktop_protocol.CLIENT_HOST then return end
+        desktop_owner.revoke_recipient(desktop, recipient, now_ms)
+    end
+    local function local_display_exit(event: process.Event)
+        if event.kind ~= process.event.EXIT then return end
+        local recipient = tostring(event.from)
+        local registered = display_lifetimes[recipient]
+        if not registered then return end
+        display_lifetimes[recipient] = nil
+        for _, destination in pairs(registered) do
+            lifetime_count = lifetime_count - 1
+            send(destination.pid, desktop_protocol.LIFETIME_EXIT, {version = 1, recipient = recipient})
+        end
+    end
     -- reconcile_enrollment applies the host-selected local client nodes to the
     -- peer set and the desktop bridge. It runs on the tick, because a registry
     -- entry has no change notification here, and before a client-host sender the
@@ -192,7 +277,7 @@ local function main(configuration: unknown)
         local configured = enrollment.configured_view(state)
         local_clients = enrollment.set(desired.nodes, boot, configured)
         hive_peers = enrollment.set(desired.peers, boot, configured)
-        if desktop then desktop_owner.enroll(desktop, local_clients, now_ms) end
+        if desktop then desktop_owner.enroll(desktop, local_clients, hive_peers, now_ms) end
     end
     local function discover(now_ms: integer)
         local remotes: {string} = {}
@@ -503,7 +588,7 @@ local function main(configuration: unknown)
         local desktop_switches = desktop and desktop.switches
         local desktop_observers = desktop and desktop.observers
         while true do
-            local cases = {requests:case_receive(), replies:case_receive(), hellos:case_receive(), events:case_receive(), ticks:case_receive()}
+            local cases = {requests:case_receive(), replies:case_receive(), hellos:case_receive(), lifetimes:case_receive(), lifetime_exits:case_receive(), events:case_receive(), ticks:case_receive()}
             local catalog_work = 0
             if desktop then
                 for _, response in ipairs(desktop_owner.catalog_channels(desktop)) do
@@ -529,7 +614,12 @@ local function main(configuration: unknown)
             local now_ms = elapsed()
             if selected.channel == events then
                 if selected.value.kind == process.event.CANCEL then return end
+                local_display_exit(selected.value)
                 if desktop then desktop_owner.event(desktop, selected.value, now_ms) end
+            elseif selected.channel == lifetimes then
+                lifetime_request(selected.value)
+            elseif selected.channel == lifetime_exits then
+                lifetime_exit(selected.value, now_ms)
             elseif selected.channel == ticks then
                 if desktop then desktop_owner.tick(desktop, now_ms) end
                 local _, clock_error = peers.expire(state, now_ms)

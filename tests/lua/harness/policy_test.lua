@@ -219,6 +219,48 @@ local function define_tests()
             test.eq(decode_error, "test:policy: executable_env.claude overlaps executables")
         end)
 
+        test.it("decodes a production push acceptance and measures it in the policy digest", function()
+            local raw = entry({claude = "/opt/claude"})
+            local data = raw.data :: Entry
+            data.inbox_push = true
+            data.push_acceptance = {adapter_ref = "bee.driver.claude:permission_adapter", acceptance_ref = "bee.harness.catalog:push_acceptance",
+                fixture_digest = string.rep("a", 64)}
+            local decoded, decode_error = policy.decode("test:policy", raw)
+            if not decoded then error(tostring(decode_error)) end
+            local push = decoded.push_acceptance
+            if not push then error("push acceptance was not decoded") end
+            test.eq(push.adapter_ref, "bee.driver.claude:permission_adapter")
+            test.eq(push.acceptance_ref, "bee.harness.catalog:push_acceptance")
+            test.eq(push.fixture_digest, string.rep("a", 64))
+            local plain = entry({claude = "/opt/claude"})
+            ;(plain.data :: Entry).inbox_push = true
+            local without, without_error = policy.decode("test:policy", plain)
+            if not without then error(tostring(without_error)) end
+            test.is_nil(without.push_acceptance)
+            test.neq(without.digest, decoded.digest)
+        end)
+
+        test.it("refuses a malformed or unscoped production push acceptance", function()
+            local raw = entry({claude = "/opt/claude"})
+            local data = raw.data :: Entry
+            data.inbox_push = true
+            data.push_acceptance = {adapter_ref = "bee.driver.claude:permission_adapter", acceptance_ref = "bee.harness.catalog:push_acceptance",
+                fixture_digest = "not-a-digest"}
+            local decoded, decode_error = policy.decode("test:policy", raw)
+            test.is_nil(decoded)
+            test.eq(decode_error, "test:policy: push_acceptance.fixture_digest must be a sha256 hex digest")
+            data.push_acceptance = {acceptance_ref = "bee.harness.catalog:push_acceptance", fixture_digest = string.rep("a", 64)}
+            local missing, missing_error = policy.decode("test:policy", raw)
+            test.is_nil(missing)
+            test.eq(missing_error, "test:policy: push_acceptance names adapter_ref, acceptance_ref and fixture_digest")
+            data.push_acceptance = {adapter_ref = "bee.driver.claude:permission_adapter", acceptance_ref = "bee.harness.catalog:push_acceptance",
+                fixture_digest = string.rep("a", 64)}
+            data.inbox_push = nil
+            local unscoped, unscoped_error = policy.decode("test:policy", raw)
+            test.is_nil(unscoped)
+            test.eq(unscoped_error, "test:policy: push_acceptance needs inbox_push")
+        end)
+
         test.it("admits only workdir, thread and placement as launch overrides and measures them", function()
             local raw = entry({sh = "/bin/sh"})
             local closed = policy.decode("test:policy", raw)

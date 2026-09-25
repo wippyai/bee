@@ -79,7 +79,16 @@ def run_shard(index, folder, entries, timeout=None):
     passed = re.findall(r"(\d+) passed\s+[\d.]+(?:ms|s)", plain)
     count = int(cases[-1]) if cases else int(passed[-1]) if passed else 0
     valid = result.returncode == 0 and selected is not None and int(selected.group(1)) == len(entries) and count > 0
-    return index, len(entries), count, time.monotonic() - started, valid, output
+    return index, entries, count, time.monotonic() - started, valid, result.returncode, output
+
+
+def report_shard(result):
+    index, selected_entries, cases, elapsed, valid, returncode, output = result
+    print(f"Lua unit shard {index + 1}: {len(selected_entries)} entries, {cases} cases, {elapsed:.1f}s, {'pass' if valid else 'FAIL'}", flush=True)
+    if not valid:
+        print(f"Failed shard {index + 1} test IDs ({len(selected_entries)}); exit={returncode}:", flush=True)
+        print("\n".join(selected_entries), flush=True)
+        print(f"Failed shard {index + 1} complete output:\n{output}", flush=True)
 
 
 def main():
@@ -95,13 +104,10 @@ def main():
                     for index, group in enumerate(groups)]
             for job in as_completed(jobs):
                 result = job.result()
-                index, count, cases, elapsed, valid, output = result
-                print(f"Lua unit shard {index + 1}: {count} entries, {cases} cases, {elapsed:.1f}s, {'pass' if valid else 'FAIL'}", flush=True)
-                if not valid:
-                    print("\n".join(output.splitlines()[-40:])[-6000:], flush=True)
+                report_shard(result)
                 results.append(result)
     assert len(results) == SHARDS and all(result[4] for result in results), "A Lua unit shard failed"
-    assert sum(result[1] for result in results) == len(entries), "Lua test entry coverage changed"
+    assert sum(len(result[1]) for result in results) == len(entries), "Lua test entry coverage changed"
     print(f"Lua unit: {len(entries)} entries, {sum(result[2] for result in results)} cases across {SHARDS} processes")
 
 

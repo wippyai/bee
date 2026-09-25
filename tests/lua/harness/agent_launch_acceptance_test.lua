@@ -142,7 +142,7 @@ local function bind_policies()
     local worker = assert(registry.get(WORKER_POLICY))
     local worker_data = worker.data :: Object
     worker_data.executables = {claude = fixture_bin() .. "/claude"}
-    worker_data.environment = {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_GATEWAY_WORKER = MARKER, BEE_FIXTURE_WORKER_MARKER = MARKER,
+    worker_data.environment = {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_REPORT_STREAM = "1", BEE_FIXTURE_GATEWAY_WORKER = MARKER, BEE_FIXTURE_WORKER_MARKER = MARKER,
         BEE_FIXTURE_STREAM = stream("plain.jsonl")}
     worker_data.gateway_tools = {"thread_read", "thread_message"}
     worker_data.agent_launch = {}
@@ -159,29 +159,38 @@ local function records_of(thread_id: string): {Object}
     end
     return all
 end
--- Both scripted roles report on the shared thread, each as one stderr notice
--- prefixed "gateway:"; the caller selects the report it asserts against.
-local function reports(thread_id: string): {Object}
-    local found: {Object} = {}
-    for _, item in ipairs(records_of(thread_id)) do
-        if item.kind == "observation" and item.source == "stream" then
-            local data = (item.body :: Object).data :: Object
-            if data.type == "notice" and data.code == "stderr" then
-                local text = tostring((data.content :: Object).text)
-                local start = text:find("gateway:", 1, true)
-                if start then
-                    local decoded, err = json.decode(text:sub(start + 8))
-                    if err or type(decoded) ~= "table" then error("gateway report unreadable") end
-                    found[#found + 1] = decoded :: Object
+-- Both scripted roles commit stderr notices asynchronously. Watch the thread
+-- until the requested role's notice is durable, even after its carrier exits.
+local function report_with(thread_id: string, field: string): Object
+    local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
+    local cursor = 0
+    while true do
+        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        for _, item in ipairs(page.records :: {Object}) do
+            if item.kind == "observation" and item.source == "stream" then
+                local data = (item.body :: Object).data :: Object
+                if data.type == "notice" and (data.code == "stderr" or data.code == "informational") then
+                    local text = tostring((data.content :: Object).text)
+                    local envelope = json.decode(text)
+                    if type(envelope) == "table" and type((envelope :: Object).content) == "string" then
+                        text = (envelope :: Object).content :: string
+                    end
+                    local start = text:find("gateway:", 1, true)
+                    if start then
+                        local decoded, err = json.decode(text:sub(start + 8))
+                        if err or type(decoded) ~= "table" then error("gateway report unreadable") end
+                        local report = decoded :: Object
+                        if report[field] ~= nil then return report end
+                    end
                 end
             end
         end
-    end
-    return found
-end
-local function report_with(thread_id: string, field: string): Object
-    for _, report in ipairs(reports(thread_id)) do
-        if report[field] ~= nil then return report end
+        cursor = math.floor(tonumber(page.scanned_through) or cursor)
+        if page.has_more ~= true then
+            local remaining = guard_ms - math.floor(time.now():unix_nano() / 1000000)
+            if remaining <= 0 then break end
+            call("bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining})
+        end
     end
     error("no gateway report with " .. field .. " on thread " .. thread_id)
 end
@@ -235,7 +244,7 @@ local function define_tests()
             local ok, failure = pcall(function()
             local orchestrator = admission(ORCHESTRATOR_POLICY, thread_id, fresh("orchestrator-attempt"), workspace)
             orchestrator.origin_view = {view_id = "view-agent-origin", instance_id = "instance-agent-origin"}
-            orchestrator.environment = {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_GATEWAY_LAUNCH = WORKER_DEFINITION,
+            orchestrator.environment = {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_REPORT_STREAM = "1", BEE_FIXTURE_GATEWAY_LAUNCH = WORKER_DEFINITION,
                 BEE_FIXTURE_GATEWAY_BRIEF = "answer the orchestrator", BEE_FIXTURE_WORKER_MARKER = MARKER, BEE_FIXTURE_STREAM = stream("plain.jsonl")}
             local outcome = await_carrier(spawn_carrier(orchestrator), "orchestrator carrier")
             test.eq((outcome.settlement :: Object).outcome, "succeeded")

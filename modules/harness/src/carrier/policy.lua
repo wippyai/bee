@@ -23,6 +23,13 @@ M.OVERRIDES = {"workdir", "thread", "placement"}
 -- acceptance record and the proven fixture digest here; a production
 -- policy may only name the adapter the profile itself pins.
 type PermissionExchange = {adapter_ref: string, acceptance_ref: string, fixture_digest: string, approver_policy: string, poll_ms: integer, ttl_ms: integer}
+-- The host enables production inbox push by naming the adapter, the
+-- acceptance record and the proven fixture digest here; a production
+-- policy may only name the adapter the profile itself pins. Push carries
+-- no approver policy or poll window because the injected user message
+-- authorizes no tool effect: only the agent's own acknowledgment or
+-- correlated reply completes delivery.
+type PushAcceptance = {adapter_ref: string, acceptance_ref: string, fixture_digest: string}
 type EnvironmentResolver = (string) -> (string?, string?)
 type AgentLaunch = string
 type Policy = {
@@ -30,6 +37,7 @@ type Policy = {
     digest: string,
     permission_exchange: PermissionExchange?,
     inbox_push: boolean?,
+    push_acceptance: PushAcceptance?,
     provider_ref: string?,
     instructions: string?,
     instruction_builder: configuration.InstructionBuilder?,
@@ -140,7 +148,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "inbox_push", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_launch", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "inbox_push", "push_acceptance", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_launch", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -191,6 +199,20 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         local ttl_ms = bounds.integer(declared.ttl_ms == nil and 600000 or declared.ttl_ms)
         if not poll_ms or poll_ms < 50 or not ttl_ms or ttl_ms < 1000 then return nil, ref .. ": permission_exchange poll_ms and ttl_ms are out of range" end
         exchange = {adapter_ref = adapter_ref, acceptance_ref = acceptance_ref, fixture_digest = fixture_digest, approver_policy = approver, poll_ms = poll_ms, ttl_ms = ttl_ms}
+    end
+    local push: PushAcceptance? = nil
+    if data.push_acceptance ~= nil then
+        local declared = bounds.object(data.push_acceptance)
+        if not declared then return nil, ref .. ": push_acceptance must be an object" end
+        local unknown_push = bounds.fields(declared, {"adapter_ref", "acceptance_ref", "fixture_digest"})
+        if unknown_push then return nil, ref .. ": push_acceptance: " .. unknown_push end
+        local adapter_ref, acceptance_ref = bounds.id(declared.adapter_ref), bounds.id(declared.acceptance_ref)
+        if not adapter_ref or not acceptance_ref then return nil, ref .. ": push_acceptance names adapter_ref, acceptance_ref and fixture_digest" end
+        local fixture_digest = bounds.id(declared.fixture_digest)
+        if not fixture_digest then return nil, ref .. ": push_acceptance.fixture_digest must be a sha256 hex digest" end
+        if #fixture_digest ~= 64 or not fixture_digest:match("^%x+$") then return nil, ref .. ": push_acceptance.fixture_digest must be a sha256 hex digest" end
+        if data.inbox_push ~= true then return nil, ref .. ": push_acceptance needs inbox_push" end
+        push = {adapter_ref = adapter_ref, acceptance_ref = acceptance_ref, fixture_digest = fixture_digest}
     end
     local digest_input: {[string]: unknown} = {}
     for key, value in pairs(data) do digest_input[key] = value end
@@ -326,7 +348,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not declared or declared < 1000 or declared > 86400000 then return nil, ref .. ": gateway_ttl_ms must be between 1000 and 86400000" end
         gateway_ttl_ms = declared
     end
-    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, inbox_push = data.inbox_push == true, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
+    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, inbox_push = data.inbox_push == true, push_acceptance = push, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
         start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_launch = agent_launch, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end

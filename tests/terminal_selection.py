@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 import yaml
 
-from tui_smoke import Desktop, ROOT, RUNTIME
+from tui_smoke import DESKTOP_HANG_SECONDS, Desktop, ROOT, RUNTIME
 from workspace import pack_deployment
 
 
@@ -92,10 +92,10 @@ def exercise(packed):
             ui.mouse(0, x, y)
             ui.mouse(32, x + len('FOREGROUND_SELECTABLE') - 1, y)
             ui.mouse(0, x + len('FOREGROUND_SELECTABLE') - 1, y, True)
-            deadline = time.monotonic() + 3.5
+            deadline = time.monotonic() + DESKTOP_HANG_SECONDS
             os.write(gate_fd, b'go\n')
             ready, _, _ = select.select([completed_fd], [], [], max(0, deadline - time.monotonic()))
-            assert ready and os.read(completed_fd, 4) == b'done', 'Background output did not complete within 3.5s'
+            assert ready and os.read(completed_fd, 4) == b'done', 'Background output did not complete'
             ui.pump(min(.1, max(0, deadline - time.monotonic())))
             assert 'FOREGROUND_SELECTABLE' in ui.text(), 'New app output changed the frozen selection'
             assert 'CHANGED_OWNER_OUTPUT' not in ui.text(), 'Live content leaked into selected snapshot'

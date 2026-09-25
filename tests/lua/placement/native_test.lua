@@ -12,6 +12,7 @@ local channel = require("channel")
 local time = require("time")
 local registry = require("registry")
 local exec = require("exec")
+local fs = require("fs")
 local service = require("service")
 local identity = require("identity")
 local configuration = require("configuration")
@@ -398,6 +399,29 @@ local function define_tests()
             local replay = attempt_of(call(OWNER, "prepare", raw))
             test.eq(replay.notice and replay.notice.code, "LOGIN_REQUIRED")
             value(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+        end)
+        test.it("treats a concurrently removed attempt tree as cleaned and retains real read errors", function()
+            local gone = {readdir = function(_self: unknown, _path: string): (unknown, string) return nil, "removed" end,
+                exists = function(_self: unknown, _path: string): boolean return false end}
+            test.is_nil(homes.remove_tree((gone :: unknown) :: fs.FS, "/attempts/gone"))
+            local blocked = {readdir = function(_self: unknown, _path: string): (unknown, string) return nil, "denied" end,
+                exists = function(_self: unknown, _path: string): boolean return true end}
+            test.eq(homes.remove_tree((blocked :: unknown) :: fs.FS, "/attempts/blocked"), "read /attempts/blocked: denied")
+            local iterator_state = {}
+            local missing_file = {readdir = function(_self: unknown, _path: string)
+                    local yielded = false
+                    return function(state: unknown)
+                        if state ~= iterator_state then error("directory iterator lost its state") end
+                        if yielded then return nil end
+                        yielded = true
+                        return {name = "home", type = "file"}
+                    end, iterator_state
+                end,
+                remove = function(_self: unknown, path: string): (boolean, string?)
+                    return path == "/attempts/other", path == "/attempts/other/home" and "removed" or nil
+                end,
+                exists = function(_self: unknown, _path: string): boolean return false end}
+            test.is_nil(homes.remove_tree((missing_file :: unknown) :: fs.FS, "/attempts/other"))
         end)
         test.it("decodes Linux execution identity facts", function()
             local facts = assert(identity.decode("linux_start=55016250\nlinux_boot=2d21bc55-a6c4-441f-9d95-f5bc579c4152\npgid= 2425392\n"))
@@ -2208,7 +2232,9 @@ local function define_tests()
         test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
             local ids: {string} = {}
             for index = 1, 3 do
-                local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
+                -- Keep the children live until this case stops them. Their
+                -- liveness must not depend on how fast a loaded host sweeps.
+                local request = launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
                 ids[index] = request.attempt_id :: string
                 attempt_of(call(OWNER, "prepare", request))
                 test.eq(attempt_of(call(OWNER, "start", {attempt_id = ids[index]})).execution_state, "running")
@@ -2232,14 +2258,15 @@ local function define_tests()
                 return total
             end
             local sweeps = 0
-            while touched_count() < 3 and sweeps < 3 do
+            while sweeps == 0 or (touched_count() < 3 and sweeps < 3) do
                 local swept = value(service.sweep())
                 test.is_true((swept.reconciled :: number) <= 2)
                 sweeps = sweeps + 1
             end
             service.SWEEP_BOUND = previous_bound
             test.eq(touched_count(), 3)
-            test.is_true(sweeps >= 2)
+            -- The independently scheduled sweeper may have reconciled a row
+            -- before this process calls sweep, including all three rows.
             local before = process.registry.lookup(service.SWEEPER_NAME)
             if not before then error("sweeper is not registered") end
             assert(process.terminate(tostring(before)))

@@ -245,6 +245,15 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+- name: hook_inbox
+  kind: library.lua
+  source: file://hook_inbox.lua
+  modules: [funcs, security, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    context: bee.gateway:context
+    gateway: bee.gateway.binding:gateway
 - name: mcp
   kind: library.lua
   source: file://mcp.lua

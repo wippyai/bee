@@ -157,6 +157,12 @@ end
 -- component read grant reveals only Lua source owned by that exact installed
 -- component; registry configuration, grants and other owners never enter the
 -- result. Revision fences keep paged reads on one effective installation.
+local function source_page(name: string, selected: string, revision: integer, id: string,
+    source: string, offset: integer, limit: integer): {[string]: unknown}
+    return {component = name, version = selected, revision = revision, entry_id = id,
+        offset = offset, content = source:sub(offset + 1, offset + limit), bytes = #source,
+        eof = offset + limit >= #source}
+end
 function M.sources(raw_state: unknown, raw_revision: unknown, raw_request: unknown): ({[string]: unknown}?, string?)
     local request = bounds.object(raw_request)
     if not request or bounds.fields(request, {"component", "version", "entry_id", "expected_revision", "offset", "limit"}) then
@@ -206,9 +212,7 @@ function M.sources(raw_state: unknown, raw_revision: unknown, raw_request: unkno
             if kind and data and id and type(data.source) == "string" then
                 local source = data.source :: string
                 if wanted == id then
-                    return {component = name, version = selected, revision = revision, entry_id = id,
-                        offset = from, content = source:sub(from + 1, from + length), bytes = #source,
-                        eof = from + length >= #source}, nil
+                    return source_page(name, selected, revision, id, source, from, length), nil
                 end
                 if #entries >= 256 then return nil, "installed source manifest exceeds its bound" end
                 entries[#entries + 1] = {id = id, kind = kind, bytes = #source}

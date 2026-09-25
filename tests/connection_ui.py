@@ -4,7 +4,7 @@ import tempfile
 import re
 import time
 from terminal_selection import begin
-from tui_smoke import Desktop
+from tui_smoke import DESKTOP_HANG_SECONDS, Desktop
 
 
 def exercise(packed=False):
@@ -44,7 +44,7 @@ def exercise(packed=False):
             ui.mouse(0, 94, 1, True)
             ui.wait('CONNECTION')
             ui.key(b'\x1b[24~')  # F12 must remain available with the dropdown open.
-            deadline = time.monotonic() + 4
+            deadline = time.monotonic() + DESKTOP_HANG_SECONDS
             while 'CONNECTION' in ui.text() and time.monotonic() < deadline:
                 ui.pump(.05)
             assert 'CONNECTION' not in ui.text(), ui.text()

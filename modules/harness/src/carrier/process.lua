@@ -59,7 +59,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         if not ok then error("permission: " .. tostring(err)) end
     end
     advance(false)
-    local push_enabled = plan.policy.inbox_push == true
+    local push_enabled = plan.policy.inbox_push == true and plan.push_refusal == nil
     local poll_ms = 0
     if plan.exchange then poll_ms = plan.exchange.poll_ms end
     if push_enabled and poll_ms == 0 then poll_ms = 500 end

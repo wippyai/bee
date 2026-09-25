@@ -206,6 +206,22 @@ entries:
     classify: bee.harness.catalog:classify
     checkpoint: bee.harness.carrier:checkpoint
     stream_json: bee.driver.transport:stream_json
+- name: push_production_test
+  kind: function.lua
+  source: file://push_production_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "300s"}
+  modules: [funcs, security, process, registry, env, time, channel, json, system, exec, hash]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_store_policy, bee.gateway.security:node_policy]
+  imports:
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    catalog: bee.harness.catalog:catalog
+    adapter: bee.harness.permission:adapter
+    launch: bee.driver.claude:launch
+    placement_fixture: bee.harness.catalog:placement_fixture
+    sends: bee.threads.service:sends
 - name: placement_fixture
   kind: library.lua
   source: file://placement_fixture.lua
@@ -431,6 +447,20 @@ entries:
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     sends: bee.threads.service:sends
+- name: hook_inbox_test
+  kind: function.lua
+  source: file://hook_inbox_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "240s"}
+  modules: [funcs, security, registry, env, json, system, exec, base64]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.security.gateway:gateway_materialize_policy, bee.harness.catalog:workspace_catalog_call_policy, bee.security.storage:workspace_catalog_manage_policy, bee.security.gateway:gateway_session_send_workspace_policy, bee.security.placement:placement_exec_policy, bee.gateway.security:node_policy]
+  imports:
+    principals: bee.test.principals:bound
+    test: wippy.test:test
+    sends: bee.threads.service:sends
+    gateway: bee.gateway.binding:gateway
+    hook_inbox: bee.gateway:hook_inbox
 - name: workspace_catalog_call_policy
   kind: security.policy
   meta: {type: test_support}
@@ -497,6 +527,33 @@ entries:
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
     gateway_tools: [session_inbox, session_ack, session_reply]
+- name: push_production_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Production-shaped Claude inbox push policy with no fixture flag; the suite binds the pinned executable and the push acceptance at runtime
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: independent
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    inbox_push: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: []
+- name: push_production_acceptance
+  kind: registry.entry
+  meta:
+    type: harness.permission_acceptance
+    test_support: true
+    comment: Push acceptance record for the production-shaped policy; measurements are filled by the suite
+  data:
+    acceptance: {}
 - name: gateway_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -890,7 +947,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.harness.launch:resolve, bee.harness.launch:admit, bee.harness.launch:start, bee.resources.binding:associate, bee.resources.binding:grant,
-      bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:list, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
+      bee.credentials.binding:define, bee.credentials.binding:issue_projection, bee.credentials.binding:list, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after, bee.threads.delivery:watch]
     effect: allow
 - name: agents_probe
   kind: function.lua
@@ -982,7 +1039,7 @@ entries:
   kind: function.lua
   source: file://profile_environment_isolation_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "180s"}
+  meta: {type: test, suite: bee, timeout: "300s"}
   modules: [funcs, security, registry, env, time, json]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]

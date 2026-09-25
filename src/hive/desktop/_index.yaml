@@ -34,10 +34,11 @@ entries:
 - name: display
   kind: library.lua
   source: file://display.lua
-  modules: [tty, channel, time, process]
+  modules: [tty, channel, time, process, uuid]
   imports:
     bounds: bee.hive:bounds
     client: bee.hive:client
+    types: bee.hive:types
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
     delivery: bee.terminal:delivery

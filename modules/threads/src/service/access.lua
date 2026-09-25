@@ -33,6 +33,15 @@ function M.may_list_workspace(workspace_id: string): boolean
 end
 function M.may_send(address: string): boolean return security.can(M.INBOX_SEND, address) end
 function M.may_discover(address: string): boolean return security.can(M.INBOX_DISCOVER, address) end
+-- Forwarded principals act under an id only the hive admission derives:
+-- actor creation is policed, so no local identity may mint it, and every
+-- forwarded path keeps its database-anchored checks. This mirrors the
+-- hive principal encoding and must change with it.
+M.FORWARDED_PREFIX = "bee.hive.member."
+function M.forwarded(actor: string?): boolean
+    if type(actor) ~= "string" then return false end
+    return (actor :: string):sub(1, #M.FORWARDED_PREFIX) == M.FORWARDED_PREFIX
+end
 function M.may_create(thread_id: string): boolean
     return security.can(M.CREATE, thread_id)
 end

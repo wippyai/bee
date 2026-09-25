@@ -72,6 +72,13 @@ entries:
     actions: [funcs.security, funcs.context, security.scope.create, security.actor.create]
     resources: [security, context, custom, '*']
     effect: allow
+- name: hook_inbox_policy
+  kind: security.policy
+  meta: {comment: Hook intake answers a supported boundary with the bound action's own outstanding inbox; the thread owner still checks the admitted principal and workspace, and the hook answers only where the binding admitted session_inbox}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:inbox_list]
+    effect: allow
 - name: tool_policy_read_policy
   kind: security.policy
   meta: {comment: target_tool_* requirements inject exactly the host-selected policies that the MCP adapter may resolve}

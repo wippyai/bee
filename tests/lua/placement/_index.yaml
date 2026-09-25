@@ -194,7 +194,7 @@ entries:
   source: file://native_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "120s"}
-  modules: [funcs, security, process, channel, time, registry, exec, hash, json, sql]
+  modules: [funcs, security, process, channel, time, registry, exec, fs, hash, json, sql]
   security:
     policies: [bee.placement.native:apply_test_policy, bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.placement:placement_service_policy, bee.security.resources:resource_store_policy, bee.security.credentials:credential_store_policy, bee.security.resources:resource_resolve_policy, bee.security.credentials:credential_materialize_policy]
   imports:

@@ -13,6 +13,11 @@ M.LAUNCH = "bee.desktop:launch"
 -- The client's current session: after a switch its display shows another
 -- workspace under a new session and mount.
 M.CURRENT = "bee.desktop:current"
+-- A display registers its lifetime with its own node before the remote
+-- attach. Remote process monitors do not report individual actor exits.
+M.LIFETIME = "bee.desktop.lifetime"
+M.LIFETIME_REPLY = "bee.desktop.lifetime.reply."
+M.LIFETIME_EXIT = "bee.desktop.lifetime.exit"
 -- A catalog page holds at most this many workspaces; a cursor is at most this long.
 M.MAX_PAGE = 50
 M.MAX_CURSOR = 2200
@@ -31,7 +36,7 @@ M.VIEW_INPUT = "bee.hive.viewer.input"
 M.VIEW_RESIZE = "bee.hive.viewer.resize"
 M.VIEW_CLOSE = "bee.hive.viewer.close"
 -- folder: whether the bridge composes the owner's folder workspace; a daemon's does not.
-type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, application: string?, local_clients: boolean?, folder: boolean}
+type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, allowed_peers: {string}, application: string?, local_clients: boolean?, folder: boolean}
 type Query = {label: string?, after: string?, limit: integer}
 -- execution: the owner generation the request names; a listing may name none
 -- to learn it, since its answer carries the execution it was read under.
@@ -40,25 +45,28 @@ type DesktopInput = {execution: string?, workspace_id: string?, desktop_id: stri
 function M.configuration(value: unknown): (Configuration?, string?)
     local object = bounds.object(value)
     if not object then return nil, "desktop configuration must be an object" end
-    local fields_error = bounds.fields(object, {"execution", "expires_at", "allowed_nodes", "application", "local_clients", "folder"})
+    local fields_error = bounds.fields(object, {"execution", "expires_at", "allowed_nodes", "allowed_peers", "application", "local_clients", "folder"})
     if fields_error then return nil, fields_error end
     local execution = contract.workspace_id(object.execution)
     local expires = bounds.timestamp(object.expires_at)
     local nodes = bounds.ids(object.allowed_nodes)
+    local peers = object.allowed_peers == nil and {} or bounds.ids(object.allowed_peers)
     if not execution then return nil, "execution must be 32 lowercase hexadecimal characters" end
     if not expires then return nil, "expires_at must be a canonical UTC timestamp with milliseconds" end
     if not nodes then return nil, "allowed_nodes must be a bounded dense list of node identities" end
+    if not peers then return nil, "allowed_peers must be a bounded dense list of node identities" end
     if object.local_clients ~= nil and type(object.local_clients) ~= "boolean" then return nil, "local_clients must be boolean" end
     if object.folder ~= nil and type(object.folder) ~= "boolean" then return nil, "folder must be boolean" end
-    if (#nodes == 0 and object.local_clients ~= true) or #nodes > 64 then return nil, "allowed_nodes must contain 1 to 64 identities" end
+    if (#nodes + #peers == 0 and object.local_clients ~= true) or #nodes + #peers > 64 then return nil, "desktop node grants must contain 1 to 64 identities" end
     local seen: {[string]: boolean} = {}
     for _, node in ipairs(nodes) do if seen[node] then return nil, "allowed_nodes contains a duplicate identity" end; seen[node] = true end
+    for _, peer in ipairs(peers) do if seen[peer] then return nil, "allowed_peers contains a duplicate or statically allowed identity" end; seen[peer] = true end
     local application: string? = nil
     if object.application ~= nil then
         application = bounds.id(object.application)
         if not application then return nil, "application must be a bounded entry identity" end
     end
-    return {execution = execution, expires_at = expires, allowed_nodes = nodes, application = application, local_clients = object.local_clients == true,
+    return {execution = execution, expires_at = expires, allowed_nodes = nodes, allowed_peers = peers, application = application, local_clients = object.local_clients == true,
         folder = object.folder ~= false}, nil
 end
 function M.input(operation: string, value: unknown): DesktopInput?

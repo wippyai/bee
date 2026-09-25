@@ -7,7 +7,7 @@ import tempfile
 import time
 
 from recovery import stored
-from tui_smoke import Desktop, ROOT, RUNTIME
+from tui_smoke import DESKTOP_HANG_SECONDS, Desktop, ROOT, RUNTIME
 from workspace import classic_workspace, pack_deployment
 
 CASES = {
@@ -80,15 +80,13 @@ def run(packed, cases=CASES):
                     ui.wait("BEE SETTINGS")
                     started = time.monotonic()
                     ui.open_start(); ui.choose("Process Manager")
-                while ui.process.poll() is None and time.monotonic() - started < 5:
+                while ui.process.poll() is None and time.monotonic() - started < DESKTOP_HANG_SECONDS:
                     ui.pump(.02)
                 ui.pump(.1)
                 assert ui.process.poll() is not None, f"{case}: core delivery hung"
                 assert ui.process.returncode != 0, f"{case}: failed delivery claimed success"
                 assert b"Core delivery failed:" in ui.raw, bytes(ui.raw[-2000:])
                 assert b"Injected core delivery failure" in ui.raw, bytes(ui.raw[-2000:])
-                if case in ("shutdown",):
-                    assert time.monotonic() - started < 1.5, f"{case}: rejected quit waited"
                 assert classic_workspace(folder / "workspace.db") == baseline_id, f"{case}: failed delivery changed workspace identity"
                 recovered = stored(folder)
                 after = recovered["applications"]

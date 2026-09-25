@@ -257,7 +257,7 @@ entries:
 - name: inbox
   kind: library.lua
   source: file://inbox.lua
-  modules: [sql, system]
+  modules: [sql, system, json]
   imports:
     bounds: bee.threads.records:bounds
     access: bee.threads.service:access
@@ -267,6 +267,14 @@ entries:
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
     sends: bee.threads.service:sends
+    outbox: bee.threads.service:outbox
+- name: outbox
+  kind: library.lua
+  source: file://outbox.lua
+  modules: [sql, uuid, time, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    transaction: bee.threads.persist:transaction
 - name: inbox_accept
   kind: function.lua
   source: file://inbox_method.lua
@@ -315,3 +323,15 @@ entries:
   method: transport
   imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads.service:types}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]}
+- name: inbox_outbox_claim
+  kind: function.lua
+  source: file://outbox_method.lua
+  method: claim
+  imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: inbox_outbox_settle
+  kind: function.lua
+  source: file://outbox_method.lua
+  method: settle
+  imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}

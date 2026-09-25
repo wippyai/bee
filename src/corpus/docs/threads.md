@@ -209,12 +209,26 @@ Claude structured carrier checks the oldest item on wake and at a bounded
 poll interval, then writes its identified stream-json user message between
 turns. Its write journal and transport receipt survive carrier replacement;
 acknowledgment still requires the agent's own `inbox_ack` or reply. Shipped
-production launch policies do not enable this push path pending executable
-acceptance. Other structured drivers and PTY windows currently need an
-explicit `session_inbox` call; Hive forwarding remains separate.
+production launch policies do not enable this push path. A production policy
+enables it with `push_acceptance`: the carrier admits the push only where the
+pinned binding, profile, adapter and executable measurement still match the
+host's acceptance record, and refuses a swapped executable before any launch.
 
-`inbox_describe` returns only an action address, current grant epoch, attempt
-state and latest inbox delivery state. A caller may describe another action
+A fresh attempt on a structured driver without a between-turns controller
+starts carrying its oldest outstanding inbox item in the brief: Codex, agy,
+Grok and Muse launches close stdin or pass the brief as an argument, so the
+brief is the only channel. Claude keeps its controller push and windows keep
+their hook boundary; resumed attempts keep their provider session, since no
+fixture proves inbox-carry combined with those. A fresh sequential attempt on
+an already-admitted action attaches to its own action and chains the latest
+settled attempt; anything else fails closed with the admit refusal. PTY
+windows currently need an explicit `session_inbox` call. Cross-node sends
+persist to the durable forwarding outbox addressed at their node instead of
+committing locally; the destination admits `inbox_describe` and `inbox_send`
+through the Hive principal mapping with re-authorization, below.
+
+`inbox_describe` returns an action address with workspace, current grant
+epoch, attempt state and latest inbox delivery state. A caller may describe another action
 only with `bee.sessions.discover` on its exact address in the same workspace;
 this permission grants neither message content nor send authority.
 
@@ -311,6 +325,32 @@ forwarding between independent runtimes, remote enrollment and the two-runtime
 proofs for commit-before-reply loss, replacement, duplicate delivery and stale
 acknowledgment are not enabled. A failed owner lookup is an error; it never
 falls back to a local thread with the same name.
+
+## Cross-node inbox forwarding
+
+An inbox address is node-qualified as `{node_id, action_id}`. A send whose
+node is not local persists to the durable outbox (`bee_thread_inbox_outbox`)
+keyed by sender thread, actor and idempotency key, and never commits to a
+same-named local thread; resending the same key returns the row's current
+state as status, while anything else under the key conflicts. A pump leases
+due rows, delivers each through the destination's Hive admission, and settles
+only on the destination reply; the destination deduplicates on the sender's
+stable key, so a lost reply repeats the delivery rather than duplicating the
+message, and only the row's sender claims or settles it.
+
+The destination admits `inbox_describe` and `inbox_send` for mapped
+principals under the host-selected scope. Lookup returns the address with
+workspace, epoch, attempt and delivery state through the owner-or-discover
+gate. A forwarded send re-authorizes workspace, send grant, target action
+and epoch for the mapped principal: the sender action lives on the caller
+node, so the sender action claim is attested by the authenticated caller
+while acceptance, grant, action admission, epoch and digest are re-checked
+against destination state, and the commit records the caller node. A local
+actor naming a foreign caller node is denied. Cross-node replies, remote
+notice registration and remote watches are not forwarded; destination
+notices and watches still settle on forwarded commits. The pump daemon and
+gateway routing of remote addresses are follow-ups; until they exist the
+gateway answers remote addresses as not found.
 
 ## Carrier and projections
 

@@ -500,6 +500,41 @@ ALTER TABLE bee_thread_inbox_items ADD COLUMN transport_accepted_at TEXT;
 local ACTION_INBOX_DELIVERY_STATUS_SQL = [[
 ALTER TABLE bee_thread_inbox_items ADD COLUMN delivery_block TEXT CHECK(delivery_block IN ('waiting_for_restart','undeliverable'));
 ]]
+-- The durable forwarding outbox: one row per cross-node send, keyed by the
+-- sender's own thread, actor and idempotency key, so a retried send replays
+-- the row instead of duplicating it. A pump leases due rows, delivers each
+-- through the destination's admission, and settles only on the destination
+-- reply; the destination deduplicates on its own idempotency key, so a lost
+-- reply repeats the delivery rather than duplicating the message.
+local ACTION_INBOX_OUTBOX_SQL = [[
+CREATE TABLE bee_thread_inbox_outbox (
+  outbox_id TEXT NOT NULL PRIMARY KEY,
+  sender_thread_id TEXT NOT NULL,
+  sender_actor TEXT NOT NULL,
+  sender_action_id TEXT NOT NULL,
+  sender_node_id TEXT NOT NULL,
+  dest_node_id TEXT NOT NULL,
+  dest_workspace_id TEXT NOT NULL,
+  dest_thread_id TEXT NOT NULL,
+  dest_action_id TEXT NOT NULL,
+  grant_epoch INTEGER NOT NULL CHECK(grant_epoch > 0),
+  idempotency_key TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  content_json TEXT NOT NULL,
+  payload_digest TEXT NOT NULL CHECK(length(payload_digest) = 64),
+  state TEXT NOT NULL CHECK(state IN ('queued','delivered','failed','exhausted')) DEFAULT 'queued',
+  attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts >= 0),
+  next_attempt_ms INTEGER NOT NULL DEFAULT 0,
+  lease_owner TEXT,
+  lease_until_ms INTEGER,
+  last_error TEXT,
+  receipt_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(sender_thread_id, sender_actor, idempotency_key)
+);
+CREATE INDEX bee_thread_inbox_outbox_due ON bee_thread_inbox_outbox(state, next_attempt_ms);
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -514,6 +549,7 @@ local list: {Migration} = {
     {id = 11, name = "action_inbox", sql = ACTION_INBOX_SQL, rebuild = false},
     {id = 12, name = "action_inbox_push", sql = ACTION_INBOX_PUSH_SQL, rebuild = false},
     {id = 13, name = "action_inbox_delivery_status", sql = ACTION_INBOX_DELIVERY_STATUS_SQL, rebuild = false},
+    {id = 14, name = "action_inbox_outbox", sql = ACTION_INBOX_OUTBOX_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

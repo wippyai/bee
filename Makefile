@@ -119,6 +119,7 @@ codex-native-hooks-check:
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
 test: fixture-gateway-client
+	python3 -m unittest discover -s tests -p 'test_*.py'
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 .PHONY: compile-cache-check
 compile-cache-check:

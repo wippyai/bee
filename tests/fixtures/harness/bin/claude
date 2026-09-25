@@ -49,8 +49,8 @@ if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   # Gateway client: the child reads the host-approved MCP configuration from
   # the --mcp-config literal and the bearer token from the environment
   # destination the configuration names, walks initialization, discovery and
-  # a call, optionally waits and holds, and reports status codes only on
-  # stderr.
+  # a call, optionally waits and holds, and reports status codes only. The
+  # ordered-report fixture writes a Claude informational frame on stdout.
   # A revoked gateway can make placement request cooperative shutdown while
   # this client is holding. Flush its last real HTTP check before exiting;
   # the runner's normal forced-stop deadline remains authoritative.

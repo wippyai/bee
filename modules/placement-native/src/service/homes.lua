@@ -93,19 +93,27 @@ function M.ensure_session(session_key: string): (string?, string?)
     if home_error then return nil, home_error end
     return path, nil
 end
-local function remove_tree(vol: fs.FS, path: string): string?
-    for entry in vol:readdir(path) do
+-- Two authorized cleanup callers may race after both read a pending attempt.
+-- An entry already removed by the other caller is complete, while a path
+-- still present after an I/O failure must retain its error.
+function M.remove_tree(vol: fs.FS, path: string): string?
+    local iterator, state, first = vol:readdir(path)
+    if not iterator then
+        if vol:exists(path) == false then return nil end
+        return "read " .. path .. ": " .. tostring(state)
+    end
+    for entry in iterator, state, first do
         local child = path .. "/" .. tostring(entry.name)
         if entry.type == "directory" then
-            local nested = remove_tree(vol, child)
+            local nested = M.remove_tree(vol, child)
             if nested then return nested end
         else
             local removed, err = vol:remove(child)
-            if not removed then return "remove " .. child .. ": " .. tostring(err) end
+            if not removed and vol:exists(child) ~= false then return "remove " .. child .. ": " .. tostring(err) end
         end
     end
     local removed, err = vol:remove(path)
-    if not removed then return "remove " .. path .. ": " .. tostring(err) end
+    if not removed and vol:exists(path) ~= false then return "remove " .. path .. ": " .. tostring(err) end
     return nil
 end
 function M.remove_attempt(home_key: string): string?
@@ -113,7 +121,7 @@ function M.remove_attempt(home_key: string): string?
     if not vol then return vol_error end
     local path = "/" .. M.ATTEMPTS .. "/" .. home_key
     if not vol:exists(path) then return nil end
-    return remove_tree(vol, path)
+    return M.remove_tree(vol, path)
 end
 function M.attempt_exists(home_key: string): boolean
     local vol = volume()

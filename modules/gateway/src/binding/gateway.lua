@@ -842,7 +842,14 @@ function M.ready(value: unknown): Reply
     local address = tostring(listener.address)
     local response, request_error = http_client.get("http://" .. address .. "/ready", {timeout = "2s", query = {nonce = nonce}})
     if request_error or not response then return fail("UNAVAILABLE", "the listener did not answer: " .. tostring(request_error)) end
-    if response.status_code ~= 200 then return fail("UNAVAILABLE", "the listener answered " .. tostring(response.status_code)) end
+    if response.status_code ~= 200 then
+        local body: unknown = json.decode(tostring(response.body))
+        local failure = bounds.object((bounds.object(body) or {}).error)
+        local code = failure and bounds.line(failure.code, 64)
+        local message = failure and bounds.line(failure.message, 200)
+        local detail = code and message and (": " .. code .. ": " .. message) or ""
+        return fail("UNAVAILABLE", "the listener answered " .. tostring(response.status_code) .. detail)
+    end
     local answered: unknown, decode_error = json.decode(tostring(response.body))
     if decode_error or type(answered) ~= "table" then return fail("UNAVAILABLE", "the listener answered unreadably") end
     local reported = answered :: Object

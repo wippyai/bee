@@ -13,7 +13,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.approvals.binding:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:list, bee.approvals.binding:deliveries, bee.approvals.binding:reconcile, bee.approvals.binding:capabilities, bee.threads.approvals:append, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.approvals.binding:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:list, bee.approvals.binding:deliveries, bee.approvals.binding:reconcile, bee.approvals.binding:capabilities, bee.threads.approvals:append, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after, bee.threads.delivery:watch]
     effect: allow
 - name: test_db
   kind: db.sql.sqlite

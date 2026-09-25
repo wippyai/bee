@@ -131,14 +131,28 @@ func redeemInvite(ctx context.Context, state string, line invite.Invite) (result
 	if err != nil {
 		return err
 	}
-	admission, pinned, err := invite.Dial(ctx, line, identity, invite.Request{Node: node,
-		Addresses: []string{address.String()}, Key: base64.RawStdEncoding.EncodeToString(public)})
+	certificateAddresses, err := selectedMeshCertificateAddresses(address)
 	if err != nil {
 		return err
 	}
-	if _, err := netip.ParseAddrPort(admission.Gossip); err != nil {
+	addressStrings := make([]string, 0, len(certificateAddresses))
+	for _, candidate := range certificateAddresses {
+		addressStrings = append(addressStrings, candidate.String())
+	}
+	admission, pinned, path, err := invite.DialCandidates(ctx, line, identity, invite.Request{Node: node,
+		Addresses: addressStrings, Key: base64.RawStdEncoding.EncodeToString(public)})
+	if err != nil {
+		var refused *invite.Refused
+		if advice := joinFailureAdvice(line); advice != "" && !errors.As(err, &refused) {
+			return fmt.Errorf("%w\n%s", err, advice)
+		}
+		return err
+	}
+	gossip, err := netip.ParseAddrPort(admission.Gossip)
+	if err != nil {
 		return errors.New("the hive node sent an invalid gossip address")
 	}
+	gossip = gossipSeedForPath(gossip, path.Endpoint)
 	secret, err := base64.StdEncoding.DecodeString(admission.Secret)
 	if err != nil || len(secret) != 32 {
 		return errors.New("the hive node sent an invalid mesh secret")
@@ -153,7 +167,7 @@ func redeemInvite(ctx context.Context, state string, line invite.Invite) (result
 	if _, err := meshtls.Pool(authority.Certificate(), []byte(admission.Authorities)); err != nil {
 		return err
 	}
-	record, err := json.Marshal(joinedRecord{Node: line.Node, Gossip: admission.Gossip, Authorities: admission.Authorities})
+	record, err := json.Marshal(joinedRecord{Node: line.Node, Gossip: gossip.String(), Authorities: admission.Authorities, JoinPath: path.Endpoint})
 	if err != nil {
 		return err
 	}

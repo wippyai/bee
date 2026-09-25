@@ -25,7 +25,7 @@ local function bridge(local_clients: boolean, topic: string): owner.State
     local unused = listen("bee.test.desktop_enrollment." .. topic)
     local state: owner.State = {
         bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = "owner-node",
-        allowed = {}, enrolled = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = local_clients, folder = true},
+        allowed = {}, allowed_peers = {}, enrolled = {}, peers = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, allowed_peers = {}, local_clients = local_clients, folder = true},
         ready = unused, results = unused, copies = unused, launches = unused,
         activations = unused, observers = unused, switches = unused, retiring = {}, catalog = catalog.new(),
         spawn_scope = security.new_scope({}), executor = funcs.new(), folder = nil, served = {}, workspaces = {}, served_count = 0,
@@ -38,28 +38,44 @@ local function define_tests()
         test.it("admits a local client node only while the host enrolls it", function()
             local state = bridge(true, "admits")
             test.is_false(owner.admits(state, client("client-1", "a")), "unenrolled local client admitted")
-            owner.enroll(state, {["client-1"] = true}, 0)
+            owner.enroll(state, {["client-1"] = true}, {}, 0)
             test.is_true(owner.admits(state, client("client-1", "a")))
             test.is_false(owner.admits(state, client("client-2", "a")), "another node rode on an enrollment")
             test.is_false(owner.admits(state, "{client-1@bee:workers|a}"), "a non-client host was admitted")
-            owner.enroll(state, {}, 0)
+            owner.enroll(state, {}, {}, 0)
             test.is_false(owner.admits(state, client("client-1", "a")), "retired node still admitted")
         end)
 
         test.it("ignores enrollment when the host did not select local clients", function()
             local state = bridge(false, "unselected")
-            owner.enroll(state, {["client-1"] = true}, 0)
+            owner.enroll(state, {["client-1"] = true}, {}, 0)
             test.is_false(owner.admits(state, client("client-1", "a")))
+        end)
+
+        test.it("admits an explicitly allowed Hive peer only while its pin is enrolled", function()
+            local state = bridge(true, "peers")
+            state.allowed_peers["peer-1"] = true
+            owner.enroll(state, {}, {}, 0)
+            test.is_false(owner.admits(state, client("peer-1", "a")), "a stale grant admitted an unpinned peer")
+            owner.enroll(state, {}, {["peer-1"] = true, ["peer-2"] = true}, 0)
+            test.is_true(owner.admits(state, client("peer-1", "a")))
+            test.is_false(owner.admits(state, client("peer-2", "a")), "a pin alone granted desktop access")
+            local recipient = client("peer-1", "a")
+            state.clients[recipient] = {recipient = recipient, workspace_id = WORKSPACE, desktop_id = "", closing = false, dirty = false}
+            state.client_count = 1
+            owner.enroll(state, {}, {}, 0)
+            test.is_false(owner.admits(state, recipient), "retired peer kept desktop access")
+            test.is_nil(state.clients[recipient], "retired peer kept its attachment")
         end)
 
         test.it("revokes an attached client whose node leaves the enrollment", function()
             local state = bridge(true, "revokes")
-            owner.enroll(state, {["client-1"] = true, ["client-2"] = true}, 0)
+            owner.enroll(state, {["client-1"] = true, ["client-2"] = true}, {}, 0)
             local leaving, staying = client("client-1", "a"), client("client-2", "b")
             state.clients[leaving] = {recipient = leaving, workspace_id = WORKSPACE, desktop_id = "", closing = false, dirty = false}
             state.clients[staying] = {recipient = staying, workspace_id = WORKSPACE, desktop_id = "", closing = false, dirty = false}
             state.client_count = 2
-            owner.enroll(state, {["client-2"] = true}, 0)
+            owner.enroll(state, {["client-2"] = true}, {}, 0)
             test.is_nil(state.clients[leaving], "retired node kept its attachment")
             test.not_nil(state.clients[staying])
             test.eq(state.client_count, 1)

@@ -33,6 +33,12 @@ entries:
   source: file://preflight.lua
   modules: [hash, json]
   imports: {canonical: bee.sync:canonical}
+- name: capability_catalog
+  kind: library.lua
+  source: file://capability_catalog.lua
+- name: capability_containment
+  kind: library.lua
+  source: file://capability_containment.lua
 - name: delivery_protocol
   kind: library.lua
   source: file://delivery_protocol.lua

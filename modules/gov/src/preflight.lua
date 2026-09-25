@@ -6,9 +6,12 @@ local json = require("json")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
-    config_empty: {string}?}
+    config_empty: {string}?, security_actor: boolean?, security_groups: boolean?}
 type Artifact = {component: string, version: string, digest: string, dependencies: {string}, namespaces: {string}}
-type Requirement = {id: string, package: string, value: string?, expected_kind: string?, targets: {string}}
+type CapabilityRequest = {capability: string, parameters: {[string]: string | {string}}, reason: string,
+    target: string, path: string, catalog_revision: integer, template_revision: integer}
+type Requirement = {id: string, package: string, value: string?, expected_kind: string?, targets: {string},
+    capability_request: CapabilityRequest?}
 type Migration = {id: string, target_db: string, checksum: string, ordinal: integer}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
 type DatabaseEvidence = {database_id: string, table_prefix: string?, kind: string, package: string, digest: string}
@@ -158,6 +161,34 @@ local function only(value: {[string]: unknown}, allowed: {[string]: boolean}, la
     end
     return nil
 end
+local function candidate_parameters(raw: unknown): ({[string]: string | {string}}?, string?)
+    if type(raw) ~= "table" then return nil, "capability request parameters are malformed" end
+    local result: {[string]: string | {string}} = {}
+    local count = 0
+    for key, value in pairs(raw :: table) do
+        if type(key) ~= "string" or not identifier(key :: string) then
+            return nil, "capability request parameter name is malformed"
+        end
+        count = count + 1
+        if count > 8 then return nil, "capability request parameters exceed bound" end
+        if type(value) == "string" then
+            if #value == 0 or #value > 160 or value:find("%c") then
+                return nil, "capability request parameter value is malformed"
+            end
+            result[key] = value
+        else
+            local rows, rows_error = identifiers(value, "capability request parameter values", 16)
+            if not rows or #rows == 0 then return nil, rows_error or "capability request parameter values are malformed" end
+            local previous = ""
+            for _, item in ipairs(rows) do
+                if item <= previous then return nil, "capability request parameter values are not sorted and distinct" end
+                previous = item
+            end
+            result[key] = rows
+        end
+    end
+    return result, nil
+end
 local function candidate_artifacts(raw: unknown): ({Artifact}?, string?)
     local count, count_error = dense_count(raw, "candidate artifacts", 32)
     if not count then return nil, count_error end
@@ -191,7 +222,8 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
     if not count then return nil, count_error end
     local allowed: {[string]: boolean} = {id = true, kind = true, package = true, digest = true,
         references = true, auto_start = true, grants = true, modules = true,
-        config_objects = true, config_lists = true, config_empty = true}
+        config_objects = true, config_lists = true, config_empty = true,
+        security_actor = true, security_groups = true}
     local result: {Entry} = {}
     for index = 1, count do
         local row = (raw :: table)[index]
@@ -215,13 +247,16 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
             or type(item.kind) ~= "string" or not identifier(item.kind :: string)
             or type(item.package) ~= "string" or not identifier(item.package :: string)
             or type(item.digest) ~= "string" or not digest(item.digest :: string)
-            or type(item.auto_start) ~= "boolean" then
+            or type(item.auto_start) ~= "boolean"
+            or (item.security_actor ~= nil and type(item.security_actor) ~= "boolean")
+            or (item.security_groups ~= nil and type(item.security_groups) ~= "boolean") then
             return nil, "candidate entry is malformed"
         end
         result[index] = {id = item.id :: string, kind = item.kind :: string, package = item.package :: string,
             digest = item.digest :: string, references = references, auto_start = item.auto_start :: boolean,
             grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
-            config_empty = config_empty}
+            config_empty = config_empty, security_actor = item.security_actor :: boolean?,
+            security_groups = item.security_groups :: boolean?}
     end
     return result, nil
 end
@@ -229,7 +264,7 @@ local function candidate_requirements(raw: unknown): ({Requirement}?, string?)
     local count, count_error = dense_count(raw, "candidate requirements", 128)
     if not count then return nil, count_error end
     local allowed: {[string]: boolean} = {id = true, package = true, value = true,
-        expected_kind = true, targets = true}
+        expected_kind = true, targets = true, capability_request = true}
     local result: {Requirement} = {}
     for index = 1, count do
         local row = (raw :: table)[index]
@@ -245,8 +280,33 @@ local function candidate_requirements(raw: unknown): ({Requirement}?, string?)
             or (item.expected_kind ~= nil and (type(item.expected_kind) ~= "string" or not identifier(item.expected_kind :: string))) then
             return nil, "candidate requirement is malformed"
         end
+        local request: CapabilityRequest? = nil
+        if item.capability_request ~= nil then
+            local raw_request = item.capability_request
+            if type(raw_request) ~= "table" then return nil, "capability request is malformed" end
+            local value = raw_request :: {[string]: unknown}
+            if only(value, {capability = true, parameters = true, reason = true, target = true,
+                path = true, catalog_revision = true, template_revision = true}, "capability request")
+                or type(value.capability) ~= "string" or not (value.capability :: string):match("^[a-z][a-z0-9_.-]*$")
+                or type(value.reason) ~= "string" or #value.reason == 0 or #value.reason > 512
+                or (value.reason :: string):find("%c") or type(value.target) ~= "string"
+                or value.path ~= ".security.policies +=" or value.target ~= targets[1] or #targets ~= 1
+                or item.expected_kind ~= "security.policy" or item.value ~= nil
+                or type(value.catalog_revision) ~= "number" or value.catalog_revision < 1
+                or value.catalog_revision ~= math.floor(value.catalog_revision :: number)
+                or type(value.template_revision) ~= "number" or value.template_revision < 1
+                or value.template_revision ~= math.floor(value.template_revision :: number)
+                or type(value.parameters) ~= "table" then return nil, "capability request is malformed" end
+            local parameters, parameters_error = candidate_parameters(value.parameters)
+            if not parameters then return nil, parameters_error end
+            request = {capability = value.capability :: string, parameters = parameters,
+                reason = value.reason :: string, target = value.target :: string,
+                path = ".security.policies +=", catalog_revision = value.catalog_revision :: integer,
+                template_revision = value.template_revision :: integer}
+        end
         local requirement: Requirement = {id = item.id :: string, package = item.package :: string,
-            value = item.value :: string?, expected_kind = item.expected_kind :: string?, targets = targets}
+            value = item.value :: string?, expected_kind = item.expected_kind :: string?, targets = targets,
+            capability_request = request}
         result[index] = requirement
     end
     return result, nil
@@ -385,6 +445,10 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if namespace and namespace_owners[namespace] ~= item.package then issue("NAMESPACE_OWNER", item.id, "entry namespace is not declared by its package", "include the exact child namespace in the package ownership manifest") end
         if not artifacts[item.package] then issue("UNKNOWN_OWNER", item.id, "entry is not owned by the measured package closure", "repair the ownership manifest") end
         if not context.kinds[item.kind] then issue("KIND_DENIED", item.id, "entry kind is outside host policy", "remove the entry or request host policy review") end
+        if item.security_actor or item.security_groups then
+            issue("SECURITY_DENIED", item.id, "application content selects an actor or security groups",
+                "remove security.actor and security.groups; the host selects application identity")
+        end
         for _, grant in ipairs(item.grants) do
             if not context.grants[grant] then issue("GRANT_DENIED", item.id, "unadmitted security policy " .. grant, "remove the grant or request host policy review") end
         end
@@ -453,8 +517,8 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         requirements[item.id] = true
         if not artifacts[item.package] then issue("UNKNOWN_OWNER", item.id, "requirement is outside measured closure", "repair requirement ownership") end
         local target = item.value and final[item.value] or nil
-        if not target then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")
-        elseif item.expected_kind and target.kind ~= item.expected_kind then issue("BINDING_KIND", item.id, "resource does not match declared kind", "select a resource of the declared kind") end
+        if not target and not item.capability_request then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")
+        elseif target and item.expected_kind and target.kind ~= item.expected_kind then issue("BINDING_KIND", item.id, "resource does not match declared kind", "select a resource of the declared kind") end
         for _, reference in ipairs(item.targets) do
             if not final[reference] then issue("DANGLING_REQUIREMENT_TARGET", item.id, "missing target entry " .. reference, "repair the package requirement target") end
         end

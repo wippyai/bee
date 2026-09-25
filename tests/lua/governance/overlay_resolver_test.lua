@@ -118,12 +118,22 @@ local function define_tests()
         end)
         test.it("retains a capability requirement and validates its app policy append target", function()
             local deps, spec = fixture(nil)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+                meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
+                data = {revision = 1, never = {"exec"}, capabilities = {{id = "workspace.files.read",
+                    revision = 1, confirm = "standard", parameters = {subpath = "relative_subpath"},
+                    text = "Read workspace files under {subpath}",
+                    operations = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
+                    resources = {}}}}}
             local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
                 data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
             local request: Entry = {id = "private.app:files", kind = "ns.requirement",
                 meta = {value_kind = "security.policy", capability = "workspace.files.read",
                     parameters = {subpath = "docs"}, reason = "Render documentation"},
                 data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
+            local request_data = request.data :: Object
+            local request_meta = request.meta :: Object
             changes(spec, {app, request})
             local facts = resolve(deps, spec)
             local capability = (facts.candidate.requirements :: {Object})[1].capability_request :: Object
@@ -132,16 +142,30 @@ local function define_tests()
             test.eq(capability.reason, "Render documentation")
             test.eq(capability.target, "private.app:main")
             test.eq(capability.path, ".security.policies +=")
+            local before_digest = facts.candidate.base_digest
+            local catalog_entry = captured.entries[#captured.entries]
+            local catalog_data = catalog_entry.data :: Object
+            local catalog_rows = catalog_data.capabilities :: {Object}
+            catalog_rows[1].revision = 2
+            test.is_true(resolve(deps, spec).candidate.base_digest ~= before_digest)
             for _, bad_path in ipairs({".security.policies", ".security.groups +=", ".security.policies += .other"}) do
-                (request.data :: Object).targets = {{entry = "private.app:main", path = bad_path}}
+                request_data.targets = {{entry = "private.app:main", path = bad_path}}
                 changes(spec, {app, request})
                 local candidate = resolver.resolve_with(deps, spec)
                 test.is_nil(candidate)
             end
-            (request.data :: Object).targets = {{entry = "private.app:main", path = ".security.policies +="}}
-            (request.meta :: Object).value_kind = "security.actor"
+            request_data.targets = {{entry = "private.app:main", path = ".security.policies +="}}
+            request_meta.value_kind = "security.actor"
             changes(spec, {app, request})
-            test.is_nil(resolver.resolve_with(deps, spec))
+            local wrong_kind = resolver.resolve_with(deps, spec)
+            if wrong_kind then error("accepted capability value_kind security.actor") end
+            test.is_nil(wrong_kind)
+            request_meta.value_kind = "security.policy"
+            request_meta.parameters = {subpath = "docs/../private"}
+            changes(spec, {app, request})
+            local wrong_path = resolver.resolve_with(deps, spec)
+            if wrong_path then error("accepted capability subpath traversal") end
+            test.is_nil(wrong_path)
         end)
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec = fixture(nil)

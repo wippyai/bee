@@ -197,6 +197,84 @@ entries:
     exports:
     - feed: governance.application_versions
       content_kinds: [bee.governance-application-version@2]
+- name: capability_catalog
+  kind: registry.entry
+  meta:
+    type: bee.capability_catalog
+    comment: Host-owned review vocabulary and templates; declarations are not grants
+  data:
+    revision: 1
+    never: [exec, env, credentials, registry.write, security.policy.write, security.scope.manage, approvals.decide, core.database, lifecycle.auto_start]
+    capabilities:
+    - id: workspace.files.read
+      revision: 1
+      parameters: {subpath: relative_subpath}
+      text: Read workspace files under {subpath}
+      confirm: standard
+      operations:
+      - {operation: files.read, resource: workspace, scope: {subpath: '$subpath'}}
+      resources:
+      - {kind: fs.directory, mode: readonly, source: verified_workspace_subroot}
+    - id: app.database
+      revision: 1
+      parameters: {name: name}
+      text: Use an isolated application database named {name}
+      confirm: standard
+      operations:
+      - {operation: database.use, resource: '$name', scope: {name: '$name'}}
+      resources:
+      - {kind: db.sql.sqlite, mode: dedicated, source: host_app_database}
+    - id: threads.read
+      revision: 1
+      parameters: {scope: owned_scope}
+      text: Read owned threads
+      confirm: standard
+      operations:
+      - {operation: threads.read, resource: threads, scope: {scope: '$scope'}}
+      resources: []
+    - id: threads.message
+      revision: 1
+      parameters: {scope: children_scope}
+      text: Message child threads
+      confirm: standard
+      operations:
+      - {operation: threads.message, resource: threads, scope: {scope: '$scope'}}
+      resources: []
+    - id: agents.launch
+      revision: 1
+      parameters: {definitions: definitions}
+      text: Launch managed agents from {definitions}
+      confirm: explicit
+      operations:
+      - {operation: agents.launch, resource: managed_agents, scope: {definitions: '$definitions'}}
+      resources: []
+    - id: contract.call
+      revision: 1
+      parameters: {binding: binding, methods: methods}
+      text: Call app binding {binding} using {methods}
+      confirm: explicit
+      operations:
+      - {operation: contract.call, resource: '$binding', scope: {methods: '$methods'}}
+      resources:
+      - {kind: contract.binding, mode: caller, source: host_selected_binding}
+    - id: http.api
+      revision: 1
+      parameters: {origin: https_origin, methods: http_methods, path_prefix: url_path_prefix}
+      text: Send HTTP requests to {origin} at {path_prefix} using {methods}
+      confirm: explicit
+      operations:
+      - {operation: http.request, resource: '$origin', scope: {methods: '$methods', path_prefix: '$path_prefix'}}
+      resources:
+      - {kind: http.client, mode: scoped, source: host_selected_origin}
+    - id: hive.expose
+      revision: 1
+      parameters: {contract: contract, methods: methods}
+      text: Expose Hive contract {contract} using {methods}
+      confirm: explicit
+      operations:
+      - {operation: hive.expose, resource: '$contract', scope: {methods: '$methods'}}
+      resources:
+      - {kind: contract.binding, mode: hive, source: host_selected_contract}
 - name: sync_distribution_policy
   kind: security.policy
   meta:

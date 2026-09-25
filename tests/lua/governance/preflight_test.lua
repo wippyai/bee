@@ -94,6 +94,21 @@ local function define_tests()
                 test.is_true(has(checked(candidate, context), "SECURITY_DENIED"))
             end
         end)
+        test.it("preserves capability requests in exact candidate bytes and rejects forged targets", function()
+            local candidate, context = fixture()
+            candidate.requirements[1].value = nil
+            candidate.requirements[1].expected_kind = "security.policy"
+            candidate.requirements[1].capability_request = {capability = "workspace.files.read",
+                parameters = {subpath = "docs"}, reason = "Show docs", target = "demo:run",
+                path = ".security.policies +=", catalog_revision = 1, template_revision = 1}
+            local bytes = assert(canonical.encode(candidate, 1048576))
+            local decoded = assert(preflight.decode_candidate(bytes, assert(hash.sha256(bytes))))
+            test.eq((decoded.requirements[1].capability_request :: preflight.CapabilityRequest).reason, "Show docs")
+            test.is_true(checked(decoded, context).ready)
+            candidate.requirements[1].capability_request.target = "other:run"
+            bytes = assert(canonical.encode(candidate, 1048576))
+            test.is_nil(preflight.decode_candidate(bytes, assert(hash.sha256(bytes))))
+        end)
         test.it("measures an exact destination plan without executing it", function()
             local candidate, context = fixture()
             local report = checked(candidate, context)

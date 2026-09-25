@@ -143,7 +143,7 @@ end
 -- Checks one credential projection's bindings without bytes. File logins are
 -- meaningful only in a caller-selected retained home: an attempt home would
 -- discard them on cleanup.
-local function check_projection(request: types.LaunchRequest, projection_id: string): (Reply?, string?)
+local function check_projection(request: types.LaunchRequest, projection_id: string): (Reply?, string?, boolean?, string?)
     local raw, call_error = funcs.call(resources.CREDENTIAL_CHECK, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id, attempt_id = request.attempt_id})
     if call_error or type(raw) ~= "table" then return fail("UNAVAILABLE", "credential broker did not answer for projection " .. projection_id), nil end
     local reply = raw :: Reply
@@ -160,7 +160,7 @@ local function check_projection(request: types.LaunchRequest, projection_id: str
     if not source or projection.destination ~= (source.path:match("[^/]+$") :: string) then
         return fail("DENIED", "projection " .. projection_id .. " has invalid file login metadata"), nil
     end
-    return nil, "file"
+    return nil, "file", projection.source_present == true, source.source.provider
 end
 -- Checks the gateway binding an attempt holds under its attached carrier
 -- epoch; bindings, never bytes.
@@ -369,17 +369,22 @@ function M.prepare(value: unknown): Reply
     if missing_file then return fail("DENIED", missing_file) end
     local digest, digest_error = request_codec.digest(request)
     if not digest then return fail("INVALID", digest_error or "request is not measurable") end
+    local home_directory, home_error = configured_home(request)
+    if not home_directory then return fail("UNAVAILABLE", home_error or "configuration home unavailable") end
     local resolved_grants, resources_refused = admit_resources(request)
     if not resolved_grants then return resources_refused :: Reply end
     local file_projection = false
+    local projected_login_present = false
     for _, projection_id in ipairs(request.projections) do
-        local refused, kind = check_projection(request, projection_id)
+        local refused, kind, present, provider = check_projection(request, projection_id)
         if refused then return refused end
         if kind == "file" then
             if file_projection then return fail("DENIED", "only one file credential projection may select a retained home") end
             file_projection = true
+            if present and request.launch.login and provider == request.launch.login.provider then projected_login_present = true end
         end
     end
+    local login_notice = materialization.prepare_login_notice(request, home_directory, projected_login_present)
     local prepare_pinned, prepare_pin_error = resolver.pin()
     if not prepare_pinned then return fail("UNAVAILABLE", prepare_pin_error or "pin registry") end
     local selected_placement, placement_error = placement_resolver.resolve(prepare_pinned, request.placement_binding_ref)
@@ -462,10 +467,9 @@ function M.prepare(value: unknown): Reply
         local attempt = store.attempt(db, existing.attempt_id :: string)
         db:release()
         if existing.request_digest ~= digest then return fail("CONFLICT", "idempotency key reused with a different request") end
+        if attempt then attempt.notice = login_notice end
         return succeed(attempt)
     end
-    local home_directory, home_error = configured_home(request)
-    if not home_directory then db:release(); return fail("UNAVAILABLE", home_error or "configuration home unavailable") end
     configuration.home_directory = home_directory
     -- Placement supplies the measured attempt identity only while rendering
     -- private delivery. It is excluded from the host configuration digest and
@@ -488,6 +492,7 @@ function M.prepare(value: unknown): Reply
     local result = store.intend(db, request, digest, encoded, {capability = measured.capability, exit_observation = measured.exit_observation}, grants_json)
     db:release()
     if not result.ok then return fail(result.code or "STORAGE", result.message or "record intent") end
+    if result.attempt then result.attempt.notice = login_notice end
     return succeed(result.attempt)
 end
 -- start: spawn the runner and wait for its startup acknowledgment within

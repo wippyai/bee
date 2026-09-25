@@ -12,6 +12,7 @@ type CleanupState = "pending" | "complete" | "uncertain"
 type Access = "read" | "write"
 type Purpose = "project" | "output" | "cache" | "session"
 type StopMode = "cooperative" | "forced"
+type LoginNotice = {code: "LOGIN_REQUIRED", provider: string, command: string}
 -- One admitted resource: an fs.directory root the host admits, a subpath
 -- inside it, and the access the owner granted. grant_ref is the owner's
 -- reference for that decision; placement records it, never interprets it.
@@ -94,6 +95,8 @@ type Attempt = {
     evidence_count: integer,
     created_at: string,
     updated_at: string,
+    -- Prepare-only hint, derived from existence in the selected provider home.
+    notice: LoginNotice?,
 }
 type Evidence = {sequence: integer, at: string, kind: string, detail: string}
 type EvidencePage = {attempt_id: string, evidence: {Evidence}, next_after: integer?}

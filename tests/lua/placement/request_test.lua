@@ -23,6 +23,27 @@ local function rejects(mutate: ({[string]: unknown}) -> (), message: string)
 end
 local function define_tests()
     test.describe("Placement requests", function()
+        test.it("decodes bounded login evidence and refuses unsafe paths", function()
+            local value = launch()
+            local spec = value.launch :: {[string]: unknown}
+            spec.login = {provider = "claude", command = "claude", files = {
+                {variable = "CLAUDE_CONFIG_DIR", default_directory = ".claude", path = ".credentials.json"}}}
+            local decoded, err = request.decode(value)
+            if not decoded then error(tostring(err)) end
+            test.eq(decoded.launch.login and decoded.launch.login.provider, "claude")
+            test.eq(decoded.launch.login and decoded.launch.login.files[1].path, ".credentials.json")
+            rejects(function(item)
+                (item.launch :: {[string]: unknown}).login = {provider = "claude", command = "claude", files = {
+                    {variable = "HOME", path = "../auth.json"}}}
+            end, "launch.login.files[1].path must be a safe relative path")
+            rejects(function(item)
+                (item.launch :: {[string]: unknown}).login = {provider = "claude", command = "claude\nrm", files = {
+                    {variable = "HOME", path = "auth.json"}}}
+            end, "launch.login.command must be a bounded single line")
+            rejects(function(item)
+                (item.launch :: {[string]: unknown}).login = {provider = "claude", command = "claude", files = {}}
+            end, "launch.login.files must contain 1 to 8 paths")
+        end)
         test.it("retains hooks when the admitted MCP tool set is empty", function()
             local raw = launch()
             raw.gateway = {endpoint = "127.0.0.1:4312", tools = {}, destination = "BEE_GATEWAY_TOKEN", hooks = {"SessionStart"}, hook_destination = "BEE_GATEWAY_HOOK_TOKEN"}

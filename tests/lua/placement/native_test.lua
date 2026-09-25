@@ -320,6 +320,83 @@ local function has(list: {string}, wanted: string): boolean
 end
 local function define_tests()
     test.describe("Native placement", function()
+        test.it("checks login evidence in the selected provider home without opening files", function()
+            local raw = launch({"sh", "-c", "true"}, "direct_process")
+            raw.profile_id = "window"
+            raw.environment_refs = {HOME = "bee:machine_home"}
+            local declared = raw.launch :: {[string]: unknown}
+            declared.login = {provider = "codex", command = "codex login", files = {
+                {variable = "CODEX_HOME", default_directory = ".codex", path = "auth.json"}}}
+            local decoded, err = request_codec.decode(raw)
+            if not decoded then error(tostring(err)) end
+            local checked: {string} = {}
+            local function exists(path: string): boolean
+                checked[#checked + 1] = path
+                return path == "/custom/auth.json"
+            end
+            local missing = materialization.login_notice(decoded, "/owner", exists)
+            test.eq(missing and missing.code, "LOGIN_REQUIRED")
+            test.eq(missing and missing.provider, "codex")
+            test.eq(missing and missing.command, "codex login")
+            test.eq(checked[1], "/owner/.codex/auth.json")
+            decoded.environment.CODEX_HOME = "/custom"
+            test.is_nil(materialization.login_notice(decoded, "/owner", exists))
+            test.eq(checked[2], "/custom/auth.json")
+            decoded.environment.CODEX_HOME = "/other"
+            local other = materialization.login_notice(decoded, "/owner", exists)
+            test.eq(other and other.code, "LOGIN_REQUIRED")
+            test.eq(checked[3], "/other/auth.json")
+            decoded.profile_id = "batch"
+            test.is_nil(materialization.login_notice(decoded, "/owner", exists))
+            test.eq(#checked, 3)
+            decoded.profile_id = "window"
+            test.is_nil(materialization.login_notice(decoded, "/owner", exists, true))
+            test.eq(#checked, 3)
+            -- A retained login projection cannot satisfy a provider whose
+            -- own home override points outside the retained home.
+            decoded.environment.CODEX_HOME = "/other"
+            local projected_elsewhere = materialization.login_notice(decoded, "/owner", exists, true)
+            test.eq(projected_elsewhere and projected_elsewhere.code, "LOGIN_REQUIRED")
+            test.is_nil(materialization.login_notice(decoded, "/owner", function(path: string): boolean? return nil end))
+        end)
+        test.it("checks all five provider layouts in the home selected for each window", function()
+            local cases = {
+                {provider = "codex", variable = "CODEX_HOME", directory = ".codex", path = "auth.json", expected = "/owner/.codex/auth.json"},
+                {provider = "claude", variable = "CLAUDE_CONFIG_DIR", directory = ".claude", path = ".credentials.json", expected = "/owner/.claude/.credentials.json"},
+                {provider = "agy", variable = "HOME", path = ".gemini/antigravity-cli/antigravity-oauth-token", expected = "/owner/.gemini/antigravity-cli/antigravity-oauth-token"},
+                {provider = "grok", variable = "GROK_HOME", directory = ".grok", path = "auth.json", expected = "/owner/.grok/auth.json"},
+                {provider = "muse", variable = "HOME", path = ".config/muse/auth.json", expected = "/owner/.config/muse/auth.json"},
+            }
+            for _, case in ipairs(cases) do
+                local raw = launch({"sh", "-c", "true"}, "direct_process")
+                raw.profile_id = "window"
+                local spec = raw.launch :: {[string]: unknown}
+                spec.login = {provider = case.provider, command = case.provider, files = {
+                    {variable = case.variable, default_directory = case.directory, path = case.path}}}
+                local decoded, err = request_codec.decode(raw)
+                if not decoded then error(tostring(err)) end
+                local checked: string? = nil
+                local notice = materialization.login_notice(decoded, "/owner", function(path: string): boolean
+                    checked = path
+                    return false
+                end)
+                test.eq(checked, case.expected)
+                test.eq(notice and notice.provider, case.provider)
+            end
+        end)
+        test.it("returns a typed login notice from prepare and its replay", function()
+            local raw = launch({"sh", "-c", "true"}, "direct_process")
+            raw.profile_id = "window"
+            local spec = raw.launch :: {[string]: unknown}
+            spec.login = {provider = "codex", command = "codex login", files = {{variable = "HOME", path = ".codex/auth.json"}}}
+            local prepared = attempt_of(call(OWNER, "prepare", raw))
+            test.eq(prepared.notice and prepared.notice.code, "LOGIN_REQUIRED")
+            test.eq(prepared.notice and prepared.notice.provider, "codex")
+            test.eq(prepared.notice and prepared.notice.command, "codex login")
+            local replay = attempt_of(call(OWNER, "prepare", raw))
+            test.eq(replay.notice and replay.notice.code, "LOGIN_REQUIRED")
+            value(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+        end)
         test.it("decodes Linux execution identity facts", function()
             local facts = assert(identity.decode("linux_start=55016250\nlinux_boot=2d21bc55-a6c4-441f-9d95-f5bc579c4152\npgid= 2425392\n"))
             test.eq(facts.start_ticks, 55016250)

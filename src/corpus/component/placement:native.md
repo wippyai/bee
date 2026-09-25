@@ -21,6 +21,11 @@ volume, linked through the `target_root` requirement.
    A request for `bee.environment:machine_home` is admitted only when the pinned host launch
    policy explicitly sets `allow_host_home: true`; profile metadata cannot grant
    that filesystem authority.
+   Window login evidence is checked by existence in the selected provider
+   home. An admitted file projection's source is also checked by metadata so
+   a login about to be copied into a retained home does not produce a false
+   warning. Neither check opens login bytes. An absent login adds an advisory
+   `LOGIN_REQUIRED` notice to the prepare reply and does not stop the launch.
    A retained session home has one holder per owner/session pair: another
    attempt is refused until the predecessor is exited and its existing cleanup
    operation has proved the required scope gone and recorded `complete`.

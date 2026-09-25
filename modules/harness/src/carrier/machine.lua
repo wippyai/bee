@@ -582,8 +582,20 @@ end
 -- the action, prepares and claims its attempt, admits the gateway, and records
 -- placement intent. It does not request a turn, attach a transport or start a
 -- child; the selected execution path owns those operations.
-type PreparedAttempt = {epoch: integer, gateway_binding: string?}
+type PreparedAttempt = {epoch: integer, gateway_binding: string?, notice: placement_types.LoginNotice?}
 type FailedPreparation = {epoch: integer?, gateway_binding: string?, attempt: boolean}
+local function prepare_notice(value: unknown): (placement_types.LoginNotice?, string?)
+    local attempt = bounds.object(value)
+    if not attempt or attempt.notice == nil then return nil, nil end
+    local notice = bounds.object(attempt.notice)
+    if not notice or bounds.fields(notice, {"code", "provider", "command"}) then return nil, "placement prepare returned an invalid notice" end
+    local provider = bounds.id(notice.provider)
+    local command = bounds.line(notice.command, 128)
+    if notice.code ~= "LOGIN_REQUIRED" or not provider or not command or command == "" then
+        return nil, "placement prepare returned an invalid notice"
+    end
+    return {code = "LOGIN_REQUIRED", provider = provider, command = command}, nil
+end
 -- Every placement operation is selected once in the measured plan. Persisted
 -- and admitted plans always carry the concrete binding and its targets.
 function M.placement_target(plan: Plan, method: string): string?
@@ -633,10 +645,12 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     end
     local prepare_target = M.placement_target(plan, "prepare")
     if not prepare_target then return abandon("selected placement binds no prepare") end
-    local _, intent_error = must(io, prepare_target, plan.placement_request)
+    local intent, intent_error = must(io, prepare_target, plan.placement_request)
     if intent_error then return abandon(intent_error) end
+    local notice, notice_error = prepare_notice(intent)
+    if notice_error then return abandon(notice_error) end
     step(io, "placement_intent")
-    return {epoch = epoch, gateway_binding = gateway_binding}, nil, nil
+    return {epoch = epoch, gateway_binding = gateway_binding, notice = notice}, nil, nil
 end
 -- Structured execution requests a turn and starts the pipe runner only after
 -- shared preparation. Failures before execution retire the admitted gateway.

@@ -141,7 +141,8 @@ function M.specification(request: Request): types.Launch
             argv[#argv + 1] = "--"
             argv[#argv + 1] = request.brief
         end
-        return {executable = "grok", argv = argv, environment = environment, readiness = "terminal:attached"}
+        return {executable = "grok", argv = argv, environment = environment, readiness = "terminal:attached",
+            login = {provider = "grok", command = "grok", files = {{variable = "GROK_HOME", default_directory = ".grok", path = "auth.json"}}}}
     end
     return {executable = "grok", argv = argv, environment = environment, readiness = "none"}
 end

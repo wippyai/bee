@@ -473,6 +473,7 @@ local function define_tests()
             test.eq(checked.projection_id, proj_id)
             test.eq(checked.projection_kind, "file")
             test.eq(checked.destination, "auth.json")
+            test.eq(checked.source_present, true)
             clean(call(runner, "check", {projection_id = proj_id, subject = USER, audience = USER, attempt_id = attempt}))
 
             test.eq(code(call(user, "materialize", {projection_id = proj_id, subject = USER, audience = USER, attempt_id = attempt, generation_key = "fg1"})), "DENIED")
@@ -603,6 +604,10 @@ local function define_tests()
             if not volume then error("Grok source volume unavailable") end
             local removed, remove_error = volume:remove(".grok/auth.json")
             if not removed then error("remove Grok login: " .. tostring(remove_error)) end
+            local checked_absent = value(call(runner, "check", {projection_id = projection.projection_id, subject = USER,
+                audience = USER, attempt_id = attempt}))
+            test.eq(checked_absent.source_present, false)
+            clean(call(runner, "check", {projection_id = projection.projection_id, subject = USER, audience = USER, attempt_id = attempt}))
             local absent = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER,
                 audience = USER, attempt_id = attempt, generation_key = "grok-absent"}))
             test.eq(absent.present, false)

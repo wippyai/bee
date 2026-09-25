@@ -33,6 +33,10 @@ native windows require the exact native binding ID.
 - Driver arguments and files are private placement output frozen with the
   intent. The caller cannot supply `delivery`; retries preserve the admitted
   request digest and recorded output.
+- A window launch may declare `login` evidence. `prepare` returns an optional
+  `LOGIN_REQUIRED` notice on its attempt value when the selected provider home
+  has no evidence. The notice contains only a provider and display command;
+  it does not refuse the attempt or certify authentication.
 - Gateway selections allow at most 16 tool names. Credential projections and
   hook events remain limited to eight each; the host launch policy still
   selects which tools a caller may receive.

@@ -75,13 +75,13 @@ def configure_source_node(project):
 def configure_continuous_source(project, workspace_id):
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") != "1":
         return
-    governance_path = project / "modules/gov/src/_index.yaml"
+    governance_path = project / "src/_index.yaml"
     governance = yaml.safe_load(governance_path.read_text())
-    publication = next(item for item in governance["entries"] if item["name"] == "publication_profiles")
+    publication = next(item for item in governance["entries"] if item["name"] == "governance_publication_profiles")
     publication["data"] = {"profiles": [{"workspace_id": workspace_id,
         "source_workspace": SOURCE_WORKSPACE, "component": "bee.agent_app_demo/app",
         "overlay_owner": OVERLAY_OWNER}]}
-    activation = next(item for item in governance["entries"] if item["name"] == "activation_profiles")
+    activation = next(item for item in governance["entries"] if item["name"] == "governance_activation_profiles")
     activation["data"] = {"profiles": [{"workspace_id": workspace_id, "source_node": "node-1",
         "source_workspace": SOURCE_WORKSPACE, "component": "bee.agent_app_demo/app", "resolver": "overlay",
         "overlay_owner": OVERLAY_OWNER, "approval_policy": "local-agent-app-delivery", "parameters": [],

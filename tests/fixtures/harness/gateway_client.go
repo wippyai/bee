@@ -619,6 +619,19 @@ func reportOrchestratorRun(client *httpClient, url, authorization string, report
 	}
 	names, _ := toolsOf(rpc(client, url, authorization, "tools/list", object{}, 28))
 	report["orchestrator_tools"] = names
+	// The capabilities report advertises launch_definitions whenever the launch
+	// tool is admitted; calling discovery must therefore be admitted too, over
+	// the same host-selected launch policy.
+	if containsName(names, "launch_definitions") {
+		definitions := call("launch_definitions", object{}, 29)
+		report["definitions_call_ok"] = definitions != nil && definitions["ok"] == true
+		definitionsValue := mustObject(definitions["value"])
+		if definitionsValue != nil {
+			if list, ok := definitionsValue["definitions"].([]any); ok {
+				report["definitions_count"] = len(list)
+			}
+		}
+	}
 	marker := os.Getenv("BEE_FIXTURE_WORKER_MARKER")
 	// Worker one: a new thread, a completion observed through notify and wait.
 	first := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "run-first",
@@ -1010,6 +1023,15 @@ func reportAuthorDelivery(call func(string, object, int) object, report object, 
 	}
 }
 
+func containsName(names []string, name string) bool {
+	for _, item := range names {
+		if item == name {
+			return true
+		}
+	}
+	return false
+}
+
 func toolsOf(listed rpcReply) ([]string, []object) {
 	names := []string{}
 	descriptions := []object{}
@@ -1327,7 +1349,7 @@ func runHookPost(args []string) int {
 		fmt.Fprintln(os.Stderr, "hookpost request:", err)
 		return 1
 	}
-	request.Header.Set("Authorization", "Bearer " + args[1])
+	request.Header.Set("Authorization", "Bearer "+args[1])
 	request.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{DisableKeepAlives: true}}
 	var replied *http.Response

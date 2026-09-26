@@ -20,6 +20,9 @@ local machine = require("machine")
 local checkpoint = require("checkpoint")
 local hook_records = require("hook_records")
 local placement_store = require("placement_store")
+local capability_grants = require("capability_grants")
+local capability_catalog = require("capability_catalog")
+local sends = require("sends")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
 local AGENT_DEFINITION = "bee.harness.catalog:agent_fixture_definition"
@@ -1280,6 +1283,89 @@ local function define_tests()
             environment.BEE_FIXTURE_READ = nil
             apply(policy_entry)
             if not ok then error(tostring(failure)) end
+        end)
+        test.it("launches an allow-listed fixture agent from the generated agents.launch grant and returns a receipt", function()
+            -- The install path writes one generated policy for an approved
+            -- agents.launch grant. Exercise that exact policy, not a test
+            -- stand-in: it must carry the facade call and the launch action on
+            -- the approved definition so the application can reach the launch
+            -- pipeline and get a durable receipt.
+            local grant_workspace = fresh("generated-grant-ws")
+            local application = "bee.application:" .. grant_workspace .. ":launcher"
+            local app_id = "app.launch_fixture:app"
+            local owner = "bee.gov.apps:" .. grant_workspace .. ".launch_fixture"
+            local vocabulary = assert(capability_catalog.decode(assert(registry.get("bee:capability_catalog"))))
+            local requirement = {id = "app.launch_fixture:launch", expected_kind = "security.policy", value = nil,
+                targets = {app_id}, capability_request = {capability = "agents.launch",
+                    parameters = {definitions = {DEFINITION}}, catalog_revision = vocabulary.revision,
+                    template_revision = 1, reason = "Launch the allow-listed fixture agent",
+                    target = app_id, path = ".security.policies +="}}
+            local message_requirement = {id = "app.launch_fixture:message", expected_kind = "security.policy", value = nil,
+                targets = {app_id}, capability_request = {capability = "threads.message",
+                    parameters = {scope = "children"}, catalog_revision = vocabulary.revision,
+                    template_revision = 1, reason = "Message the child it launched",
+                    target = app_id, path = ".security.policies +="}}
+            local proposed = assert(capability_grants.propose(vocabulary, owner, app_id, {requirement, message_requirement}))
+            local generated_policies: {string} = {}
+            local generated_changes = registry.snapshot():changes()
+            for _, entry in ipairs(proposed.policies) do
+                local created, create_error = generated_changes:create(entry)
+                if not created then error("create generated grant: " .. tostring(create_error)) end
+                generated_policies[#generated_policies + 1] = entry.id :: string
+            end
+            local generated_applied, generated_error = generated_changes:apply()
+            if not generated_applied then error("apply generated grant: " .. tostring(generated_error)) end
+            local sources_entry = assert(registry.get("bee:credential_sources"))
+            local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
+            sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
+            apply(sources_entry)
+            local function generated_scope(): security.Scope
+                local policies: {security.Policy} = {}
+                for index, name in ipairs({"bee.security.harness:agent_call_policy"}) do
+                    policies[index] = assert(security.policy(name))
+                end
+                for _, id in ipairs(generated_policies) do
+                    policies[#policies + 1] = assert(security.policy(id))
+                end
+                return security.new_scope(policies)
+            end
+            local function generated_call(request: {[string]: unknown}): admission.Reply
+                local reply, err = funcs.new():with_actor(principals.actor(application, grant_workspace))
+                    :with_scope(generated_scope()):call("bee.harness.launch:agent_call", request)
+                if err then error("agent_call: " .. tostring(err)) end
+                return reply :: admission.Reply
+            end
+            local run = value(generated_call({operation = "run", definition_ref = DEFINITION, brief = "ping generated",
+                idempotency_key = fresh("generated-grant")}))
+            test.eq(run.definition_ref, DEFINITION)
+            test.not_nil(run.thread_id)
+            test.not_nil(run.attempt_id)
+            test.not_nil(run.receipt)
+            -- The generated policy admits no other definition.
+            local refused = generated_call({operation = "launch", definition_ref = RETAINED_DEFINITION, brief = "ping",
+                idempotency_key = fresh("generated-foreign")})
+            test.eq(code(refused), "LAUNCH_NOT_PERMITTED")
+            local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
+            local settled: {[string]: unknown}? = nil
+            while math.floor(time.now():unix_nano() / 1000000) < deadline_ms do
+                local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 5000}))
+                if current.state == "ended" then settled = current break end
+            end
+            test.not_nil(settled)
+            test.eq(settled and settled.outcome, "succeeded")
+            test.not_nil(settled and settled.answer)
+            -- The same install's threads.message grant reaches the Threads
+            -- owner's message verbs; the owner checks the sender's membership.
+            local message = {message_id = "app-generated-msg", message_kind = "notification",
+                recipient_ids = {}, content = {text = "generated message"}}
+            local payload_digest = assert(sends.payload_digest(message))
+            local sent, send_error = funcs.new():with_actor(principals.actor(application, grant_workspace))
+                :with_scope(generated_scope()):call("bee.threads.service:send", {thread_id = run.thread_id,
+                    idempotency_key = fresh("generated-send"), caller_node_id = "node-generated",
+                    payload_digest = payload_digest, message = message})
+            if send_error then error("send: " .. tostring(send_error)) end
+            local send_reply = sent :: {[string]: unknown}
+            test.eq(send_reply.ok, true)
         end)
         test.it("runs an agent as a function with durable receipts, replay, cancel before start and wait for terminal carrier record", function()
             local run_workspace = fresh("func-run-ws")

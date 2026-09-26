@@ -204,9 +204,11 @@ authorize calls to the Threads owner, which checks the application's actor
 membership, plus `fs` and `sql` so file and database grants are callable
 through the granted identities shown at approval. A child-thread message
 grant authorizes calls to the Threads owner's message verbs, which check the
-caller's membership; a launch grant authorizes `bee.harness.launch` on exactly
-the approved definitions through the application launch facade, which binds
-the attempt to the caller's workspace and admits no inherited app grant. The
+caller's membership; a launch grant authorizes the application launch facade
+call and `bee.harness.launch` on exactly the approved definitions, so the
+installed policy reaches the facade and the facade then checks the same
+generated policy for the named definition; the attempt is bound to the
+caller's workspace and admits no inherited app grant. The
 runtime authorizes `contract.call` on the bare method name and
 `http_client.request` on the URL alone, so contract and HTTP grants never give
 an application those actions. They authorize `funcs.call` on the host gateway

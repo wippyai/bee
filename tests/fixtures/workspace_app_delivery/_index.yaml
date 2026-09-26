@@ -88,6 +88,51 @@ entries:
       start_menu: false
       fullscreen: false
       reuse: never
+- name: child_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The one allow-listed fixture agent the installed Tally app may launch; the acceptance fills the executable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment:
+      BEE_FIXTURE_STREAM: ''
+    prepare_options:
+      permission_mode: dontAsk
+      max_turns: 1
+    gateway_tools: []
+- name: child
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The allow-listed fixture agent the installed Tally app launches; only the executable is the scripted agent
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: workspace-app-child
+    title: Tally fixture agent
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.workspace.app.probe:child_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    thread_policy:
+      kind: new
+    credentials: []
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
 - name: operator_policy
   kind: security.policy
   meta:

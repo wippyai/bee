@@ -60,6 +60,7 @@ LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another
 GREETING = "hello tally"
 SHARED_SUBPATH = "shared"
 DATABASE_NAME = "tally"
+CHILD_DEFINITION = "bee.workspace.app.probe:child"
 
 
 def grant_identities(workspace_id):
@@ -81,7 +82,7 @@ def answer_entries():
              "data": {"source": source, "method": "main",
                       "modules": ["tty", "process", "channel", "json", "funcs", "fs", "sql"],
                       "imports": {"client": "bee.application:client", "appearance": "bee.application:appearance",
-                                  "frame": "bee.application:frame"}},
+                                  "frame": "bee.application:frame", "agents": "bee.application:agents"}},
              "meta": {"type": "bee.application", "application": {
                  "api_version": 1, "lifetime": "view", "revision": "1", "title": TITLE,
                  "instance_policy": "singleton", "resume_schema": "tally.v1", "restart_policy": "automatic"}}},
@@ -96,6 +97,11 @@ def answer_entries():
             {"id": "app.tally:tally_db", "kind": "ns.requirement",
              "meta": {"value_kind": "security.policy", "capability": "app.database",
                       "parameters": {"name": DATABASE_NAME}, "reason": "Persist tally rows across restart"},
+             "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}},
+            {"id": "app.tally:agent_launch", "kind": "ns.requirement",
+             "meta": {"value_kind": "security.policy", "capability": "agents.launch",
+                      "parameters": {"definitions": [CHILD_DEFINITION]},
+                      "reason": "Launch the allow-listed workspace summarizer"},
              "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}}]
 
 
@@ -139,6 +145,14 @@ def compose(folder):
         policy["environment"]["BEE_FIXTURE_AUTHOR_ENTRIES"] = str(answer)
         policy["environment"]["BEE_FIXTURE_STREAM"] = str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
     index.write_text(yaml.safe_dump(document, sort_keys=False))
+    # The allow-listed child agent the installed app launches is the scripted
+    # protocol executable with the plain stream; the acceptance proves the
+    # installed agents.launch grant reaches the real launch pipeline.
+    if PROVIDER == "scripted":
+        child = next(entry for entry in document["entries"] if entry["name"] == "child_policy")["data"]
+        child["executables"] = {"claude": str(ROOT / "tests/fixtures/harness/bin/claude")}
+        child["environment"]["BEE_FIXTURE_STREAM"] = str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
+        index.write_text(yaml.safe_dump(document, sort_keys=False))
     subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true",
                     "--set", "lua.type_system.strict=true"], cwd=project, check=True, timeout=300)
     return project
@@ -225,7 +239,8 @@ def exercise():
         apply_staged_in_ui(ui, {"workspace": SOURCE, "version": version, "approval_policy": APPROVAL_POLICY},
                            folder, expected_capability=["Read owned threads",
                                                         "Read workspace files under shared",
-                                                        "Use an isolated application database named tally"])
+                                                        "Use an isolated application database named tally",
+                                                        "Launch managed agents from " + CHILD_DEFINITION])
         open_catalog_app(ui, TITLE, COLD_BOOT)
         ui.wait("TALLY", timeout=20)
         ui.wait("Tally: 0", timeout=20)
@@ -247,8 +262,8 @@ def exercise():
             ui.pump(.1)
         assert grant_evidence.exists(), "installed grant scope was not verified"
         grant = json.loads(grant_evidence.read_text())
-        assert grant["capabilities"] == ["app.database", "threads.read", "workspace.files.read"], grant
-        assert len(grant["policies"]) == 4, grant
+        assert grant["capabilities"] == ["agents.launch", "app.database", "threads.read", "workspace.files.read"], grant
+        assert len(grant["policies"]) == 5, grant
         volume_id, database_id = grant_identities(classic_workspace(folder / "workspace.db"))
         assert grant["volume_id"] == volume_id, grant
         assert grant["database_id"] == database_id, grant
@@ -271,7 +286,15 @@ def exercise():
     app_db = project / ".wippy" / "app-db" / f"{suffix}.db"
     with sqlite3.connect(f"file:{app_db}?mode=ro", uri=True) as db:
         rows = db.execute("SELECT n, note FROM tally_rows ORDER BY rowid").fetchall()
+        runs = db.execute("SELECT definition_ref, state FROM tally_runs ORDER BY rowid").fetchall()
     assert rows == [(1, GREETING), (2, GREETING), (3, GREETING)], rows
+    # The installed app launched the allow-listed fixture agent under its
+    # generated agents.launch grant and recorded the durable receipt; the same
+    # grant refuses any definition it does not name.
+    assert runs, "the installed app recorded no agent launch"
+    for definition_ref, state in runs:
+        assert definition_ref == CHILD_DEFINITION, runs
+        assert not state.startswith("refused:"), runs
     if HIVE_SOURCE:
         with sqlite3.connect(f"file:{folder / 'governance.db'}?mode=ro", uri=True) as db:
             artifact_digest, source_node = db.execute(
@@ -283,10 +306,11 @@ def exercise():
             "admission": "rule", "source_workspace": SOURCE, "component": "app." + SOURCE,
             "definition_id": DEFINITION_ID, "workspace_id": workspace_id}, indent=2))
     print("Workspace application: a managed agent authored " + DEFINITION_ID + " from its written spec on the "
-          "shipped host profiles, the person saw the threads.read, workspace.files.read and app.database "
-          "capabilities in Approvals, and the installed scope contained their three generated policies; it called "
-          "the Threads owner, read a workspace file through its confined volume, recorded its counts with the "
-          "greeting in its isolated database, and restored its saved count with its rows intact")
+          "shipped host profiles, the person saw the threads.read, workspace.files.read, app.database and "
+          "agents.launch capabilities in Approvals, and the installed scope contained their four generated "
+          "policies; it called the Threads owner, read a workspace file through its confined volume, recorded its "
+          "counts with the greeting in its isolated database, launched the allow-listed fixture agent under its "
+          "generated launch grant and recorded the durable receipt, and restored its saved count with its rows intact")
 
 
 if __name__ == "__main__":

@@ -1409,6 +1409,9 @@ entries:
     checkpoint: bee.harness.carrier:checkpoint
     hook_records: bee.harness.carrier:hook_records
     placement_store: bee.placement.native.persist:store
+    capability_grants: bee.gov:capability_grants
+    capability_catalog: bee.gov:capability_catalog
+    sends: bee.threads.service:sends
 - name: codex_profile_test
   kind: function.lua
   source: file://codex_profile_test.lua

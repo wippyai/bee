@@ -26,5 +26,12 @@ here for my approval.
   using a measured `ns.requirement` targeting `app.tally:app` at
   `.security.policies +=`. Record every count with the greeting as a row in
   the granted database; the rows survive a restart.
-- The application needs the `fs` and `sql` runtime modules alongside the
+- Request the host catalog capability `agents.launch` with
+  `definitions: [bee.workspace.app.probe:child]` using a measured
+  `ns.requirement` targeting `app.tally:app` at `.security.policies +=`. At
+  startup, call the application agents helper's `run` with that definition and
+  a brief, then record the returned attempt receipt (attempt id, definition and
+  state) as a row in the granted database. The same grant must refuse a
+  definition it does not name.
+- The application needs the `fs`, `sql` and `agents` helpers alongside the
   interface modules above.

@@ -200,6 +200,24 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
     elseif meta and (meta.parameters ~= nil or meta.reason ~= nil) then
         return nil, "capability requirement metadata is incomplete"
     end
+    -- An agent-launch request names the launch definitions the application may
+    -- start. The generated policy pairs the facade call with the launch action
+    -- on those names, so each name must be a real launch definition: a callable
+    -- or any other kind named here would widen the generated funcs.call grant
+    -- beyond the facade.
+    if capability == "agents.launch" and capability_request then
+        local params = capability_request.parameters :: {[string]: unknown}
+        local definitions = params.definitions
+        if type(definitions) ~= "table" then return nil, "managed agent launch parameters are invalid" end
+        for _, ref in ipairs(definitions :: {unknown}) do
+            local candidate = type(ref) == "string" and object(final[ref :: string]) or nil
+            local candidate_meta = candidate and object(candidate.meta) or nil
+            if not candidate or candidate.kind ~= "registry.entry" or not candidate_meta
+                or candidate_meta.type ~= "bee.launch_definition" then
+                return nil, "managed agent launch definition " .. tostring(ref) .. " is not a launch definition"
+            end
+        end
+    end
     -- A Hive exposure request names this artifact's own operations at the
     -- requested mode; the generated scope policy carries the enforcement, so
     -- the requirement appends to one of those operations instead of an app.

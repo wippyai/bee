@@ -9,6 +9,7 @@ local frame = require("frame")
 local funcs = require("funcs")
 local fs = require("fs")
 local sql = require("sql")
+local agents = require("agents")
 
 
 local HINTS = frame.hints({{key = "Enter", verb = "add one"}, {key = "r", verb = "reset"}, {key = "Esc", verb = "exit"}})
@@ -36,6 +37,17 @@ local function main(value: unknown)
     if db_error or not db then error("Application database grant is unavailable") end
     local _, schema_error = db:execute("CREATE TABLE IF NOT EXISTS tally_rows(n INTEGER, note TEXT)")
     if schema_error then error("Application database schema is unavailable") end
+    local _, runs_schema_error = db:execute("CREATE TABLE IF NOT EXISTS tally_runs(attempt_id TEXT, definition_ref TEXT, state TEXT)")
+    if runs_schema_error then error("Application run schema is unavailable") end
+    -- The installed agents.launch grant lets this app start exactly the
+    -- allow-listed fixture agent and get a durable receipt for it; the run is
+    -- not waited on here, so the window paints while the child settles.
+    local receipt, launch_fault = agents.run({definition_ref = "bee.workspace.app.probe:child",
+        brief = "summarize the workspace", idempotency_key = "tally-launch-" .. launch.launch_token})
+    local run_state = receipt and receipt.state or ("refused:" .. tostring(launch_fault and launch_fault.code))
+    local _, run_row_error = db:execute("INSERT INTO tally_runs(attempt_id, definition_ref, state) VALUES (?, ?, ?)",
+        {receipt and receipt.attempt_id or "", receipt and receipt.definition_ref or "", run_state})
+    if run_row_error then error("Application run record is unavailable") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))

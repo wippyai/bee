@@ -49,9 +49,11 @@ entries:
     effect: allow
 - name: carrier_environment_policy
   kind: security.policy
+  groups: [bee.harness.launch:agent_launch_execution_scope]
   meta:
     comment: The managed harness boundary reads declared nonsecret executable and configuration-directory variables
-      while resolving host launch policy
+      while resolving host launch policy; the agent-launch execution scope holds the same entries so admission
+      resolves the executable_env and environment_refs of the definitions it admits
   policy:
     actions:
     - env.get

@@ -14,7 +14,8 @@ type Subscription = {subscription_id: string, actor: string, consumer_id: string
 type Page = {page_id: string, lease_generation: integer, from_sequence: integer, scanned_through: integer}
 type Obligations = {open_actions: integer, running_attempts: integer, open_turns: integer, open_requests: integer, live_claims: integer}
 type Obligation = {message_id: string, recipient_id: string, message_record_id: string, kind: string, state: string, delivery_id: string?, reply_record_id: string?, created_sequence: integer}
-type Notice = {notice_id: string, watcher_actor: string, watcher_thread_id: string, watcher_action_id: string?, target_thread_id: string, target_action_id: string, after_sequence: integer, state: string}
+type Notice = {notice_id: string, watcher_actor: string, watcher_thread_id: string, watcher_action_id: string?, target_thread_id: string,
+    target_action_id: string?, target_attempt_id: string?, after_sequence: integer, state: string}
 type Delivery = {delivery_id: string, message_id: string, recipient_id: string, batch_id: string, consumer_id: string, claimant_actor: string, channel: string, owner_incarnation: integer, state: string, expires_at: string}
 local function integer(value: unknown): integer?
     if type(value) ~= "number" or value ~= math.floor(value) then return nil end
@@ -380,6 +381,20 @@ function M.action_records(tx: sql.Transaction, thread_id: string, action_id: str
     end
     return stored, nil
 end
+-- Records of one exact attempt after a cursor that can end a turn or attempt.
+-- Attempt-addressed notices use this while the gateway session is not bound.
+function M.attempt_records(tx: sql.Transaction, thread_id: string, attempt_id: string, after: integer, limit: integer): ({Stored}?, string?)
+    local rows, query_err = tx:query("SELECT record_id, sequence, kind, record_json FROM bee_thread_records WHERE thread_id = ? AND attempt_id = ? AND sequence > ? " ..
+        "AND kind IN ('observation', 'turn.end', 'receipt') ORDER BY sequence LIMIT ?", {thread_id, attempt_id, after, limit})
+    if query_err or not rows then return nil, "read attempt records" end
+    local stored: {Stored} = {}
+    for index, row in ipairs(rows) do
+        local item, item_err = stored_row(row :: {[string]: unknown})
+        if not item then return nil, item_err end
+        stored[index] = item
+    end
+    return stored, nil
+end
 -- The action's most recent settlement, attempt or action scope, by sequence.
 function M.latest_settlement(tx: sql.Transaction, thread_id: string, action_id: string): (Stored?, string?)
     local row, err = single(tx, "SELECT r.record_id, r.sequence, r.kind, r.record_json FROM bee_thread_settlements s JOIN bee_thread_records r ON r.record_id = s.record_id " ..
@@ -389,11 +404,14 @@ function M.latest_settlement(tx: sql.Transaction, thread_id: string, action_id: 
     return stored_row(row)
 end
 local function notice_row(row: {[string]: unknown}): (Notice?, string?)
-    local id, watcher, watcher_thread, target_thread, target_action = text(row.notice_id), text(row.watcher_actor), text(row.watcher_thread_id), text(row.target_thread_id), text(row.target_action_id)
+    local id, watcher, watcher_thread, target_thread = text(row.notice_id), text(row.watcher_actor), text(row.watcher_thread_id), text(row.target_thread_id)
+    local target_action, target_attempt = text(row.target_action_id), text(row.target_attempt_id)
     local after, state = integer(row.after_sequence), text(row.state)
-    if not id or not watcher or not watcher_thread or not target_thread or not target_action or not after or not state then return nil, "thread notice row is corrupt" end
+    if not id or not watcher or not watcher_thread or not target_thread or (not target_action and not target_attempt) or not after or not state then
+        return nil, "thread notice row is corrupt"
+    end
     return {notice_id = id, watcher_actor = watcher, watcher_thread_id = watcher_thread, watcher_action_id = text(row.watcher_action_id),
-        target_thread_id = target_thread, target_action_id = target_action, after_sequence = after, state = state}, nil
+        target_thread_id = target_thread, target_action_id = target_action, target_attempt_id = target_attempt, after_sequence = after, state = state}, nil
 end
 function M.notice(tx: sql.Transaction, notice_id: string): (Notice?, string?)
     local row, err = single(tx, "SELECT * FROM bee_thread_notices WHERE notice_id = ?", {notice_id}, "thread notice")

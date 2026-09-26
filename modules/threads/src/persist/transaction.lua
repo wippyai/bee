@@ -176,10 +176,14 @@ function M.drop_projection(tx: sql.Transaction, thread_id: string, kind: string)
     return execute(tx, "DELETE FROM bee_thread_projections WHERE thread_id = ? AND kind = ?", {thread_id, kind}, "drop projection")
 end
 function M.insert_notice(tx: sql.Transaction, notice_id: string, watcher_actor: string, watcher_thread_id: string, watcher_action_id: string?,
-    target_thread_id: string, target_action_id: string, after: integer, now: string): string?
-    return execute(tx, "INSERT INTO bee_thread_notices (notice_id, watcher_actor, watcher_thread_id, watcher_action_id, target_thread_id, target_action_id, after_sequence, state, created_at) " ..
-        "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
-        {notice_id, watcher_actor, watcher_thread_id, watcher_action_id or sql.NULL, target_thread_id, target_action_id, after, now}, "create thread notice")
+    target_thread_id: string, target_action_id: string?, target_attempt_id: string?, after: integer, now: string): string?
+    return execute(tx, "INSERT INTO bee_thread_notices (notice_id, watcher_actor, watcher_thread_id, watcher_action_id, target_thread_id, target_action_id, target_attempt_id, after_sequence, state, created_at) " ..
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+        {notice_id, watcher_actor, watcher_thread_id, watcher_action_id or sql.NULL, target_thread_id, target_action_id or sql.NULL, target_attempt_id or sql.NULL, after, now}, "create thread notice")
+end
+function M.bind_notice_attempt(tx: sql.Transaction, notice_id: string, action_id: string): string?
+    return execute(tx, "UPDATE bee_thread_notices SET target_action_id = ? WHERE notice_id = ? AND target_attempt_id IS NOT NULL AND target_action_id IS NULL AND state = 'pending'",
+        {action_id, notice_id}, "bind thread notice attempt")
 end
 function M.advance_notice(tx: sql.Transaction, notice_id: string, after: integer): string?
     return execute(tx, "UPDATE bee_thread_notices SET after_sequence = ? WHERE notice_id = ? AND state = 'pending'", {after, notice_id}, "advance thread notice")

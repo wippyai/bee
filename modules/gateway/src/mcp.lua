@@ -73,10 +73,12 @@ local TOOLS: {Tool} = {
             in_reply_to = {type = "object", additionalProperties = false, required = {"thread_id", "record_id"}, properties = {thread_id = {type = "string", minLength = 1, maxLength = 160}, record_id = {type = "string", minLength = 1, maxLength = 160}}},
             outcome = {type = "string", enum = {"succeeded", "failed", "cancelled", "uncertain"}},
         }}},
-    {name = "thread_notify", description = "Be told once when a running session ends its current turn or exits: a notification message lands on your own thread, where thread_wait wakes on it. session is an action_id, attempt_id, or a thread_id holding one session; a session that has already exited is reported at once.", operation = "bee.threads.service:notify",
+    {name = "thread_notify", description = "Be told once when a running session ends its current turn or exits: a notification message lands on your own thread, where thread_wait wakes on it. Use session for a bound session, or thread_id and attempt_id from your thread_launch reply to register before its session binds. The thread owner checks that you are a member of the target thread; an ended attempt is reported at once.", operation = "bee.threads.service:notify",
         policies = {TOOL_POLICY_REFS.message}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"session", "idempotency_key"}, properties = {
+        schema = {type = "object", additionalProperties = false, required = {"idempotency_key"}, properties = {
             session = {type = "string", minLength = 1, maxLength = 160},
+            thread_id = {type = "string", minLength = 1, maxLength = 160, description = "The child thread returned by thread_launch"},
+            attempt_id = {type = "string", minLength = 1, maxLength = 160, description = "The child attempt returned by thread_launch"},
             idempotency_key = {type = "string", minLength = 1, maxLength = 160},
         }}},
     {name = "session_directory", description = "Page the local agents in your workspace that your host permits you to discover, in stable name order. Each entry has a host-assigned name, an exact node/action address, current acceptance epoch, attempt state and latest inbox delivery state; discovery grants no thread read or send permission. Pass cursor from the previous reply's next_cursor; a missing next_cursor ends the listing.", operation = "bee.threads.service:inbox_describe",
@@ -620,13 +622,19 @@ end
 function M.notify_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
-    local unknown_field = bounds.fields(arguments, {"session", "idempotency_key"})
+    local unknown_field = bounds.fields(arguments, {"session", "thread_id", "attempt_id", "idempotency_key"})
     if unknown_field then return nil, unknown_field end
-    local session = bounds.id(arguments.session)
-    if not session then return nil, "session is required and must be an identifier" end
     local key = bounds.id(arguments.idempotency_key)
     if not key then return nil, "idempotency_key is required and must be an identifier" end
-    return {session = session, idempotency_key = key}, nil
+    if arguments.session ~= nil then
+        if arguments.thread_id ~= nil or arguments.attempt_id ~= nil then return nil, "session cannot be combined with thread_id or attempt_id" end
+        local session = bounds.id(arguments.session)
+        if not session then return nil, "session must be an identifier" end
+        return {session = session, idempotency_key = key}, nil
+    end
+    local thread_id, attempt_id = bounds.id(arguments.thread_id), bounds.id(arguments.attempt_id)
+    if not thread_id or not attempt_id then return nil, "thread_id and attempt_id are required identifiers when session is omitted" end
+    return {thread_id = thread_id, attempt_id = attempt_id, idempotency_key = key}, nil
 end
 
 function M.inbox_message_arguments(params: Object, reply: boolean): (Object?, string?)

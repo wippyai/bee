@@ -64,8 +64,9 @@ local function deliver(tx: sql.Transaction, notice: reader.Notice, cause: record
         if cancel_err then return nil, storage(cancel_err) end
         return nil, nil
     end
+    local target_action = notice.target_action_id or cause.action_id or notice.target_attempt_id or "unknown"
     local body: {[string]: unknown} = {message_id = "notice:" .. notice.notice_id, message_kind = "notification", sender_id = notice.watcher_actor,
-        recipient_ids = {notice.watcher_actor}, content = {text = text_of(notice.target_action_id, ending)}}
+        recipient_ids = {notice.watcher_actor}, content = {text = text_of(target_action, ending)}}
     if notice.watcher_action_id then body.recipient_action_ids = {notice.watcher_action_id} end
     if ending.outcome then body.outcome = ending.outcome end
     local decoded, decode_error = message.decode(body)
@@ -82,10 +83,34 @@ end
 -- ending record delivers the notice, otherwise the cursor advances past
 -- what was scanned.
 local function settle(tx: sql.Transaction, notice: reader.Notice): (string?, Result?)
+    if notice.target_attempt_id and not notice.target_action_id then
+        local attempt, attempt_err = reader.attempt(tx, notice.target_thread_id, notice.target_attempt_id)
+        if attempt_err then return nil, storage(attempt_err) end
+        if not attempt then
+            local target_head, head_err = reader.head(tx, notice.target_thread_id)
+            if head_err then return nil, storage(head_err) end
+            if not target_head or target_head.state ~= "open" then
+                local cancel_err = transaction.cancel_notice(tx, notice.notice_id)
+                if cancel_err then return nil, storage(cancel_err) end
+            end
+            return nil, nil
+        end
+        local bind_err = transaction.bind_notice_attempt(tx, notice.notice_id, attempt.action_id)
+        if bind_err then return nil, storage(bind_err) end
+        notice.target_action_id = attempt.action_id
+    end
+    local attempt_id = notice.target_attempt_id
+    local action_id = notice.target_action_id
+    if not attempt_id and not action_id then return nil, failure("INTERNAL", "a pending notice has no target") end
     local after = notice.after_sequence
     while true do
-        local rows, rows_err = reader.action_records(tx, notice.target_thread_id, notice.target_action_id, after, M.SCAN_RECORDS)
-        if not rows then return nil, storage(rows_err or "read action records") end
+        local rows, rows_err
+        if attempt_id then
+            rows, rows_err = reader.attempt_records(tx, notice.target_thread_id, attempt_id, after, M.SCAN_RECORDS)
+        else
+            rows, rows_err = reader.action_records(tx, notice.target_thread_id, action_id :: string, after, M.SCAN_RECORDS)
+        end
+        if not rows then return nil, storage(rows_err or "read notice target records") end
         for _, row in ipairs(rows) do
             local stored, stored_error = record.decode_json(row.record_json)
             if not stored then return nil, failure("INTERNAL", stored_error or "stored record is corrupt") end
@@ -145,14 +170,21 @@ function M.notify(db: sql.DB, actor: string, request: unknown): Result
     -- caller_node_id is the authenticated caller attestation a forwarded
     -- request carries; the admission already verified it, and the owner
     -- accepts it so a cross-node notice is not rejected for naming its caller.
-    local unknown_field = bounds.fields(object, {"thread_id", "idempotency_key", "target_thread_id", "target_action_id", "watcher_action_id", "caller_node_id"})
+    local unknown_field = bounds.fields(object, {"thread_id", "idempotency_key", "target_thread_id", "target_action_id", "target_attempt_id", "watcher_action_id", "caller_node_id"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     if object.caller_node_id ~= nil and not bounds.id(object.caller_node_id) then
         return failure("INVALID_ARGUMENT", "caller_node_id is not an identifier")
     end
-    local target_thread_id, target_action_id = bounds.id(object.target_thread_id), bounds.id(object.target_action_id)
+    local target_thread_id = bounds.id(object.target_thread_id)
+    local target_action_id = object.target_action_id ~= nil and bounds.id(object.target_action_id) or nil
+    local target_attempt_id = object.target_attempt_id ~= nil and bounds.id(object.target_attempt_id) or nil
     if not target_thread_id then return failure("INVALID_ARGUMENT", "target_thread_id is not an identifier") end
-    if not target_action_id then return failure("INVALID_ARGUMENT", "target_action_id is not an identifier") end
+    if (object.target_action_id ~= nil and not target_action_id) or (object.target_attempt_id ~= nil and not target_attempt_id) then
+        return failure("INVALID_ARGUMENT", "target action or attempt is not an identifier")
+    end
+    if (target_action_id == nil) == (target_attempt_id == nil) then
+        return failure("INVALID_ARGUMENT", "name exactly one target_action_id or target_attempt_id")
+    end
     local watcher_action_id: string? = nil
     if object.watcher_action_id ~= nil then
         watcher_action_id = bounds.id(object.watcher_action_id)
@@ -176,21 +208,43 @@ function M.notify(db: sql.DB, actor: string, request: unknown): Result
         end
         local target, reader_member, target_denied = authority.membership(tx, target_thread_id, actor)
         if not target or not reader_member then return target_denied or failure("DENIED", "caller is not a member of the target thread") end
-        local action, action_err = reader.action(tx, target_thread_id, target_action_id)
-        if action_err then return storage(action_err) end
-        if not action then return failure("NOT_FOUND", "the target action does not exist") end
+        local attempt: reader.Attempt? = nil
+        if target_action_id then
+            local action, action_err = reader.action(tx, target_thread_id, target_action_id)
+            if action_err then return storage(action_err) end
+            if not action then return failure("NOT_FOUND", "the target action does not exist") end
+        elseif target_attempt_id then
+            local found, attempt_err = reader.attempt(tx, target_thread_id, target_attempt_id)
+            if attempt_err then return storage(attempt_err) end
+            attempt = found
+            if attempt then target_action_id = attempt.action_id end
+        end
         local pending_count, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_notices WHERE watcher_thread_id = ? AND state = 'pending'", {head.thread_id}, "pending notices")
         if not pending_count then return storage(count_err or "count pending notices") end
         if pending_count >= M.MAX_PENDING_PER_WATCHER then return failure("LIMIT_EXCEEDED", "the thread already waits on " .. tostring(M.MAX_PENDING_PER_WATCHER) .. " notices") end
         local notice_id, id_err = uuid.v7()
         if id_err or not notice_id then return failure("INTERNAL", "allocate notice identifier") end
-        local insert_err = transaction.insert_notice(tx, notice_id, actor, head.thread_id, watcher_action_id, target_thread_id, target_action_id, target.head_sequence, transaction.now())
+        local insert_err = transaction.insert_notice(tx, notice_id, actor, head.thread_id, watcher_action_id, target_thread_id,
+            target_action_id, target_attempt_id, target.head_sequence, transaction.now())
         if insert_err then return storage(insert_err) end
-        local value: {[string]: unknown} = {notice_id = notice_id, state = "pending", target_thread_id = target_thread_id, target_action_id = target_action_id}
-        local live, live_err = reader.running_attempt(tx, target_thread_id, target_action_id)
-        if live_err then return storage(live_err) end
-        if not live then
-            local settled, settled_err = reader.latest_settlement(tx, target_thread_id, target_action_id)
+        local value: {[string]: unknown} = {notice_id = notice_id, state = "pending", target_thread_id = target_thread_id}
+        if target_action_id then value.target_action_id = target_action_id end
+        if target_attempt_id then value.target_attempt_id = target_attempt_id end
+        local should_settle = false
+        if target_attempt_id then
+            should_settle = attempt ~= nil and attempt.state == "ended"
+        elseif target_action_id then
+            local live, live_err = reader.running_attempt(tx, target_thread_id, target_action_id)
+            if live_err then return storage(live_err) end
+            should_settle = live == nil
+        end
+        if should_settle and target_action_id then
+            local settled, settled_err
+            if target_attempt_id then
+                settled, settled_err = reader.settled(tx, target_thread_id, "attempt", target_action_id, target_attempt_id)
+            else
+                settled, settled_err = reader.latest_settlement(tx, target_thread_id, target_action_id)
+            end
             if settled_err then return storage(settled_err) end
             if settled then
                 local stored, stored_error = record.decode_json(settled.record_json)

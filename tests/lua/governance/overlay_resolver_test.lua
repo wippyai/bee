@@ -212,6 +212,39 @@ local function define_tests()
             changes(spec, {op, other, request})
             test.is_nil(resolver.resolve_with(deps, spec))
         end)
+        test.it("requires every agents.launch definition to be a launch definition", function()
+            local deps, spec = fixture(nil)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+                meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
+                data = {revision = 7, never = {"exec"}, capabilities = {{id = "agents.launch",
+                    revision = 1, confirm = "explicit",
+                    parameters = {definitions = "definitions"},
+                    text = "Launch managed agents from {definitions}",
+                    policies = {{operation = "agents.launch", resource = "managed_agents",
+                        scope = {definitions = "$definitions"}}},
+                    resources = {}}}}}
+            captured.entries[#captured.entries + 1] = {id = "bee.host:worker", kind = "registry.entry",
+                meta = {type = "bee.launch_definition"}, data = {launch_id = "worker"},
+                registry = {owner = "bee/host"}}
+            captured.entries[#captured.entries + 1] = {id = "bee.host:private_callable", kind = "function.lua",
+                data = {source = "return true"}, registry = {owner = "bee/host"}}
+            local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
+                data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
+            local request: Entry = {id = "private.app:launch", kind = "ns.requirement",
+                meta = {value_kind = "security.policy", capability = "agents.launch",
+                    parameters = {definitions = {"bee.host:worker"}},
+                    reason = "Launch the allow-listed worker"},
+                data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
+            local request_meta = request.meta :: Object
+            changes(spec, {app, request})
+            test.not_nil(resolver.resolve_with(deps, spec))
+            -- A callable entry named as a definition would widen the generated
+            -- funcs.call grant beyond the launch facade, so it is refused.
+            request_meta.parameters = {definitions = {"bee.host:private_callable"}}
+            changes(spec, {app, request})
+            test.is_nil(resolver.resolve_with(deps, spec))
+        end)
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture :: () -> (Captured?, string?))()

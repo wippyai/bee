@@ -7,11 +7,13 @@ production launch definition, admission, carrier, placement and gateway with
 the spec (tests/fixtures/workspace_app_delivery/SPEC.md) as its brief, authors
 the application using only its gateway tools: the overlay guide, its own
 overlay, freeze and a delivery request that names no workspace. The application
-requests threads.read, workspace.files.read and app.database; the person then
-reviews the plan in Overlays and approves it in Approvals, the activation owner
-applies it with its host-created volume and isolated database, and the
-application opens from the Start menu and behaves as the spec says, including
-its saved count and its database rows after a restart.
+requests threads.read, threads.message, workspace.files.read, app.database and
+agents.launch; the person then reviews the plan in Overlays and approves it in
+Approvals, the activation owner applies it with its host-created volume and
+isolated database, and the application opens from the Start menu and behaves as
+the spec says, including its saved count and its database rows after a restart.
+The installed app launches its shipped-driver-shaped fixture agent, waits for
+the placed child to settle, reads its result and steers it once.
 
 The far end of the launch is the scripted protocol agent
 (tests/fixtures/harness/gateway_client.go, mode spec): it writes the answer a
@@ -60,6 +62,7 @@ LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another
 GREETING = "hello tally"
 SHARED_SUBPATH = "shared"
 DATABASE_NAME = "tally"
+CHILD_DEFINITION = "bee.workspace.app.probe:child"
 
 
 def grant_identities(workspace_id):
@@ -79,9 +82,10 @@ def answer_entries():
     source = (FIXTURE / "tally.lua").read_text()
     return [{"id": DEFINITION_ID, "kind": "process.lua",
              "data": {"source": source, "method": "main",
-                      "modules": ["tty", "process", "channel", "json", "funcs", "fs", "sql"],
+                      "modules": ["tty", "process", "channel", "json", "funcs", "fs", "sql", "hash"],
                       "imports": {"client": "bee.application:client", "appearance": "bee.application:appearance",
-                                  "frame": "bee.application:frame"}},
+                                  "frame": "bee.application:frame", "agents": "bee.application:agents",
+                                  "canonical": "bee.threads.records:canonical"}},
              "meta": {"type": "bee.application", "application": {
                  "api_version": 1, "lifetime": "view", "revision": "1", "title": TITLE,
                  "instance_policy": "singleton", "resume_schema": "tally.v1", "restart_policy": "automatic"}}},
@@ -96,6 +100,16 @@ def answer_entries():
             {"id": "app.tally:tally_db", "kind": "ns.requirement",
              "meta": {"value_kind": "security.policy", "capability": "app.database",
                       "parameters": {"name": DATABASE_NAME}, "reason": "Persist tally rows across restart"},
+             "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}},
+            {"id": "app.tally:agent_launch", "kind": "ns.requirement",
+             "meta": {"value_kind": "security.policy", "capability": "agents.launch",
+                      "parameters": {"definitions": [CHILD_DEFINITION]},
+                      "reason": "Launch the allow-listed workspace summarizer"},
+             "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}},
+            {"id": "app.tally:child_message", "kind": "ns.requirement",
+             "meta": {"value_kind": "security.policy", "capability": "threads.message",
+                      "parameters": {"scope": "children"},
+                      "reason": "Steer the child it launched"},
              "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}}]
 
 
@@ -139,6 +153,14 @@ def compose(folder):
         policy["environment"]["BEE_FIXTURE_AUTHOR_ENTRIES"] = str(answer)
         policy["environment"]["BEE_FIXTURE_STREAM"] = str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
     index.write_text(yaml.safe_dump(document, sort_keys=False))
+    # The allow-listed child agent the installed app launches resolves its
+    # scripted protocol executable through executable_env like the shipped
+    # drivers do; the acceptance proves the installed agents.launch grant
+    # reaches the real launch pipeline and resolves the driver entry there.
+    if PROVIDER == "scripted":
+        child = next(entry for entry in document["entries"] if entry["name"] == "child_policy")["data"]
+        child["environment"]["BEE_FIXTURE_STREAM"] = str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
+        index.write_text(yaml.safe_dump(document, sort_keys=False))
     subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true",
                     "--set", "lua.type_system.strict=true"], cwd=project, check=True, timeout=300)
     return project
@@ -202,6 +224,12 @@ def evidence_root():
 def exercise():
     folder = evidence_root()
     print("Evidence:", folder)
+    # The shipped-driver-shaped child resolves its executable through
+    # executable_env, so the fixture protocol binary answers host executable
+    # discovery for every node this acceptance boots.
+    fixture_bin = str(ROOT / "tests/fixtures/harness/bin")
+    if fixture_bin not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = fixture_bin + os.pathsep + os.environ.get("PATH", "")
     project = compose(folder)
     first = Desktop(folder, project=project)
     try:
@@ -225,7 +253,9 @@ def exercise():
         apply_staged_in_ui(ui, {"workspace": SOURCE, "version": version, "approval_policy": APPROVAL_POLICY},
                            folder, expected_capability=["Read owned threads",
                                                         "Read workspace files under shared",
-                                                        "Use an isolated application database named tally"])
+                                                        "Use an isolated application database named tally",
+                                                        "Message child threads",
+                                                        "Launch managed agents from " + CHILD_DEFINITION])
         open_catalog_app(ui, TITLE, COLD_BOOT)
         ui.wait("TALLY", timeout=20)
         ui.wait("Tally: 0", timeout=20)
@@ -247,8 +277,9 @@ def exercise():
             ui.pump(.1)
         assert grant_evidence.exists(), "installed grant scope was not verified"
         grant = json.loads(grant_evidence.read_text())
-        assert grant["capabilities"] == ["app.database", "threads.read", "workspace.files.read"], grant
-        assert len(grant["policies"]) == 4, grant
+        assert grant["capabilities"] == ["agents.launch", "app.database", "threads.message", "threads.read",
+                                                "workspace.files.read"], grant
+        assert len(grant["policies"]) == 6, grant
         volume_id, database_id = grant_identities(classic_workspace(folder / "workspace.db"))
         assert grant["volume_id"] == volume_id, grant
         assert grant["database_id"] == database_id, grant
@@ -271,7 +302,22 @@ def exercise():
     app_db = project / ".wippy" / "app-db" / f"{suffix}.db"
     with sqlite3.connect(f"file:{app_db}?mode=ro", uri=True) as db:
         rows = db.execute("SELECT n, note FROM tally_rows ORDER BY rowid").fetchall()
+        runs = db.execute("SELECT attempt_id, definition_ref, state, outcome, steer FROM tally_runs ORDER BY rowid").fetchall()
     assert rows == [(1, GREETING), (2, GREETING), (3, GREETING)], rows
+    # The installed app launched the shipped-driver-shaped fixture agent under
+    # its generated agents.launch grant, waited for the placed child to
+    # settle, read its result and steered it once under threads.message.
+    assert runs, "the installed app recorded no agent launch"
+    for attempt_id, definition_ref, state, outcome, steer in runs:
+        assert definition_ref == CHILD_DEFINITION, runs
+        assert attempt_id, runs
+        assert state == "ended", runs
+        assert outcome == "succeeded", runs
+        assert steer == "sent", runs
+    with sqlite3.connect(f"file:{folder / 'threads.db'}?mode=ro", uri=True) as db:
+        steers = db.execute("SELECT thread_id FROM bee_thread_records WHERE kind = ? AND record_json LIKE ?",
+                            ("message", "%tally steer: keep counting%")).fetchall()
+    assert steers, "the installed app's steer is not durable on a child thread"
     if HIVE_SOURCE:
         with sqlite3.connect(f"file:{folder / 'governance.db'}?mode=ro", uri=True) as db:
             artifact_digest, source_node = db.execute(
@@ -283,10 +329,12 @@ def exercise():
             "admission": "rule", "source_workspace": SOURCE, "component": "app." + SOURCE,
             "definition_id": DEFINITION_ID, "workspace_id": workspace_id}, indent=2))
     print("Workspace application: a managed agent authored " + DEFINITION_ID + " from its written spec on the "
-          "shipped host profiles, the person saw the threads.read, workspace.files.read and app.database "
-          "capabilities in Approvals, and the installed scope contained their three generated policies; it called "
-          "the Threads owner, read a workspace file through its confined volume, recorded its counts with the "
-          "greeting in its isolated database, and restored its saved count with its rows intact")
+          "shipped host profiles, the person saw the threads.read, threads.message, workspace.files.read, "
+          "app.database and agents.launch capabilities in Approvals, and the installed scope contained their "
+          "generated policies; it called the Threads owner, read a workspace file through its confined volume, "
+          "recorded its counts with the greeting in its isolated database, launched the shipped-driver-shaped "
+          "fixture agent under its generated launch grant, waited for the placed child to settle, read its "
+          "result, steered it once with a durable message, and restored its saved count with its rows intact")
 
 
 if __name__ == "__main__":

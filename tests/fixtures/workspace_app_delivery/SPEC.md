@@ -26,5 +26,17 @@ here for my approval.
   using a measured `ns.requirement` targeting `app.tally:app` at
   `.security.policies +=`. Record every count with the greeting as a row in
   the granted database; the rows survive a restart.
-- The application needs the `fs` and `sql` runtime modules alongside the
-  interface modules above.
+- Request the host catalog capability `agents.launch` with
+  `definitions: [bee.workspace.app.probe:child]` using a measured
+  `ns.requirement` targeting `app.tally:app` at `.security.policies +=`. At
+  startup, call the application agents helper's `run` with that definition and
+  a brief, then `wait` for the child to settle and `status` for its result;
+  record the attempt id, definition, settled state and outcome as a row in the
+  granted database. The same grant must refuse a definition it does not name.
+- Request the host catalog capability `threads.message` with
+  `scope: children` using a measured `ns.requirement` targeting
+  `app.tally:app` at `.security.policies +=`. After the wait, steer the child
+  once by sending its thread a notification through `bee.threads.service:send`
+  and record whether the steer landed in the same database row.
+- The application needs the `fs`, `sql`, `hash` and `agents` helpers alongside
+  the interface modules above.

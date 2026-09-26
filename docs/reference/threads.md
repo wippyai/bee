@@ -256,17 +256,20 @@ thread, and no obligation outlives the membership that could have settled it.
 ## One-shot notices
 
 `notify` registers a notice on the caller's own thread: tell me once when an
-action of a thread I may read ends a turn or an attempt. The caller must be an
-owner or participant of its thread and an active member of the target thread;
-a named recipient action must be the caller's own action on its thread. The
-notice starts at the target thread's head. The first later record of the
-target action that is a `turn.end`, a `receipt`, or an observation
-`turn.signal` with phase `ended` or `execution.exit` delivers it: the owner
-commits one `notification` message on the watcher's thread under the
-watcher's identity and the notice's key, addressed to the watcher and its
-action, with the ending record as causation and its outcome when it states
-one. A target action with no live attempt is reported at once from its latest
-settlement.
+action of a thread I may read ends a turn or an attempt. It can name an
+existing `target_action_id`, or an admitted `target_attempt_id` whose action
+may not have been recorded yet. The caller must be an owner or participant of
+its thread and an active member of the target thread; a named recipient action
+must be the caller's own action on its thread. The notice starts at the target
+thread's head. An attempt-addressed notice stays pending until that attempt
+appears, then follows only that attempt's records. The first later target
+record that is a `turn.end`, a `receipt`, or an observation `turn.signal` with
+phase `ended` or `execution.exit` delivers it: the owner commits one
+`notification` message on the watcher's thread under the watcher's identity
+and the notice's key, addressed to the watcher and its action, with the ending
+record as causation and its outcome when it states one. A target action with
+no live attempt, or an attempt already ended when named, is reported at once
+from its settlement.
 
 The owner settles notices after every commit on the target thread and sweeps
 pending notices when it starts and every five seconds, so a notice whose

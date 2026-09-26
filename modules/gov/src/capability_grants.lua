@@ -205,9 +205,17 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
         if not definitions then
             return nil, nil, nil, "managed agent launch grant names no valid definitions"
         end
+        -- The application reaches the launch facade through its own call, then
+        -- the facade checks bee.harness.launch against the exact definition.
+        -- The policy names the facade call and the exact approved definitions;
+        -- the resolver separately proves every name is a launch definition, so
+        -- the funcs.call grant reaches no callable other than the facade.
+        local resources: {string} = {"bee.harness.launch:agent_call"}
+        for _, ref in ipairs(definitions) do resources[#resources + 1] = ref end
+        table.sort(resources)
         return {id = id, kind = "security.policy",
             meta = {comment = "Host-generated managed agent launch grant"},
-            data = {policy = {actions = {"bee.harness.launch"}, resources = definitions,
+            data = {policy = {actions = {"bee.harness.launch", "funcs.call"}, resources = resources,
                 effect = "allow"}}}, nil, nil, nil
     end
     -- The runtime cannot pair a contract binding with its method or an HTTP

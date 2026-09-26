@@ -8,7 +8,8 @@ posts its answer and settles, and the orchestrator's thread_wait returns. The
 worker's gateway tools are its own launch policy's, and lineage records the
 orchestrator's action as the parent of the child's. A second case exercises the
 managed-run tools: a managed orchestrator launches a Codex batch worker on a new
-thread, is told by thread_notify and wakes on thread_wait, reads the child's own
+thread, registers thread_notify immediately from the returned attempt IDs,
+wakes on thread_wait, reads the child's own
 thread as member_thread, queries run_status, steers the child once, and cancels a
 second worker with run_cancel.
 

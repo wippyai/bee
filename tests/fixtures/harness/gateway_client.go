@@ -619,6 +619,19 @@ func reportOrchestratorRun(client *httpClient, url, authorization string, report
 	}
 	names, _ := toolsOf(rpc(client, url, authorization, "tools/list", object{}, 28))
 	report["orchestrator_tools"] = names
+	// The capabilities report advertises launch_definitions whenever the launch
+	// tool is admitted; calling discovery must therefore be admitted too, over
+	// the same host-selected launch policy.
+	if containsName(names, "launch_definitions") {
+		definitions := call("launch_definitions", object{}, 29)
+		report["definitions_call_ok"] = definitions != nil && definitions["ok"] == true
+		definitionsValue := mustObject(definitions["value"])
+		if definitionsValue != nil {
+			if list, ok := definitionsValue["definitions"].([]any); ok {
+				report["definitions_count"] = len(list)
+			}
+		}
+	}
 	marker := os.Getenv("BEE_FIXTURE_WORKER_MARKER")
 	// Worker one: a new thread, a completion observed through notify and wait.
 	first := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "run-first",
@@ -631,41 +644,9 @@ func reportOrchestratorRun(client *httpClient, url, authorization string, report
 	}
 	childThread, childAction, childAttempt := stringField(firstValue, "thread_id"), stringField(firstValue, "action_id"), stringField(firstValue, "attempt_id")
 	report["first_thread"] = childThread
-	// thread_notify addresses a running session: the child's gateway binding
-	// opens after its carrier admits the action, so wait until the session
-	// listing shows the child before notifying once. Pacing follows the
-	// child's thread wakeups, so a slow carrier under load only waits longer
-	// instead of outrunning a fixed poll bound and sending a notify the
-	// gateway must refuse.
-	sessionCursor := 0
-	sessionDeadline := time.Now().Add(170 * time.Second)
-	sessionVisible := false
-	for waited := 0; !sessionVisible && time.Now().Before(sessionDeadline); waited++ {
-		listed := call("thread_sessions", object{}, 100+waited)
-		if value := mustObject(listed["value"]); value != nil {
-			if sessions, ok := value["sessions"].([]any); ok {
-				for _, raw := range sessions {
-					if item := mustObject(raw); stringField(item, "action_id") == childAction {
-						sessionVisible = true
-					}
-				}
-			}
-		}
-		report["session_waits"] = waited + 1
-		if !sessionVisible && time.Now().Before(sessionDeadline) {
-			waitedReply := rpcWithTimeout(client, url, authorization, "tools/call", object{
-				"name":      "thread_wait",
-				"arguments": object{"after_sequence": sessionCursor, "wait_ms": 5000, "member_thread": childThread},
-			}, 200+waited, 20*time.Second)
-			if waitValue := mustObject(outcome(waitedReply)["value"]); waitValue != nil {
-				if head, ok := waitValue["head_sequence"].(float64); ok {
-					sessionCursor = int(head)
-				}
-			}
-		}
-	}
-	report["session_visible"] = sessionVisible
-	notifyReply := rpcWithTimeout(client, url, authorization, "tools/call", object{"name": "thread_notify", "arguments": object{"session": childAction, "idempotency_key": "run-first-notify"}}, 31, 20*time.Second)
+	// The launch reply names an admitted attempt before the child's gateway
+	// binding opens, so register the durable notice immediately.
+	notifyReply := rpcWithTimeout(client, url, authorization, "tools/call", object{"name": "thread_notify", "arguments": object{"thread_id": childThread, "attempt_id": childAttempt, "idempotency_key": "run-first-notify"}}, 31, 20*time.Second)
 	notified := outcome(notifyReply)
 	report["first_notify_ok"] = notified != nil && notified["ok"] == true
 	report["first_notify_status"] = notifyReply.status
@@ -1010,6 +991,15 @@ func reportAuthorDelivery(call func(string, object, int) object, report object, 
 	}
 }
 
+func containsName(names []string, name string) bool {
+	for _, item := range names {
+		if item == name {
+			return true
+		}
+	}
+	return false
+}
+
 func toolsOf(listed rpcReply) ([]string, []object) {
 	names := []string{}
 	descriptions := []object{}
@@ -1327,7 +1317,7 @@ func runHookPost(args []string) int {
 		fmt.Fprintln(os.Stderr, "hookpost request:", err)
 		return 1
 	}
-	request.Header.Set("Authorization", "Bearer " + args[1])
+	request.Header.Set("Authorization", "Bearer "+args[1])
 	request.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{DisableKeepAlives: true}}
 	var replied *http.Response

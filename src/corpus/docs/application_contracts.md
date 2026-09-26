@@ -135,9 +135,11 @@ does not mutate thread obligations or delivery history.
 
 An application starts a managed agent with `bee.application:agents`, which
 calls `bee.harness.launch:agent_call` as the application's own actor. The host
-decides what it may start: it attaches `bee.security.harness:agent_call_policy` (the call) and a
-policy granting `bee.harness.launch` on each launch definition the application
-may start to its admission binding. The request is
+decides what it may start: an approved `agents.launch` grant installs one
+generated policy that carries both the facade `funcs.call` and
+`bee.harness.launch` on each named definition, so the installed application
+reaches the facade and the facade then checks the same policy for the exact
+definition. The request is
 `bee.application:agent_protocol`'s launch: `definition_ref`, `brief`,
 `idempotency_key` and optional `workspace_id`, `saved_profile_id` with
 `saved_profile_revision`, `thread`, `workdir` and `placement`. `thread`,

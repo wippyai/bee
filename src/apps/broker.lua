@@ -27,6 +27,7 @@ local thread_binding = require("thread_binding")
 local thread_protocol = require("thread_protocol")
 type Admission = {revision: string, evidence: string, bindings: {contract.Binding}, items: {contract.Descriptor},
     descriptors: {[string]: contract.Descriptor}, scopes: {[string]: security.Scope}}
+type AliasBackfill = {instance_id: string, definition_id: string}
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type AppearanceOp = "state" | "set" | "inherit"
 type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp, renderer: string, mount: string}
@@ -45,6 +46,7 @@ type BindingCoordinator = {instance_id: string, state: thread_binding_reducer.St
 -- terminates it. A PTY application waits for its child, which the runtime's
 -- terminal proxy signals with TERM and escalates to KILL after its 3 s grace.
 local STOP_GRACE = "8s"
+local MAX_ALIAS_BACKFILL = 16
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function application_actor(workspace_id: string, instance_id: string, definition_id: string,
     definition_revision: string, execution_generation: integer): security.Actor
@@ -54,13 +56,38 @@ local function application_actor(workspace_id: string, instance_id: string, defi
     if not actor then error("Create application principal: " .. tostring(err)) end
     return actor
 end
-local function main(owner: string, initial_preferences: unknown)
+local function main(owner: string, initial_preferences: unknown, raw_alias_backfill: unknown)
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
     if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end
     local workspace_id = contract.workspace_id(ctx.get("bee.workspace_id"))
     if not workspace_id then
         error("Invalid workspace identity bootstrap")
     end
+    local function decode_alias_backfill(value: unknown): {AliasBackfill}?
+        if type(value) ~= "table" then return nil end
+        local input = value :: {[unknown]: unknown}
+        local count = 0
+        for key in pairs(input) do
+            if type(key) ~= "number" or key < 1 or key > MAX_ALIAS_BACKFILL or key ~= math.floor(key) then return nil end
+            count = count + 1
+        end
+        local result: {AliasBackfill} = {}
+        local seen: {[string]: boolean} = {}
+        for index = 1, count do
+            local item = bounds.object(input[index])
+            if not item or bounds.fields(item, {"instance_id", "definition_id"}) then return nil end
+            local instance_id = bounds.id(item.instance_id)
+            local definition_id = bounds.id(item.definition_id)
+            if not instance_id or not definition_id or #definition_id > 160
+                or not thread_binding.actor(workspace_id, instance_id)
+                or not app_identity.stable(workspace_id, definition_id) or seen[instance_id] then return nil end
+            seen[instance_id] = true
+            result[#result + 1] = {instance_id = instance_id, definition_id = definition_id}
+        end
+        return result
+    end
+    local alias_backfill = decode_alias_backfill(raw_alias_backfill)
+    if not alias_backfill then error("Invalid retained application identity projection") end
     assert(process.set_options({upgradable = true}))
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local shutdown_requests = assert(process.listen("bee.application.shutdown", {message = true}))
@@ -219,11 +246,7 @@ local function main(owner: string, initial_preferences: unknown)
                 return false, "permission_denied", "Application identity is invalid"
             end
             local stable_id: string = stable.id
-            local actor, actor_error = security.new_actor(stable_id)
-            if not actor then return false, "permission_denied", tostring(actor_error or "create application alias caller") end
-            local acted, actor_failure = funcs.new():with_actor(actor)
-            if not acted then return false, "permission_denied", tostring(actor_failure or "set application alias caller") end
-            local scoped, scope_error = acted:with_scope(alias_scope)
+            local scoped, scope_error = funcs.new():with_scope(alias_scope)
             if not scoped then return false, "permission_denied", tostring(scope_error or "set application alias scope") end
             local instance_actor = thread_binding.actor(workspace_id, instance_id)
             if not instance_actor then return false, "permission_denied", "Application identity is invalid" end
@@ -247,16 +270,27 @@ local function main(owner: string, initial_preferences: unknown)
     -- A removed admission binding fences its stable family out of every
     -- thread: a revoked or uninstalled app keeps no runs to follow. The
     -- fence converges, so a tick that finds active rows fences again.
-    local function fence_stable(definition_id: string)
+    local function fence_stable(definition_id: string): boolean
         local stable = app_identity.stable(workspace_id, definition_id)
-        if not stable or type(stable.id) ~= "string" then return end
+        if not stable or type(stable.id) ~= "string" then return false end
         local stable_id: string = stable.id
-        local actor = security.new_actor(stable_id)
-        if not actor then return end
-        local acted = funcs.new():with_actor(actor)
-        local scoped = acted and acted:with_scope(alias_scope)
-        if not scoped then return end
-        scoped:call("bee.threads.service:fence_app", {stable = stable_id})
+        local scoped = funcs.new():with_scope(alias_scope)
+        if not scoped then return false end
+        local reply, call_error = scoped:call("bee.threads.service:fence_app", {stable = stable_id})
+        return not call_error and type(reply) == "table" and (reply :: {[string]: unknown}).ok == true
+    end
+    local function backfill_retained_aliases(records: {AliasBackfill})
+        local current = admission.current
+        if not current then error("Application admission is unavailable for alias recovery") end
+        for _, record in ipairs(records) do
+            local attested, _, message = attest_instance(record.instance_id, record.definition_id)
+            if not attested then
+                error("Backfill retained application alias: " .. tostring(message or "thread owner refused the alias"))
+            end
+            if not current.descriptors[record.definition_id] and not fence_stable(record.definition_id) then
+                error("Fence unadmitted checkpoint application family")
+            end
+        end
     end
     local function facade_call(actor_id: string, target: string, request: unknown)
         local actor, actor_error = security.new_actor(actor_id)
@@ -341,8 +375,6 @@ local function main(owner: string, initial_preferences: unknown)
         if ok then
             local selected: Admission = loaded :: Admission
             if previous == selected then return end
-            admission.current, admission.error = selected, ""
-            assert(process.send(owner, "bee.application.catalog", {version = 1, items = selected.items}))
             -- A binding the catalog no longer admits fences its stable
             -- family out of every thread: a revoked or uninstalled app
             -- keeps no runs to follow, whether or not it still runs.
@@ -352,9 +384,13 @@ local function main(owner: string, initial_preferences: unknown)
                     for _, new in ipairs(selected.bindings) do
                         if new.definition_id == old.definition_id then kept = true; break end
                     end
-                    if not kept then fence_stable(old.definition_id) end
+                    if not kept and not fence_stable(old.definition_id) then
+                        error("Fence removed application thread family")
+                    end
                 end
             end
+            admission.current, admission.error = selected, ""
+            assert(process.send(owner, "bee.application.catalog", {version = 1, items = selected.items}))
             -- A compatible automatic application follows its applied
             -- definition behind the same viewport. Once an exit has been
             -- observed, its exact requested revision is a fence: a later
@@ -1024,6 +1060,7 @@ local function main(owner: string, initial_preferences: unknown)
         else commit_explicit_close(item, force and "force_stop" or "stop") end
     end
     refresh_admission(true)
+    backfill_retained_aliases(alias_backfill)
     assert(process.send(owner, "bee.app.ready", {version = 1}))
     local function abort_shutdown()
         local plan = shutdown_plan

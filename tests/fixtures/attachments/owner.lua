@@ -46,7 +46,7 @@ local function run_probe(mode: string?)
     if naming_error then error(tostring(naming_error)) end
     local scope = security.new_scope({broker_policy, boundary, naming_policy})
     local broker = tostring(assert(process.with_options({}):with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id})
-        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
     -- The catalog is the owner's startup signal. Do not race name registration
     -- by treating successful spawn as service readiness.
     local ready = assert(catalogs:receive())

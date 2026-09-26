@@ -117,8 +117,9 @@ receipt fields), 13 `action_inbox_delivery_status` (persisted restart blockers),
 14 `action_inbox_outbox` (the durable forwarding outbox), 15
 `action_inbox_outbox_reply` (cross-node reply correlation on a queued row), 16
 `cancel_intent` (managed-run cancellation state before the carrier settles),
-and 17 `attempt_notices` (durable attempt-addressed notices before action
-admission).
+17 `attempt_notices` (durable attempt-addressed notices before action
+admission), and 18 `app_alias` (the broker-attested stable application
+identity behind reopened-instance membership).
 Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and

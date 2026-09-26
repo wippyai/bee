@@ -51,7 +51,10 @@ than that horizon creates a fresh request.
 Approver policies are host-owned under `bee:approver_policies`:
 each names its approvers and the longest lifetime a request may ask for. An
 approver needs both the `bee.approvals.decide` action on the workspace and a
-place in the policy. Workspace membership alone exposes nothing.
+place in the policy. Workspace membership alone exposes nothing. Approvals are
+node-local: `decide` and `withdraw` are never Hive-exposed, so a mapped remote
+principal reads the feed and a request but cannot decide one, and the host
+ceiling names only the feed, read and replica operations.
 
 | Slice | Responsibility |
 |---|---|

@@ -266,7 +266,11 @@ names every shipped namespace a host-selected scope lives in or is reached from
 `bee.sync`, `bee.host`, `bee.session`, `bee.client`, `bee.desktop`,
 `bee.terminal`, `bee.node` and `bee.workspace`), and its `super_edit` list is
 the host's explicit carve-out of protected namespaces, empty in the shipped
-composition. The instance
+composition. A super-edit profile row carries `expires_at`; it is admitted only
+while unexpired, must set `allow.auto_start: false`, must name a dedicated
+`super-edit`-prefixed approver policy declared with `confirm: explicit`, and may
+not carry `allow.grants` for `security.*`, `funcs.security`, `process.security`
+or a registry apply action. The instance
 sets `allow.auto_start: false`, and preflight refuses any entry declaring
 `lifecycle.auto_start` under such a policy (`AUTO_START_DENIED`); an explicit
 row admits auto start unless it sets that field to `false`. Availability

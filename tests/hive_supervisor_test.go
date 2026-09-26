@@ -482,7 +482,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		command(b, "feed-replay", "feed_replay")
 		command(b, "feed-snapshot", "feed_snapshot")
 		command(a, "approval-create "+subject, "approval_created")
-		command(b, "feed-approval", "feed_approval")
+		command(b, "feed-approval", "feed_approval_refused")
 		command(a, "approval-revoke", "approval_revoked")
 		command(b, "feed-approval-empty", "feed_approval_empty")
 		command(a, "revoke", "revoked")

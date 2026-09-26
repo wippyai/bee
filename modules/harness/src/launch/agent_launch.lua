@@ -42,6 +42,19 @@ function M.permitted(policy: {[string]: unknown}, definition_ref: string): (bool
     end
     return false, nil
 end
+-- Whether every gateway tool a child definition's policy would offer is one
+-- the launching parent's own policy already holds. A host may flag one
+-- definition to admit a child whose tools exceed its parent's; without that
+-- flag an agent never starts a child with a gateway surface its own policy
+-- does not already carry.
+function M.tools_within(child: {string}, parent: {string}): (boolean, string?)
+    local held: {[string]: boolean} = {}
+    for _, name in ipairs(parent) do held[name] = true end
+    for _, name in ipairs(child) do
+        if not held[name] then return false, name end
+    end
+    return true, nil
+end
 -- The child's durable request identity: the caller's own action and the
 -- retry key, so the same call replays the same child action and attempt and a
 -- different brief under the same key conflicts instead of starting twice.

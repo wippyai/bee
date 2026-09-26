@@ -7,7 +7,7 @@ M.POLICIES_REF = "bee.approvals:policies_ref"
 M.THREAD_APPEND = "bee.threads.approvals:append"
 type DefinitionSelector = {definition_id: string}
 type Approver = string | DefinitionSelector
-type Policy = {name: string, approvers: {Approver}, max_ttl_ms: integer}
+type Policy = {name: string, approvers: {Approver}, max_ttl_ms: integer, confirm: string}
 local function reference(id: string, label: string): (string?, string?)
     local entry = registry.get(id)
     if not entry then return nil, label .. " reference is missing" end
@@ -37,6 +37,16 @@ function M.policies(): ({[string]: Policy}?, string?)
         if type(name) ~= "string" or name == "" then return nil, "approver policy has no name" end
         if type(approvers) ~= "table" then return nil, "approver policy " .. name .. " has no approvers" end
         if type(ttl) ~= "number" or ttl < 1 then return nil, "approver policy " .. name .. " has no max_ttl_ms" end
+        -- A host may demand an explicit confirmation for a policy; the default
+        -- is a standard decision. The owner records the value so a consumer
+        -- such as the super-edit admission can require it.
+        local confirm = "standard"
+        if item.confirm ~= nil then
+            if item.confirm ~= "standard" and item.confirm ~= "explicit" then
+                return nil, "approver policy " .. name .. " confirm must be standard or explicit"
+            end
+            confirm = item.confirm :: string
+        end
         local subjects: {Approver} = {}
         for _, approver in ipairs(approvers :: {unknown}) do
             if type(approver) == "string" then
@@ -59,7 +69,7 @@ function M.policies(): ({[string]: Policy}?, string?)
                 return nil, "approver policy " .. name .. " lists an invalid approver selector"
             end
         end
-        policies[name] = {name = name, approvers = subjects, max_ttl_ms = math.floor(ttl)}
+        policies[name] = {name = name, approvers = subjects, max_ttl_ms = math.floor(ttl), confirm = confirm}
     end
     return policies, nil
 end

@@ -40,7 +40,7 @@ entries:
 - name: hive_policy_exposure_policy
   kind: security.policy
   meta:
-    comment: Exact reviewed feed and node operations; destination principal and owner authorization still required
+    comment: Exact reviewed feed and node operations; a decision or withdrawal is node-local and never exposed, and destination principal and owner authorization is still required for what is
   policy:
     actions:
     - hive.expose.policy
@@ -52,12 +52,12 @@ entries:
     - bee.approvals.binding:feed_snapshot
     - bee.approvals.binding:feed_read_after
     - bee.approvals.binding:read
-    - bee.approvals.binding:decide
-    - bee.approvals.binding:withdraw
     - bee.sync.binding:replica_receive
     effect: allow
 - name: policy_admission_policy
   kind: security.policy
+  meta:
+    comment: The catalog-declared operations the admission may invoke as a mapped principal; a decision or withdrawal is node-local and deliberately absent, so no mapping row can admit one
   policy:
     actions:
     - registry.get
@@ -74,8 +74,6 @@ entries:
     - bee.approvals.binding:feed_snapshot
     - bee.approvals.binding:feed_read_after
     - bee.approvals.binding:read
-    - bee.approvals.binding:decide
-    - bee.approvals.binding:withdraw
     - bee.sync.binding:replica_receive
     effect: allow
 - name: hive_replica_admission_policy

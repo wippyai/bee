@@ -3,6 +3,7 @@
 -- checks the local caller, owns approval consumption and applies one overlay.
 local registry = require("registry")
 local security = require("security")
+local time = require("time")
 local system = require("system")
 local funcs = require("funcs")
 local hash = require("hash")
@@ -43,7 +44,7 @@ type Profile = {workspace_id: string, source_node: string, source_workspace: str
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
-    auto_start: boolean, policy_digest: string}
+    auto_start: boolean, super_edit: boolean, expires_at: string, policy_digest: string}
 type Configuration = activation_profiles.Configuration
 type Result = transaction.Result
 type ResolverRoot = {component: string, version: string, parameters: {unknown}}
@@ -71,6 +72,56 @@ local function load(): (Configuration?, string?)
     local data = bounds.object(entry.data)
     if not data then return nil, "activation profiles are malformed" end
     return M.configuration(data, node_id)
+end
+
+-- The dedicated approver policy a super-edit row must name: it must exist,
+-- list its approvers, and demand an explicit confirmation. The name is the
+-- host's declaration of a person-confirmed, node-local decision; a policy
+-- missing here or carrying any other confirmation is refused.
+local function super_edit_approver_policy(name: string): (boolean, string?)
+    local entry = registry.get("bee:approver_policies")
+    local data = entry and bounds.object(entry.data) or nil
+    local listed = data and data.policies or nil
+    if type(listed) ~= "table" then return false, "approver policies are unavailable" end
+    for _, raw in ipairs(listed :: {unknown}) do
+        local policy = bounds.object(raw)
+        local declared = policy and bounds.id(policy.name) or nil
+        if declared == name then
+            local approvers = policy and policy.approvers or nil
+            if type(approvers) ~= "table" or #(approvers :: {unknown}) == 0 then
+                return false, "super-edit approver policy " .. name .. " names no approvers"
+            end
+            if policy.confirm ~= "explicit" then
+                return false, "super-edit approver policy " .. name .. " must confirm explicitly"
+            end
+            return true, nil
+        end
+    end
+    return false, "super-edit approver policy " .. name .. " is not configured on this host"
+end
+
+-- A super-edit row is admitted only while unexpired and naming the dedicated
+-- explicit-confirmation approver policy. The decoder already refused a row
+-- that could grant security authority or start itself.
+local FORMAT = "2006-01-02T15:04:05.000Z07:00"
+function M.super_edit_admission(raw: unknown): (boolean, string?)
+    local profile_value = bounds.object(raw)
+    if not profile_value then return false, "super-edit admission needs a measured profile" end
+    if profile_value.super_edit ~= true then return true, nil end
+    local expires_at = bounds.text(profile_value.expires_at, 40)
+    local approval_policy = bounds.id(profile_value.approval_policy)
+    if not expires_at or not approval_policy then
+        return false, "super-edit activation profile is malformed"
+    end
+    local expires = time.parse(FORMAT, expires_at)
+    if not expires then return false, "super-edit activation profile has an invalid expiry" end
+    if not expires:after(time.now()) then
+        return false, "super-edit activation profile expired at " .. expires_at
+    end
+    if not approval_policy:match("^super%-edit") then
+        return false, "a super-edit activation profile must name a super-edit approver policy"
+    end
+    return super_edit_approver_policy(approval_policy)
 end
 
 local function selected(config: Configuration, workspace_id: string, source_node: string,
@@ -116,8 +167,12 @@ local function selected(config: Configuration, workspace_id: string, source_node
             if not live then return nil, live_error end
         end
     end
-    return activation_profiles.select(config, workspace_id, source_node, source_workspace,
-        installed, vocabulary, owner_hint, slot_source)
+    local profile_value, profile_error = activation_profiles.select(config, workspace_id, source_node,
+        source_workspace, installed, vocabulary, owner_hint, slot_source)
+    if not profile_value then return nil, profile_error end
+    local admitted, admission_error = M.super_edit_admission(profile_value)
+    if not admitted then return nil, admission_error end
+    return profile_value, nil
 end
 
 local function migration_binding(profile_value: Profile, target: string): (DatabaseBinding?, string?)

@@ -179,9 +179,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 16662,
+      "bytes": 17269,
       "id": "docs/distributed_app_delivery",
-      "sha256": "7f686947473229a2f75f25531cc73d546f276c38eae2b2fcf52931c57a1d2697",
+      "sha256": "2dd70e705ef80015a91f411eb5bb02736036b1bc777b61a30abfc0adc4a7854e",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -203,9 +203,9 @@
       "topic": "application"
     },
     {
-      "bytes": 10788,
+      "bytes": 11041,
       "id": "docs/gateway",
-      "sha256": "61edd15688eb53642d39615d1cf5e49cf33362aed61c636421df374b914930cb",
+      "sha256": "822b01278660a6d7dc82caf57313517b0c363c409945bb38c653829c3d71a9c5",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -227,9 +227,9 @@
       "topic": "application"
     },
     {
-      "bytes": 10938,
+      "bytes": 11156,
       "id": "docs/approvals",
-      "sha256": "e6b96c6942f8c1605d898eef0fcc8b344462113d53bb35c07db9c2b7eca28e0b",
+      "sha256": "1ea153aefa28e3ef51f457d2f9f8d58f9307fd3ba07232c94e1acb3b82699102",
       "source": "docs/reference/approvals.md",
       "title": "Durable approval requests",
       "topic": "approvals"
@@ -283,9 +283,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3976,
+      "bytes": 4202,
       "id": "component/approvals",
-      "sha256": "b44f3cc2b2a02ec6af06fbe4ff113d5a5be8fcd21e5ebd58760a706237aaa68a",
+      "sha256": "1fff189276f6f05c9f9983445fdf5ad82d006115d6d05d9ee6dc6feba41eedb9",
       "source": "modules/approvals/src/README.md",
       "title": "Bee approvals",
       "topic": "component"
@@ -371,17 +371,17 @@
       "topic": "component"
     },
     {
-      "bytes": 19154,
+      "bytes": 19485,
       "id": "component/gov",
-      "sha256": "455f17aae547db8cec3ba1d3ae19d10532adbf6f3dda1b043a7590589869c325",
+      "sha256": "1a2c704fb1c2da333183ae3d73dccc8bd418adc10a906d6f0e5e02d02e75ae54",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
     },
     {
-      "bytes": 21530,
+      "bytes": 21718,
       "id": "component/harness",
-      "sha256": "4079f5057c0ae78cb8aec9a6ceaec1a5866ea4f19c77f9871923ae98bf83e028",
+      "sha256": "47ae088284089407c21acee7e6542e1011b790dcca8b351541b2dc35e1137dad",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -478,7 +478,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 583847,
+    "bytes": 585670,
     "documents": 59
   }
 }

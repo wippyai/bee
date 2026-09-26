@@ -19,6 +19,9 @@ local ACTION = "action-agent-launch"
 local ATTEMPT = "attempt-agent-launch"
 local THREAD = "thread-agent-launch"
 local PERMITTED = "bee.harness.catalog:fixture_definition"
+local WIDER_PARENT = "bee.harness.catalog:agent_launch_wider_parent_policy"
+local WIDER_CHILD = "bee.harness.catalog:agent_launch_wider_definition"
+local FLAGGED_CHILD = "bee.harness.catalog:agent_launch_flagged_definition"
 local WINDOW_DEFINITION = "bee.harness.catalog:agent_launch_window_definition"
 local ALLOWING_POLICY = "bee.harness.catalog:agent_launch_policy"
 local DENYING_POLICY = "bee.harness.catalog:agent_launch_denied_policy"
@@ -169,6 +172,20 @@ local function define_tests()
                 action_id = "child-action-3", body = {request_id = "launch:child", principal_id = AGENT, binding_ref = "binding", binding_digest = "digest",
                     grant_refs = {}, budget_ref = "policy", parent_action_id = 7, input = {text = "do the work"}}})
             test.eq(refused, "action.admitted: parent_action_id is not an identifier")
+        end)
+        test.it("refuses a child whose gateway tools exceed the launching policy unless the host flags it", function()
+            -- The child's own policy offers thread_read; the launching policy
+            -- holds no gateway tool. The unflagged child is refused before any
+            -- work, and the explicitly flagged one is admitted.
+            local refused = launch(binding(WIDER_PARENT), {definition_ref = WIDER_CHILD, brief = "widen", idempotency_key = "wider-key"})
+            test.eq(fault(refused), "LAUNCH_TOOLS_EXCEED_PARENT")
+            test.is_true(tostring((refused.error :: Object).message):find("thread_read", 1, true) ~= nil)
+            local flagged = launch(binding(WIDER_PARENT), {definition_ref = FLAGGED_CHILD, brief = "widen", idempotency_key = "flagged-key"})
+            test.is_true(fault(flagged) ~= "LAUNCH_TOOLS_EXCEED_PARENT")
+            -- The pure subset helper is exact.
+            test.is_true(select(1, agent_launch.tools_within({"thread_read"}, {"thread_read", "thread_wait"})))
+            test.is_false(select(1, agent_launch.tools_within({"thread_read"}, {"thread_wait"})))
+            test.eq(select(2, agent_launch.tools_within({"thread_read", "overlay"}, {"thread_read"})), "overlay")
         end)
         test.it("refuses a definition declaring a window mode, which has no agent carrier", function()
             local reply = launch(binding(WINDOW_POLICY), {definition_ref = WINDOW_DEFINITION, brief = "do the work", idempotency_key = "window-key"})

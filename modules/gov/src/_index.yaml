@@ -195,7 +195,7 @@ entries:
 - name: activation_profile_decoder
   kind: library.lua
   source: file://activation_profiles.lua
-  modules: [hash]
+  modules: [hash, time]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical

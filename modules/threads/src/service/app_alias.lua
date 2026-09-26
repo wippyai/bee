@@ -87,16 +87,37 @@ function M.register(db: sql.DB, actor: string, request: unknown): Result
         return transaction.success({stable = alias.stable, instance = alias.instance}, false)
     end)
 end
-function M.family(db: sql.DB, actor: string, request: unknown): Result
+-- A revoked grant removes access: every active member row of the stable
+-- family is deactivated, whatever role it holds. Leaving cannot do this:
+-- the owner row of a thread the app launched never leaves. The call
+-- converges: a second fence finds no active row and fences nothing.
+function M.fence(db: sql.DB, actor: string, request: unknown): Result
     local object, invalid = decoded(request, {"stable"})
     if not object then return invalid or failure("INVALID_ARGUMENT", "invalid request") end
     local stable = app_actor(object.stable)
     if not stable then return failure("INVALID_ARGUMENT", "stable must name an application identity") end
-    if not access.may_alias(stable) then return failure("DENIED", "caller may not read application families") end
-    return transaction.read(db, function(tx: sql.Transaction): Result
+    if not access.may_alias(stable) then return failure("DENIED", "caller may not fence application families") end
+    return transaction.write(db, function(tx: sql.Transaction): Result
         local threads, read_err = reader.app_family_threads(tx, stable)
         if not threads then return storage(read_err or "read application family") end
-        return transaction.success({stable = stable, threads = threads}, false)
+        local fenced = 0
+        for _, entry in ipairs(threads) do
+            local head, head_err = reader.head(tx, entry.thread_id)
+            if head_err then return storage(head_err) end
+            if head then
+                local member, member_err = reader.member(tx, entry.thread_id, entry.actor)
+                if member_err then return storage(member_err) end
+                if member and member.active then
+                    local revision = head.revision + 1
+                    local deactivate_err = transaction.set_member(tx, entry.thread_id, entry.actor, member.role, revision, false)
+                    if deactivate_err then return storage(deactivate_err) end
+                    local advance_err = transaction.set_revision(tx, entry.thread_id, revision, head.state)
+                    if advance_err then return storage(advance_err) end
+                    fenced = fenced + 1
+                end
+            end
+        end
+        return transaction.success({stable = stable, fenced = fenced}, false)
     end)
 end
 return M

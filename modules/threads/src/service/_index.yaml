@@ -173,9 +173,9 @@ entries:
     types: bee.threads.service:types
   security:
     policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
-- name: app_family
+- name: fence_app
   kind: function.lua
-  source: file://app_family_method.lua
+  source: file://fence_app_method.lua
   method: handle
   imports:
     boundary: bee.threads.service:boundary

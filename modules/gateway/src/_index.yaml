@@ -141,6 +141,16 @@ entries:
     path: .security.policies +=
   - entry: bee.gateway.security:tool_policy_read_policy
     path: .policy.resources +=
+- name: target_tool_run_policy
+  kind: ns.requirement
+  meta: {comment: Host-selected managed-run policy for the built-in MCP status, wait and cancel tools}
+  targets:
+  - entry: bee.gateway:tool_run_policy_ref
+    path: .resource_ref
+  - entry: bee.gateway.api:mcp_http
+    path: .security.policies +=
+  - entry: bee.gateway.security:tool_policy_read_policy
+    path: .policy.resources +=
 - name: target_tool_overlay_policy
   kind: ns.requirement
   meta: {comment: Host-selected governed-overlay policy for the built-in MCP tool}
@@ -333,6 +343,9 @@ entries:
 - name: tool_launch_policy_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Linked host policy for the built-in managed-launch tool}
+- name: tool_run_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in managed-run status, wait and cancel tools}
 - name: tool_overlay_policy_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Linked host policy for the built-in governed-overlay tool}

@@ -119,6 +119,17 @@ entries:
     resources:
     - bee.harness.launch:agent_launch_call
     effect: allow
+- name: gateway_tool_run_policy
+  kind: security.policy
+  meta:
+    comment: The bound MCP subject may read, wait on and cancel managed runs through the launch facade's own run operation, as itself and in its own workspace; the backend answers only for a run the caller launched, and this grants no launch, grant, credential, trait or overlay authority
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.harness.launch:agent_run_call
+    - bee.threads.service:get
+    effect: allow
 - name: gateway_tool_overlay_policy
   kind: security.policy.expr
   meta:

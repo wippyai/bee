@@ -107,6 +107,32 @@ entries:
       {"type":"object","additionalProperties":false,"required":["definition_ref","brief","idempotency_key"],"properties":{"definition_ref":{"type":"string","minLength":1,"maxLength":160},"brief":{"type":"string","minLength":1,"maxLength":16384},"idempotency_key":{"type":"string","minLength":1,"maxLength":64},"workspace_id":{"type":"string","minLength":32,"maxLength":32},"saved_profile_id":{"type":"string","minLength":1,"maxLength":160},"saved_profile_revision":{"type":"integer","minimum":1},"workdir":{"type":"object","additionalProperties":false,"properties":{"resource":{"type":"string","minLength":1,"maxLength":160},"root_ref":{"type":"string","minLength":1,"maxLength":160},"path":{"type":"string","maxLength":1024}}},"thread":{"type":"object","additionalProperties":false,"properties":{"thread_id":{"type":"string","minLength":1,"maxLength":160},"title":{"type":"string","minLength":1,"maxLength":512}}},"placement":{"type":"string","enum":["native","docker"]},"agent_ref":{"type":"string","minLength":1,"maxLength":160},"owner_component_revision":{"type":"integer","minimum":1},"owner_revision":{"type":"integer","minimum":1},"spec_digest":{"type":"string","minLength":64,"maxLength":64}}}
   security:
     policies: [bee.harness.launch:agent_launch_facade_policy]
+- name: agent_run_call
+  kind: function.lua
+  source: file://agent_run_method.lua
+  method: handle
+  modules: [security]
+  imports:
+    bounds: bee.threads.records:bounds
+    caller_launch: bee.harness.launch:caller_launch
+  meta:
+    type: tool
+    title: Read, wait on or cancel a managed run
+    llm_alias: BeeAgentRun
+    llm_description: Read one managed run this caller started (status), wait, read-only and bounded, for it to end (wait), or cancel it (cancel). A run is named by the child thread and attempt that thread_launch returned; the backend checks the caller launched it, so a caller reaches only its own runs. Nothing is launched here.
+    input_schema: |
+      {"type":"object","additionalProperties":false,"required":["operation","thread_id","attempt_id"],"properties":{"operation":{"type":"string","enum":["status","wait","cancel"]},"thread_id":{"type":"string","minLength":1,"maxLength":160},"attempt_id":{"type":"string","minLength":1,"maxLength":160},"wait_ms":{"type":"integer","minimum":0,"maximum":60000},"idempotency_key":{"type":"string","minLength":1,"maxLength":64}}}
+  security:
+    policies: [bee.harness.launch:agent_run_facade_policy]
+- name: agent_run_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The managed-run facade runs as the bound subject; it may read the caller's own launch policy scope and call the run backend, and nothing else. It cannot launch
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:agent_launch_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:agent_call_backend") || action == "security.actor.create"'
+    actions: [funcs.security, security.policy_group.get, funcs.call, security.actor.create]
+    resources: [security, bee.harness.launch:agent_launch_execution_scope, bee.harness.launch:agent_call_backend, '*']
+    effect: allow
 - name: caller_launch
   kind: library.lua
   source: file://caller_launch.lua

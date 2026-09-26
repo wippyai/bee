@@ -377,6 +377,43 @@ local function prove_sessions()
     assert((notice_body.recipient_action_ids :: {string})[1] == "session-a" and notice_body.outcome == "succeeded" and (notice.causation :: Object).record_id == ended.record_id,
         "the notice was not addressed to session a with the ending record: " .. tostring(json.encode(notice)))
 end
+-- A launcher reaches a child it started on a new thread. The orchestrator's
+-- binding is on THREAD; a separate child thread it owns (created and admitted
+-- under its own actor, as thread_launch does for a caller-thread definition on
+-- a new thread) is reachable by naming it as member_thread on thread_read and
+-- thread_wait. An unrelated thread the caller is not a member of is refused,
+-- and the bound thread still works with no member_thread.
+local function prove_child_thread()
+    local child = "child-thread"
+    ok(call("bee.threads.service:create", {thread_id = child, idempotency_key = key(), title = "Child work"}), "create child thread")
+    ok(call("bee.threads.service:record", {thread_id = child, idempotency_key = key(), kind = "message",
+        body = {message_id = "child-note", message_kind = "progress", recipient_ids = {}, content = {text = "child progress"}}}), "record on child thread")
+    local token, _ = admit("child-launcher", nil, 1, {"thread_read", "thread_wait"})
+    local member = tool("child-launcher", token, "thread_read", {cursor = 0, member_thread = child})
+    assert(member.ok == true, "a launched child thread was not readable as member_thread: " .. tostring(json.encode(member)))
+    local child_records = (member.value :: Object).records :: {Object}
+    assert(#child_records == 1 and (((child_records[1].body :: Object).content :: Object).text) == "child progress", "member_thread read the wrong thread")
+    local bound = tool("child-launcher", token, "thread_read", {cursor = 0})
+    assert(bound.ok == true, "the bound thread was not readable without member_thread")
+    assert((bound.value :: Object).records ~= nil and ((bound.value :: Object).records :: {Object})[1].thread_id ~= child, "no member_thread read the bound thread, not the child")
+    -- A thread this caller does not belong to is refused, never silently
+    -- redirected to the bound thread. The foreign thread is owned by a
+    -- different actor, so membership really does deny it.
+    local foreign = "foreign-thread"
+    local other = security.new_actor("bee.test.gateway.other", {})
+    assert(other, "construct the foreign actor")
+    local created, create_error = funcs.new():with_actor(other):call("bee.threads.service:create",
+        {thread_id = foreign, idempotency_key = key(), title = "Someone else"})
+    assert(not create_error and type(created) == "table" and (created :: Object).ok == true,
+        "create foreign thread: " .. tostring(create_error or json.encode(created)))
+    local refused_read = tool("child-launcher", token, "thread_read", {cursor = 0, member_thread = foreign})
+    assert(refused_read.ok == false and (refused_read.error :: Object).code == "NOT_FOUND", "an unrelated member_thread was not refused")
+    local refused_wait = tool("child-launcher", token, "thread_wait", {after_sequence = 0, wait_ms = 1, member_thread = foreign})
+    assert(refused_wait.ok == false and (refused_wait.error :: Object).code == "NOT_FOUND", "an unrelated member_thread wait was not refused")
+    local waited = tool("child-launcher", token, "thread_wait", {after_sequence = 0, wait_ms = 1, member_thread = child})
+    assert(waited.ok == true and (waited.value :: Object).status ~= nil, "a member_thread wait was refused")
+end
+
 local function main()
     prove_endpoint_call_scope()
     ADDRESS = endpoint()
@@ -607,6 +644,7 @@ local function main()
     ok(call("bee.gateway.binding:revoke", {binding_id = mcp_binding}), "revoke MCP message binding")
     assert(select(1, rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = message_arguments})) == 401, "revoked thread_message token was accepted")
     end
+    prove_child_thread()
     prove_sessions()
     -- Hooks: a binding that admits hook events gets a second credential of
     -- its own kind; neither credential opens the other endpoint.

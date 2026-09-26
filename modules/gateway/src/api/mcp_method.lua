@@ -255,7 +255,80 @@ local function remote_send(binding: gateway.Binding, tool: mcp.Tool, request: Ob
     local reply, call_error = executor:call(tool.operation, body)
     return reply_result(reply, call_error)
 end
+-- The managed-run tools map to the harness launch facade's own run operation,
+-- the same one an application reaches as agents.status/wait/cancel. The
+-- endpoint's target scope admits that facade plus the membership probe below.
+local run_call = "bee.harness.launch:agent_run_call"
+local thread_probe = "bee.threads.service:get"
+-- A caller reaches only runs it launched. Launching is the membership: a child
+-- thread_launch starts on a new thread is created and admitted under the
+-- caller, so the caller is an active member of it, and a caller-thread launch
+-- runs on the caller's own thread. The thread owner answers membership; an
+-- unrelated thread, or an identity the caller fabricated, names no thread it
+-- belongs to and is refused. This is durable at thread_launch return and never
+-- races the child carrier's own admission.
+local function run_visible(executor: funcs.Executor, thread_id: string): boolean
+    local reply, call_error = executor:call(thread_probe, {thread_id = thread_id})
+    if call_error then return false end
+    local answer = bounds.object(reply)
+    if not answer or answer.ok ~= true then return false end
+    local value = bounds.object(answer.value)
+    local membership = value and bounds.object(value.membership)
+    return membership ~= nil and membership.active == true
+end
+local function run_tool(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object): Object
+    local executor, failure = subject_executor(binding, tool, values, nil)
+    if not executor then return failure :: Object end
+    local operation = "status"
+    if tool.name == "run_wait" then operation = "wait" end
+    if tool.name == "run_cancel" then operation = "cancel" end
+    local body: Object = {operation = operation, thread_id = request.thread_id, attempt_id = request.attempt_id}
+    if operation == "wait" or operation == "cancel" then body.wait_ms = request.wait_ms or 0 end
+    if operation == "cancel" then body.idempotency_key = request.idempotency_key end
+    -- The caller reaches only runs it launched: the run is refused by name
+    -- before any owner operation runs unless the caller is an active member of
+    -- the child thread, which is how a launched child's thread is its own.
+    if not run_visible(executor, request.thread_id) then
+        return refused("NOT_FOUND", "no run this caller launched names thread " .. request.thread_id)
+    end
+    local reply, call_error = executor:call(run_call, body)
+    if call_error then return reply_result(nil, call_error) end
+    local answer = bounds.object(reply)
+    if answer and answer.ok ~= true then
+        local fault = bounds.object(answer.error)
+        if fault and tostring(fault.code) == "DENIED" then
+            return refused("NOT_FOUND", "no run this caller launched names thread " .. request.thread_id)
+        end
+    end
+    return reply_result(reply, nil)
+end
+
+-- A caller may name a member_thread it is an active member of, such as a child
+-- it launched on a new thread. The thread owner checks membership again on the
+-- read or watch, but the endpoint refuses early so an unrelated thread is never
+-- offered as if it were this binding's own, and strips the field before the
+-- owner call so the owner's field allow-list stays exact.
+local function member_thread(executor: funcs.Executor, request: Object, bound: string): (string?, Object?)
+    local supplied = request.member_thread
+    if supplied == nil then return bound, nil end
+    request.member_thread = nil
+    local thread_id = bounds.id(supplied)
+    if not thread_id then return nil, refused("INVALID_ARGUMENT", "member_thread must be a thread identifier") end
+    local reply, call_error = executor:call("bee.threads.service:get", {thread_id = thread_id})
+    if call_error then return nil, refused("UNAVAILABLE", tostring(call_error)) end
+    local answer = bounds.object(reply)
+    local value = answer and answer.ok == true and bounds.object(answer.value) or nil
+    local membership = value and bounds.object(value.membership)
+    if not membership or membership.active ~= true then
+        return nil, refused("NOT_FOUND", "member_thread " .. thread_id .. " is not a thread this caller belongs to")
+    end
+    return thread_id, nil
+end
+
 local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?): Object
+    if tool.name == "run_status" or tool.name == "run_wait" or tool.name == "run_cancel" then
+        return run_tool(binding, tool, request, values)
+    end
     local executor, failure = subject_executor(binding, tool, values, runtime)
     if not executor then return failure :: Object end
     if tool.name == "thread_sessions" then return list_sessions(binding, executor, request) end
@@ -288,7 +361,11 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
             target_thread_id = target.thread_id, target_action_id = target.action_id, watcher_action_id = binding.action_id})
         return reply_result(reply, call_error)
     end
-    if tool.name == "thread_read" then request.thread_id = binding.thread_id end
+    if tool.name == "thread_read" then
+        local selected, missing = member_thread(executor, request, binding.thread_id)
+        if not selected then return missing :: Object end
+        request.thread_id = selected
+    end
     if tool.name == "request_capability" or tool.name == "capability_status" or tool.name == "install_request"
         or tool.name == "uninstall_request" or tool.name == "install_status" then
         request.binding_id = binding.binding_id
@@ -297,9 +374,13 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
         request.kind = "message"
         request.thread_id = binding.thread_id
         request.context = {action_id = binding.action_id, attempt_id = binding.attempt_id}
+        local member, missing = member_thread(executor, request, binding.thread_id)
+        if not member then return missing :: Object end
+        request.thread_id = member
+        if member ~= binding.thread_id then request.context = nil end
         local address = request.session
         request.session = nil
-        if type(address) == "string" then
+        if type(address) == "string" and member == binding.thread_id then
             local target, unreachable = resolve(binding, executor, address)
             if not target then return unreachable :: Object end
             -- The session is the recipient; the caller's own action names the
@@ -316,9 +397,11 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
     return reply_result(reply, call_error)
 end
 local function wait(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object): Object
-    request.thread_id = binding.thread_id
     local executor, failure = subject_executor(binding, tool, values, nil)
     if not executor then return failure :: Object end
+    local selected, missing = member_thread(executor, request, binding.thread_id)
+    if not selected then return missing :: Object end
+    request.thread_id = selected
     local remaining = tonumber(request.wait_ms) or 0
     local budget = tonumber(request.transport_budget_ms) or mcp.TRANSPORT_BUDGET_MS
     if remaining > budget then remaining = budget end
@@ -467,6 +550,9 @@ local function handle(): nil
     elseif tool.name == "session_inbox" then arguments, argument_error = mcp.inbox_page_arguments(parameters)
     elseif tool.name == "session_ack" then arguments, argument_error = mcp.inbox_ack_arguments(parameters)
     elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
+    elseif tool.name == "run_status" then arguments, argument_error = mcp.run_arguments(parameters, false)
+    elseif tool.name == "run_wait" then arguments, argument_error = mcp.run_arguments(parameters, false)
+    elseif tool.name == "run_cancel" then arguments, argument_error = mcp.run_arguments(parameters, true)
     elseif tool.name == "launch_definitions" then arguments, argument_error = mcp.launch_definitions_arguments(parameters, binding.workspace_id)
     elseif tool.name == "capabilities" then arguments, argument_error = mcp.capabilities_arguments(parameters)
     elseif tool.name == "request_capability" then arguments, argument_error = mcp.capability_arguments(parameters)

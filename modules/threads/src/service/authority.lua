@@ -151,7 +151,9 @@ function M.list(db: sql.DB, actor: string, request: unknown): Result
         limit = number
     end
     return transaction.read(db, function(tx: sql.Transaction): Result
-        local heads, err = reader.accessible_heads(tx, actor, after, limit)
+        local stable, alias_err = reader.app_stable(tx, actor)
+        if alias_err then return storage(alias_err) end
+        local heads, err = reader.accessible_heads(tx, actor, stable, after, limit)
         if not heads then return storage(err or "read accessible threads") end
         local summaries: {types.Summary} = {}
         for index = 1, math.min(#heads, limit) do summaries[index] = M.summary(heads[index]) end

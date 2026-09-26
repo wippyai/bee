@@ -7,24 +7,26 @@ local harness = require("harness")
 local app_identity = require("app_identity")
 local ALIAS_POLICY = "bee.security.threads:application_thread_alias_policy"
 local WORKSPACE = string.rep("a", 32)
+local OTHER_WORKSPACE = string.rep("b", 32)
 
-local function stable(definition: string): string
-    return assert(app_identity.stable(WORKSPACE, definition)).id
+local function stable(definition: string, workspace_id: string?): string
+    return assert(app_identity.stable(workspace_id or WORKSPACE, definition)).id
 end
 
-local function instance(): string
-    return "bee.application:" .. WORKSPACE .. ":" .. harness.key()
+local function instance(workspace_id: string?): string
+    return "bee.application:" .. (workspace_id or WORKSPACE) .. ":" .. harness.key()
 end
 
 type Client = harness.Client
 
-local function app_principal(id: string, grants: {string}): Client
-    return harness.principal(id, grants, WORKSPACE)
+local function app_principal(id: string, grants: {string}, workspace_id: string?): Client
+    return harness.principal(id, grants, workspace_id or WORKSPACE)
 end
 
-local function attest(broker: Client, definition: string, id: string): {[string]: unknown}
-    local value: unknown = harness.value(broker:call("register_app_alias", {stable = stable(definition),
-        instance = id, workspace_id = WORKSPACE, definition_id = definition}))
+local function attest(broker: Client, definition: string, id: string, workspace_id: string?): {[string]: unknown}
+    local selected_workspace = workspace_id or WORKSPACE
+    local value: unknown = harness.value(broker:call("register_app_alias", {stable = stable(definition, selected_workspace),
+        instance = id, workspace_id = selected_workspace, definition_id = definition}))
     if type(value) ~= "table" then error("application alias reply must be an object") end
     return value :: {[string]: unknown}
 end
@@ -74,6 +76,17 @@ local function define_tests()
             test.eq(posted.sequence, 1)
             local read = harness.value(reopened:call("read_after", {thread_id = thread_id, cursor = 0, limit = 8}))
             test.eq(#read.records, 1)
+            local listed = harness.value(reopened:call("list", {limit = 8}))
+            local found = false
+            for _, raw in ipairs(listed.threads :: {unknown}) do
+                if (raw :: {[string]: unknown}).thread_id == thread_id then found = true end
+            end
+            test.is_true(found)
+            local other_broker = app_principal("other-broker", {ALIAS_POLICY}, OTHER_WORKSPACE)
+            local foreign_instance = instance(OTHER_WORKSPACE)
+            attest(other_broker, definition, foreign_instance, OTHER_WORKSPACE)
+            local foreign = app_principal(foreign_instance, {}, OTHER_WORKSPACE)
+            test.eq(harness.code(foreign:call("get", {thread_id = thread_id})), "DENIED")
         end)
         test.it("keeps guest membership per instance and fences the family", function()
             local broker = app_principal("broker", {ALIAS_POLICY})

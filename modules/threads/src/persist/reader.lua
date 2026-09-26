@@ -161,9 +161,12 @@ local function heads_of(rows: {{[string]: unknown}}): ({Head}?, string?)
     end
     return heads, nil
 end
-function M.accessible_heads(tx: sql.Transaction, actor: string, after: string, limit: integer): ({Head}?, string?)
+function M.accessible_heads(tx: sql.Transaction, actor: string, stable: string?, after: string, limit: integer): ({Head}?, string?)
     local rows, query_err = tx:query("SELECT h.thread_id, h.owner_actor, h.title, h.state, h.revision, h.head_sequence, h.created_at, h.workspace_id FROM bee_thread_heads h " ..
-        "JOIN bee_thread_members m ON m.thread_id = h.thread_id WHERE m.actor = ? AND m.active = 1 AND h.thread_id > ? ORDER BY h.thread_id LIMIT ?", {actor, after, limit + 1})
+        "JOIN bee_thread_members m ON m.thread_id = h.thread_id WHERE m.active = 1 AND h.thread_id > ? AND (m.actor = ? OR (" ..
+        "(h.owner_actor = ? OR EXISTS (SELECT 1 FROM bee_thread_app_alias owner_alias WHERE owner_alias.instance = h.owner_actor AND owner_alias.stable = ?)) AND " ..
+        "(m.actor = ? OR EXISTS (SELECT 1 FROM bee_thread_app_alias member_alias WHERE member_alias.instance = m.actor AND member_alias.stable = ?)))) " ..
+        "ORDER BY h.thread_id LIMIT ?", {after, actor, stable or "", stable or "", stable or "", stable or "", limit + 1})
     if query_err or not rows then return nil, "read accessible threads" end
     return heads_of(rows)
 end

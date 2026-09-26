@@ -58,6 +58,22 @@ entries:
     actions: [funcs.call]
     resources: [bee.threads.service:get, bee.threads.service:join, bee.threads.service:leave]
     effect: allow
+- name: application_thread_alias_policy
+  kind: security.policy
+  meta:
+    comment: Broker-only executor for stable application alias attestation and family fencing
+  policy:
+    actions: [bee.threads.app_alias]
+    resources: ['*']
+    effect: allow
+- name: application_thread_alias_call_policy
+  kind: security.policy
+  meta:
+    comment: Broker-only transport for the alias attestation operations
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:register_app_alias, bee.threads.service:fence_app]
+    effect: allow
 - name: application_thread_facade_policy
   kind: security.policy
   meta:

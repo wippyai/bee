@@ -406,6 +406,24 @@ CREATE INDEX bee_thread_records_action
 local OWNER_AUTHORITY_SQL = [[
 ALTER TABLE bee_thread_owner ADD COLUMN authority_id TEXT;
 ]]
+-- The broker attests each application instance it opens for the app's
+-- stable identity, so a reopened instance inherits the threads and runs
+-- its app launched. The mapping is append-only: leaving a thread
+-- deactivates the member row, and a revoked app is fenced by leaving
+-- every family row, never by rewriting attestation.
+local APP_ALIAS_SQL = [[
+CREATE TABLE bee_thread_app_alias (
+  stable TEXT NOT NULL CHECK(length(CAST(stable AS BLOB)) <= 160),
+  instance TEXT NOT NULL CHECK(length(CAST(instance AS BLOB)) <= 160),
+  workspace_id TEXT NOT NULL
+    CHECK(length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+  definition_id TEXT NOT NULL CHECK(length(CAST(definition_id AS BLOB)) <= 160),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(stable, instance)
+);
+CREATE INDEX bee_thread_app_alias_instance
+  ON bee_thread_app_alias(instance, stable);
+]]
 -- A notice is owed once to a watcher on its own thread when a target action
 -- ends a turn or an attempt; after_sequence is the scan cursor over that
 -- action's records on the target thread.
@@ -620,6 +638,7 @@ local list: {Migration} = {
     {id = 15, name = "action_inbox_outbox_reply", sql = ACTION_INBOX_OUTBOX_REPLY_SQL, rebuild = false},
     {id = 16, name = "cancel_intent", sql = CANCEL_INTENT_SQL, rebuild = false},
     {id = 17, name = "attempt_notices", sql = ATTEMPT_NOTICES_SQL, rebuild = true},
+    {id = 18, name = "app_alias", sql = APP_ALIAS_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

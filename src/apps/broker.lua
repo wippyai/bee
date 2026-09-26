@@ -91,6 +91,9 @@ local function main(owner: string, initial_preferences: unknown)
     local binding_requests: {[string]: string} = {}
     local membership_policy = assert(security.policy("bee.security.threads:application_thread_membership_policy"))
     local membership_scope = security.new_scope({membership_policy})
+    local alias_policy = assert(security.policy("bee.security.threads:application_thread_alias_policy"))
+    local alias_call_policy = assert(security.policy("bee.security.threads:application_thread_alias_call_policy"))
+    local alias_scope = security.new_scope({alias_policy, alias_call_policy})
     local facade_policy = assert(security.policy("bee.security.threads:application_thread_facade_policy"))
     local facade_scope = security.new_scope({facade_policy})
     local function thread_call(actor_id: string, target: string, request: unknown)
@@ -206,6 +209,55 @@ local function main(owner: string, initial_preferences: unknown)
         local left = funcs.new():with_scope(membership_scope):call("bee.threads.service:leave", request)
         return type(left) == "table" and (left :: {[string]: unknown}).ok == true
     end
+    -- Every opened instance is attested for its app's stable identity, so a
+    -- reopened instance inherits the threads and runs the app launched.
+    -- Attestation is fail-closed: the open is refused when it cannot land.
+    local function attest_instance(instance_id: string, definition_id: string): (boolean, string?, string?)
+        local done, ok, code, message = pcall(function(): (boolean, string?, string?)
+            local stable = app_identity.stable(workspace_id, definition_id)
+            if not stable or type(stable.id) ~= "string" then
+                return false, "permission_denied", "Application identity is invalid"
+            end
+            local stable_id: string = stable.id
+            local actor, actor_error = security.new_actor(stable_id)
+            if not actor then return false, "permission_denied", tostring(actor_error or "create application alias caller") end
+            local acted, actor_failure = funcs.new():with_actor(actor)
+            if not acted then return false, "permission_denied", tostring(actor_failure or "set application alias caller") end
+            local scoped, scope_error = acted:with_scope(alias_scope)
+            if not scoped then return false, "permission_denied", tostring(scope_error or "set application alias scope") end
+            local instance_actor = thread_binding.actor(workspace_id, instance_id)
+            if not instance_actor then return false, "permission_denied", "Application identity is invalid" end
+            local reply, call_error = scoped:call("bee.threads.service:register_app_alias", {stable = stable_id,
+                instance = instance_actor, workspace_id = workspace_id, definition_id = definition_id})
+            if call_error then
+                return false, "permission_denied", "Application alias attestation call failed: " .. tostring(call_error):sub(1, 300)
+            end
+            if type(reply) ~= "table" then
+                return false, "permission_denied", "Application alias attestation is unavailable"
+            end
+            if (reply :: {[string]: unknown}).ok ~= true then
+                local fault = bounds.object((reply :: {[string]: unknown}).error)
+                return false, "permission_denied", tostring(fault and fault.message or "the thread owner refused the application alias")
+            end
+            return true, nil, nil
+        end)
+        if not done then return false, "permission_denied", "Application alias attestation raised: " .. tostring(ok):sub(1, 300) end
+        return ok, code, message
+    end
+    -- A removed admission binding fences its stable family out of every
+    -- thread: a revoked or uninstalled app keeps no runs to follow. The
+    -- fence converges, so a tick that finds active rows fences again.
+    local function fence_stable(definition_id: string)
+        local stable = app_identity.stable(workspace_id, definition_id)
+        if not stable or type(stable.id) ~= "string" then return end
+        local stable_id: string = stable.id
+        local actor = security.new_actor(stable_id)
+        if not actor then return end
+        local acted = funcs.new():with_actor(actor)
+        local scoped = acted and acted:with_scope(alias_scope)
+        if not scoped then return end
+        scoped:call("bee.threads.service:fence_app", {stable = stable_id})
+    end
     local function facade_call(actor_id: string, target: string, request: unknown)
         local actor, actor_error = security.new_actor(actor_id)
         if not actor then return nil, tostring(actor_error or "create application thread caller") end
@@ -291,6 +343,18 @@ local function main(owner: string, initial_preferences: unknown)
             if previous == selected then return end
             admission.current, admission.error = selected, ""
             assert(process.send(owner, "bee.application.catalog", {version = 1, items = selected.items}))
+            -- A binding the catalog no longer admits fences its stable
+            -- family out of every thread: a revoked or uninstalled app
+            -- keeps no runs to follow, whether or not it still runs.
+            if previous then
+                for _, old in ipairs(previous.bindings) do
+                    local kept = false
+                    for _, new in ipairs(selected.bindings) do
+                        if new.definition_id == old.definition_id then kept = true; break end
+                    end
+                    if not kept then fence_stable(old.definition_id) end
+                end
+            end
             -- A compatible automatic application follows its applied
             -- definition behind the same viewport. Once an exit has been
             -- observed, its exact requested revision is a fence: a later
@@ -485,6 +549,12 @@ local function main(owner: string, initial_preferences: unknown)
         end
         local actor_id = thread_binding.actor(workspace_id, instance_id)
         if not actor_id then emit(contract.reply(req.request_id, "open", "permission_denied", "Application identity is invalid"), true); return end
+        local attested, alias_code, alias_message = attest_instance(instance_id, descriptor.definition_id)
+        if not attested then
+            emit(contract.reply(req.request_id, "open", alias_code or "permission_denied",
+                alias_message or "Application alias attestation was not admitted"), true)
+            return
+        end
         local provisional = {instance_id = instance_id, thread_id = provenance.thread_id, actor_id = actor_id,
             role = "participant", initiating_owner_id = provenance.initiating_owner}
         local get = thread_binding.get_request(provisional, workspace_id)
@@ -1612,6 +1682,11 @@ local function main(owner: string, initial_preferences: unknown)
                                 emit(contract.reply(req.request_id, "open", member_code or "permission_denied",
                                     member_message or "Application thread membership was not admitted"), true)
                             else
+                                local attested, alias_code, alias_message = attest_instance(instance_id, req.definition_id)
+                                if not attested then
+                                    emit(contract.reply(req.request_id, "open", alias_code or "permission_denied",
+                                        alias_message or "Application alias attestation was not admitted"), true)
+                                else
                                 local token = uuid.v7()
                                 local theme = appearance.theme(preferences.theme)
                                 local view, err = tty.viewport({width = 60, height = 16, page = appearance.page(theme, selected_descriptor.role == "terminal")})
@@ -1643,6 +1718,7 @@ local function main(owner: string, initial_preferences: unknown)
                                             instances[view_id] = instance
                                         end
                                     end
+                                end
                                 end
                             end
                         end

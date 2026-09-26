@@ -363,6 +363,14 @@
       "topic": "component"
     },
     {
+      "bytes": 1729,
+      "id": "component/driver:wippy",
+      "sha256": "2ddfb4b60c24ba5b9b8d7a47e6264a29373bc64dfde5b17ddab868d09edbe274",
+      "source": "modules/driver-wippy/src/README.md",
+      "title": "Bee Wippy Driver",
+      "topic": "component"
+    },
+    {
       "bytes": 6921,
       "id": "component/gateway",
       "sha256": "a1e6e23bb521eb6835e5fac3148fad47e0135992dc247b7bfef6785ed5a531d7",
@@ -478,7 +486,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 593389,
-    "documents": 59
+    "bytes": 595118,
+    "documents": 60
   }
 }

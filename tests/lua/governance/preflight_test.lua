@@ -5,6 +5,9 @@ local canonical = require("canonical")
 local artifact = require("artifact")
 local hash = require("hash")
 local SHA = string.rep("a", 64)
+type Manifest = {revision: integer, namespaces: {string}, entries: {string}}
+local KERNEL: Manifest = {revision = 1, namespaces = {"bee.gov", "bee.security"},
+    entries = {"bee:approver_policies", "bee:protected_kernel"}}
 local function fixture(): (preflight.Candidate, preflight.Context)
     local references: {string} = {}
     local database: preflight.Entry = {id = "host:db", kind = "db.sql.sqlite", package = "host", digest = SHA, references = references, auto_start = true, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
@@ -18,9 +21,19 @@ local function fixture(): (preflight.Candidate, preflight.Context)
         packages = {["wolfy-j/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
         entries = entries, installed_entries = nil,
         applied = {}, grants = {}, modules = {}, exact_expansion = true, migration_barrier = false, auto_start = true,
-        protected = {revision = 1, namespaces = {"bee.gov", "bee.security"},
-            entries = {"bee:approver_policies", "bee:protected_kernel"}}}
+        protected = KERNEL}
     return candidate, context
+end
+-- The same host context under another trust map, or none.
+local function with_kernel(context: preflight.Context, kernel: Manifest?): preflight.Context
+    return {node_id = context.node_id, registry_revision = context.registry_revision,
+        registry_digest = context.registry_digest, policy_digest = context.policy_digest,
+        packages = context.packages, namespaces = context.namespaces, kinds = context.kinds,
+        databases = context.databases, grants = context.grants, modules = context.modules,
+        database_bindings = context.database_bindings, entries = context.entries,
+        installed_entries = context.installed_entries, applied = context.applied,
+        exact_expansion = context.exact_expansion, migration_barrier = context.migration_barrier,
+        auto_start = context.auto_start, protected = kernel}
 end
 local function checked(candidate: preflight.Candidate, context: preflight.Context): preflight.Report
     local result, err = preflight.check(candidate, context)
@@ -131,12 +144,11 @@ local function define_tests()
             exact.artifacts[1].namespaces = {"demo", "bee"}
             exact.entries[#exact.entries + 1] = entry("bee:protected_kernel", "wolfy-j/demo", {})
             test.is_true(has(checked(exact, context), "PROTECTED_KERNEL"))
-            context.protected = nil
-            local missing, missing_error = preflight.check(candidate, context)
+            local missing, missing_error = preflight.check(candidate, with_kernel(context, nil))
             test.is_nil(missing)
             test.not_nil(missing_error)
-            context.protected = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:approver_policies"}}
-            local open_map, open_error = preflight.check(candidate, context)
+            local open_map, open_error = preflight.check(candidate, with_kernel(context,
+                {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:approver_policies"}}))
             test.is_nil(open_map)
             test.not_nil(string.find(tostring(open_error), "protect itself", 1, true))
         end)

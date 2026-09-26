@@ -77,9 +77,9 @@ local function string_list(raw: unknown, pattern: string): {string}?
     return result
 end
 
--- Each catalog entry materializes into generated host entries: a policy plus
--- the host-created volume or database it authorizes. Other catalog entries
--- remain review vocabulary until their resource and owner boundaries arrive.
+-- Each installable catalog entry materializes into generated host entries: a
+-- policy plus the host-created volume or database it authorizes. Hive
+-- exposure stays host-published review vocabulary with no app grant.
 local function policy(owner: string, grant: Object, id: string, folder: unknown): (Object?, Object?, Object?, string?)
     local scope = bounds.object(grant.scope)
     if not scope then return nil, nil, nil, "capability scope is malformed" end
@@ -144,7 +144,7 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.HTTP_REQUEST},
                 effect = "allow"}}}, nil, nil, nil
     end
-    return nil, nil, nil, "capability has no installed enforcement in this slice"
+    return nil, nil, nil, "capability has no application-installable enforcement"
 end
 
 -- The workspace folder is part of the measured set whenever a volume is
@@ -331,6 +331,15 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
     for field, value in pairs(data) do copy[field] = value end
     copy.record_digest = measured_record
     return copy, nil
+end
+
+-- The generated host entries a live installed record stands for, in the
+-- shape activation composes into the application's overlay.
+function M.installed(record_raw: unknown, record: Object): Object
+    local entry: Object = {}
+    for key, value in pairs((record_raw :: Object)) do if key ~= "registry" then entry[key] = value end end
+    return {policies = record.policies, bindings = record.bindings, volumes = record.volumes,
+        databases = record.databases, record = entry}
 end
 
 -- A registry record is live only while its generated policies, volumes,

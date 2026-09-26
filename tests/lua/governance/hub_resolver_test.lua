@@ -3,7 +3,8 @@
 -- boundaries as the destination host without granting this test a registry
 -- writer or an execution capability.
 local test = require("test")
-local KERNEL = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
+local KERNEL: {revision: integer, namespaces: {string}, entries: {string}} =
+    {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
 local artifact = require("artifact")
 local resolver = require("hub_resolver")
 

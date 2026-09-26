@@ -3,6 +3,7 @@
 -- module derives the host-created volume, database and policy entries that
 -- activation installs. It authorizes nothing on its own.
 local hash = require("hash")
+local gateway = require("capability_gateway")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -14,9 +15,6 @@ local PRIVATE_ROOT = ".wippy"
 local PRIVATE_PREFIX = ".wippy/"
 -- Application databases live outside every approved readable tree.
 M.DATABASE_DIR = ".wippy/app-db"
--- An application reads the identities of its own installed volumes and
--- database here instead of embedding host-generated identities.
-M.GRANTED_RESOURCES = "bee.gov.binding:granted_resources"
 
 local function segments(value: string): ({string}?, string?)
     if type(value) ~= "string" or #value == 0 or #value > 160 or value:find("%c")
@@ -104,6 +102,19 @@ local function located(root: Folder, subpath: string): string
     return root.directory .. "/" .. relative
 end
 
+-- Whether measured capability requirements ask for workspace files, whose
+-- grants root in the destination workspace's folder.
+function M.rooted(requirements: {unknown}): boolean
+    for _, raw in ipairs(requirements) do
+        local item = type(raw) == "table" and raw :: {[string]: unknown} or nil
+        local request = item and type(item.capability_request) == "table"
+            and item.capability_request :: {[string]: unknown} or nil
+        local capability = request and request.capability or nil
+        if type(capability) == "string" and capability:sub(1, 16) == "workspace.files." then return true end
+    end
+    return false
+end
+
 function M.volume_id(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (string?, string?)
     if type(owner_raw) ~= "string" or #owner_raw == 0 or #owner_raw > 160 then
         return nil, "file grant owner is invalid"
@@ -168,7 +179,8 @@ local function policy(id: string, actions: {string}, resources: {string}, commen
 end
 
 -- Acquisition is the policy boundary; the installed volume's readonly flag
--- enforces the read-only mode below it.
+-- enforces the read-only mode below it. The same grant lets the application
+-- read its own granted identities from the gateway.
 function M.file_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown, writable_raw: unknown,
     policy_id_raw: unknown): (Object?, string?)
     local volume, volume_error = M.volume(owner_raw, folder_raw, subpath_raw, writable_raw)
@@ -177,7 +189,7 @@ function M.file_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unk
     end
     local id: string = policy_id_raw :: string
     if #id == 0 or #id > 160 then return nil, "file grant policy identity is invalid" end
-    return policy(id, {"fs.get", "funcs.call"}, {(volume :: {[string]: unknown}).id :: string, M.GRANTED_RESOURCES},
+    return policy(id, {"fs.get", "funcs.call"}, {(volume :: {[string]: unknown}).id :: string, gateway.GRANTED_RESOURCES},
         "Host-generated workspace file grant"), nil
 end
 
@@ -190,7 +202,7 @@ function M.database_policy(owner_raw: unknown, name_raw: unknown, policy_id_raw:
     end
     local id: string = policy_id_raw :: string
     if #id == 0 or #id > 160 then return nil, "database grant policy identity is invalid" end
-    return policy(id, {"db.get", "funcs.call"}, {(database :: {[string]: unknown}).id :: string, M.GRANTED_RESOURCES},
+    return policy(id, {"db.get", "funcs.call"}, {(database :: {[string]: unknown}).id :: string, gateway.GRANTED_RESOURCES},
         "Host-generated isolated application database grant"), nil
 end
 

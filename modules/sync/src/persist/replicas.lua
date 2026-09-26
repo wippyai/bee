@@ -328,6 +328,31 @@ function M.read(store: Store, raw_key: Key): Result
     end)
 end
 
+-- Names, in order, the source owners that have made at least one version of
+-- one feed available here. Discovery metadata only, like available().
+function M.sources(store: Store, feed_raw: unknown, limit_raw: unknown): Result
+    if store.closed then return fail("CLOSED", "replica store is closed") end
+    local feed = bounds.id(feed_raw)
+    local limit = bounds.count(limit_raw, 128)
+    if not feed or limit == nil or limit < 1 then return fail("INVALID", "replica source query is invalid") end
+    return transaction.read(store.db, "sync replica", function(tx: sql.Transaction): Result
+        local rows, query_error = tx:query([[SELECT DISTINCT v.source_owner
+FROM bee_sync_replica_versions v
+JOIN bee_sync_replica_transfers t
+  ON t.source_owner = v.source_owner AND t.feed = v.feed AND t.version_key = v.version_key
+WHERE v.feed = ? AND t.state = 'available'
+ORDER BY v.source_owner
+LIMIT ?]], {feed, limit})
+        if query_error or not rows then return fail("INTERNAL", "list replica sources") end
+        local owners: {string} = {}
+        for _, row in ipairs(rows) do
+            if type(row.source_owner) ~= "string" then return fail("INTERNAL", "replica source row is corrupt") end
+            owners[#owners + 1] = row.source_owner
+        end
+        return transaction.success({feed = feed, sources = owners}, false)
+    end)
+end
+
 -- Lists the immutable descriptors already made available for one exact source
 -- feed. This is discovery metadata only: callers still use read() to verify a
 -- descriptor and its bytes together before staging anything.

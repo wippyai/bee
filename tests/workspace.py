@@ -105,6 +105,35 @@ def _catalog(database):
     return sqlite3.connect(f"file:{Path(database)}?mode=ro", uri=True)
 
 
+def name_node(project, name):
+    """Give a Hive source a stable node identity before any Governance row is created."""
+    assert re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}", name), name
+    path = project / ".wippy.yaml"
+    document = yaml.safe_load(path.read_text())
+    document["relay"] = {"node_name": name}
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+
+
+def stage_hive_source(project):
+    """Compose the replica probe into an authoring project the Hive acceptance
+    later starts as its source node. The replica fixture supplies an enrolled
+    supervisor explicitly, so only the protected supervisor service entry is
+    kept from starting; the real Hive sender stays in bee.hive."""
+    hive_service_index = project / "src/hive/service/_index.yaml"
+    hive_service = yaml.safe_load(hive_service_index.read_text())
+    service = next(item for item in hive_service["entries"] if item["name"] == "supervisor_service")
+    service["lifecycle"]["auto_start"] = False
+    hive_service_index.write_text(yaml.safe_dump(hive_service, sort_keys=False))
+    shutil.copytree(ROOT / "tests/fixtures/hive_replica", project / "src/replica_probe")
+    shutil.rmtree(project / "src/replica_probe/host_environment")
+    source_probe = project / "src/replica_probe/_index.yaml"
+    probe = yaml.safe_load(source_probe.read_text())
+    controller = next(item for item in probe["entries"] if item["name"] == "controller_policy")
+    controller["policy"]["actions"] = [action for action in controller["policy"]["actions"]
+                                       if not action.startswith("registry.overlay.")]
+    source_probe.write_text(yaml.safe_dump(probe, sort_keys=False))
+
+
 def classic_workspace(database):
     """The id of the classic folder workspace in a node workspace catalog."""
     connection = _catalog(database)

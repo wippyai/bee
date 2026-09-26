@@ -29,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app_journey import assert_overlay_authority  # noqa: E402
 from delivery_review import back_to_plans, focus  # noqa: E402
 from tui_smoke import DESKTOP_HANG_SECONDS, Desktop  # noqa: E402
-from workspace import ROOT, RUNTIME, classic_workspace, database_environment, workspace_checkpoint  # noqa: E402
+from workspace import (ROOT, RUNTIME, classic_workspace, database_environment, name_node,  # noqa: E402
+                       stage_hive_source, workspace_checkpoint)
 
 ROUNDS = 3
 UPDATE_ROUNDS = 4
@@ -63,13 +64,8 @@ def configure_source_node(project):
     Governance row is created. Ordinary authoring keeps the runtime-selected
     local identity."""
     selected = os.environ.get("BEE_AGENT_APP_NODE_NAME")
-    if not selected:
-        return
-    assert re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}", selected), selected
-    path = project / ".wippy.yaml"
-    document = yaml.safe_load(path.read_text())
-    document["relay"] = {"node_name": selected}
-    path.write_text(yaml.safe_dump(document, sort_keys=False))
+    if selected:
+        name_node(project, selected)
 
 
 def configure_continuous_source(project, workspace_id):
@@ -662,22 +658,7 @@ def exercise():
     stamp_presenter(project)
     shutil.copytree(ROOT / "tests/fixtures/agent_app", project / "src/probe")
     if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") == "1":
-        # The replica fixture supplies an enrolled supervisor explicitly.
-        # Keep the real Hive sender in bee.hive and disable only the protected
-        # service entry for this fixture's explicitly managed supervisor.
-        hive_service_index = project / "src/hive/service/_index.yaml"
-        hive_service = yaml.safe_load(hive_service_index.read_text())
-        service = next(item for item in hive_service["entries"] if item["name"] == "supervisor_service")
-        service["lifecycle"]["auto_start"] = False
-        hive_service_index.write_text(yaml.safe_dump(hive_service, sort_keys=False))
-        shutil.copytree(ROOT / "tests/fixtures/hive_replica", project / "src/replica_probe")
-        shutil.rmtree(project / "src/replica_probe/host_environment")
-        source_probe = project / "src/replica_probe/_index.yaml"
-        probe = yaml.safe_load(source_probe.read_text())
-        controller = next(item for item in probe["entries"] if item["name"] == "controller_policy")
-        controller["policy"]["actions"] = [action for action in controller["policy"]["actions"]
-                                              if not action.startswith("registry.overlay.")]
-        source_probe.write_text(yaml.safe_dump(probe, sort_keys=False))
+        stage_hive_source(project)
     for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
         shutil.copy2(ROOT / name, project / name)
     configure_source_node(project)

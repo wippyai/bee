@@ -114,6 +114,8 @@ entries:
     application_admission: bee.gov:governed_application_admission
     publication_profiles: bee.gov:publication_profile_decoder
     workspace_applications: bee.gov:workspace_applications
+    capability_grants: bee.gov:capability_grants
+    capability_catalog: bee.gov:capability_catalog
     publisher: bee.gov.binding:publisher
     staging: bee.gov.persist:staging
     activation_store: bee.gov.persist:activation_store
@@ -169,6 +171,7 @@ entries:
     activation_profiles: bee.gov:activation_profile_decoder
     capability_grants: bee.gov:capability_grants
     capability_catalog: bee.gov:capability_catalog
+    capability_files: bee.gov:capability_files
     workspace_applications: bee.gov:workspace_applications
     preflight: bee.gov:preflight
 - name: destination_backend_call

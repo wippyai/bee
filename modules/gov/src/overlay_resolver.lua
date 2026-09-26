@@ -429,20 +429,16 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             return nil, nil, catalog_error or "workspace application capability profile is invalid"
         end
         local requested: {Object} = {}
-        local folder: unknown = nil
         for _, item in ipairs(requirements) do
-            local request = object(item.capability_request)
-            if request then
-                requested[#requested + 1] = item
-                if folder == nil and type(request.capability) == "string"
-                    and (request.capability :: string):sub(1, 16) == "workspace.files." then
-                    local resolve_folder = deps.folder
-                    if not resolve_folder then return nil, nil, "workspace folder is unavailable for a file grant" end
-                    local resolved_folder, folder_error = resolve_folder()
-                    if not resolved_folder then return nil, nil, folder_error or "workspace folder is unavailable" end
-                    folder = resolved_folder
-                end
-            end
+            if item.capability_request then requested[#requested + 1] = item end
+        end
+        local folder: unknown = nil
+        if capability_files.rooted(requested) then
+            local resolve_folder = deps.folder
+            if not resolve_folder then return nil, nil, "workspace folder is unavailable for a file grant" end
+            local resolved_folder, folder_error = resolve_folder()
+            if not resolved_folder then return nil, nil, folder_error or "workspace folder is unavailable" end
+            folder = resolved_folder
         end
         local proposed, proposed_error = capability_grants.propose(vocabulary, owner, app_id, requested, nil, folder)
         if not proposed then return nil, nil, proposed_error end

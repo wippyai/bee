@@ -26,6 +26,14 @@ entries:
   directory: .
   base: project
   auto_init: false
+- name: app_databases
+  kind: fs.directory
+  meta:
+    comment: Host-provisioned directory holding isolated application databases; it lies under Bee state, outside every approved readable tree
+  directory: .wippy/app-db
+  base: project
+  auto_init: true
+  mode: '0700'
 - name: machine_home
   kind: env.variable
   storage: bee.env:workspace_environment

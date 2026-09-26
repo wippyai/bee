@@ -26,6 +26,7 @@ local migration_runner = require("migration_runner")
 local activation_profiles = require("activation_profiles")
 local capability_grants = require("capability_grants")
 local capability_catalog = require("capability_catalog")
+local capability_files = require("capability_files")
 local workspace_applications = require("workspace_applications")
 
 local M = {}
@@ -166,17 +167,6 @@ local function workspace_folder(workspace_id: string): (unknown?, string?)
     return {root_ref = root_ref, directory = data.directory, base = data.base, subpath = subpath}, nil
 end
 
--- Whether a plan requests workspace files, which root in the workspace folder.
-local function requests_files(requirements: {unknown}): boolean
-    for _, raw in ipairs(requirements) do
-        local item = bounds.object(raw)
-        local request = item and bounds.object(item.capability_request) or nil
-        local capability = request and request.capability or nil
-        if type(capability) == "string" and capability:sub(1, 16) == "workspace.files." then return true end
-    end
-    return false
-end
-
 local function destination_resolver(profile_value: Profile, node_id: string, workspace_id: string,
     activation_store: activations.Store?, base_policy_digest: string?): unknown
     local function selected_root(spec_raw: unknown): (ResolverRoot?, string?)
@@ -268,7 +258,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         if requirement.capability_request then requested[#requested + 1] = requirement end
     end
     local folder: unknown = nil
-    if requests_files(requested) then
+    if capability_files.rooted(requested) then
         local resolved, folder_error = workspace_folder(profile_value.workspace_id)
         if not resolved then return nil, folder_error end
         folder = resolved
@@ -531,18 +521,38 @@ function M.call(raw: unknown): Result
                 result = failure("UNAVAILABLE", config_error or resource_error or replica_error or "open replica store")
             else
                 -- A version is available here when the host profile selected for
-                -- its source overlay publishes exactly that component.
+                -- its source overlay publishes exactly that component. With Hive
+                -- admission the workspace-applications rule selects for every
+                -- source node that made a version of the feed available.
                 local sources: {string} = {}
                 local listed: Set = {}
-                for _, item in ipairs(config.profiles) do
-                    if item.workspace_id == workspace_id and not listed[item.source_node] then
-                        listed[item.source_node] = true
-                        sources[#sources + 1] = item.source_node
+                local function add(source_node: string)
+                    if not listed[source_node] then
+                        listed[source_node] = true
+                        sources[#sources + 1] = source_node
                     end
                 end
-                if config.workspace_applications and not listed[node_id] then sources[#sources + 1] = node_id end
+                for _, item in ipairs(config.profiles) do
+                    if item.workspace_id == workspace_id then add(item.source_node) end
+                end
+                local rule = config.workspace_applications
+                if rule then add(node_id) end
+                if rule and rule.hive then
+                    local owners = replicas.sources(replica_store, delivery.FEED, 128)
+                    local owners_value = owners.ok and bounds.object(owners.value) or nil
+                    local names = owners_value and owners_value.sources or nil
+                    if type(names) ~= "table" then
+                        result = owners.ok and failure("INTERNAL", "replica source list is malformed") or owners
+                    else
+                        for _, owner_raw in ipairs(names :: {unknown}) do
+                            local owner = bounds.id(owner_raw)
+                            if not owner then result = failure("INTERNAL", "replica source is malformed"); break end
+                            add(owner)
+                        end
+                    end
+                end
                 local items: {unknown} = {}
-                for _, source_node in ipairs(sources) do
+                for _, source_node in ipairs(result == nil and sources or {}) do
                     local found = replicas.available(replica_store, source_node, delivery.FEED, 128)
                     if not found.ok then result = found; break end
                     local value = bounds.object(found.value)

@@ -93,9 +93,8 @@ local function define_tests()
                 named("app.notes:store", "app.database", {name = "notes"}),
                 named("app.notes:threads", "threads.read", {scope = "owned"})}, nil, FOLDER))
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-several", 1))
-            local decoded, decode_error = grants.decode(record, OWNER, "workspace-1", APP, vocabulary())
-            test.is_nil(decode_error)
-            test.not_nil(decoded)
+            local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
+            test.eq(#(decoded.capabilities :: {unknown}), 3)
         end)
         test.it("materializes a verified workspace file volume and its policy", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,

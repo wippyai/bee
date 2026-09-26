@@ -11,6 +11,7 @@ local bounds = require("bounds")
 local M = {}
 M.CONTRACT_CALL = "bee.gov.binding:contract_call"
 M.HTTP_REQUEST = "bee.gov.binding:http_request"
+M.GRANTED_RESOURCES = "bee.gov.binding:granted_resources"
 type Object = {[string]: unknown}
 type Caller = {actor_id: string, workspace_id: string, definition_id: string}
 

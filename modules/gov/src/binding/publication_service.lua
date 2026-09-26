@@ -1,6 +1,7 @@
 -- MIT. Host-selected overlay publication. Callers name a configured
 -- application and version; the host profile chooses the source workspace and
 -- overlay. Remote identities and destination policy never enter publication.
+local registry = require("registry")
 local security = require("security")
 local system = require("system")
 local base64 = require("base64")
@@ -17,6 +18,8 @@ local materializer = require("materializer")
 local application_admission = require("application_admission")
 local publication_profiles = require("publication_profiles")
 local workspace_applications = require("workspace_applications")
+local capability_grants = require("capability_grants")
+local capability_catalog = require("capability_catalog")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -192,7 +195,29 @@ function M.call(raw: unknown): Result
     local intent, entries, admission, intent_error = publish_intent(desired.ok and desired.value or nil,
         active, node_id, workspace_id, selected_version)
     if not intent or not entries then activations.close(activation_store); return failure("BLOCKED", intent_error or "read immutable activation intent") end
-    local matches, match_error = materializer.matches_composed(active.overlay_owner, entries, admission)
+    -- A workspace application's overlay also holds the host entries its live
+    -- grant record installed; the comparison includes exactly those.
+    local generated: Object? = nil
+    if identity and (active.overlay_owner == identity.overlay_owner or active.overlay_owner == prior_owner) then
+        local record_id = active.overlay_owner == prior_owner and capability_grants.prior_record_id(active.overlay_owner)
+            or capability_grants.record_id(active.overlay_owner)
+        local installed = record_id and registry.get(record_id) or nil
+        if installed then
+            local vocabulary, catalog_error = capability_catalog.decode(registry.get("bee:capability_catalog"))
+            local record, record_error = vocabulary and capability_grants.decode(installed, active.overlay_owner,
+                workspace_id, identity.definition_id, vocabulary) or nil
+            local live, live_error = false, nil
+            if record then
+                live, live_error = capability_grants.live(record, function(id: string): unknown return registry.get(id) end)
+            end
+            if not record or not live then
+                activations.close(activation_store)
+                return failure("BLOCKED", tostring(catalog_error or record_error or live_error or "installed grant is not live"))
+            end
+            generated = capability_grants.installed(installed, record)
+        end
+    end
+    local matches, match_error = materializer.matches_composed(active.overlay_owner, entries, admission, generated)
     if matches == nil then activations.close(activation_store); return failure("UNAVAILABLE", tostring(match_error)) end
     if matches ~= true then activations.close(activation_store); return failure("BLOCKED", "complete applied overlay no longer matches its immutable intent") end
     -- Fence the immutable record after observing the overlay.  A superseding

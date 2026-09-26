@@ -1,0 +1,54 @@
+version: '1.0'
+namespace: bee.hub.install.probe
+entries:
+- name: binding
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: BEE_AGENT_INSTALL_BINDING
+  readonly: true
+- name: request_id
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: BEE_AGENT_INSTALL_REQUEST
+  readonly: true
+- name: probe_policy
+  kind: security.policy
+  meta: {comment: The probe stands in for the carrier and the agent it admits; it calls the real thread and gateway owners}
+  policy:
+    actions: [funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, env.get, system.read]
+    resources: '*'
+    effect: allow
+- name: agent
+  kind: library.lua
+  source: file://agent.lua
+  modules: [funcs, security, system, time, env]
+- name: request
+  kind: process.lua
+  source: file://request.lua
+  method: main
+  modules: [logger, time]
+  imports:
+    agent: bee.hub.install.probe:agent
+  security:
+    policies: [bee.hub.install.probe:probe_policy]
+  meta:
+    command:
+      name: agent-install-request
+      security:
+        actor:
+          id: bee.hub.install.probe
+- name: status
+  kind: process.lua
+  source: file://status.lua
+  method: main
+  modules: [logger]
+  imports:
+    agent: bee.hub.install.probe:agent
+  security:
+    policies: [bee.hub.install.probe:probe_policy]
+  meta:
+    command:
+      name: agent-install-status
+      security:
+        actor:
+          id: bee.hub.install.probe

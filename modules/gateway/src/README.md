@@ -28,6 +28,14 @@ the new app to that view's display using the existing assignment store; a
 headless binding leaves it unassigned. The result carries qualified view and
 instance identities for subsequent interaction.
 
+A binding may also admit `request_capability` and `capability_status`. An
+elevation request asks the person for one host catalog capability with bounded
+parameters and a TTL; the approval shows the catalog's own wording bound to the
+authenticated thread and attempt. Consuming it writes one resources grant for
+that thread actor, which that attempt's placement resolves and no child attempt
+inherits. A replay returns the same grant; the binding's own surface policy
+selects the approver. Filing the request grants nothing.
+
 The HTTP MCP route bounds each JSON request at 512 KiB. Overlay calls through MCP
 accept at most 64 KiB of text or 87,384 bytes of canonical base64 per put
 (at most 64 KiB decoded);

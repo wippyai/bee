@@ -21,6 +21,7 @@ workspace:
     bee/workspace-manager: ./modules/workspace-manager
     bee/host-processes: ./modules/host-processes
     bee/hub-modules: ./modules/hub-modules
+    bee/gov-overlays: ./modules/gov-overlays
     bee/approvals: ./modules/approvals
     bee/application: ./modules/application
     bee/node: ./modules/node

@@ -124,6 +124,10 @@ entries:
   kind: ns.dependency
   component: bee/hub-modules
   version: 0.1.0-dev
+- name: gov_overlays
+  kind: ns.dependency
+  component: bee/gov-overlays
+  version: 0.1.0-dev
 - name: application
   kind: ns.dependency
   component: bee/application

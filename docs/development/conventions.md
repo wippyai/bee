@@ -36,11 +36,12 @@ host wiring lives in the app root or beside its component.
 | `src/storage` | Workspace database, catalog rows and migration ledger |
 | `modules/application/src` | Public application helpers, appearance and rendering values |
 | `src/console`, `src/settings` | Standalone Terminal and Settings applications |
-| `src/approvals/inbox`, `src/gov/overlays` | Feature-owned standalone applications |
+| `src/approvals/inbox` | Feature-owned approvals inbox application |
 | `modules/threads-timeline/src` | Thread timeline viewer as an installable package |
 | `modules/workspace-manager/src` | Workspace manager as an installable package |
 | `modules/host-processes/src` | Host process inspection app as an installable package |
 | `modules/hub-modules/src` | Hub Modules app as an installable package |
+| `modules/gov-overlays/src` | Governance Overlays app as an installable package |
 | `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
 | `modules/docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/resources/src` | Resource associations, scoped grants and owner-local ledger |

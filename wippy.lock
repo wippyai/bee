@@ -24,6 +24,8 @@ modules:
     version: 0.1.0-dev
   - name: bee/threads-timeline
     version: 0.1.0-dev
+  - name: bee/workspace-manager
+    version: 0.1.0-dev
   - name: bee/approvals
     version: 0.1.0-dev
   - name: bee/application

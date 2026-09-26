@@ -321,6 +321,12 @@ func runGatewayAt(url, authorization string) int {
 	if definition := os.Getenv("BEE_FIXTURE_GATEWAY_LAUNCH"); definition != "" {
 		reportLaunch(client, url, authorization, report, definition, os.Getenv("BEE_FIXTURE_GATEWAY_BRIEF"))
 	}
+	if definition := os.Getenv("BEE_FIXTURE_GATEWAY_RUN_CONTROL"); definition != "" {
+		reportRunControl(client, url, authorization, report, definition, os.Getenv("BEE_FIXTURE_GATEWAY_RUN_BRIEF"))
+	}
+	if definition := os.Getenv("BEE_FIXTURE_GATEWAY_ORCHESTRATOR_RUN"); definition != "" {
+		reportOrchestratorRun(client, url, authorization, report, definition, os.Getenv("BEE_FIXTURE_GATEWAY_RUN_BRIEF"))
+	}
 	if marker := os.Getenv("BEE_FIXTURE_GATEWAY_WORKER"); marker != "" {
 		reportWorker(client, url, authorization, report, marker)
 	}
@@ -473,7 +479,15 @@ func reportLaunch(client *httpClient, url, authorization string, report object, 
 	call := func(name string, args object, id int) object {
 		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
 	}
-	launched := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "k"}, 30)
+	// The orchestrator's own launch reports whether the managed-run tools and
+	// the discovery tools its host policy admits are actually offered.
+	names, _ := toolsOf(rpc(client, url, authorization, "tools/list", object{}, 29))
+	report["orchestrator_tools"] = names
+	launchArgs := object{"definition_ref": definition, "brief": brief, "idempotency_key": "k"}
+	if title := os.Getenv("BEE_FIXTURE_ORCHESTRATOR_THREAD_TITLE"); title != "" {
+		launchArgs["thread"] = object{"title": title}
+	}
+	launched := call("thread_launch", launchArgs, 30)
 	report["launch_ok"] = launched != nil && launched["ok"] == true
 	value := mustObject(launched["value"])
 	if value == nil {
@@ -542,6 +556,245 @@ func reportLaunch(client *httpClient, url, authorization string, report object, 
 	report["waits"] = waits
 	report["final_marker"] = answered
 	report["final_receipt"] = settled
+	// Read the run back through the managed-run tool, naming the child's thread
+	// and attempt the launch returned. This is the same identity an orchestrator
+	// uses after a child runs on a thread of its own.
+	if status := call("run_status", object{"thread_id": stringField(value, "thread_id"), "attempt_id": stringField(value, "attempt_id")}, 90); status != nil {
+		report["run_status_ok"] = status["ok"] == true
+		statusValue := mustObject(status["value"])
+		if statusValue != nil {
+			report["run_state"] = statusValue["state"]
+			report["run_outcome"] = statusValue["outcome"]
+		}
+	}
+}
+
+// The orchestrator's managed-run controls over a second child it launches and
+// then cancels: run_status reads its state, run_cancel stops it and reports a
+// terminal state. The cancel intent is durable and idempotent.
+func reportRunControl(client *httpClient, url, authorization string, report object, definition, brief string) {
+	call := func(name string, args object, id int) object {
+		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
+	}
+	launchArgs := object{"definition_ref": definition, "brief": brief, "idempotency_key": "cancel-k"}
+	if title := os.Getenv("BEE_FIXTURE_ORCHESTRATOR_CANCEL_TITLE"); title != "" {
+		launchArgs["thread"] = object{"title": title}
+	}
+	launched := call("thread_launch", launchArgs, 92)
+	report["cancel_launch_ok"] = launched != nil && launched["ok"] == true
+	value := mustObject(launched["value"])
+	if value == nil {
+		report["cancel_launch_refusal"] = launched
+		return
+	}
+	threadID, attemptID := stringField(value, "thread_id"), stringField(value, "attempt_id")
+	initial := call("run_status", object{"thread_id": threadID, "attempt_id": attemptID}, 93)
+	report["cancel_status_ok"] = initial != nil && initial["ok"] == true
+	cancelled := call("run_cancel", object{"thread_id": threadID, "attempt_id": attemptID, "idempotency_key": "cancel-once", "wait_ms": 20000}, 94)
+	report["cancel_ok"] = cancelled != nil && cancelled["ok"] == true
+	cancelValue := mustObject(cancelled["value"])
+	if cancelValue != nil {
+		report["cancel_state"] = cancelValue["state"]
+		report["cancel_outcome"] = cancelValue["outcome"]
+	}
+	replayed := call("run_cancel", object{"thread_id": threadID, "attempt_id": attemptID, "idempotency_key": "cancel-once", "wait_ms": 20000}, 95)
+	report["cancel_replay_ok"] = replayed != nil && replayed["ok"] == true
+	// A run identity the orchestrator never launched must not be readable
+	// through the managed-run tool.
+	foreign := call("run_status", object{"thread_id": "not-a-launched-thread", "attempt_id": "not-a-launched-attempt"}, 96)
+	report["cancel_foreign_refused"] = foreign == nil || foreign["ok"] != true
+}
+
+// The scripted orchestrator for the managed-run proof. It launches a Codex
+// worker on a thread of its own, is told by thread_notify when that child ends
+// and wakes on thread_wait, reads the child's thread by naming it member_thread,
+// queries the run with run_status, steers the child once by writing to its
+// thread, then launches a second worker on a new thread and cancels it with
+// run_cancel. Every step uses only the tools the orchestrator's own launch
+// policy admits. It reports statuses only; the records are asserted from the
+// threads themselves.
+func reportOrchestratorRun(client *httpClient, url, authorization string, report object, definition, brief string) {
+	call := func(name string, args object, id int) object {
+		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
+	}
+	names, _ := toolsOf(rpc(client, url, authorization, "tools/list", object{}, 28))
+	report["orchestrator_tools"] = names
+	marker := os.Getenv("BEE_FIXTURE_WORKER_MARKER")
+	// Worker one: a new thread, a completion observed through notify and wait.
+	first := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "run-first",
+		"thread": object{"title": os.Getenv("BEE_FIXTURE_ORCHESTRATOR_THREAD_TITLE")}}, 30)
+	report["first_launch_ok"] = first != nil && first["ok"] == true
+	firstValue := mustObject(first["value"])
+	if firstValue == nil {
+		report["first_launch_refusal"] = first
+		return
+	}
+	childThread, childAction, childAttempt := stringField(firstValue, "thread_id"), stringField(firstValue, "action_id"), stringField(firstValue, "attempt_id")
+	report["first_thread"] = childThread
+	// The child's action is admitted by its carrier shortly after the launch
+	// returns; notify names it, so wait until its admitted record exists.
+	for attempt := 0; attempt < 100; attempt++ {
+		admitted := call("thread_read", object{"cursor": 0, "limit": 64, "member_thread": childThread}, 100+attempt)
+		admittedValue := mustObject(admitted["value"])
+		found := false
+		if admittedValue != nil {
+			if list, ok := admittedValue["records"].([]any); ok {
+				for _, raw := range list {
+					record := mustObject(raw)
+					if kind := stringField(record, "kind"); kind == "action.admitted" && stringField(record, "action_id") == childAction {
+						found = true
+					}
+				}
+			}
+		}
+		if found {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	notifyReply := rpcWithTimeout(client, url, authorization, "tools/call", object{"name": "thread_notify", "arguments": object{"session": childAction, "idempotency_key": "run-first-notify"}}, 31, 20*time.Second)
+	notified := outcome(notifyReply)
+	report["first_notify_ok"] = notified != nil && notified["ok"] == true
+	report["first_notify_status"] = notifyReply.status
+	// Read the child's own thread by name (member_thread), then wait on it for
+	// the child's answer and terminal receipt.
+	readBack := call("thread_read", object{"cursor": 0, "limit": 64, "member_thread": childThread}, 32)
+	readValue := mustObject(readBack["value"])
+	head := 0
+	if readValue != nil {
+		if scanned, ok := readValue["scanned_through"].(float64); ok {
+			head = int(scanned)
+		}
+	}
+	answered, settled, notifyFired := false, false, false
+	for attempt := 0; attempt < 12 && !(answered && settled); attempt++ {
+		waited := rpcWithTimeout(client, url, authorization, "tools/call", object{
+			"name":      "thread_wait",
+			"arguments": object{"after_sequence": head, "wait_ms": 20000, "member_thread": childThread},
+		}, 33+attempt, 40*time.Second)
+		outcomeValue := outcome(waited)
+		waitReport := mustObject(outcomeValue["value"])
+		if scanned, ok := waitReport["scanned_through"].(float64); ok {
+			head = int(scanned)
+		}
+		final := call("thread_read", object{"cursor": head, "limit": 64, "member_thread": childThread}, 45+attempt)
+		finalValue := mustObject(final["value"])
+		records := []any{}
+		if finalValue != nil {
+			if list, ok := finalValue["records"].([]any); ok {
+				records = list
+			}
+		}
+		for _, raw := range records {
+			record := mustObject(raw)
+			kind := stringField(record, "kind")
+			if kind == "receipt" && stringField(record, "action_id") == childAction {
+				settled = true
+			}
+			if kind == "message" {
+				content := mustObject(mustObject(record["body"])["content"])
+				if text := stringField(content, "text"); text != "" && strings.Contains(text, marker) {
+					answered = true
+				}
+			}
+		}
+		if scanned, ok := finalValue["scanned_through"].(float64); ok {
+			head = int(scanned)
+		}
+	}
+	report["first_answered"] = answered
+	report["first_settled"] = settled
+	// The one-shot notice lands on the orchestrator's own bound thread. The
+	// owner settles it on the watched thread's next commit or its own periodic
+	// sweep, so poll the bound thread on a wall-clock bound rather than a wait
+	// that a stale cursor would return from at once.
+	deadline := time.Now().Add(90 * time.Second)
+	for !notifyFired && time.Now().Before(deadline) {
+		own := call("thread_read", object{"cursor": 0, "limit": 64}, 58)
+		ownValue := mustObject(own["value"])
+		if ownValue != nil {
+			if list, ok := ownValue["records"].([]any); ok {
+				for _, raw := range list {
+					record := mustObject(raw)
+					if kind := stringField(record, "kind"); kind == "message" {
+						body := mustObject(record["body"])
+						if strings.HasPrefix(stringField(body, "message_id"), "notice:") {
+							notifyFired = true
+						}
+					}
+				}
+			}
+		}
+		if !notifyFired {
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+	report["notify_fired"] = notifyFired
+	// Query the run by the child's identity the launch returned.
+	status := call("run_status", object{"thread_id": childThread, "attempt_id": childAttempt}, 60)
+	report["run_status_ok"] = status != nil && status["ok"] == true
+	statusValue := mustObject(status["value"])
+	if statusValue != nil {
+		report["run_state"] = statusValue["state"]
+		report["run_outcome"] = statusValue["outcome"]
+	}
+	// Steer the child exactly once by writing to its thread, then prove the
+	// steer is durable there.
+	steerText := "steer:" + marker
+	steered := call("thread_message", object{"idempotency_key": "run-first-steer", "message_id": "run-first-steer",
+		"message_kind": "progress", "recipient_ids": []string{}, "content": object{"text": steerText},
+		"member_thread": childThread}, 61)
+	report["steer_ok"] = steered != nil && steered["ok"] == true
+	steerRead := call("thread_read", object{"cursor": 0, "limit": 64, "member_thread": childThread}, 62)
+	steerValue := mustObject(steerRead["value"])
+	steerSeen := false
+	if steerValue != nil {
+		if list, ok := steerValue["records"].([]any); ok {
+			for _, raw := range list {
+				record := mustObject(raw)
+				if kind := stringField(record, "kind"); kind == "message" {
+					content := mustObject(mustObject(record["body"])["content"])
+					if stringField(content, "text") == steerText {
+						steerSeen = true
+					}
+				}
+			}
+		}
+	}
+	report["steer_seen"] = steerSeen
+	// A run identity the orchestrator never launched is not readable.
+	foreign := call("run_status", object{"thread_id": "never-launched-thread", "attempt_id": "never-launched-attempt"}, 63)
+	report["foreign_refused"] = foreign == nil || foreign["ok"] != true
+	// Worker two: a second new thread, cancelled through run_cancel, and the
+	// cancel replays instead of acting twice.
+	second := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "run-second",
+		"thread": object{"title": os.Getenv("BEE_FIXTURE_ORCHESTRATOR_CANCEL_TITLE")}}, 70)
+	report["second_launch_ok"] = second != nil && second["ok"] == true
+	secondValue := mustObject(second["value"])
+	if secondValue == nil {
+		report["second_launch_refusal"] = second
+		return
+	}
+	secondThread, secondAttempt := stringField(secondValue, "thread_id"), stringField(secondValue, "attempt_id")
+	report["second_thread"] = secondThread
+	cancelled := call("run_cancel", object{"thread_id": secondThread, "attempt_id": secondAttempt,
+		"idempotency_key": "run-second-cancel", "wait_ms": 20000}, 71)
+	report["cancel_ok"] = cancelled != nil && cancelled["ok"] == true
+	cancelValue := mustObject(cancelled["value"])
+	if cancelValue != nil {
+		report["cancel_state"] = cancelValue["state"]
+		report["cancel_outcome"] = cancelValue["outcome"]
+	}
+	replayed := call("run_cancel", object{"thread_id": secondThread, "attempt_id": secondAttempt,
+		"idempotency_key": "run-second-cancel", "wait_ms": 20000}, 72)
+	report["cancel_replay_ok"] = replayed != nil && replayed["ok"] == true
+	finalStatus := call("run_status", object{"thread_id": secondThread, "attempt_id": secondAttempt}, 73)
+	report["second_status_ok"] = finalStatus != nil && finalStatus["ok"] == true
+	finalValue := mustObject(finalStatus["value"])
+	if finalValue != nil {
+		report["second_final_state"] = finalValue["state"]
+		report["second_final_outcome"] = finalValue["outcome"]
+	}
 }
 
 // The scripted worker child. It reads the thread it was started on and posts

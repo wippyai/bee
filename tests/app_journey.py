@@ -379,7 +379,8 @@ def configure_open_agent(project):
     hooks_document = yaml.safe_load(hooks.read_text())
     definition = next(entry for entry in hooks_document["entries"] if entry["name"] == "definition")
     definition["data"]["presentation"]["start_menu"] = True
-    definition["data"].pop("session_resource")
+    # The recovery path continues the native attempt after the host restarts.
+    definition["data"]["session_resource"] = "session"
     hooks.write_text(yaml.safe_dump(hooks_document, sort_keys=False))
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
@@ -488,7 +489,7 @@ def run_open_probe(project, directory, packed=False, deployment=None):
 
 def copy_activation(source, destination):
     """Clone approved durable state; boot recovery must reapply its overlay."""
-    for name in ("registry", "governance", "approvals", "workspace"):
+    for name in ("registry", "governance", "approvals", "workspace", "threads"):
         with sqlite3.connect(source / f"{name}.db") as origin:
             with sqlite3.connect(destination / f"{name}.db") as target:
                 origin.backup(target)

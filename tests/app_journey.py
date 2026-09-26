@@ -86,9 +86,9 @@ def assert_overlay_authority(project):
             (granted if policy.get("effect") == "allow" else denied).add(identity)
     assert granted == {
         "bee.gov.security:destination_service_policy",
+        "bee.gov.security:recovery_command_policy",
         "bee.gov.security:super_edit_execution_policy",
         "bee.gov.security:super_edit_recovery_execution_policy",
-        "bee.gov.security:recovery_command_policy",
     }, granted
     assert denied == {"bee.security:app_boundary_policy", "bee.security:scope_managing_app_boundary"}, denied
 

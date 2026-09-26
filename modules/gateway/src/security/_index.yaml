@@ -174,7 +174,7 @@ entries:
 - name: installation
   kind: library.lua
   source: file://installation.lua
-  modules: [registry]
+  modules: [registry, sql, json]
   imports:
     bounds: bee.threads.records:bounds
     installation: bee.hub:installation

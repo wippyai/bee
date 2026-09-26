@@ -143,26 +143,27 @@ local function define_tests()
             model.apply_plan(state, {ok = true, error = nil, replayed = false, value = detail})
             model.show_pane(state, "review")
             local kind, _, enabled = view.primary(state)
-            test.eq(kind, "select"); test.is_true(enabled)
+            test.eq(kind, "update"); test.is_true(enabled)
             state.plans[1].selected = true
             kind, _, enabled = view.primary(state)
-            test.eq(kind, "prepare"); test.is_true(enabled)
+            test.eq(kind, "update"); test.is_true(enabled)
             test.is_true(model.apply_activation(state, {ok = true, error = nil, replayed = false, value = {
                 owner_node = "node-destination", workspace_id = "workspace-destination", intent_id = "intent-1",
                 overlay_owner = "overlay-owner", source_node = "node-source", source_workspace = "example-app",
                 version = "2.0.0", phase = "authorized", revision = 1}}))
             kind, _, enabled = view.primary(state)
-            test.eq(kind, "step"); test.is_true(enabled)
+            test.eq(kind, "status"); test.is_true(enabled)
             local ordinary = view.draw(80, 18, appearance.defaults(), state, 0)
             local ordinary_kinds: {[string]: boolean} = {}
             for _, hit in ipairs(ordinary.hits) do ordinary_kinds[hit.kind] = true end
-            test.is_true(ordinary_kinds.step)
+            test.is_true(ordinary_kinds.status)
+            test.is_false(ordinary_kinds.step == true)
             test.is_false(ordinary_kinds.recover == true)
             model.toggle_technical(state)
             local detailed = view.draw(80, 18, appearance.defaults(), state, 0)
             local detailed_kinds: {[string]: boolean} = {}
             for _, hit in ipairs(detailed.hits) do detailed_kinds[hit.kind] = true end
-            test.is_true(detailed_kinds.recover and detailed_kinds.status)
+            test.is_true(detailed_kinds.step and detailed_kinds.recover and detailed_kinds.status)
         end)
     end)
 end

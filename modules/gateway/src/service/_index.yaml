@@ -1,0 +1,10 @@
+version: '1.0'
+namespace: bee.gateway.service
+entries:
+- name: worker
+  kind: process.lua
+  source: file://worker.lua
+  method: main
+  modules: [process, channel, time]
+  imports:
+    installation: bee.gateway.security:installation

@@ -236,12 +236,7 @@ def apply_staged_in_ui(ui, staged, root, expected_capability=None):
         Path("/tmp/app-journey-replacement-desktop.raw").write_bytes(ui.raw)
         raise
     ui.wait("Verdict ready", timeout=20)
-    ui.wait("Accept review", timeout=20)
-    ui.key(b"a")
-    ui.wait("Select version", timeout=20)
-    ui.key(b"s")
-    ui.wait("Request approval", timeout=20)
-    ui.key(b"p")
+    ui.key(b"\r")
     ui.wait("Activation approval_bound", timeout=COLD_BOOT)
 
     ui.open_start()

@@ -2,14 +2,16 @@
 -- Agent-requested Hub installation through the approval owner. The agent
 -- names a package; the host resolves the exact plan and files one approval
 -- bound to the asking thread and attempt. The agent never writes the
--- registry: once the person approves, the next status poll consumes the
--- decision exactly once and applies the approved plan digest through the Hub
--- facade under the installation apply policy. A replayed poll replays the
--- recorded Hub receipt instead of applying twice.
+-- registry: once the person approves, an owner worker consumes the decision
+-- and applies the approved plan digest through the Hub facade under the
+-- installation apply policy. The agent's status polling returns the decision
+-- and, once applied, the recorded Hub receipt without performing the apply.
 local registry = require("registry")
 local bounds = require("bounds")
 local installation = require("installation")
 local subject_call = require("subject_call")
+local sql = require("sql")
+local json = require("json")
 local M = {}
 M.CALL_POLICY = "bee.gateway.security:installation_policy"
 M.READ_POLICY = "bee.gateway.security:installation_read_policy"
@@ -110,8 +112,8 @@ function M.request(port: Port, binding: Binding, policy: string, kind: "install"
         expires_at = approval.expires_at}}
 end
 
--- status: the person's decision, and once approved the applied outcome.
-function M.status(port: Port, binding: Binding, policy: string, raw: unknown): Reply
+-- apply_approved: consumes the approved decision and applies the approved plan digest through Hub.
+function M.apply_approved(port: Port, binding: Binding, policy: string, raw: unknown): Reply
     local value = bounds.object(raw)
     local request_id = value and bounds.id(value.request_id) or nil
     if not request_id then return fail("INVALID", "request_id is required") end
@@ -139,6 +141,78 @@ function M.status(port: Port, binding: Binding, policy: string, raw: unknown): R
     end
     return reply(installation.status(port.hub({operation = "apply", request = installation.apply_request(verified),
         expected_digest = verified.digest}, true)))
+end
+
+-- status: the person's decision, or once applied by the owner worker, the applied outcome.
+function M.status(port: Port, binding: Binding, policy: string, raw: unknown): Reply
+    local value = bounds.object(raw)
+    local request_id = value and bounds.id(value.request_id) or nil
+    if not request_id then return fail("INVALID", "request_id is required") end
+    local workspace_id = binding.workspace_id
+    if not workspace_id then return fail("DENIED", "this binding names no workspace to install into") end
+    local read = port.approvals("read", {approval_id = request_id})
+    if not read.ok then return read end
+    local view = bounds.object(read.value)
+    local verified, verify_error = installation.verify(view, binding.subject, workspace_id, policy, context(binding))
+    if not view or not verified then return fail("DENIED", verify_error or "request does not belong to this agent") end
+    local request = verified.request
+    local function reply(outcome: installation.Status): Reply
+        return {ok = true, value = {request_id = request_id, action = request.action, component = request.component,
+            version = request.version, plan_digest = verified.digest, status = outcome.status, code = outcome.code,
+            message = outcome.message, state = outcome.state}}
+    end
+    local decision = installation.decision(view)
+    if decision.status ~= "approved" then return reply(decision) end
+    local effect_key = installation.effect_key(request_id)
+    if view.consumed_effect == effect_key then
+        return reply(installation.status(port.hub({operation = "apply", request = installation.apply_request(verified),
+            expected_digest = verified.digest}, true)))
+    end
+    return reply(decision)
+end
+
+-- drain_approved: finds approved Hub installation requests that have not been consumed,
+-- consumes each under the asking subject's binding and applies it through Hub.
+function M.drain_approved(): (integer, string?)
+    local db, open_error = sql.get("bee.approvals:db")
+    if not db then return 0, tostring(open_error or "open approvals database") end
+    local rows, query_error = db:query(
+        "SELECT approval_id, workspace_id, requester_id, policy, proposal_json, proposal_digest, owner_incarnation " ..
+        "FROM bee_approval_requests " ..
+        "WHERE state = 'decided' AND decision = 'approved' AND consumed_effect IS NULL " ..
+        "AND proposal_json LIKE '%\"ref\":\"bee.hub:apply\"%' " ..
+        "LIMIT 16")
+    db:release()
+    if not rows then return 0, tostring(query_error or "query approved requests") end
+    local count = 0
+    for _, raw_row in ipairs(rows) do
+        local row = bounds.object(raw_row)
+        if row then
+            local approval_id = bounds.id(row.approval_id)
+            local workspace_id = bounds.id(row.workspace_id)
+            local requester_id = bounds.id(row.requester_id)
+            local policy = bounds.id(row.policy)
+            local proposal_raw = row.proposal_json and json.decode(tostring(row.proposal_json))
+            local proposal = bounds.object(proposal_raw)
+            local payload = proposal and bounds.object(proposal.payload)
+            if approval_id and workspace_id and requester_id and policy and payload then
+                local binding: Binding = {
+                    binding_id = "worker:" .. approval_id,
+                    subject = requester_id,
+                    action_id = tostring(payload.action_id or ""),
+                    attempt_id = tostring(payload.attempt_id or ""),
+                    thread_id = tostring(payload.thread_id or ""),
+                    workspace_id = workspace_id,
+                }
+                local port = M.port(binding)
+                local applied = M.apply_approved(port, binding, policy, {request_id = approval_id})
+                if applied.ok then
+                    count = count + 1
+                end
+            end
+        end
+    end
+    return count, nil
 end
 
 return M

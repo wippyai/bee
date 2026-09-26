@@ -8,7 +8,6 @@ local client = require("client")
 local types = require("types")
 
 local M = {}
-local CARRIER_OPS = "bee.threads.carrier"
 local THREADS = "bee.threads.service"
 
 M.MAX_TURNS = 16
@@ -34,28 +33,6 @@ local function reply_value(reply: unknown): {[string]: unknown}?
     if object.ok ~= true then return nil end
     if type(object.value) ~= "table" then return nil end
     return object.value :: {[string]: unknown}
-end
-
-local function reply_error(reply: unknown, fallback: string): string
-    local object = type(reply) == "table" and (reply :: {[string]: unknown}) or {}
-    local err = object.error
-    if type(err) == "table" then
-        local detail = err :: {[string]: unknown}
-        if type(detail.message) == "string" then return detail.message :: string end
-        if type(detail.code) == "string" then return detail.code :: string end
-    end
-    return fallback
-end
-
-local function is_cancelled(thread_id: string, attempt_id: string): boolean
-    local res = call_func(CARRIER_OPS .. ":cancel_status", {thread_id = thread_id, attempt_id = attempt_id})
-    local val = reply_value(res)
-    if val then
-        if val.state == "cancelling" or val.state == "ended" then
-            return true
-        end
-    end
-    return false
 end
 
 local function model_id(value: unknown): string?
@@ -257,66 +234,37 @@ local function wire_messages(messages: {types.Message}): {{[string]: unknown}}
     return out
 end
 
-function M.run(request: types.RunRequest): types.RunResult
+function M.execute(context: types.ExecutionContext, request: types.RunRequest): types.ExecutionResult
     local thread_id = request.thread_id
     local action_id = request.action_id
     local attempt_id = request.attempt_id
+    local epoch = context.carrier_epoch
     local agent_ref = request.agent_ref
     local brief = request.brief or ""
     local workspace_id = request.workspace_id or "default"
     local idempotency_key = request.idempotency_key or (attempt_id .. "-run")
-
-    local initial_receipt: types.RunReceipt = {
-        scope = "attempt",
-        thread_id = thread_id,
-        action_id = action_id,
-        attempt_id = attempt_id,
-        state = "running",
-        idempotency_key = idempotency_key,
-    }
-    local function fail_run(message: string): types.RunResult
-        return {ok = false, error = message, outcome = "failed", thread_id = thread_id, action_id = action_id, attempt_id = attempt_id, receipt = initial_receipt}
-    end
-
-    -- 1. Claim carrier epoch
-    local claim_res, claim_err = call_func(CARRIER_OPS .. ":claim", {
-        thread_id = thread_id,
-        attempt_id = attempt_id,
-        idempotency_key = idempotency_key .. "-claim",
-    })
-    local claim_data = reply_value(claim_res)
-    if not claim_data then
-        return fail_run("claim attempt: " .. reply_error(claim_res, claim_err or "claim failed"))
-    end
-    local epoch = math.floor(tonumber(claim_data.carrier_epoch) or 0)
-    if epoch < 1 then
-        return fail_run("claim attempt: carrier epoch is not positive")
-    end
-    -- A caller that names the epoch it saw fences entry: the claim must
-    -- advance exactly from it, so an interposed claim fails instead of
-    -- silently taking over another carrier's attempt.
-    if request.carrier_epoch ~= nil and epoch ~= request.carrier_epoch + 1 then
-        return fail_run("carrier epoch moved under attempt: observed " .. tostring(request.carrier_epoch) .. ", claimed " .. tostring(epoch))
-    end
-    local revision = math.floor(tonumber(claim_data.checkpoint_revision) or 0)
-
-    if claim_data.attempt_state == "ended" then
-        return {ok = true, outcome = tostring(claim_data.attempt_outcome or "succeeded"), thread_id = thread_id, action_id = action_id, attempt_id = attempt_id, receipt = initial_receipt}
-    end
-
-    -- 2. Check previous checkpoint for resume
     local messages: {types.Message} = {}
-    local checkpoint_res = call_func(CARRIER_OPS .. ":checkpoint", {thread_id = thread_id, attempt_id = attempt_id})
-    local checkpoint_data = reply_value(checkpoint_res)
-    if checkpoint_data and type(checkpoint_data.checkpoint) == "table" then
-        local saved = checkpoint_data.checkpoint :: {[string]: unknown}
-        local state_val = type(saved.normalizer_state) == "table" and (saved.normalizer_state :: {[string]: unknown}) or {}
+
+    local function checkpoint(terminal: {[string]: unknown}?): {[string]: unknown}
+        local value: {[string]: unknown} = {schema_revision = M.CHECKPOINT_REVISION,
+            normalizer_state = {messages = messages}}
+        if terminal then value.terminal = terminal end
+        return value
+    end
+
+    local function fail_run(message: string): types.ExecutionResult
+        return {outcome = "failed", error = message, settle = false}
+    end
+
+    local checkpoint_data = bounds.object(context.checkpoint)
+    if checkpoint_data then
+        local state_val = type(checkpoint_data.normalizer_state) == "table"
+            and (checkpoint_data.normalizer_state :: {[string]: unknown}) or {}
         if type(state_val.messages) == "table" then
             messages = state_val.messages :: {types.Message}
         end
     end
 
-    -- 3. Resolve host configuration
     local raw_config: unknown = request.host_config
     if raw_config == nil then
         local conf_entry = registry.get("bee.driver.wippy:host_config")
@@ -332,62 +280,12 @@ function M.run(request: types.RunRequest): types.RunResult
     end
 
     local function commit(idem: string, records: {{[string]: unknown}}, terminal: {[string]: unknown}?): (boolean, string?)
-        local checkpoint: {[string]: unknown} = {
-            schema_revision = M.CHECKPOINT_REVISION,
-            normalizer_state = {messages = messages},
-        }
-        if terminal then checkpoint.terminal = terminal end
-        local res, res_err = call_func(CARRIER_OPS .. ":commit", {
-            thread_id = thread_id,
-            attempt_id = attempt_id,
-            carrier_epoch = epoch,
-            expected_revision = revision,
-            idempotency_key = idem,
-            checkpoint = checkpoint,
-            records = records,
-        })
-        local value = reply_value(res)
-        if not value then
-            return false, reply_error(res, res_err or "commit failed")
-        end
-        local next_revision = math.floor(tonumber(value.checkpoint_revision) or (revision + 1))
-        revision = next_revision
-        return true, nil
+        return context.commit(idem, records, checkpoint(terminal))
     end
 
-    local function settle(outcome: string, answer: string?): types.RunResult
-        commit(idempotency_key .. "-final", {}, {outcome = outcome, answer = answer})
-        call_func(THREADS .. ":receipt", {
-            thread_id = thread_id,
-            action_id = action_id,
-            attempt_id = attempt_id,
-            carrier_epoch = epoch,
-            idempotency_key = idempotency_key .. "-terminal-receipt",
-            receipt = {
-                scope = "attempt",
-                outcome = outcome,
-                evidence_refs = {},
-            },
-        })
-        local final_receipt: types.RunReceipt = {
-            scope = "attempt",
-            thread_id = thread_id,
-            action_id = action_id,
-            attempt_id = attempt_id,
-            state = "ended",
-            idempotency_key = idempotency_key,
-        }
-        return {
-            ok = outcome ~= "failed",
-            outcome = outcome,
-            answer = answer,
-            thread_id = thread_id,
-            action_id = action_id,
-            attempt_id = attempt_id,
-            receipt = final_receipt,
-            state = "ended",
-            status = "ended",
-        }
+    local function settle(outcome: string, answer: string?, error: string?): types.ExecutionResult
+        return {outcome = outcome, answer = answer, error = error,
+            checkpoint = checkpoint({outcome = outcome, answer = answer})}
     end
 
     -- 4. Resolve agent closure if agent_ref provided
@@ -461,7 +359,7 @@ function M.run(request: types.RunRequest): types.RunResult
     while turn_sequence < max_turns do
         turn_sequence = turn_sequence + 1
 
-        if is_cancelled(thread_id, attempt_id) then
+        if context.cancelled() then
             return settle("cancelled", final_answer)
         end
 
@@ -473,26 +371,21 @@ function M.run(request: types.RunRequest): types.RunResult
         }
 
         local resp, chat_err = client.chat_completions(host_config, payload, workspace_id, function()
-            return is_cancelled(thread_id, attempt_id)
+            return context.cancelled()
         end)
 
-        if chat_err == "cancelled" or is_cancelled(thread_id, attempt_id) then
+        if chat_err == "cancelled" or context.cancelled() then
             return settle("cancelled", final_answer)
         end
 
         if chat_err or not resp then
-            local failed = settle("failed", final_answer)
-            failed.ok = false
-            failed.error = "chat completions: " .. tostring(chat_err)
-            return failed
+            return settle("failed", final_answer, "chat completions: " .. tostring(chat_err))
         end
 
         if resp.tool_calls and #resp.tool_calls > 0 then
             if #resp.tool_calls > M.MAX_TOOL_CALLS_PER_TURN then
-                local failed = settle("failed", final_answer)
-                failed.ok = false
-                failed.error = "turn requests " .. tostring(#resp.tool_calls) .. " tool calls, above the limit of " .. tostring(M.MAX_TOOL_CALLS_PER_TURN)
-                return failed
+                return settle("failed", final_answer,
+                    "turn requests " .. tostring(#resp.tool_calls) .. " tool calls, above the limit of " .. tostring(M.MAX_TOOL_CALLS_PER_TURN))
             end
             local assistant_msg: types.Message = {
                 role = "assistant",
@@ -571,18 +464,12 @@ function M.run(request: types.RunRequest): types.RunResult
             end
 
             if not checkpoint_fits(messages) then
-                local failed = settle("failed", final_answer)
-                failed.ok = false
-                failed.error = "checkpoint exceeds " .. tostring(M.MAX_CHECKPOINT_BYTES) .. " bytes"
-                return failed
+                return settle("failed", final_answer, "checkpoint exceeds " .. tostring(M.MAX_CHECKPOINT_BYTES) .. " bytes")
             end
 
             local committed, commit_err = commit(idempotency_key .. "-turn-" .. tostring(turn_sequence), tool_records, nil)
             if not committed then
-                local failed = settle("failed", final_answer)
-                failed.ok = false
-                failed.error = "commit turn records: " .. tostring(commit_err)
-                return failed
+                return settle("failed", final_answer, "commit turn records: " .. tostring(commit_err))
             end
         else
             if resp.content then
@@ -608,18 +495,12 @@ function M.run(request: types.RunRequest): types.RunResult
                 }
 
                 if not checkpoint_fits(messages) then
-                    local failed = settle("failed", final_answer)
-                    failed.ok = false
-                    failed.error = "checkpoint exceeds " .. tostring(M.MAX_CHECKPOINT_BYTES) .. " bytes"
-                    return failed
+                    return settle("failed", final_answer, "checkpoint exceeds " .. tostring(M.MAX_CHECKPOINT_BYTES) .. " bytes")
                 end
 
                 local committed, commit_err = commit(idempotency_key .. "-ans-" .. tostring(turn_sequence), {answer_record}, {outcome = "succeeded", answer = final_answer})
                 if not committed then
-                    local failed = settle("failed", final_answer)
-                    failed.ok = false
-                    failed.error = "commit answer record: " .. tostring(commit_err)
-                    return failed
+                    return settle("failed", final_answer, "commit answer record: " .. tostring(commit_err))
                 end
             end
 
@@ -674,10 +555,7 @@ function M.run(request: types.RunRequest): types.RunResult
         end
     end
 
-    local exhausted = settle("failed", final_answer)
-    exhausted.ok = false
-    exhausted.error = "turn limit of " .. tostring(max_turns) .. " exceeded without a final answer"
-    return exhausted
+    return settle("failed", final_answer, "turn limit of " .. tostring(max_turns) .. " exceeded without a final answer")
 end
 
 return M

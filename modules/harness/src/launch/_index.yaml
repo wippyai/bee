@@ -142,6 +142,13 @@ entries:
     bounds: bee.threads.records:bounds
     agent_launch: bee.harness.launch:agent_launch
     definitions: bee.harness.launch:definitions
+- name: managed_run
+  kind: library.lua
+  source: file://managed_run.lua
+  modules: [funcs, time]
+  imports:
+    bounds: bee.threads.records:bounds
+    agent_launch: bee.harness.launch:agent_launch
 - name: agent_launch_backend
   kind: function.lua
   source: file://agent_launch_method.lua
@@ -211,7 +218,7 @@ entries:
   kind: function.lua
   source: file://agent_call_backend.lua
   method: handle
-  modules: [funcs, security, registry, time]
+  modules: [funcs, security, registry]
   imports:
     agent_protocol: bee.application:agent_protocol
     bounds: bee.threads.records:bounds
@@ -219,6 +226,7 @@ entries:
     definitions: bee.harness.launch:definitions
     caller_launch: bee.harness.launch:caller_launch
     placement_resolver: bee.placement:resolver
+    managed_run: bee.harness.launch:managed_run
   meta:
     type: internal
 - name: agent_call_facade_policy

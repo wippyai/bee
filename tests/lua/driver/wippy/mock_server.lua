@@ -22,9 +22,7 @@ local function handle(): nil
 
     -- Check if the latest message is a tool result
     local last_msg = #messages > 0 and messages[#messages] or nil
-    local last_role = last_msg and last_msg.role or ""
-
-    if last_role == "tool" then
+    if last_msg and last_msg.role == "tool" then
         local tool_res = tostring(last_msg.content or "")
         local final_text = "I have completed the task. Result: " .. tool_res
 

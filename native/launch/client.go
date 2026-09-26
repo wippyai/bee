@@ -296,7 +296,7 @@ func incompatibleOwner(state, revision string) error {
 	if revision == "" {
 		revision = "unadvertised"
 	}
-	return fmt.Errorf("a running older Bee owner for state %q uses client protocol %q; %s; then run `bee` again", state, revision, manualOwnerStop(state))
+	return fmt.Errorf("a running older Bee owner for state %q uses client protocol %q; %s; then run `bee` again: %w", state, revision, manualOwnerStop(state), errOlderOwnerProtocol)
 }
 
 func manualOwnerStop(state string) string {

@@ -194,6 +194,20 @@ require a new executable; Hub updates replace application packs. Lint catches
 missing module exports and type incompatibilities, but a semantic native-version
 requirement gate is not implemented.
 
+### Native executable replacement
+
+A person confirms the exact SHA-256 of the candidate executable before any
+handoff. The cutover (`native/launch/cutover.go`) verifies the candidate
+against that confirmed digest, runs its readiness self-test, drains the
+running owner with `bee stop` over the authenticated client channel and waits
+for the state lock to release before starting the candidate and checking its
+readiness publication. When this binary cannot speak to an older owner, the
+stop goes through the retained previous binary; only when that route also
+fails does the manual termination guidance apply. A candidate that fails to
+boot falls back to the retained previous binary automatically. The state
+directory keeps `hive/previous-bee` and the `hive/cutover.json` ledger for a
+one-step rollback, which re-verifies the retained digest before booting it.
+
 ### Command grammar
 
 `bee --help` prints this grammar and the state the invocation would use. It

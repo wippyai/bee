@@ -212,6 +212,9 @@ threads-timeline-module:
 .PHONY: workspace-manager-module
 workspace-manager-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/workspace_manager_app.py
+.PHONY: host-processes-module
+host-processes-module:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/control_delivery.py
 saved-profiles-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/saved_profiles.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/saved_profiles.go -runtime "$(abspath $(WIPPY))"

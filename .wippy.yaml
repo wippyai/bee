@@ -19,6 +19,7 @@ workspace:
     bee/hive-manager: ./modules/hive-manager
     bee/threads-timeline: ./modules/threads-timeline
     bee/workspace-manager: ./modules/workspace-manager
+    bee/host-processes: ./modules/host-processes
     bee/approvals: ./modules/approvals
     bee/application: ./modules/application
     bee/node: ./modules/node

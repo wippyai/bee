@@ -116,6 +116,10 @@ entries:
   kind: ns.dependency
   component: bee/workspace-manager
   version: 0.1.0-dev
+- name: host_processes
+  kind: ns.dependency
+  component: bee/host-processes
+  version: 0.1.0-dev
 - name: application
   kind: ns.dependency
   component: bee/application

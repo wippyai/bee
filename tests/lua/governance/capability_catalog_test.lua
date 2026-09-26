@@ -87,6 +87,47 @@ local function define_tests()
             send[1].scope.path_prefix = "/private"
             test.is_nil(catalog.render(decoded, {read[1], send[1]}))
         end)
+        test.it("names Hive operations, a mode and audiences in the expose template", function()
+            local shipped = assert(catalog.decode(assert(registry.get("bee:capability_catalog"))))
+            local template = shipped.capabilities["hive.expose"]
+            test.eq(template.revision, 2)
+            test.eq(template.parameters.operations, "hive_operations")
+            test.eq(template.parameters.mode, "hive_mode")
+            test.eq(template.parameters.audiences, "hive_audiences")
+            local params = {operations = {"bee.hive.telemetry:stats", "bee.hive.telemetry:presence"},
+                mode = "open", audiences = {"*"}}
+            local normalized = assert(catalog.normalize(shipped, "hive.expose", params))
+            local operations = normalized.operations :: {string}
+            test.eq(#operations, 2)
+            test.eq(operations[1], "bee.hive.telemetry:presence")
+            test.eq(operations[2], "bee.hive.telemetry:stats")
+            test.eq(normalized.mode, "open")
+            local grant = assert(catalog.resolve(shipped, "hive.expose", params))
+            test.eq(grant[1].operation, "hive.expose")
+            test.eq(grant[1].resource, "open")
+            local scope = grant[1].scope :: {[string]: unknown}
+            test.eq((scope.operations :: {string})[1], "bee.hive.telemetry:presence")
+            test.eq((scope.audiences :: {string})[1], "*")
+            local lines = assert(catalog.render(shipped, grant))
+            local all = table.concat(lines, "\n")
+            test.is_true(all:find("Expose Hive operations bee.hive.telemetry:presence, bee.hive.telemetry:stats in open mode", 1, true) ~= nil)
+            test.is_true(all:find("Hive operations bee.hive.telemetry:presence, bee.hive.telemetry:stats in open mode", 1, true) ~= nil)
+        end)
+        test.it("refuses malformed Hive exposure parameters", function()
+            local shipped = assert(catalog.decode(assert(registry.get("bee:capability_catalog"))))
+            test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {}, mode = "open", audiences = {"*"}}))
+            test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {"no-colon"}, mode = "open", audiences = {"*"}}))
+            test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {"bee.hive.telemetry:presence"}, mode = "admin", audiences = {"*"}}))
+            test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {"bee.hive.telemetry:presence"}, mode = "open", audiences = {}}))
+            test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {"bee.hive.telemetry:presence"}, mode = "open", audiences = {"Bad Peer"}}))
+            test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {"bee.hive.telemetry:presence"}, mode = "open"}))
+            local policy = {operations = {"bee.hive.telemetry:presence"}, mode = "policy", audiences = {"node-2", "node-1"}}
+            local normalized = assert(catalog.normalize(shipped, "hive.expose", policy))
+            local audiences = normalized.audiences :: {string}
+            test.eq(#audiences, 2)
+            test.eq(audiences[1], "node-1")
+            test.eq(audiences[2], "node-2")
+        end)
     end)
 end
 return test.run_cases(define_tests)

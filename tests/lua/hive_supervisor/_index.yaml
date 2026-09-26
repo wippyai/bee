@@ -45,6 +45,7 @@ entries:
   source: file://dispatch_probe.lua
   method: handle
   meta: {type: test_support}
+  modules: [funcs, security, registry]
   imports:
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
@@ -53,12 +54,29 @@ entries:
   source: file://dispatch_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [funcs, security]
+  modules: [funcs, security, registry]
   imports:
     test: wippy.test:test
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
     bounds: bee.hive:bounds
+    audiences: bee.hive.supervisor:audiences
+- name: audiences_probe
+  kind: function.lua
+  source: file://audiences_probe.lua
+  method: install
+  meta: {type: test_support}
+  modules: [registry]
+  imports:
+    audiences: bee.hive.supervisor:audiences
+- name: audiences_test
+  kind: function.lua
+  source: file://audiences_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    audiences: bee.hive.supervisor:audiences
 - name: execute_policy
   kind: security.policy
   meta: {type: test_support}

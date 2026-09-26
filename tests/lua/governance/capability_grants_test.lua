@@ -12,11 +12,11 @@ local function vocabulary(): unknown
     return assert(catalog.decode(assert(registry.get("bee:capability_catalog"))))
 end
 
-local function request(capability: string, parameters: {[string]: unknown}): {[string]: unknown}
+local function request(capability: string, parameters: {[string]: unknown}, template_revision: integer?): {[string]: unknown}
     return {id = "app.notes:request", expected_kind = "security.policy", value = nil,
         targets = {APP}, capability_request = {capability = capability, parameters = parameters,
             catalog_revision = assert(vocabulary()).revision,
-            template_revision = 1, reason = "show the person's threads",
+            template_revision = template_revision or 1, reason = "show the person's threads",
             target = APP, path = ".security.policies +="}}
 end
 
@@ -175,9 +175,58 @@ local function define_tests()
             test.eq(#(body.resources :: {string}), 1)
             test.eq((body.resources :: {string})[1], "bee.gov.binding:http_request")
         end)
-        test.it("keeps Hive exposure as review vocabulary without installable enforcement", function()
-            test.is_nil(grants.propose(vocabulary(), OWNER, APP,
-                {request("hive.expose", {contract = "app.notes:api", methods = {"get"}})}))
+        test.it("generates Hive exposure over exactly the approved operations", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
+                {request("hive.expose", {operations = {"bee.hive.telemetry:stats", "bee.hive.telemetry:presence"},
+                    mode = "open", audiences = {"*"}}, 2)}))
+            test.eq(#proposed.capabilities, 1)
+            test.eq(proposed.capabilities[1].operation, "hive.expose")
+            test.eq(proposed.capabilities[1].resource, "open")
+            local scope = proposed.capabilities[1].scope :: {[string]: unknown}
+            local operations = scope.operations :: {string}
+            test.eq(#operations, 2)
+            test.eq(operations[1], "bee.hive.telemetry:presence")
+            test.eq(operations[2], "bee.hive.telemetry:stats")
+            test.eq(#proposed.policies, 1)
+            local generated = proposed.policies[1] :: {[string]: unknown}
+            test.eq(generated.kind, "security.policy")
+            local groups = generated.groups :: {string}
+            test.eq(#groups, 1)
+            test.eq(groups[1], "bee.security.hive:hive_exposure_scope")
+            local body = (generated.data :: {[string]: unknown}).policy :: {[string]: unknown}
+            local actions = body.actions :: {string}
+            test.eq(#actions, 1)
+            test.eq(actions[1], "hive.expose.open")
+            local resources = body.resources :: {string}
+            test.eq(#resources, 2)
+            test.eq(resources[1], "bee.hive.telemetry:presence")
+            test.eq(resources[2], "bee.hive.telemetry:stats")
+            test.eq(body.effect, "allow")
+            test.eq(proposed.bindings[1].requirement_id, "app.notes:request")
+            test.eq(proposed.bindings[1].policy_id, generated.id)
+            local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-expose", 1))
+            local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
+            local installed_entries: {[string]: unknown} = {}
+            installed_entries[generated.id :: string] = generated
+            installed_entries["app.notes:request"] = {kind = "ns.requirement",
+                data = {default = generated.id}}
+            test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
+            local lines = assert(catalog.render(vocabulary(), proposed.capabilities))
+            test.is_true(table.concat(lines, "\n"):find("Hive operations bee.hive.telemetry:presence", 1, true) ~= nil)
+        end)
+        test.it("targets the supervisor exposure scope with a loadable grant", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
+                {request("hive.expose", {operations = {"bee.hive:probe_open"},
+                    mode = "open", audiences = {"node-1"}}, 2)}))
+            local generated = proposed.policies[1] :: {[string]: unknown}
+            test.eq(generated.kind, "security.policy")
+            local groups = generated.groups :: {string}
+            test.eq(#groups, 1)
+            test.eq(groups[1], "bee.security.hive:hive_exposure_scope")
+            local body = (generated.data :: {[string]: unknown}).policy :: {[string]: unknown}
+            test.eq((body.actions :: {string})[1], "hive.expose.open")
+            test.eq((body.resources :: {string})[1], "bee.hive:probe_open")
+            test.eq(body.effect, "allow")
         end)
         test.it("materializes the package capabilities with their reviewed bodies", function()
             local vocabulary_value = vocabulary()

@@ -171,6 +171,47 @@ local function define_tests()
             local wrong_path = resolver.resolve_with(deps, spec)
             test.is_nil(wrong_path)
         end)
+        test.it("accepts a Hive exposure request for the artifact's own operations", function()
+            local deps, spec = fixture(nil)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
+                meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
+                data = {revision = 7, never = {"exec"}, capabilities = {{id = "hive.expose",
+                    revision = 2, confirm = "explicit",
+                    parameters = {operations = "hive_operations", mode = "hive_mode", audiences = "hive_audiences"},
+                    text = "Expose Hive operations {operations} in {mode} mode to {audiences}",
+                    policies = {{operation = "hive.expose", resource = "$mode",
+                        scope = {operations = "$operations", audiences = "$audiences"}}},
+                    resources = {{kind = "hive.operations", mode = "exposed"}}}}}}
+            local op: Entry = {id = "private.app:telemetry", kind = "function.lua",
+                meta = {hive = "open"}, data = {source = "return true"}}
+            local other: Entry = {id = "private.app:extra", kind = "function.lua",
+                meta = {hive = "open"}, data = {source = "return true"}}
+            local request: Entry = {id = "private.app:exposure", kind = "ns.requirement",
+                meta = {value_kind = "security.policy", capability = "hive.expose",
+                    parameters = {operations = {"private.app:telemetry"}, mode = "open", audiences = {"node-1"}},
+                    reason = "Expose telemetry"},
+                data = {targets = {{entry = "private.app:telemetry", path = ".security.policies +="}}}}
+            local request_data = request.data :: Object
+            local request_meta = request.meta :: Object
+            changes(spec, {op, other, request})
+            local facts = resolve(deps, spec)
+            local capability = (facts.candidate.requirements :: {Object})[1].capability_request :: Object
+            test.eq(capability.capability, "hive.expose")
+            test.eq(capability.target, "private.app:telemetry")
+            test.eq(((capability.parameters :: Object).operations :: {string})[1], "private.app:telemetry")
+            test.eq((capability.parameters :: Object).mode, "open")
+            request_data.targets = {{entry = "private.app:extra", path = ".security.policies +="}}
+            changes(spec, {op, other, request})
+            test.is_nil(resolver.resolve_with(deps, spec))
+            request_data.targets = {{entry = "private.app:telemetry", path = ".security.policies +="}}
+            request_meta.parameters = {operations = {"private.app:telemetry"}, mode = "policy", audiences = {"node-1"}}
+            changes(spec, {op, other, request})
+            test.is_nil(resolver.resolve_with(deps, spec))
+            request_meta.parameters = {operations = {"bee.host:db"}, mode = "open", audiences = {"node-1"}}
+            changes(spec, {op, other, request})
+            test.is_nil(resolver.resolve_with(deps, spec))
+        end)
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture :: () -> (Captured?, string?))()

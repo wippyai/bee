@@ -35,6 +35,14 @@ entries:
     actions: [hive.expose.open]
     resources: [bee.hive:probe_open]
     effect: allow
+- name: probe_exposure_grant
+  kind: security.policy
+  meta: {type: test_support, comment: Install-grant equivalent joining the supervisor exposure scope}
+  groups: [bee.security.hive:hive_exposure_scope]
+  policy:
+    actions: [hive.expose.open]
+    resources: [bee.hive:probe_open]
+    effect: allow
 - name: probe_open
   kind: function.lua
   source: file://probe_open.lua

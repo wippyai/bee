@@ -33,10 +33,12 @@ import (
 // workspaces.
 type Selection struct{ Workspace, Desktop string }
 
-// Detach waits for the owner's acknowledgement, including under scheduler
-// load. This bound diagnoses a stalled owner; it is not an exit speed budget.
-// The owner's monitor still owns eventual cleanup after an uncertain result.
-const detachTimeout = 30 * time.Second
+// detachTimeout bounds how long a local detach waits for the owner's
+// acknowledgement before reporting uncertainty. It is a local exit hang guard,
+// not the owner's cleanup deadline: the owner's monitor still owns eventual
+// attachment cleanup, and a healthy owner acknowledges in well under this
+// bound. A stalled owner must never keep the client attached to the terminal.
+const detachTimeout = time.Second
 
 type Config struct {
 	// Directory holds the owner's rendezvous descriptor.
@@ -299,6 +301,9 @@ func presentWorkspace(ctx context.Context, operations context.Context, client *h
 		if ctx.Err() != nil {
 			return
 		}
+		// A local detach is bounded: an owner that does not answer within the
+		// hang guard is reported as an uncertain outcome, never a silent
+		// commit, and never an unbounded wait on the owner's reply.
 		if err := detachMounted(ctx, client, mounted); err != nil {
 			result = errors.Join(result, fmt.Errorf("detach desktop: %w", err))
 		}

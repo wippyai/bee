@@ -32,8 +32,8 @@ type detachProbe struct {
 func (p *detachProbe) Detach(ctx context.Context, key string, mounted hive.DesktopMount) error {
 	p.called = true
 	deadline, ok := ctx.Deadline()
-	if !ok || time.Until(deadline) < 5*time.Second {
-		return errors.New("detach was given a startup speed deadline")
+	if !ok || time.Until(deadline) > detachTimeout {
+		return errors.New("detach lost its bounded hang guard")
 	}
 	if ctx.Err() != nil || key != "session-detach-"+mounted.Session {
 		return errors.New("detach lost its active session authority")
@@ -50,6 +50,32 @@ func TestDetachKeepsSessionAuthorityAndHangGuard(t *testing.T) {
 	}
 	if !probe.called {
 		t.Fatal("desktop detach was not requested")
+	}
+}
+
+// stalledDetacher models an owner that never acknowledges a detach: it returns
+// only when its context ends.
+type stalledDetacher struct{}
+
+func (stalledDetacher) Detach(ctx context.Context, _ string, _ hive.DesktopMount) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// A local detach announces uncertainty instead of gating process exit on an
+// owner that cannot answer, so the physical surface can retire promptly.
+func TestDetachDoesNotGateLocalExitOnAnUnresponsiveOwner(t *testing.T) {
+	done := make(chan error, 1)
+	go func() {
+		done <- detachMounted(context.Background(), stalledDetacher{}, hive.DesktopMount{Session: "attached"})
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("an unacknowledged detach was reported as committed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("local detach blocked on an unresponsive owner")
 	}
 }
 

@@ -66,6 +66,17 @@ local function handle(raw: unknown): Reply
     if not permitted then return fail("LAUNCH_NOT_PERMITTED", "this agent may not launch " .. request.definition_ref) end
     local definition, definition_error = definitions.load(request.definition_ref)
     if not definition then return fail("NOT_FOUND", definition_error or "the launch definition is unavailable") end
+    -- A child whose CLI runs without a usable workdir confinement starts
+    -- only where the host explicitly flagged it on the launching policy's
+    -- own allow-list. This is asserted at admission, before any work.
+    if definition.unconfined then
+        local flagged, flag_error = agent_launch.unconfined_permitted(caller_policy, request.definition_ref)
+        if flag_error then return fail("UNAVAILABLE", flag_error) end
+        if not flagged then
+            return fail("LAUNCH_UNCONFINED",
+                "child definition " .. request.definition_ref .. " runs without a usable workdir confinement, which the launching policy does not explicitly permit")
+        end
+    end
     -- A child may not reach a wider gateway surface than the parent already
     -- holds: the child's own policy supplies its tools, so unless the host
     -- explicitly flagged the definition, they must be a subset of the

@@ -1079,6 +1079,66 @@ entries:
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
     allow_wider_tools: true
+- name: agent_launch_unconfined_parent_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: A launching policy that allow-lists one unconfined child without the explicit host flag, so the admission must refuse it
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    gateway_tools: [thread_read]
+    agent_launch: [bee.harness.catalog:agent_launch_unconfined_definition]
+- name: agent_launch_unconfined_flagging_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: A launching policy that allow-lists one unconfined child with the explicit host flag, so the admission reaches the wider-tools check
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    gateway_tools: [thread_read]
+    agent_launch: [bee.harness.catalog:agent_launch_unconfined_definition]
+    agent_launch_unconfined: [bee.harness.catalog:agent_launch_unconfined_definition]
+- name: agent_launch_unconfined_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: A child whose CLI runs without a usable workdir confinement; the host records it as unconfined, so only an explicitly flagged launching policy admits it
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agent-launch-unconfined-fixture
+    title: Agent launch unconfined fixture
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:agent_launch_child_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+    unconfined: true
 - name: agent_run_orchestrator_policy
   kind: registry.entry
   meta:
@@ -1201,6 +1261,7 @@ entries:
   imports:
     test: wippy.test:test
     agent_launch: bee.harness.launch:agent_launch
+    definitions: bee.harness.launch:definitions
     agent_protocol: bee.application:agent_protocol
     record: bee.threads.records:record
 - name: launch_definitions_test

@@ -31,6 +31,7 @@ local function definition_summary(ref: string): ({[string]: unknown}?, string?)
         default_mode = definition.default_mode, profile_id = definition.profile_id,
         policy_ref = definition.policy_ref, allowed_overrides = definition.allowed_overrides,
         workdir_policy = definition.workdir_policy, thread_policy = definition.thread_policy,
+        unconfined = definition.unconfined,
         placements = {"native", "docker"}}, nil
 end
 local function saved_profiles(workspace_id: string, admitted: {[string]: boolean}): ({unknown}?, string?)

@@ -279,6 +279,15 @@ follows every desired slot whose source the host still selects for that owner,
 and the application catalog admits a governed admission record only while its
 source's selected profile names the same owner and bindings.
 
+Bee Settings is the only caller of the protected profile writer: the local
+person enters the exact namespace list and duration and confirms the same
+values before the host adds one profile per namespace. Settings can remove the
+current workspace's super-edit rows and their overlay entries. A failed local
+host readiness check removes expiring rows and their overlays before one
+startup retry. `bee gov revert OWNER` uses the fixed recovery actor to restore
+one retained activation baseline without the desktop; it refuses an owner with
+applied migration facts until a forward-only compensation plan exists.
+
 The configuration may also carry one `packages` rule with the wider ceiling
 for installed package delivery (`security.policy`, `registry.entry`,
 `contract.binding` and `env.variable` beside the workspace-application kinds).

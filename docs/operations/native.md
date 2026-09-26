@@ -245,6 +245,7 @@ bee workspace roots
 bee workspace create LABEL ROOT[/PATH] [--new-folder]
 bee workspace archive WORKSPACE | restore WORKSPACE
                                  manage the running node's workspace catalog
+bee gov revert OWNER             restore one retained activation baseline without the desktop
 bee hive invite [--out FILE | --share DIR]
 bee hive invites | revoke INVITE_ID | peers | leave NODE
 bee hive join INVITE

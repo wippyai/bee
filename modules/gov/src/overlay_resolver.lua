@@ -200,6 +200,30 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
     elseif meta and (meta.parameters ~= nil or meta.reason ~= nil) then
         return nil, "capability requirement metadata is incomplete"
     end
+    -- A Hive exposure request names this artifact's own operations at the
+    -- requested mode; the generated scope policy carries the enforcement, so
+    -- the requirement appends to one of those operations instead of an app.
+    local exposure: {[string]: boolean}? = nil
+    if capability == "hive.expose" and capability_request then
+        local params = capability_request.parameters :: {[string]: unknown}
+        local mode = params.mode
+        local operations = params.operations
+        local request_namespace = (entry.id :: string):match("^([^:]+):")
+        if type(mode) ~= "string" or type(operations) ~= "table" then
+            return nil, "Hive exposure parameters are invalid"
+        end
+        exposure = {}
+        for _, ref in ipairs(operations :: {unknown}) do
+            local candidate = type(ref) == "string" and object(final[ref :: string]) or nil
+            local candidate_meta = candidate and object(candidate.meta) or nil
+            local candidate_namespace = type(ref) == "string" and (ref :: string):match("^([^:]+):") or nil
+            if not candidate or candidate.kind ~= "function.lua" or candidate_namespace ~= request_namespace
+                or not candidate_meta or candidate_meta.hive ~= mode then
+                return nil, "Hive exposure operation " .. tostring(ref) .. " is not this artifact's " .. tostring(mode) .. " operation"
+            end
+            exposure[ref :: string] = true
+        end
+    end
     for _, raw in ipairs(targets) do
         local target = object(raw)
         local target_id = target and bounds.id(target.entry) or nil
@@ -208,12 +232,18 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         local destination = object(final[target_id])
         if not destination then return nil, "requirement target entry is absent: " .. target_id end
         if capability_request then
-            local request_namespace = (entry.id :: string):match("^([^:]+):")
-            local target_namespace = target_id:match("^([^:]+):")
-            local target_meta = object(destination.meta)
-            if target.path ~= ".security.policies +=" or target_namespace ~= request_namespace
-                or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.application" then
-                return nil, "capability requirement must append policies to its own application"
+            if exposure then
+                if target.path ~= ".security.policies +=" or not exposure[target_id] then
+                    return nil, "Hive exposure requirement must append policies to one of its own operations"
+                end
+            else
+                local request_namespace = (entry.id :: string):match("^([^:]+):")
+                local target_namespace = target_id:match("^([^:]+):")
+                local target_meta = object(destination.meta)
+                if target.path ~= ".security.policies +=" or target_namespace ~= request_namespace
+                    or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.application" then
+                    return nil, "capability requirement must append policies to its own application"
+                end
             end
             capability_request.target = target_id
             capability_request.path = target.path

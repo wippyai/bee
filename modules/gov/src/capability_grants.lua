@@ -282,10 +282,20 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
         local requirement_id = item and bounds.id(item.id) or nil
         local targets = item and list(item.targets, 1) or nil
         if not item or not request or not requirement_id or seen[requirement_id]
-            or not targets or #targets ~= 1 or targets[1] ~= app
+            or not targets or #targets ~= 1
             or item.value ~= nil or item.expected_kind ~= "security.policy"
-            or request.target ~= app or request.path ~= ".security.policies +="
+            or request.path ~= ".security.policies +="
             or request.catalog_revision ~= vocabulary.revision then
+            return nil, "capability requirement is not a measured app policy append"
+        end
+        -- A Hive exposure grant joins the supervisor scope instead of an
+        -- application, so its target is one of its own operations. The
+        -- resolver already contained the named operations to the artifact.
+        if request.capability == "hive.expose" then
+            if request.target ~= targets[1] then
+                return nil, "Hive exposure requirement target differs from its grant"
+            end
+        elseif targets[1] ~= app or request.target ~= app then
             return nil, "capability requirement is not a measured app policy append"
         end
         local template = type(request.capability) == "string" and vocabulary.capabilities[request.capability] or nil

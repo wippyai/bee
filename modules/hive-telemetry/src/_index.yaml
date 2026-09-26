@@ -20,6 +20,20 @@ entries:
   kind: ns.dependency
   component: bee/hive
   version: '*'
+- name: target_exposure
+  kind: ns.requirement
+  meta:
+    capability: hive.expose
+    parameters:
+      operations: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list,
+        bee.hive.telemetry:holdings, bee.hive.telemetry:cluster]
+      mode: open
+      audiences: ['*']
+    reason: Expose the package open telemetry operations to Hive peers
+    value_kind: security.policy
+  targets:
+  - entry: bee.hive.telemetry:presence
+    path: .security.policies +=
 - name: presence
   kind: function.lua
   source: file://presence.lua

@@ -2,11 +2,7 @@
 local registry = require("registry")
 local system = require("system")
 local contract = require("contract")
-local activation_profiles = require("activation_profiles")
-local capability_grants = require("capability_grants")
-local capability_catalog = require("capability_catalog")
-local workspace_applications = require("workspace_applications")
-local governed_admission = require("governed_admission")
+local application_admissions = require("application_admissions")
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {id: string, kind: string, meta: Object?, data: Object}
@@ -70,147 +66,28 @@ local function items(bindings: {contract.Binding}, pinned: registry.Snapshot): {
     return result
 end
 
-local function same_binding(left: Object, right: governed_admission.Binding): boolean
-    if left.definition_id ~= right.definition_id or left.thread_access ~= right.thread_access then return false end
-    if (left.appearance_write == true) ~= (right.appearance_write == true)
-        or (left.application_stop == true) ~= (right.application_stop == true)
-        or (left.scope_management == true) ~= (right.scope_management == true) then return false end
-    local left_grace = left.close_grace_ms == nil and 250 or left.close_grace_ms
-    local right_grace = right.close_grace_ms == nil and 250 or right.close_grace_ms
-    if left_grace ~= right_grace then return false end
-    local left_policies = left.policies
-    if type(left_policies) ~= "table" or #left_policies ~= #right.policies then return false end
-    for index, policy in ipairs(left_policies) do if policy ~= right.policies[index] then return false end end
-    return true
-end
-
-type Lookup = (string) -> Entry?
-type Measured = {id: string, bytes: string, digest: string, record: governed_admission.Record}
-
--- Each governed admission record carried by an applied overlay joins this
--- workspace's catalog only while the host profile selected for its source
--- still names that overlay owner and projects the same measured bindings.
-local function governed(pinned: registry.Snapshot, lookup: Lookup,
-    configuration: activation_profiles.DecodedConfiguration, workspace_id: string,
-    node_id: string): ({contract.Binding}, {string})
-    local records: {Measured} = {}
-    local by_owner: {[string]: Measured} = {}
-    for _, namespace in ipairs({governed_admission.NAMESPACE, "bee.governance"}) do
-        for _, entry in ipairs(pinned:find({[".kind"] = "registry.entry", [".ns"] = namespace})) do
-            if governed_admission.reserved(entry.id) then
-                local measured, measured_error = governed_admission.measure(entry.data)
-                if not measured or (measured.id ~= entry.id
-                    and governed_admission.prior_id(measured.record.overlay_owner) ~= entry.id) then
-                    error("Invalid governed application admission: " .. tostring(measured_error))
-                end
-                if measured.record.workspace_id == workspace_id then
-                    local prior = by_owner[measured.record.overlay_owner]
-                    if prior and prior.digest ~= measured.digest then error("Conflicting governed application admissions") end
-                    measured.id = entry.id
-                    if not prior or namespace == governed_admission.NAMESPACE then
-                        by_owner[measured.record.overlay_owner] = measured
-                    end
-                end
-            end
+local function record_bindings(raw: unknown): {contract.Binding}
+    if type(raw) ~= "table" then error("Invalid protected application admission bindings") end
+    local count = 0
+    for key in pairs(raw :: table) do
+        if type(key) ~= "number" or key ~= math.floor(key :: number)
+            or (key :: number) < 1 or (key :: number) > 64 then
+            error("Invalid protected application admission bindings")
         end
+        count = count + 1
     end
-    for _, item in pairs(by_owner) do records[#records + 1] = item end
-    table.sort(records, function(left: Measured, right: Measured): boolean return left.id < right.id end)
+    if count == 0 then error("Invalid protected application admission bindings") end
     local result: {contract.Binding} = {}
-    local evidence: {string} = {}
-    for _, item in ipairs(records) do
-        local record = item.record
-        local identity = workspace_applications.identity(workspace_id, record.source_workspace)
-        local grant_id = identity and identity.overlay_owner == record.overlay_owner
-            and capability_grants.record_id(record.overlay_owner) or nil
-        local installed = grant_id and lookup(grant_id) or nil
-        if not installed and identity and identity.overlay_owner == record.overlay_owner then
-            local old_grant = capability_grants.prior_record_id(record.overlay_owner)
-            installed = old_grant and lookup(old_grant) or nil
+    local seen: {[string]: boolean} = {}
+    for index = 1, count do
+        local binding = contract.binding((raw :: table)[index])
+        if not binding or seen[binding.definition_id] then
+            error("Invalid or duplicate protected application admission binding")
         end
-        local application_id = identity and identity.definition_id or nil
-        if not installed and not identity then
-            local package_entry = configuration.packages
-                and activation_profiles.find_package(configuration.packages, record.source_workspace) or nil
-            local package_owner = package_entry
-                and activation_profiles.package_owner(workspace_id, package_entry.component) or nil
-            if package_entry and package_owner == record.overlay_owner then
-                application_id = package_entry.definition_id
-                local package_grant = capability_grants.record_id(package_owner)
-                installed = package_grant and lookup(package_grant) or nil
-            end
-        end
-        local vocabulary: capability_catalog.Catalog? = nil
-        if installed then
-            vocabulary = capability_catalog.decode(lookup("bee:capability_catalog"))
-            local grant = vocabulary and application_id and capability_grants.decode(installed,
-                record.overlay_owner, workspace_id, application_id, vocabulary) or nil
-            local live = grant and capability_grants.live(grant, lookup) or false
-            if not live then installed = nil; vocabulary = nil end
-        end
-        local profile = activation_profiles.select_decoded(configuration,
-            workspace_id, record.source_node, record.source_workspace, node_id,
-            installed, vocabulary)
-        if profile and profile.overlay_owner == record.overlay_owner and profile.applications then
-            local artifacts: {Object} = {}
-            local policies: {Object} = {}
-            local policy_ids: {[string]: boolean} = {}
-            local complete = true
-            for _, binding in ipairs(profile.applications) do
-                local definition = lookup(binding.definition_id :: string)
-                if not definition then complete = false; break end
-                artifacts[#artifacts + 1] = definition
-                for _, policy_id in ipairs(binding.policies :: {string}) do policy_ids[policy_id] = true end
-            end
-            if complete then
-                for policy_id in pairs(policy_ids) do
-                    local policy = lookup(policy_id)
-                    if not policy then complete = false; break end
-                    policies[#policies + 1] = policy
-                end
-            end
-            local projected = complete and governed_admission.project({workspace_id = profile.workspace_id,
-                overlay_owner = profile.overlay_owner, source_node = profile.source_node,
-                source_workspace = profile.source_workspace, artifact_digest = record.artifact_digest,
-                bindings = profile.applications, artifact_entries = artifacts,
-                registry_entries = policies, overlay_ids = {}}) or nil
-            if projected and projected.bytes == item.bytes then
-                for index, raw in ipairs(profile.applications) do
-                    local measured_binding = record.bindings[index]
-                    if not measured_binding or not same_binding(raw, measured_binding) then
-                        error("Governed application admission binding order changed")
-                    end
-                    local binding = contract.binding(raw)
-                    if not binding then error("Invalid governed application binding") end
-                    result[#result + 1] = binding
-                end
-                evidence[#evidence + 1] = item.digest
-            end
-        end
+        seen[binding.definition_id] = true
+        result[#result + 1] = binding
     end
-    return result, evidence
-end
-
--- Package admission depends only on the registry revision, the host
--- configuration and the destination workspace/node. Deriving it hashes and
--- projects every installed package, and the broker reads the catalog on each
--- request, so one read per revision reuses the measured set instead of
--- re-measuring the whole ceiling.
-type PackageCache = {revision: string, workspace_id: string, node_id: string,
-    bindings: {Object}, evidence: {string}, error: string?}
-local packaged_cache: PackageCache? = nil
-local function packaged_bindings(revision: string, configuration: activation_profiles.DecodedConfiguration,
-    workspace_id: string, node_id: string, lookup: (string) -> Entry?): ({Object}?, {string}?, string?)
-    local cached = packaged_cache
-    if not cached or cached.revision ~= revision or cached.workspace_id ~= workspace_id
-        or cached.node_id ~= node_id then
-        local bindings, evidence, error_message = activation_profiles.package_bindings(configuration,
-            workspace_id, node_id, function(id: string): unknown return lookup(id) end)
-        cached = {revision = revision, workspace_id = workspace_id, node_id = node_id,
-            bindings = bindings or {}, evidence = evidence or {}, error = error_message}
-        packaged_cache = cached
-    end
-    return cached.bindings, cached.evidence, cached.error
+    return result
 end
 
 -- Overlays change the effective catalog without advancing registry history.
@@ -224,37 +101,42 @@ function M.read(workspace_id: string): Selection
         local entry = pinned:get(id)
         return entry and entry :: Entry or nil
     end
-    local profile_entry = lookup("bee.env:gov_activation_profiles")
-    if not profile_entry or profile_entry.kind ~= "registry.entry" then error("Invalid activation profiles") end
-    local configuration, configuration_error = activation_profiles.decode(profile_entry.data)
-    if not configuration then error("Invalid activation profiles: " .. tostring(configuration_error)) end
     local node_id, node_error = system.node.id()
     if not node_id or node_error then error("Node identity is unavailable: " .. tostring(node_error)) end
+    local published, publication_error = application_admissions.read(pinned, revision, workspace_id, node_id)
+    if not published then error(tostring(publication_error)) end
     local bindings = static_bindings(lookup("bee.security:application_admission"))
-    local dynamic, evidence = governed(pinned, lookup, configuration, workspace_id, node_id)
-    local packaged, packaged_evidence, packaged_error = packaged_bindings(revision, configuration,
-        workspace_id, node_id, lookup)
-    if not packaged or not packaged_evidence then error("Invalid package application admission: " .. tostring(packaged_error)) end
     local seen: {[string]: boolean} = {}
     for _, binding in ipairs(bindings) do seen[binding.definition_id] = true end
-    for _, binding in ipairs(dynamic) do
-        if seen[binding.definition_id] then error("Duplicate application admission binding: " .. binding.definition_id) end
-        if #bindings >= governed_admission.MAX_BINDINGS then error("Application admission capacity is exceeded") end
-        seen[binding.definition_id] = true
-        bindings[#bindings + 1] = binding
-    end
-    for index, raw in ipairs(packaged) do
-        local binding = contract.binding(raw)
-        if not binding then error("Invalid package application binding") end
-        -- An explicitly delivered record for the same definition wins over
-        -- the host-composed package entry.
-        if not seen[binding.definition_id] then
-            if #bindings >= governed_admission.MAX_BINDINGS then error("Application admission capacity is exceeded") end
-            seen[binding.definition_id] = true
-            bindings[#bindings + 1] = binding
-            evidence[#evidence + 1] = packaged_evidence[index]
+    local evidence: {string} = {}
+    local function consume(records: {application_admissions.Measurement}, packaged: boolean)
+        for _, published_record in ipairs(records) do
+            local record = published_record.record
+            if record.schema_revision ~= "bee.governance-application-admission@1"
+                or record.workspace_id ~= workspace_id
+                or type(published_record.digest) ~= "string"
+                or #published_record.digest ~= 64 or not published_record.digest:match("^[0-9a-f]+$") then
+                error("Invalid protected application admission record")
+            end
+            local admitted = false
+            for _, binding in ipairs(record_bindings(record.bindings)) do
+                if packaged and seen[binding.definition_id] then
+                    -- An explicitly delivered record for the same definition wins.
+                else
+                    if seen[binding.definition_id] then
+                        error("Duplicate application admission binding: " .. binding.definition_id)
+                    end
+                    if #bindings >= 64 then error("Application admission capacity is exceeded") end
+                    seen[binding.definition_id] = true
+                    bindings[#bindings + 1] = binding
+                    admitted = true
+                end
+            end
+            if admitted then evidence[#evidence + 1] = published_record.digest end
         end
     end
+    consume(published.governed, false)
+    consume(published.packages, true)
     table.sort(bindings, function(left: contract.Binding, right: contract.Binding): boolean
         return left.definition_id < right.definition_id
     end)

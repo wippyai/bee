@@ -54,11 +54,7 @@ entries:
   modules: [registry, system]
   imports:
     contract: bee.protocol:application
-    activation_profiles: bee.gov:activation_profile_decoder
-    capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
-    workspace_applications: bee.gov:workspace_applications
-    governed_admission: bee.gov:governed_application_admission
+    application_admissions: bee.gov:application_admissions
 - name: interactions
   kind: library.lua
   source: file://interactions.lua

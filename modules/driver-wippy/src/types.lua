@@ -54,6 +54,17 @@ type RunRequest = {
     carrier_epoch: integer?,
 }
 
+type ExecutionContext = {
+    thread_id: string,
+    action_id: string,
+    attempt_id: string,
+    carrier_epoch: integer,
+    checkpoint_revision: integer,
+    checkpoint: unknown,
+    cancelled: () -> boolean,
+    commit: (string, {{[string]: unknown}}, {[string]: unknown}) -> (boolean, string?),
+}
+
 type RunReceipt = {
     scope: string,
     thread_id: string,
@@ -74,6 +85,14 @@ type RunResult = {
     receipt: RunReceipt?,
     state: string?,
     status: string?,
+}
+
+type ExecutionResult = {
+    outcome: string,
+    error: string?,
+    answer: string?,
+    settle: boolean?,
+    checkpoint: Object?,
 }
 
 return M

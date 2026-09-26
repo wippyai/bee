@@ -363,9 +363,9 @@
       "topic": "component"
     },
     {
-      "bytes": 1729,
+      "bytes": 2141,
       "id": "component/driver:wippy",
-      "sha256": "2ddfb4b60c24ba5b9b8d7a47e6264a29373bc64dfde5b17ddab868d09edbe274",
+      "sha256": "d0d92b80322997ffacb9effdc394c9b984db4ec93331195d39e31c39890ecbf8",
       "source": "modules/driver-wippy/src/README.md",
       "title": "Bee Wippy Driver",
       "topic": "component"
@@ -379,17 +379,17 @@
       "topic": "component"
     },
     {
-      "bytes": 20992,
+      "bytes": 21072,
       "id": "component/gov",
-      "sha256": "89937fe45d89b769963879f6e3916537bcd2d47d313472cee1d59b31a4c4def9",
+      "sha256": "9c5cf1e876baecd45209a79656e66e1a2444d1bb3a0d6cb82934ffeaf0e7bc13",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
     },
     {
-      "bytes": 21743,
+      "bytes": 21893,
       "id": "component/harness",
-      "sha256": "6595902224559501538b9bdcc85baafe8b79f2a9a3ae299a0913d984829faaa5",
+      "sha256": "730109fafd8a73efa2aa70c7861e824851382f715380b1c0fc82a1f41e1f8237",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -486,7 +486,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 600642,
+    "bytes": 601284,
     "documents": 60
   }
 }

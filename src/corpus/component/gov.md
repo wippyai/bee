@@ -297,9 +297,11 @@ binding flags and thread access. `activation_profiles.select` instantiates the
 entry whose component matches a package source this node composes, under the
 private owner `bee.packages:<workspace_id>.<component>`; a live host grant
 record adds its capability-derived policy IDs beside the entry's base
-admission. `activation_profiles.package_bindings` measures the same records
-from the composed registry so the catalog admits host-composed packages
-without delivery, while their definitions and policies still project exactly.
+admission. `activation_profiles.package_admissions` measures the same record
+shape from the composed registry. `application_admissions` selects those
+package records and the currently projected governed records for the core
+catalog; package projection is memoized by registry revision, workspace and
+node.
 
 Host profiles now select `resolver: hub` or `resolver: overlay`; omitted legacy
 values decode as `hub`. The private-overlay resolver consumes exact immutable

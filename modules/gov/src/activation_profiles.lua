@@ -586,24 +586,20 @@ function M.select(configuration: Configuration, workspace_id: string, source_nod
     return measure(item, policy, configuration.node_id)
 end
 
--- The governed admission bindings for every host-composed package in one
--- workspace, measured from the packages rule against the registry the lookup
--- reads. A live host grant record derives capability policy IDs beside each
--- entry's base admission; without one the entry admits its reviewed policies.
--- The catalog trusts these records while the composed definitions and
--- policies still project them exactly.
-function M.package_bindings(configuration: DecodedConfiguration, workspace_id: string, node_id: string,
-    lookup: (string) -> unknown): ({Object}?, {string}?, string?)
-    local bindings: {Object} = {}
-    local evidence: {string} = {}
+-- Publish the same measured admission records for host-composed packages as
+-- activation publishes for governed overlays. Capability policy IDs are
+-- derived from a live grant before each record is measured.
+function M.package_admissions(configuration: DecodedConfiguration, workspace_id: string, node_id: string,
+    lookup: (string) -> unknown): ({application_admission.Measurement}?, string?)
+    local admissions: {application_admission.Measurement} = {}
     local rule = configuration.packages
     if not rule or not rule.applications or #rule.applications == 0 then
-        return bindings, evidence, nil
+        return admissions, nil
     end
     local vocabulary: capability_catalog.Catalog? = nil
     for _, entry in ipairs(rule.applications) do
         local owner = M.package_owner(workspace_id, entry.component)
-        if not owner then return nil, nil, "package application owner is invalid" end
+        if not owner then return nil, "package application owner is invalid" end
         -- An entry whose application definition is not composed names a
         -- package this host has not installed: it admits nothing, and its
         -- absence is not an error.
@@ -616,16 +612,16 @@ function M.package_bindings(configuration: DecodedConfiguration, workspace_id: s
             if not vocabulary then
                 local raw_catalog = lookup("bee:capability_catalog")
                 local decoded_catalog = raw_catalog and capability_catalog.decode(raw_catalog) or nil
-                if not decoded_catalog then return nil, nil, "host capability catalog is unavailable" end
+                if not decoded_catalog then return nil, "host capability catalog is unavailable" end
                 vocabulary = decoded_catalog
             end
             local installed, installed_error = capability_grants.decode(installed_raw,
                 owner, workspace_id, entry.definition_id, vocabulary)
-            if not installed then return nil, nil, installed_error end
+            if not installed then return nil, installed_error end
             generated = {}
             for _, raw_policy in ipairs(installed.policies :: {unknown}) do
                 local item = bounds.object(raw_policy)
-                if not item then return nil, nil, "installed grant policy is invalid" end
+                if not item then return nil, "installed grant policy is invalid" end
                 generated[#generated + 1] = item
                 local id = bounds.id(item.id)
                 if id then overlay_ids[id] = true end
@@ -633,25 +629,25 @@ function M.package_bindings(configuration: DecodedConfiguration, workspace_id: s
         end
         local item, _, profile_error = instantiate_package(rule, entry, workspace_id, node_id,
             installed_raw, vocabulary)
-        if not item or not item.applications then return nil, nil, profile_error end
+        if not item or not item.applications then return nil, profile_error end
         local definition = bounds.object(lookup(entry.definition_id))
-        if not definition then return nil, nil, "package application definition is unavailable: " .. entry.definition_id end
+        if not definition then return nil, "package application definition is unavailable: " .. entry.definition_id end
         local artifact_bytes, artifact_error = canonical.encode({id = definition.id, kind = definition.kind,
             meta = definition.meta, data = definition.data}, 1048576)
-        if not artifact_bytes then return nil, nil, tostring(artifact_error or "measure package application") end
+        if not artifact_bytes then return nil, tostring(artifact_error or "measure package application") end
         local artifact_digest, digest_error = hash.sha256(artifact_bytes)
-        if not artifact_digest then return nil, nil, tostring(digest_error or "measure package application") end
+        if not artifact_digest then return nil, tostring(digest_error or "measure package application") end
         local policy_entries: {Object} = {}
         for _, raw_binding in ipairs(item.applications) do
             local candidate = bounds.object(raw_binding)
             local policy_ids = candidate and candidate.policies or nil
             if not candidate or type(policy_ids) ~= "table" then
-                return nil, nil, "package application admission is invalid"
+                return nil, "package application admission is invalid"
             end
             for _, policy_id in ipairs(policy_ids :: {unknown}) do
                 local policy_entry = bounds.object(lookup(policy_id :: string))
                 if not policy_entry then
-                    return nil, nil, "package application policy is unavailable: " .. tostring(policy_id)
+                    return nil, "package application policy is unavailable: " .. tostring(policy_id)
                 end
                 policy_entries[#policy_entries + 1] = policy_entry
             end
@@ -661,14 +657,11 @@ function M.package_bindings(configuration: DecodedConfiguration, workspace_id: s
             artifact_digest = artifact_digest, bindings = item.applications,
             artifact_entries = {definition}, registry_entries = policy_entries,
             overlay_ids = overlay_ids, generated_policies = generated})
-        if not projected then return nil, nil, project_error end
-        for _, record_binding in ipairs(projected.record.bindings) do
-            bindings[#bindings + 1] = record_binding
-            evidence[#evidence + 1] = projected.digest
-        end
+        if not projected then return nil, project_error end
+        admissions[#admissions + 1] = projected
         ::continue::
     end
-    return bindings, evidence, nil
+    return admissions, nil
 end
 
 return M

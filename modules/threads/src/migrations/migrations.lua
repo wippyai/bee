@@ -430,6 +430,41 @@ CREATE INDEX bee_thread_notices_target
 CREATE INDEX bee_thread_notices_watcher
   ON bee_thread_notices(watcher_thread_id, state);
 ]]
+-- Attempt-addressed notices can arrive before the carrier commits its action
+-- admission. The nullable action keeps that registration durable until the
+-- attempt row binds its action; older action-addressed notices remain intact.
+local ATTEMPT_NOTICES_SQL = [[
+CREATE TABLE bee_thread_notices_rebuilt (
+  notice_id TEXT PRIMARY KEY,
+  watcher_actor TEXT NOT NULL,
+  watcher_thread_id TEXT NOT NULL REFERENCES bee_thread_heads(thread_id),
+  watcher_action_id TEXT,
+  target_thread_id TEXT NOT NULL,
+  target_action_id TEXT,
+  target_attempt_id TEXT,
+  after_sequence INTEGER NOT NULL CHECK(after_sequence >= 0),
+  state TEXT NOT NULL CHECK(state IN ('pending','fired','cancelled')),
+  fired_record_id TEXT REFERENCES bee_thread_records(record_id),
+  created_at TEXT NOT NULL,
+  CHECK((target_action_id IS NOT NULL) OR (target_attempt_id IS NOT NULL)),
+  CHECK((state = 'fired') = (fired_record_id IS NOT NULL)),
+  FOREIGN KEY(target_thread_id, target_action_id)
+    REFERENCES bee_thread_actions(thread_id, action_id)
+);
+INSERT INTO bee_thread_notices_rebuilt (notice_id, watcher_actor, watcher_thread_id, watcher_action_id,
+  target_thread_id, target_action_id, target_attempt_id, after_sequence, state, fired_record_id, created_at)
+  SELECT notice_id, watcher_actor, watcher_thread_id, watcher_action_id,
+    target_thread_id, target_action_id, NULL, after_sequence, state, fired_record_id, created_at
+  FROM bee_thread_notices;
+DROP TABLE bee_thread_notices;
+ALTER TABLE bee_thread_notices_rebuilt RENAME TO bee_thread_notices;
+CREATE INDEX bee_thread_notices_target
+  ON bee_thread_notices(target_thread_id, state);
+CREATE INDEX bee_thread_notices_watcher
+  ON bee_thread_notices(watcher_thread_id, state);
+CREATE INDEX bee_thread_notices_attempt
+  ON bee_thread_notices(target_thread_id, target_attempt_id, state);
+]]
 -- A thread a workspace owns carries that workspace. Threads created before
 -- this migration are attributed from their owner: an application principal
 -- is bee.application:<workspace_id>:<instance_id>. Other threads stay
@@ -584,6 +619,7 @@ local list: {Migration} = {
     {id = 14, name = "action_inbox_outbox", sql = ACTION_INBOX_OUTBOX_SQL, rebuild = false},
     {id = 15, name = "action_inbox_outbox_reply", sql = ACTION_INBOX_OUTBOX_REPLY_SQL, rebuild = false},
     {id = 16, name = "cancel_intent", sql = CANCEL_INTENT_SQL, rebuild = false},
+    {id = 17, name = "attempt_notices", sql = ATTEMPT_NOTICES_SQL, rebuild = true},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

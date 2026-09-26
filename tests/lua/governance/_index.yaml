@@ -299,10 +299,11 @@ entries:
   source: file://preflight_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [hash]
+  modules: [hash, registry]
   imports:
     test: wippy.test:test
     preflight: bee.gov:preflight
+    protected_kernel: bee.gov:protected_kernel
     canonical: bee.sync:canonical
     artifact: bee.gov:artifact
 - name: capability_catalog_test

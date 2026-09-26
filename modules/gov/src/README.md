@@ -258,7 +258,15 @@ workspace's folder from the node catalog; contract and HTTP grants authorize
 only the capability gateway (`bee.gov.binding:contract_call`,
 `bee.gov.binding:http_request`), which checks the caller's own live record.
 Preflight also refuses edits to the host `bee:protected_kernel` trust map, its
-transitive code dependencies and requirement selectors aimed at it. The instance
+transitive code dependencies and requirement selectors aimed at it. That map
+names every shipped namespace a host-selected scope lives in or is reached from
+(the governance, security, approvals, admission and launch namespaces plus
+`bee.gateway`, `bee.harness`, `bee.credentials`, `bee.placement`,
+`bee.placement.native`, `bee.resources`, `bee.threads`, `bee.hive`, `bee.env`,
+`bee.sync`, `bee.host`, `bee.session`, `bee.client`, `bee.desktop`,
+`bee.terminal`, `bee.node` and `bee.workspace`), and its `super_edit` list is
+the host's explicit carve-out of protected namespaces, empty in the shipped
+composition. The instance
 sets `allow.auto_start: false`, and preflight refuses any entry declaring
 `lifecycle.auto_start` under such a policy (`AUTO_START_DENIED`); an explicit
 row admits auto start unless it sets that field to `false`. Availability

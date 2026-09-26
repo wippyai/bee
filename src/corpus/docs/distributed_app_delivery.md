@@ -50,14 +50,21 @@ recovery restores only the previously authorized desired intent.
 ### Protected kernel
 
 The host-owned `bee:protected_kernel` entry is the trust map no activation
-profile can open, however permissive. It names the governance, security,
-approvals, admission and launch namespaces (`bee.gov`, `bee.governance`,
-`bee.security`, `bee.approvals`, `bee.apps`, `bee.launch`) and the exact host
-selectors `bee:approver_policies`, `bee:capability_catalog`,
-`bee.env:gov_activation_profiles`, `bee.env:gov_publication_profiles`,
-`bee.deps:gov`, `bee.deps:approvals` and itself. Both destination resolvers
-read it from the destination registry, include it in the approval base, and
-pass it to preflight, which fails closed without it. Preflight computes the
+profile can open, however permissive. It names every shipped namespace a
+host-selected security scope lives in or is reached from (`bee.gov`,
+`bee.governance`, `bee.security`, `bee.approvals`, `bee.apps`, `bee.launch`,
+`bee.gateway`, `bee.harness`, `bee.credentials`, `bee.placement`,
+`bee.placement.native`, `bee.resources`, `bee.threads`, `bee.hive`, `bee.env`,
+`bee.sync`, `bee.host`, `bee.session`, `bee.client`, `bee.desktop`,
+`bee.terminal`, `bee.node` and `bee.workspace`, which cover their child
+namespaces) and the exact host selectors `bee:approver_policies`,
+`bee:capability_catalog`, `bee.env:gov_activation_profiles`,
+`bee.env:gov_publication_profiles`, `bee.deps:gov`, `bee.deps:approvals` and
+itself. Its `super_edit` list is the host's explicit carve-out: an empty list
+in the shipped composition opens nothing, and a namespace the host deliberately
+names there is the only protected namespace a super-edit profile may replace.
+Both destination resolvers read it from the destination registry, include it in
+the approval base, and pass it to preflight, which fails closed without it. Preflight computes the
 kernel as the named definitions plus the code and wiring they reference
 transitively (registry records and policies are protected by name only, so an
 application they describe stays upgradable) and reports `PROTECTED_KERNEL` for

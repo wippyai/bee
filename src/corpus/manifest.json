@@ -147,9 +147,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 14372,
+      "bytes": 14978,
       "id": "docs/mcp_configuration",
-      "sha256": "63bfb961a4ed42641fa3f37ca8d3eecbff3d210630338f2237caa791657b2e23",
+      "sha256": "d78f1116c180b1683b6459e05cc613e9de5eab6cc5ab7759f4f86a126331ccad",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -171,9 +171,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 6471,
+      "bytes": 9331,
       "id": "docs/hub_inspection",
-      "sha256": "479d7d4ae0105e2457f63b7688ec5db43375e2e4cfc6316da3eae7756c8aa97a",
+      "sha256": "62cc2c8af2c13e05ab601ec2e0e7b088182072eb6a8e8653bbe9bb5e8385535d",
       "source": "docs/guides/hub.md",
       "title": "Hub installation and package reads",
       "topic": "registry"
@@ -203,9 +203,9 @@
       "topic": "application"
     },
     {
-      "bytes": 10708,
+      "bytes": 10788,
       "id": "docs/gateway",
-      "sha256": "d6a615c4249136c526c6a9178624a499df5135a3589cc11164b8bf0a49a78893",
+      "sha256": "61edd15688eb53642d39615d1cf5e49cf33362aed61c636421df374b914930cb",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -355,9 +355,9 @@
       "topic": "component"
     },
     {
-      "bytes": 6289,
+      "bytes": 6921,
       "id": "component/gateway",
-      "sha256": "184aa73cea157c0a22c1996e669ca4604dc57eaaa3e68aa9664016cfd1b98a60",
+      "sha256": "a1e6e23bb521eb6835e5fac3148fad47e0135992dc247b7bfef6785ed5a531d7",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -395,9 +395,9 @@
       "topic": "component"
     },
     {
-      "bytes": 5738,
+      "bytes": 6277,
       "id": "component/hub",
-      "sha256": "fd62327a96a003def9089ff11dd18ffe157402751eef2f6430faddfd842e16a5",
+      "sha256": "800c0c12228706ee790feee090d340ec41f9dd2ee554c0ae9bf9af0a02c48214",
       "source": "modules/hub/src/README.md",
       "title": "Hub module management",
       "topic": "component"
@@ -470,7 +470,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 575932,
+    "bytes": 580649,
     "documents": 58
   }
 }

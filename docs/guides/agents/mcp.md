@@ -86,6 +86,15 @@ development version, and `installed` (which takes no request body) for the
 effective inventory. `read_file` windows are capped at 16,384 bytes with
 `next_offset`. See the [Hub inspection guide](../hub.md).
 
+`install_request`, `uninstall_request` and `install_status` are write tools
+beside `components`. A request names a Hub package (`component`, optional
+exact `version`); the host resolves the plan and files one approval bound to
+the caller's thread and attempt. The person decides it in Approvals; the
+caller's next `install_status` applies exactly the approved plan digest, and a
+replayed poll replays its receipt. They are admitted through the host's
+`target_tool_install_policy` link and never grant Hub management to the
+caller. See [agent installation requests](../hub.md#agent-installation-requests).
+
 Read `capabilities` before authoring: it reports the admitted tools with
 their policies, the trait catalog, the bound workspace and thread, and launch
 rights. `launch_definitions` lists the caller's admitted launch definitions

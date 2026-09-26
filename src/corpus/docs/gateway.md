@@ -72,7 +72,8 @@ authority.
 The host may admit thread_read, thread_wait, thread_message, thread_sessions,
 thread_notify, session_directory, session_send, session_inbox, session_ack,
 session_reply, thread_launch, launch_definitions, capabilities, Governance
-overlay, Hub components, delivery and docs. Each tool receives only bounded
+overlay, Hub components, Hub installation requests (install_request,
+uninstall_request, install_status), delivery and docs. Each tool receives only bounded
 arguments. The binding supplies thread, subject, action, attempt and context.
 Tool results carry the JSON reply as text and as structured content with an
 output schema; failures use one normalized error shape

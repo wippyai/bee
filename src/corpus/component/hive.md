@@ -116,14 +116,19 @@ otherwise the first non-virtual LAN interface address, otherwise loopback when
 the node is alone. It persists the pick in `hive/advertise` and reads it back on
 the next boot, repicking when the stored address is no longer assigned locally,
 so a DHCP lease change or a Tailscale toggle never advertises a stale address.
-The local descriptor still uses loopback aliases for same-machine clients. A
-join adopts the IP the inviter observed on the authenticated join TCP when this
-host owns it, and otherwise records itself in `hive/nat` and publishes
-`internode_dial=out`; a running owner republishes a changed address through the
-runtime's membership metadata and rewrites each pinned peer's `.addr` seed from
-cluster `NodeJoined`, `NodeLeft` and `NodeUpdated` events. The runtime does not
-yet carry memberlist gossip over the internode link, so a NATed peer needs
-mirrored networking or a forwarded UDP path until that runtime hook lands. The
+The local descriptor still uses loopback aliases for same-machine clients. Both
+sides of a join keep the path it proved: the joiner adopts the IP the inviter
+observed on the authenticated join TCP when this host owns it, and otherwise
+records itself in `hive/nat` and publishes `internode_dial=out`; the join
+listener records the local address a remote peer's join arrived on in
+`hive/reached` and advertises it in preference to the automatic pick, so a peer
+that reached the LAN address keeps using it when the pick is a Tailscale
+address. A running owner republishes a changed address through the runtime's
+membership metadata and rewrites each pinned peer's `.addr` seed from cluster
+`NodeJoined`, `NodeLeft` and `NodeUpdated` events. The runtime does not yet
+carry memberlist gossip over the internode link and fixes its gossip advertise
+address at boot, so a NATed peer can lose its peer when that peer restarts until
+the runtime hook lands. The
 [reachability guide](../../../docs/operations/hive-reachability.md) describes
 the remaining runtime work.
 Peer membership also grants desktop access: every pinned peer may reach this

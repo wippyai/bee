@@ -299,6 +299,16 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 	for _, peer := range peers {
 		pinned[peer.node] = peer.key
 	}
+	// The node this one joined proved exactly one path to that hive node: the
+	// authenticated join connection. Its gossip address may name an interface
+	// this host cannot route (a Tailscale or private address), so the proven
+	// path wins for that peer and the gossiped address stands for the rest.
+	verified := netip.Addr{}
+	if record, joined, err := readJoined(state); err == nil && joined && record.JoinPath != "" {
+		if path, err := netip.ParseAddrPort(record.JoinPath); err == nil {
+			verified = path.Addr()
+		}
+	}
 	for _, member := range membership.Nodes() {
 		key, ok := pinned[member.ID]
 		if !ok || member.Meta[internode.MetadataPublicKey] != base64.RawStdEncoding.EncodeToString(key) {
@@ -308,11 +318,23 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 		if err != nil || address.Port() == 0 {
 			continue
 		}
+		if verified.IsValid() && !verified.IsLoopback() && member.ID == joinedNode(state) {
+			address = netip.AddrPortFrom(verified, address.Port())
+		}
 		if err := writeChanged(filepath.Join(ownerPeersDirectory(state), member.ID+peerAddressSuffix), address.String()); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// joinedNode is the node this one joined, or empty when it joined none.
+func joinedNode(state string) string {
+	record, joined, err := readJoined(state)
+	if err != nil || !joined {
+		return ""
+	}
+	return record.Node
 }
 
 // writeChanged writes value as one line unless the file already holds it.

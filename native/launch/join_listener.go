@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -75,6 +76,18 @@ type admitter struct {
 	// serial keeps one redemption in flight: all share the listener's one
 	// supervisor endpoint.
 	serial sync.Mutex
+	// reached is the local address an admitted join connection arrived on.
+	// The listener records it so this node advertises a path the peer proved
+	// it can reach.
+	reached atomic.Pointer[netip.Addr]
+}
+
+// reachedAddress returns the address the last admitted join arrived on.
+func (a *admitter) reachedAddress() (netip.Addr, bool) {
+	if value := a.reached.Load(); value != nil {
+		return *value, true
+	}
+	return netip.Addr{}, false
 }
 
 func (l *joinListenerComponent) Start(ctx context.Context) error {
@@ -121,6 +134,9 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	l.cancel, l.done = cancel, make(chan struct{})
 	a := &admitter{state: l.state, node: l.node, authority: authority, membership: membership, redeem: redeem}
+	// The listener owns the accepted socket, so it can report the local
+	// address each admitted join arrived on before the handshake is answered.
+	servedListener := &reachedListener{Listener: listener, admitter: a}
 	// The node states where it can be reached and whether it expects to be
 	// dialed, through the membership metadata the runtime re-broadcasts. The
 	// dial hint is additive: a runtime without the internode dial-direction
@@ -132,7 +148,7 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	go func() {
 		defer close(served)
 		defer redeem.Close()
-		if err := invite.Serve(lifetime, listener, identity, a.admit); err != nil {
+		if err := invite.Serve(lifetime, servedListener, identity, a.admit); err != nil {
 			log.Warn("join listener stopped", zap.Error(err))
 		}
 	}()
@@ -143,6 +159,9 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 		for {
 			if err := recordAddresses(l.state, membership); err != nil {
 				log.Warn("hive address record failed", zap.Error(err))
+			}
+			if err := l.adoptReachedAddress(a); err != nil {
+				log.Warn("hive reached address record failed", zap.Error(err))
 			}
 			if err := l.republishAddress(membership); err != nil {
 				log.Warn("hive address republish failed", zap.Error(err))
@@ -164,6 +183,40 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 		close(l.done)
 	}()
 	return nil
+}
+
+// reachedListener reports the local address of each accepted join connection
+// to the admitter before the handshake reads it.
+type reachedListener struct {
+	net.Listener
+	admitter *admitter
+}
+
+func (l *reachedListener) Accept() (net.Conn, error) {
+	connection, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	l.admitter.observeReached(connection.RemoteAddr(), connection.LocalAddr())
+	return connection, nil
+}
+
+// adoptReachedAddress persists the address the last admitted join arrived on,
+// so this node advertises a path a peer proved it can reach. A node whose
+// automatic pick is not routable from one peer therefore stays reachable
+// without any operator configuration.
+func (l *joinListenerComponent) adoptReachedAddress(a *admitter) error {
+	reached, ok := a.reachedAddress()
+	if !ok {
+		return nil
+	}
+	assigned, err := assignedInterfaceAddresses()
+	if err != nil {
+		return err
+	}
+	tailnet, _ := tailscaleIdentity()
+	_, _, err = applyReachedAddress(ownerDirectory(l.state), reached.String(), assigned, tailnet)
+	return err
 }
 
 // republishAddress tells the mesh about a new advertise address when the
@@ -250,6 +303,60 @@ func refuse(code, message string) *invite.Refused {
 	return &invite.Refused{Code: code, Message: message}
 }
 
+// observeReached records the local address one accepted join connection
+// arrived on. It is the address this node must advertise to be reachable from
+// that peer, so it outranks the automatic pick while this host owns it.
+//
+// Only a peer on another machine teaches anything. A node on this host is
+// already reachable through the automatic pick, and the local address of a
+// same-host connection may be an address no other machine can route.
+func (a *admitter) observeReached(remote, local net.Addr) {
+	assigned, err := assignedInterfaceAddresses()
+	if err != nil {
+		return
+	}
+	tailnet, _ := tailscaleIdentity()
+	if isAssignedLocally(remoteAddress(remote), assigned, tailnet) {
+		return
+	}
+	address, ok := localAddress(local)
+	if !ok || !isAssignedLocally(address, assigned, tailnet) {
+		return
+	}
+	value := address
+	a.reached.Store(&value)
+}
+
+// remoteAddress reads the peer IP of an accepted TCP connection.
+func remoteAddress(connection net.Addr) netip.Addr {
+	tcp, ok := connection.(*net.TCPAddr)
+	if !ok {
+		return netip.Addr{}
+	}
+	address, ok := netip.AddrFromSlice(tcp.IP)
+	if !ok {
+		return netip.Addr{}
+	}
+	return address.Unmap()
+}
+
+// localAddress reads the local IP of an accepted TCP connection.
+func localAddress(connection net.Addr) (netip.Addr, bool) {
+	tcp, ok := connection.(*net.TCPAddr)
+	if !ok {
+		return netip.Addr{}, false
+	}
+	address, ok := netip.AddrFromSlice(tcp.IP)
+	if !ok {
+		return netip.Addr{}, false
+	}
+	address = address.Unmap()
+	if address.IsLoopback() || address.IsUnspecified() {
+		return netip.Addr{}, false
+	}
+	return address, true
+}
+
 // admit redeems the joiner's invite through the supervisor, pins the joiner's
 // identity key as a Hive peer and certifies its mesh leaf.
 func (a *admitter) admit(ctx context.Context, peer ed25519.PublicKey, request invite.Request) (invite.Admission, *invite.Refused) {
@@ -301,6 +408,24 @@ func (a *admitter) admit(ctx context.Context, peer ed25519.PublicKey, request in
 	if err := writeOwnerFile(pin, []byte(base64.RawStdEncoding.EncodeToString(peer)+"\n")); err != nil {
 		return invite.Admission{}, refuse("INTERNAL", "the hive node could not pin the joining node")
 	}
-	return invite.Admission{Node: a.node, Gossip: a.membership.LocalNode().Addr, Secret: strings.TrimSpace(string(secret)),
+	return invite.Admission{Node: a.node, Gossip: a.gossipSeed(), Secret: strings.TrimSpace(string(secret)),
 		Certificate: string(leaf), Authorities: string(pool)}, nil
+}
+
+// gossipSeed is the address the joiner seeds this node at. A remote joiner
+// proved it can reach the local address its join connection arrived on, so
+// that address with the live gossip port is a seed it can actually use. When
+// the join came from this host, or no path was observed, the node's own
+// gossip address stands.
+func (a *admitter) gossipSeed() string {
+	local := a.membership.LocalNode()
+	reached, ok := a.reachedAddress()
+	if !ok {
+		return local.Addr
+	}
+	address, err := netip.ParseAddrPort(local.Addr)
+	if err != nil || address.Port() == 0 {
+		return local.Addr
+	}
+	return netip.AddrPortFrom(reached, address.Port()).String()
 }

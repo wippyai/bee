@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -202,5 +203,73 @@ func TestRepublishAddressOnlyOnChange(t *testing.T) {
 	}
 	if listener.published != published {
 		t.Fatalf("tracked address = %v, want %v", listener.published, published)
+	}
+}
+
+// The listener reports the local address of an accepted join connection, so
+// the node can advertise a path the peer proved it can reach.
+func TestListenerObservesTheLocalAddressOfAJoin(t *testing.T) {
+	a, _ := joinAdmitter(t, &fakeRedeemer{})
+	if _, ok := a.reachedAddress(); ok {
+		t.Fatal("a fresh admitter already reported a reached address")
+	}
+	assigned, err := assignedInterfaceAddresses()
+	if err != nil || len(assigned) == 0 {
+		t.Skip("no non-loopback interface to test a reached path with")
+	}
+	local := assigned[0].address
+	remote := &net.TCPAddr{IP: net.IPv4(203, 0, 113, 7), Port: 5000}
+	// A peer on another machine that reached a local address teaches the path
+	// this node must advertise.
+	a.observeReached(remote, &net.TCPAddr{IP: net.ParseIP(local.String()), Port: 4100})
+	reached, ok := a.reachedAddress()
+	if !ok || reached != local {
+		t.Fatalf("reached = %v, %v; want %v", reached, ok, local)
+	}
+	// A peer on this host teaches nothing: its local address may be one no
+	// other machine can route.
+	a.reached.Store(nil)
+	a.observeReached(&net.TCPAddr{IP: net.ParseIP(local.String())}, &net.TCPAddr{IP: net.ParseIP(local.String()), Port: 4100})
+	if _, ok := a.reachedAddress(); ok {
+		t.Fatal("a same-host peer was recorded as a reached path")
+	}
+	// A loopback or unspecified local address teaches nothing either.
+	for _, address := range []net.Addr{&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}, &net.TCPAddr{IP: net.IPv4zero}} {
+		a.reached.Store(nil)
+		a.observeReached(remote, address)
+		if _, ok := a.reachedAddress(); ok {
+			t.Fatalf("local address %v was recorded", address)
+		}
+	}
+}
+
+// The admission's gossip seed names the address a remote joiner proved it can
+// reach, so a node whose own advertised address is not routable from that peer
+// is still seedable. A same-host join keeps the node's own gossip address.
+func TestAdmissionSeedsAJoinerAtAReachableAddress(t *testing.T) {
+	redeem := &fakeRedeemer{}
+	a, _ := joinAdmitter(t, redeem)
+	identity, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, _ := redeemRequest(t)
+	if admission, refused := a.admit(context.Background(), identity, request); refused != nil {
+		t.Fatal(refused)
+	} else if admission.Gossip != "127.0.0.1:4100" {
+		t.Fatalf("unobserved gossip seed = %q, want the node's own gossip address", admission.Gossip)
+	}
+	assigned, err := assignedInterfaceAddresses()
+	if err != nil || len(assigned) == 0 {
+		t.Skip("no non-loopback interface to seed a remote joiner with")
+	}
+	local := assigned[0].address
+	a.observeReached(&net.TCPAddr{IP: net.IPv4(203, 0, 113, 7)}, &net.TCPAddr{IP: net.ParseIP(local.String()), Port: 5000})
+	admission, refused := a.admit(context.Background(), identity, request)
+	if refused != nil {
+		t.Fatal(refused)
+	}
+	if want := netip.AddrPortFrom(local, 4100).String(); admission.Gossip != want {
+		t.Fatalf("gossip seed = %q, want the proven path %q", admission.Gossip, want)
 	}
 }

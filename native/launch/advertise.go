@@ -21,6 +21,12 @@ const (
 	// locally: the node stays reachable over the paths its invite carried
 	// while the runtime cannot dial it directly.
 	natFileName = "nat"
+	// reachedFileName records the address a peer actually reached this node
+	// on. The listener learns it from the local address of an admitted join
+	// connection, so a node whose automatic pick (for example a Tailscale
+	// address) is not routable from a particular peer still advertises an
+	// address that peer proved it can reach.
+	reachedFileName = "reached"
 	// dialMetadataKey is the internode metadata key a NATed node publishes so
 	// the peer on the other side keeps the connection open instead of dialing
 	// an address it cannot reach. The pinned runtime ignores unknown metadata
@@ -76,6 +82,16 @@ func isAssignedLocally(address netip.Addr, assigned []interfaceAddress, tailnet 
 // readAdvertise returns the persisted advertise address, if one is stored.
 func readAdvertise(directory string) (netip.Addr, bool, error) {
 	address, err := readAddressFile(filepath.Join(directory, advertiseFileName))
+	if errors.Is(err, errNoAddressFile) {
+		return netip.Addr{}, false, nil
+	}
+	return address, err == nil, err
+}
+
+// readReached returns the address a peer proved it could reach this node on,
+// if one is recorded.
+func readReached(directory string) (netip.Addr, bool, error) {
+	address, err := readAddressFile(filepath.Join(directory, reachedFileName))
 	if errors.Is(err, errNoAddressFile) {
 		return netip.Addr{}, false, nil
 	}
@@ -143,15 +159,59 @@ func keepPersisted(persisted, picked netip.Addr, tailnet []netip.Addr) bool {
 	return !inTailnet(picked)
 }
 
-// resolveAdvertiseAddress picks or reads the advertise address of state using
-// the live interfaces and Tailscale identity.
+// resolveAdvertiseAddress returns the address this node advertises: the
+// address a peer proved it could reach when this host still owns it, otherwise
+// the automatic pick.
 func resolveAdvertiseAddress(state string) (netip.Addr, error) {
 	assigned, err := assignedInterfaceAddresses()
 	if err != nil {
 		return netip.Addr{}, err
 	}
 	tailnet, _ := tailscaleIdentity()
-	return ensureAdvertiseAddress(ownerDirectory(state), assigned, tailnet)
+	return effectiveAdvertiseAddress(ownerDirectory(state), assigned, tailnet)
+}
+
+// effectiveAdvertiseAddress prefers an address a peer reached this node on
+// over the automatic pick. A proven path is the only statement about
+// reachability this node has, so it wins while it is still assigned locally.
+// hive/advertise keeps the automatic pick and hive/reached the proven path, so
+// each is replaced independently.
+func effectiveAdvertiseAddress(directory string, assigned []interfaceAddress, tailnet []netip.Addr) (netip.Addr, error) {
+	picked, err := ensureAdvertiseAddress(directory, assigned, tailnet)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	reached, ok, err := readReached(directory)
+	if err != nil || !ok {
+		return picked, err
+	}
+	if reached.IsLoopback() || !isAssignedLocally(reached, assigned, tailnet) {
+		return picked, nil
+	}
+	return reached, nil
+}
+
+// applyReachedAddress records the address a peer reached this node on, when
+// this host owns it. The listener calls it for every admitted join, so the
+// node advertises a path a peer proved works instead of an address that peer
+// cannot route. A reached address that is no longer assigned is dropped.
+func applyReachedAddress(directory, reached string, assigned []interfaceAddress, tailnet []netip.Addr) (netip.Addr, bool, error) {
+	reached = strings.TrimSpace(reached)
+	if reached == "" {
+		return netip.Addr{}, false, nil
+	}
+	address, err := netip.ParseAddr(reached)
+	if err != nil || !address.IsValid() || address.IsUnspecified() || address.Zone() != "" {
+		return netip.Addr{}, false, errors.New("the join connection reported an invalid local address")
+	}
+	address = address.Unmap()
+	if address.IsLoopback() || !isAssignedLocally(address, assigned, tailnet) {
+		return netip.Addr{}, false, nil
+	}
+	if err := writeChanged(filepath.Join(directory, reachedFileName), address.String()); err != nil {
+		return netip.Addr{}, false, err
+	}
+	return address, true, nil
 }
 
 // applyObservedAddress replaces the persisted advertise address with the IP

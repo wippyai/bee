@@ -242,3 +242,47 @@ func (m *recordingMembership) UpdateMeta(updates map[string]string) {
 		m.meta[key] = value
 	}
 }
+
+// The address a peer proved it can reach outranks the automatic pick, so a
+// node whose preferred address (for example a Tailscale address) is not
+// routable from one peer still advertises a path that peer reached.
+func TestReachedAddressOutranksTheAutomaticPick(t *testing.T) {
+	state := t.TempDir()
+	directory := ownerDirectory(state)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tail := netip.MustParseAddr("100.64.0.1")
+	lan := netip.MustParseAddr("192.168.1.30")
+	assigned := []interfaceAddress{{name: "eth0", address: lan}}
+	tailnet := []netip.Addr{tail}
+	// The automatic pick prefers Tailscale.
+	if picked, err := ensureAdvertiseAddress(directory, assigned, tailnet); err != nil || picked != tail {
+		t.Fatalf("automatic pick = %v, %v; want %v", picked, err, tail)
+	}
+	if effective, err := effectiveAdvertiseAddress(directory, assigned, tailnet); err != nil || effective != tail {
+		t.Fatalf("effective before a peer reached us = %v, %v; want %v", effective, err, tail)
+	}
+	// A peer that reached the LAN address moves the advertisement there.
+	if _, adopted, err := applyReachedAddress(directory, lan.String(), assigned, tailnet); err != nil || !adopted {
+		t.Fatalf("applyReachedAddress = %v, %v; want adopted", adopted, err)
+	}
+	if effective, err := effectiveAdvertiseAddress(directory, assigned, tailnet); err != nil || effective != lan {
+		t.Fatalf("effective after a peer reached us = %v, %v; want %v", effective, err, lan)
+	}
+	// A reached address this host no longer owns is ignored.
+	if _, adopted, err := applyReachedAddress(directory, "203.0.113.7", assigned, tailnet); err != nil || adopted {
+		t.Fatalf("an unowned reached address = %v, %v", adopted, err)
+	}
+	for _, bad := range []string{"not-an-address", "0.0.0.0", "192.168.1.30%eth0"} {
+		if _, _, err := applyReachedAddress(directory, bad, assigned, tailnet); err == nil {
+			t.Fatalf("reached address %q was accepted", bad)
+		}
+	}
+	// An empty report and a loopback report change nothing.
+	for _, value := range []string{"", "127.0.0.1"} {
+		if _, adopted, err := applyReachedAddress(directory, value, assigned, tailnet); err != nil || adopted {
+			t.Fatalf("reached address %q = %v, %v", value, adopted, err)
+		}
+	}
+}

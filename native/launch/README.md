@@ -134,12 +134,16 @@ owner-only, atomically, and never over an existing file.
 
 Invites carry up to eight alternate interface, tailnet and MagicDNS hints. The
 joining command races TLS handshakes, authenticates the pinned identity, and
-uses the first verified route for redemption. The hive node reports the IP it
-saw on that authenticated TCP connection; the joiner adopts it as its
-advertised address when this host owns it, and otherwise records itself in
-`hive/nat` and publishes `internode_dial=out` so the peer keeps the connection
-open instead of dialing an address it cannot reach. The joiner persists the
-verified route's IP as its initial gossip seed and reports every candidate
+uses the first verified route for redemption. Both sides then keep the path the
+join proved. The hive node reports the IP it saw on that authenticated TCP
+connection; the joiner adopts it as its advertised address when this host owns
+it, and otherwise records itself in `hive/nat` and publishes
+`internode_dial=out` so the peer keeps the connection open instead of dialing an
+address it cannot reach. The join listener records the local address a remote
+peer's join arrived on in `hive/reached` and advertises it in preference to the
+automatic pick, so a peer that reached the LAN address keeps using it when the
+pick is a Tailscale address; a join from another node on this host is ignored.
+Each side seeds the other at the proven path and reports every candidate
 failure if none verifies.
 
 A running owner republishes a changed advertise address with

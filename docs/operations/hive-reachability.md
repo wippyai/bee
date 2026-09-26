@@ -62,19 +62,38 @@ metadata, and rewrites each pinned peer's `.addr` seed from cluster
 new address is seeded there on the next boot. Neither side needs a restart to
 learn the new internode endpoint.
 
-### Joining from behind NAT
+### The address a peer proved it can reach
 
-The hive node reports the IP it saw on the authenticated join TCP connection.
-The joiner adopts that address when this host owns it; otherwise it records the
-address in `hive/nat` and publishes `internode_dial=out` in its membership
-metadata, so the peer keeps the connection open instead of dialing an address
-it cannot reach. The join listener and internode TCP paths therefore work from
-a NATed guest without any environment variable, port proxy or firewall rule.
+A node's automatic pick can name an interface a particular peer cannot route: a
+Tailscale address when the two machines meet over a LAN, or a private guest
+address behind NAT. Both sides of a join therefore record the path the
+connection actually used, because that path is the only statement about
+reachability either node has.
+
+- The hive node reports the IP it saw on the authenticated join TCP connection.
+  The joiner adopts that address when this host owns it, and otherwise records
+  it in `hive/nat` and publishes `internode_dial=out` in its membership
+  metadata, so the peer keeps the connection open instead of dialing an
+  address it cannot reach.
+- The join listener records the local address a remote peer's join arrived on,
+  in `hive/reached`, and advertises that address in preference to the automatic
+  pick while this host still owns it. A peer that reached the LAN address keeps
+  using it even when the automatic pick is a Tailscale address. A join from
+  another node on this host teaches nothing and is ignored.
+- Each side seeds the other at the path the join proved. The admission names
+  the address the joiner can actually reach, and the joiner records the
+  authenticated join path for the hive node.
+
+The join listener and internode TCP paths therefore work from a NATed guest
+without any environment variable, port proxy or firewall rule.
 
 Memberlist gossip is the remaining gap. The runtime carries gossip over UDP in
-both directions, so a NATed peer and its inviter can lose each other after a
-probe interval until the runtime's gossip-over-internode hook lands. That hook
-is runtime work, not Bee work.
+both directions and fixes its gossip advertise address at boot, so a NATed peer
+and its inviter can lose each other after a probe interval — most visibly when
+the peer on the other side restarts. The runtime's gossip-over-internode hook
+closes that gap; it is runtime work, not Bee work. `make hive-join-check` runs
+the two-node restart matrix across two machines and records each case that
+passes and each case that waits for that hook.
 
 ## Tailscale
 

@@ -13,17 +13,23 @@ local function fail(code: string, message: string): {[string]: unknown}
 end
 
 local function status_of(thread_id: string, attempt_id: string): {[string]: unknown}
+    local cancel_res, _ = funcs.call(CARRIER_OPS .. ":cancel_status", {thread_id = thread_id, attempt_id = attempt_id})
+    if cancel_res and type(cancel_res) == "table" and (cancel_res :: {[string]: unknown}).ok == true then
+        local cval = (cancel_res :: {[string]: unknown}).value :: {[string]: unknown}?
+        if cval and (cval.state == "cancelling" or cval.state == "ended") then
+            return {
+                thread_id = thread_id,
+                attempt_id = attempt_id,
+                scope = "attempt",
+                state = cval.state,
+                outcome = "cancelled",
+            }
+        end
+    end
+
     local res, err = funcs.call(CARRIER_OPS .. ":checkpoint", {thread_id = thread_id, attempt_id = attempt_id})
     if err or not res or type(res) ~= "table" or (res :: {[string]: unknown}).ok ~= true then
-        -- Check cancel status
-        local cancel_res, _ = funcs.call(CARRIER_OPS .. ":cancel_status", {thread_id = thread_id, attempt_id = attempt_id})
-        if cancel_res and type(cancel_res) == "table" and (cancel_res :: {[string]: unknown}).ok == true then
-            local cval = (cancel_res :: {[string]: unknown}).value :: {[string]: unknown}?
-            if cval and cval.state == "ended" then
-                return {thread_id = thread_id, attempt_id = attempt_id, state = "ended", outcome = "cancelled"}
-            end
-        end
-        return {thread_id = thread_id, attempt_id = attempt_id, state = "starting"}
+        return {thread_id = thread_id, attempt_id = attempt_id, scope = "attempt", state = "starting"}
     end
 
     local val = (res :: {[string]: unknown}).value :: {[string]: unknown}
@@ -45,6 +51,7 @@ local function status_of(thread_id: string, attempt_id: string): {[string]: unkn
     return {
         thread_id = thread_id,
         attempt_id = attempt_id,
+        scope = "attempt",
         state = state,
         outcome = ended and (val.attempt_outcome or (cp and cp.terminal and (cp.terminal :: {[string]: unknown}).outcome)) or nil,
         answer = answer,
@@ -127,13 +134,22 @@ local function handle(raw: unknown): {[string]: unknown}
         if not thread_id or not attempt_id then return fail("INVALID", "cancel requires thread_id and attempt_id") end
         local idempotency_key = bounds.id(object.idempotency_key) or ((attempt_id :: string) .. "-cancel")
 
-        funcs.call(CARRIER_OPS .. ":cancel_intent", {
+        local cancel_res = funcs.call(CARRIER_OPS .. ":cancel_intent", {
             thread_id = thread_id :: string,
-            attempt_id = attempt_id,
+            attempt_id = attempt_id :: string,
             state = "cancelling",
             idempotency_key = idempotency_key,
         })
-        return {ok = true, value = status_of(thread_id, attempt_id)}
+        return {
+            ok = true,
+            value = {
+                thread_id = thread_id :: string,
+                attempt_id = attempt_id :: string,
+                scope = "attempt",
+                state = "cancelling",
+                idempotency_key = idempotency_key,
+            }
+        }
     else
         return fail("INVALID", "unsupported operation: " .. tostring(operation))
     end

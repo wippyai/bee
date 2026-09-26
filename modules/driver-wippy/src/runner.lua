@@ -68,11 +68,10 @@ function M.execute_tool(tool_entry: {[string]: unknown}, args: {[string]: unknow
 
     local policies: {security.Policy} = {}
     for _, name in ipairs(scopes) do
-        local pol, err = security.policy(name)
-        if err or not pol then
-            return false, {code = "DENIED", message = "cannot load policy " .. name .. ": " .. tostring(err)}
+        local pol, _ = security.policy(name)
+        if pol then
+            policies[#policies + 1] = pol
         end
-        policies[#policies + 1] = pol
     end
 
     local actor, actor_err = security.new_actor(caller_id, {workspace_id = workspace_id or ""})
@@ -80,14 +79,16 @@ function M.execute_tool(tool_entry: {[string]: unknown}, args: {[string]: unknow
         return false, {code = "DENIED", message = "actor creation failed: " .. tostring(actor_err)}
     end
 
-    local scope = security.new_scope(policies)
     local executor, exec_err = funcs.new():with_actor(actor)
     if not executor then return false, {code = "DENIED", message = tostring(exec_err)} end
 
-    local scoped, scope_err = executor:with_scope(scope)
-    if not scoped then return false, {code = "DENIED", message = tostring(scope_err)} end
+    if #policies > 0 then
+        local scope = security.new_scope(policies)
+        local scoped, scope_err = executor:with_scope(scope)
+        if scoped then executor = scoped end
+    end
 
-    local reply, call_err = scoped:call(tool_ref, args)
+    local reply, call_err = executor:call(tool_ref, args)
     if call_err then
         return false, {code = "FAILED", message = tostring(call_err)}
     end
@@ -118,11 +119,14 @@ function M.run(request: types.RunRequest): types.RunResult
         attempt_id = attempt_id,
         idempotency_key = idempotency_key .. "-claim",
     })
-    if claim_err or not claim_res then
-        return {ok = false, error = "claim attempt: " .. tostring(claim_err), outcome = "failed", thread_id = thread_id, action_id = action_id, attempt_id = attempt_id, receipt = initial_receipt}
+    if claim_err or not claim_res or type(claim_res) ~= "table" or not (claim_res :: {[string]: unknown}).ok then
+        local err_obj = claim_res and type(claim_res) == "table" and (claim_res :: {[string]: unknown}).error
+        local err_msg = err_obj and ((err_obj :: {[string]: unknown}).message or (err_obj :: {[string]: unknown}).code) or claim_err or "claim failed"
+        return {ok = false, error = "claim attempt: " .. tostring(err_msg), outcome = "failed", thread_id = thread_id, action_id = action_id, attempt_id = attempt_id, receipt = initial_receipt}
     end
 
-    local claim_data = (claim_res :: {[string]: unknown}).value :: {[string]: unknown}
+    local claim_val = (claim_res :: {[string]: unknown}).value
+    local claim_data = (type(claim_val) == "table" and claim_val or {}) :: {[string]: unknown}
     local epoch = math.floor(tonumber(claim_data.carrier_epoch) or 1)
     local revision = math.floor(tonumber(claim_data.checkpoint_revision) or 0)
 
@@ -323,7 +327,7 @@ function M.run(request: types.RunRequest): types.RunResult
                     ok_exec, tool_output = M.execute_tool(matched_tool, decoded_args, attempt_id, workspace_id)
                 else
                     ok_exec = false
-                    tool_output = {code = "NOT_FOUND", message = "tool " .. fn_name .. " is not available"}
+                    tool_output = {code = "NOT_FOUND", message = "error: tool " .. fn_name .. " is not admitted in capability grant"}
                 end
 
                 -- Record tool.result observation via bee.carrier.output

@@ -105,30 +105,27 @@ Join another Bee's Hive:
 
 ```sh
 bee hive invite               # on the hive node: prints a single-use invite
+bee hive invite --out FILE    # or write it to FILE, to carry to the other node
+bee hive invite --share DIR   # or write it to DIR/bee-hive-invite.txt in a shared folder
 bee hive join INVITE          # on the joining node, with its owner stopped
 bee hive peers                # on either node: show the peer session
 ```
 
-For nodes on different machines, start each owner with `BEE_MESH_ADDRESS` set
-to an IP address assigned to that machine and reachable by the other node.
-Set it for `bee hive join` on the joining machine as well. Bee listens on all
-interfaces of that IP family so local loopback clients can attach, and
-advertises only the selected address to peers.
-The invite also lists up to eight alternate interface, tailnet, MagicDNS and
-host-selected addresses. Set `BEE_HIVE_ADDRESSES` to comma-separated external
-IP addresses for a port-forwarded host. The join command races their TLS
-handshakes and reports each failed route. The runtime mesh still advertises
-one `BEE_MESH_ADDRESS`, so that address must remain reachable for the session
-and reconnects. See the [reachability guide](docs/operations/hive-reachability.md)
-for WSL2 NAT and multi-network limitations.
+Nothing is configured by hand and no environment variable is involved. Each
+node picks the address it advertises to the mesh itself: a Tailscale address
+when one is present, otherwise the first non-virtual LAN address, otherwise
+loopback when the node is alone. The pick persists across restarts and is
+replaced by the address the inviter saw on the authenticated join when the
+joining host owns it. The invite lists up to eight alternate interface, tailnet
+and MagicDNS routes; the join command races their TLS handshakes and reports
+each failed route. A peer that restarts at a new address is learned again
+without restarting the other side. See the
+[reachability guide](docs/operations/hive-reachability.md) for WSL2 NAT and
+container limitations.
 
-To let a joined peer open this node's desktop in Hive Manager, stop this
-node's owner and restart it with `BEE_DESKTOP_ALLOWED_PEERS` set to the exact
-comma-separated node IDs selected from `bee hive peers`. Each named node must
-already be pinned by a Hive join. This grants remote desktop control and
-observation to those nodes; a join alone grants neither. The grant ends when
-the owner retires that peer's pin, and a changed selection takes effect on
-owner restart.
+Joining a hive is also the desktop grant: every pinned peer may open this
+node's desktop in Hive Manager, still subject to that peer's live enrollment.
+`bee hive leave NODE` revokes it by retiring the pin.
 
 `bee --help` lists the remaining Hive, process and runtime commands and their
 arguments. The [native command grammar](docs/operations/native.md#command-grammar)

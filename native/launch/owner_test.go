@@ -6,12 +6,14 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"io"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 	app "github.com/wippyai/runtime/cmd/app"
 )
@@ -21,6 +23,20 @@ import (
 func ownerLaunch(state string) app.Launch {
 	return app.Launch{Op: app.OpRun, Command: desktopCommand, Args: []string{ownerArgument},
 		State: state, Dir: state, Explicit: true}
+}
+
+func assignedInterfaces(t *testing.T) []interfaceAddress {
+	t.Helper()
+	assigned, err := assignedInterfaceAddresses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return assigned
+}
+
+func tailnetAddresses() []netip.Addr {
+	tailnet, _ := tailscaleIdentity()
+	return tailnet
 }
 
 func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
@@ -50,8 +66,8 @@ func TestPrepareOwnerBuildsClusterSection(t *testing.T) {
 		t.Fatal("cluster has no node name")
 	}
 	for key, want := range map[string]string{
-		"membership.bind_addr": "127.0.0.1",
-		"internode.bind_addr":  "127.0.0.1",
+		"membership.bind_addr": wantBindAddress(pickAdvertiseAddress(assignedInterfaces(t), tailnetAddresses())),
+		"internode.bind_addr":  wantBindAddress(pickAdvertiseAddress(assignedInterfaces(t), tailnetAddresses())),
 	} {
 		if got := cluster.GetString(key, ""); got != want {
 			t.Fatalf("%s = %q, want %q", key, got, want)
@@ -157,12 +173,24 @@ func TestPrepareDaemonComposesNoFolderWorkspace(t *testing.T) {
 	}
 }
 
-func TestPrepareOwnerDesktopPeerGrantRequiresPinnedPeer(t *testing.T) {
+// Desktop access is granted to every pinned Hive peer by default: the join is
+// the whole selection and no environment variable or restart is involved.
+func TestPrepareOwnerGrantsDesktopToEveryPinnedPeer(t *testing.T) {
 	state := t.TempDir()
-	t.Setenv("BEE_MESH_ADDRESS", "")
-	t.Setenv("BEE_DESKTOP_ALLOWED_PEERS", "bee-owner-peer")
-	if _, _, err := prepareOwner(state, false); err == nil || !strings.Contains(err.Error(), "not a pinned Hive peer") {
-		t.Fatalf("unpinned desktop peer grant was accepted: %v", err)
+	config, release, err := prepareOwner(state, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	settingsOf := func(config boot.Config) map[string]any {
+		input, _ := config.Get("override.bee.hive.service:supervisor_service:input")
+		return input.([]any)[0].(map[string]any)
+	}
+	bridge := settingsOf(config)["desktop"].(map[string]any)
+	if allowed, present := bridge["allowed_peers"]; present {
+		t.Fatalf("an unjoined node granted a desktop peer: %#v", allowed)
 	}
 	peer, _, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -175,41 +203,26 @@ func TestPrepareOwnerDesktopPeerGrantRequiresPinnedPeer(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(path, "bee-owner-peer.pub"), []byte(base64.RawStdEncoding.EncodeToString(peer)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	config, release, err := prepareOwner(state, false)
+	config, release, err = prepareOwner(state, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = release() }()
-	input, _ := config.Get("override.bee.hive.service:supervisor_service:input")
-	settings := input.([]any)[0].(map[string]any)
-	bridge := settings["desktop"].(map[string]any)
+	bridge = settingsOf(config)["desktop"].(map[string]any)
 	if static := bridge["allowed_nodes"].([]any); len(static) != 0 {
-		t.Fatalf("native peer selection changed static desktop grants: %#v", static)
+		t.Fatalf("peer selection changed static desktop grants: %#v", static)
 	}
 	allowed := bridge["allowed_peers"].([]any)
 	if len(allowed) != 1 || allowed[0] != "bee-owner-peer" {
 		t.Fatalf("desktop allowed_peers = %#v", allowed)
 	}
-}
-
-func TestDesktopPeerGrantRejectsInvalidSelection(t *testing.T) {
-	state := t.TempDir()
-	peer, _, err := ed25519.GenerateKey(nil)
-	if err != nil {
+	// Retiring the pin revokes the grant on the next boot.
+	if err := leaveHive(io.Discard, state, "bee-owner-peer"); err != nil {
 		t.Fatal(err)
 	}
-	path := ownerPeersDirectory(state)
-	if err := os.MkdirAll(path, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(path, "bee-owner-peer.pub"), []byte(base64.RawStdEncoding.EncodeToString(peer)+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, value := range []string{"bee-owner-peer,bee-owner-peer", "bee-owner-peer,", "../outside", ownerNodeName(state)} {
-		t.Setenv("BEE_DESKTOP_ALLOWED_PEERS", value)
-		if _, err := selectedDesktopPeers(state); err == nil {
-			t.Fatalf("invalid desktop peer selection %q was accepted", value)
-		}
+	peers, err := selectedDesktopPeers(state)
+	if err != nil || len(peers) != 0 {
+		t.Fatalf("a retired peer kept its desktop grant: %v %v", peers, err)
 	}
 }
 

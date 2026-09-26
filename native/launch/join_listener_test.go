@@ -8,6 +8,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +19,7 @@ import (
 	"github.com/wippyai/bee/native/hive/invite"
 	"github.com/wippyai/bee/native/hive/meshtls"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 type fakeMembership struct {
@@ -125,5 +128,148 @@ func TestJoinListenerRefusesWithoutPinning(t *testing.T) {
 	}
 	if len(redeem.calls) != 1 {
 		t.Fatalf("the supervisor was asked for malformed requests: %v", redeem.calls)
+	}
+}
+
+// A peer that comes back at a new gossip address has its persisted seed
+// rewritten, so the next boot seeds it where it now is. The rewrite is
+// identity-pinned: a member whose gossiped key differs from the pin is ignored.
+func TestPeerSeedsFollowAPeerThatMoves(t *testing.T) {
+	state := t.TempDir()
+	if _, release, err := prepareOwner(state, true); err != nil {
+		t.Fatal(err)
+	} else if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	peer, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeOwnerFile(filepath.Join(ownerPeersDirectory(state), "bee-owner-peer.pub"),
+		[]byte(base64.RawStdEncoding.EncodeToString(peer)+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	membership := fakeMembership{local: clusterapi.NodeInfo{ID: ownerNodeName(state), Addr: "127.0.0.1:4100"},
+		others: []clusterapi.NodeInfo{{ID: "bee-owner-peer", Addr: "127.0.0.1:4200",
+			Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: base64.RawStdEncoding.EncodeToString(peer)}}}}
+	if err := recordAddresses(state, membership); err != nil {
+		t.Fatal(err)
+	}
+	if _, seeds := prepareBindPort(t, state); seeds != "127.0.0.1:4200" {
+		t.Fatalf("seeds = %q, want the peer's first address", seeds)
+	}
+	// The peer restarts with a new address; the same pinned key reports it.
+	membership.others[0].Addr = "127.0.0.1:4300"
+	if err := recordAddresses(state, membership); err != nil {
+		t.Fatal(err)
+	}
+	if _, seeds := prepareBindPort(t, state); seeds != "127.0.0.1:4300" {
+		t.Fatalf("seeds = %q, want the peer's new address", seeds)
+	}
+	// The node's own gossip port is remembered for the next boot.
+	if port, _ := prepareBindPort(t, state); port != 4100 {
+		t.Fatalf("remembered gossip port = %d, want 4100", port)
+	}
+}
+
+// The republisher only tells the mesh about a changed address, and publishes
+// the internode endpoint and dial direction together.
+func TestRepublishAddressOnlyOnChange(t *testing.T) {
+	state := t.TempDir()
+	if _, release, err := prepareOwner(state, true); err != nil {
+		t.Fatal(err)
+	} else if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	published, err := resolveAdvertiseAddress(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	membership := &recordingMembership{}
+	listener := &joinListenerComponent{state: state, published: published}
+	if err := listener.republishAddress(membership); err != nil {
+		t.Fatal(err)
+	}
+	if len(membership.meta) != 0 {
+		t.Fatalf("an unchanged address was republished: %#v", membership.meta)
+	}
+	listener.published = netip.MustParseAddr("203.0.113.1")
+	if err := listener.republishAddress(membership); err != nil {
+		t.Fatal(err)
+	}
+	if membership.meta[internode.MetadataAdvertiseAddr] != published.String() ||
+		membership.meta[internode.MetadataAdvertisePort] != "4100" {
+		t.Fatalf("republished meta = %#v, want %s", membership.meta, published)
+	}
+	if listener.published != published {
+		t.Fatalf("tracked address = %v, want %v", listener.published, published)
+	}
+}
+
+// The listener reports the local address of an accepted join connection, so
+// the node can advertise a path the peer proved it can reach.
+func TestListenerObservesTheLocalAddressOfAJoin(t *testing.T) {
+	a, _ := joinAdmitter(t, &fakeRedeemer{})
+	if _, ok := a.reachedAddress(); ok {
+		t.Fatal("a fresh admitter already reported a reached address")
+	}
+	assigned, err := assignedInterfaceAddresses()
+	if err != nil || len(assigned) == 0 {
+		t.Skip("no non-loopback interface to test a reached path with")
+	}
+	local := assigned[0].address
+	remote := &net.TCPAddr{IP: net.IPv4(203, 0, 113, 7), Port: 5000}
+	// A peer on another machine that reached a local address teaches the path
+	// this node must advertise.
+	a.observeReached(remote, &net.TCPAddr{IP: net.ParseIP(local.String()), Port: 4100})
+	reached, ok := a.reachedAddress()
+	if !ok || reached != local {
+		t.Fatalf("reached = %v, %v; want %v", reached, ok, local)
+	}
+	// A peer on this host teaches nothing: its local address may be one no
+	// other machine can route.
+	a.reached.Store(nil)
+	a.observeReached(&net.TCPAddr{IP: net.ParseIP(local.String())}, &net.TCPAddr{IP: net.ParseIP(local.String()), Port: 4100})
+	if _, ok := a.reachedAddress(); ok {
+		t.Fatal("a same-host peer was recorded as a reached path")
+	}
+	// A loopback or unspecified local address teaches nothing either.
+	for _, address := range []net.Addr{&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}, &net.TCPAddr{IP: net.IPv4zero}} {
+		a.reached.Store(nil)
+		a.observeReached(remote, address)
+		if _, ok := a.reachedAddress(); ok {
+			t.Fatalf("local address %v was recorded", address)
+		}
+	}
+}
+
+// The admission's gossip seed names the address a remote joiner proved it can
+// reach, so a node whose own advertised address is not routable from that peer
+// is still seedable. A same-host join keeps the node's own gossip address.
+func TestAdmissionSeedsAJoinerAtAReachableAddress(t *testing.T) {
+	redeem := &fakeRedeemer{}
+	a, _ := joinAdmitter(t, redeem)
+	identity, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, _ := redeemRequest(t)
+	if admission, refused := a.admit(context.Background(), identity, request); refused != nil {
+		t.Fatal(refused)
+	} else if admission.Gossip != "127.0.0.1:4100" {
+		t.Fatalf("unobserved gossip seed = %q, want the node's own gossip address", admission.Gossip)
+	}
+	assigned, err := assignedInterfaceAddresses()
+	if err != nil || len(assigned) == 0 {
+		t.Skip("no non-loopback interface to seed a remote joiner with")
+	}
+	local := assigned[0].address
+	a.observeReached(&net.TCPAddr{IP: net.IPv4(203, 0, 113, 7)}, &net.TCPAddr{IP: net.ParseIP(local.String()), Port: 5000})
+	admission, refused := a.admit(context.Background(), identity, request)
+	if refused != nil {
+		t.Fatal(refused)
+	}
+	if want := netip.AddrPortFrom(local, 4100).String(); admission.Gossip != want {
+		t.Fatalf("gossip seed = %q, want the proven path %q", admission.Gossip, want)
 	}
 }

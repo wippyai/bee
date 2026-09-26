@@ -46,7 +46,7 @@ const (
 // publisher that mirrors the trusted client and peer directories into the
 // supervisor's admission entry.
 func ownerComponents(state, execution, launch string) ([]boot.Component, error) {
-	address, err := selectedMeshAddress()
+	address, err := selectedMeshAddress(state)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func prepareOwner(state string, folder bool) (boot.Config, func() error, error) 
 // prepareLockedOwner builds the owner's boot configuration while it holds the
 // owner lock.
 func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
-	address, err := selectedMeshAddress()
+	address, err := selectedMeshAddress(state)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +164,9 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 		"internode.tls.key_file":              transport.KeyFile,
 		"internode.tls.ca_file":               transport.CAFile,
 	}
+	if hint := meshDialHint(state); hint != "" {
+		cluster["membership.meta."+dialMetadataKey] = hint
+	}
 	desktop := map[string]any{
 		"execution":     execution,
 		"expires_at":    ownerExpiry(),
@@ -190,29 +193,22 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 	), nil
 }
 
-// selectedDesktopPeers is a host-selected grant to exact, pinned Hive nodes.
-// The supervisor also requires a live peer enrollment before admitting a
-// client from one of these nodes, so retiring a pin revokes its desktop grant.
+// selectedDesktopPeers grants this node's desktop to every pinned Hive peer by
+// default: joining a hive is the whole selection, so no environment variable
+// and no restart is needed. The supervisor still requires a live peer
+// enrollment before admitting a client, so `bee hive leave NODE` revokes the
+// grant by retiring the pin.
 func selectedDesktopPeers(state string) ([]any, error) {
-	value := os.Getenv("BEE_DESKTOP_ALLOWED_PEERS")
-	allowed := []any{}
-	if value == "" {
-		return allowed, nil
+	peers, err := trustedKeys(ownerPeersDirectory(state))
+	if err != nil {
+		return nil, err
 	}
-	parts := strings.Split(value, ",")
-	if len(parts) > 64 {
-		return nil, errors.New("BEE_DESKTOP_ALLOWED_PEERS exceeds 64 nodes")
-	}
-	seen := make(map[string]bool, len(parts))
-	for _, node := range parts {
-		if !invite.ValidNode(node) || node == ownerNodeName(state) || seen[node] {
-			return nil, fmt.Errorf("BEE_DESKTOP_ALLOWED_PEERS contains an invalid or duplicate node %q", node)
+	allowed := make([]any, 0, len(peers))
+	for _, peer := range peers {
+		if !invite.ValidNode(peer.node) || peer.node == ownerNodeName(state) {
+			continue
 		}
-		if _, pinned := resolveTrustedKey(ownerPeersDirectory(state), node); !pinned {
-			return nil, fmt.Errorf("BEE_DESKTOP_ALLOWED_PEERS node %q is not a pinned Hive peer", node)
-		}
-		seen[node] = true
-		allowed = append(allowed, node)
+		allowed = append(allowed, peer.node)
 	}
 	return allowed, nil
 }

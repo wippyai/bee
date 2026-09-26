@@ -263,3 +263,15 @@ entries:
       initialize:
       - path: .claude.json
         content: '{"hasCompletedOnboarding":true}'
+- name: command
+  kind: registry.entry
+  meta:
+    type: bee.application_command
+    comment: CLI command to launch Claude in the agent window
+  data:
+    name: claude
+    definition_id: bee.harness.window:app
+    arguments:
+    - bee.driver.claude:default_window
+    fullscreen: true
+

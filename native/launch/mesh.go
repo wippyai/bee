@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -48,31 +47,11 @@ const (
 	peerAddressSuffix = ".addr"
 )
 
-// meshAddress is the default owner address. A host can explicitly select an
-// assigned address for a Hive reachable from another machine.
-var meshAddress = netip.MustParseAddr("127.0.0.1")
-
-func selectedMeshAddress() (netip.Addr, error) {
-	value := os.Getenv("BEE_MESH_ADDRESS")
-	if value == "" {
-		return meshAddress, nil
-	}
-	address, err := netip.ParseAddr(value)
-	if err != nil || address.Zone() != "" || !address.IsGlobalUnicast() || address.IsLoopback() {
-		return netip.Addr{}, errors.New("BEE_MESH_ADDRESS must be an assigned external IP address")
-	}
-	interfaces, err := net.InterfaceAddrs()
-	if err != nil {
-		return netip.Addr{}, err
-	}
-	for _, entry := range interfaces {
-		if network, ok := entry.(*net.IPNet); ok {
-			if assigned, ok := netip.AddrFromSlice(network.IP); ok && assigned.Unmap() == address.Unmap() {
-				return address.Unmap(), nil
-			}
-		}
-	}
-	return netip.Addr{}, errors.New("BEE_MESH_ADDRESS is not assigned to this host")
+// selectedMeshAddress returns the address this node advertises to the mesh:
+// the persisted pick when it is still assigned to this host, otherwise a fresh
+// Tailscale, LAN or loopback pick. No environment variable selects it.
+func selectedMeshAddress(state string) (netip.Addr, error) {
+	return resolveAdvertiseAddress(state)
 }
 
 func meshBindAddress(address netip.Addr) netip.Addr {
@@ -320,6 +299,16 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 	for _, peer := range peers {
 		pinned[peer.node] = peer.key
 	}
+	// The node this one joined proved exactly one path to that hive node: the
+	// authenticated join connection. Its gossip address may name an interface
+	// this host cannot route (a Tailscale or private address), so the proven
+	// path wins for that peer and the gossiped address stands for the rest.
+	verified := netip.Addr{}
+	if record, joined, err := readJoined(state); err == nil && joined && record.JoinPath != "" {
+		if path, err := netip.ParseAddrPort(record.JoinPath); err == nil {
+			verified = path.Addr()
+		}
+	}
 	for _, member := range membership.Nodes() {
 		key, ok := pinned[member.ID]
 		if !ok || member.Meta[internode.MetadataPublicKey] != base64.RawStdEncoding.EncodeToString(key) {
@@ -329,11 +318,23 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 		if err != nil || address.Port() == 0 {
 			continue
 		}
+		if verified.IsValid() && !verified.IsLoopback() && member.ID == joinedNode(state) {
+			address = netip.AddrPortFrom(verified, address.Port())
+		}
 		if err := writeChanged(filepath.Join(ownerPeersDirectory(state), member.ID+peerAddressSuffix), address.String()); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// joinedNode is the node this one joined, or empty when it joined none.
+func joinedNode(state string) string {
+	record, joined, err := readJoined(state)
+	if err != nil || !joined {
+		return ""
+	}
+	return record.Node
 }
 
 // writeChanged writes value as one line unless the file already holds it.

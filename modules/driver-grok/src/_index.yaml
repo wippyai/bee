@@ -187,3 +187,15 @@ entries:
       path: .grok/auth.json
       content_format: json
       initialize: []
+- name: command
+  kind: registry.entry
+  meta:
+    type: bee.application_command
+    comment: CLI command to launch Grok CLI in the agent window
+  data:
+    name: grok
+    definition_id: bee.harness.window:app
+    arguments:
+    - bee.driver.grok:default_window
+    fullscreen: true
+

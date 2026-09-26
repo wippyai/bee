@@ -56,6 +56,22 @@ func runHive(ctx context.Context, out io.Writer, client *hive.Join, directory st
 		if _, err := invite.Parse(line.String()); err != nil {
 			return err
 		}
+		if command.out != "" || command.share != "" {
+			path := command.out
+			if command.share != "" {
+				path, err = writeSharedInvite(command.share, line.String())
+			} else {
+				path, err = writeInviteFile(command.out, line.String())
+			}
+			if err != nil {
+				return err
+			}
+			_, err = io.WriteString(os.Stderr, inviteFileHint(path))
+			if err != nil {
+				return err
+			}
+			return wslInviteNotice(os.Stderr, owner, address, command)
+		}
 		if _, err := fmt.Fprintln(out, line.String()); err != nil {
 			return err
 		}
@@ -63,14 +79,7 @@ func runHive(ctx context.Context, out io.Writer, client *hive.Join, directory st
 		if err != nil {
 			return err
 		}
-		if guest := wslNATAddress(); guest != "" {
-			gossip, gossipErr := netip.ParseAddrPort(owner.Gossip)
-			transport, transportErr := netip.ParseAddrPort(owner.Transport)
-			if gossipErr == nil && transportErr == nil {
-				_, err = io.WriteString(os.Stderr, wslNATWarning(guest, address.Port(), gossip.Port(), transport.Port()))
-			}
-		}
-		return err
+		return wslInviteNotice(os.Stderr, owner, address, command)
 	case hiveInvites:
 		records, err := client.Invites(ctx)
 		if err != nil {
@@ -110,6 +119,21 @@ func runHive(ctx context.Context, out io.Writer, client *hive.Join, directory st
 		return awaitSession(ctx, out, client, command.node)
 	}
 	return fmt.Errorf("bee hive %s is not an owner operation", command.verb)
+}
+
+// wslInviteNotice prints the informational WSL2 NAT notice for an invite this
+// owner just minted. It prints nothing on a host that is not a WSL2 NAT guest.
+func wslInviteNotice(errOut io.Writer, owner rendezvous.Descriptor, join netip.AddrPort, command hiveCommand) error {
+	guest := wslNATAddress()
+	if guest == "" {
+		return nil
+	}
+	gossip, gossipErr := netip.ParseAddrPort(owner.Gossip)
+	transport, transportErr := netip.ParseAddrPort(owner.Transport)
+	if gossipErr != nil || transportErr != nil {
+		return nil
+	}
+	return writeString(errOut, wslNotice(guest, join.Port(), gossip.Port(), transport.Port()))
 }
 
 // awaitSession waits until the owner holds an established supervisor session

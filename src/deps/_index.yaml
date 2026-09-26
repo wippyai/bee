@@ -58,8 +58,6 @@ entries:
     value: bee:gateway_listener
   - name: target_endpoint
     value: bee:gateway_endpoint
-  - name: target_hook_storage
-    value: bee.harness.host:environment
   - name: target_approval_request_policy
     value: bee.security.approvals:approval_request_policy
   - name: target_approval_consume_policy

@@ -18,12 +18,11 @@ entries:
   kind: function.lua
   source: file://backend.lua
   method: handle
-  modules: [sql, fs, security, process]
+  modules: [sql, fs, security, process, registry]
   imports:
     store: bee.storage:store
     catalog: bee.storage:catalog
     protocol: bee.workspace.catalog:protocol
-    resources: bee.resources:resources
     recovery: bee.workspace:recovery
     extensions: bee.workspace.catalog:extensions
   meta: {type: internal}

@@ -631,27 +631,40 @@ func reportOrchestratorRun(client *httpClient, url, authorization string, report
 	}
 	childThread, childAction, childAttempt := stringField(firstValue, "thread_id"), stringField(firstValue, "action_id"), stringField(firstValue, "attempt_id")
 	report["first_thread"] = childThread
-	// The child's action is admitted by its carrier shortly after the launch
-	// returns; notify names it, so wait until its admitted record exists.
-	for attempt := 0; attempt < 100; attempt++ {
-		admitted := call("thread_read", object{"cursor": 0, "limit": 64, "member_thread": childThread}, 100+attempt)
-		admittedValue := mustObject(admitted["value"])
-		found := false
-		if admittedValue != nil {
-			if list, ok := admittedValue["records"].([]any); ok {
-				for _, raw := range list {
-					record := mustObject(raw)
-					if kind := stringField(record, "kind"); kind == "action.admitted" && stringField(record, "action_id") == childAction {
-						found = true
+	// thread_notify addresses a running session: the child's gateway binding
+	// opens after its carrier admits the action, so wait until the session
+	// listing shows the child before notifying once. Pacing follows the
+	// child's thread wakeups, so a slow carrier under load only waits longer
+	// instead of outrunning a fixed poll bound and sending a notify the
+	// gateway must refuse.
+	sessionCursor := 0
+	sessionDeadline := time.Now().Add(170 * time.Second)
+	sessionVisible := false
+	for waited := 0; !sessionVisible && time.Now().Before(sessionDeadline); waited++ {
+		listed := call("thread_sessions", object{}, 100+waited)
+		if value := mustObject(listed["value"]); value != nil {
+			if sessions, ok := value["sessions"].([]any); ok {
+				for _, raw := range sessions {
+					if item := mustObject(raw); stringField(item, "action_id") == childAction {
+						sessionVisible = true
 					}
 				}
 			}
 		}
-		if found {
-			break
+		report["session_waits"] = waited + 1
+		if !sessionVisible && time.Now().Before(sessionDeadline) {
+			waitedReply := rpcWithTimeout(client, url, authorization, "tools/call", object{
+				"name":      "thread_wait",
+				"arguments": object{"after_sequence": sessionCursor, "wait_ms": 5000, "member_thread": childThread},
+			}, 200+waited, 20*time.Second)
+			if waitValue := mustObject(outcome(waitedReply)["value"]); waitValue != nil {
+				if head, ok := waitValue["head_sequence"].(float64); ok {
+					sessionCursor = int(head)
+				}
+			}
 		}
-		time.Sleep(50 * time.Millisecond)
 	}
+	report["session_visible"] = sessionVisible
 	notifyReply := rpcWithTimeout(client, url, authorization, "tools/call", object{"name": "thread_notify", "arguments": object{"session": childAction, "idempotency_key": "run-first-notify"}}, 31, 20*time.Second)
 	notified := outcome(notifyReply)
 	report["first_notify_ok"] = notified != nil && notified["ok"] == true
@@ -706,11 +719,12 @@ func reportOrchestratorRun(client *httpClient, url, authorization string, report
 	report["first_settled"] = settled
 	// The one-shot notice lands on the orchestrator's own bound thread. The
 	// owner settles it on the watched thread's next commit or its own periodic
-	// sweep, so poll the bound thread on a wall-clock bound rather than a wait
-	// that a stale cursor would return from at once.
+	// sweep, so follow the bound thread forward on delivery wakeups until the
+	// notice is durable or the wall-clock bound ends.
+	ownCursor := 0
 	deadline := time.Now().Add(90 * time.Second)
-	for !notifyFired && time.Now().Before(deadline) {
-		own := call("thread_read", object{"cursor": 0, "limit": 64}, 58)
+	for waited := 0; !notifyFired && time.Now().Before(deadline); waited++ {
+		own := call("thread_read", object{"cursor": ownCursor, "limit": 64}, 58)
 		ownValue := mustObject(own["value"])
 		if ownValue != nil {
 			if list, ok := ownValue["records"].([]any); ok {
@@ -724,9 +738,15 @@ func reportOrchestratorRun(client *httpClient, url, authorization string, report
 					}
 				}
 			}
+			if scanned, ok := ownValue["scanned_through"].(float64); ok {
+				ownCursor = int(scanned)
+			}
 		}
-		if !notifyFired {
-			time.Sleep(250 * time.Millisecond)
+		if !notifyFired && time.Now().Before(deadline) {
+			rpcWithTimeout(client, url, authorization, "tools/call", object{
+				"name":      "thread_wait",
+				"arguments": object{"after_sequence": ownCursor, "wait_ms": 5000},
+			}, 300+waited, 20*time.Second)
 		}
 	}
 	report["notify_fired"] = notifyFired

@@ -1218,7 +1218,7 @@ entries:
   meta:
     type: bee.launch_policy
     test_support: true
-    comment: The scripted orchestrator's own launch policy for the managed-run proof; it reaches thread_launch, launch_definitions, capabilities and the managed-run tools, and its allow-list names exactly the one Codex worker definition it launches on a new thread
+    comment: The scripted orchestrator's own launch policy for the managed-run proof; it reaches thread_launch, thread_sessions, launch_definitions, capabilities and the managed-run tools, and its allow-list names exactly the one Codex worker definition it launches on a new thread
   data:
     schema_revision: bee.launch-policy@2
     required_cleanup: direct_process
@@ -1231,7 +1231,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_notify, thread_launch, launch_definitions, capabilities, run_status, run_wait, run_cancel]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_notify, thread_launch, thread_sessions, launch_definitions, capabilities, run_status, run_wait, run_cancel]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     agent_launch: [bee.harness.catalog:agent_run_codex_worker]
 - name: agent_run_worker_policy

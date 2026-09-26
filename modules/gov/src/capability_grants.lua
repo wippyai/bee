@@ -84,6 +84,23 @@ end
 local VIEWER_EXPRESSION = '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.hive.desktop:viewer") || (action == "process.host" && resource == "bee.hive.desktop:display_host") || (action == "process.registry.lookup" && resource matches "^bee[.]hive[.]supervisor(/.+)?$") || action == "process.monitor" || action == "tty.attach" || action == "tty.read" || action == "tty.write" || action == "tty.resize" || action == "tty.viewport"'
 local LEASE_EXPRESSION = '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$") || (action == "process.registry.lookup" && resource == "bee.workspace.hosts") || action == "process.send"'
 
+local function exposure_audiences(raw: unknown): {string}?
+    if type(raw) ~= "table" then return nil end
+    local result: {string} = {}
+    local seen: {[string]: boolean} = {}
+    for _, item in ipairs(raw :: {unknown}) do
+        if type(item) ~= "string" or #item == 0 or #item > 160 or seen[item :: string]
+            or ((item :: string) ~= "*" and not (item :: string):match("^[a-z][a-z0-9_.-]*$")) then
+            return nil
+        end
+        seen[item :: string] = true
+        result[#result + 1] = item :: string
+    end
+    if #result == 0 or #result > 16 then return nil end
+    table.sort(result)
+    return result
+end
+
 local function plain(actions: {string}, resources: unknown, comment: string, id: string): Object
     return {id = id, kind = "security.policy", meta = {comment = comment},
         data = {policy = {actions = actions, resources = resources, effect = "allow"}}}
@@ -142,8 +159,9 @@ local function package_policy(grant: Object, id: string): Object?
 end
 
 -- Each installable catalog entry materializes into generated host entries: a
--- policy plus the host-created volume or database it authorizes. Hive
--- exposure stays host-published review vocabulary with no app grant.
+-- policy plus the host-created volume or database it authorizes. A Hive
+-- exposure grant materializes into an exposure-scope policy over exactly the
+-- approved operations; other review-vocabulary entries have no app grant.
 local function policy(owner: string, grant: Object, id: string, folder: unknown): (Object?, Object?, Object?, string?)
     local scope = bounds.object(grant.scope)
     if not scope then return nil, nil, nil, "capability scope is malformed" end
@@ -207,6 +225,22 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
         return {id = id, kind = "security.policy", meta = {comment = "Host-generated HTTP gateway grant"},
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.HTTP_REQUEST},
                 effect = "allow"}}}, nil, nil, nil
+    end
+    -- A Hive exposure grant authorizes exactly the approved operations under
+    -- the requested mode. The supervisor joins it through its exposure
+    -- scope; audiences stay in the grant record for review and the
+    -- destination audience table, never in this ceiling.
+    if grant.capability == "hive.expose" and grant.operation == "hive.expose" then
+        local mode = grant.resource
+        local operations = string_list(scope.operations, "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$")
+        local audiences = exposure_audiences(scope.audiences)
+        if (mode ~= "open" and mode ~= "policy") or not operations or not audiences then
+            return nil, nil, nil, "Hive exposure grant names no valid mode, operations and audiences"
+        end
+        return {id = id, kind = "security.policy", groups = {"hive_exposure_scope"},
+            meta = {comment = "Host-generated Hive operation exposure grant"},
+            data = {policy = {actions = {"hive.expose." .. (mode :: string)},
+                resources = operations, effect = "allow"}}}, nil, nil, nil
     end
     if next(scope) == nil then
         local generated = package_policy(grant, id)

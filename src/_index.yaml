@@ -122,14 +122,14 @@ entries:
       resources:
       - {kind: http.client, mode: scoped, source: host_selected_origin}
     - id: hive.expose
-      revision: 1
-      parameters: {contract: contract, methods: methods}
-      text: Expose Hive contract {contract} using {methods}
+      revision: 2
+      parameters: {operations: hive_operations, mode: hive_mode, audiences: hive_audiences}
+      text: Expose Hive operations {operations} in {mode} mode to {audiences}
       confirm: explicit
       policies:
-      - {operation: hive.expose, resource: '$contract', scope: {methods: '$methods'}}
+      - {operation: hive.expose, resource: '$mode', scope: {operations: '$operations', audiences: '$audiences'}}
       resources:
-      - {kind: contract.binding, mode: hive, source: host_selected_contract}
+      - {kind: hive.operations, mode: exposed, source: host_selected_operations}
     - id: hive.view
       revision: 1
       parameters: {}

@@ -379,7 +379,8 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			"lua":   map[string]any{"type_system": map[string]any{"enabled": true, "strict": true}},
 			"cluster": map[string]any{
 				"enabled": true, "name": fmt.Sprintf("node-%d", i),
-				"raft":       map[string]any{"role": role, "bootstrap_expect": expected, "max_voters": 1, "max_standbys": 0, "data_dir": filepath.Join(state, "node-state")},
+				"raft": map[string]any{"role": role, "bootstrap_expect": expected, "max_voters": 1, "max_standbys": 0,
+					"heartbeat_timeout": "300ms", "election_timeout": "300ms", "data_dir": filepath.Join(state, "node-state")},
 				"membership": map[string]any{"bind_addr": "127.0.0.1", "bind_port": 0, "join_addrs": seed, "secret_key": secretString},
 				"internode":  map[string]any{"bind_addr": "127.0.0.1", "bind_port": 0, "auto_port": true, "identity_key": keys[i], "trusted_peer_keys": trusted, "tls": transportTLS},
 			},

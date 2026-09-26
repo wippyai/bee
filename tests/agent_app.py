@@ -74,11 +74,13 @@ def configure_continuous_source(project, workspace_id):
     governance_path = project / "src/env/_index.yaml"
     governance = yaml.safe_load(governance_path.read_text())
     publication = next(item for item in governance["entries"] if item["name"] == "gov_publication_profiles")
-    publication["data"] = {"profiles": [{"workspace_id": workspace_id,
+    publication["data"] = {**publication["data"], "profiles": [{"workspace_id": workspace_id,
         "source_workspace": SOURCE_WORKSPACE, "component": "bee.agent_app_demo/app",
         "overlay_owner": OVERLAY_OWNER}]}
     activation = next(item for item in governance["entries"] if item["name"] == "gov_activation_profiles")
-    activation["data"] = {"profiles": [{"workspace_id": workspace_id, "source_node": "node-1",
+    # Keep the shipped workspace-applications and packages rules; this fixture
+    # adds its own authoring profile beside them.
+    activation["data"] = {**activation["data"], "profiles": [{"workspace_id": workspace_id, "source_node": "node-1",
         "source_workspace": SOURCE_WORKSPACE, "component": "bee.agent_app_demo/app", "resolver": "overlay",
         "overlay_owner": OVERLAY_OWNER, "approval_policy": "local-agent-app-delivery", "parameters": [],
         "applications": [{"definition_id": DEFINITION_ID,

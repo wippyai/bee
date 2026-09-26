@@ -229,7 +229,7 @@ def apply_staged_in_ui(ui, staged, root, expected_capability=None):
 
     # Focus the retained delivery window from the taskbar and let its own
     # activation loop consume the one approved effect.
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + COLD_BOOT
     while "Overlays" not in ui.screen.display[0]:
         assert time.monotonic() < deadline, ui.text()
         ui.pump(.2)
@@ -323,8 +323,12 @@ def open_catalog_app(ui, title, timeout):
         ui.pump(.5)
 
 
-def wait_taskbar_title(ui, title, timeout):
-    """Return the exact title span after its taskbar tab is rendered."""
+def wait_taskbar_title(ui, title, timeout=COLD_BOOT):
+    """Return the exact title span once its taskbar tab renders.
+
+    The wait ends on the rendered tab, so it is an event wait: the bound only
+    diagnoses a desktop that never shows the window, never how fast it renders.
+    """
     expected = re.compile(rf"(?<!\S){re.escape(title)}(?!\S)")
     deadline = time.monotonic() + timeout
     while True:
@@ -419,7 +423,7 @@ def run_open_probe(project, directory, packed=False, deployment=None):
             # The window was opened by the approved MCP caller. Select its
             # real picker and child through the desktop, then prove the hook
             # driver remains a usable PTY after gateway delivery.
-            agent_x = wait_taskbar_title(ui, "Agent", timeout=10)
+            agent_x = wait_taskbar_title(ui, "Agent")
             ui.mouse(0, agent_x, 1)
             ui.mouse(0, agent_x, 1, True)
             fixture_x, fixture_row = wait_agent_picker_choice(ui, "Window hooks fixture", timeout=10)

@@ -20,6 +20,7 @@ workspace:
     bee/threads-timeline: ./modules/threads-timeline
     bee/workspace-manager: ./modules/workspace-manager
     bee/host-processes: ./modules/host-processes
+    bee/hub-modules: ./modules/hub-modules
     bee/approvals: ./modules/approvals
     bee/application: ./modules/application
     bee/node: ./modules/node

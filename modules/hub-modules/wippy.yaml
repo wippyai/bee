@@ -1,0 +1,6 @@
+organization: bee
+module: hub-modules
+type: library
+version: 0.1.0-dev
+description: Hub component listing app with scoped plan and publication
+license: MIT

@@ -120,6 +120,10 @@ entries:
   kind: ns.dependency
   component: bee/host-processes
   version: 0.1.0-dev
+- name: hub_modules
+  kind: ns.dependency
+  component: bee/hub-modules
+  version: 0.1.0-dev
 - name: application
   kind: ns.dependency
   component: bee/application

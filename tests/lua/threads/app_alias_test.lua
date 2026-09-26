@@ -16,14 +16,17 @@ local function instance(): string
     return "bee.application:" .. WORKSPACE .. ":" .. harness.key()
 end
 
-local function app_principal(id: string, grants: {string})
+type Client = harness.Client
+
+local function app_principal(id: string, grants: {string}): Client
     return harness.principal(id, grants, WORKSPACE)
 end
 
-local function attest(broker: unknown, definition: string, id: string)
-    local caller = broker :: {call: (unknown, string, {[string]: unknown}) -> {[string]: unknown}}
-    return harness.value(caller:call("register_app_alias", {stable = stable(definition),
+local function attest(broker: Client, definition: string, id: string): {[string]: unknown}
+    local value: unknown = harness.value(broker:call("register_app_alias", {stable = stable(definition),
         instance = id, workspace_id = WORKSPACE, definition_id = definition}))
+    if type(value) ~= "table" then error("application alias reply must be an object") end
+    return value :: {[string]: unknown}
 end
 
 local function define_tests()

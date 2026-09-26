@@ -223,6 +223,59 @@ local function define_tests()
             end
         end)
 
+        test.it("lists the security policies an update and an uninstall add, replace and remove", function()
+            local function policy(id: string, owner: string, actions: {string}, resources: unknown): {[string]: unknown}
+                return {id = id, kind = "security.policy", registry = {owner = owner, root = false},
+                    data = {policy = {actions = actions, resources = resources, effect = "allow"}}}
+            end
+            local installed = state({
+                root("acme/app", "1.0.0"),
+                root("acme/other", "1.0.0"),
+                policy("acme.app:reader", "acme/app", {"fs.get"}, {"acme.app:files"}),
+                policy("acme.app:legacy", "acme/app", {"registry.get"}, "*"),
+                policy("acme.other:reader", "acme/other", {"fs.get"}, {"acme.other:files"}),
+            }, {
+                {name = "acme/app", version = "1.0.0", source = "hub"},
+                {name = "acme/other", version = "1.0.0", source = "hub"},
+            })
+            local artifacts = source({
+                ["acme/app@1.1.0"] = package("acme/app", "1.1.0", "a", {
+                    {id = "acme.app:reader", kind = "security.policy", meta = {},
+                        data = {policy = {actions = {"fs.get", "fs.list"}, resources = {"acme.app:files"}, effect = "allow"}}},
+                    {id = "acme.app:writer", kind = "security.policy.expr", meta = {},
+                        data = {policy = {actions = {"fs.put"}, resources = "*", expression = "true", effect = "allow"}}},
+                }),
+                ["acme/other@1.0.0"] = package("acme/other", "1.0.0", "b", {
+                    {id = "acme.other:reader", kind = "security.policy", meta = {},
+                        data = {policy = {actions = {"fs.get"}, resources = {"acme.other:files"}, effect = "allow"}}},
+                }),
+            })
+            local update, update_problem = plan.prepare(installed, 4,
+                request({action = "update", component = "acme/app", version = "1.1.0"}), artifacts)
+            test.is_nil(update_problem)
+            test.not_nil(update)
+            if update then
+                local changes = update.plan.policy_changes
+                test.eq(#changes, 3)
+                test.eq(changes[1].id, "acme.app:legacy"); test.eq(changes[1].change, "remove")
+                test.eq(changes[1].resources[1], "*"); test.eq(changes[1].actions[1], "registry.get")
+                test.eq(changes[2].id, "acme.app:reader"); test.eq(changes[2].change, "update")
+                test.eq(changes[2].actions[2], "fs.list"); test.eq(changes[2].component, "acme/app")
+                test.eq(changes[3].id, "acme.app:writer"); test.eq(changes[3].change, "add")
+                test.is_true(changes[3].expression)
+            end
+            local uninstall, uninstall_problem = plan.prepare(installed, 4,
+                request({action = "uninstall", component = "acme/app"}), artifacts)
+            test.is_nil(uninstall_problem)
+            test.not_nil(uninstall)
+            if uninstall then
+                local changes = uninstall.plan.policy_changes
+                test.eq(#changes, 2)
+                test.eq(changes[1].id, "acme.app:legacy"); test.eq(changes[1].change, "remove")
+                test.eq(changes[2].id, "acme.app:reader"); test.eq(changes[2].change, "remove")
+            end
+        end)
+
         test.it("refuses package entries that collide with another registry owner", function()
             local prepared, problem = plan.prepare(state({
                 {id = "acme.app:entry", kind = "library.lua", registry = {owner = "other/module", root = false}},

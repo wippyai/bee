@@ -114,6 +114,29 @@ local function main(owner: string, workspace: unknown, database_resource: string
         if not committed then database:close(); error("Fence revoked application checkpoint: " .. tostring(commit_error)) end
         snapshot = reconciled
     end
+    -- Threads and runs an app launched before the stable alias existed stay
+    -- named for their instances. Attest every retained checkpoint once, so a
+    -- reopened app inherits them through its stable identity. Best effort:
+    -- live opens attest again and the next boot retries the rest.
+    local alias_policy = security.policy("bee.security.threads:application_thread_alias_policy")
+    local alias_call_policy = security.policy("bee.security.threads:application_thread_alias_call_policy")
+    local alias_scope = alias_policy and alias_call_policy and security.new_scope({alias_policy, alias_call_policy})
+    if alias_scope then
+        for _, record in ipairs(retained_records) do
+            local stable = app_identity.stable(workspace_id, record.definition_id)
+            if stable and type(stable.id) == "string" then
+                local stable_id: string = stable.id
+                local instance_actor = thread_binding.actor(workspace_id, record.instance_id)
+                local caller = instance_actor and security.new_actor(stable_id)
+                local acted = caller and funcs.new():with_actor(caller)
+                local scoped = acted and acted:with_scope(alias_scope)
+                if scoped then
+                    scoped:call("bee.threads.service:register_app_alias", {stable = stable_id,
+                        instance = instance_actor, workspace_id = workspace_id, definition_id = record.definition_id})
+                end
+            end
+        end
+    end
     local live_inventory = inventory.new(workspace_id)
     if resumed then
         live_inventory = {workspace_id = workspace_id, catalog_revision = resumed.catalog_revision,

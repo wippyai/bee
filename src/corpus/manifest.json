@@ -147,9 +147,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 18800,
+      "bytes": 19101,
       "id": "docs/mcp_configuration",
-      "sha256": "6f43c2a58b244c8a543106ebdb2de4e3cf5f9d3529713dbcd9aa170917486fd0",
+      "sha256": "f166983ee42b9135f6408a7ab4a444bb10917ba293385c1a51297ab5eeb74ef8",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -203,9 +203,9 @@
       "topic": "application"
     },
     {
-      "bytes": 12381,
+      "bytes": 12821,
       "id": "docs/gateway",
-      "sha256": "3218b0820f4e9e1e0cc40626fd0a843291850b8db2ed906e78ce56e8c4840854",
+      "sha256": "08a46fda6d48ac2db8ba58821c2197bc3ac5e782997d0bf502fd2c9f411e18da",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 25824,
+      "bytes": 26080,
       "id": "docs/threads",
-      "sha256": "3960b919dcf7947c3ab8bc9386fe7bcc2dd29e1a0e189edf5176f75aa633a7f1",
+      "sha256": "64e4c6a73ac218231c1429d038c51489747774753c7e8f9ee49b1bec17bdabcc",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -373,7 +373,7 @@
     {
       "bytes": 6921,
       "id": "component/gateway",
-      "sha256": "a1e6e23bb521eb6835e5fac3148fad47e0135992dc247b7bfef6785ed5a531d7",
+      "sha256": "18da670d5ad53a8d3754fc3b18bc7f3d43cde4f9eefedd5cd2f0add93f33092a",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -467,9 +467,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8364,
+      "bytes": 8686,
       "id": "component/threads",
-      "sha256": "6ee899c2bb00a6099be50ef50a6a41f2c8ec4ccb8a98161c1ed66e71df577f80",
+      "sha256": "a16a57185dfe7b5fad1433fc40e14817fa376f8df5b4b0fd7e17e866c5c417e5",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -486,7 +486,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 597607,
+    "bytes": 598926,
     "documents": 60
   }
 }

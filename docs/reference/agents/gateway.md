@@ -108,9 +108,15 @@ keeps only those whose thread the bound subject can read, as answered by the
 thread owner's `get` run as the subject. The scan is complete; `cursor` and
 `limit` select a window and the reply names `next_cursor` (absent at the end)
 with `eof`. thread_notify resolves a session the same way and registers the
-thread owner's one-shot notice on the caller's own thread. An unreadable or
-unknown session is `NOT_FOUND`; a binding without a workspace has no peer
-sessions. See [Configurable managed MCP](../../guides/agents/mcp.md#coordinating-with-other-sessions). thread_launch starts only a
+thread owner's one-shot notice on the caller's own thread. It also accepts the
+`thread_id` and `attempt_id` returned by thread_launch, so the caller can
+register while the admitted attempt is still starting and before its gateway
+session binds. The thread owner holds that registration until the attempt is
+recorded, then delivers on its next turn end or exit; if the attempt has
+already ended, it reports the settlement at once. Both forms require active
+membership in the target thread, and the gateway hides an unreadable target as
+`NOT_FOUND`. A binding without a workspace has no peer sessions. See
+[Configurable managed MCP](../../guides/agents/mcp.md#coordinating-with-other-sessions). thread_launch starts only a
 definition named in the caller's launch-policy allow-list, in the binding's
 workspace or in a `workspace_id` the caller's scope may launch into; its child
 is admitted through the ordinary carrier path with its own policy. Unless the

@@ -183,7 +183,10 @@ hand work to each other, for any harness:
   to tell the caller once when that session ends its current turn or exits.
   The notice is a `notification` message on the caller's own thread, addressed
   to its action and caused by the ending record; a waiting `thread_wait` there
-  wakes on it. A session that has already exited is reported at once.
+  wakes on it. A session that has already exited is reported at once. After
+  `thread_launch`, pass its `thread_id` and `attempt_id` with the key to
+  register before the child's gateway session binds; this route checks target
+  thread membership and needs no `thread_sessions` lookup.
 
 Reach through these older thread tools follows thread membership: a session on
 a thread the subject cannot read is neither listed nor addressable by
@@ -192,7 +195,8 @@ Sessions started with `thread_launch` on the caller's thread share it and its
 subject and reach each other through these tools.
 
 A child `thread_launch` starts on a new thread does not share the caller's
-thread. The launcher reaches it by naming it as `member_thread` on
+thread. The launcher registers its notice immediately from the returned child
+thread and attempt IDs, and reaches it by naming it as `member_thread` on
 `thread_read`, `thread_wait` and `thread_message`: the caller is an active
 member of the child thread because it created and admitted it, the field
 defaults to the bound thread, and the thread owner checks membership again.

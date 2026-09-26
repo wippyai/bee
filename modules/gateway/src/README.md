@@ -7,8 +7,8 @@ listener epoch, drain, readiness, and HTTP handlers. The listener itself
 activation binds native loopback port zero and reads the assigned address
 through supervisor state. Agent
 profiles declare `thread_read`, `thread_wait`, `thread_message`,
-`thread_sessions` and `thread_notify` (find, address and be told about other
-running sessions of the workspace whose threads the subject reads), the
+`thread_sessions` and `thread_notify` (find and address running sessions, and
+register a notice by a launched attempt before its session binds), the
 `session_directory`, `session_send`, `session_inbox`, `session_ack` and
 `session_reply` tools for separately owned action inboxes, the
 caller-owned Governance `overlay` tool, and `thread_launch`, which starts one

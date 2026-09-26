@@ -17,7 +17,7 @@ actor.
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (15 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
+| `bee.threads.persist` | The owned store: checked migration ledger (17 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
 
 ## Dependency interface
 
@@ -65,9 +65,11 @@ settles the sender's obligation and acknowledges its exact live claim.
 Subscriptions are consumer cursors with one outstanding page acknowledged
 by identity and exact extent; they never touch obligations. A notice is a
 member's one-shot request to be told on its own thread when an action of a
-thread it reads ends a turn or an attempt; the owner settles notices after
-commits on the target thread and on a sweep, and commits the notification
-once under the watcher's identity. A message may address sessions by
+thread it reads ends a turn or an attempt. It can name an action or an attempt
+whose action admission has not been recorded yet; the owner binds that pending
+attempt notice when its action arrives, settles exact attempt records after
+commits on the target thread and on a sweep, and commits the notification once
+under the watcher's identity. A message may address sessions by
 `recipient_action_ids` and name its sending action; the owner verifies both. Claims and
 subscriptions carry the owner incarnation established by
 `bee.threads:owner` at startup. The recap is folded from records only.
@@ -115,8 +117,11 @@ subscriptions, pages), 5 `projection` (checkpoints), 6 `carrier`, 7
 the index `list_workspace` walks), 11 `action_inbox` (acceptance epochs, rules
 and ordered items), 12 `action_inbox_push` (offer generations and transport
 receipt fields), 13 `action_inbox_delivery_status` (persisted restart blockers),
-14 `action_inbox_outbox` (the durable forwarding outbox) and 15
-`action_inbox_outbox_reply` (cross-node reply correlation on a queued row).
+14 `action_inbox_outbox` (the durable forwarding outbox), 15
+`action_inbox_outbox_reply` (cross-node reply correlation on a queued row), 16
+`cancel_intent` (managed-run cancellation state before the carrier settles),
+and 17 `attempt_notices` (durable attempt-addressed notices before action
+admission).
 Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and

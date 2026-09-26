@@ -61,6 +61,7 @@ entries:
     - bee.driver.agy:executable
     - bee.driver.grok:executable
     - bee.driver.muse:executable
+    - bee.driver.opencode:executable
     - bee.driver.claude:config_home
     - bee.driver.codex:config_home
     effect: allow

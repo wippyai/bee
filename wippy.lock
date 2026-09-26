@@ -48,3 +48,5 @@ modules:
     version: 0.1.0-dev
   - name: bee/driver-muse
     version: 0.1.0-dev
+  - name: bee/driver-opencode
+    version: 0.1.0-dev

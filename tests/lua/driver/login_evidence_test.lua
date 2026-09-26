@@ -5,6 +5,7 @@ local claude = require("claude_launch")
 local agy = require("agy_launch")
 local grok = require("grok_launch")
 local muse = require("muse_launch")
+local opencode = require("opencode_launch")
 
 local function define_tests()
     test.describe("Provider window login declarations", function()
@@ -14,6 +15,7 @@ local function define_tests()
             {launch = agy.specification(assert(agy.decode({profile_id = "window", brief = ""}))), provider = "agy", command = "agy", variable = "HOME", path = ".gemini/antigravity-cli/antigravity-oauth-token"},
             {launch = grok.specification(assert(grok.decode({profile_id = "window", brief = ""}))), provider = "grok", command = "grok", variable = "GROK_HOME", directory = ".grok", path = "auth.json"},
             {launch = muse.specification(assert(muse.decode({profile_id = "window", brief = ""}))), provider = "muse", command = "muse", variable = "HOME", path = ".config/muse/auth.json"},
+            {launch = opencode.specification(assert(opencode.decode({profile_id = "window", brief = ""}))), provider = "opencode", command = "opencode auth login", variable = "HOME", path = ".local/share/opencode/auth.json"},
         }
         for _, case in ipairs(cases) do
             test.it(case.provider .. " declares its window login evidence", function()

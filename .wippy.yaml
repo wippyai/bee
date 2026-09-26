@@ -30,3 +30,4 @@ workspace:
     bee/driver-codex: ./modules/driver-codex
     bee/driver-grok: ./modules/driver-grok
     bee/driver-muse: ./modules/driver-muse
+    bee/driver-opencode: ./modules/driver-opencode

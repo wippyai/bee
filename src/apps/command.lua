@@ -12,6 +12,7 @@ local KNOWN_PACKAGES: {[string]: string} = {
     codex = "bee/agents",
     grok = "bee/agents",
     muse = "bee/agents",
+    opencode = "bee/agents",
     agent = "bee/agents",
 }
 

@@ -55,6 +55,7 @@ entries:
     agy_launch: bee.driver.agy:launch
     grok_launch: bee.driver.grok:launch
     muse_launch: bee.driver.muse:launch
+    opencode_launch: bee.driver.opencode:launch
 - name: codex_config_test
   kind: function.lua
   source: file://codex_config_test.lua

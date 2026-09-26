@@ -1,0 +1,39 @@
+version: '1.0'
+namespace: bee.driver.opencode
+entries:
+- name: launch_test
+  kind: function.lua
+  source: file://launch_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    launch: bee.driver.opencode:launch
+    prepare: bee.driver.opencode.binding:prepare
+    dispatch: bee.driver.opencode.binding:dispatch
+    quote: bee.driver.kit:quote
+- name: configuration_test
+  kind: function.lua
+  source: file://configuration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    registry: registry
+    configuration: bee.driver.opencode:configuration
+    configure: bee.driver.opencode.binding:configure
+    placement_configuration: bee.placement.native:configuration
+    placement_types: bee.placement:types
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [fs]
+  imports:
+    test: wippy.test:test
+    protocol: bee.driver.opencode:protocol
+    normalize: bee.driver.opencode.binding:normalize
+    stream_json: bee.driver.transport:stream_json
+    observation: bee.threads.records:observation

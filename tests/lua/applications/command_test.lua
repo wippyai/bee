@@ -69,6 +69,7 @@ local function define_tests()
                 codex = "bee.driver.codex:default_window",
                 grok = "bee.driver.grok:default_window",
                 muse = "bee.driver.muse:default_window",
+                opencode = "bee.driver.opencode:default_window",
             }
             for name, definition_ref in pairs(expected) do
                 local launch, err = handler.resolve(name, {})
@@ -83,7 +84,7 @@ local function define_tests()
             end
         end)
         test.it("reports helpful package hints for known agent commands and plain errors for unknown commands", function()
-            for _, name in ipairs({"claude", "codex", "agy", "grok", "muse", "agent"}) do
+            for _, name in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode", "agent"}) do
                 test.eq(handler.unknown_error(name), "Unknown Bee command: " .. name .. " (install bee/agents)")
             end
             test.eq(handler.unknown_error("nonexistent"), "Unknown Bee command: nonexistent")

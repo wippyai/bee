@@ -984,7 +984,7 @@ entries:
   meta:
     type: bee.launch_definition
     test_support: true
-    comment: The one worker definition the scripted orchestrator may launch; it runs on the caller's own thread so the bound thread tools reach it
+    comment: The one worker definition the scripted orchestrator may launch; it runs on the caller's own thread so the bound thread tools reach it, and the host explicitly admits its own wider gateway tools
   data:
     schema_revision: bee.launch-definition@1
     launch_id: agent-launch-accepted-worker
@@ -999,6 +999,86 @@ entries:
     thread_policy: {kind: caller}
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+    allow_wider_tools: true
+- name: agent_launch_wider_parent_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: A launching policy that holds no gateway tool and allow-lists two children whose own policy offers one, so the admission must refuse the unflagged child and admit the flagged one
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    gateway_tools: []
+    agent_launch: [bee.harness.catalog:agent_launch_wider_definition, bee.harness.catalog:agent_launch_flagged_definition]
+- name: agent_launch_child_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The child's own policy; it offers one gateway tool the wider parent does not hold
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    gateway_tools: [thread_read]
+    agent_launch: []
+- name: agent_launch_wider_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: A child whose own policy offers a gateway tool the launching policy does not; it carries no host flag, so the admission refuses it
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agent-launch-wider-fixture
+    title: Agent launch wider fixture
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:agent_launch_child_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: agent_launch_flagged_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The same child explicitly flagged by the host, so its wider gateway tools are admitted
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agent-launch-flagged-fixture
+    title: Agent launch flagged fixture
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:agent_launch_child_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+    allow_wider_tools: true
 - name: agent_launch_window_policy
   kind: registry.entry
   meta:

@@ -66,6 +66,19 @@ local function handle(raw: unknown): Reply
     if not permitted then return fail("LAUNCH_NOT_PERMITTED", "this agent may not launch " .. request.definition_ref) end
     local definition, definition_error = definitions.load(request.definition_ref)
     if not definition then return fail("NOT_FOUND", definition_error or "the launch definition is unavailable") end
+    -- A child may not reach a wider gateway surface than the parent already
+    -- holds: the child's own policy supplies its tools, so unless the host
+    -- explicitly flagged the definition, they must be a subset of the
+    -- launching policy's. This is asserted at admission, before any work.
+    if not definition.allow_wider_tools then
+        local child_policy, child_error = policy.load(definition.policy_ref)
+        if not child_policy then return fail("UNAVAILABLE", child_error or "the child's launch policy is unavailable") end
+        local within, wider = agent_launch.tools_within(child_policy.gateway_tools, caller_policy.gateway_tools)
+        if not within then
+            return fail("LAUNCH_TOOLS_EXCEED_PARENT",
+                "child definition " .. request.definition_ref .. " offers gateway tool " .. tostring(wider) .. ", which the launching policy does not hold")
+        end
+    end
     -- The launching agent reaches a child through the thread tools bound to
     -- its own attempt. Without an explicit thread choice the child joins the
     -- caller's thread, so only a definition naming the caller's thread is

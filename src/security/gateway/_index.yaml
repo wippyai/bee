@@ -177,3 +177,11 @@ entries:
     actions: [funcs.call]
     resources: [bee.apps:open_call]
     effect: allow
+- name: gateway_tool_install_policy
+  kind: security.policy
+  meta:
+    comment: A bound MCP subject may file Hub installation requests and poll them; the person's thread-bound approval is the only authority to apply one, and this grants no Hub management or registry write
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.binding:install_request, bee.gateway.binding:uninstall_request, bee.gateway.binding:install_status]
+    effect: allow

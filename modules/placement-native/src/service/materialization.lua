@@ -88,8 +88,8 @@ function M.prepare_login_notice(request: types.LaunchRequest, private_home: stri
     projected_login_path: string?): types.LoginNotice?
     if request.profile_id ~= "window" or not request.launch.login then return nil end
     local selected_home = private_home
-    if request.environment_refs.HOME == "bee:machine_home" then
-        local resolved, err = env.get("bee:machine_home")
+    if request.environment_refs.HOME == "bee.env:machine_home" then
+        local resolved, err = env.get("bee.env:machine_home")
         if err or type(resolved) ~= "string" then return nil end
         selected_home = resolved
     end

@@ -66,8 +66,12 @@ local function define_tests()
                 :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults()))
             assert(catalogs:receive():from() == broker)
             local request = assert(json.encode({request_id = "fixture-request", definition_ref = "bee.fixture.terminal.launch:definition", brief = "", thread_id = thread}))
+            -- A direct open names the thread on the broker request so the
+            -- broker admits the host-issued application principal it is about
+            -- to start into it, exactly as the workspace host does. A picker
+            -- definition forbids the override and joins its instance instead.
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "fixture-open", op = "open", workspace_id = WORKSPACE,
-                definition_id = "bee.harness.window:app", arguments = {request}}))
+                definition_id = "bee.harness.window:app", thread_id = thread, arguments = {request}}))
             local opened = receive_reply(replies, "fixture-open", "open")
             assert(opened.error_code == "", "fixture provider window did not become ready: " .. tostring(opened.error))
             local id = tostring(opened.id)

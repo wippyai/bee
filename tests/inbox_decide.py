@@ -41,13 +41,13 @@ def edit_inbox_workspaces(project):
     index.write_text(yaml.safe_dump(doc, sort_keys=False))
 
 
-def run_probe(project, folder, command, timeout, deployment=None):
+def run_probe(project, folder, command, timeout, deployment=None, environment=None):
     if deployment:
         deployment_copy(deployment, folder)
     args = [str(RUNTIME), "run", "--verbose", command, "--host", "bee:workers",
             "--set", f"registry.history_path={folder}/registry.db"]
     result = subprocess.run(args, cwd=folder if deployment else project, capture_output=True, text=True,
-                            timeout=timeout, env=database_environment(folder))
+                            timeout=timeout, env=database_environment(folder, **(environment or {})))
     return result
 
 

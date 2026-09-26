@@ -36,6 +36,16 @@ that thread actor, which that attempt's placement resolves and no child attempt
 inherits. A replay returns the same grant; the binding's own surface policy
 selects the approver. Filing the request grants nothing.
 
+`install_request`, `uninstall_request` and `install_status` file and poll Hub
+installation requests the same way. The gateway resolves the exact Hub plan as
+the bound subject with Hub read authority only, and files one thread-bound
+approval under the approval policy the host's `target_install_configuration`
+entry names. On the first status poll after approval it consumes the decision
+under one effect key and calls the Hub apply with the approved digest, adding
+the installation apply policy to that call alone. Elevation, MCP access and
+installation share `subject_call` for subject-bound owner calls and approval
+consumption.
+
 The HTTP MCP route bounds each JSON request at 512 KiB. Overlay calls through MCP
 accept at most 64 KiB of text or 87,384 bytes of canonical base64 per put
 (at most 64 KiB decoded);

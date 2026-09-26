@@ -28,6 +28,10 @@ entries:
   kind: ns.dependency
   component: bee/docs
   version: '*'
+- name: dependency_hub
+  kind: ns.dependency
+  component: bee/hub
+  version: '*'
 - name: target_db
   kind: ns.requirement
   meta: {comment: Host-selected SQLite resource for bindings, credential hashes, listener state, surfaces, and hook intake}
@@ -197,6 +201,24 @@ entries:
     path: .security.policies +=
   - entry: bee.gateway.security:tool_policy_read_policy
     path: .policy.resources +=
+- name: target_tool_install_policy
+  kind: ns.requirement
+  meta: {comment: Host-selected policy for the built-in installation request tools; it admits filing and polling requests and never applying one}
+  targets:
+  - entry: bee.gateway:tool_install_policy_ref
+    path: .resource_ref
+  - entry: bee.gateway.api:mcp_http
+    path: .security.policies +=
+  - entry: bee.gateway.security:tool_policy_read_policy
+    path: .policy.resources +=
+- name: target_install_configuration
+  kind: ns.requirement
+  meta: {comment: Host-selected module installation configuration naming the approval policy agent installation requests are filed under; an absent link fails closed}
+  targets:
+  - entry: bee.gateway:install_configuration_ref
+    path: .resource_ref
+  - entry: bee.gateway.security:installation_policy
+    path: .policy.resources +=
 - name: target_remote_resolver
   kind: ns.requirement
   meta: {comment: Host-selected resolver for node-qualified session addresses; the module default resolves nothing, so a composition with no transport answers a remote address as not found}
@@ -329,6 +351,12 @@ entries:
 - name: tool_application_open_policy_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Linked host policy for the built-in admitted-application open tool}
+- name: tool_install_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in installation request tools}
+- name: install_configuration_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host module installation configuration; target_install_configuration fills resource_ref}
 - name: configuration
   kind: library.lua
   source: file://configuration.lua

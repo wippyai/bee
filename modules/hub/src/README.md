@@ -85,3 +85,11 @@ policies from the current scope, then adds only those selected execution
 policies. This lets package code receive exact function and physical-database
 grants without inheriting Hub or Governance publication authority. Policy
 selection remains the invoking host owner's responsibility.
+
+Plans also list `policy_changes`: each security policy the change adds, replaces
+with a new package version or removes with a departing package, with its
+actions, resources and whether an expression limits it. `installation` is the
+pure value library for agent installation requests: it decodes a request,
+selects install or update and the newest release, renders one approval body
+from a ready plan, verifies a recorded request belongs to the asking attempt
+and maps an apply reply to the agent's status. The gateway performs the calls.

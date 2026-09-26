@@ -4,21 +4,60 @@ The real facade and publication boundary are covered by hub-manage-check.
 This fixture exercises the actual broker, app process, presenter and keyboard.
 The real Hub install into a packed release deployment is the post-publication
 check in hub_release_install.py.
+
+An agent-driven install goes through the same fixture facade: an admitted
+attempt files an installation request through its gateway binding, the person
+approves it in Approvals, and only then does the attempt's status poll apply
+the approved plan digest under the Hub management policy.
 """
+import json
 import re
+import shutil
 import tempfile
 import time
 from pathlib import Path
 import yaml
 
+from inbox_decide import run_probe
 from tui_smoke import Desktop
-from workspace import fixture_workspace, pack_fixture, registry_entries
+from workspace import ROOT, fixture_workspace, pack_fixture, registry_entries
+
+AGENT_WORKSPACE = "fedcba9876543210fedcba9876543210"
+AGENT_DIGEST = "d" * 64
 
 
 FACADE = '''
+local security = require("security")
 local recovered = false
+-- The agent-requested package: reads never carry management authority; the
+-- approved apply does, for exactly the approved digest and request.
+local function agent_tool(raw: {[string]: unknown}): {[string]: unknown}
+    local request = raw.request or {}
+    local manage = security.can("bee.hub.manage", "bee/agent-tool")
+    if raw.operation == "plan" then
+        assert(not manage, "planning carried Hub management authority")
+        assert(request.action == "install" and request.version == "1.0.0" and request.migration_policy == "up",
+            "agent plan request changed")
+        return {ok = true, replayed = false, value = {request = {action = "install", component = "bee/agent-tool",
+            version = "1.0.0", migration_policy = "up", parameters = {}}, digest = AGENT_DIGEST, ready = true,
+            base_revision = 1, missing = {}, migrations = {}, starts = {}, capabilities = {"agent.tool:reader"},
+            modules = {{component = "bee/agent-tool", version = "1.0.0", previous_version = "", change = "install"}},
+            policy_changes = {{id = "agent.tool:reader", component = "bee/agent-tool", change = "add",
+                actions = {"fs.get"}, resources = {"agent.tool:data"}, expression = false}}}}
+    end
+    assert(raw.operation == "apply", "unexpected agent tool operation")
+    assert(manage, "approved apply lacks Hub management authority")
+    assert(raw.expected_digest == AGENT_DIGEST and request.action == "install" and request.version == "1.0.0"
+        and request.migration_policy == "up", "agent apply changed the approved plan")
+    return {ok = true, replayed = false, value = {state = "complete", message = "Agent tool installed"}}
+end
 local function handle(raw: unknown): {[string]: unknown}
     if type(raw) ~= "table" then return {ok = false, replayed = false} end
+    if (raw.operation == "plan" or raw.operation == "apply") and type(raw.request) == "table"
+        and raw.request.component == "bee/agent-tool" then return agent_tool(raw) end
+    if raw.operation == "installed" then
+        return {ok = true, replayed = false, value = {version = 1, modules = {}, roots = {}}}
+    end
     if raw.operation == "catalog" then
         return {ok = true, replayed = false, value = {total = 1, items = {{
             component = "bee/example", title = "Preview fixture", description = "Packaged module",
@@ -91,7 +130,67 @@ local function handle(raw: unknown): {[string]: unknown}
     return {ok = false, replayed = false, code = "FIXTURE", message = "No fixture mutation"}
 end
 return {handle = handle}
-'''
+'''.replace("AGENT_DIGEST", '"' + AGENT_DIGEST + '"')
+
+
+def stage_agent_install(project):
+    """Add the agent probe and list its workspace in the Approvals inbox."""
+    shutil.copytree(ROOT / "tests/fixtures/agent_install", project / "src/agent_install_probe")
+    index = project / "src/approvals/inbox/_index.yaml"
+    document = yaml.safe_load(index.read_text())
+    entry = next(item for item in document["entries"] if item["name"] == "workspaces")
+    entry["data"]["workspaces"].append(AGENT_WORKSPACE)
+    index.write_text(yaml.safe_dump(document, sort_keys=False))
+
+
+def probe_log(result, marker):
+    output = result.stdout + result.stderr
+    failures = [line for line in output.splitlines() if "AGENT_INSTALL" in line and "_FAILED" in line]
+    assert result.returncode == 0 and marker in output, "\n".join(failures) or output[-6000:]
+    line = next(line for line in output.splitlines() if marker in line)
+    return json.loads(line[line.index("{"):])
+
+
+def exercise_agent_install(project, packed, pack):
+    with tempfile.TemporaryDirectory(prefix="bee-agent-install-") as directory:
+        folder = Path(directory)
+        (folder / ".wippy").mkdir()
+        launch_pack = pack if packed else None
+        requested = probe_log(run_probe(project, folder, "agent-install-request", 120, launch_pack),
+                              "AGENT_INSTALL_REQUESTED")
+        assert requested["status"] == "pending" and requested["version"] == "1.0.0", requested
+        assert requested["action"] == "install", requested
+        ui = Desktop(folder, packed=packed, project=project, deployment=pack)
+        try:
+            ui.wait("No applications open", timeout=30)
+            ui.open_start()
+            ui.choose("Tools")
+            ui.choose("Approvals")
+            ui.wait("APPROVALS", timeout=30)
+            ui.wait("bee.hub:apply", timeout=30)
+            ui.key(b"j")
+            ui.key(b"o")
+            ui.wait("Asked: Install bee/agent-tool 1.0.0 from the Hub?", timeout=20)
+            ui.wait("added: agent.tool:reader allows fs.get on agent.tool:data", timeout=20)
+            ui.key(b"a")
+            ui.wait("Approve this request?", timeout=20)
+            ui.key(b"\t")
+            ui.key(b"\r")
+            ui.wait("approved by bee.application:", timeout=30)
+            ui.key(b"\x1b")
+            ui.pump(.5)
+            ui.quit()
+        except Exception:
+            Path(folder / "agent-install-failure.raw").write_bytes(ui.raw)
+            raise
+        finally:
+            ui.close()
+        environment = {"BEE_AGENT_INSTALL_BINDING": requested["binding_id"],
+                       "BEE_AGENT_INSTALL_REQUEST": requested["request_id"]}
+        status = probe_log(run_probe(project, folder, "agent-install-status", 120, launch_pack, environment),
+                           "AGENT_INSTALL_STATUS")
+        assert status["status"] == "applied" and status["replayed_status"] == "applied", status
+        assert status["component"] == "bee/agent-tool" and status["version"] == "1.0.0", status
 
 
 def exercise(project, packed, pack):
@@ -434,10 +533,13 @@ return {handle = handle}
 def main():
     with fixture_workspace(unit_tests=False) as project:
         (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)
+        stage_agent_install(project)
         pack = project / "modules-deployment"
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)
+        exercise_agent_install(project, False, pack)
+        exercise_agent_install(project, True, pack)
     with fixture_workspace(unit_tests=False) as project:
         # The test workspace adds wippy/test as a local source dependency for
         # unrelated fixture apps. Remove that root so this scenario proves the

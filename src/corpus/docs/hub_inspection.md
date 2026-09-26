@@ -20,6 +20,8 @@ Managed agents receive the narrower read-only MCP `components` tool when their
 launch policy admits it. It supports `catalog`, `details`, `inspect`, `state`,
 `files`, `read_file`, `installed`, `installed_source` and effect-free `plan`; direct apply,
 installation, update, removal and status calls are refused at that boundary.
+Agents ask the person to install through the separate write tools described in
+[Agent installation requests](#agent-installation-requests).
 
 ## Inspect a package
 
@@ -121,6 +123,51 @@ retry is scheduled.
 Modules presents the same read, plan, review, confirmation and receipt flow.
 Its package contents browser is read-only and binds resource reads to the
 selected artifact digest.
+
+## Agent installation requests
+
+An agent learns how to build on a package by reading it through `components`:
+`catalog` and `details` to find it, `state`, `inspect`, `files` and `read_file`
+for its entries, requirements, documentation and examples, and `plan` to see
+what installing it would change. To use a package it does not have, the agent
+asks the person:
+
+```json
+{"name": "install_request", "arguments": {"component": "acme/tool", "version": "1.2.0"}}
+{"name": "uninstall_request", "arguments": {"component": "acme/tool"}}
+{"name": "install_status", "arguments": {"request_id": "<request_id>"}}
+```
+
+`install_request` resolves the exact plan in the agent's own workspace: the
+newest release that is not yanked when `version` is omitted, and an update when
+the component already has a Hub dependency root. Install and update run the
+package's migrations (`up`) under the host's migration grants; uninstall uses
+`block`. The host files one approval, bound to the agent's thread and attempt,
+under the approval policy the host configuration `bee:module_installation`
+names (`module-installation`, decided in Approvals). The approval shows the
+package, version, source, dependency changes, the security policies the change
+adds, replaces or removes with their actions and resources, migrations and
+auto-start entries; the plan digest binds all of them. Filing changes nothing
+and returns `request_id` and `status: pending`. A retry for the same plan by the
+same attempt replays the same request. A package whose plan needs requirement
+values is refused with `INCOMPLETE`; the person installs it in Modules.
+
+`install_status` reports `pending`, `refused` (with `DENIED`, `EXPIRED` or
+`WITHDRAWN`), `approved`, `applied` or `failed` with the Hub code and message.
+The agent never holds Hub management authority. On the first poll after the
+person approves, the gateway consumes the decision once and applies exactly the
+approved digest through the Hub facade with management authority added to that
+one call; a changed registry base fails with `STALE` and needs a new request.
+`approved` means the apply outcome is unknown; the next poll repeats the same
+digest-bound apply, which replays its recorded receipt. The requesting attempt
+applies the request: the approval notice wakes its `thread_wait`, and a request
+whose attempt ended before polling stays unapplied.
+
+The host grants these tools per launch policy (`gateway_tools`) and links their
+MCP policy through the gateway's `target_tool_install_policy`; the shipped
+policy admits filing and polling requests and never applying them. The shipped
+agent launch policies include them. The configuration link
+`target_install_configuration` fails closed when absent.
 
 ## Limits and checks
 

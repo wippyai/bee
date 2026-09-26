@@ -387,6 +387,38 @@ local function define_tests()
                 test.eq(notice and notice.provider, case.provider)
             end
         end)
+        test.it("finds login evidence in the host home the carrier selects", function()
+            -- A host-home window names HOME by the nested env reference, so the
+            -- notice must resolve that same reference; otherwise it inspects the
+            -- private attempt home, where the provider never stores evidence.
+            local original = registry.get("bee.env:machine_home")
+            if not original then error("machine home binding is missing") end
+            local changed = registry.get("bee.env:machine_home")
+            if not changed then error("machine home binding is missing") end
+            changed.data = {storage = "bee.placement.native:sentinel_storage",
+                variable = "BEE_TEST_LOGIN_HOME", default = "/", readonly = true}
+            local changes = registry.snapshot():changes()
+            changes:update(changed)
+            local applied, apply_error = changes:apply()
+            if not applied then error(tostring(apply_error)) end
+            local ok, failure = pcall(function()
+                local raw = launch({"sh", "-c", "true"}, "direct_process")
+                raw.profile_id = "window"
+                raw.environment_refs = {HOME = "bee.env:machine_home"}
+                local spec = raw.launch :: {[string]: unknown}
+                -- etc/hosts exists in the inherited host home and never in the
+                -- private attempt home, so only host-home resolution clears it.
+                spec.login = {provider = "codex", command = "codex login", files = {{variable = "HOME", path = "etc/hosts"}}}
+                local decoded, decode_error = request_codec.decode(raw)
+                if not decoded then error(tostring(decode_error)) end
+                test.is_nil(materialization.prepare_login_notice(decoded, "/private-attempt-home", nil))
+            end)
+            local restore = registry.snapshot():changes()
+            restore:update(original)
+            local restored, restore_error = restore:apply()
+            if not restored then error(tostring(restore_error)) end
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("returns a typed login notice from prepare and its replay", function()
             local raw = launch({"sh", "-c", "true"}, "direct_process")
             raw.profile_id = "window"

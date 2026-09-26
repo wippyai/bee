@@ -22,7 +22,7 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, launch_definitions: string, capability: string}
+type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, launch_definitions: string, capability: string, install: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
     read = "bee.gateway:tool_read_policy_ref",
     message = "bee.gateway:tool_message_policy_ref",
@@ -39,6 +39,7 @@ local TOOL_POLICY_REFS: ToolPolicyRefs = {
     capabilities = "bee.gateway:tool_read_policy_ref",
     launch_definitions = "bee.gateway:tool_launch_policy_ref",
     capability = "bee.gateway:tool_read_policy_ref",
+    install = "bee.gateway:tool_install_policy_ref",
 }
 local BUILTIN_POLICY_REFS: {[string]: boolean} = {}
 for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = true end
@@ -138,7 +139,7 @@ local TOOLS: {Tool} = {
     {name = "docs", description = "Read the platform documentation that ships inside Bee, offline: list the corpus by topic (at most 64 per page), search it for a phrase (at most 16 matches per page), or read one bounded window of one document by stable id (at most 16,384 bytes per window, honoring offset after section selection). Use it to look up how the runtime modules an application author calls work (process, channel, tty, registry, sql, fs, http, events), Bee's own contracts (application, threads, hive and cross-node subscriptions, placement, gateway, storage, UI) and the terminal toolkit for drawing, layout, styles and input.", operation = "bee.docs.binding:call",
         policies = {TOOL_POLICY_REFS.docs}, annotations = READ_ANNOTATIONS,
         schema = docs_protocol.schema()},
-    {name = "components", description = "Read-only inspection of installed registry components, Hub packages and resolved installation plans. catalog {query?, page?, keyword?} discovers Hub packages; details {component} describes one; inspect {component, version} reads one exact Hub artifact (an exact version is required) as entry summaries first, at most 32 per page with next_offset, then page entries or read selected source windows; state {component, version} reads its metadata, resources and entry summaries the same way; files {component, version, resource, path?, offset?, limit?} pages a packaged directory; read_file {component, version, resource, path, offset?, limit?} reads one packaged file window of at most 16,384 bytes with next_offset; installed takes no request body and reads effective component inventory; installed_source {component, version, entry_id?, expected_revision?, offset?, limit?} lists and pages Lua source of an exact installed component, including local dev versions, under its registry revision; plan resolves dependencies and capabilities without applying. Hub artifact inspection and installed inspection are different sources and may differ. This tool cannot apply or write the registry.", operation = "bee.hub.binding:call",
+    {name = "components", description = "Read-only inspection of installed registry components, Hub packages and resolved installation plans. catalog {query?, page?, keyword?} discovers Hub packages; details {component} describes one; inspect {component, version} reads one exact Hub artifact (an exact version is required) as entry summaries first, at most 32 per page with next_offset, then page entries or read selected source windows; state {component, version} reads its metadata, resources and entry summaries the same way; files {component, version, resource, path?, offset?, limit?} pages a packaged directory; read_file {component, version, resource, path, offset?, limit?} reads one packaged file window of at most 16,384 bytes with next_offset; installed takes no request body and reads effective component inventory; installed_source {component, version, entry_id?, expected_revision?, offset?, limit?} lists and pages Lua source of an exact installed component, including local dev versions, under its registry revision; plan resolves dependencies and capabilities without applying. Hub artifact inspection and installed inspection are different sources and may differ. This tool cannot apply or write the registry; install_request asks the person to install a package.", operation = "bee.hub.binding:call",
         policies = {TOOL_POLICY_REFS.components}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
             operation = {type = "string", enum = {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan"}},
@@ -178,6 +179,25 @@ local TOOLS: {Tool} = {
             {operation = "installed_source", request = {component = "bee/application", version = "0.1.0-dev"}},
             {operation = "read_file", request = {component = "acme/tool", version = "1.2.3",
                 resource = "package", path = "init.lua", offset = 0, limit = 16384}},
+        }}},
+    {name = "install_request", description = "Ask the person to install or update one Hub package in this agent's workspace. The host resolves the exact plan (the newest release when version is omitted, an update when the package is already installed through the Hub) and files one approval showing the package, version, source, dependency changes, the security policies it adds, replaces or removes, migrations and auto-start entries. Filing changes nothing; poll install_status with the returned request_id. A retry for the same plan replays the same request. A package that needs requirement values is refused; the person installs it in Modules.",
+        operation = "bee.gateway.binding:install_request",
+        policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"component"}, properties = {
+            component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name"},
+            version = {type = "string", minLength = 1, maxLength = 128, description = "Exact version; omit for the newest release"},
+        }}},
+    {name = "uninstall_request", description = "Ask the person to remove one Hub package this installer holds, with the dependencies only it uses. The approval shows the removed packages and policies; applied migrations block the removal. Filing changes nothing; poll install_status with the returned request_id.",
+        operation = "bee.gateway.binding:uninstall_request",
+        policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"component"}, properties = {
+            component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name"},
+        }}},
+    {name = "install_status", description = "Poll one installation request by request_id: pending, refused (the person denied it or it expired), approved (applying), applied, or failed with the Hub code and message. On the first poll after approval the host consumes the decision once and applies exactly the approved plan; a replayed poll replays the recorded result.",
+        operation = "bee.gateway.binding:install_status",
+        policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
+            request_id = {type = "string", minLength = 1, maxLength = 160},
         }}},
     {name = "delivery", description = "Check a frozen component pack without staging it (preflight needs the frozen snapshot_digest and stages nothing; call it before request), request delivery of your frozen pack to this destination (request publishes the frozen artifact, stages it and reads the destination's preflight verdict and needs snapshot_digest), or read a staged version's review, selection and activation status (status needs neither digest nor node; source_node and intent_id narrow it). It names the human steps it cannot take: review in Overlays, approval in Approvals and apply by the activation owner. Request and preflight stage and check; status only reads.",
         operation = "bee.gov.binding:delivery_call",
@@ -262,6 +282,9 @@ M.OUTPUT_SCHEMAS = {
     capability_status = output_schema({type = "object", additionalProperties = false,
         properties = {approval_id = {type = "string"}, status = {type = "string"},
             grant_id = {type = "string"}, expires_at = {type = "string"}, authorization_epoch = {type = "integer"}}}),
+    install_request = output_schema({type = "object"}),
+    uninstall_request = output_schema({type = "object"}),
+    install_status = output_schema({type = "object"}),
 }
 -- Opening a reviewed application is deliberately not a base capability.  The
 -- surface installs this one built-in trait when the binding admits the tool;
@@ -471,6 +494,33 @@ function M.capability_status_arguments(params: Object): (Object?, string?)
     local approval_id = bounds.id(arguments.approval_id)
     if not approval_id then return nil, "approval_id is required and must be an identifier" end
     return {approval_id = approval_id}, nil
+end
+-- Installation requests name a package; the host resolves everything else.
+function M.install_arguments(params: Object, uninstall: boolean): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local allowed: {string} = {"component", "version"}
+    if uninstall then allowed = {"component"} end
+    local unknown_field = bounds.fields(arguments, allowed)
+    if unknown_field then return nil, unknown_field end
+    local component = bounds.line(arguments.component, 160)
+    if not component then return nil, "component is required as owner/name" end
+    local request: Object = {component = component}
+    if arguments.version ~= nil then
+        local version = bounds.line(arguments.version, 128)
+        if not version then return nil, "version must be an exact package version" end
+        request.version = version
+    end
+    return request, nil
+end
+function M.install_status_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"request_id"})
+    if unknown_field then return nil, unknown_field end
+    local request_id = bounds.id(arguments.request_id)
+    if not request_id then return nil, "request_id is required and must be an identifier" end
+    return {request_id = request_id}, nil
 end
 -- The capability report takes no arguments: the binding selects the surface.
 function M.capabilities_arguments(params: Object): (Object?, string?)

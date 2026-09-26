@@ -5,66 +5,32 @@
 -- approval the gateway consumes the decision and writes one resources
 -- grant row for the authenticated thread actor. Decisions remain in the
 -- approval owner; the gateway records only the resulting grant effect.
-local funcs = require("funcs")
-local security = require("security")
 local hash = require("hash")
 local registry = require("registry")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local capability = require("capability")
+local subject_call = require("subject_call")
 local M = {}
 M.ELEVATION_CALL_POLICY = "bee.gateway.security:elevation_policy"
-M.REQUEST_POLICY_REF = "bee.gateway:approval_request_policy_ref"
-M.CONSUME_POLICY_REF = "bee.gateway:approval_consume_policy_ref"
 M.GRANT_THREAD_POLICY = "bee.security.resources:resource_grant_thread_policy"
 M.CATALOG_ENTRY = "bee:capability_catalog"
 M.GRANT_CALL = "bee.resources.binding:grant"
 type Object = {[string]: unknown}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, workspace_id: string?}
 type Reply = {ok: boolean, value: unknown, error: {code: string, message: string}?}
-local function fail(code: string, message: string): Reply return {ok = false, value = nil, error = {code = code, message = message}} end
-local function linked_policy(reference: string, description: string): (string?, string?)
-    local entry, entry_error = registry.get(reference)
-    if entry_error or not entry then return nil, description .. " policy reference is unavailable" end
-    local data = bounds.object(entry.data)
-    local target = data and bounds.id(data.resource_ref)
-    if not target then return nil, description .. " policy is not linked" end
-    return target, nil
+type Approvals = (string, Object) -> Reply
+local fail = subject_call.fail
+-- The approval bound to this thread and attempt is the authority for every
+-- effect; the scope is server-side plumbing.
+local function approvals(binding: Binding): Approvals
+    return subject_call.approvals(binding, M.ELEVATION_CALL_POLICY, {M.GRANT_THREAD_POLICY})
 end
--- The executor runs as the bound subject in its binding's workspace under
--- the elevation call policy plus the host-linked approval policies and the
--- thread-grant policy. The scope is server-side plumbing: the approval
--- bound to this thread and attempt is the authority for every effect.
-local function invoke(binding: Binding, operation: string, value: Object): Reply
-    local meta: {[string]: string} = {}
-    if binding.workspace_id then meta.workspace_id = binding.workspace_id end
-    local actor, actor_error = security.new_actor(binding.subject, meta)
-    if not actor then return fail("DENIED", tostring(actor_error)) end
-    local policies: {security.Policy} = {}
-    local request, request_error = linked_policy(M.REQUEST_POLICY_REF, "approval request")
-    if not request then return fail("UNAVAILABLE", request_error or "approval request policy") end
-    local consume, consume_error = linked_policy(M.CONSUME_POLICY_REF, "approval consume")
-    if not consume then return fail("UNAVAILABLE", consume_error or "approval consume policy") end
-    for _, id in ipairs({M.ELEVATION_CALL_POLICY, request, consume, M.GRANT_THREAD_POLICY}) do
-        local policy, policy_error = security.policy(id)
-        if not policy then return fail("UNAVAILABLE", tostring(policy_error)) end
-        policies[#policies + 1] = policy
-    end
-    local acted, actor_failure = funcs.new():with_actor(actor)
-    if not acted then return fail("DENIED", tostring(actor_failure)) end
-    local scoped, scope_error = acted:with_scope(security.new_scope(policies))
-    if not scoped then return fail("DENIED", tostring(scope_error)) end
-    local target = operation == "grant" and M.GRANT_CALL or "bee.approvals.binding:" .. operation
-    local raw, call_error = scoped:call(target, value)
-    if call_error then return fail("UNAVAILABLE", tostring(call_error)) end
-    local reply = bounds.object(raw)
-    if not reply or type(reply.ok) ~= "boolean" then return fail("UNAVAILABLE", "invalid approval reply") end
-    if reply.ok then return {ok = true, value = reply.value} end
-    local fault = bounds.object(reply.error)
-    local code = fault and bounds.id(fault.code)
-    local message = fault and bounds.text(fault.message, 4096)
-    if not code or not message then return fail("UNAVAILABLE", "invalid approval failure") end
-    return {ok = false, value = reply.value, error = {code = code, message = message}}
+local function grant(binding: Binding, value: Object): Reply
+    local linked, link_error = subject_call.approval_policies()
+    if not linked then return link_error :: Reply end
+    return subject_call.call(binding, {M.ELEVATION_CALL_POLICY, linked[1], linked[2], M.GRANT_THREAD_POLICY},
+        M.GRANT_CALL, value)
 end
 local function catalog_entry(): (unknown?, Reply?)
     local entry, entry_error = registry.get(M.CATALOG_ENTRY)
@@ -88,7 +54,7 @@ function M.request(binding: Binding, policy_name: string, raw: unknown): Reply
     if not entry then return entry_error :: Reply end
     local request, measure_error = measured(entry, binding, raw)
     if not request then return measure_error :: Reply end
-    return invoke(binding, "request", {workspace_id = workspace_id, idempotency_key = "capability:" .. capability.request_key(request),
+    return approvals(binding)("request", {workspace_id = workspace_id, idempotency_key = "capability:" .. capability.request_key(request),
         request_kind = "permission", policy = policy_name, proposal = capability.proposal(request),
         prompt = {text = capability.wording(request)}, thread_id = binding.thread_id})
 end
@@ -129,23 +95,6 @@ local function verified(binding: Binding, policy_name: string, entry: unknown, v
     if not consistent then return nil, nil, fail("DENIED", consumption_error or "approval does not belong to this thread and attempt") end
     return request, expected, nil
 end
-local function consume(binding: Binding, approval_id: string, expected: string, incarnation_raw: unknown): Reply
-    local incarnation = bounds.count(incarnation_raw)
-    if not incarnation or incarnation == 0 then return fail("UNAVAILABLE", "approval authority identity missing") end
-    local effect_key = "capability:" .. approval_id
-    local consumed = invoke(binding, "consume", {approval_id = approval_id, proposal_digest = expected,
-        effect_key = effect_key, owner_incarnation = incarnation})
-    if not consumed.ok and consumed.error and consumed.error.code == "REVALIDATE" then
-        local state = bounds.object(consumed.value)
-        local current = state and bounds.count(state.current_incarnation)
-        if not current or current == 0 then return fail("UNAVAILABLE", "approval authority identity missing") end
-        local validated = invoke(binding, "revalidate", {approval_id = approval_id, proposal_digest = expected, owner_incarnation = current})
-        if not validated.ok then return validated end
-        consumed = invoke(binding, "consume", {approval_id = approval_id, proposal_digest = expected,
-            effect_key = effect_key, owner_incarnation = current})
-    end
-    return consumed
-end
 -- status: report the decision, and on approval consume it exactly once and
 -- write the thread-actor grant row the attempt's placement resolves. A
 -- replayed status replays the same grant instead of writing a second row:
@@ -155,7 +104,8 @@ function M.status(binding: Binding, policy_name: string, approval_id_raw: unknow
     if not approval_id then return fail("INVALID", "approval_id is required") end
     local entry, entry_error = catalog_entry()
     if not entry then return entry_error :: Reply end
-    local read = invoke(binding, "read", {approval_id = approval_id})
+    local owner = approvals(binding)
+    local read = owner("read", {approval_id = approval_id})
     if not read.ok then return read end
     local view = bounds.object(read.value)
     if not view then return fail("UNAVAILABLE", "invalid approval read") end
@@ -164,11 +114,11 @@ function M.status(binding: Binding, policy_name: string, approval_id_raw: unknow
     if view.state ~= "decided" or view.decision ~= "approved" then
         return {ok = true, value = {approval_id = approval_id, status = view.decision or view.state}}
     end
-    local consumed = consume(binding, approval_id, expected, view.owner_incarnation)
+    local consumed = subject_call.consume(owner, approval_id, expected, "capability:" .. approval_id, view.owner_incarnation)
     if not consumed.ok then return consumed end
     local write, write_error = capability.grant_write(request, binding.workspace_id, binding.subject)
     if not write then return fail("DENIED", write_error or "approved capability writes no grant") end
-    local granted = invoke(binding, "grant", write)
+    local granted = grant(binding, write)
     if not granted.ok then return granted end
     local row = bounds.object(granted.value)
     local grant_id = row and bounds.id(row.grant_id)

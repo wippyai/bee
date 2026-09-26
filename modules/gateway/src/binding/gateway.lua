@@ -27,6 +27,7 @@ local surface = require("surface")
 local surface_store = require("surface_store")
 local access = require("access")
 local elevation = require("elevation")
+local installation = require("installation")
 local sessions = require("sessions")
 local M = {}
 function M.accepts_host(value: unknown): boolean
@@ -1021,11 +1022,11 @@ function M.access_status(binding: Binding, approval_id: string): Reply
     if commit_error then return fail("STORAGE", "grant commit outcome unknown; retry the same approval") end
     return succeed({approval_id = approval_id, status = "granted", revision = updated.revision, traits = grant.traits})
 end
--- Capability elevation runs as the bound subject: the binding row is
--- rechecked on every call, and the approval policy comes from the
--- binding's own surface access. Only the bound subject may elevate its
--- own attempt.
-local function elevation_binding(value: unknown): (Binding?, Reply?)
+-- Capability elevation and installation requests run as the bound subject:
+-- the binding row is rechecked on every call, and only the bound subject may
+-- act for its own attempt. Elevation takes its approval policy from the
+-- binding's own surface access; installation from the host configuration.
+local function own_binding(value: unknown): (Binding?, Reply?)
     local object = bounds.object(value)
     if not object then return nil, fail("INVALID", "request must be an object") end
     local binding_id = bounds.id(object.binding_id)
@@ -1037,7 +1038,7 @@ local function elevation_binding(value: unknown): (Binding?, Reply?)
     local binding, missing = binding_by_id(db, binding_id)
     db:release()
     if not binding then return nil, missing end
-    if binding.subject ~= caller then return nil, fail("DENIED", "only the bound subject elevates its own attempt") end
+    if binding.subject ~= caller then return nil, fail("DENIED", "only the bound subject acts for its own attempt") end
     if binding.revoked then return nil, fail("DENIED", "binding is revoked") end
     local expires = time.parse(FORMAT, binding.expires_at)
     if not expires or not time.now():before(expires) then return nil, fail("DENIED", "binding has expired") end
@@ -1051,7 +1052,7 @@ local function elevation_policy(binding: Binding): (string?, Reply?)
     return access.policy, nil
 end
 function M.request_capability(value: unknown): Reply
-    local binding, refusal = elevation_binding(value)
+    local binding, refusal = own_binding(value)
     if not binding then return refusal end
     local policy_name, policy_refusal = elevation_policy(binding)
     if not policy_name then return policy_refusal end
@@ -1059,12 +1060,37 @@ function M.request_capability(value: unknown): Reply
     return elevation.request(binding, policy_name, {capability = object.capability, parameters = object.parameters, ttl_ms = object.ttl_ms})
 end
 function M.capability_status(value: unknown): Reply
-    local binding, refusal = elevation_binding(value)
+    local binding, refusal = own_binding(value)
     if not binding then return refusal end
     local policy_name, policy_refusal = elevation_policy(binding)
     if not policy_name then return policy_refusal end
     local object = bounds.object(value) or {}
     return elevation.status(binding, policy_name, object.approval_id)
+end
+local function installation_call(value: unknown, fields: {string}): (Binding?, string?, unknown?, Reply?)
+    local binding, refusal = own_binding(value)
+    if not binding then return nil, nil, nil, refusal end
+    local policy_name, policy_refusal = installation.approval_policy()
+    if not policy_name then return nil, nil, nil, policy_refusal end
+    local object = bounds.object(value) or {}
+    local request: {[string]: unknown} = {}
+    for _, name in ipairs(fields) do request[name] = object[name] end
+    return binding, policy_name, request, nil
+end
+function M.install_request(value: unknown): Reply
+    local binding, policy_name, request, refusal = installation_call(value, {"component", "version"})
+    if not binding or not policy_name then return refusal :: Reply end
+    return installation.request(installation.port(binding), binding, policy_name, "install", request)
+end
+function M.uninstall_request(value: unknown): Reply
+    local binding, policy_name, request, refusal = installation_call(value, {"component"})
+    if not binding or not policy_name then return refusal :: Reply end
+    return installation.request(installation.port(binding), binding, policy_name, "uninstall", request)
+end
+function M.install_status(value: unknown): Reply
+    local binding, policy_name, request, refusal = installation_call(value, {"request_id"})
+    if not binding or not policy_name then return refusal :: Reply end
+    return installation.status(installation.port(binding), binding, policy_name, request)
 end
 function M.authenticate(token: string, action_id: string, kind: string): (Binding?, Reply?)
     if #token == 0 or #token > 128 then return nil, fail("UNAUTHENTICATED", "token is not presentable") end

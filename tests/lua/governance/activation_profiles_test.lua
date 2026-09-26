@@ -149,21 +149,24 @@ local function define_tests()
                 ["bee.probe.manager:client_policy"] = policy,
                 ["bee.security:ordinary_app_subsystem_boundary"] = base,
             }
-            local admitted, evidence, error_message = profiles.package_bindings(configured, WORKSPACE,
+            local admitted, error_message = profiles.package_admissions(configured, WORKSPACE,
                 NODE, function(id: string): unknown return installed[id] end)
-            if not admitted or not evidence then error(tostring(error_message)) end
+            if not admitted then error(tostring(error_message)) end
             test.eq(#admitted, 1)
-            test.eq(admitted[1].definition_id, "bee.probe.manager:app")
-            test.eq(#evidence, 1)
+            test.eq(admitted[1].record.schema_revision, "bee.governance-application-admission@1")
+            test.eq(admitted[1].record.workspace_id, WORKSPACE)
+            test.eq(admitted[1].record.source_workspace, "bee.probe.manager")
+            test.eq(#admitted[1].record.bindings, 1)
+            test.eq(admitted[1].record.bindings[1].definition_id, "bee.probe.manager:app")
+            test.is_true(#admitted[1].digest == 64)
             -- Without the composed definition the entry admits nothing and the
             -- call reports no error: the missing-definition path a host takes
             -- when a package is uninstalled.
             installed["bee.probe.manager:app"] = nil
-            local dropped, dropped_evidence, dropped_error = profiles.package_bindings(configured,
+            local dropped, dropped_error = profiles.package_admissions(configured,
                 WORKSPACE, NODE, function(id: string): unknown return installed[id] end)
-            if not dropped or not dropped_evidence then error(tostring(dropped_error)) end
+            if not dropped then error(tostring(dropped_error)) end
             test.eq(#dropped, 0)
-            test.eq(#dropped_evidence, 0)
         end)
     end)
 end

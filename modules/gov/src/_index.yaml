@@ -215,6 +215,16 @@ entries:
     workspace_applications: bee.gov:workspace_applications
     capability_grants: bee.gov:capability_grants
     capability_catalog: bee.gov:capability_catalog
+- name: application_admissions
+  kind: library.lua
+  source: file://application_admissions.lua
+  modules: [registry]
+  imports:
+    activation_profiles: bee.gov:activation_profile_decoder
+    capability_grants: bee.gov:capability_grants
+    capability_catalog: bee.gov:capability_catalog
+    workspace_applications: bee.gov:workspace_applications
+    governed_admission: bee.gov:governed_application_admission
 - name: workspace_applications
   kind: library.lua
   source: file://workspace_applications.lua

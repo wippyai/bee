@@ -44,6 +44,25 @@ local function define_tests()
             test.eq(spec.argv[8], "1")
         end)
 
+        test.it("runs the shipped batch worker in the default permission mode with no sandbox flag", function()
+            local decoded, err = launch.decode({profile_id = "batch", brief = "read traits", permission_mode = "default", max_turns = 1})
+            if not decoded then error(tostring(err)) end
+            local spec = launch.specification(decoded)
+            test.eq(spec.argv[1], "-p")
+            test.eq(spec.argv[2], "read traits")
+            local seen_sandbox = false
+            local seen_mode = false
+            for index, item in ipairs(spec.argv) do
+                if item == "--sandbox" then seen_sandbox = true end
+                if item == "--permission-mode" then
+                    seen_mode = true
+                    test.eq(spec.argv[index + 1], "default")
+                end
+            end
+            test.is_true(seen_mode)
+            test.is_false(seen_sandbox)
+        end)
+
         test.it("uses --single= when brief begins with a dash", function()
             local decoded, err = launch.decode({profile_id = "batch", brief = "--version"})
             if not decoded then error(tostring(err)) end

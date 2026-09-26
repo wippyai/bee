@@ -50,6 +50,15 @@ local function define_tests()
             test.eq(tools_error, "gateway_tools names a tool that is not a plain identifier")
             local _, unknown_error = launch.decode({profile_id = "batch", brief = "hi", model = "x/y"})
             test.eq(unknown_error, "unknown field model")
+            -- OpenCode offers no sandbox or permission flag Bee can select:
+            -- every such launch field is refused, which is why the host
+            -- records the batch route as unconfined.
+            local _, sandbox_error = launch.decode({profile_id = "batch", brief = "hi", sandbox = true})
+            test.eq(sandbox_error, "unknown field sandbox")
+            local _, mode_error = launch.decode({profile_id = "batch", brief = "hi", permission_mode = "default"})
+            test.eq(mode_error, "unknown field permission_mode")
+            local _, approval_error = launch.decode({profile_id = "batch", brief = "hi", approval_mode = "never"})
+            test.eq(approval_error, "unknown field approval_mode")
             test.is_nil(launch.decode(nil))
         end)
         test.it("handles prepare and dispatch methods", function()

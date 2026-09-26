@@ -131,6 +131,10 @@ local function define_tests()
             test.eq(model_error, "model is not one bounded model identifier")
             local _, effort_error = claude_launch.decode({profile_id = "session", brief = "x", effort = "turbo"})
             test.eq(effort_error, "effort is not one Bee admits")
+            local batch, batch_error = claude_launch.decode({profile_id = "batch", brief = "read traits", permission_mode = "default", max_turns = 1})
+            if not batch then error(tostring(batch_error)) end
+            test.eq(quote.line(claude_launch.specification(batch).argv),
+                "-p --output-format stream-json --verbose --include-partial-messages --permission-mode default --max-turns 1 -- 'read traits'")
             local resumed = claude_launch.specification({profile_id = "session", brief = "next", permission_mode = "default", max_turns = 1, resume_ref = "sess-1", permission_exchange = false})
             test.eq(resumed.argv[#resumed.argv - 2], "sess-1")
             test.eq(resumed.argv[#resumed.argv - 1], "--")
@@ -403,6 +407,10 @@ local function define_tests()
             if not full then error(tostring(full_error)) end
             test.eq(quote.line(muse_launch.specification(full).argv),
                 "exec --json --approval-mode never --model muse-spark-1.3 --reasoning-effort high --max-model-steps 4 -- 'say ok'")
+            local worker, worker_error = muse_launch.decode({profile_id = "batch", brief = "read traits", approval_mode = "on-request", max_steps = 1})
+            if not worker then error(tostring(worker_error)) end
+            test.eq(quote.line(muse_launch.specification(worker).argv),
+                "exec --json --approval-mode on-request --max-model-steps 1 -- 'read traits'")
             local resumed, resumed_error = muse_launch.decode({profile_id = "batch", brief = "next", resume_ref = "01a0ad3f-1bad-7bb1-9290-d73200470b9e"})
             if not resumed then error(tostring(resumed_error)) end
             test.eq(quote.line(muse_launch.specification(resumed).argv),

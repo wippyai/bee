@@ -435,6 +435,7 @@ entries:
     - bee.driver.grok:binding
     - bee.driver.muse:binding
     - bee.driver.opencode:binding
+    - bee.driver.wippy:binding
 - name: launch_policy_claude_window
   kind: registry.entry
   meta:

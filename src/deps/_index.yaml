@@ -293,3 +293,8 @@ entries:
     value: bee:launch_policy_opencode_window
   - name: batch_policy
     value: bee:launch_policy_opencode_batch
+- name: driver_wippy
+  kind: ns.dependency
+  component: bee/driver-wippy
+  version: '*'
+

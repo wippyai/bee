@@ -1,0 +1,27 @@
+version: '1.0'
+namespace: bee.driver.wippy.binding
+entries:
+- name: prepare
+  kind: function.lua
+  source: file://prepare.lua
+  method: handle
+  imports:
+    bounds: bee.threads.records:bounds
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch.lua
+  method: handle
+  imports:
+    bounds: bee.threads.records:bounds
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    bounds: bee.threads.records:bounds
+- name: normalize
+  kind: function.lua
+  source: file://normalize.lua
+  method: handle
+  imports:
+    bounds: bee.threads.records:bounds

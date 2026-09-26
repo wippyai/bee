@@ -37,3 +37,4 @@ workspace:
     bee/driver-grok: ./modules/driver-grok
     bee/driver-muse: ./modules/driver-muse
     bee/driver-opencode: ./modules/driver-opencode
+    bee/driver-wippy: ./modules/driver-wippy

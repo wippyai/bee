@@ -1,0 +1,130 @@
+version: '1.0'
+namespace: bee.driver.wippy
+entries:
+- name: definition
+  kind: ns.definition
+  module: driver-wippy
+  readme: file://README.md
+  meta:
+    title: Bee Wippy native driver
+    comment: In-process agent harness driver running framework closures against OpenAI-compatible chat endpoints
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: dependency_harness
+  kind: ns.dependency
+  component: bee/harness
+  version: '*'
+- name: types
+  kind: library.lua
+  source: file://types.lua
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  modules: [http_client, json, env, registry, funcs]
+  imports:
+    types: bee.driver.wippy:types
+- name: runner
+  kind: library.lua
+  source: file://runner.lua
+  modules: [json, registry, funcs, security]
+  imports:
+    client: bee.driver.wippy:client
+    types: bee.driver.wippy:types
+    bounds: bee.threads.records:bounds
+    agent_resolver: bee.harness.launch:agent_resolver
+- name: run
+  kind: function.lua
+  source: file://run_method.lua
+  method: handle
+  modules: [funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    runner: bee.driver.wippy:runner
+    types: bee.driver.wippy:types
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.wippy.binding:prepare
+      dispatch: bee.driver.wippy.binding:dispatch
+      normalize: bee.driver.wippy.binding:normalize
+      configure: bee.driver.wippy.binding:configure
+  meta:
+    type: harness.driver
+    driver_id: wippy
+    profiles_ref: bee.driver.wippy:profiles
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.wippy:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Wippy Native Agent
+      implementation_version: 0.1.0
+      default_profile: session
+      profiles:
+      - id: session
+        mode: session
+        protocol: native
+        protocol_revision: native-1
+        answer_path:
+          strategy: terminal_field
+          adapter_ref: bee.driver.wippy:binding
+        resume:
+          strategy: in-process
+          portable: true
+        isolation_env:
+          variables: []
+          private_home: false
+        exit_codes_trustworthy: true
+        permission_exchange:
+          mode: none
+        input_ready:
+          strategy: none
+          timeout_ms: 0
+        interrupt:
+          methods:
+          - runner_cancel
+      - id: batch
+        mode: batch
+        protocol: native
+        protocol_revision: native-1
+        answer_path:
+          strategy: terminal_field
+          adapter_ref: bee.driver.wippy:binding
+        resume:
+          strategy: in-process
+          portable: true
+        isolation_env:
+          variables: []
+          private_home: false
+        exit_codes_trustworthy: true
+        permission_exchange:
+          mode: none
+        input_ready:
+          strategy: none
+          timeout_ms: 0
+        interrupt:
+          methods:
+          - runner_cancel
+- name: host_config
+  kind: registry.entry
+  meta:
+    type: bee.driver_wippy_config
+    comment: Default host configuration for Wippy native driver OpenAI-compatible chat endpoint
+  data:
+    endpoint: http://127.0.0.1:8080/v1
+    model: default

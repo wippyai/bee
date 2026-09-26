@@ -45,4 +45,4 @@ supervisor dispatch policy.
 holdings page end to end against the live host manager, and the cluster
 aggregate against an injected caller (counts, unavailable nodes, malformed
 pages, strict input decoding). The kernel primitive keeps its own unit test
-at `tests/lua/launch:holdings_test`.
+at `tests/lua/launch/holdings_test.lua` (`bee.launch:holdings_test`).

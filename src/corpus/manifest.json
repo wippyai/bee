@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 8781,
+      "bytes": 8809,
       "id": "docs/agent_guide",
-      "sha256": "4510be39ab6c370bc8c7abff1b8d456b736a6e826a677fe1d2159ad91d927377",
+      "sha256": "b80e56eff4ddc8961b986b40dfebf781b650d2ffbacace1c7961874e8ada2af2",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -179,9 +179,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 19157,
+      "bytes": 19249,
       "id": "docs/distributed_app_delivery",
-      "sha256": "d82f4c7e9c25f4829f5c629b860854004b459f2417e6141a1cf3d9a67c1d20cb",
+      "sha256": "ce2e5d4e97b2aecbc0f7e4154c893c054f8c5fa88159588c93799d163dfa679d",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 23251,
+      "bytes": 23203,
       "id": "docs/application_contracts",
-      "sha256": "f4d6d95cda9ee35fd40df114bf462bee241b4166425cadc77d3273f5ecbfbc96",
+      "sha256": "ec851e47b4a5ef29208ff59c52b5ba7ccd6a91ed289e30122339a6f6c132a57b",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -387,9 +387,9 @@
       "topic": "component"
     },
     {
-      "bytes": 21718,
+      "bytes": 21743,
       "id": "component/harness",
-      "sha256": "47ae088284089407c21acee7e6542e1011b790dcca8b351541b2dc35e1137dad",
+      "sha256": "6595902224559501538b9bdcc85baafe8b79f2a9a3ae299a0913d984829faaa5",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -403,9 +403,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2544,
+      "bytes": 2577,
       "id": "component/hive:telemetry",
-      "sha256": "b384979e98d6852f132967955941af4bbae85cce2197a81f00694db757d3ff91",
+      "sha256": "14cea3bcedb42930ceb7b680fe162b6a1e6da3bf4a388295b517c619a025c9d8",
       "source": "modules/hive-telemetry/src/README.md",
       "title": "bee.hive.telemetry",
       "topic": "component"
@@ -486,7 +486,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 598926,
+    "bytes": 599056,
     "documents": 60
   }
 }

@@ -106,6 +106,15 @@ local function endpoint(): string
     if not entry then error("gateway endpoint entry") end
     return tostring((entry.data :: Object).address)
 end
+-- The listener can accept TCP before the registry transaction commits its routes.
+local function await_readiness_route_commit()
+    local entry, entry_error = registry.get("bee.managed:ready")
+    if entry_error or not entry then error("managed readiness endpoint: " .. tostring(entry_error)) end
+    local changes = registry.snapshot():changes()
+    changes:update(entry)
+    local committed, commit_error = changes:apply()
+    if not committed then error("commit managed readiness route: " .. tostring(commit_error)) end
+end
 local function open_gateway(): integer
     local opened = call("bee.gateway.binding:open", {address = endpoint()})
     return math.floor(tonumber(opened.epoch) or 0)
@@ -329,7 +338,10 @@ local function define_tests()
         install_policy(EXPIRING_POLICY)
         install_policy("bee.harness.catalog:gateway_surface_policy")
         admit_root()
+        await_readiness_route_commit()
         open_gateway()
+        local readiness = call("bee.gateway.binding:ready", {})
+        if readiness.listening ~= true then error("managed gateway readiness route did not become ready") end
         test.it("admits after preparation, projects the token at delivery, serves the child as an MCP client and revokes on exit", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")

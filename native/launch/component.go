@@ -41,11 +41,12 @@ type Host struct {
 	resolver    hostResolver
 	// clientRoute runs an ordinary launch against the retained owner in the
 	// planned state.
-	clientRoute func(context.Context, app.Launch, clientIntent) error
+	clientRoute  func(context.Context, app.Launch, clientIntent) error
+	cutoverSeams func() cutoverSeams
 }
 
 func newHost(resolver hostResolver) *Host {
-	return &Host{resolver: resolver, clientRoute: runClientRoute}
+	return &Host{resolver: resolver, clientRoute: runClientRoute, cutoverSeams: defaultCutoverSeams}
 }
 
 // Component is the native factory named by wippy.build.json. The returned
@@ -95,6 +96,15 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	if owner && len(launch.Args) != 1 {
 		return app.Plan{}, errors.New("bee start takes no arguments")
 	}
+	upgrade := desktop && len(launch.Args) > 0 && launch.Args[0] == "upgrade"
+	var upgradeRequest upgradeCommand
+	if upgrade {
+		parsed, err := parseUpgradeCommand(launch.Args[1:])
+		if err != nil {
+			return app.Plan{}, err
+		}
+		upgradeRequest = parsed
+	}
 	// A daemon runs the node from this folder's state without composing the
 	// folder as a workspace; it serves the node's catalog workspaces.
 	daemon := desktop && len(launch.Args) > 0 && launch.Args[0] == daemonArgument
@@ -104,10 +114,10 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	// An explicit application ID keeps the runtime's own entry, which is how
 	// recovery and development launches still reach an application directly.
 	application := desktop && len(launch.Args) > 0 && strings.Contains(launch.Args[0], ":")
-	// Every other ordinary launch of this executable is a client of the retained
-	// owner. Its words are decoded before a project is selected, so a malformed
-	// invocation reads no state.
-	client := desktop && !owner && !daemon && !application
+	// Ordinary desktop commands are clients of the retained owner. Their words
+	// are decoded before a project is selected, so malformed invocations read no
+	// state.
+	client := desktop && !owner && !daemon && !application && !upgrade
 	var intent clientIntent
 	if client {
 		parsed, err := parseClientIntent(launch.Args)
@@ -143,6 +153,12 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		host.ownerState, host.ownerLaunch = state, launched
 		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
 			return prepareOwner(state, owner)
+		}
+		return plan, nil
+	}
+	if upgrade {
+		plan.Run = func(ctx context.Context) error {
+			return host.runUpgrade(ctx, state, launch.Dir, upgradeRequest)
 		}
 		return plan, nil
 	}

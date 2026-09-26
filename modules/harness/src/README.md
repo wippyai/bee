@@ -173,11 +173,12 @@ setup to finish; admission results that arrive after close are still drained
 and their attempt-bound grants are revoked. Existing measured request envelopes
 still select a profile directly through admission.
 
-The component-owned `command_names` route `bee claude`, `bee codex`, `bee agy`
-and `bee grok` to this same application and admission path. Command discovery
-returns only a definition reference and presentation preference; the Agent actor
-then resolves and fences the current plan before setup or admission. Valid
-duplicate claims refuse, and managed aliases accept no raw trailing arguments.
+The driver-owned `command_names` route `bee claude`, `bee codex`, `bee agy`,
+`bee grok`, `bee muse` and `bee opencode` to this same application and admission
+path. Command discovery returns only a definition reference and presentation
+preference; the Agent actor then resolves and fences the current plan before
+setup or admission. Valid duplicate claims refuse, and managed aliases accept
+no raw trailing arguments.
 An empty catalog displays an empty picker; it does not infer executable paths,
 credentials or a launch policy from registry metadata.
 

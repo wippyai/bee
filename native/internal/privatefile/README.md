@@ -22,6 +22,8 @@ rejects reparse points, reserved names and document/lock names that differ only
 by case. Windows directory sync remains a no-op; crash durability has not been
 verified there.
 
-`make -C native check` runs Linux race tests and vet, including concurrent
-subprocess updates and identity preservation. `make -C native privatefile-windows-check`
-compiles the Windows tests and runs static checks; it does not execute them.
+`make -C native check` runs the native race tests, including concurrent
+subprocess updates and identity preservation. Windows uses protected owner
+ACLs and rejects reparse points, but `native/Makefile` does not define a
+Windows-specific check target, so that path has no repository Make acceptance
+command.

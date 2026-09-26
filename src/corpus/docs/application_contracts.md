@@ -267,11 +267,11 @@ proposals; they require distinct owner operations.
 `bee claude`, `bee codex`, `bee agy`, `bee grok`, `bee muse` and `bee opencode` select their
 reviewed managed launch definitions and use the same admission, carrier,
 thread, hook and MCP path as the Agent picker. They preserve the caller's
-working directory and accept no trailing raw arguments. `bee recover <name>`
-uses the embedded managed definition when the selected installed pack is stale,
-while preserving workspace databases and application state. Native Terminal exposes
-the `terminal` handler and runs an explicit native argument vector with the
-OS user's authority; an empty vector starts `/bin/bash -i`. Declaring a handler
+working directory and accept no trailing raw arguments. The runtime-level
+`bee recover` command boots Bee's shipped bundle; it does not select a managed
+launch by name. Native Terminal exposes the `terminal` handler and runs an
+explicit native argument vector with the OS user's authority; an empty vector
+starts `/bin/bash -i`. Declaring a handler
 does not grant native execution to another application.
 
 An admitted command declaration contains at most 16 lowercase ASCII command

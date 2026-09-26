@@ -39,16 +39,17 @@ contract fields and invalid optional owner resources. Empty Lua grants `{}` mean
 an empty list; arbitrary objects do not. Operation-specific results are decoded
 separately from the common envelope.
 
-Run `make -C native hive-client-check MESH_RUNTIME=/path/to/client-runtime`.
 Unit/race checks cover sender and reply correlation, owner replacement,
 cancellation and no replay, plus strict reply and desktop decoders. These are
 binding tests; actual supervisor round trips, physical attachment, invitation
 redemption and public second-`bee` behavior still need integration acceptance.
-The ordinary desktop runtime candidate lacks native mesh surface/TLS APIs; use
-the client runtime supplied by its lane without changing the release manifest.
+`native/Makefile` does not define the documented `hive-client-check` target, so
+that acceptance command is unavailable in this checkout. The ordinary desktop
+runtime candidate lacks native mesh surface/TLS APIs; use the client runtime
+supplied by its lane without changing the release manifest.
 
-The compiled `testfixture` now builds through
-`make -C native hive-desktop-client-fixture MESH_RUNTIME=... FIXTURE_OUTPUT=...`.
+`native/Makefile` also does not define `hive-desktop-client-fixture`; compiling
+that fixture through Make remains a proposal.
 The runtime lane's `/tmp/bee-wippy-tls-lifecycle-candidate` now passes the real
 supervisor round trip with this compiled client: admission, native viewport IO,
 detach and same-shell rejoin (`/tmp/bee-tls-lifecycle-admission.log`, journal 559).

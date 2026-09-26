@@ -11,19 +11,27 @@ the client route, the owner it starts and a plain `bee start` all use it. An
 explicit --state is preserved unchanged. Planning does not create
 directories, write receipts, inspect databases or acquire locks.
 
-`bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT` is planned first: it
-runs the [hook POST helper](../hookpost/README.md) without project selection,
-state, the client route or the retained owner.
+`bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT` runs the
+[hook POST helper](../hookpost/README.md) before project selection, state
+opening, the client route or the retained owner.
 
-`bee help`, `bee -h` and `bee --help` are planned next: the host prints the
-command grammar and the state this invocation would use, computed from the
-launch alone, and exits 0 without selecting a project or reading state.
+`bee help`, `bee -h` and `bee --help` print the command grammar and the state
+this invocation would use, computed from the launch alone. The host exits 0
+without selecting a project or reading state.
 
 `bee daemon` takes no arguments and runs the owner route like `bee start`, under
 the owner command `bee-daemon`, with a desktop bridge that composes no folder
 workspace (`desktop.folder = false`); it serves the node's catalog workspaces
 to clients. A client of such a node shows a workspace picker, and Ctrl+] in a
 presented desktop returns to it.
+
+`bee upgrade PATH --digest SHA256` verifies the person-confirmed candidate
+digest and its `help` self-test before it stops the selected project's owner,
+then starts the candidate and retains the current executable for one-step
+rollback. If the candidate does not become ready, the retained executable is
+started again. `bee upgrade --rollback` verifies that retained executable and
+hands the project state back to it. These are local CLI commands; the gateway
+does not expose cutover.
 
 Every other ordinary launch is decoded before project selection. `bee start`
 takes no arguments; `bee MODULE:ENTRY` keeps the runtime's own entry; the rest

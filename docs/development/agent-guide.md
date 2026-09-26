@@ -86,10 +86,11 @@ Keep those operations labeled as proposals until their acceptance contracts
 exist.
 
 `bee observe` attaches a read-only display to a running local Bee and never
-starts or displaces the controller. `bee recover <name>` selects the embedded
-application pack for a named managed launch while preserving workspace and
-application state. These commands keep the local owner boundary and provide
-no remote enrollment. On a node without a folder workspace (`bee daemon`),
+starts or displaces the controller. `bee recover` boots Bee's shipped bundle
+with fresh registry history while preserving workspace and application state;
+it does not select a managed launch by name. These commands keep the local
+owner boundary and provide no remote enrollment. On a node without a folder
+workspace (`bee daemon`),
 `bee client` picks one of the node's workspaces and Ctrl+] returns to the
 picker to switch; see [the workspace catalog](../reference/workspace-catalog.md).
 

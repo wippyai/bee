@@ -37,7 +37,13 @@ policy` and a `meta.hive_operation` block (revision, title, bounded input and
 output schemas, limits). The host ceiling is an ordinary security policy with
 actions `hive.expose.<mode>` over entry ids; the catalog includes an operation
 only when the ceiling admits its mode, and the supervisor resolves it again at
-admission. Interfaces are `registry.entry` entries with `meta.type:
+admission. A package exposes its operations through the `hive.expose`
+capability instead: its request names the operations, a mode and audiences,
+and the install grant writes a policy over exactly those operation ids into
+the `bee.security.hive:hive_exposure_scope` group the supervisor loads. Open
+dispatch additionally admits only the peers in the host's
+`bee.hive.supervisor:exposure_audiences` table for a listed operation.
+Interfaces are `registry.entry` entries with `meta.type:
 hive.interface` naming `operation_ref`, fixed arguments and allowed arguments;
 they narrow and never widen.
 

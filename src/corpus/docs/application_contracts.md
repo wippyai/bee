@@ -44,7 +44,10 @@ storage. Application metadata and launch arguments cannot select it.
 An agent-authored app may declare a measured capability request through an
 `ns.requirement` whose metadata names a catalog capability, parameters, reason
 and `security.policy` value kind. It must append to the app entry's
-`.security.policies +=` target. The destination resolver validates the request
+`.security.policies +=` target, except a `hive.expose` request, which appends
+to one of the artifact's own Hive operations at the requested mode and installs
+a host-owned exposure-scope policy over exactly the approved operations. The
+destination resolver validates the request
 against the protected host catalog and retains it in the immutable preflight
 candidate. A request by itself grants no authority. App content that supplies
 `security.actor` or `security.groups` is

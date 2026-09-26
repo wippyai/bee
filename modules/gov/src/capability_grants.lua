@@ -237,7 +237,7 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
         if (mode ~= "open" and mode ~= "policy") or not operations or not audiences then
             return nil, nil, nil, "Hive exposure grant names no valid mode, operations and audiences"
         end
-        return {id = id, kind = "security.policy", groups = {"hive_exposure_scope"},
+        return {id = id, kind = "security.policy", groups = {"bee.security.hive:hive_exposure_scope"},
             meta = {comment = "Host-generated Hive operation exposure grant"},
             data = {policy = {actions = {"hive.expose." .. (mode :: string)},
                 resources = operations, effect = "allow"}}}, nil, nil, nil

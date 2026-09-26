@@ -154,6 +154,14 @@ managed-provider-window-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_provider_window.py
 managed-window-app-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_window_app.py
+.PHONY: managed-window-opencode-check
+managed-window-opencode-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_window_opencode.py
+
+.PHONY: live-opencode-window-check
+live-opencode-window-check:
+	@test -n "$(BEE_OPENCODE_BIN)" || { echo 'Set BEE_OPENCODE_BIN to the real opencode executable.'; exit 1; }
+	BEE_RUNTIME="$(abspath $(WIPPY))" BEE_OPENCODE_BIN="$(BEE_OPENCODE_BIN)" python3 tests/managed_window_opencode_live.py
 .PHONY: managed-window-failure-check
 check: managed-window-failure-check
 managed-window-failure-check:

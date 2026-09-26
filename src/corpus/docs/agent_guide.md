@@ -95,7 +95,7 @@ picker to switch; see [the workspace catalog](../reference/workspace-catalog.md)
 
 ## Managed provider login
 
-Each built-in Codex, Claude, agy, Grok and Muse window launch declares its
+Each built-in Codex, Claude, agy, Grok, Muse and OpenCode window launch declares its
 provider's login evidence as safe paths relative to its provider home, plus a
 command to show the person. Native placement checks file existence in the
 home selected for that attempt, including `CODEX_HOME`, `CLAUDE_CONFIG_DIR`

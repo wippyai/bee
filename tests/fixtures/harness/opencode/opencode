@@ -1,0 +1,18 @@
+#!/bin/bash
+# OpenCode protocol fixture: replays a captured opencode run-json-1 stream for
+# the headless route and, for the interactive route, draws a startup marker and
+# echoes input. It lives outside bin/ so no bare `opencode` lookup in the test
+# composition resolves it. This is protocol evidence, not the real harness.
+marker="${BEE_FIXTURE_MARKER:-opencode-fixture}"
+if [ "$1" = "run" ]; then
+  stream="${BEE_FIXTURE_STREAM:?BEE_FIXTURE_STREAM names the captured stream}"
+  cat "$stream"
+  exit "${BEE_FIXTURE_EXIT:-0}"
+fi
+# The interactive TUI owns a terminal and stays attached until its input
+# closes, as the real interface does. The marker is the first frame.
+printf '%s ready\r\n' "$marker"
+while IFS= read -r line; do
+  printf 'opencode> %s\r\n' "$line"
+done
+exit "${BEE_FIXTURE_EXIT:-0}"

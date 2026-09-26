@@ -251,3 +251,14 @@ entries:
     value: bee:launch_policy_muse_window
   - name: batch_policy
     value: bee:launch_policy_muse_batch
+- name: driver_opencode
+  kind: ns.dependency
+  component: bee/driver-opencode
+  version: '*'
+  parameters:
+  - name: host_environment
+    value: bee.harness.host:environment
+  - name: window_policy
+    value: bee:launch_policy_opencode_window
+  - name: batch_policy
+    value: bee:launch_policy_opencode_batch

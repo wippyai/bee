@@ -216,7 +216,8 @@ host's acceptance record, and refuses a swapped executable before any launch.
 
 A fresh attempt on a structured driver without a between-turns controller
 starts carrying its oldest outstanding inbox item in the brief: Codex, agy,
-Grok and Muse launches close stdin or pass the brief as an argument, so the
+Grok, Muse and OpenCode launches pass the brief as an argument and never read
+stdin, so the
 brief is the only channel. Claude keeps its controller push and windows keep
 their hook boundary; resumed attempts keep their provider session, since no
 fixture proves inbox-carry combined with those. A fresh sequential attempt on

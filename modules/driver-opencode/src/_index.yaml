@@ -1,0 +1,189 @@
+version: '1.0'
+namespace: bee.driver.opencode
+entries:
+- name: definition
+  kind: ns.definition
+  module: driver-opencode
+  readme: file://README.md
+  meta:
+    title: Bee OpenCode driver
+    comment: Optional harness binding; host activation and launch policies authorize its use
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: host_environment
+  kind: ns.requirement
+  meta:
+    comment: Read-only host environment that supplies the selected OpenCode executable
+  default: bee.harness.host:environment
+  targets:
+  - entry: bee.driver.opencode:executable
+    path: .storage
+- name: window_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned OpenCode window route
+  targets:
+  - entry: bee.driver.opencode:default_window
+    path: .data.policy_ref
+- name: batch_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned OpenCode batch route
+  targets:
+  - entry: bee.driver.opencode:research_batch
+    path: .data.policy_ref
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: opencode
+  default: ''
+  readonly: true
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  modules: [json]
+  imports:
+    events: bee.driver.kit:events
+    types: bee.driver:types
+    bounds: bee.threads.records:bounds
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules: [hash]
+  imports:
+    canonical: bee.threads.records:canonical
+    configure_protocol: bee.driver:configuration
+- name: launch
+  kind: library.lua
+  source: file://launch.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.driver:types
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.opencode.binding:prepare
+      dispatch: bee.driver.opencode.binding:dispatch
+      normalize: bee.driver.opencode.binding:normalize
+      configure: bee.driver.opencode.binding:configure
+  meta:
+    type: harness.driver
+    driver_id: opencode
+    profiles_ref: bee.driver.opencode:profiles
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.opencode:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: OpenCode
+      implementation_version: 1.18.32
+      default_profile: window
+      profiles:
+      - id: batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: opencode-run-json-1
+        answer_path:
+          strategy: accumulate
+          adapter_ref: bee.driver.opencode:protocol
+        resume:
+          strategy: per-process
+          portable: false
+        inbound:
+        - next_turn
+        isolation_env:
+          variables:
+          - HOME
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: none
+        interrupt:
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - streamable_http
+          initialize_timeout_ms: 30000
+        permission_exchange:
+          mode: none
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: native-window-1
+        hooks: {transports: [], events: []}
+        answer_path: {strategy: none}
+        resume: {strategy: none, portable: false}
+        isolation_env:
+          variables: [HOME]
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready: {strategy: none}
+        permission_exchange: {mode: none}
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned OpenCode window declaration; the host separately selects its policy, activation, executable and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: opencode-window
+    title: OpenCode
+    command_names: [opencode]
+    binding_ref: bee.driver.opencode:binding
+    profile_id: window
+    policy_ref: ''
+    default_mode: window
+    allowed_overrides: [thread, workdir]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    session_resource: session
+    credentials: []
+    presentation: {start_menu: true, fullscreen: true, reuse: never}
+- name: research_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned bounded OpenCode batch route for a host-selected coordinator and caller-owned shared thread
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: opencode-research-batch
+    title: OpenCode researcher
+    command_names: []
+    binding_ref: bee.driver.opencode:binding
+    profile_id: batch
+    policy_ref: ''
+    default_mode: batch
+    allowed_overrides: [thread, workdir]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    session_resource: session
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: command
+  kind: registry.entry
+  meta:
+    type: bee.application_command
+    comment: CLI command to launch OpenCode in the agent window
+  data:
+    name: opencode
+    definition_id: bee.harness.window:app
+    arguments:
+    - bee.driver.opencode:default_window
+    fullscreen: true

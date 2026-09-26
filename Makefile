@@ -243,7 +243,7 @@ CHECK_JOBS ?= 4
 check-parallel:
 	python3 build/parallel_check.py --jobs "$(CHECK_JOBS)"
 check-shard-foundation: check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check
-check-shard-modules: hub-migration-service-check modules-app-check modules-update-check modules-contents-check app-admission-check retained-owner-check hive-supervisor-check
+check-shard-modules: hub-migration-service-check modules-app-check modules-update-check modules-contents-check app-admission-check kernel-bare-check package-drop-check retained-owner-check hive-supervisor-check
 check-shard-services: threads threads-module harness-module resources-module gateway-check gateway-readiness-check governance-workspace-check saved-profiles-check thread-storage-check resources-check
 check-shard-services-storage: workspace-storage-check
 check-shard-services-client-storage: client-storage-check
@@ -537,6 +537,16 @@ check: app-admission-check
 .PHONY: app-admission-check
 app-admission-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_admission.py
+.PHONY: kernel-bare-check
+# The bare-kernel composition boots with the six management-app packages absent.
+kernel-bare-check: fixture-gateway-client
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/kernel_bare.py
+.PHONY: package-drop-check
+# A retained window of an uninstalled package drops through the missing-definition path.
+package-drop-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/kernel_package_drop.py
+check: kernel-bare-check
+check: package-drop-check
 
 # Explicit live-provider proof: uses the installed Agy login and consumes inference.
 .PHONY: research-benchmark-check

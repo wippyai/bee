@@ -326,3 +326,31 @@ def deployment_copy(deployment, directory):
     """Place a deployment in the disposable working directory of one launch."""
     shutil.copytree(deployment, directory, symlinks=True, dirs_exist_ok=True)
     return Path(directory)
+
+
+# The management apps the default bundle installs. A bare-kernel composition
+# drops them from the lock, the replacements and the dependency entries while
+# the kernel, Settings, Console and Inbox stay installed.
+BUNDLE_PACKAGES = ("bee/hive-manager", "bee/threads-timeline", "bee/workspace-manager",
+                   "bee/host-processes", "bee/hub-modules", "bee/gov-overlays")
+
+
+def strip_dependencies(folder, names=BUNDLE_PACKAGES):
+    """Remove the named package dependencies from a composed fixture.
+
+    The caller owns the fixture: this edits its lock, replacement map and
+    dependency entry list in place so an acceptance can boot a composition
+    without the packages, the way removing a package delivers."""
+    lock_path = folder / "wippy.lock"
+    lock = yaml.safe_load(lock_path.read_text())
+    lock["modules"] = [module for module in lock.get("modules", []) if module["name"] not in names]
+    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False))
+    configuration_path = folder / ".wippy.yaml"
+    configuration = yaml.safe_load(configuration_path.read_text())
+    for name in names:
+        configuration["workspace"]["replacements"].pop(name, None)
+    configuration_path.write_text(yaml.safe_dump(configuration, sort_keys=False))
+    dependency_path = folder / "src/deps/_index.yaml"
+    dependency = yaml.safe_load(dependency_path.read_text())
+    dependency["entries"] = [entry for entry in dependency["entries"] if entry.get("component") not in names]
+    dependency_path.write_text(yaml.safe_dump(dependency, sort_keys=False))

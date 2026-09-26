@@ -98,10 +98,8 @@ func TestOwnerPicksAndPersistsItsMeshAddress(t *testing.T) {
 	}
 	defer func() { _ = release() }()
 	section := config.Sub("cluster")
-	for key := range map[string]bool{"membership.advertise_addr": true, "internode.advertise_addr": true} {
-		if got := section.GetString(key, ""); got != want.String() {
-			t.Errorf("%s = %q, want %q", key, got, want)
-		}
+	if got := section.GetString("membership.advertise_addr", ""); got != want.String() {
+		t.Errorf("membership.advertise_addr = %q, want %q", got, want.String())
 	}
 	for key, wantBind := range map[string]string{"membership.bind_addr": wantBindAddress(want), "internode.bind_addr": wantBindAddress(want)} {
 		if got := section.GetString(key, ""); got != wantBind {

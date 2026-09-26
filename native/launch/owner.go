@@ -153,8 +153,6 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 		"internode.bind_addr":                 meshBindAddress(address).String(),
 		"internode.bind_port":                 0,
 		"internode.auto_port":                 true,
-		"internode.advertise_addr":            address.String(),
-		"internode.advertise_port":            0,
 		"internode.identity_key_file":         keyPath,
 		"internode.identity_key":              "",
 		"internode.trusted_peer_keys." + node: base64.RawStdEncoding.EncodeToString(public),

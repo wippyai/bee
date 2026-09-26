@@ -331,8 +331,16 @@ def deployment_copy(deployment, directory):
 # The management apps the default bundle installs. A bare-kernel composition
 # drops them from the lock, the replacements and the dependency entries while
 # the kernel, Settings, Console and Inbox stay installed.
-BUNDLE_PACKAGES = ("bee/hive-manager", "bee/threads-timeline", "bee/workspace-manager",
-                   "bee/host-processes", "bee/hub-modules", "bee/gov-overlays")
+AGENT_PACKAGES = (
+    "bee/agents", "bee/harness", "bee/credentials", "bee/placement",
+    "bee/placement-native", "bee/resources", "bee/driver", "bee/driver-agy",
+    "bee/driver-claude", "bee/driver-codex", "bee/driver-grok", "bee/driver-muse",
+    "bee/driver-opencode", "bee/driver-wippy",
+)
+BUNDLE_PACKAGES = (
+    "bee/hive-manager", "bee/threads-timeline", "bee/workspace-manager",
+    "bee/host-processes", "bee/hub-modules", "bee/gov-overlays", *AGENT_PACKAGES,
+)
 
 
 def strip_dependencies(folder, names=BUNDLE_PACKAGES):

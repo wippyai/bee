@@ -474,15 +474,28 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		})
 		return runner
 	}
+	pendingMarkers := make(map[*procRunner][]string)
 	marker := func(runner *procRunner, expected string) string {
+		prefix := "BEE_HIVE_SUPERVISOR " + expected
+		pending := pendingMarkers[runner]
+		for index, line := range pending {
+			if strings.HasPrefix(line, prefix) {
+				pendingMarkers[runner] = append(pending[:index], pending[index+1:]...)
+				return strings.TrimPrefix(line, prefix)
+			}
+		}
+		pendingMarkers[runner] = pending
 		for {
 			select {
 			case line, open := <-runner.collector.lines:
 				if !open {
 					t.Fatalf("node exited waiting for %s", expected)
 				}
-				if strings.HasPrefix(line, "BEE_HIVE_SUPERVISOR "+expected) {
-					return strings.TrimPrefix(line, "BEE_HIVE_SUPERVISOR "+expected)
+				if strings.HasPrefix(line, prefix) {
+					return strings.TrimPrefix(line, prefix)
+				}
+				if strings.HasPrefix(line, "BEE_HIVE_SUPERVISOR ") {
+					pendingMarkers[runner] = append(pendingMarkers[runner], line)
 				}
 			case <-ctx.Done():
 				t.Fatalf("waiting for %s: %v", expected, ctx.Err())

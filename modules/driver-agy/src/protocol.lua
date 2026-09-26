@@ -216,7 +216,7 @@ local function extract_cid(envelope: {[string]: unknown}, body: {[string]: unkno
         if not envelope_cid then return nil, "envelope conversation_id is not an identifier" end
     end
     local body_cid: string? = nil
-    if body_raw ~= nil then
+    if body_raw ~= nil and body_raw ~= "" then
         body_cid = bounds.id(body_raw)
         if not body_cid then return nil, "body conversation_id is not an identifier" end
     end

@@ -164,8 +164,10 @@ request grants no policy. Preflight refuses app-shipped `security.actor` and
 `security.groups` on every entry with `SECURITY_DENIED`.
 
 The catalog currently describes `workspace.files.read`, `app.database`,
-`threads.read`, `threads.message`, `agents.launch`, `contract.call`, `http.api`
-and `hive.expose`. Its decoder bounds relative subpaths, lists, identities and
+`threads.read`, `threads.message`, `agents.launch`, `contract.call`, `http.api`,
+`hive.expose`, `hive.view`, `hive.remote_view`, `workspace.catalog.read`,
+`workspace.catalog.manage`, `workspace.host.lease`, `desktop.application_stop`,
+`hub.manage`, `gov.delivery.manage` and `gov.delivery.activate`. Its decoder bounds relative subpaths, lists, identities and
 HTTPS origins; it also carries a never-list for execution, environment and
 credential access, registry and scope management, approval decisions, core
 databases, and auto start. Pure helpers expand templates into proposed
@@ -234,6 +236,26 @@ not a grant to launch any agent definition: launch remains subject to the
 host's separate definition and application policies. Although the catalog
 also describes Hive exposure, this rule does not install that grant: Hive
 exposure stays host-published.
+
+The shipped `packages` ceiling beside it is the wider rule for installed
+package delivery: it additionally admits `security.policy`, `registry.entry`,
+`contract.binding` and `env.variable` entries with the `registry` and `system`
+native modules, still under the ordinary application boundary, no thread
+access, and the same explicit person approval. Governed admission bindings
+carry the runtime flags `appearance_write`, `application_stop`,
+`scope_management` and `close_grace_ms` alongside policies and thread access,
+so a package record states the same binding the broker enforces.
+
+The rule also names the host-composed package applications the catalog admits
+without delivery: Hive Manager (`hive.view`, `hive.remote_view`), Timeline
+(`threads.read`), Workspace Manager (`workspace.catalog.read`,
+`workspace.catalog.manage`, `workspace.host.lease`), Host Processes
+(`desktop.application_stop`, admitted with `application_stop`), Modules
+(`hub.manage`), and Overlays (`gov.delivery.manage`, `gov.delivery.activate`).
+Each entry reuses its reviewed static policies; a live host grant record for
+the package owner adds capability-derived policy IDs beside them. Only
+Settings, Console, Inbox and the harness window stay on the static admission
+list.
 
 ### Can a workspace application get its own database?
 

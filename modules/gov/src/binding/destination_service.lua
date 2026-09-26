@@ -166,6 +166,27 @@ local function selected(config: Configuration, workspace_id: string, source_node
                 function(entry_id: string): unknown return registry.get(entry_id) end)
             if not live then return nil, live_error end
         end
+        if installed == nil and workspace_identity == nil and config.packages then
+            local entry = activation_profiles.find_package(config.packages, source_workspace)
+            if entry then
+                local package_owner = activation_profiles.package_owner(workspace_id, entry.component)
+                local package_id = package_owner and capability_grants.record_id(package_owner) or nil
+                local package_installed = package_id and registry.get(package_id) or nil
+                if package_installed then
+                    local raw_catalog = registry.get("bee:capability_catalog")
+                    local decoded, catalog_error = capability_catalog.decode(raw_catalog)
+                    if not decoded then return nil, catalog_error end
+                    vocabulary = decoded
+                    local record, record_error = capability_grants.decode(package_installed,
+                        package_owner, workspace_id, entry.definition_id, decoded)
+                    if not record then return nil, record_error end
+                    local live, live_error = capability_grants.live(record,
+                        function(entry_id: string): unknown return registry.get(entry_id) end)
+                    if not live then return nil, live_error end
+                    installed = package_installed
+                end
+            end
+        end
     end
     local profile_value, profile_error = activation_profiles.select(config, workspace_id, source_node,
         source_workspace, installed, vocabulary, owner_hint, slot_source)

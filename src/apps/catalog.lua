@@ -72,6 +72,12 @@ end
 
 local function same_binding(left: Object, right: governed_admission.Binding): boolean
     if left.definition_id ~= right.definition_id or left.thread_access ~= right.thread_access then return false end
+    if (left.appearance_write == true) ~= (right.appearance_write == true)
+        or (left.application_stop == true) ~= (right.application_stop == true)
+        or (left.scope_management == true) ~= (right.scope_management == true) then return false end
+    local left_grace = left.close_grace_ms == nil and 250 or left.close_grace_ms
+    local right_grace = right.close_grace_ms == nil and 250 or right.close_grace_ms
+    if left_grace ~= right_grace then return false end
     local left_policies = left.policies
     if type(left_policies) ~= "table" or #left_policies ~= #right.policies then return false end
     for index, policy in ipairs(left_policies) do if policy ~= right.policies[index] then return false end end
@@ -122,11 +128,23 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
             local old_grant = capability_grants.prior_record_id(record.overlay_owner)
             installed = old_grant and lookup(old_grant) or nil
         end
+        local application_id = identity and identity.definition_id or nil
+        if not installed and not identity then
+            local package_entry = configuration.packages
+                and activation_profiles.find_package(configuration.packages, record.source_workspace) or nil
+            local package_owner = package_entry
+                and activation_profiles.package_owner(workspace_id, package_entry.component) or nil
+            if package_entry and package_owner == record.overlay_owner then
+                application_id = package_entry.definition_id
+                local package_grant = capability_grants.record_id(package_owner)
+                installed = package_grant and lookup(package_grant) or nil
+            end
+        end
         local vocabulary: capability_catalog.Catalog? = nil
         if installed then
             vocabulary = capability_catalog.decode(lookup("bee:capability_catalog"))
-            local grant = vocabulary and capability_grants.decode(installed, record.overlay_owner,
-                workspace_id, identity.definition_id, vocabulary) or nil
+            local grant = vocabulary and application_id and capability_grants.decode(installed,
+                record.overlay_owner, workspace_id, application_id, vocabulary) or nil
             local live = grant and capability_grants.live(grant, lookup) or false
             if not live then installed = nil; vocabulary = nil end
         end
@@ -173,6 +191,28 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
     return result, evidence
 end
 
+-- Package admission depends only on the registry revision, the host
+-- configuration and the destination workspace/node. Deriving it hashes and
+-- projects every installed package, and the broker reads the catalog on each
+-- request, so one read per revision reuses the measured set instead of
+-- re-measuring the whole ceiling.
+type PackageCache = {revision: string, workspace_id: string, node_id: string,
+    bindings: {Object}, evidence: {string}, error: string?}
+local packaged_cache: PackageCache? = nil
+local function packaged_bindings(revision: string, configuration: activation_profiles.DecodedConfiguration,
+    workspace_id: string, node_id: string, lookup: (string) -> Entry?): ({Object}?, {string}?, string?)
+    local cached = packaged_cache
+    if not cached or cached.revision ~= revision or cached.workspace_id ~= workspace_id
+        or cached.node_id ~= node_id then
+        local bindings, evidence, error_message = activation_profiles.package_bindings(configuration,
+            workspace_id, node_id, function(id: string): unknown return lookup(id) end)
+        cached = {revision = revision, workspace_id = workspace_id, node_id = node_id,
+            bindings = bindings or {}, evidence = evidence or {}, error = error_message}
+        packaged_cache = cached
+    end
+    return cached.bindings, cached.evidence, cached.error
+end
+
 -- Overlays change the effective catalog without advancing registry history.
 -- Compare the bounded admission/presentation values captured in one snapshot;
 -- source code and unrelated registry entries are not serialized here.
@@ -192,6 +232,9 @@ function M.read(workspace_id: string): Selection
     if not node_id or node_error then error("Node identity is unavailable: " .. tostring(node_error)) end
     local bindings = static_bindings(lookup("bee.security:application_admission"))
     local dynamic, evidence = governed(pinned, lookup, configuration, workspace_id, node_id)
+    local packaged, packaged_evidence, packaged_error = packaged_bindings(revision, configuration,
+        workspace_id, node_id, lookup)
+    if not packaged or not packaged_evidence then error("Invalid package application admission: " .. tostring(packaged_error)) end
     local seen: {[string]: boolean} = {}
     for _, binding in ipairs(bindings) do seen[binding.definition_id] = true end
     for _, binding in ipairs(dynamic) do
@@ -199,6 +242,18 @@ function M.read(workspace_id: string): Selection
         if #bindings >= governed_admission.MAX_BINDINGS then error("Application admission capacity is exceeded") end
         seen[binding.definition_id] = true
         bindings[#bindings + 1] = binding
+    end
+    for index, raw in ipairs(packaged) do
+        local binding = contract.binding(raw)
+        if not binding then error("Invalid package application binding") end
+        -- An explicitly delivered record for the same definition wins over
+        -- the host-composed package entry.
+        if not seen[binding.definition_id] then
+            if #bindings >= governed_admission.MAX_BINDINGS then error("Application admission capacity is exceeded") end
+            seen[binding.definition_id] = true
+            bindings[#bindings + 1] = binding
+            evidence[#evidence + 1] = packaged_evidence[index]
+        end
     end
     table.sort(bindings, function(left: contract.Binding, right: contract.Binding): boolean
         return left.definition_id < right.definition_id

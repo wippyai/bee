@@ -147,9 +147,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 14978,
+      "bytes": 17899,
       "id": "docs/mcp_configuration",
-      "sha256": "d78f1116c180b1683b6459e05cc613e9de5eab6cc5ab7759f4f86a126331ccad",
+      "sha256": "7c7bb7202532557523631c6e1d5d12be207248aad0622aa3a3bd7a41603cb7d8",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -203,9 +203,9 @@
       "topic": "application"
     },
     {
-      "bytes": 11041,
+      "bytes": 12381,
       "id": "docs/gateway",
-      "sha256": "822b01278660a6d7dc82caf57313517b0c363c409945bb38c653829c3d71a9c5",
+      "sha256": "3218b0820f4e9e1e0cc40626fd0a843291850b8db2ed906e78ce56e8c4840854",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -478,7 +478,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 588022,
+    "bytes": 592283,
     "documents": 59
   }
 }

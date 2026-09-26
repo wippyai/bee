@@ -71,9 +71,10 @@ authority.
 
 The host may admit thread_read, thread_wait, thread_message, thread_sessions,
 thread_notify, session_directory, session_send, session_inbox, session_ack,
-session_reply, thread_launch, launch_definitions, capabilities, Governance
-overlay, Hub components, Hub installation requests (install_request,
-uninstall_request, install_status), delivery and docs. Each tool receives only bounded
+session_reply, thread_launch, launch_definitions, capabilities, run_status,
+run_wait, run_cancel, Governance overlay, Hub components, Hub installation
+requests (install_request, uninstall_request, install_status), delivery and
+docs. Each tool receives only bounded
 arguments. The binding supplies thread, subject, action, attempt and context.
 Tool results carry the JSON reply as text and as structured content with an
 output schema; failures use one normalized error shape
@@ -91,9 +92,15 @@ saved profile IDs and revisions; it starts nothing.
 
 thread_message always writes a message record through the thread owner.
 Callers cannot choose sender, thread, record family or context. Without
-`session` it writes to the bound thread; with `session` it writes to that
-running session's thread, addressed to its action and naming the caller's.
-thread_wait is read-only and does not create an obligation.
+`session` or `member_thread` it writes to the bound thread; with `session` it
+writes to that running session's thread, addressed to its action and naming
+the caller's; with `member_thread` it writes to a thread the caller is an
+active member of, such as a child it launched on a new thread. thread_read and
+thread_wait take the same `member_thread`, so a launcher reaches a child on a
+thread of its own; the field defaults to the bound thread, the two are
+exclusive, and the thread owner checks membership again. An unrelated thread
+is refused as `NOT_FOUND`. thread_wait is read-only and does not create an
+obligation.
 
 thread_sessions pages the live, unsealed bindings of the caller's workspace
 in stable action order, one per action under its newest carrier epoch, and
@@ -114,6 +121,19 @@ with a wider gateway surface than its own; the refusal is
 optional `thread`, `workdir`, `placement` and saved profile choices decode
 with `bee.application:agent_protocol` and take effect only where the
 definition and its launch policy allow the override.
+
+run_status, run_wait and run_cancel follow a managed run the caller started.
+Each names the child thread and attempt a thread_launch returned. run_status
+reads the run's state (`starting`, `running`, `cancelling` or `ended`) and its
+settled outcome and answer; run_wait waits, read-only and bounded, for the run
+to end; run_cancel records a durable cancel intent through the thread owner,
+stops the admitted attempt and reports its resulting state, settling a run
+whose child never started directly. They map to the harness application
+facade's own run operation and cannot launch. The gateway refuses any run
+whose thread the caller is not an active member of - which is how a child
+thread_launch starts on a new thread belongs to its launcher - so a caller
+reaches only the runs it started. See
+[Coordinating with other sessions](../../guides/agents/mcp.md#coordinating-with-other-sessions).
 
 session_directory pages local live actions in the caller's workspace that the
 host grants `bee.sessions.discover` on, in stable name order with the same

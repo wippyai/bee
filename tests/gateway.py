@@ -36,6 +36,7 @@ HOST_ENTRIES = {
         "gateway_tool_launch_policy", "gateway_tool_overlay_policy", "gateway_tool_docs_policy",
         "gateway_tool_components_policy", "gateway_tool_delivery_policy",
         "gateway_tool_publish_policy", "gateway_tool_application_open_policy",
+        "gateway_tool_install_policy",
     },
     "src/security/approvals/_index.yaml": {
         "approval_store_policy", "approval_owner_policy", "approval_request_policy",
@@ -47,12 +48,13 @@ HOST_ENTRIES = {
         "thread_lifecycle_policy", "thread_carrier_policy", "thread_approval_policy",
         "thread_approval_client_policy", "thread_waiter_policy",
     },
-    "src/_index.yaml": {"approver_policies", "docs_corpus", "placement_path", "placement_host_files",
+    "src/_index.yaml": {"approver_policies", "module_installation", "docs_corpus", "placement_path", "placement_host_files",
                          "placement_executor", "placement_admitted_roots", "placement_resource_mode"},
     "src/env/_index.yaml": {"gov_publication_profiles", "gov_activation_profiles"},
     "src/security/_index.yaml": {"ordinary_app_subsystem_boundary"},
     "src/security/placement/_index.yaml": {"placement_store_policy", "placement_exec_policy"},
     "src/security/docs/_index.yaml": {"docs_policy"},
+    "src/security/gov/_index.yaml": {"workspace_folder_read_policy"},
 }
 
 
@@ -99,6 +101,8 @@ def gateway_parameters(listener):
         ("target_tool_delivery_policy", "bee.security.gateway:gateway_tool_delivery_policy"),
         ("target_tool_publish_policy", "bee.security.gateway:gateway_tool_publish_policy"),
         ("target_tool_application_open_policy", "bee.security.gateway:gateway_tool_application_open_policy"),
+        ("target_tool_install_policy", "bee.security.gateway:gateway_tool_install_policy"),
+        ("target_install_configuration", "bee:module_installation"),
     )
 
 
@@ -131,6 +135,8 @@ def write_gateway_host(folder, native):
             ("target_activation_profiles", "bee.env:gov_activation_profiles"),
             ("target_approval_request_policy", "bee.security.approvals:approval_request_policy"),
             ("target_approval_consume_policy", "bee.security.approvals:approval_consume_policy"),
+            ("target_workspace_folder_read", "bee.workspace.catalog:read"),
+            ("target_workspace_folder_policy", "bee.security.gov:workspace_folder_read_policy"),
         )),
         dependency("dependency_docs", "bee/docs", (("target_corpus", "bee:docs_corpus"),)),
         dependency("dependency_driver", "bee/driver"),

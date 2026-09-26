@@ -162,13 +162,13 @@ entries:
   kind: function.lua
   source: file://cluster.lua
   method: handle
-  modules: [process, channel, time, uuid]
+  modules: [process, channel, time, uuid, system]
   imports:
     bounds: bee.hive:bounds
     types: bee.hive:types
     client: bee.hive:client
   meta:
-    comment: Open Hive operation aggregating one holdings page from each named node for cluster telemetry
+    comment: Open Hive operation aggregating workspace holdings and local peer link state
     hive: open
     hive_operation:
       revision: '1'
@@ -190,11 +190,14 @@ entries:
             items:
               type: object
               additionalProperties: false
-              required: [node_id, status]
+              required: [node_id, status, connected]
               properties:
                 node_id: {type: string}
                 status: {type: string}
+                connected: {type: boolean}
+                direction: {type: string, enum: [outbound, inbound]}
+                remote_address: {type: string}
                 workspace_count: {type: integer}
                 has_more: {type: boolean}
   security:
-    policies: [bee.hive.telemetry.security:cluster_policy]
+    policies: [bee.hive.telemetry.security:cluster_policy, bee.security.hive:hive_telemetry_policy]

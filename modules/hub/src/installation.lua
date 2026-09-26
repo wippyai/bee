@@ -244,9 +244,11 @@ function M.decision(view_raw: unknown): Status
     local view = bounds.object(view_raw) or {}
     if view.state == "pending" then return {status = "pending"} end
     if view.state == "decided" and view.decision == "approved" then return {status = "approved"} end
-    local reason = view.state == "decided" and "denied" or tostring(view.state)
-    return {status = "refused", code = reason:upper(), message = "the person " .. (reason == "denied"
-        and "refused the installation" or ("left the request " .. reason))}
+    if view.state == "decided" then
+        return {status = "refused", code = "DENIED", message = "the person refused the installation"}
+    end
+    local reason = tostring(view.state)
+    return {status = "refused", code = reason:upper(), message = "the request " .. reason .. " before a decision"}
 end
 
 -- status: the Hub apply reply as the agent's outcome. An uncertain or

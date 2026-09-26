@@ -104,9 +104,9 @@ local function attempt(workspace: string): Binding
 end
 -- The Hub facade fixture: one resolvable package and a recorded apply.
 type Hub = {calls: {Object}, applies: {Object}, apply_reply: Object}
-local function hub(): Hub
-    return {calls = {}, applies = {}, apply_reply = {ok = true, replayed = false, value = {state = "complete",
-        message = "Dependency root install completed"}}}
+local function hub(apply_reply: Object?): Hub
+    return {calls = {}, applies = {}, apply_reply = apply_reply or {ok = true, replayed = false,
+        value = {state = "complete", message = "Dependency root install completed"}}}
 end
 local function port(binding: Binding, fixture: Hub): installation.Port
     local selected = installation.port(binding)
@@ -190,7 +190,8 @@ local function define_tests()
                 test.eq(applied_request.migration_policy, "up")
                 local consumed = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = request_id})
                 test.eq(consumed.consumed_effect, "hub-install:" .. request_id)
-                fixture.apply_reply = {ok = true, replayed = true, value = {state = "complete"}}
+                local replay: Object = {ok = true, replayed = true, value = {state = "complete"}}
+                fixture.apply_reply = replay
                 local again = value_of(installation.status(selected, binding, APPROVER_POLICY, {request_id = request_id}))
                 test.eq(again.status, "applied")
                 test.eq(#fixture.applies, 2)
@@ -227,8 +228,8 @@ local function define_tests()
                 local workspace = fresh("install-stale")
                 call(AGENT, workspace, "bee.gateway.binding:open", {address = endpoint()})
                 local binding = attempt(workspace)
-                local fixture = hub()
-                fixture.apply_reply = {ok = false, replayed = false, code = "STALE", message = "the install plan changed; refresh and confirm it again"}
+                local fixture = hub({ok = false, replayed = false, code = "STALE",
+                    message = "the install plan changed; refresh and confirm it again"})
                 local selected = port(binding, fixture)
                 local filed = value_of(installation.request(selected, binding, APPROVER_POLICY, "install",
                     {component = "acme/tool", version = "1.0.0"}))

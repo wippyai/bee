@@ -24,8 +24,8 @@ binary = Path(selected).resolve(strict=True)
 codex_binary = Path(codex_selected).resolve(strict=True)
 claude_version = subprocess.check_output([str(binary), "--version"], text=True, timeout=15).strip()
 codex_version = subprocess.check_output([str(codex_binary), "--version"], text=True, timeout=15).strip()
-claude_declared = yaml.safe_load((ROOT / "src/driver/claude/_index.yaml").read_text())
-codex_declared = yaml.safe_load((ROOT / "src/driver/codex/_index.yaml").read_text())
+claude_declared = yaml.safe_load((ROOT / "modules/driver-claude/src/_index.yaml").read_text())
+codex_declared = yaml.safe_load((ROOT / "modules/driver-codex/src/_index.yaml").read_text())
 claude_profile_version = next(e for e in claude_declared["entries"] if e["name"] == "profiles")["data"]["driver"]["implementation_version"]
 codex_profile_version = next(e for e in codex_declared["entries"] if e["name"] == "profiles")["data"]["driver"]["implementation_version"]
 print(f"Actual Claude under test: {claude_version}; declaration version: {claude_profile_version}", flush=True)

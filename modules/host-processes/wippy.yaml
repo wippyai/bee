@@ -1,0 +1,6 @@
+organization: bee
+module: host-processes
+type: library
+version: 0.1.0-dev
+description: Host process inspection app with application stop
+license: MIT

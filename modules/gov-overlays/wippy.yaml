@@ -1,0 +1,6 @@
+organization: bee
+module: gov-overlays
+type: library
+version: 0.1.0-dev
+description: Governed overlay review app with local destination status
+license: MIT

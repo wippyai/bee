@@ -281,7 +281,7 @@ func liveCodexCheck() error {
 	}
 	// The host executes the owner's installed Codex and inherits the owner's
 	// Codex home, so the named profile and its login resolve there.
-	if err = liveCodexSetVariable(root, "src/driver/codex/_index.yaml", "executable", "BEE_LIVE_CODEX_EXECUTABLE"); err != nil {
+	if err = liveCodexSetVariable(root, "modules/driver-codex/src/_index.yaml", "executable", "BEE_LIVE_CODEX_EXECUTABLE"); err != nil {
 		return err
 	}
 	if err = liveCodexSetVariable(root, "src/env/_index.yaml", "machine_home", "BEE_LIVE_CODEX_HOME"); err != nil {

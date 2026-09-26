@@ -10,6 +10,7 @@ A missing or wrong value fails this target; it never reduces coverage.
 """
 import os
 import re
+import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed

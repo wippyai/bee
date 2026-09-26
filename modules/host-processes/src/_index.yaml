@@ -1,6 +1,16 @@
 version: '1.0'
 namespace: bee.host.processes
 entries:
+- name: definition
+  kind: ns.definition
+  module: host-processes
+  meta:
+    title: Bee host processes
+    comment: Host process inspection app; host composition and policy selection remain in Bee
+- name: dependency_application
+  kind: ns.dependency
+  component: bee/application
+  version: '*'
 - name: app
   kind: process.lua
   source: file://app.lua

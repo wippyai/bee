@@ -6,10 +6,10 @@ is not a process, terminal view, agent or chat transcript. Views can detach
 while the thread, subscriptions and delivery state remain owned by the thread
 owner.
 
-The implementation has two compatible surfaces. The actor-owned `journal`
-contract keeps its claimed runs and event format. The rich authority,
-lifecycle, delivery, projection and carrier contracts use separate tables and
-never rewrite or implicitly bridge journal data.
+The `authority`, `lifecycle`, `delivery`, `projection`, `carrier` and
+`approvals` contracts commit typed records in their own tables. The
+historical actor-owned journal tables stay in the migration ledger and its
+stored data; no contract reads or writes them.
 
 ## Ownership and boundaries
 
@@ -30,8 +30,6 @@ Rich thread membership has three roles:
 Lifecycle operations have a separate host-granted permission. Membership does
 not by itself admit an action, attempt or receipt. The owner checks membership,
 state, revisions and the operation's grant inside the same write transaction.
-The legacy journal remains actor-owned and is not made accessible by rich
-membership.
 
 The module owns its SQLite resource and migration ledger. One runtime must own
 the file; opening the same file from multiple runtimes is unsupported. A
@@ -43,7 +41,7 @@ The implementation is split into these Lua namespaces:
 
 | Namespace | Responsibility |
 | --- | --- |
-| `bee.threads` | Journal compatibility, local bindings, resources and capability reporting. |
+| `bee.threads` | Local bindings, resources and capability reporting. |
 | `bee.threads.records` | Typed decoders, bounds and canonical record encoding; no I/O. |
 | `bee.threads.service` | Thread authority, membership, messages, action inboxes, lifecycle and owner-qualified send. |
 | `bee.threads.delivery` | Recipient obligations, claim batches, dispatch, waits and subscriptions. |
@@ -414,7 +412,8 @@ Shared decoder and database limits are:
 | Extension JSON depth | 16 |
 | Thread title | 512 bytes |
 
-The checked migration ledger carries the legacy journal, rich authority,
+The checked migration ledger carries the historical journal tables, rich
+authority,
 lifecycle, delivery, projection, carrier, approval, owner-authority, notice
 workspace-attribution and action-inbox schema. Migration 10 (`workspace_attribution`) adds
 the head column and its index and attributes existing threads whose owner is

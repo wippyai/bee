@@ -1,10 +1,9 @@
 -- Isolation proof for the threads module: only bee.threads namespaces plus
 -- this host composition are loaded, the module's dependency interface has
--- been linked, and the journal works through its public contract.
+-- been linked, and the rich contracts work through their public bindings.
 local registry = require("registry")
 local contract = require("contract")
 local sql = require("sql")
-local journal = require("journal")
 local io = require("io")
 
 local function main()
@@ -22,18 +21,6 @@ local function main()
     local direct, direct_error = sql.get("bee.threads:db")
     assert(direct == nil and direct_error ~= nil, "caller gained SQL authority")
 
-    local log = assert(journal.open("isolation"))
-    assert(log:claim("run"))
-    for i = 1, 3 do
-        local result, err = log:append("run", "key-" .. tostring(i), "check", "{}")
-        assert(result, err or "append failed")
-        assert(result.seq == i, "sequence")
-    end
-    local page = assert(log:read_after(0))
-    assert(#page.events == 3 and page.events[3].kind == "check", "replay")
-    local binding = assert(contract.open("bee.threads:local"))
-    local denied = binding:read_after({thread = "isolation", after = 0, actor = "someone-else"})
-    assert(type(denied) == "table" and #denied.events == 3, "actor in payload changed identity")
     for _, id in ipairs({"bee.threads.records:types", "bee.threads.service:types", "bee.threads.migrations:migrations"}) do
         local slice = assert(registry.get(id), id .. " missing")
         assert(slice.kind == "library.lua", id .. " kind")
@@ -52,6 +39,6 @@ local function main()
     assert(page.ok == true and #page.value.records == 2 and page.value.records[2].kind == "action.admitted", "authority read_after")
     local ledger = sql.get("bee.threads:db")
     assert(ledger == nil, "caller gained SQL authority")
-    io.print("threads module: definition, linked target_db, isolated closure, journal contract, authority and lifecycle contracts")
+    io.print("threads module: definition, linked target_db, isolated closure, authority and lifecycle contracts")
 end
 return {main = main}

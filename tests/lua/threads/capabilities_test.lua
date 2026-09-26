@@ -28,7 +28,7 @@ local function define_tests()
         test.it("lists every bound contract with the methods the registry defines", function()
             local described = capabilities.describe()
             test.eq(described.revision, "bee.threads.capabilities@1")
-            test.eq(#described.contracts, 7)
+            test.eq(#described.contracts, 6)
             for _, declared in ipairs(described.contracts) do
                 same(declared.methods, names(declared.contract))
             end
@@ -73,7 +73,7 @@ local function define_tests()
             local described = reply :: capabilities.Report
             test.eq(described.revision, "bee.threads.capabilities@1")
             test.eq(described.limits.max_thread_records, bounds.MAX_THREAD_RECORDS)
-            test.eq(#described.contracts, 7)
+            test.eq(#described.contracts, 6)
         end)
     end)
 end

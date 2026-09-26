@@ -13,18 +13,6 @@ entries:
     actions: [registry.get]
     resources: [bee.threads:database_ref]
     effect: allow
-- name: thread_read_client_policy
-  kind: security.policy
-  policy:
-    actions: [contract.open, contract.call, funcs.call]
-    resources: [bee.threads:local, read_after, bee.threads:read_after]
-    effect: allow
-- name: thread_write_client_policy
-  kind: security.policy
-  policy:
-    actions: [contract.open, contract.call, funcs.call]
-    resources: [bee.threads:local, claim, append, bee.threads:claim, bee.threads:append]
-    effect: allow
 - name: thread_authority_client_policy
   kind: security.policy
   policy:
@@ -77,15 +65,13 @@ entries:
   source: file://probe.lua
   method: main
   modules: [registry, contract, sql, io]
-  imports:
-    journal: bee.threads:client
   meta:
     command:
       name: threads-isolation
       short: Prove the threads module closure boots without the desktop
       security:
         actor: {id: threads-isolation}
-        policies: [bee.security.threads:thread_read_client_policy, bee.security.threads:thread_write_client_policy, bee:probe_registry_policy,
+        policies: [bee:probe_registry_policy,
           bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy]
 - name: dependency_threads
   kind: ns.dependency

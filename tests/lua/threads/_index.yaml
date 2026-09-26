@@ -101,7 +101,6 @@ entries:
     test: wippy.test:test
     harness: bee.threads:harness
     database: bee.threads.persist:database
-    legacy: bee.threads.persist:legacy
     ledger: bee.persist:ledger
     migrations: bee.threads.migrations:migrations
     owner: bee.threads.persist:owner

@@ -7,11 +7,11 @@ entries:
   readme: file://README.md
   meta:
     title: Bee threads
-    comment: Durable local journal with a checked SQLite store and an actor-owned contract
+    comment: Durable local threads with checked SQLite storage and actor-owned contracts
 - name: target_db
   kind: ns.requirement
   meta:
-    comment: SQL resource the journal store opens for every owned table
+    comment: SQL resource the thread store opens for every owned table
   default: bee.threads:db
   targets:
   - entry: bee.threads:database_ref
@@ -49,15 +49,6 @@ entries:
   kind: library.lua
   source: file://resources.lua
   modules: [registry]
-- name: protocol
-  kind: library.lua
-  source: file://protocol.lua
-- name: client
-  kind: library.lua
-  source: file://client.lua
-  modules: [contract]
-  imports:
-    protocol: bee.threads:protocol
 - name: capabilities_report
   kind: library.lua
   source: file://capabilities.lua
@@ -152,23 +143,6 @@ entries:
                   ceiling_ms: {type: integer}
                   caller_may_shorten: {type: boolean}
                   caller_may_extend: {type: boolean}
-- name: journal
-  kind: contract.definition
-  methods:
-  - name: claim
-    description: Claim a stable run identity in the caller's thread
-  - name: append
-    description: Commit an idempotent event in a claimed run
-  - name: read_after
-    description: Read an ordered page after an exclusive sequence
-- name: local
-  kind: contract.binding
-  contracts:
-  - contract: bee.threads:journal
-    methods:
-      claim: bee.threads:claim
-      append: bee.threads:append
-      read_after: bee.threads:read_after
 - name: authority
   kind: contract.definition
   methods:
@@ -352,39 +326,6 @@ entries:
       request_turn: bee.threads.service:request_turn
       end_turn: bee.threads.service:end_turn
       receipt: bee.threads.service:receipt
-- name: claim
-  kind: function.lua
-  source: file://methods.lua
-  method: claim
-  modules: [security]
-  imports:
-    protocol: bee.threads:protocol
-    resources: bee.threads:resources
-    store: bee.threads.persist:store
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
-- name: append
-  kind: function.lua
-  source: file://methods.lua
-  method: append
-  modules: [security]
-  imports:
-    protocol: bee.threads:protocol
-    resources: bee.threads:resources
-    store: bee.threads.persist:store
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
-- name: read_after
-  kind: function.lua
-  source: file://methods.lua
-  method: read_after
-  modules: [security]
-  imports:
-    protocol: bee.threads:protocol
-    resources: bee.threads:resources
-    store: bee.threads.persist:store
-  security:
-    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: owner
   kind: process.lua
   source: file://owner.lua

@@ -3,7 +3,6 @@
 local test = require("test")
 local harness = require("harness")
 local database = require("database")
-local legacy = require("legacy")
 local ledger = require("ledger")
 local migrations = require("migrations")
 local owner = require("owner")
@@ -14,14 +13,16 @@ local function define_tests()
             local resource = "bee.threads:upgrade_test_db"
             local v1, open_error = database.open_at(resource, 1)
             if not v1 then error(tostring(open_error)) end
-            local claimed, claim_error = legacy.claim(v1, "alice", "legacy-thread", "run-1")
-            test.is_true(claimed)
-            test.is_nil(claim_error)
+            harness.execute(v1, "INSERT INTO bee_threads (thread_id, actor, created_at) VALUES ('legacy-thread', 'alice', 'now')")
+            harness.execute(v1, "INSERT INTO bee_thread_runs (thread_id, run_id, actor, claimed_at) VALUES ('legacy-thread', 'run-1', 'alice', 'now')")
             for index = 1, 3 do
-                local seq = legacy.append(v1, "alice", "legacy-thread", "run-1", "key-" .. tostring(index), "test.case", '{"n":' .. tostring(index) .. '}')
-                test.eq(seq, index)
+                harness.execute(v1, "INSERT INTO bee_thread_events (thread_id, sequence, run_id, idempotency_key, event_type, body_json, committed_at) VALUES ('legacy-thread', ?, 'run-1', ?, 'test.case', ?, 'now')",
+                    {index, "key-" .. tostring(index), '{"n":' .. tostring(index) .. '}'})
             end
-            local before = harness.query(v1, "SELECT thread_id, sequence, run_id, idempotency_key, event_type, body_json, committed_at FROM bee_thread_events ORDER BY sequence")
+            local before = harness.query(v1, "SELECT thread_id, actor, created_at FROM bee_threads ORDER BY thread_id")
+            test.eq(before[1].actor, "alice")
+            local before_events = harness.query(v1, "SELECT thread_id, sequence, run_id, idempotency_key, event_type, body_json, committed_at FROM bee_thread_events ORDER BY sequence")
+            test.eq(#before_events, 3)
             local ledger_before = harness.query(v1, "SELECT id, name, checksum FROM bee_thread_schema_migrations ORDER BY id")
             v1:release()
             test.eq(#ledger_before, 1)
@@ -30,9 +31,16 @@ local function define_tests()
             test.eq(ledger_before[1].checksum, expected_checksum)
             local upgraded, upgrade_error = database.open(resource)
             if not upgraded then error(tostring(upgrade_error)) end
-            local after = harness.query(upgraded, "SELECT thread_id, sequence, run_id, idempotency_key, event_type, body_json, committed_at FROM bee_thread_events ORDER BY sequence")
-            test.eq(#after, #before)
+            local after_threads = harness.query(upgraded, "SELECT thread_id, actor, created_at FROM bee_threads ORDER BY thread_id")
+            test.eq(#after_threads, #before)
             for index, row in ipairs(before) do
+                for _, column in ipairs({"thread_id", "actor", "created_at"}) do
+                    test.eq(after_threads[index][column], row[column])
+                end
+            end
+            local after = harness.query(upgraded, "SELECT thread_id, sequence, run_id, idempotency_key, event_type, body_json, committed_at FROM bee_thread_events ORDER BY sequence")
+            test.eq(#after, #before_events)
+            for index, row in ipairs(before_events) do
                 for _, column in ipairs({"thread_id", "sequence", "run_id", "idempotency_key", "event_type", "body_json", "committed_at"}) do
                     test.eq(after[index][column], row[column])
                 end
@@ -56,13 +64,9 @@ local function define_tests()
             test.eq(ledger_after[15].name, "action_inbox_outbox_reply")
             test.eq(ledger_after[16].name, "cancel_intent")
             test.eq(ledger_after[17].name, "attempt_notices")
-            local events, read_error = legacy.read(upgraded, "alice", "legacy-thread", 0)
-            test.is_nil(read_error)
+            local events = harness.query(upgraded, "SELECT body_json FROM bee_thread_events WHERE thread_id = 'legacy-thread' ORDER BY sequence")
             test.eq(#events, 3)
-            test.eq(events[3].body, '{"n":3}')
-            local denied, denied_error = legacy.read(upgraded, "bob", "legacy-thread", 0)
-            test.is_nil(denied)
-            test.eq(denied_error, "thread access denied")
+            test.eq(events[3].body_json, '{"n":3}')
             local heads = harness.query(upgraded, "SELECT COUNT(*) AS count FROM bee_thread_heads")
             test.eq(heads[1].count, 0)
             upgraded:release()

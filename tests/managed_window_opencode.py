@@ -24,7 +24,7 @@ import workspace
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def runtime_test(folder, environment, selected):
+def runtime_test(folder, environment, label):
     run = subprocess.run([str(workspace.RUNTIME), "test", "--host", "bee:terminal"],
                          cwd=folder, capture_output=True, text=True,
                          timeout=int(os.environ.get("BEE_OPENCODE_WINDOW_TIMEOUT", "120")), env=environment)
@@ -35,12 +35,10 @@ def runtime_test(folder, environment, selected):
                 print(line[:800])
         sys.exit(run.returncode)
     if "PASSED" not in out:
-        sys.exit("the managed OpenCode window proof did not pass for " + selected)
-    return selected
+        sys.exit("the managed OpenCode window proof did not pass for " + label)
 
 
 def main():
-    selected = "fixture executable"
     with workspace.fixture_workspace(unit_tests=False) as folder:
         tests = folder / "src/tests"
         shutil.copytree(ROOT / "tests/fixtures/managed_window_opencode", tests / "managed_window_opencode")
@@ -61,7 +59,7 @@ def main():
         environment = workspace.database_environment(folder, HOME=str(home))
         subprocess.run([str(workspace.RUNTIME), "lint", "--ns", "bee.managed.opencode.fixture"],
                        cwd=folder, env=environment, check=True, timeout=90)
-        runtime_test(folder, environment, selected)
+        runtime_test(folder, environment, "the fixture executable")
     print("Managed OpenCode window: broker PTY startup, input, detach/rebind and one cancelled attempt "
           "receipt through the production binding passed; no provider turn and no login")
 

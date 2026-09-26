@@ -136,6 +136,21 @@ grok worker definitions. A child an orchestrator launches on a new thread is
 reachable through `thread_read`, `thread_wait` and `thread_message` with
 `member_thread` (see [Coordinating with other sessions](#coordinating-with-other-sessions)).
 
+Worker containment basis:
+
+| Worker definition | Home | CLI control |
+|---|---|---|
+| Codex batch | private, no host inheritance | `--sandbox workspace-write` |
+| Codex named_batch | host home (the person's explicit saved-profile choice) | `--sandbox workspace-write` |
+| Claude batch | private, no host inheritance | default permission mode |
+| Muse batch | private, no host inheritance | `on-request` approval |
+| agy batch | private, no host inheritance | `--sandbox` |
+| Grok batch | private, no host inheritance | none provable: recorded `unconfined`, needs the explicit `agent_launch_unconfined` host flag |
+| OpenCode batch | private, no host inheritance | none exists: recorded `unconfined`, not in the orchestrator allow-list |
+
+These are CLI permission controls, not operating system confinement; see
+[Managed agent containment](../../development/agent-guide.md#managed-agent-containment).
+
 `workdir` with `{root_ref, path}` names a folder under a root the host admits.
 The shipped host admits the workspace folder (`bee.env:workspace_root`) and
 its children as a placement root, so an orchestrator can target a folder it

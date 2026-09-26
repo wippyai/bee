@@ -24,6 +24,14 @@ entries:
     delivery: bee.threads.records:delivery
     bounds: bee.threads.records:bounds
     types: bee.threads.records:types
+- name: app_identity_test
+  kind: function.lua
+  source: file://app_identity_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    app_identity: bee.threads.records:app_identity
 - name: client_test_policy
   kind: security.policy
   meta: {type: test_support}

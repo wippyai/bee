@@ -7,6 +7,12 @@ entries:
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
+- name: app_identity
+  kind: library.lua
+  source: file://app_identity.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
 - name: values
   kind: library.lua
   source: file://values.lua

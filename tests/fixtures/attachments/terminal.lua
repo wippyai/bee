@@ -23,7 +23,7 @@ function M.main()
     local broker = tostring(assert(process.with_options({}):with_context({
         ["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id,
     }):with_scope(security.new_scope(policies)):spawn_monitored(
-        "bee.apps:broker", "bee:workers", owner, appearance.defaults())))
+        "bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
     assert(catalogs:receive():from() == broker)
     local endpoint = "bee.attachment.probe.host"
     assert(process.registry.lookup(endpoint) == broker)

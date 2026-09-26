@@ -72,7 +72,7 @@ local function run()
     local boundary = assert(security.policy("bee.security:core_spawn_boundary"))
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
         :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.apps:broker", "bee:workers", owner,
-            {theme = "classic", background = "solid", taskbar = "labels"})))
+            {theme = "classic", background = "solid", taskbar = "labels"}, {})))
     local events = assert(process.events())
     local appearance_replies = 0
     coroutine.spawn(function()

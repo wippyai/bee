@@ -108,7 +108,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     if not boundary then error(tostring(boundary_error)) end
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
     assert(catalogs:receive():from() == broker)
 
     -- 4. Resolve plan and open bee.harness.window:app

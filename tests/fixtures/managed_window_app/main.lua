@@ -89,7 +89,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     if not boundary then error(tostring(boundary_error)) end
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
     local events = assert(process.events())
     local catalog_deadline = time.after("5s")
     while true do
@@ -423,7 +423,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     fixture_data.bindings = bindings
     apply(fixture_admission)
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-        :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults())))
+        :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
     local function wait_message(subscription: Channel<process.Message>, label: string, timeout: string?): process.Message
         local deadline = time.after(timeout or "5s")
         local selected = channel.select({subscription:case_receive(), events:case_receive(), deadline:case_receive()})

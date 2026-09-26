@@ -58,8 +58,8 @@ end
 function M.may_project_approvals(thread_id: string): boolean
     return security.can(M.APPROVAL, thread_id)
 end
--- Only the application broker attests instances for a stable app and
--- enumerates the family's threads for revocation fencing.
+-- The application broker backfills retained instances, attests current opens
+-- and fences a family's threads after admission loss.
 function M.may_alias(stable: string): boolean
     return security.can(M.APP_ALIAS, stable)
 end

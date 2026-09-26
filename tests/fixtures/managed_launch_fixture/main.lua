@@ -63,7 +63,7 @@ local function define_tests()
             if not boundary then error(tostring(boundary_error)) end
             local scope = security.new_scope({broker_policy, boundary})
             local broker = tostring(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
-                :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults()))
+                :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {}))
             assert(catalogs:receive():from() == broker)
             local request = assert(json.encode({request_id = "fixture-request", definition_ref = "bee.fixture.terminal.launch:definition", brief = "", thread_id = thread}))
             -- A direct open names the thread on the broker request so the

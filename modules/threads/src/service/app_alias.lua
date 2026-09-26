@@ -1,7 +1,7 @@
 -- MIT. Broker-attested application alias: the stable app an instance was
 -- opened for, and the family's active threads for revocation fencing.
 -- Only the application broker holds the alias action; instances attest
--- nothing themselves, so one app cannot claim another's stable identity.
+-- nothing themselves, so an app cannot claim another's stable identity.
 local sql = require("sql")
 local bounds = require("bounds")
 local access = require("access")

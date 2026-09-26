@@ -83,7 +83,8 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 		t.Fatal(err)
 	}
 	// The manager is an application; this isolated supervisor composition has
-	// no application dependency or desktop app lifecycle.
+	// no desktop app lifecycle. It stages the application libraries only
+	// because the hive-telemetry package reads the host manager through them.
 	if err := os.RemoveAll(filepath.Join(sourceSnapshot, "hive", "manager")); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err := os.CopyFS(filepath.Join(sourceSnapshot, "security"), os.DirFS(filepath.Join(repository, "src/security"))); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"hive", "persist", "sync", "threads"} {
+	for _, name := range []string{"hive", "persist", "sync", "threads", "hive-telemetry", "application"} {
 		if err := os.CopyFS(filepath.Join(root, "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
 			t.Fatal(err)
 		}
@@ -255,7 +256,9 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 	if err := os.WriteFile(fixtureManifest, []byte(fixtureText), 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"application", "node"} {
+	// The application libraries already ride the base module list for the
+	// hive-telemetry package; the feeds composition adds only node here.
+	for _, name := range []string{"node"} {
 		if err := os.CopyFS(filepath.Join(filepath.Dir(source), "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
 			t.Fatal(err)
 		}
@@ -351,9 +354,9 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		if err := os.CopyFS(filepath.Join(folder, "src", "hive_probe"), os.DirFS(fixtureSnapshot)); err != nil {
 			t.Fatal(err)
 		}
-		moduleNames := []string{"hive", "persist", "sync", "threads"}
+		moduleNames := []string{"hive", "persist", "sync", "threads", "hive-telemetry", "application"}
 		if feeds {
-			moduleNames = append(moduleNames, "application", "approvals", "node")
+			moduleNames = append(moduleNames, "approvals", "node")
 		}
 		for _, name := range moduleNames {
 			if err := os.CopyFS(filepath.Join(folder, "modules", name), os.DirFS(filepath.Join(root, "modules", name))); err != nil {

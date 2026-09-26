@@ -35,6 +35,11 @@ type Definition = {
     -- they exceed the launching parent's policy; without it a child launch is
     -- refused when its tools are not a subset of the parent's.
     allow_wider_tools: boolean,
+    -- The host records that this definition's CLI runs without a usable
+    -- workdir confinement: no sandbox or permission flag Bee can select
+    -- restricts it. An orchestrator launches it only through the explicit
+    -- agent_launch_unconfined allow-list on its own launch policy.
+    unconfined: boolean,
 }
 local function decode_workdir(value: unknown): (WorkdirPolicy?, string?)
     local object = bounds.object(value == nil and {kind = "caller_workspace"} or value)
@@ -75,7 +80,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if not data then return nil, ref .. " has no data" end
     local unknown_field = bounds.fields(data, {"schema_revision", "launch_id", "title", "command_names", "binding_ref", "profile_id", "policy_ref", "agent_ref", "default_mode",
         "allowed_overrides", "workdir_policy", "thread_policy", "session_resource", "credentials", "presentation",
-        "allow_wider_tools"})
+        "allow_wider_tools", "unconfined"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local launch_id, binding_ref, profile_id, policy_ref = bounds.id(data.launch_id), bounds.id(data.binding_ref), bounds.id(data.profile_id), bounds.id(data.policy_ref)
@@ -119,6 +124,9 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if data.allow_wider_tools ~= nil and type(data.allow_wider_tools) ~= "boolean" then
         return nil, ref .. ": allow_wider_tools must be a boolean"
     end
+    if data.unconfined ~= nil and type(data.unconfined) ~= "boolean" then
+        return nil, ref .. ": unconfined must be a boolean"
+    end
     local encoded, encode_error = canonical.encode(data)
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
@@ -126,7 +134,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     return {ref = ref, digest = digest, launch_id = launch_id, title = title, command_names = commands, binding_ref = binding_ref, profile_id = profile_id,
         policy_ref = policy_ref, agent_ref = agent_ref, default_mode = mode, allowed_overrides = overrides, workdir_policy = workdir, thread_policy = thread, session_resource = session_resource, credentials = credentials,
         presentation = {start_menu = presentation.start_menu == true, fullscreen = presentation.fullscreen == true, reuse = reuse},
-        allow_wider_tools = data.allow_wider_tools == true}, nil
+        allow_wider_tools = data.allow_wider_tools == true, unconfined = data.unconfined == true}, nil
 end
 function M.load(ref: string): (Definition?, string?)
     local entry, err = registry.get(ref)

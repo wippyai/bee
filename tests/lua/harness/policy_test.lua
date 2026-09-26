@@ -103,6 +103,26 @@ local function define_tests()
             test.is_nil(invalid)
             test.eq(invalid_error, "test:policy: allow_host_home must be a boolean")
         end)
+        test.it("decodes the explicit unconfined allow-list as bounded host data", function()
+            local raw = entry({sh = "/bin/sh"})
+            local data = raw.data :: Entry
+            local bare, bare_error = policy.decode("test:policy", raw)
+            if not bare then error(tostring(bare_error)) end
+            test.eq(#bare.agent_launch_unconfined, 0)
+            data.agent_launch = {"test:worker"}
+            data.agent_launch_unconfined = {"test:worker"}
+            local flagged, flagged_error = policy.decode("test:policy", raw)
+            if not flagged then error(tostring(flagged_error)) end
+            test.eq(#flagged.agent_launch_unconfined, 1)
+            test.eq(flagged.agent_launch_unconfined[1], "test:worker")
+            test.neq(flagged.digest, bare.digest)
+            data.agent_launch_unconfined = {"test:worker", "test:worker"}
+            local doubled, doubled_error = policy.decode("test:policy", raw)
+            test.is_nil(doubled)
+            test.eq(doubled_error, "test:policy: agent_launch_unconfined names test:worker twice")
+            data.agent_launch_unconfined = "test:worker"
+            test.is_nil(policy.decode("test:policy", raw))
+        end)
 
         test.it("measures the surface against the host's tools, not the narrower set a profile offers", function()
             local raw = entry({claude = "/bin/claude"})

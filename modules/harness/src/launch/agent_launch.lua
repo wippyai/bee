@@ -42,6 +42,19 @@ function M.permitted(policy: {[string]: unknown}, definition_ref: string): (bool
     end
     return false, nil
 end
+-- Whether the caller's own launch policy explicitly permits a definition
+-- whose CLI runs without a usable workdir confinement. A definition the
+-- host records as unconfined is refused without this explicit host flag.
+function M.unconfined_permitted(policy: {[string]: unknown}, definition_ref: string): (boolean, string?)
+    local object = bounds.object(policy)
+    if not object then return false, "launch policy is unavailable" end
+    local rows = object.agent_launch_unconfined
+    if type(rows) ~= "table" then return false, nil end
+    for _, raw in ipairs(rows) do
+        if bounds.id(raw) == definition_ref then return true, nil end
+    end
+    return false, nil
+end
 -- Whether every gateway tool a child definition's policy would offer is one
 -- the launching parent's own policy already holds. A host may flag one
 -- definition to admit a child whose tools exceed its parent's; without that

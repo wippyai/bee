@@ -8,6 +8,7 @@ local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
 local agent_launch = require("agent_launch")
+local definitions = require("definitions")
 local agent_protocol = require("agent_protocol")
 local record = require("record")
 local CALL = "bee.harness.launch:agent_launch_call"
@@ -23,6 +24,9 @@ local WIDER_PARENT = "bee.harness.catalog:agent_launch_wider_parent_policy"
 local WIDER_CHILD = "bee.harness.catalog:agent_launch_wider_definition"
 local FLAGGED_CHILD = "bee.harness.catalog:agent_launch_flagged_definition"
 local WINDOW_DEFINITION = "bee.harness.catalog:agent_launch_window_definition"
+local UNCONFINED_CHILD = "bee.harness.catalog:agent_launch_unconfined_definition"
+local UNCONFINED_PARENT = "bee.harness.catalog:agent_launch_unconfined_parent_policy"
+local UNCONFINED_FLAGGING = "bee.harness.catalog:agent_launch_unconfined_flagging_policy"
 local ALLOWING_POLICY = "bee.harness.catalog:agent_launch_policy"
 local DENYING_POLICY = "bee.harness.catalog:agent_launch_denied_policy"
 local WINDOW_POLICY = "bee.harness.catalog:agent_launch_window_policy"
@@ -186,6 +190,28 @@ local function define_tests()
             test.is_true(select(1, agent_launch.tools_within({"thread_read"}, {"thread_read", "thread_wait"})))
             test.is_false(select(1, agent_launch.tools_within({"thread_read"}, {"thread_wait"})))
             test.eq(select(2, agent_launch.tools_within({"thread_read", "overlay"}, {"thread_read"})), "overlay")
+        end)
+        test.it("refuses an unconfined child unless the launching policy explicitly flags it", function()
+            -- The child definition is recorded as unconfined: its CLI runs
+            -- without a usable workdir confinement. The allow-listed but
+            -- unflagged parent is refused before any work, and the parent
+            -- carrying the explicit host flag reaches the later checks.
+            local refused = launch(binding(UNCONFINED_PARENT), {definition_ref = UNCONFINED_CHILD, brief = "widen", idempotency_key = "unconfined-key"})
+            test.eq(fault(refused), "LAUNCH_UNCONFINED")
+            test.is_true(tostring((refused.error :: Object).message):find(UNCONFINED_CHILD, 1, true) ~= nil)
+            local flagged = launch(binding(UNCONFINED_FLAGGING), {definition_ref = UNCONFINED_CHILD, brief = "widen", idempotency_key = "unconfined-flagged-key"})
+            test.is_true(fault(flagged) ~= "LAUNCH_UNCONFINED")
+            -- The pure explicit-flag helper is exact.
+            test.is_true(select(1, agent_launch.unconfined_permitted({agent_launch_unconfined = {UNCONFINED_CHILD}}, UNCONFINED_CHILD)))
+            test.is_false(select(1, agent_launch.unconfined_permitted({agent_launch_unconfined = {}}, UNCONFINED_CHILD)))
+            test.is_false(select(1, agent_launch.unconfined_permitted({}, UNCONFINED_CHILD)))
+            -- The definition decoder records the host's confinement mark.
+            local marked, marked_error = definitions.decode(UNCONFINED_CHILD, assert(registry.get(UNCONFINED_CHILD)))
+            if not marked then error(tostring(marked_error)) end
+            test.is_true(marked.unconfined)
+            local plain, plain_error = definitions.decode(PERMITTED, assert(registry.get(PERMITTED)))
+            if not plain then error(tostring(plain_error)) end
+            test.is_false(plain.unconfined)
         end)
         test.it("refuses a definition declaring a window mode, which has no agent carrier", function()
             local reply = launch(binding(WINDOW_POLICY), {definition_ref = WINDOW_DEFINITION, brief = "do the work", idempotency_key = "window-key"})

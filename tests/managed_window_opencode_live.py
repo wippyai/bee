@@ -17,6 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 sys.path.insert(0, str(Path(__file__).parent))
 import workspace
 
@@ -33,7 +35,6 @@ def main():
         tests = folder / "src/tests"
         shutil.copytree(ROOT / "tests/fixtures/managed_window_opencode", tests / "managed_window_opencode")
         path = tests / "managed_window_opencode/_index.yaml"
-        import yaml
         document = yaml.safe_load(path.read_text())
         policy = next(e for e in document["entries"] if e["name"] == "policy")["data"]
         policy["executables"] = {"opencode": selected}

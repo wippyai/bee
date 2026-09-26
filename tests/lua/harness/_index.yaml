@@ -141,7 +141,10 @@ entries:
     runner_drain_ms: 100
     fixture: true
     executables: {claude: /bin/true}
-    environment: {}
+    # A window profile inherits the host user home, so pin the provider home
+    # to a path with no login evidence: the readiness proof then always sees
+    # its notice on any machine rather than depending on the developer's login.
+    environment: {CLAUDE_CONFIG_DIR: /nonexistent-window-ready-home}
 - name: window_ready_definition
   kind: registry.entry
   meta:

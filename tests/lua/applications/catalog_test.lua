@@ -152,6 +152,33 @@ local function define_tests()
             end
             assert(cleanup:apply())
         end)
+
+        test.it("admits host-composed packages through the measured packages rule", function()
+            local selected = catalog.read(WORKSPACE)
+            local bindings: {[string]: Object} = {}
+            for _, binding in ipairs(selected.bindings) do
+                bindings[binding.definition_id] = binding :: Object
+            end
+            local timeline = bindings["bee.threads.timeline:app"]
+            if not timeline then error("timeline package binding missing") end
+            test.eq((timeline.policies :: {string})[1], "bee.security:ordinary_app_subsystem_boundary")
+            test.eq((timeline.policies :: {string})[2], "bee.threads.timeline:client_policy")
+            test.eq(timeline.thread_access, "none")
+            local processes = bindings["bee.host.processes:app"]
+            if not processes then error("processes package binding missing") end
+            test.is_true(processes.application_stop == true)
+            test.is_false(processes.appearance_write == true)
+            test.eq(processes.close_grace_ms, 250)
+            local manager = bindings["bee.hive.manager:app"]
+            if not manager then error("hive manager package binding missing") end
+            test.eq(#(manager.policies :: {string}), 3)
+            test.is_true(has(selected, "bee.workspace.manager:app"))
+            test.is_true(has(selected, "bee.hub.modules:app"))
+            test.is_true(has(selected, "bee.gov.overlays:app"))
+            test.is_true(has(selected, "bee.settings:app"))
+            test.is_true(selected.evidence ~= "")
+            test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline:app"))
+        end)
     end)
 end
 

@@ -200,6 +200,15 @@ entries:
   imports:
     test: wippy.test:test
     application_admission: bee.gov:governed_application_admission
+- name: activation_profiles_test
+  kind: function.lua
+  source: file://activation_profiles_test.lua
+  method: run
+  modules: [registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    activation_profiles: bee.gov:activation_profile_decoder
 - name: materializer_test
   kind: function.lua
   source: file://materializer_test.lua

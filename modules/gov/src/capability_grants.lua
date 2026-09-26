@@ -77,6 +77,70 @@ local function string_list(raw: unknown, pattern: string): {string}?
     return result
 end
 
+-- Host-composed package applications admit through the shared package
+-- ceiling; each generated body repeats its reviewed static policy exactly.
+-- Other catalog entries remain review vocabulary until their resource and
+-- owner boundaries arrive in later slices.
+local VIEWER_EXPRESSION = '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.hive.desktop:viewer") || (action == "process.host" && resource == "bee.hive.desktop:display_host") || (action == "process.registry.lookup" && resource matches "^bee[.]hive[.]supervisor(/.+)?$") || action == "process.monitor" || action == "tty.attach" || action == "tty.read" || action == "tty.write" || action == "tty.resize" || action == "tty.viewport"'
+local LEASE_EXPRESSION = '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$") || (action == "process.registry.lookup" && resource == "bee.workspace.hosts") || action == "process.send"'
+
+local function plain(actions: {string}, resources: unknown, comment: string, id: string): Object
+    return {id = id, kind = "security.policy", meta = {comment = comment},
+        data = {policy = {actions = actions, resources = resources, effect = "allow"}}}
+end
+
+local function package_policy(grant: Object, id: string): Object?
+    if grant.capability == "hive.view" and grant.operation == "hive.view"
+        and grant.resource == "cluster" then
+        return plain({"registry.get", "system.read"}, {"bee.hive.manager:names", "cluster"},
+            "Host-generated Hive membership view grant", id)
+    end
+    if grant.capability == "hive.remote_view" and grant.operation == "hive.remote_view"
+        and grant.resource == "workspaces" then
+        return {id = id, kind = "security.policy.expr",
+            meta = {comment = "Host-generated Hive remote view grant"},
+            data = {policy = {actions = {"process.spawn", "process.spawn.monitored", "process.host",
+                "process.registry.lookup", "process.monitor", "tty.attach", "tty.read",
+                "tty.write", "tty.resize", "tty.viewport"}, resources = "*",
+                expression = VIEWER_EXPRESSION, effect = "allow"}}}
+    end
+    if grant.capability == "workspace.catalog.read" and grant.operation == "workspace.catalog.read"
+        and grant.resource == "workspaces" then
+        return plain({"bee.workspace.manager.read"}, "*", "Host-generated workspace catalog read grant", id)
+    end
+    if grant.capability == "workspace.catalog.manage" and grant.operation == "workspace.catalog.manage"
+        and grant.resource == "workspaces" then
+        return plain({"bee.workspace.manager.manage", "bee.workspace.manager.browse"}, "*",
+            "Host-generated workspace catalog manage grant", id)
+    end
+    if grant.capability == "workspace.host.lease" and grant.operation == "workspace.host.lease"
+        and grant.resource == "workspace_hosts" then
+        return {id = id, kind = "security.policy.expr",
+            meta = {comment = "Host-generated workspace host lease grant"},
+            data = {policy = {actions = {"process.registry.register", "process.registry.unregister",
+                "process.registry.lookup", "process.send"}, resources = "*",
+                expression = LEASE_EXPRESSION, effect = "allow"}}}
+    end
+    if grant.capability == "desktop.application_stop" and grant.operation == "desktop.application_stop"
+        and grant.resource == "applications" then
+        return plain({"system.read"}, {"hosts", "memory", "goroutines", "supervisor"},
+            "Host-generated host process inspection grant", id)
+    end
+    if grant.capability == "hub.manage" and grant.operation == "hub.manage"
+        and grant.resource == "components" then
+        return plain({"bee.hub.read", "bee.hub.manage"}, "*", "Host-generated Hub management grant", id)
+    end
+    if grant.capability == "gov.delivery.manage" and grant.operation == "gov.delivery.manage"
+        and grant.resource == "overlays" then
+        return plain({"bee.gov.delivery.manage"}, "*", "Host-generated delivery management grant", id)
+    end
+    if grant.capability == "gov.delivery.activate" and grant.operation == "gov.delivery.activate"
+        and grant.resource == "overlays" then
+        return plain({"bee.gov.delivery.activate"}, "*", "Host-generated delivery activation grant", id)
+    end
+    return nil
+end
+
 -- Each installable catalog entry materializes into generated host entries: a
 -- policy plus the host-created volume or database it authorizes. Hive
 -- exposure stays host-published review vocabulary with no app grant.
@@ -143,6 +207,10 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
         return {id = id, kind = "security.policy", meta = {comment = "Host-generated HTTP gateway grant"},
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.HTTP_REQUEST},
                 effect = "allow"}}}, nil, nil, nil
+    end
+    if next(scope) == nil then
+        local generated = package_policy(grant, id)
+        if generated then return generated, nil, nil, nil end
     end
     return nil, nil, nil, "capability has no application-installable enforcement"
 end

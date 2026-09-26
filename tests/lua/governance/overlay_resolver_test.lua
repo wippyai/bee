@@ -225,7 +225,8 @@ local function define_tests()
                 workspace_id = "workspace-destination", overlay_owner = "bee.apps:workspace-destination",
                 source_node = "node-source", source_workspace = "author/app",
                 applications = {{definition_id = "private.app:main",
-                    policies = {"bee:ordinary-policy"}, thread_access = "none"}}}
+                    policies = {"bee:ordinary-policy"}, thread_access = "none",
+                    appearance_write = true, close_grace_ms = 1000}}}
             local deps, spec = fixture(policy)
             local captured = (deps.capture :: () -> (Captured?, string?))()
             captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
@@ -248,6 +249,9 @@ local function define_tests()
             local proposal = facts.context.capability_proposal :: Object
             test.eq(#(proposal.policies :: {unknown}), 1)
             local binding = ((facts.context.application_admission :: Object).record :: Object).bindings :: {Object}
+            test.is_true(binding[1].appearance_write == true)
+            test.eq(binding[1].close_grace_ms, 1000)
+            test.is_true(binding[1].application_stop == false)
             test.eq(#(binding[1].policies :: {unknown}), 2)
             test.eq((binding[1].policies :: {string})[1], (proposal.policies :: {Object})[1].id)
             test.eq((binding[1].policies :: {string})[2], "bee:ordinary-policy")

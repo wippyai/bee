@@ -279,6 +279,19 @@ follows every desired slot whose source the host still selects for that owner,
 and the application catalog admits a governed admission record only while its
 source's selected profile names the same owner and bindings.
 
+The configuration may also carry one `packages` rule with the wider ceiling
+for installed package delivery (`security.policy`, `registry.entry`,
+`contract.binding` and `env.variable` beside the workspace-application kinds).
+It names one application entry per host-composed package: the component,
+application definition, capability IDs, base admission policies, runtime
+binding flags and thread access. `activation_profiles.select` instantiates the
+entry whose component matches a package source this node composes, under the
+private owner `bee.packages:<workspace_id>.<component>`; a live host grant
+record adds its capability-derived policy IDs beside the entry's base
+admission. `activation_profiles.package_bindings` measures the same records
+from the composed registry so the catalog admits host-composed packages
+without delivery, while their definitions and policies still project exactly.
+
 Host profiles now select `resolver: hub` or `resolver: overlay`; omitted legacy
 values decode as `hub`. The private-overlay resolver consumes exact immutable
 Sync artifact definitions and preserves their registry IDs. It assigns package

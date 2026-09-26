@@ -84,13 +84,44 @@ local function define_tests()
         test.it("rejects unknown authority and malformed thread access", function()
             local value = record()
             local rows = value.bindings :: {{[string]: unknown}}
-            rows[1].appearance_write = true
-            test.is_nil(admission.measure(value))
-            rows[1].appearance_write = nil
             rows[1].thread_access = "all"
             test.is_nil(admission.measure(value))
             rows[1].thread_access = "observe_post"
             value.extra = true
+            test.is_nil(admission.measure(value))
+        end)
+
+        test.it("carries governed binding flags with bounded close grace", function()
+            local value = record()
+            local rows = value.bindings :: {{[string]: unknown}}
+            rows[1].appearance_write = true
+            rows[1].application_stop = true
+            rows[1].scope_management = true
+            rows[1].close_grace_ms = 60000
+            local measured = assert(admission.measure(value))
+            local flagged = measured.record.bindings[2]
+            test.is_true(flagged.appearance_write == true)
+            test.is_true(flagged.application_stop == true)
+            test.is_true(flagged.scope_management == true)
+            test.eq(flagged.close_grace_ms, 60000)
+            local plain = measured.record.bindings[1]
+            test.is_true(plain.appearance_write == false)
+            test.is_true(plain.application_stop == false)
+            test.is_true(plain.scope_management == false)
+            test.eq(plain.close_grace_ms, 250)
+            local repeated = assert(admission.measure(measured.record))
+            test.eq(repeated.bytes, measured.bytes)
+            value = record()
+            rows = value.bindings :: {{[string]: unknown}}
+            rows[1].appearance_write = "yes"
+            test.is_nil(admission.measure(value))
+            value = record()
+            rows = value.bindings :: {{[string]: unknown}}
+            rows[1].close_grace_ms = 60001
+            test.is_nil(admission.measure(value))
+            value = record()
+            rows = value.bindings :: {{[string]: unknown}}
+            rows[1].close_grace_ms = 1.5
             test.is_nil(admission.measure(value))
         end)
 

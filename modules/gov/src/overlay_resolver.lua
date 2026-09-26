@@ -497,8 +497,14 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
                     target_db = target}
             end
         end
+        local source_binding = app_binding :: Object
         local prospective_binding: Object = {definition_id = app_id :: string,
-            policies = selected_policies, thread_access = proposed.thread_access}
+            policies = selected_policies, thread_access = proposed.thread_access,
+            appearance_write = source_binding.appearance_write == true,
+            application_stop = source_binding.application_stop == true,
+            scope_management = source_binding.scope_management == true,
+            close_grace_ms = source_binding.close_grace_ms == nil and 250
+                or source_binding.close_grace_ms}
         policy.applications = {prospective_binding}
         local prospective_bytes = canonical.encode({base_policy_digest = policy.base_policy_digest,
             capability_digest = proposed.digest, database_bindings = policy.database_bindings or {}})

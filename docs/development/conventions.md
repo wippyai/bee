@@ -21,7 +21,8 @@ host wiring lives in the app root or beside its component.
 | `src/security`, `src/security/<area>` | Host-selected app policies as `bee.security` and `bee.security.<area>` |
 | `src/env` | Host environment and selected resources as `bee.env` |
 | `src/hive/service`, `src/hive/api`, `src/hive/security` | App-owned Hive supervisor, open workspaces operation and its policy |
-| `src/hive/supervisor`, `src/hive/desktop`, `src/hive/manager` | Hive host behavior, desktop bridge and management app |
+| `src/hive/supervisor`, `src/hive/desktop` | Hive host behavior and desktop bridge |
+| `modules/hive-manager/src` | Hive management app as an installable package |
 | `src/workspace` | Workspace persistence, application checkpoints, workspace identity and the node catalog operations and extension contract |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
 | `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
@@ -36,7 +37,9 @@ host wiring lives in the app root or beside its component.
 | `modules/application/src` | Public application helpers, appearance and rendering values |
 | `src/console`, `src/settings` | Standalone Terminal and Settings applications |
 | `src/approvals/inbox`, `src/hub/modules`, `src/gov/overlays` | Feature-owned standalone applications |
-| `src/workspace/manager`, `src/threads/timeline`, `src/host/processes` | Feature-owned standalone applications |
+| `src/host/processes` | Feature-owned standalone applications |
+| `modules/threads-timeline/src` | Thread timeline viewer as an installable package |
+| `modules/workspace-manager/src` | Workspace manager as an installable package |
 | `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
 | `modules/docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/resources/src` | Resource associations, scoped grants and owner-local ledger |

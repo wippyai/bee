@@ -67,3 +67,46 @@ entries:
       policies: [bee.security:ordinary_app_subsystem_boundary]
       thread_access: none
       hive: true
+    packages:
+      approval_policy: workspace-application-delivery
+      kinds: [process.lua, library.lua, ns.requirement, security.policy, registry.entry, contract.binding, env.variable]
+      modules: [tty, process, channel, json, time, uuid, base64, hash, funcs, registry, system]
+      policies: [bee.security:ordinary_app_subsystem_boundary]
+      thread_access: none
+      applications:
+      - component: bee.hive.manager
+        definition_id: bee.hive.manager:app
+        capabilities: [hive.view, hive.remote_view]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.hive.manager:client_policy, bee.hive.manager:viewer_policy]
+        thread_access: none
+      - component: bee.threads.timeline
+        definition_id: bee.threads.timeline:app
+        capabilities: [threads.read]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.threads.timeline:client_policy]
+        thread_access: none
+      - component: bee.workspace.manager
+        definition_id: bee.workspace.manager:app
+        capabilities: [workspace.catalog.read, workspace.catalog.manage, workspace.host.lease]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.workspace.manager:client_policy,
+          bee.security.storage:workspace_catalog_read_policy, bee.security.storage:workspace_catalog_manage_policy,
+          bee.security.threads:thread_workspace_list_policy, bee.security.desktop:workspace_host_lease_policy]
+        thread_access: none
+      - component: bee.host.processes
+        definition_id: bee.host.processes:app
+        capabilities: [desktop.application_stop]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.security.desktop:processes_policy]
+        application_stop: true
+        thread_access: none
+      - component: bee.hub.modules
+        definition_id: bee.hub.modules:app
+        capabilities: [hub.manage]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.hub.modules:client_policy,
+          bee.hub.modules:hub_policy, bee.hub.modules:publication_policy]
+        thread_access: none
+      - component: bee.gov.overlays
+        definition_id: bee.gov.overlays:app
+        capabilities: [gov.delivery.manage, gov.delivery.activate]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.gov.overlays:client_policy,
+          bee.security.gov:governance_delivery_read_policy, bee.security.gov:governance_delivery_manage_policy,
+          bee.security.gov:governance_delivery_activate_policy]
+        thread_access: none

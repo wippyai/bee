@@ -22,7 +22,9 @@ local PRIOR_WORKSPACE_OWNER_PREFIX = "bee.governance.workspace_applications:"
 
 type Object = {[string]: unknown}
 type ThreadAccess = "none" | "observe_post"
-type Binding = {definition_id: string, policies: {string}, thread_access: ThreadAccess}
+type Binding = {definition_id: string, policies: {string}, thread_access: ThreadAccess,
+    appearance_write: boolean, application_stop: boolean, scope_management: boolean,
+    close_grace_ms: integer}
 type Record = {schema_revision: string, workspace_id: string, overlay_owner: string,
     source_node: string, source_workspace: string, artifact_digest: string,
     policy_digest: string, bindings: {Binding}}
@@ -91,13 +93,31 @@ end
 local function binding(raw: unknown): (Binding?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "application binding must be an object" end
-    local extra = bounds.fields(value, {"definition_id", "policies", "thread_access"})
+    local extra = bounds.fields(value, {"definition_id", "policies", "thread_access",
+        "appearance_write", "application_stop", "scope_management", "close_grace_ms"})
     if extra then return nil, "application binding: " .. extra end
     local definition_id = registry_id(value.definition_id)
     if not definition_id then return nil, "application binding is invalid" end
     local granted, grant_error = M.grant(value.policies, value.thread_access)
     if not granted then return nil, grant_error end
-    return {definition_id = definition_id, policies = granted.policies, thread_access = granted.thread_access}, nil
+    if value.appearance_write ~= nil and type(value.appearance_write) ~= "boolean" then
+        return nil, "application binding appearance_write is invalid"
+    end
+    if value.application_stop ~= nil and type(value.application_stop) ~= "boolean" then
+        return nil, "application binding application_stop is invalid"
+    end
+    if value.scope_management ~= nil and type(value.scope_management) ~= "boolean" then
+        return nil, "application binding scope_management is invalid"
+    end
+    local close_grace_ms = value.close_grace_ms
+    if close_grace_ms ~= nil and (type(close_grace_ms) ~= "number" or close_grace_ms ~= close_grace_ms
+        or close_grace_ms < 0 or close_grace_ms > 60000 or close_grace_ms ~= math.floor(close_grace_ms)) then
+        return nil, "application binding close_grace_ms is invalid"
+    end
+    return {definition_id = definition_id, policies = granted.policies, thread_access = granted.thread_access,
+        appearance_write = value.appearance_write == true, application_stop = value.application_stop == true,
+        scope_management = value.scope_management == true,
+        close_grace_ms = close_grace_ms == nil and 250 or math.floor(close_grace_ms)}, nil
 end
 
 function M.bindings(raw: unknown): ({Binding}?, string?)

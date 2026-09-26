@@ -1,6 +1,20 @@
 version: '1.0'
 namespace: bee.hive.manager
 entries:
+- name: definition
+  kind: ns.definition
+  module: hive-manager
+  meta:
+    title: Bee hive manager
+    comment: Hive cluster management app; host composition and policy selection remain in Bee
+- name: dependency_hive
+  kind: ns.dependency
+  component: bee/hive
+  version: '*'
+- name: dependency_application
+  kind: ns.dependency
+  component: bee/application
+  version: '*'
 - name: app
   kind: process.lua
   source: file://app.lua

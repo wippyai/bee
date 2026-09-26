@@ -130,6 +130,78 @@ entries:
       - {operation: hive.expose, resource: '$contract', scope: {methods: '$methods'}}
       resources:
       - {kind: contract.binding, mode: hive, source: host_selected_contract}
+    - id: hive.view
+      revision: 1
+      parameters: {}
+      text: View Hive cluster membership
+      confirm: standard
+      policies:
+      - {operation: hive.view, resource: cluster, scope: {}}
+      resources: []
+    - id: hive.remote_view
+      revision: 1
+      parameters: {}
+      text: Open a remote view of another node's workspace
+      confirm: explicit
+      policies:
+      - {operation: hive.remote_view, resource: workspaces, scope: {}}
+      resources: []
+    - id: workspace.catalog.read
+      revision: 1
+      parameters: {}
+      text: Read the workspace catalog
+      confirm: standard
+      policies:
+      - {operation: workspace.catalog.read, resource: workspaces, scope: {}}
+      resources: []
+    - id: workspace.catalog.manage
+      revision: 1
+      parameters: {}
+      text: Create, archive and restore workspaces
+      confirm: explicit
+      policies:
+      - {operation: workspace.catalog.manage, resource: workspaces, scope: {}}
+      resources: []
+    - id: workspace.host.lease
+      revision: 1
+      parameters: {}
+      text: Lease workspace hosts for opened workspaces
+      confirm: standard
+      policies:
+      - {operation: workspace.host.lease, resource: workspace_hosts, scope: {}}
+      resources: []
+    - id: desktop.application_stop
+      revision: 1
+      parameters: {}
+      text: Stop running applications from the process view
+      confirm: explicit
+      policies:
+      - {operation: desktop.application_stop, resource: applications, scope: {}}
+      resources: []
+    - id: hub.manage
+      revision: 1
+      parameters: {}
+      text: Plan and apply Hub component changes
+      confirm: explicit
+      policies:
+      - {operation: hub.manage, resource: components, scope: {}}
+      resources: []
+    - id: gov.delivery.manage
+      revision: 1
+      parameters: {}
+      text: Prepare and publish governed delivery versions
+      confirm: explicit
+      policies:
+      - {operation: gov.delivery.manage, resource: overlays, scope: {}}
+      resources: []
+    - id: gov.delivery.activate
+      revision: 1
+      parameters: {}
+      text: Activate accepted governed delivery versions
+      confirm: explicit
+      policies:
+      - {operation: gov.delivery.activate, resource: overlays, scope: {}}
+      resources: []
 - name: thread_outbox_pump_service
   kind: process.service
   process: bee.threads.service:pump_worker

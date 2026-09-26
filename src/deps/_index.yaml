@@ -104,6 +104,18 @@ entries:
   kind: ns.dependency
   component: bee/hive-telemetry
   version: 0.1.0-dev
+- name: hive_manager
+  kind: ns.dependency
+  component: bee/hive-manager
+  version: 0.1.0-dev
+- name: threads_timeline
+  kind: ns.dependency
+  component: bee/threads-timeline
+  version: 0.1.0-dev
+- name: workspace_manager
+  kind: ns.dependency
+  component: bee/workspace-manager
+  version: 0.1.0-dev
 - name: application
   kind: ns.dependency
   component: bee/application

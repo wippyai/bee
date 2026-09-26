@@ -179,6 +179,62 @@ local function define_tests()
             test.is_nil(grants.propose(vocabulary(), OWNER, APP,
                 {request("hive.expose", {contract = "app.notes:api", methods = {"get"}})}))
         end)
+        test.it("materializes the package capabilities with their reviewed bodies", function()
+            local vocabulary_value = vocabulary()
+            local cases = {
+                {capability = "hive.view", operation = "hive.view",
+                    actions = {"registry.get", "system.read"}, kind = "security.policy"},
+                {capability = "hive.remote_view", operation = "hive.remote_view",
+                    actions = {"process.spawn"}, kind = "security.policy.expr"},
+                {capability = "workspace.catalog.read", operation = "workspace.catalog.read",
+                    actions = {"bee.workspace.manager.read"}, kind = "security.policy"},
+                {capability = "workspace.catalog.manage", operation = "workspace.catalog.manage",
+                    actions = {"bee.workspace.manager.manage"}, kind = "security.policy"},
+                {capability = "workspace.host.lease", operation = "workspace.host.lease",
+                    actions = {"process.send"}, kind = "security.policy.expr"},
+                {capability = "desktop.application_stop", operation = "desktop.application_stop",
+                    actions = {"system.read"}, kind = "security.policy"},
+                {capability = "hub.manage", operation = "hub.manage",
+                    actions = {"bee.hub.manage"}, kind = "security.policy"},
+                {capability = "gov.delivery.manage", operation = "gov.delivery.manage",
+                    actions = {"bee.gov.delivery.manage"}, kind = "security.policy"},
+                {capability = "gov.delivery.activate", operation = "gov.delivery.activate",
+                    actions = {"bee.gov.delivery.activate"}, kind = "security.policy"},
+            }
+            for _, case in ipairs(cases) do
+                local proposed = assert(grants.propose(vocabulary_value, OWNER, APP,
+                    {request(case.capability, {})}))
+                test.eq(proposed.capabilities[1].operation, case.operation)
+                test.eq(proposed.policies[1].kind, case.kind)
+                local body = (proposed.policies[1].data :: {[string]: unknown}).policy
+                    :: {[string]: unknown}
+                local found = false
+                for _, action in ipairs(body.actions :: {string}) do
+                    for _, wanted in ipairs(case.actions) do
+                        if action == wanted then found = true end
+                    end
+                end
+                test.is_true(found)
+                local lines = assert(catalog.render(vocabulary_value, proposed.capabilities))
+                test.eq(#lines, 1)
+            end
+        end)
+        test.it("round-trips an installed package grant record", function()
+            local vocabulary_value = vocabulary()
+            local proposed = assert(grants.propose(vocabulary_value, OWNER, APP,
+                {request("hub.manage", {})}))
+            local record = assert(grants.record(OWNER, "workspace-1", APP, proposed,
+                "approval-package", 1))
+            local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary_value))
+            local installed_entries: {[string]: unknown} = {}
+            installed_entries[proposed.policies[1].id :: string] = proposed.policies[1]
+            installed_entries["app.notes:request"] = {kind = "ns.requirement",
+                data = {default = proposed.policies[1].id}}
+            test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
+            local compared = assert(grants.diff(vocabulary_value, nil, proposed))
+            test.is_true(compared.requires_approval)
+            test.is_true(table.concat(compared.lines, "\n"):find("Plan and apply Hub", 1, true) ~= nil)
+        end)
     end)
 end
 return test.run_cases(define_tests)

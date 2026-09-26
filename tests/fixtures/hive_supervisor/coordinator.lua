@@ -11,8 +11,8 @@ local funcs = require("funcs")
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 local function main(remote: string)
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
-        "bee.security.hive:hive_dispatch_policy", "bee.hive.probe:names_policy", "bee.hive.probe:execute_policy"}) do
+    for _, name in ipairs({"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_facade_policy",
+        "bee.security.hive:hive_dispatch_policy", "bee.hive.probe:telemetry_grant", "bee.hive.probe:names_policy", "bee.hive.probe:execute_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error("load supervisor policy " .. name .. ": " .. tostring(policy_error)) end
         policies[#policies + 1] = policy
@@ -75,6 +75,27 @@ local function main(remote: string)
             if not denied.error or denied.error.code ~= "INVALID_ARGUMENT" then error("resource scope was not refused") end
             handle:close()
             assert(io.print("BEE_HIVE_SUPERVISOR probe_passed"))
+        elseif command == "expose-stats" then
+            local handle, open_error = client.open()
+            if not handle then error(tostring(open_error)) end
+            local reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry"},
+                {operation_ref = "bee.hive.telemetry:stats"}, {}, {timeout = "3s"})
+            handle:close()
+            if reply.ok then
+                assert(io.print("BEE_HIVE_SUPERVISOR stats_ok"))
+            elseif reply.error and reply.error.code == "DENIED" then
+                assert(io.print("BEE_HIVE_SUPERVISOR stats_denied"))
+            else
+                error("unexpected stats outcome: " .. tostring(reply.error and reply.error.code))
+            end
+        elseif command == "expose-presence" then
+            local handle, open_error = client.open()
+            if not handle then error(tostring(open_error)) end
+            local reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry"},
+                {operation_ref = "bee.hive.telemetry:presence"}, {}, {timeout = "3s"})
+            handle:close()
+            if not reply.ok then error("presence refused: " .. tostring(reply.error and reply.error.code)) end
+            assert(io.print("BEE_HIVE_SUPERVISOR presence_ok"))
         elseif command == "sibling" then
             local target = assert(process.registry.lookup(types.SUPERVISOR_NAME .. "/" .. remote))
             local replies = assert(process.listen(types.TOPIC_REPLY, {message = true}))

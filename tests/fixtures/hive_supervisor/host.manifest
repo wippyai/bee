@@ -27,6 +27,13 @@ entries:
     value: bee:workers
   - name: waiter_policies
     value: [bee.security.threads:thread_waiter_policy]
+- name: dependency_hive_telemetry
+  kind: ns.dependency
+  component: bee/hive-telemetry
+  version: 0.1.0-dev
+  parameters:
+  - name: target_exposure
+    value: bee.security.hive:hive_exposure_policy
 - name: sync_exports
   kind: registry.entry
   meta:

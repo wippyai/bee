@@ -53,12 +53,20 @@ The implementation is split into these Lua namespaces:
 ## Authority and records
 
 The authority exposes `create`, `get`, `list`, `list_workspace`, `join`, `leave`, `close`,
-`record` and `read_after`. Every mutation has a thread ID and idempotency key;
+`record`, `read_after`, `register_app_alias` and `fence_app`. Every mutation has a thread ID and idempotency key;
 membership and thread state are checked within the transaction. `join` accepts
 `participant` or `observer`, uses an expected revision, and is owner-only;
 `leave` can remove the caller or an owner-selected member, but the owner cannot
 leave its own thread. `close` is owner-only and refuses while lifecycle work is
-unsettled.
+unsettled. `register_app_alias` and `fence_app` are broker-only: the broker
+attests each opened instance for its app's stable identity (definition plus
+workspace, refined by the overlay owner for governed apps), and fences that
+family out of every thread when admission is lost.
+
+An application instance without its own member row still belongs through its
+stable family, but only on threads the family owns, so a reopened app keeps
+the threads and runs it launched while guest memberships stay per instance
+and an owner's fence keeps viewport scope.
 
 A thread a workspace owns carries that workspace. `create` records the
 `workspace_id` of the caller's host-issued identity (an application principal's

@@ -97,6 +97,15 @@ entries:
   imports:
     test: wippy.test:test
     appearance: bee.application:appearance
+- name: app_stable_membership_test
+  kind: function.lua
+  source: file://app_stable_membership_test.lua
+  method: run
+  modules: [process, channel, time, security, funcs, registry]
+  meta: {type: test, suite: bee, timeout: "120s"}
+  imports:
+    test: wippy.test:test
+    appearance: bee.application:appearance
 - name: broker_stop_test
   kind: function.lua
   source: file://broker_stop_test.lua

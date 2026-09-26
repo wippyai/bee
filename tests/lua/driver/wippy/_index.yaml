@@ -1,0 +1,70 @@
+version: '1.0'
+namespace: bee.driver.wippy.test
+entries:
+- name: mock_listener
+  kind: http.service
+  meta:
+    type: test_support
+    comment: Stand-in OpenAI-compatible chat completions listener for driver-wippy unit tests
+  addr: 127.0.0.1:0
+  lifecycle:
+    auto_start: true
+- name: mock_router
+  kind: http.router
+  meta:
+    type: test_support
+    server: bee.driver.wippy.test:mock_listener
+  prefix: /
+- name: mock_completions
+  kind: http.endpoint
+  meta:
+    type: test_support
+    router: bee.driver.wippy.test:mock_router
+  method: POST
+  path: /v1/chat/completions
+  func: bee.driver.wippy.test:mock_server
+- name: mock_server
+  kind: function.lua
+  source: file://mock_server.lua
+  method: handle
+  modules: [http, json]
+- name: driver_wippy_test
+  kind: function.lua
+  source: file://driver_wippy_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+    timeout: "60s"
+  modules: [system, json, registry, funcs, security, time]
+  imports:
+    test: wippy.test:test
+    runner: bee.driver.wippy:runner
+    client: bee.driver.wippy:client
+    types: bee.driver.wippy:types
+    harness: bee.threads:harness
+- name: test_tool
+  kind: function.lua
+  source: file://tool_method.lua
+  method: handle
+  meta:
+    type: tool
+    title: File Report Tool
+    llm_alias: FileReport
+    llm_description: Return a review through the review contract.
+    input_schema: '{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false}'
+    output_schema: '{"type":"object"}'
+- name: test_http_policy
+  kind: security.policy
+  meta:
+    type: test_support
+  policy:
+    actions:
+    - http_client.request
+    - http_client.private_ip
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    - funcs.security
+    resources: ['*']
+    effect: allow

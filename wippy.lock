@@ -62,3 +62,6 @@ modules:
     version: 0.1.0-dev
   - name: bee/driver-opencode
     version: 0.1.0-dev
+  - name: bee/driver-wippy
+    version: 0.1.0-dev
+

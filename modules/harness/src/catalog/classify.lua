@@ -44,7 +44,7 @@ end
 -- remain host-selected; test metadata cannot add a transport capability.
 local function supported(mode: string, protocol: string): boolean
     if mode == "window" then return protocol == "pty" end
-    return (mode == "batch" or mode == "session") and protocol == "stream-json"
+    return (mode == "batch" or mode == "session") and (protocol == "stream-json" or protocol == "native")
 end
 -- Classifies one binding with everything the catalog resolved for it.
 function M.binding(input: Input): Binding

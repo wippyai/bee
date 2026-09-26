@@ -239,6 +239,26 @@ local function define_tests()
             test.eq(harness.code(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1,
                 expected_revision = 1, checkpoint = checkpoint(2), records = {with_provenance}})), "INVALID_ARGUMENT")
         end)
+        test.it("commits memory control events under carrier epoch and survives checkpoint recovery", function()
+            local thread_id = prepared_attempt()
+            harness.value(carrier:call("carrier_claim", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1"}))
+            local mem = {source = "bee", body = {type = "extension", event_key = "memory:mem-1",
+                data = {type = "extension", event_name = "bee.carrier.memory", event_revision = "1",
+                    payload_json = '{"key":"summary","value":"persisted facts"}'}}}
+            local committed = harness.value(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1,
+                expected_revision = 0, checkpoint = checkpoint(1), records = {mem}}))
+            test.eq(committed.checkpoint_revision, 1)
+            test.eq(#committed.records, 1)
+            test.is_false(committed.records[1].replayed)
+            local page = harness.value(carrier:call("read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"observation"}}}))
+            local observed = page.records[#page.records]
+            test.eq(observed.source, "bee")
+            test.eq(observed.body.data.event_name, "bee.carrier.memory")
+            test.eq(observed.body.data.payload_json, '{"key":"summary","value":"persisted facts"}')
+            local recovered = harness.value(carrier:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"}))
+            test.eq(recovered.carrier_epoch, 1)
+            test.eq(recovered.checkpoint_revision, 1)
+        end)
     end)
 end
 return test.run_cases(define_tests)

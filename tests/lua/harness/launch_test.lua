@@ -530,6 +530,8 @@ local function define_tests()
                 {definition = "bee.driver.muse:research_batch", policy = "bee:launch_policy_muse_batch",
                     binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
                     option = "approval_mode", expected = "never", additional_options = {max_steps = 1}},
+                {definition = "bee.driver.opencode:research_batch", policy = "bee:launch_policy_opencode_batch",
+                    binding = "bee.driver.opencode:binding", executable = "bee.driver.opencode:executable"},
             }
             for _, selected in ipairs(cases) do
                 local entry = assert(registry.get(selected.definition))
@@ -553,7 +555,8 @@ local function define_tests()
                         return nil, "unadmitted environment reference"
                     end)
                 if not policy then error(tostring(policy_error)) end
-                test.eq(policy.prepare_options[selected.option], selected.expected)
+                if selected.option then test.eq(policy.prepare_options[selected.option], selected.expected)
+                else test.eq(next(policy.prepare_options or {}), nil) end
                 test.eq(table.concat(policy.allowed_overrides, ","), "thread,workdir")
                 for option, expected in pairs(selected.additional_options or {}) do
                     test.eq(policy.prepare_options[option], expected)
@@ -578,6 +581,7 @@ local function define_tests()
                 {"bee.driver.muse:default_window", "bee:launch_policy_muse_window"}, {"bee.driver.muse:research_batch", "bee:launch_policy_muse_batch"},
                 {"bee.driver.agy:default_window", "bee:launch_policy_agy_window"}, {"bee.driver.agy:research_batch", "bee:launch_policy_agy_batch"},
                 {"bee.driver.grok:default_window", "bee:launch_policy_grok_window"},
+                {"bee.driver.opencode:default_window", "bee:launch_policy_opencode_window"}, {"bee.driver.opencode:research_batch", "bee:launch_policy_opencode_batch"},
             }
             for _, pair in ipairs(shipped) do
                 local decoded, definition_error = definitions.decode(pair[1], assert(registry.get(pair[1])))

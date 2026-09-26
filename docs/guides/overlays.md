@@ -52,12 +52,14 @@ recovery restores only the previously authorized desired intent.
 The host-owned `bee:protected_kernel` entry is the trust map no activation
 profile can open, however permissive. It names every shipped namespace a
 host-selected security scope lives in or is reached from (`bee.gov`,
-`bee.governance`, `bee.security`, `bee.approvals`, `bee.apps`, `bee.launch`,
+`bee.security`, `bee.approvals`, `bee.apps`, `bee.launch`,
 `bee.gateway`, `bee.harness`, `bee.credentials`, `bee.placement`,
 `bee.placement.native`, `bee.resources`, `bee.threads`, `bee.hive`, `bee.env`,
 `bee.sync`, `bee.host`, `bee.session`, `bee.client`, `bee.desktop`,
 `bee.terminal`, `bee.node` and `bee.workspace`, which cover their child
-namespaces) and the exact host selectors `bee:approver_policies`,
+namespaces. The legacy `bee.governance` prefix remains protected for old
+application admission records. The kernel also names the exact host selectors
+`bee:approver_policies`,
 `bee:capability_catalog`, `bee.env:gov_activation_profiles`,
 `bee.env:gov_publication_profiles`, `bee.deps:gov`, `bee.deps:approvals` and
 itself. Its `super_edit` list is the host's explicit carve-out: an empty list

@@ -48,25 +48,25 @@ aliases, the mapped model and the declined hints; a changed agent, trait,
 tool, delegate or contract reference returns `CONFLICT` before any grant or
 credential projection. The closure's composed text travels through the
 profile instruction channel, so an agent route needs `profile_instructions`;
-`bee.harness.profiles:agent_preferences`
-(`modules/harness/src/profiles/protocol.lua`) narrows a saved profile inside
-the closure and refuses tools outside it or an option claiming `model`
+the `agent_preferences` helper in
+`modules/harness/src/profiles/protocol.lua` narrows a saved profile inside the
+closure and refuses tools outside it or an option claiming `model`
 (`FORBIDDEN`).
 
-`bee.gateway:catalog.from_framework`
-(`modules/gateway/src/catalog.lua`) projects the closure's selected function
-tools and traits into gateway declarations: each function id becomes one MCP
-tool under its `llm_alias` adapter alias with its input schema, and each
-trait keeps its prompt with those aliases. The alias carries no authority;
-the host supplies one policy list per function id, and selection still
-refuses any tool outside the admitted ceiling. The function still executes
-under a host-selected scope.
+The `from_framework` helper in `modules/gateway/src/catalog.lua` projects the
+closure's selected function tools and traits into gateway declarations: each
+function id becomes one MCP tool under its `llm_alias` adapter alias with its
+input schema, and each trait keeps its prompt with those aliases. The alias
+carries no authority; the host supplies one policy list per function id, and
+selection still refuses any tool outside the admitted ceiling. The function
+still executes under a host-selected scope.
 
 ## Implemented: workspace agent selection
 
 A workspace stores the selected framework agent reference (`agent_ref`), the
 owner-issued component revision (`owner_component_revision`) and the computed
-spec digest (`spec_digest`) in workspace-keyed state (`bee:saved_profiles`).
+spec digest (`spec_digest`) in its workspace-keyed saved profile. The profile
+store uses the host's node database through `bee.harness.profiles:target_db`.
 Selection, validation and saving execute under the caller's workspace authority;
 access across workspaces is refused without explicit cross-workspace authority
 (`DENIED`, `CROSS_WORKSPACE_FORBIDDEN`).

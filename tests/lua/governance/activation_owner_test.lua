@@ -1,8 +1,8 @@
 -- MIT. Destination orchestration keeps selection, approval, desired state and
 -- overlay observation in their separate owners.
 local test = require("test")
-local KERNEL: {revision: integer, namespaces: {string}, entries: {string}} =
-    {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}}
+local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
+    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
 local hash = require("hash")
 local canonical = require("canonical")
 local artifact = require("artifact")

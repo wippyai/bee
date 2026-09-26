@@ -35,7 +35,7 @@ local function fixture(policy_raw: Policy?): (Object, Object, {captured: Capture
             {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"},
                 registry = {owner = "host/overlay"}},
             {id = "bee:protected_kernel", kind = "registry.entry", meta = {type = "bee.protected_kernel"},
-                data = {revision = 1, namespaces = {"bee.gov"}, entries = {"bee:protected_kernel"}},
+                data = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}},
                 registry = {owner = "bee/host"}},
         },
         overlay_ids = { ["private.app:old-overlay"] = true },

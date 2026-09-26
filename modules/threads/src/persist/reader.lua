@@ -61,6 +61,44 @@ function M.member(tx: sql.Transaction, thread_id: string, actor: string): (Membe
     if not row then return nil, nil end
     return member_row(row)
 end
+-- The stable app the broker attested an instance for at open. Only the
+-- broker writes attestation; instances attest nothing themselves.
+function M.app_stable(tx: sql.Transaction, instance: string): (string?, string?)
+    local row, err = single(tx, "SELECT stable FROM bee_thread_app_alias WHERE instance = ?", {instance}, "thread app alias")
+    if err then return nil, err end
+    if not row then return nil, nil end
+    local stable = text(row.stable)
+    if not stable then return nil, "thread app alias row is corrupt" end
+    return stable, nil
+end
+-- One active member of the thread from the caller's stable family: the
+-- stable row itself, else any active row attested for the same stable.
+function M.app_family_member(tx: sql.Transaction, thread_id: string, stable: string): (Member?, string?)
+    local rows, query_err = tx:query("SELECT m.actor, m.role, m.revision, m.active FROM bee_thread_members m " ..
+        "LEFT JOIN bee_thread_app_alias a ON a.instance = m.actor " ..
+        "WHERE m.thread_id = ? AND m.active = 1 AND (m.actor = ? OR a.stable = ?) " ..
+        "ORDER BY (m.actor = ?) DESC LIMIT 1", {thread_id, stable, stable, stable})
+    if query_err or not rows then return nil, "read thread app family" end
+    if #rows == 0 then return nil, nil end
+    return member_row(rows[1] :: {[string]: unknown})
+end
+-- Every active member row of the stable family, with its thread head
+-- revision, so revocation fences exactly what the family holds.
+function M.app_family_threads(tx: sql.Transaction, stable: string): ({{thread_id: string, actor: string, revision: integer}}?, string?)
+    local rows, query_err = tx:query("SELECT h.thread_id, m.actor, h.revision FROM bee_thread_members m " ..
+        "JOIN bee_thread_heads h ON h.thread_id = m.thread_id " ..
+        "LEFT JOIN bee_thread_app_alias a ON a.instance = m.actor " ..
+        "WHERE m.active = 1 AND (m.actor = ? OR a.stable = ?) ORDER BY h.thread_id, m.actor", {stable, stable})
+    if query_err or not rows then return nil, "read thread app family" end
+    local result: {{thread_id: string, actor: string, revision: integer}} = {}
+    for index, raw in ipairs(rows) do
+        local row = raw :: {[string]: unknown}
+        local thread_id, actor, revision = text(row.thread_id), text(row.actor), integer(row.revision)
+        if not thread_id or not actor or not revision then return nil, "thread app family row is corrupt" end
+        result[index] = {thread_id = thread_id, actor = actor, revision = revision}
+    end
+    return result, nil
+end
 function M.command(tx: sql.Transaction, thread_id: string, actor: string, key: string): (Command?, string?)
     local row, err = single(tx, "SELECT operation, request_json, reply_json FROM bee_thread_commands WHERE thread_id = ? AND actor = ? AND idempotency_key = ?", {thread_id, actor, key}, "thread command")
     if err then return nil, err end

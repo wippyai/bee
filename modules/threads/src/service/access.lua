@@ -9,6 +9,7 @@ M.OBSERVE = "bee.threads.observe"
 M.LIFECYCLE = "bee.threads.lifecycle"
 M.CARRIER = "bee.threads.carrier"
 M.APPROVAL = "bee.threads.approval"
+M.APP_ALIAS = "bee.threads.app_alias"
 M.WORKSPACE = "bee.threads.workspace"
 M.INBOX_SEND = "bee.sessions.send"
 M.INBOX_DISCOVER = "bee.sessions.discover"
@@ -56,6 +57,11 @@ function M.may_carry(thread_id: string): boolean
 end
 function M.may_project_approvals(thread_id: string): boolean
     return security.can(M.APPROVAL, thread_id)
+end
+-- Only the application broker attests instances for a stable app and
+-- enumerates the family's threads for revocation fencing.
+function M.may_alias(stable: string): boolean
+    return security.can(M.APP_ALIAS, stable)
 end
 function M.submits(role: string): boolean
     return role == "owner" or role == "participant"

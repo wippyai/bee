@@ -135,6 +135,10 @@ entries:
     value: bee.security.approvals:approval_request_policy
   - name: target_approval_consume_policy
     value: bee.security.approvals:approval_consume_policy
+  - name: target_workspace_folder_read
+    value: bee.workspace.catalog:read
+  - name: target_workspace_folder_policy
+    value: bee.security.gov:workspace_folder_read_policy
 `
 	if err := os.MkdirAll(filepath.Join(root, "src", "deps"), 0700); err != nil {
 		return fmt.Errorf("create dependency namespace: %w", err)
@@ -159,14 +163,6 @@ entries:
 	}
 	if err := os.WriteFile(filepath.Join(root, "src", "env", "_index.yaml"), []byte(envIndex), 0600); err != nil {
 		return fmt.Errorf("write governance host profiles: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, "src", "security"), 0700); err != nil {
-		return fmt.Errorf("create host security namespace: %w", err)
-	}
-	for _, name := range []string{"approvals", "threads"} {
-		if err := copyTree(filepath.Join(root, "src", "security", name), filepath.Join("src", "security", name)); err != nil {
-			return fmt.Errorf("stage %s host policies: %w", name, err)
-		}
 	}
 
 	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
@@ -219,7 +215,7 @@ func migrationLedger(root string) (string, error) {
 		"governance_plan_approval_proposal", "governance_plan_approval_incarnation",
 		"governance_activation_intents", "governance_component_slots", "governance_activation_migrations",
 		"governance_activation_application_admission", "governance_workspace_append",
-		"governance_activation_grant_reuse"}
+		"governance_activation_grant_reuse", "governance_activation_rollback"}
 	rows := strings.Split(ledger, "\n")
 	if len(rows) != len(expected) {
 		return "", fmt.Errorf("unexpected governance migration ledger: %q", ledger)

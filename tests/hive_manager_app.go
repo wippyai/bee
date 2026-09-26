@@ -75,10 +75,10 @@ func exercise(runtime, root, mode string, packed bool) error {
 	if mode != "slow" && updated == string(data) {
 		return fmt.Errorf("missing fake-directory mode for %s", mode)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "src", "hive", "manager", "directory.lua"), []byte(updated), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "modules", "hive-manager", "src", "directory.lua"), []byte(updated), 0600); err != nil {
 		return err
 	}
-	manifest := filepath.Join(dir, "src", "hive", "manager", "_index.yaml")
+	manifest := filepath.Join(dir, "modules", "hive-manager", "src", "_index.yaml")
 	data, err = os.ReadFile(manifest)
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func exercise(runtime, root, mode string, packed bool) error {
 		return err
 	}
 	if mode == "stale" {
-		app := filepath.Join(dir, "src", "hive", "manager", "app.lua")
+		app := filepath.Join(dir, "modules", "hive-manager", "src", "app.lua")
 		data, err := os.ReadFile(app)
 		if err != nil {
 			return err

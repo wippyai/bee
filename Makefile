@@ -202,6 +202,10 @@ harness-module:
 resources-module:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/resources_module.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/resources_module.go -root .. -runtime "$(abspath $(WIPPY))"
+.PHONY: hive-manager-module
+hive-manager-module:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hive_manager_app.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" go run tests/hive_manager_app.go
 saved-profiles-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/saved_profiles.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/saved_profiles.go -runtime "$(abspath $(WIPPY))"

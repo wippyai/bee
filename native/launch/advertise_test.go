@@ -199,8 +199,9 @@ func TestMeshDialHintOnlyForANATedNode(t *testing.T) {
 	}
 }
 
-// A NATed node advertises the dial hint through the membership metadata the
-// runtime re-broadcasts, beside its internode endpoint.
+// A NATed node advertises its internode endpoint and dial hint through the
+// membership metadata the runtime re-broadcasts. The pinned runtime has no
+// boot-config key for membership metadata, so UpdateMeta is the only path.
 func TestOwnerPublishesItsDialHintAndEndpoint(t *testing.T) {
 	state := t.TempDir()
 	if err := os.MkdirAll(ownerDirectory(state), 0o700); err != nil {
@@ -209,19 +210,23 @@ func TestOwnerPublishesItsDialHintAndEndpoint(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ownerDirectory(state), natFileName), []byte("203.0.113.7\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	config, release, err := prepareOwner(state, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = release() }()
-	if got := config.Sub("cluster").GetString("membership.meta."+dialMetadataKey, ""); got != dialOut {
-		t.Fatalf("published %s = %q, want %q", dialMetadataKey, got, dialOut)
+	if hint := meshDialHint(state); hint != dialOut {
+		t.Fatalf("dial hint = %q, want %q", hint, dialOut)
 	}
 	membership := &recordingMembership{}
 	publishMeshMeta(membership, netip.MustParseAddr("192.168.1.5"), dialOut)
 	if membership.meta[internode.MetadataAdvertiseAddr] != "192.168.1.5" ||
 		membership.meta[internode.MetadataAdvertisePort] != "4100" || membership.meta[dialMetadataKey] != dialOut {
 		t.Fatalf("published meta = %#v", membership.meta)
+	}
+	// A directly reachable node publishes its endpoint without a dial hint.
+	direct := &recordingMembership{}
+	publishMeshMeta(direct, netip.MustParseAddr("192.168.1.5"), "")
+	if _, present := direct.meta[dialMetadataKey]; present {
+		t.Fatalf("a direct node published a dial hint: %#v", direct.meta)
+	}
+	if direct.meta[internode.MetadataAdvertiseAddr] != "192.168.1.5" {
+		t.Fatalf("direct meta = %#v", direct.meta)
 	}
 }
 

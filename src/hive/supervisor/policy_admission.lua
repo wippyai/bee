@@ -38,7 +38,7 @@ function M.handle(value: unknown): types.Reply
     if native_error or native ~= request.owner_ref.node_id then return denied(id, "DENIED", "owner is not this node") end
     if request.owner_ref.service_id ~= service or request.owner_ref.resource_ref ~= nil then return denied(id, "INVALID_ARGUMENT", "feed owner service does not match") end
     if request.principal_ref.issuer ~= request.caller_node_id then return denied(id, "DENIED", "principal issuer does not match the verified peer") end
-    if not security.can("hive.expose.policy", request.operation_ref) then return denied(id, "DENIED", "host does not expose this operation") end
+    if not catalog.admits("policy", request.operation_ref) then return denied(id, "DENIED", "host does not expose this operation") end
     local deadline = time.parse("2006-01-02T15:04:05.000Z07:00", request.deadline)
     if not deadline or not deadline:after(time.now()) then return denied(id, "DEADLINE_EXCEEDED", "request deadline passed") end
     local entry = registry.get(principals.ENTRY)

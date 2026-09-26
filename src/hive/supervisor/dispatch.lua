@@ -4,9 +4,11 @@ local canonical = require("canonical")
 local json = require("json")
 local funcs = require("funcs")
 local security = require("security")
+local registry = require("registry")
 local types = require("types")
 local catalog = require("catalog")
 local bounds = require("bounds")
+local audiences = require("audiences")
 
 local M = {}
 
@@ -64,8 +66,9 @@ function M.dispatch(request: unknown): types.Reply
     end
 
     -- 4. Host exposure ceiling: the operation runs only when the host exposes
-    -- it open. The catalog resolves it again below under the same ceiling.
-    if not security.can("hive.expose.open", req.operation_ref) then
+    -- it open, directly or through an install grant the exposure scope joins.
+    -- The catalog resolves it again below under the same ceiling.
+    if not catalog.admits("open", req.operation_ref) then
         return types.reply_error(request_id, types.fault("DENIED", "host does not expose this operation"))
     end
 
@@ -78,6 +81,21 @@ function M.dispatch(request: unknown): types.Reply
     -- 6. Require mode=open
     if op.mode ~= "open" then
         return types.reply_error(request_id, types.fault("DENIED", "operation mode is not open"))
+    end
+
+    -- 6b. Audience enforcement: a listed operation admits the owner's own
+    -- callers and its peers. An absent table restricts nothing beyond the
+    -- ceiling; a broken one refuses, so a host typo fails closed.
+    local audience_entry = registry.get(audiences.ENTRY)
+    if audience_entry ~= nil then
+        local raw_entry = bounds.object(audience_entry)
+        local listed = audiences.decode(raw_entry and raw_entry.data or nil)
+        if not listed then
+            return types.reply_error(request_id, types.fault("DENIED", "exposure audiences are unavailable"))
+        end
+        if not audiences.admits(listed, req.operation_ref, req.owner_ref.node_id, req.caller_node_id, req.principal_ref.issuer) then
+            return types.reply_error(request_id, types.fault("DENIED", "caller is not in the operation audience"))
+        end
     end
 
     -- 7. Check operation_revision

@@ -97,6 +97,19 @@ entries:
   imports:
     types: bee.hive:types
     bounds: bee.hive:bounds
+- name: audiences
+  kind: library.lua
+  source: file://exposure_audiences.lua
+  imports:
+    bounds: bee.hive:bounds
+- name: exposure_audiences
+  kind: registry.entry
+  meta:
+    type: bee.hive.exposure_audiences
+    comment: Host-owned table of the peers each listed open operation admits; an unlisted operation stays as exposed
+      as its ceiling, and the owner's own callers bypass audiences
+  data:
+    audiences: []
 - name: policy_admission
   kind: library.lua
   source: file://policy_admission.lua
@@ -114,7 +127,7 @@ entries:
   method: handle
   modules: [funcs, security, registry, system, time, logger]
   security:
-    policies: [bee.hive.supervisor:policy_identity_policy, bee.hive.supervisor:policy_actor_policy, bee.security.hive:policy_admission_policy, bee.security.hive:hive_policy_exposure_policy]
+    policies: [bee.hive.supervisor:policy_identity_policy, bee.hive.supervisor:policy_actor_policy, bee.security.hive:policy_admission_policy, bee.security.hive:hive_policy_exposure_policy, bee.security.hive:hive_exposure_facade_policy]
   imports:
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
@@ -208,20 +221,22 @@ entries:
 - name: dispatch
   kind: library.lua
   source: file://dispatch.lua
-  modules: [json, funcs, security]
+  modules: [json, funcs, security, registry]
   imports:
     canonical: bee.threads.records:canonical
     types: bee.hive:types
     catalog: bee.hive:catalog
     bounds: bee.hive:bounds
+    audiences: bee.hive.supervisor:audiences
 
 - name: execute
   kind: function.lua
   source: file://dispatch.lua
   method: dispatch
-  modules: [json, funcs, security]
+  modules: [json, funcs, security, registry]
   imports:
     canonical: bee.threads.records:canonical
     types: bee.hive:types
     catalog: bee.hive:catalog
     bounds: bee.hive:bounds
+    audiences: bee.hive.supervisor:audiences

@@ -8,7 +8,7 @@ local types = require("types")
 local bounds = require("bounds")
 local catalog = require("catalog")
 local version = require("version")
-local dispatch = require("dispatch")
+local output = require("output")
 local canonical = require("canonical")
 
 local M = {}
@@ -58,16 +58,16 @@ function M.handle(value: unknown): types.Reply
     if not policy then return denied(id, "UNAVAILABLE", tostring(policy_error or "replica receipt policy unavailable")) end
     local caller = funcs.new():with_actor(security.new_actor("bee.hive.node." .. request.caller_node_id))
         :with_scope(security.new_scope({policy}))
-    local output, output_error = caller:call(M.OPERATION, resolved.input)
-    if output_error or type(output) ~= "table" or type(output.ok) ~= "boolean" then
+    local reply, reply_error = caller:call(M.OPERATION, resolved.input)
+    if reply_error or type(reply) ~= "table" or type(reply.ok) ~= "boolean" then
         return denied(id, "UNAVAILABLE", "replica owner outcome is unknown; read durable status before retrying")
     end
-    if not dispatch.validate_output(operation.output_schema, operation.limits.max_output_bytes, output) then
+    if not output.validate(operation.output_schema, operation.limits.max_output_bytes, reply) then
         return denied(id, "UNAVAILABLE", "replica owner reply failed its contract")
     end
-    local encoded = canonical.encode(output)
+    local encoded = canonical.encode(reply)
     if not encoded or #encoded > types.MAX_OUTPUT_BYTES then return denied(id, "UNAVAILABLE", "replica owner reply exceeds transport capacity") end
-    return types.reply_ok(id, output)
+    return types.reply_ok(id, reply)
 end
 
 return M

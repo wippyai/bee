@@ -19,9 +19,8 @@ local hash = require("hash")
 local registration = require("registration")
 local registry = require("registry")
 local admission = require("admission")
-local thread_admission = require("thread_admission")
 local policy_admission = require("policy_admission")
-local replica_admission = require("replica_admission")
+local adapters = require("adapters")
 local catalog = require("catalog")
 local desktop_owner = require("desktop_owner")
 local desktop_protocol = require("desktop_protocol")
@@ -529,14 +528,28 @@ local function main(configuration: unknown)
             expires_at = elapsed() + math.floor(deadline:sub(wall_now):milliseconds()), abandoned = false}
         if request.owner_ref.node_id == node then
             if execution_count >= MAX_EXECUTIONS then failed(sender, id, "BUSY", "operation capacity reached"); return end
-            -- A forwarded thread operation runs as the actor the host maps
-            -- the verified principal to; everything else takes the open
-            -- dispatch. A local caller never reaches the thread path here.
+            -- A forwarded operation the host mapped to a feature-owned
+            -- adapter runs as the actor that adapter's principal mapping
+            -- grants; a catalog policy operation takes the generic policy
+            -- worker; everything else takes the open dispatch. A local
+            -- caller never reaches the adapter path here.
             local worker = "bee.hive.supervisor:execute"
-            if sender_node ~= native_node and request.operation_ref == replica_admission.OPERATION then
-                worker = "bee.hive.supervisor:admit_replica"
-            elseif sender_node ~= native_node and thread_admission.OPERATIONS[request.operation_ref] then
-                worker = "bee.hive.supervisor:admit_thread"
+            local mapped: string? = nil
+            if sender_node ~= native_node then
+                local entry = registry.get(adapters.ENTRY)
+                if entry ~= nil then
+                    local object = bounds.object(entry)
+                    local routes, routes_error = nil, "operation adapters entry is unreadable"
+                    if object then routes, routes_error = adapters.decode(object.data) end
+                    if not routes then
+                        failed(sender, id, "UNAVAILABLE", routes_error or "operation adapters are unavailable")
+                        return
+                    end
+                    mapped = adapters.worker_of(routes, request.operation_ref)
+                end
+            end
+            if mapped then
+                worker = mapped
             elseif policy_admission.admits(request.operation_ref) then
                 worker = "bee.hive.supervisor:admit_policy"
             end

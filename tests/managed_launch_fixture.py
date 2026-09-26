@@ -29,6 +29,11 @@ from workspace import RUNTIME, fixture_workspace, retain_test_suites  # noqa: E4
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITES = ("placement", "harness", "driver", "credentials", "threads", "gateway", "managed", "principals", "workspace_catalog", "storage")
+TESTS = (
+    "bee.harness.catalog:codex_profile_test",
+    "bee.harness.catalog:launch_test",
+    "bee.fixture.terminal.launch:test",
+)
 TERMINAL_PROOF = "opens a real native terminal for the fixture provider and leaves launch evidence on the thread"
 TURN_PROOF = "starts the carrier to settlement and a retried start recovers the same attempt"
 
@@ -46,11 +51,34 @@ def main():
         policy["executables"] = {"claude": str(folder / "fixtures/harness/bin/claude")}
         policy["environment"] = {"BEE_FIXTURE_STREAM": str(folder / "fixtures/drivers/claude/stream-json-2/plain.jsonl"), "BEE_FIXTURE_LINGER": "30"}
         path.write_text(yaml.safe_dump(document, sort_keys=False))
-        environment = {**os.environ, "BEE_FIXTURE_BIN": str(folder / "fixtures/harness/bin"), "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers")}
+        fixture_bin = folder / "fixtures/harness/bin"
+        environment = {**os.environ, "BEE_FIXTURE_BIN": str(fixture_bin), "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
+                       "PATH": str(fixture_bin) + os.pathsep + os.environ.get("PATH", "")}
         environment.pop("ANTHROPIC_API_KEY", None)
         started = time.time()
-        run = subprocess.run([str(RUNTIME), "test", "--host", "bee:terminal"], cwd=folder, capture_output=True, text=True,
-                              timeout=int(os.environ.get("BEE_MANAGED_LAUNCH_FIXTURE_TIMEOUT", "300")), env=environment)
+        timeout = int(os.environ.get("BEE_MANAGED_LAUNCH_FIXTURE_TIMEOUT", "300"))
+        args = [str(RUNTIME)]
+        if os.environ.get("BEE_MANAGED_LAUNCH_VERBOSE") == "1":
+            args.append("--verbose")
+        args.extend(["test", "--host", "bee:terminal", "test", *TESTS])
+        try:
+            run = subprocess.run(args, cwd=folder, capture_output=True, text=True, timeout=timeout, env=environment)
+        except subprocess.TimeoutExpired as failure:
+            output = failure.stdout or ""
+            errors = failure.stderr or ""
+            if isinstance(output, bytes):
+                output = output.decode(errors="replace")
+            if isinstance(errors, bytes):
+                errors = errors.decode(errors="replace")
+            output += errors
+            out = re.sub(r"\x1b\[[0-9;]*m", "", output).replace("\r", "\n")
+            print(f"runtime test timed out after {time.time() - started:.1f} s")
+            for line in out.splitlines():
+                if re.search(r"^\s+x |_test:\d+:|assertion failed", line):
+                    print(line[:400])
+            if os.environ.get("BEE_MANAGED_LAUNCH_VERBOSE") == "1":
+                print("\n".join(out.splitlines()[-80:]))
+            sys.exit(f"managed launch fixture runtime test exceeded {timeout} s")
         out = re.sub(r"\x1b\[[0-9;]*m", "", run.stdout + run.stderr).replace("\r", "\n")
         print(f"runtime test exit {run.returncode} after {time.time() - started:.1f} s")
         for line in out.splitlines():

@@ -13,7 +13,7 @@ local time = require("time")
 local uuid = require("uuid")
 local types = require("types")
 local principals = require("principals")
-local thread_admission = require("thread_admission")
+local adapter = require("admission")
 local harness = require("harness")
 local sends = require("sends")
 local LOCAL, REMOTE = "node-b", "node-a"
@@ -44,7 +44,7 @@ local function both()
     install({{issuer = REMOTE, subject_id = ALPHA, policies = MEMBER_POLICIES}, {issuer = REMOTE, subject_id = BETA, policies = MEMBER_POLICIES}})
 end
 local function current_mappings(): principals.Mappings
-    local mappings, err = thread_admission.mappings(registry.get(principals.ENTRY))
+    local mappings, err = adapter.mappings(registry.get(principals.ENTRY))
     if not mappings then error(tostring(err)) end
     return mappings
 end
@@ -64,9 +64,9 @@ local function forwarded(operation: string, input: Object, subject_id: string, e
     return request
 end
 local function admitted(request: types.Request): types.Reply
-    local admission, fault = thread_admission.admit(LOCAL, request, current_mappings(), time.now())
-    if not admission then return types.reply_error(request.request_id, fault or types.fault("DENIED", "not admitted")) end
-    return thread_admission.execute(request.request_id, admission)
+	local record, fault = adapter.admit(LOCAL, request, current_mappings(), time.now())
+	if not record then return types.reply_error(request.request_id, fault or types.fault("DENIED", "not admitted")) end
+	return adapter.execute(request.request_id, record)
 end
 local function code(reply: types.Reply): string
     if reply.ok then error("expected a failure, got success") end
@@ -147,7 +147,7 @@ local function define_tests()
             stray.extra = true
             test.eq(code(admitted(forwarded("bee.threads.service:send", stray, BETA))), "INVALID_ARGUMENT")
             local past = forwarded("bee.threads.service:send", send_input(thread_id, "k-9", "late"), BETA)
-            local expired = thread_admission.admit(LOCAL, past, current_mappings(), time.now():add("60s"))
+            local expired = adapter.admit(LOCAL, past, current_mappings(), time.now():add("60s"))
             test.is_nil(expired)
             -- The owner reference must bind the thread the payload addresses.
             local unbound = forwarded("bee.threads.service:send", send_input(thread_id, "k-10", "no resource"), BETA, {owner_ref = {node_id = LOCAL, service_id = "bee.threads"}})
@@ -196,13 +196,13 @@ local function define_tests()
             both()
             local thread_id = thread_with_members()
             local request = forwarded("bee.threads.service:send", send_input(thread_id, "k-1", "through the worker"), BETA)
-            local raw, err = funcs.call("bee.hive.supervisor:admit_thread", request)
+            local raw, err = funcs.call("bee.threads.hive:admit", request)
             if err then error("admit_thread: " .. tostring(err)) end
             local reply = raw :: types.Reply
             test.eq(reply.request_id, request.request_id)
             test.eq(value(reply).sequence, 1)
             local denied = forwarded("bee.threads.service:send", send_input(thread_id, "k-2", "unmapped"), subject("a9"))
-            local raw_denied = funcs.call("bee.hive.supervisor:admit_thread", denied)
+            local raw_denied = funcs.call("bee.threads.hive:admit", denied)
             test.eq(code(raw_denied :: types.Reply), "DENIED")
         end)
     end)

@@ -43,7 +43,7 @@ entries:
   kind: security.policy
   policy:
     actions: [registry.get, system.read, funcs.call]
-    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check, bee.sync.binding:replica_receive]
+    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive:invoke_check, bee.sync.binding:replica_receive]
     effect: allow
 - name: hive_dispatch_policy
   kind: security.policy
@@ -63,3 +63,13 @@ entries:
     actions: [db.get, registry.get]
     resources: [bee.sync:db, bee.sync:database_ref]
     effect: allow
+- name: hive_operation_adapters
+  kind: registry.entry
+  meta:
+    type: bee.hive.operation_adapters
+  data:
+    adapters:
+    - operations: [bee.threads.service:send, bee.threads.service:send_status]
+      worker: bee.threads.hive:admit
+    - operations: [bee.sync.binding:replica_receive]
+      worker: bee.sync.hive:admit

@@ -67,7 +67,7 @@ M.RESERVED = {"actor", "actor_id", "principal", "principal_id", "principal_ref",
 -- Operations whose payload deliberately carries no thread: an address
 -- resolution answers with the thread, it never receives one.
 M.THREADLESS_OPERATIONS = {["bee.threads.service:inbox_resolve"] = true}
-M.INVOKE_CHECK = "bee.hive.supervisor:invoke_check"
+M.INVOKE_CHECK = "bee.hive:invoke_check"
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 type Object = {[string]: unknown}
 type Admission = {actor_id: string, policies: {string}, operation_ref: string, input: Object, caller_node_id: string, principal: types.PrincipalRef}

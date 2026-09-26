@@ -33,7 +33,7 @@ def edit_approver_policy(project):
 
 
 def edit_inbox_workspaces(project):
-    index = project / "src/approvals/inbox/_index.yaml"
+    index = project / "modules/approvals-inbox/src/_index.yaml"
     import yaml
     doc = yaml.safe_load(index.read_text())
     entry = next(e for e in doc["entries"] if e["name"] == "workspaces")

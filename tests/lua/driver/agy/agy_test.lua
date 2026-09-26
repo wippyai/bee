@@ -541,6 +541,17 @@ local function define_tests()
             test.eq(nested_conflict.terminal.error.code, "conflicting_conversation_id")
         end)
 
+        test.it("uses the pinned session when a terminal result repeats its conversation ID as empty", function()
+            local state = protocol.new(false)
+            protocol.normalize(state, 1, {event = "init", conversation_id = "pinned-conv", init = {}})
+            local result = protocol.normalize(state, 2, {event = "result",
+                result = {conversation_id = "", status = "SUCCESS", response = "complete"}})
+            test.not_nil(result.terminal)
+            test.eq(result.terminal and result.terminal.outcome, "succeeded")
+            test.eq(result.terminal and result.terminal.resume_ref, "pinned-conv")
+            test.eq(result.terminal and result.terminal.answer, "complete")
+        end)
+
         test.it("enforces that malformed results must not succeed", function()
             -- Result received on unstarted session fails
             local unstarted = protocol.new(false)

@@ -8,6 +8,10 @@ entries:
   meta:
     title: Bee synchronized projections
     comment: Owner-local bounded ledger and projection reads; a host selects feed export, worker, and transport wiring
+- name: dependency_hive
+  kind: ns.dependency
+  component: bee/hive
+  version: '*'
 - name: dependency_persist
   kind: ns.dependency
   component: bee/persist

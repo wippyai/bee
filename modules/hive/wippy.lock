@@ -1,6 +1,3 @@
 directories:
   modules: .wippy
   src: ./src
-modules:
-  - name: bee/threads
-    version: 0.1.0-dev

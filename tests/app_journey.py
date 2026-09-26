@@ -40,6 +40,11 @@ GUIDE_APPROVAL_POLICY = "workspace-application-delivery"
 COLD_BOOT = 30
 OVERLAY_WRITE = "registry.overlay.apply"
 OVERLAY_OWNER = "bee.app.journey.probe:activation_overlay"
+HOST_ONLY_OVERLAY_WRITERS = {
+    "bee.gov.security:super_edit_execution_policy",
+    "bee.gov.security:super_edit_recovery_execution_policy",
+    "bee.gov.security:recovery_command_policy",
+}
 OPEN_SEED = "bee.app.open.probe:seed"
 OPEN_PROBE_THREAD = "open-probe-thread"
 MIGRATION_ID = "bee.app_journey_demo:001"
@@ -73,8 +78,8 @@ def bind_admission(project):
 
 
 def assert_overlay_authority(project):
-    """Only the destination and host-selected maintenance paths may write overlays."""
-    granted, denied = set(), set()
+    """Applications get only the destination writer; host recovery stays private."""
+    granted, denied, host_only = set(), set(), {}
     indexes = list((project / "src").rglob("_index.yaml")) + list((project / "modules/gov/src").rglob("_index.yaml"))
     for index in indexes:
         document = yaml.safe_load(index.read_text())
@@ -83,14 +88,27 @@ def assert_overlay_authority(project):
             if not isinstance(policy, dict) or OVERLAY_WRITE not in (policy.get("actions") or []):
                 continue
             identity = f'{document["namespace"]}:{entry["name"]}'
+            if identity in HOST_ONLY_OVERLAY_WRITERS:
+                host_only[identity] = entry
+                continue
             (granted if policy.get("effect") == "allow" else denied).add(identity)
-    assert granted == {
-        "bee.gov.security:destination_service_policy",
-        "bee.gov.security:super_edit_execution_policy",
-        "bee.gov.security:super_edit_recovery_execution_policy",
-        "bee.gov.security:recovery_command_policy",
-    }, granted
+    assert granted == {"bee.gov.security:destination_service_policy"}, granted
     assert denied == {"bee.security:app_boundary_policy", "bee.security:scope_managing_app_boundary"}, denied
+    assert set(host_only) == HOST_ONLY_OVERLAY_WRITERS, host_only
+    assert host_only["bee.gov.security:super_edit_execution_policy"]["groups"] == ["super_edit_execution_scope"]
+    assert host_only["bee.gov.security:super_edit_recovery_execution_policy"]["groups"] == ["super_edit_recovery_execution_scope"]
+
+    recovery = yaml.safe_load((project / "modules/gov/src/service/_index.yaml").read_text())
+    command = next(entry for entry in recovery["entries"] if entry["name"] == "recovery_cli")["meta"]["command"]["security"]
+    assert command == {"actor": {"id": "bee.gov.recovery"},
+                       "policies": ["bee.gov.security:recovery_command_policy"]}, command
+
+    activation = yaml.safe_load((project / "src/env/_index.yaml").read_text())
+    profiles = next(entry for entry in activation["entries"] if entry["name"] == "gov_activation_profiles")["data"]["profiles"]
+    assert not any(profile.get("super_edit") or profile.get("expires_at") for profile in profiles), profiles
+    kernel = yaml.safe_load((project / "src/_index.yaml").read_text())
+    protected = next(entry for entry in kernel["entries"] if entry["name"] == "protected_kernel")["data"]
+    assert protected["super_edit"] == [], protected["super_edit"]
 
 
 def assert_delivery_has_no_overlay_authority(project):
@@ -379,7 +397,8 @@ def configure_open_agent(project):
     hooks_document = yaml.safe_load(hooks.read_text())
     definition = next(entry for entry in hooks_document["entries"] if entry["name"] == "definition")
     definition["data"]["presentation"]["start_menu"] = True
-    definition["data"].pop("session_resource")
+    # The recovery path continues the native attempt after the host restarts.
+    definition["data"]["session_resource"] = "session"
     hooks.write_text(yaml.safe_dump(hooks_document, sort_keys=False))
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
@@ -488,7 +507,7 @@ def run_open_probe(project, directory, packed=False, deployment=None):
 
 def copy_activation(source, destination):
     """Clone approved durable state; boot recovery must reapply its overlay."""
-    for name in ("registry", "governance", "approvals", "workspace"):
+    for name in ("registry", "governance", "approvals", "workspace", "threads"):
         with sqlite3.connect(source / f"{name}.db") as origin:
             with sqlite3.connect(destination / f"{name}.db") as target:
                 origin.backup(target)

@@ -1,0 +1,6 @@
+organization: bee
+module: approvals-inbox
+type: library
+version: 0.1.0-dev
+description: Approvals inbox application over the durable approval owner
+license: MIT

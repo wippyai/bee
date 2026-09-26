@@ -8,19 +8,19 @@ entries:
   meta:
     title: Bee hive
     comment: Cross-node protocol envelopes, client, open telemetry and registry catalog; host composition and policy selection remain in Bee
-- name: dependency_threads
-  kind: ns.dependency
-  component: bee/threads
-  version: '*'
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
+- name: canonical
+  kind: library.lua
+  source: file://canonical.lua
+  modules: [json]
 - name: types
   kind: library.lua
   source: file://types.lua
   modules: [hash]
   imports:
-    canonical: bee.threads.records:canonical
+    canonical: bee.hive:canonical
     bounds: bee.hive:bounds
 - name: client
   kind: library.lua
@@ -32,6 +32,27 @@ entries:
   source: file://catalog.lua
   modules: [registry, security, json, hash]
   imports:
-    canonical: bee.threads.records:canonical
+    canonical: bee.hive:canonical
     bounds: bee.hive:bounds
     types: bee.hive:types
+- name: principals
+  kind: library.lua
+  source: file://principals.lua
+  modules: [hash]
+  imports:
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+- name: output
+  kind: library.lua
+  source: file://output.lua
+  modules: [json]
+  imports:
+    canonical: bee.hive:canonical
+- name: invoke_check
+  kind: function.lua
+  source: file://invoke_check.lua
+  method: handle
+  modules: [security]
+  imports:
+    catalog: bee.hive:catalog
+    bounds: bee.hive:bounds

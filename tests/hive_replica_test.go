@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // TestHiveSupervisorReplica exercises the production publisher, automatic
@@ -201,6 +203,42 @@ func configureAgentArtifactFixture(folder string, scenario *hiveAgentArtifactSce
 	return os.WriteFile(path, []byte(updated), 0600)
 }
 
+type hiveReplicaModule struct {
+	packageName string
+	component   string
+	version     string
+}
+
+func readHiveReplicaModules(t *testing.T, repository string) ([]byte, []hiveReplicaModule) {
+	t.Helper()
+	lockPath := filepath.Join(repository, "wippy.lock")
+	data, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatalf("read locked replica modules: %v", err)
+	}
+	var lock struct {
+		Modules []struct {
+			Name    string `yaml:"name"`
+			Version string `yaml:"version"`
+		} `yaml:"modules"`
+	}
+	if err := yaml.Unmarshal(data, &lock); err != nil {
+		t.Fatalf("decode locked replica modules: %v", err)
+	}
+	if len(lock.Modules) == 0 {
+		t.Fatal("root wippy.lock contains no replica modules")
+	}
+	modules := make([]hiveReplicaModule, 0, len(lock.Modules))
+	for _, entry := range lock.Modules {
+		component, found := strings.CutPrefix(entry.Name, "bee/")
+		if !found || component == "" || filepath.Base(component) != component || entry.Version == "" {
+			t.Fatalf("invalid locked Bee module in wippy.lock: name=%q version=%q", entry.Name, entry.Version)
+		}
+		modules = append(modules, hiveReplicaModule{packageName: entry.Name, component: component, version: entry.Version})
+	}
+	return data, modules
+}
+
 func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 	binary := os.Getenv("BEE_HIVE_SUPERVISOR_RUNTIME")
 	if binary == "" {
@@ -215,6 +253,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		t.Fatal("locate replica fixture")
 	}
 	repository := filepath.Dir(filepath.Dir(sourceFile))
+	lockedModules, modules := readHiveReplicaModules(t, repository)
 	root := t.TempDir()
 	tlsRoot := root
 	if agent != nil {
@@ -251,13 +290,6 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			"codex="+binary, "grok="+binary, "ANTHROPIC_API_KEY=fixture-only",
 			"BEE_AGENT_APP_AGY="+binary, "BEE_AGENT_APP_HOME="+os.Getenv("HOME"))
 	}
-	moduleNames := []string{
-		"application", "approvals", "credentials", "docs", "driver", "driver-agy",
-		"driver-claude", "driver-codex", "driver-grok", "driver-muse", "driver-opencode", "gateway", "gov",
-		"gov-overlays", "harness", "hive", "hive-manager", "hive-telemetry", "host-processes", "hub", "hub-modules",
-		"node", "persist", "placement", "placement-native",
-		"resources", "sync", "threads", "threads-timeline", "workspace-manager",
-	}
 	type stagedNode struct{ project, state string }
 	stage := func(i int, seed string) stagedNode {
 		folder := filepath.Join(root, fmt.Sprintf("node-%d", i))
@@ -288,9 +320,9 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		// enrolled peer list directly. The host service is declared in the root
 		// composition and the launch override below keeps it out of this explicit
 		// fixture. The real Hive sender remains in the composed Hive module.
-		for _, name := range moduleNames {
+		for _, module := range modules {
 			if !externalDestination && !(agent != nil && i == 1 && agent.sourceProject != "") {
-				if err := os.CopyFS(filepath.Join(project, "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
+				if err := os.CopyFS(filepath.Join(project, "modules", module.component), os.DirFS(filepath.Join(repository, "modules", module.component))); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -355,11 +387,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 				t.Fatal(err)
 			}
 		}
-		lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
-		for _, name := range moduleNames {
-			lock += "- name: bee/" + name + "\n  version: 0.1.0-dev\n"
-		}
-		if err := os.WriteFile(filepath.Join(project, "wippy.lock"), []byte(lock), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(project, "wippy.lock"), lockedModules, 0600); err != nil {
 			t.Fatal(err)
 		}
 		projectConfig, err := os.ReadFile(filepath.Join(repository, "wippy.yaml"))
@@ -386,8 +414,8 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			},
 		}
 		replacements := map[string]string{}
-		for _, name := range moduleNames {
-			replacements["bee/"+name] = "./modules/" + name
+		for _, module := range modules {
+			replacements[module.packageName] = "./modules/" + module.component
 		}
 		config["workspace"] = map[string]any{"replacements": replacements}
 		data, err := json.Marshal(config)
@@ -446,15 +474,28 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		})
 		return runner
 	}
+	pendingMarkers := make(map[*procRunner][]string)
 	marker := func(runner *procRunner, expected string) string {
+		prefix := "BEE_HIVE_SUPERVISOR " + expected
+		pending := pendingMarkers[runner]
+		for index, line := range pending {
+			if strings.HasPrefix(line, prefix) {
+				pendingMarkers[runner] = append(pending[:index], pending[index+1:]...)
+				return strings.TrimPrefix(line, prefix)
+			}
+		}
+		pendingMarkers[runner] = pending
 		for {
 			select {
 			case line, open := <-runner.collector.lines:
 				if !open {
 					t.Fatalf("node exited waiting for %s", expected)
 				}
-				if strings.HasPrefix(line, "BEE_HIVE_SUPERVISOR "+expected) {
-					return strings.TrimPrefix(line, "BEE_HIVE_SUPERVISOR "+expected)
+				if strings.HasPrefix(line, prefix) {
+					return strings.TrimPrefix(line, prefix)
+				}
+				if strings.HasPrefix(line, "BEE_HIVE_SUPERVISOR ") {
+					pendingMarkers[runner] = append(pendingMarkers[runner], line)
 				}
 			case <-ctx.Done():
 				t.Fatalf("waiting for %s: %v", expected, ctx.Err())

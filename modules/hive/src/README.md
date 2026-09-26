@@ -12,9 +12,9 @@ Cluster telemetry lives in the optional `bee/hive-telemetry` package
 
 | Slice | Responsibility |
 |---|---|
-| `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `client`, the supervisor-host provenance resource, and the default host composition (`replica_sender`, `supervisor_service`, `workspaces`) |
+| `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `client`, `canonical`, `principals` (the destination identity table), `output` (contract validation), `invoke_check`, the supervisor-host provenance resource, and the default host composition (`replica_sender`, `supervisor_service`, `workspaces`) |
 | `bee.hive.registry` | `catalog`, the registry read model for operation exposure and interfaces |
-| `bee.hive.supervisor` | The root-owned supervisor: hello, admission, forwarding, guarded dispatch, epochs (Astra's lane) |
+| `bee.hive.supervisor` | The root-owned supervisor: hello, admission, forwarding, generic adapter routing, guarded dispatch, epochs |
 | `bee.hive.desktop` | Root-owned desktop integration |
 
 ## Host composition
@@ -55,9 +55,15 @@ and subject pair to its derived member actor and configured policy IDs, and
 checks that mapped actor's scope grants `hive.invoke` for the operation. Only
 after those checks does it call the owner function, rechecking the operation
 revision, input digest and output contract. A request cannot choose its actor,
-policies or destination, and metadata cannot grant them. This generic policy
-route is the current operation seam; it does not provide headless-node launch
-or destination package installation.
+policies or destination, and metadata cannot grant them.
+
+A feature-owned operation whose admission is domain-specific (a thread send, a
+replica receipt) routes through the same generic supervisor. The host selects a
+`bee.hive.supervisor:operation_adapters` row mapping the operation reference to
+the admission worker in the package that owns the feature; the supervisor
+authenticates the peer and dispatch, and the worker still runs under the
+policies its package declares. The supervisor itself keeps only authenticated
+routing and the host-selected grant table, not the per-feature adapter code.
 
 ## Joining a hive
 

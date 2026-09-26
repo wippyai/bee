@@ -185,6 +185,15 @@ local function define_tests()
                 empty_request.tools = {}
                 local empty = raw_call(caller(true, false), "bee.gateway.binding:admit", empty_request)
                 test.eq(empty.error and empty.error.code, "INVALID")
+                -- The bound fits every shipped launch policy and still
+                -- refuses a binding beyond it.
+                local oversized_request = admit_request("oversized-tools")
+                local many_tools: {string} = {}
+                for _ = 1, 33 do many_tools[#many_tools + 1] = "thread_read" end
+                oversized_request.tools = many_tools
+                local oversized = raw_call(caller(true, false), "bee.gateway.binding:admit", oversized_request)
+                test.is_false(oversized.ok)
+                test.eq((oversized.error :: Object).code, "INVALID")
 
                 local replay_request = admit_request("origin-replay")
                 replay_request.idempotency_key = "origin-replay-key"

@@ -25,6 +25,8 @@ local capability_catalog = require("capability_catalog")
 local sends = require("sends")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
+local SHIPPED_SHAPE_DEFINITION = "bee.harness.catalog:shipped_shape_definition"
+local SHIPPED_BATCH_POLICY = "bee:launch_policy_claude_batch"
 local AGENT_DEFINITION = "bee.harness.catalog:agent_fixture_definition"
 local AGENT_POLICY = "bee.harness.catalog:agent_fixture_policy"
 local AGENT_REVIEWER = "bee.harness.catalog:agent_reviewer"
@@ -1366,6 +1368,100 @@ local function define_tests()
             if send_error then error("send: " .. tostring(send_error)) end
             local send_reply = sent :: {[string]: unknown}
             test.eq(send_reply.ok, true)
+        end)
+        test.it("launches a shipped executable_env policy from the generated agents.launch grant and the run settles", function()
+            -- The shipped batch policies resolve their driver executable
+            -- through executable_env, so only a run against the shipped
+            -- policy proves the execution scope reads those driver entries;
+            -- a fixture absolute executables map never touches env.get.
+            local shipped_workspace = fresh("shipped-shape-ws")
+            local application = "bee.application:" .. shipped_workspace .. ":launcher"
+            local app_id = "app.shipped_shape:app"
+            local owner = "bee.gov.apps:" .. shipped_workspace .. ".shipped_shape"
+            local vocabulary = assert(capability_catalog.decode(assert(registry.get("bee:capability_catalog"))))
+            local requirement = {id = "app.shipped_shape:launch", expected_kind = "security.policy", value = nil,
+                targets = {app_id}, capability_request = {capability = "agents.launch",
+                    parameters = {definitions = {SHIPPED_SHAPE_DEFINITION}}, catalog_revision = vocabulary.revision,
+                    template_revision = 1, reason = "Launch the shipped Claude batch route",
+                    target = app_id, path = ".security.policies +="}}
+            local message_requirement = {id = "app.shipped_shape:message", expected_kind = "security.policy", value = nil,
+                targets = {app_id}, capability_request = {capability = "threads.message",
+                    parameters = {scope = "children"}, catalog_revision = vocabulary.revision,
+                    template_revision = 1, reason = "Message the child it launched",
+                    target = app_id, path = ".security.policies +="}}
+            local proposed = assert(capability_grants.propose(vocabulary, owner, app_id, {requirement, message_requirement}))
+            local generated_policies: {string} = {}
+            local generated_changes = registry.snapshot():changes()
+            for _, entry in ipairs(proposed.policies) do
+                local created, create_error = generated_changes:create(entry)
+                if not created then error("create generated grant: " .. tostring(create_error)) end
+                generated_policies[#generated_policies + 1] = entry.id :: string
+            end
+            local generated_applied, generated_error = generated_changes:apply()
+            if not generated_applied then error("apply generated grant: " .. tostring(generated_error)) end
+            local sources_entry = assert(registry.get("bee:credential_sources"))
+            local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
+            sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
+            apply(sources_entry)
+            -- The shipped batch policy offers gateway tools, so the carrier
+            -- admits a gateway binding for the child.
+            open_gateway()
+            local function generated_scope(): security.Scope
+                local policies: {security.Policy} = {}
+                for index, name in ipairs({"bee.security.harness:agent_call_policy"}) do
+                    policies[index] = assert(security.policy(name))
+                end
+                for _, id in ipairs(generated_policies) do
+                    policies[#policies + 1] = assert(security.policy(id))
+                end
+                return security.new_scope(policies)
+            end
+            local function generated_call(request: {[string]: unknown}): admission.Reply
+                local reply, err = funcs.new():with_actor(principals.actor(application, shipped_workspace))
+                    :with_scope(generated_scope()):call("bee.harness.launch:agent_call", request)
+                if err then error("agent_call: " .. tostring(err)) end
+                return reply :: admission.Reply
+            end
+            local _, streams = fixture_paths()
+            local policy_entry = assert(registry.get(SHIPPED_BATCH_POLICY))
+            local policy_data = policy_entry.data :: {[string]: unknown}
+            local environment = policy_data.environment :: {[string]: unknown}
+            environment.BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl"
+            apply(policy_entry)
+            local ok, failure = pcall(function()
+                local run = value(generated_call({operation = "run", definition_ref = SHIPPED_SHAPE_DEFINITION, brief = "ping shipped",
+                    idempotency_key = fresh("shipped-shape")}))
+                test.eq(run.definition_ref, SHIPPED_SHAPE_DEFINITION)
+                test.not_nil(run.thread_id)
+                test.not_nil(run.attempt_id)
+                test.not_nil(run.receipt)
+                local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
+                local settled: {[string]: unknown}? = nil
+                while math.floor(time.now():unix_nano() / 1000000) < deadline_ms do
+                    local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 5000}))
+                    if current.state == "ended" then settled = current break end
+                end
+                test.not_nil(settled)
+                test.eq(settled and settled.outcome, "succeeded")
+                test.not_nil(settled and settled.answer)
+                local status = value(generated_call({operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id}))
+                test.eq(status.state, "ended")
+                -- The same install's threads.message grant reaches the Threads
+                -- owner's message verbs; the owner checks the sender's membership.
+                local message = {message_id = "app-shipped-msg", message_kind = "notification",
+                    recipient_ids = {}, content = {text = "shipped message"}}
+                local payload_digest = assert(sends.payload_digest(message))
+                local sent, send_error = funcs.new():with_actor(principals.actor(application, shipped_workspace))
+                    :with_scope(generated_scope()):call("bee.threads.service:send", {thread_id = run.thread_id,
+                        idempotency_key = fresh("shipped-send"), caller_node_id = "node-shipped",
+                        payload_digest = payload_digest, message = message})
+                if send_error then error("send: " .. tostring(send_error)) end
+                local send_reply = sent :: {[string]: unknown}
+                test.eq(send_reply.ok, true)
+            end)
+            environment.BEE_FIXTURE_STREAM = nil
+            apply(policy_entry)
+            if not ok then error(tostring(failure)) end
         end)
         test.it("runs an agent as a function with durable receipts, replay, cancel before start and wait for terminal carrier record", function()
             local run_workspace = fresh("func-run-ws")

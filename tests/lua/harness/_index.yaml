@@ -686,6 +686,26 @@ entries:
     thread_policy: {kind: new}
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: shipped_shape_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The shipped Claude batch policy behind a test definition; proves an application launch resolves executable_env inside the execution scope
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: claude-shipped-shape
+    title: Claude shipped shape
+    command_names: [claude-shipped-shape]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee:launch_policy_claude_batch
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
 - name: retained_fixture_definition
   kind: registry.entry
   meta:

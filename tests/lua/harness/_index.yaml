@@ -1300,6 +1300,28 @@ entries:
       bee.threads.service:create, bee.threads.service:get, bee.threads.service:admit_action, bee.threads.service:prepare_attempt,
       bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.resources.binding:revoke_all, bee.resources.binding:resolve, bee.resources.binding:list]
     effect: allow
+- name: installation_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.binding:open, bee.gateway.binding:admit, bee.gateway.binding:install_request,
+      bee.threads.service:create, bee.threads.service:get, bee.threads.service:admit_action, bee.threads.service:prepare_attempt]
+    effect: allow
+- name: installation_request_test
+  kind: function.lua
+  source: file://installation_request_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, registry, time]
+  security:
+    policies: [bee.harness.catalog:installation_client_policy, bee.gateway.security:execute_policy,
+      bee.gateway.security:installation_policy, bee.gateway.security:access_reference_policy,
+      bee.gateway.security:access_policy_read_policy]
+  imports:
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    installation: bee.gateway.security:installation
 - name: capability_elevation_test
   kind: function.lua
   source: file://capability_elevation_test.lua

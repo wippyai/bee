@@ -164,7 +164,7 @@ entries:
     revision: 1
     namespaces: [bee.gov, bee.governance, bee.security, bee.approvals, bee.apps, bee.launch]
     entries: ['bee:protected_kernel', 'bee:approver_policies', 'bee:capability_catalog', 'bee.env:gov_activation_profiles',
-      'bee.env:gov_publication_profiles', 'bee.deps:gov', 'bee.deps:approvals']
+      'bee.env:gov_publication_profiles', 'bee.deps:gov', 'bee.deps:approvals', 'bee:module_installation']
 - name: approver_policies
   kind: registry.entry
   meta:
@@ -175,6 +175,17 @@ entries:
     approvers:
     - definition_id: bee.approvals.inbox:app
     max_ttl_ms: 600000
+  - name: module-installation
+    approvers:
+    - definition_id: bee.approvals.inbox:app
+    max_ttl_ms: 600000
+- name: module_installation
+  kind: registry.entry
+  meta:
+    type: bee.module_installation
+    comment: Host-selected approval policy for agent Hub installation requests; a request files one approval and only an approved one applies
+  data:
+    approval_policy: module-installation
 - name: credential_sources
   kind: registry.entry
   meta:
@@ -383,6 +394,9 @@ entries:
     - delivery
     - docs
     - components
+    - install_request
+    - uninstall_request
+    - install_status
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -415,7 +429,7 @@ entries:
     environment: {}
     environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
@@ -457,6 +471,9 @@ entries:
     - delivery
     - docs
     - components
+    - install_request
+    - uninstall_request
+    - install_status
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -490,7 +507,7 @@ entries:
     environment: {}
     environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_instructions: true
     profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
@@ -514,7 +531,7 @@ entries:
     environment: {}
     environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_instructions: true
     profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
@@ -554,6 +571,9 @@ entries:
     - delivery
     - docs
     - components
+    - install_request
+    - uninstall_request
+    - install_status
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -585,7 +605,7 @@ entries:
     executable_env: {muse: bee.driver.muse:executable}
     environment: {}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     hook_command_ref: bee.gateway:hook_executable
     profile_options: {effort: [low, medium, high]}
@@ -625,6 +645,9 @@ entries:
     - delivery
     - docs
     - components
+    - install_request
+    - uninstall_request
+    - install_status
     gateway_hooks:
     - PreToolUse
     - PostToolUse
@@ -655,7 +678,7 @@ entries:
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m}
 - name: launch_policy_grok_window
   kind: registry.entry
@@ -691,6 +714,9 @@ entries:
     - delivery
     - docs
     - components
+    - install_request
+    - uninstall_request
+    - install_status
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

@@ -110,6 +110,37 @@ local function define_tests()
             test.not_nil(mcp.OUTPUT_SCHEMAS.request_capability)
             test.not_nil(mcp.OUTPUT_SCHEMAS.capability_status)
         end)
+        test.it("offers installation requests as write tools apart from the read-only components tool", function()
+            local listed = mcp.list({"components", "install_request", "uninstall_request", "install_status"}).tools :: {Object}
+            test.eq(#listed, 4)
+            for _, item in ipairs(listed) do
+                local annotations = item.annotations :: Object
+                test.eq(annotations.readOnlyHint, item.name == "components")
+                test.eq(annotations.destructiveHint, false)
+            end
+            for _, name in ipairs({"install_request", "uninstall_request", "install_status"}) do
+                local tool = mcp.tool(name)
+                if not tool then error(name .. " tool") end
+                test.eq(tool.operation, "bee.gateway.binding:" .. name)
+                test.eq(tool.policies[1], mcp.TOOL_POLICY_REFS.install)
+                test.is_true(mcp.is_tool_policy_reference(tool.policies[1]))
+                test.not_nil(mcp.OUTPUT_SCHEMAS[name])
+            end
+            local install = mcp.install_arguments({arguments = {component = "acme/tool", version = "1.2.0"}}, false)
+            test.eq(install and install.version, "1.2.0")
+            local newest = mcp.install_arguments({arguments = {component = "acme/tool"}}, false)
+            test.is_nil(newest and newest.version)
+            local _, removal_version = mcp.install_arguments({arguments = {component = "acme/tool", version = "1.2.0"}}, true)
+            test.eq(removal_version, "unknown field version")
+            local _, parameters = mcp.install_arguments({arguments = {component = "acme/tool", parameters = {}}}, false)
+            test.eq(parameters, "unknown field parameters")
+            local _, missing = mcp.install_arguments({arguments = {}}, false)
+            test.eq(missing, "component is required as owner/name")
+            local polled = mcp.install_status_arguments({arguments = {request_id = "approval-1"}})
+            test.eq(polled and polled.request_id, "approval-1")
+            local _, no_id = mcp.install_status_arguments({arguments = {}})
+            test.eq(no_id, "request_id is required and must be an identifier")
+        end)
         test.it("decodes one strict JSON-RPC request and refuses the rest", function()
             local call = mcp.decode({jsonrpc = "2.0", id = 7, method = "tools/list"})
             if not call then error("decode") end

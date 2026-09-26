@@ -29,6 +29,7 @@ entries:
     surface_store: bee.gateway.persist:surface_store
     access: bee.gateway.security:access
     elevation: bee.gateway.security:elevation
+    installation: bee.gateway.security:installation
 - name: open
   kind: function.lua
   source: file://open_method.lua
@@ -163,6 +164,48 @@ entries:
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
     - bee.security.resources:resource_grant_thread_policy
+- name: install_request
+  kind: function.lua
+  source: file://install_request_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:installation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: uninstall_request
+  kind: function.lua
+  source: file://uninstall_request_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:installation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: install_status
+  kind: function.lua
+  source: file://install_status_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:installation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
 - name: drain
   kind: function.lua
   source: file://drain_method.lua

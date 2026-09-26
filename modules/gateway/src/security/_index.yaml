@@ -91,7 +91,7 @@ entries:
   meta: {comment: The MCP adapter reads only its component-owned links to the selected built-in tool policies}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway:tool_read_policy_ref, bee.gateway:tool_message_policy_ref, bee.gateway:tool_inbox_policy_ref, bee.gateway:tool_discover_policy_ref, bee.gateway:tool_send_grant_policy_ref, bee.gateway:tool_launch_policy_ref, bee.gateway:tool_overlay_policy_ref, bee.gateway:tool_docs_policy_ref, bee.gateway:tool_components_policy_ref, bee.gateway:tool_delivery_policy_ref, bee.gateway:tool_publish_policy_ref, bee.gateway:tool_application_open_policy_ref]
+    resources: [bee.gateway:tool_read_policy_ref, bee.gateway:tool_message_policy_ref, bee.gateway:tool_inbox_policy_ref, bee.gateway:tool_discover_policy_ref, bee.gateway:tool_send_grant_policy_ref, bee.gateway:tool_launch_policy_ref, bee.gateway:tool_overlay_policy_ref, bee.gateway:tool_docs_policy_ref, bee.gateway:tool_components_policy_ref, bee.gateway:tool_delivery_policy_ref, bee.gateway:tool_publish_policy_ref, bee.gateway:tool_application_open_policy_ref, bee.gateway:tool_install_policy_ref]
     effect: allow
 - name: access_call_policy
   kind: security.policy
@@ -109,19 +109,27 @@ entries:
     effect: allow
 - name: access_policy_read_policy
   kind: security.policy
-  meta: {comment: target_approval_* requirements inject exactly the host-selected approval policies that a binding may resolve; elevation loads its own call policy and the thread-grant policy the same way}
+  meta: {comment: target_approval_* requirements inject exactly the host-selected approval policies that a binding may resolve; elevation and installation load their own call policies the same way}
   policy:
     actions: [security.policy.get]
-    resources: [bee.gateway.security:access_call_policy, bee.gateway.security:elevation_policy, bee.security.resources:resource_grant_thread_policy]
+    resources: [bee.gateway.security:access_call_policy, bee.gateway.security:elevation_policy, bee.security.resources:resource_grant_thread_policy,
+      bee.gateway.security:installation_policy, bee.gateway.security:installation_read_policy, bee.gateway.security:installation_apply_policy]
     effect: allow
+- name: subject_call
+  kind: library.lua
+  source: file://subject_call.lua
+  modules: [funcs, security, registry]
+  imports:
+    bounds: bee.threads.records:bounds
 - name: access
   kind: library.lua
   source: file://access.lua
-  modules: [funcs, security, hash, registry]
+  modules: [hash]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     surface: bee.gateway:surface
+    subject_call: bee.gateway.security:subject_call
 - name: elevation_policy
   kind: security.policy
   meta:
@@ -133,8 +141,41 @@ entries:
 - name: elevation
   kind: library.lua
   source: file://elevation.lua
-  modules: [funcs, security, hash, registry]
+  modules: [hash, registry]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     capability: bee.gov:capability_request
+    subject_call: bee.gateway.security:subject_call
+- name: installation_policy
+  kind: security.policy
+  meta:
+    comment: Private per-binding installation requests call the approval operations and the Hub facade and read the host installation link; the thread-bound approval is the authority for the apply
+  policy:
+    actions: [funcs.call, registry.get]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.hub.binding:call, bee.gateway:install_configuration_ref, bee.threads.service:get, bee.threads.service:read_after]
+    effect: allow
+- name: installation_read_policy
+  kind: security.policy
+  meta:
+    comment: Installation requests read the installed inventory, package details and the exact plan through the Hub facade
+  policy:
+    actions: [bee.hub.read]
+    resources: '*'
+    effect: allow
+- name: installation_apply_policy
+  kind: security.policy
+  meta:
+    comment: Joins the Hub read policy only after the person's thread-bound approval is consumed; the facade still applies only the approved plan digest
+  policy:
+    actions: [bee.hub.manage]
+    resources: '*'
+    effect: allow
+- name: installation
+  kind: library.lua
+  source: file://installation.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    installation: bee.hub:installation
+    subject_call: bee.gateway.security:subject_call

@@ -43,7 +43,9 @@ local function identity(raw: unknown): string?
 end
 local KINDS: {[string]: boolean} = {relative_subpath = true, name = true, owned_scope = true,
     children_scope = true, definitions = true, methods = true, http_methods = true,
-    https_origin = true, url_path_prefix = true, binding = true, contract = true}
+    https_origin = true, url_path_prefix = true, binding = true, contract = true,
+    hive_operations = true, hive_mode = true, hive_audiences = true}
+local HIVE_MODES: {[string]: boolean} = {open = true, policy = true}
 
 local function template_value(raw: unknown, parameters: {[string]: string}): boolean
     if type(raw) == "string" then
@@ -149,10 +151,25 @@ local function set_values(raw: unknown, kind: string): {string}?
         if not value or seen[value] then return nil end
         if kind == "http_methods" then
             if not ({GET = true, POST = true, PUT = true, PATCH = true, DELETE = true, HEAD = true})[value] then return nil end
-        elseif kind == "definitions" or kind == "methods" then
-            if kind == "definitions" and not value:match("^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$") then return nil end
+        elseif kind == "definitions" or kind == "methods" or kind == "hive_operations" then
             if kind == "methods" and not value:match("^[A-Za-z][A-Za-z0-9_]*$") then return nil end
+            if kind ~= "methods" and not value:match("^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$") then return nil end
         end
+        seen[value] = true
+        result[#result + 1] = value
+    end
+    table.sort(result)
+    return result
+end
+local function audience_list(raw: unknown): {string}?
+    local rows = list(raw, 16)
+    if not rows or #rows == 0 then return nil end
+    local seen: {[string]: boolean} = {}
+    local result: {string} = {}
+    for _, item in ipairs(rows) do
+        local value = word(item, 160)
+        if not value or seen[value] then return nil end
+        if value ~= "*" and not value:match("^[a-z][a-z0-9_.-]*$") then return nil end
         seen[value] = true
         result[#result + 1] = value
     end
@@ -164,7 +181,13 @@ local function parameter(raw: unknown, kind: string): unknown?
     if kind == "url_path_prefix" then return clean_path(raw, true) end
     if kind == "owned_scope" then return raw == "owned" and "owned" or nil end
     if kind == "children_scope" then return raw == "children" and "children" or nil end
-    if kind == "definitions" or kind == "methods" or kind == "http_methods" then return set_values(raw, kind) end
+    if kind == "hive_mode" then
+        if type(raw) ~= "string" or not HIVE_MODES[raw] then return nil end
+        return raw
+    end
+    if kind == "hive_audiences" then return audience_list(raw) end
+    if kind == "definitions" or kind == "methods" or kind == "http_methods"
+        or kind == "hive_operations" then return set_values(raw, kind) end
     local value = word(raw, 160)
     if not value then return nil end
     if kind == "https_origin" then
@@ -271,7 +294,7 @@ function M.render(catalog: Catalog, grants_raw: unknown): ({string}?, string?)
         if id == "app.database" then reads[#reads + 1] = "Application database " .. printable(params.name) end
         if id == "http.api" then egress[#egress + 1] = printable(params.origin) end
         if id == "contract.call" then egress[#egress + 1] = "app binding " .. printable(params.binding) end
-        if id == "hive.expose" then egress[#egress + 1] = "Hive contract " .. printable(params.contract) end
+        if id == "hive.expose" then egress[#egress + 1] = "Hive operations " .. printable(params.operations) .. " in " .. printable(params.mode) .. " mode" end
     end
     for _, source in ipairs(reads) do
         for _, destination in ipairs(egress) do

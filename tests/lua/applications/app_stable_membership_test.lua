@@ -71,13 +71,20 @@ local function run_code(instance_id: string): string?
     return tostring((reply.error :: {[string]: unknown}).code)
 end
 
+local baseline_bindings: {{[string]: unknown}}? = nil
+
 local function set_admission(admitted: boolean)
     local snap = registry.snapshot()
     local record = assert(snap:get(ADMISSION_ID)) :: {[string]: unknown}
     local data = (record.data :: {[string]: unknown}?) or {}
+    if not baseline_bindings then
+        baseline_bindings = {}
+        for _, raw in ipairs((data.bindings :: {unknown}?) or {}) do
+            baseline_bindings[#baseline_bindings + 1] = raw :: {[string]: unknown}
+        end
+    end
     local bindings = {}
-    for _, raw in ipairs((data.bindings :: {unknown}?) or {}) do
-        local binding = raw :: {[string]: unknown}
+    for _, binding in ipairs(baseline_bindings) do
         if admitted or binding.definition_id ~= DEFINITION then bindings[#bindings + 1] = binding end
     end
     local changes = snap:changes()
@@ -120,6 +127,7 @@ local function define_tests()
                         end
                     end
                 end
+                error(tag .. " open reply loop ended")
             end
             local function close(view_id: unknown)
                 local request_id = tostring(view_id) .. "-close"

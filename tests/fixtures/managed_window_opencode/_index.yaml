@@ -1,0 +1,94 @@
+version: '1.0'
+namespace: bee.managed.opencode.fixture
+entries:
+- name: policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The fixture OpenCode executable is bound by the acceptance script; the host user home is inherited so a real login-evidence path is inspected
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+    allow_host_home: true
+- name: definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The production OpenCode driver binding and window profile a real opencode window uses; only the executable is the fixture
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: managed-opencode-window-fixture
+    title: Open OpenCode window
+    command_names: []
+    binding_ref: bee.driver.opencode:binding
+    profile_id: window
+    policy_ref: bee.managed.opencode.fixture:policy
+    default_mode: window
+    allowed_overrides:
+    - brief
+    - thread
+    workdir_policy:
+      kind: caller_workspace
+    thread_policy:
+      kind: caller
+    credentials: []
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
+- name: expectation
+  kind: registry.entry
+  meta:
+    test_support: true
+  data:
+    marker: opencode-fixture
+    brief: managed-window
+- name: test
+  kind: function.lua
+  source: file://main.lua
+  method: run
+  modules:
+  - process
+  - channel
+  - time
+  - security
+  - tty
+  - funcs
+  - json
+  - registry
+  imports:
+    appearance: bee.application:appearance
+  security:
+    policies:
+    - bee.security.desktop:desktop_policy
+    - bee.managed.opencode.fixture:core_spawn_policy
+    - bee.security.threads:thread_authority_client_policy
+    - bee.security.threads:thread_lifecycle_client_policy
+    - bee.security.threads:thread_create_policy
+  meta:
+    type: test
+    suite: bee
+    timeout: 180s
+- name: core_spawn_policy
+  kind: security.policy
+  meta: {test_support: true}
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.host:main
+    - bee.session:main
+    - bee.apps:broker
+    - bee.terminal:main
+    effect: allow

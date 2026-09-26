@@ -26,6 +26,7 @@ local migration_runner = require("migration_runner")
 local activation_profiles = require("activation_profiles")
 local capability_grants = require("capability_grants")
 local capability_catalog = require("capability_catalog")
+local capability_files = require("capability_files")
 local workspace_applications = require("workspace_applications")
 
 local M = {}
@@ -166,17 +167,6 @@ local function workspace_folder(workspace_id: string): (unknown?, string?)
     return {root_ref = root_ref, directory = data.directory, base = data.base, subpath = subpath}, nil
 end
 
--- Whether a plan requests workspace files, which root in the workspace folder.
-local function requests_files(requirements: {unknown}): boolean
-    for _, raw in ipairs(requirements) do
-        local item = bounds.object(raw)
-        local request = item and bounds.object(item.capability_request) or nil
-        local capability = request and request.capability or nil
-        if type(capability) == "string" and capability:sub(1, 16) == "workspace.files." then return true end
-    end
-    return false
-end
-
 local function destination_resolver(profile_value: Profile, node_id: string, workspace_id: string,
     activation_store: activations.Store?, base_policy_digest: string?): unknown
     local function selected_root(spec_raw: unknown): (ResolverRoot?, string?)
@@ -268,7 +258,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         if requirement.capability_request then requested[#requested + 1] = requirement end
     end
     local folder: unknown = nil
-    if requests_files(requested) then
+    if capability_files.rooted(requested) then
         local resolved, folder_error = workspace_folder(profile_value.workspace_id)
         if not resolved then return nil, folder_error end
         folder = resolved

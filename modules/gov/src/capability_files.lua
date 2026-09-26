@@ -102,6 +102,19 @@ local function located(root: Folder, subpath: string): string
     return root.directory .. "/" .. relative
 end
 
+-- Whether measured capability requirements ask for workspace files, whose
+-- grants root in the destination workspace's folder.
+function M.rooted(requirements: {unknown}): boolean
+    for _, raw in ipairs(requirements) do
+        local item = type(raw) == "table" and raw :: {[string]: unknown} or nil
+        local request = item and type(item.capability_request) == "table"
+            and item.capability_request :: {[string]: unknown} or nil
+        local capability = request and request.capability or nil
+        if type(capability) == "string" and capability:sub(1, 16) == "workspace.files." then return true end
+    end
+    return false
+end
+
 function M.volume_id(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (string?, string?)
     if type(owner_raw) ~= "string" or #owner_raw == 0 or #owner_raw > 160 then
         return nil, "file grant owner is invalid"

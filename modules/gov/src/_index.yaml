@@ -48,6 +48,14 @@ entries:
     canonical: bee.sync:canonical
     capability_catalog: bee.gov:capability_catalog
     capability_containment: bee.gov:capability_containment
+- name: capability_request
+  kind: library.lua
+  source: file://capability_request.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    capability_catalog: bee.gov:capability_catalog
 - name: delivery_protocol
   kind: library.lua
   source: file://delivery_protocol.lua

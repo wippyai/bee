@@ -199,7 +199,8 @@ entries:
     path: .policy.resources +=
 - name: target_remote_resolver
   kind: ns.requirement
-  meta: {comment: Host-selected resolver for node-qualified session addresses; the default resolves nothing, so a composition with no transport answers a remote address as not found}
+  meta: {comment: Host-selected resolver for node-qualified session addresses; the module default resolves nothing, so a composition with no transport answers a remote address as not found}
+  default: bee.gateway:remote
   targets:
   - entry: bee.gateway.api:mcp_http
     path: .imports.remote

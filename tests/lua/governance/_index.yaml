@@ -60,6 +60,24 @@ entries:
   imports:
     test: wippy.test:test
     destination_service: bee.gov.binding:destination_service
+- name: super_edit_test
+  kind: function.lua
+  source: file://super_edit_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    super_edit: bee.gov:super_edit
+- name: headless_revert_test
+  kind: function.lua
+  source: file://headless_revert_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    transaction: bee.persist:transaction
+    headless_revert: bee.gov:headless_revert
 - name: publication_profiles_test
   kind: function.lua
   source: file://publication_profiles_test.lua

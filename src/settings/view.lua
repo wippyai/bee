@@ -3,7 +3,7 @@ local tty = require("tty")
 local appearance = require("appearance")
 local frame = require("frame")
 local build_info = require("build_info")
-type Pane = "theme" | "background" | "taskbar" | "about"
+type Pane = "theme" | "background" | "taskbar" | "edit_mode" | "about"
 type Grid = {columns: integer, rows: integer, capacity: integer, card_width: integer}
 type Frame = {rows: {string}, hits: {frame.Hit}}
 local M = {}
@@ -50,8 +50,10 @@ function M.offset(index: integer, offset: integer, grid: Grid, count: integer, r
 end
 local HINTS = frame.hints({{key = "←→↑↓", verb = "choose"}, {key = "Tab", verb = "switch"}, {key = "D", verb = "default"}})
 local ABOUT_HINTS = frame.hints({{key = "Tab", verb = "switch"}, {key = "PgUp/PgDn", verb = "scroll"}})
+local EDIT_HINTS = frame.hints({{key = "E", verb = "enable"}, {key = "D", verb = "disable"}, {key = "Tab", verb = "switch"}})
 local TABS: {frame.Tab} = {{kind = "theme", label = "Themes", short = "Theme"}, {kind = "background", label = "Backgrounds", short = "BG"},
-    {kind = "taskbar", label = "Tabs", short = "Tabs"}, {kind = "about", label = "About", short = "About"}}
+    {kind = "taskbar", label = "Tabs", short = "Tabs"}, {kind = "edit_mode", label = "Edit mode", short = "Edit"},
+    {kind = "about", label = "About", short = "About"}}
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, pane: Pane, offset: integer, message: string?): Frame
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
@@ -59,14 +61,23 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local themes, backgrounds = appearance.themes(), appearance.backgrounds()
     local count = pane == "taskbar" and 2 or (pane == "theme" and #themes or (pane == "background" and #backgrounds or 0))
     local notice = message or ""
-    frame.header(painter, pane == "about" and "BEE SETTINGS · ABOUT" or "BEE SETTINGS · DISPLAY")
-    if pane ~= "about" and width >= 18 and height >= 3 then
+    frame.header(painter, pane == "about" and "BEE SETTINGS · ABOUT" or (pane == "edit_mode" and "BEE SETTINGS · EDIT MODE" or "BEE SETTINGS · DISPLAY"))
+    if pane ~= "about" and pane ~= "edit_mode" and width >= 18 and height >= 3 then
         local wide = width >= 48
         local label = wide and "Use node default (D)" or "Default (D)"
         local size = tty.text.width(" " .. label .. " ")
         frame.button(painter, wide and width - size or 2, wide and 1 or 3, {kind = "inherit", label = label, enabled = true})
     end
     if height >= 2 then frame.tabs(painter, 2, TABS, pane) end
+    if pane == "edit_mode" then
+        if height >= 5 then
+            frame.line(painter, 4, "Temporary overlay admission is host controlled.", theme.text)
+            frame.line(painter, 5, "Each activation still needs an explicit person approval.", theme.text)
+            if height >= 6 then frame.line(painter, 6, "Enable accepts exact non-kernel namespaces for up to 24h.", theme.muted) end
+        end
+        if height >= 3 then frame.footer(painter, notice ~= "" and notice or "Choose E or D to continue", EDIT_HINTS) end
+        return {rows = frame.rows(painter), hits = painter.hits}
+    end
     if pane == "about" then
         local details = about_details(build_info.info(), width)
         local capacity = math.floor(math.max(0, height - 5))

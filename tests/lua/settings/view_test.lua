@@ -80,6 +80,28 @@ local function define_tests()
             test.is_true(compact:find("Native", 1, true) ~= nil)
             test.is_true(compact:find("Website", 1, true) ~= nil)
         end)
+        test.it("shows person-confirmed, bounded edit mode controls at every terminal size", function()
+            for _, width in ipairs({1, 12, 28, 48, 80}) do
+                for _, height in ipairs({1, 3, 6, 12}) do
+                    local frame = view.draw(width, height, appearance.defaults(), "edit_mode", 0)
+                    test.eq(#frame.rows, height)
+                    for _, row in ipairs(frame.rows) do test.eq(tty.text.width(row), width) end
+                    for _, hit in ipairs(frame.hits) do
+                        test.is_true(hit.x >= 1 and hit.y >= 1)
+                        test.is_true(hit.x + hit.width - 1 <= width)
+                        test.is_true(hit.y + hit.height - 1 <= height)
+                    end
+                end
+            end
+            local text = table.concat(view.draw(80, 12, appearance.defaults(), "edit_mode", 0).rows, "\n")
+            test.is_true(text:find("Temporary overlay admission is host controlled.", 1, true) ~= nil)
+            test.is_true(text:find("explicit person approval", 1, true) ~= nil)
+            test.is_true(text:find("up to 24h", 1, true) ~= nil)
+            local tabs = view.draw(80, 12, appearance.defaults(), "theme", 0).hits
+            local has_edit_tab = false
+            for _, hit in ipairs(tabs) do if hit.kind == "edit_mode" then has_edit_tab = true end end
+            test.is_true(has_edit_tab)
+        end)
     end)
 end
 local cases = test.run_cases(define_tests)

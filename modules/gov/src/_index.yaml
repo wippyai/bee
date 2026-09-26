@@ -36,6 +36,18 @@ entries:
 - name: protected_kernel
   kind: library.lua
   source: file://protected_kernel.lua
+- name: super_edit
+  kind: library.lua
+  source: file://super_edit.lua
+  modules: [hash]
+- name: headless_revert
+  kind: library.lua
+  source: file://headless_revert.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    transaction: bee.persist:transaction
 - name: capability_catalog
   kind: library.lua
   source: file://capability_catalog.lua

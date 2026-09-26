@@ -105,6 +105,7 @@ func TestPlanAnswersHelpBeforeProjectSelection(t *testing.T) {
 			"bee workspace create LABEL ROOT[/PATH] [--new-folder]",
 			"bee workspace archive WORKSPACE",
 			"bee workspace restore WORKSPACE",
+			"bee gov revert OWNER",
 			"bee hive invite",
 			"bee hive invites",
 			"bee hive revoke INVITE_ID",

@@ -10,6 +10,51 @@ entries:
     actions: [funcs.security, security.policy_group.get, funcs.call]
     resources: [security, bee.gov.security:destination_execution_scope, bee.gov.binding:destination_backend_call]
     effect: allow
+- name: super_edit_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: Settings may enter the private host profile writer; the facade checks its broker-minted application identity
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.actor.get" && resource == "*") || (action == "security.actor.create" && resource == "*") || (action == "security.scope.create" && resource == "*") || (action == "security.policy_group.get" && resource == "bee.gov.security:super_edit_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:super_edit_backend_call")'
+    actions: [funcs.security, security.actor.get, security.actor.create, security.scope.create, security.policy_group.get, funcs.call]
+    resources: [security, '*', bee.gov.security:super_edit_execution_scope, bee.gov.binding:super_edit_backend_call]
+    effect: allow
+- name: super_edit_execution_policy
+  kind: security.policy
+  groups: [super_edit_execution_scope]
+  meta: {comment: Private host access used only by the Settings activation profile writer}
+  policy:
+    actions: [bee.gov.super_edit.execute, registry.get, registry.snapshot, registry.apply, registry.overlay.get,
+      registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, system.read]
+    resources: '*'
+    effect: allow
+- name: super_edit_recovery_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The native local startup path may enter the recovery scope and call the private profile writer
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.actor.get" && resource == "*") || (action == "security.actor.create" && resource == "*") || (action == "security.scope.create" && resource == "*") || (action == "security.policy_group.get" && resource == "bee.gov.security:super_edit_recovery_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:super_edit_backend_call")'
+    actions: [funcs.security, security.actor.get, security.actor.create, security.scope.create, security.policy_group.get, funcs.call]
+    resources: [security, '*', bee.gov.security:super_edit_recovery_execution_scope, bee.gov.binding:super_edit_backend_call]
+    effect: allow
+- name: super_edit_recovery_execution_policy
+  kind: security.policy
+  groups: [super_edit_recovery_execution_scope]
+  meta: {comment: Private host access used only to disable super-edit overlays after local startup readiness fails}
+  policy:
+    actions: [bee.gov.super_edit.recover, registry.get, registry.snapshot, registry.apply, registry.overlay.get,
+      registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, system.read]
+    resources: '*'
+    effect: allow
+- name: recovery_command_policy
+  kind: security.policy
+  meta: {comment: Headless native governance recovery reads activation facts and restores one retained baseline}
+  policy:
+    actions: [db.get, registry.get, registry.snapshot, registry.preview, registry.apply, system.read,
+      funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get,
+      registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
+    resources: '*'
+    effect: allow
 - name: staging_policy
   kind: security.policy
   groups: [workspace_execution_scope]

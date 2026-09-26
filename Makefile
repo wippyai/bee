@@ -65,7 +65,9 @@ agent-app-hive-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/agent_app_hive.py
 
 .PHONY: agent-app-hive-e2e-check
-agent-app-hive-e2e-check:
+# The continuous journey authors through the real harness gateway, so the
+# scripted far-end binary must exist before the desktop stages it.
+agent-app-hive-e2e-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/agent_app_hive_e2e.py
 .PHONY: governance-runtime-check
 governance-runtime-check:

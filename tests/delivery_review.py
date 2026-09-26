@@ -103,9 +103,14 @@ def invoke(project, folder):
     return invoked
 
 
-def focus(ui, label):
-    """Windows are chosen from the taskbar, the way a person switches them."""
-    deadline = time.monotonic() + 10
+def focus(ui, label, timeout=DESKTOP_HANG_SECONDS):
+    """Windows are chosen from the taskbar, the way a person switches them.
+
+    The wait ends on the rendered tab, so it is an event wait: the bound only
+    diagnoses a desktop that never shows the window, never how fast a restore
+    renders.
+    """
+    deadline = time.monotonic() + timeout
     while True:
         row = ui.screen.display[0]
         if label in row:

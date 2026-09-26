@@ -93,7 +93,7 @@ entries:
   meta:
     type: bee.launch_policy
     test_support: true
-    comment: The one allow-listed fixture agent the installed Tally app may launch; the acceptance fills the executable
+    comment: The one allow-listed fixture agent the installed Tally app may launch; shaped like the shipped drivers with executable_env while the acceptance fills the answer stream
   data:
     schema_revision: bee.launch-policy@2
     required_cleanup: direct_process
@@ -104,6 +104,7 @@ entries:
     runner_drain_ms: 1000
     fixture: true
     executables: {}
+    executable_env: {claude: bee.driver.claude:executable}
     environment:
       BEE_FIXTURE_STREAM: ''
     prepare_options:

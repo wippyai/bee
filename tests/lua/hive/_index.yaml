@@ -164,7 +164,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    principals: bee.hive.supervisor:principals
+    principals: bee.hive:principals
 - name: thread_admission_test
   kind: function.lua
   source: file://thread_admission_test.lua
@@ -176,8 +176,8 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    principals: bee.hive.supervisor:principals
-    thread_admission: bee.hive.supervisor:thread_admission
+    principals: bee.hive:principals
+    admission: bee.threads.hive:admission
     harness: bee.threads:harness
     sends: bee.threads.service:sends
 - name: inbox_forwarding_test
@@ -191,8 +191,8 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    principals: bee.hive.supervisor:principals
-    thread_admission: bee.hive.supervisor:thread_admission
+    principals: bee.hive:principals
+    admission: bee.threads.hive:admission
     harness: bee.threads:harness
     sends: bee.threads.service:sends
 - name: desktop_catalog_test

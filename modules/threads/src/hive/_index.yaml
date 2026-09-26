@@ -1,0 +1,42 @@
+version: '1.0'
+namespace: bee.threads.hive
+entries:
+- name: admission
+  kind: library.lua
+  source: file://admission.lua
+  modules: [funcs, security, time]
+  imports:
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+    canonical: bee.hive:canonical
+    catalog: bee.hive:catalog
+    principals: bee.hive:principals
+- name: admit
+  kind: function.lua
+  source: file://admit.lua
+  method: handle
+  modules: [registry, time]
+  imports:
+    types: bee.hive:types
+    admission: bee.threads.hive:admission
+    principals: bee.hive:principals
+  security:
+    policies: [bee.threads.hive:admission_policy, bee.threads.hive:identity_policy, bee.security.hive:hive_thread_exposure_policy]
+- name: admission_policy
+  kind: security.policy
+  meta:
+    comment: The admitting worker reads the host principal mapping and calls the forwarded thread operations; the mapped actor's own scope remains the mapping's policies
+  policy:
+    actions: [funcs.call, registry.get]
+    resources: [bee.threads.service:send, bee.threads.service:send_status, bee.threads.service:inbox_resolve,
+      bee.threads.service:inbox_reply, bee.threads.service:notify, bee.threads.delivery:watch,
+      bee.hive.supervisor:principal_mappings]
+    effect: allow
+- name: identity_policy
+  kind: security.policy
+  meta:
+    comment: The admitting worker acts as the mapped actor under the mapping's policies
+  policy:
+    actions: [process.security, security.scope.create, security.policy.get]
+    resources: '*'
+    effect: allow

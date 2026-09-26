@@ -21,7 +21,7 @@ host wiring lives in the app root or beside its component.
 | `src/security`, `src/security/<area>` | Host-selected app policies as `bee.security` and `bee.security.<area>` |
 | `src/env` | Host environment and selected resources as `bee.env` |
 | `src/hive/service`, `src/hive/api`, `src/hive/security` | App-owned Hive supervisor, open workspaces operation and its policy |
-| `src/hive/supervisor`, `src/hive/desktop` | Hive host behavior and desktop bridge |
+| `src/hive/supervisor`, `src/hive/desktop` | Generic Hive routing, host-selected adapter table, supervisor lifecycle and desktop bridge |
 | `modules/hive-manager/src` | Hive management app as an installable package |
 | `src/workspace` | Workspace persistence, application checkpoints, workspace identity and the node catalog operations and extension contract |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
@@ -36,12 +36,13 @@ host wiring lives in the app root or beside its component.
 | `src/storage` | Workspace database, catalog rows and migration ledger |
 | `modules/application/src` | Public application helpers, appearance and rendering values |
 | `src/console`, `src/settings` | Standalone Terminal and Settings applications |
-| `src/approvals/inbox` | Feature-owned approvals inbox application |
+| `modules/approvals-inbox/src` | Approvals inbox app as an installable package |
 | `modules/threads-timeline/src` | Thread timeline viewer as an installable package |
 | `modules/workspace-manager/src` | Workspace manager as an installable package |
 | `modules/host-processes/src` | Host process inspection app as an installable package |
 | `modules/hub-modules/src` | Hub Modules app as an installable package |
 | `modules/gov-overlays/src` | Governance Overlays app as an installable package |
+| `modules/hive/src` | Cross-node protocol envelopes, client, exposure catalog, shared principal identity and the `hive.invoke` check |
 | `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
 | `modules/docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/resources/src` | Resource associations, scoped grants and owner-local ledger |

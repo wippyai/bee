@@ -15,7 +15,7 @@ local uuid = require("uuid")
 local system = require("system")
 local types = require("types")
 local principals = require("principals")
-local thread_admission = require("thread_admission")
+local adapter = require("admission")
 local harness = require("harness")
 local sends = require("sends")
 local REMOTE = "node-a"
@@ -54,7 +54,7 @@ local function both()
     install({{issuer = REMOTE, subject_id = ALPHA, policies = MEMBER_POLICIES}, {issuer = REMOTE, subject_id = BETA, policies = MEMBER_POLICIES}})
 end
 local function current_mappings(): principals.Mappings
-    local mappings, err = thread_admission.mappings(registry.get(principals.ENTRY))
+    local mappings, err = admission.mappings(registry.get(principals.ENTRY))
     if not mappings then error(tostring(err)) end
     return mappings
 end
@@ -72,9 +72,9 @@ local function forwarded(operation: string, input: Object, subject_id: string, e
     return request
 end
 local function admitted(request: types.Request): types.Reply
-    local admission, fault = thread_admission.admit(local_node(), request, current_mappings(), time.now())
-    if not admission then return types.reply_error(request.request_id, fault or types.fault("DENIED", "not admitted")) end
-    return thread_admission.execute(request.request_id, admission)
+	local record, fault = adapter.admit(local_node(), request, current_mappings(), time.now())
+	if not record then return types.reply_error(request.request_id, fault or types.fault("DENIED", "not admitted")) end
+	return adapter.execute(request.request_id, record)
 end
 local function code(reply: types.Reply): string
     if reply.ok then error("expected a failure, got success") end

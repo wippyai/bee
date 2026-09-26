@@ -227,6 +227,19 @@ entries:
   hide_logs: true
   lifecycle:
     auto_start: true
+- name: hive_operation_adapters
+  kind: registry.entry
+  meta:
+    type: bee.hive.operation_adapters
+    comment: Host-selected forwarding routes; the supervisor maps each thread and replica operation to the feature-owned admission worker in the package that owns it, and that worker still runs under the host-selected policies its package declares
+  data:
+    adapters:
+    - operations: [bee.threads.service:send, bee.threads.service:send_status, bee.threads.service:inbox_resolve,
+        bee.threads.service:inbox_describe, bee.threads.service:inbox_send, bee.threads.service:inbox_reply,
+        bee.threads.service:notify, bee.threads.delivery:watch]
+      worker: bee.threads.hive:admit
+    - operations: [bee.sync.binding:replica_receive]
+      worker: bee.sync.hive:admit
 - name: protected_kernel
   kind: registry.entry
   meta:

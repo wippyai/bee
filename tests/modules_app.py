@@ -136,7 +136,7 @@ return {handle = handle}
 def stage_agent_install(project):
     """Add the agent probe and list its workspace in the Approvals inbox."""
     shutil.copytree(ROOT / "tests/fixtures/agent_install", project / "src/agent_install_probe")
-    index = project / "src/approvals/inbox/_index.yaml"
+    index = project / "modules/approvals-inbox/src/_index.yaml"
     document = yaml.safe_load(index.read_text())
     entry = next(item for item in document["entries"] if item["name"] == "workspaces")
     entry["data"]["workspaces"].append(AGENT_WORKSPACE)

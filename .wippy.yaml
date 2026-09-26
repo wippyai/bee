@@ -23,6 +23,7 @@ workspace:
     bee/hub-modules: ./modules/hub-modules
     bee/gov-overlays: ./modules/gov-overlays
     bee/approvals: ./modules/approvals
+    bee/approvals-inbox: ./modules/approvals-inbox
     bee/application: ./modules/application
     bee/node: ./modules/node
     bee/resources: ./modules/resources

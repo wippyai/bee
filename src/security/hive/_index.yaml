@@ -77,7 +77,7 @@ entries:
     resources:
     - node
     - bee.hive.supervisor:principal_mappings
-    - bee.hive.supervisor:invoke_check
+    - bee.hive:invoke_check
     - bee.node.binding:describe
     - bee.node.binding:update_metadata
     - bee.node.binding:snapshot
@@ -120,7 +120,7 @@ entries:
     - bee.threads.service:inbox_reply
     - bee.threads.service:notify
     - bee.threads.delivery:watch
-    - bee.hive.supervisor:invoke_check
+    - bee.hive:invoke_check
     effect: allow
 - name: hive_thread_exposure_policy
   kind: security.policy
@@ -205,7 +205,7 @@ entries:
 - name: hive_execute_policy
   kind: security.policy
   meta:
-    comment: The native supervisor host may call its own admitted-operation executor
+    comment: The supervisor host may call its open executor, its generic policy worker and the feature-owned admission workers the host routed (selected beside the operation-adapter table)
   policy:
     actions:
     - funcs.call
@@ -213,6 +213,8 @@ entries:
     - bee.hive.supervisor:execute
     - bee.hive.supervisor:admit_policy
     - bee.hive.supervisor:advertise
+    - bee.threads.hive:admit
+    - bee.sync.hive:admit
     effect: allow
 - name: hive_owner_stop_policy
   kind: security.policy

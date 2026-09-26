@@ -133,6 +133,10 @@ entries:
   kind: ns.dependency
   component: bee/gov-overlays
   version: 0.1.0-dev
+- name: approvals_inbox
+  kind: ns.dependency
+  component: bee/approvals-inbox
+  version: 0.1.0-dev
 - name: application
   kind: ns.dependency
   component: bee/application

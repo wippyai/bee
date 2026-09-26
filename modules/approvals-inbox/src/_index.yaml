@@ -1,6 +1,32 @@
 version: '1.0'
 namespace: bee.approvals.inbox
 entries:
+- name: definition
+  kind: ns.definition
+  module: approvals-inbox
+  meta:
+    title: Bee approvals inbox
+    comment: Approvals inbox application; host composition, admitted workspaces and source selection remain in Bee
+- name: dependency_application
+  kind: ns.dependency
+  component: bee/application
+  version: '*'
+- name: dependency_approvals
+  kind: ns.dependency
+  component: bee/approvals
+  version: '*'
+- name: dependency_hive
+  kind: ns.dependency
+  component: bee/hive
+  version: '*'
+- name: dependency_sync
+  kind: ns.dependency
+  component: bee/sync
+  version: '*'
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
 - name: app
   kind: process.lua
   source: file://app.lua

@@ -77,6 +77,14 @@ entries:
   imports:
     test: wippy.test:test
     audiences: bee.hive.supervisor:audiences
+- name: adapters_test
+  kind: function.lua
+  source: file://adapters_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    adapters: bee.hive.supervisor:adapters
 - name: execute_policy
   kind: security.policy
   meta: {type: test_support}
@@ -99,7 +107,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call, system.read]
-    resources: [node, bee.hive.supervisor:admit_replica]
+    resources: [node, bee.sync.hive:admit]
     effect: allow
 - name: replica_admission_test
   kind: function.lua

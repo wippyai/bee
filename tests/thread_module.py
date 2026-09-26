@@ -9,12 +9,14 @@ from workspace import ROOT, RUNTIME
 
 MODULE = ROOT / "modules/threads"
 PERSIST = ROOT / "modules/persist"
+HIVE = ROOT / "modules/hive"
 HOST = ROOT / "tests/fixtures/modules/threads/src"
 
 
 def stage(folder, mutate=None):
     shutil.copytree(MODULE, folder / "modules/threads")
     shutil.copytree(PERSIST, folder / "modules/persist")
+    shutil.copytree(HIVE, folder / "modules/hive")
     shutil.copytree(HOST, folder / "src/host")
     # The staged services attach the production app policies.
     shutil.copytree(ROOT / "src/security/threads", folder / "src/security/threads")
@@ -23,6 +25,8 @@ def stage(folder, mutate=None):
   src: ./src
 modules:
   - name: bee/persist
+    version: 0.1.0-dev
+  - name: bee/hive
     version: 0.1.0-dev
   - name: bee/threads
     version: 0.1.0-dev
@@ -33,6 +37,7 @@ shutdown:
 workspace:
   replacements:
     bee/persist: ./modules/persist
+    bee/hive: ./modules/hive
     bee/threads: ./modules/threads
 """)
     if mutate:
@@ -52,7 +57,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="bee-thread-module-") as directory:
         folder = stage(Path(directory))
         staged = sorted(str(p.relative_to(folder)) for p in folder.rglob("_index.yaml"))
-        assert staged == ["modules/persist/src/_index.yaml", "modules/threads/src/_index.yaml", "modules/threads/src/approvals/_index.yaml", "modules/threads/src/carrier/_index.yaml", "modules/threads/src/delivery/_index.yaml", "modules/threads/src/migrations/_index.yaml", "modules/threads/src/persist/_index.yaml", "modules/threads/src/projection/_index.yaml", "modules/threads/src/records/_index.yaml", "modules/threads/src/service/_index.yaml", "src/host/_index.yaml", "src/security/threads/_index.yaml"], staged
+        assert staged == ["modules/hive/src/_index.yaml", "modules/persist/src/_index.yaml", "modules/threads/src/_index.yaml", "modules/threads/src/approvals/_index.yaml", "modules/threads/src/carrier/_index.yaml", "modules/threads/src/delivery/_index.yaml", "modules/threads/src/hive/_index.yaml", "modules/threads/src/migrations/_index.yaml", "modules/threads/src/persist/_index.yaml", "modules/threads/src/projection/_index.yaml", "modules/threads/src/records/_index.yaml", "modules/threads/src/service/_index.yaml", "src/host/_index.yaml", "src/security/threads/_index.yaml"], staged
         run(folder, "lint")
         database = folder / "threads.db"
         output = run(folder, "run", "threads-isolation", env={"BEE_THREADS_DB": str(database)})

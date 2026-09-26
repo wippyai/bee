@@ -43,6 +43,19 @@ local function define_tests()
             test.is_false(has(full.operations, "bee.hive:probe_policy_mode"))
             test.is_true(has(full.diagnostics, "bee.hive:probe_policy_mode: host ceiling denies policy"))
         end)
+        test.it("never exposes an approval decision or withdrawal over Hive", function()
+            -- Approvals stay node-local: the host ceiling names the feed and
+            -- read operations but not decide or withdraw, so a mapped
+            -- principal cannot decide a request even when its own scope would
+            -- otherwise hold the action.
+            local full = probe({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_policy_exposure_policy"})
+            test.is_true(has(full.operations, "bee.approvals.binding:feed_snapshot"))
+            test.is_true(has(full.operations, "bee.approvals.binding:read"))
+            test.is_false(has(full.operations, "bee.approvals.binding:decide"))
+            test.is_false(has(full.operations, "bee.approvals.binding:withdraw"))
+            test.is_true(has(full.diagnostics, "bee.approvals.binding:decide: host ceiling denies policy"))
+            test.is_true(has(full.diagnostics, "bee.approvals.binding:withdraw: host ceiling denies policy"))
+        end)
         test.it("rejects malformed declarations and unsupported callables", function()
             local good, good_error = catalog.decode_operation(operation())
             if not good then error(tostring(good_error)) end

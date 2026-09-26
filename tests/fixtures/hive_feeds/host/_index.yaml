@@ -5,13 +5,13 @@ entries:
   kind: security.policy
   policy:
     actions: [hive.expose.policy]
-    resources: [bee.node.binding:describe, bee.node.binding:update_metadata, bee.node.binding:snapshot, bee.node.binding:read_after, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide]
+    resources: [bee.node.binding:describe, bee.node.binding:update_metadata, bee.node.binding:snapshot, bee.node.binding:read_after, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read]
     effect: allow
 - name: feed_admission_policy
   kind: security.policy
   policy:
     actions: [registry.get, system.read, funcs.call]
-    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check, bee.node.binding:describe, bee.node.binding:update_metadata, bee.node.binding:snapshot, bee.node.binding:read_after, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide]
+    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check, bee.node.binding:describe, bee.node.binding:update_metadata, bee.node.binding:snapshot, bee.node.binding:read_after, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read]
     effect: allow
 - name: approval_store_policy
   kind: security.policy

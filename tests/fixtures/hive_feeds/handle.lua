@@ -68,18 +68,24 @@ local function handle(raw: unknown): string
         end
         if #items ~= 1 or page.owner_id ~= remote then error("incorrect approval snapshot") end
         local request = object(object(items[1]).value)
+        -- A mapped principal reads the feed but never decides over Hive: the
+        -- decision is node-local, so the host ceiling refuses it here even
+        -- though the mapped scope holds the action.
         local decided = mesh:call(owner, {operation_ref = "bee.approvals.binding:decide"}, {approval_id = request.approval_id,
             expected_revision = request.revision, proposal_digest = request.proposal_digest, decision = "approved"}, {timeout = "5s"})
-        if not decided.ok or object(decided.value).ok ~= true then error("remote decision failed") end
+        if decided.ok then error("remote decision was admitted over Hive") end
+        if not decided.error or (decided.error.code ~= "DENIED" and decided.error.code ~= "INVALID_ARGUMENT") then
+            error("remote decision was not refused by the host ceiling: " .. tostring(decided.error and decided.error.code))
+        end
+        -- The refusal left the request pending: the feed still shows one
+        -- undecided item and no transition event.
         local changed = mesh:call(owner, {operation_ref = "bee.approvals.binding:feed_read_after"}, {workspace_id = "feed-workspace",
             cursor = page.cursor, expected_scope_revision = page.scope_revision}, {timeout = "5s"})
         if not changed.ok or object(changed.value).ok ~= true then error("approval catch-up failed") end
         local events = object(object(changed.value).value).events
-        if type(events) ~= "table" or #events ~= 1 then error("missing approval transition") end
-        local committed = object(object(object(events[1]).payload).request)
-        if committed.decision ~= "approved" or committed.revision ~= 2 then error("wrong approval transition") end
+        if type(events) ~= "table" or #events ~= 0 then error("a refused decision still moved the feed") end
         mesh:close()
-        return "feed_approval"
+        return "feed_approval_refused"
     end
     local operation = "bee.node.binding:describe"
     local request: {[string]: unknown} = {}

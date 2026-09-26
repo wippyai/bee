@@ -50,7 +50,10 @@ different content under the same key is a conflict. States are `pending`,
 will succeed.
 
 `decide` and `withdraw` compare the pending revision, deadline and authenticated
-actor in one transaction. The transaction records the new history revision,
+actor in one transaction. Approvals are node-local: a host never exposes
+`decide` or `withdraw` over Hive, so a mapped principal reads the feed and a
+request but decides nothing, and a decision is always made on the node that
+owns the request. The transaction records the new history revision,
 inbox change and any thread outbox row together. Concurrent answers yield one
 committed decision; a retry returns that result and a conflicting answer
 returns a conflict. If cancellation races an approval, the reply reports the

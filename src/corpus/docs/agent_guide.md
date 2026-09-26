@@ -93,6 +93,30 @@ no remote enrollment. On a node without a folder workspace (`bee daemon`),
 `bee client` picks one of the node's workspaces and Ctrl+] returns to the
 picker to switch; see [the workspace catalog](../reference/workspace-catalog.md).
 
+## Managed agent containment
+
+A managed CLI runs with the operating system user's authority, so the host
+confines what it can see. Every orchestrator-launched batch worker runs
+with a private attempt home that holds only the provider login the
+credential broker projects; the launch policy admits no host HOME
+inheritance and no prompt-free permission mode. The one exception is the
+named Codex route, where the person explicitly chose a host-home profile
+so a saved Codex config profile resolves. Each CLI further runs under its
+own permission control where one exists and is proven: Codex
+`--sandbox workspace-write`, Claude Code and Grok default permission
+modes, Muse `on-request` approval, agy `--sandbox`. Grok and OpenCode
+offer no workdir confinement Bee can select, so the host records those
+batch routes as `unconfined`: the orchestrator launches them only where
+its own launch policy names them in `agent_launch_unconfined`, and
+`launch_definitions` reports the mark.
+
+These controls are CLI permissions, not operating system confinement. A
+managed CLI can still read any file the OS user can read outside its
+workdir; only full OS confinement, a separate Wippy runtime feature,
+removes that authority. Treat the worker brief, workdir and home as the
+containment boundary and keep Hive keys, Bee state and other provider
+logins outside every granted folder and home.
+
 ## Managed provider login
 
 Each built-in Codex, Claude, agy, Grok, Muse and OpenCode window launch declares its

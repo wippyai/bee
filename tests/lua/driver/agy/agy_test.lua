@@ -76,7 +76,7 @@ local function define_tests()
             local batch_p = profile.find(binding, "batch")
             if not batch_p then error("batch profile missing") end
             test.eq(batch_p.mode, "batch")
-            test.is_false(batch_p.isolation_env.private_home)
+            test.is_true(batch_p.isolation_env.private_home)
             test.is_true(has(batch_p.mcp.client_transports, "streamable_http"))
             test.is_false(has(batch_p.mcp.client_transports, "stdio"))
 
@@ -162,6 +162,22 @@ local function define_tests()
             test.eq(mcp_file.provider_ref, "bee:gateway_endpoint")
             test.is_true(mcp_file.content:find("/mcp/agy%-batch%-proof") ~= nil)
             test.eq(mcp_file.secret_fields[1].environment, "BEE_GATEWAY_TOKEN")
+        end)
+
+        test.it("selects the native sandbox for the shipped batch worker without skipping permissions", function()
+            local request, err = launch.decode({
+                profile_id = "batch",
+                brief = "read traits",
+                model = "gemini-3.8-flash",
+                effort = "high",
+                sandbox = true,
+                print_timeout = "5m",
+            })
+            if not request then error(tostring(err)) end
+            local line = quote.line(launch.specification(request).argv)
+            test.is_true(line:find("%-%-sandbox") ~= nil)
+            test.is_true(line:find("dangerously%-skip%-permissions") == nil)
+            test.is_true(line:find("%-%-print%-timeout 5m") ~= nil)
         end)
 
         test.it("does not hardcode a model when omitted in production", function()

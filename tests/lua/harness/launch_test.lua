@@ -520,7 +520,7 @@ local function define_tests()
             local cases = {
                 {definition = "bee.driver.codex:research_batch", policy = "bee:launch_policy_codex_batch",
                     binding = "bee.driver.codex:binding", credential = "codex_login", executable = "bee.driver.codex:executable",
-                    config = "bee.driver.codex:config_home", option = "sandbox", expected = "read-only"},
+                    config = "bee.driver.codex:config_home", option = "sandbox", expected = "workspace-write"},
                 {definition = "bee.driver.claude:research_batch", policy = "bee:launch_policy_claude_batch",
                     binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
                     config = "bee.driver.claude:config_home", option = "max_turns", expected = 1},
@@ -529,12 +529,12 @@ local function define_tests()
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
                 {definition = "bee.driver.muse:research_batch", policy = "bee:launch_policy_muse_batch",
                     binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
-                    option = "approval_mode", expected = "never", additional_options = {max_steps = 1}},
+                    option = "approval_mode", expected = "on-request", additional_options = {max_steps = 1}},
                 {definition = "bee.driver.opencode:research_batch", policy = "bee:launch_policy_opencode_batch",
-                    binding = "bee.driver.opencode:binding", executable = "bee.driver.opencode:executable"},
+                    binding = "bee.driver.opencode:binding", executable = "bee.driver.opencode:executable", unconfined = true},
                 {definition = "bee.driver.grok:research_batch", policy = "bee:launch_policy_grok_batch",
                     binding = "bee.driver.grok:binding", executable = "bee.driver.grok:executable",
-                    option = "permission_mode", expected = "dontAsk"},
+                    option = "permission_mode", expected = "default", unconfined = true},
             }
             for _, selected in ipairs(cases) do
                 local entry = assert(registry.get(selected.definition))
@@ -550,6 +550,8 @@ local function define_tests()
                 if selected.credential then test.eq(decoded.credentials[1], selected.credential)
                 else test.eq(#decoded.credentials, 0) end
                 test.is_false(decoded.presentation.start_menu)
+                if selected.unconfined then test.is_true(decoded.unconfined)
+                else test.is_false(decoded.unconfined) end
                 local policy_entry = assert(registry.get(selected.policy))
                 local policy, policy_error = launch_policy.decode(selected.policy, policy_entry,
                     function(ref: string): (string?, string?)
@@ -564,9 +566,19 @@ local function define_tests()
                 for option, expected in pairs(selected.additional_options or {}) do
                     test.eq(policy.prepare_options[option], expected)
                 end
+                -- Every orchestrator-launched worker runs without host HOME
+                -- inheritance and without a prompt-free permission mode: the
+                -- person chose no host home for these routes.
+                test.is_false(policy.allow_host_home)
+                for name, item in pairs(policy.prepare_options) do
+                    if type(item) == "string" then
+                        test.is_true(item ~= "dontAsk" and item ~= "bypassPermissions" and item ~= "never",
+                            selected.policy .. "." .. name .. " admits a prompt-free mode")
+                    end
+                end
                 if selected.binding == "bee.driver.agy:binding" then
                     test.eq(#policy.gateway_hooks, 0)
-                    test.is_true(policy.allow_host_home)
+                    test.eq(policy.prepare_options.sandbox, true)
                     local has_thread_message = false
                     for _, tool in ipairs(policy.gateway_tools) do if tool == "thread_message" then has_thread_message = true end end
                     test.is_true(has_thread_message)
@@ -575,6 +587,31 @@ local function define_tests()
                 for _, tool in ipairs(policy.gateway_tools) do if tool == "overlay" then has_workspace = true end end
                 test.is_true(has_workspace)
             end
+        end)
+        test.it("flags exactly the unconfined orchestrator worker on the shipped orchestrator policy", function()
+            local entry = assert(registry.get("bee:launch_policy_claude_window"))
+            local orchestrator, orchestrator_error = launch_policy.decode("bee:launch_policy_claude_window", entry,
+                function(ref: string): (string?, string?)
+                    if ref == "bee.driver.claude:executable" then return "/usr/bin/orchestrator-agent", nil end
+                    if ref == "bee.driver.claude:config_home" then return "", nil end
+                    return nil, "unadmitted environment reference"
+                end)
+            if not orchestrator then error(tostring(orchestrator_error)) end
+            test.eq(#orchestrator.agent_launch_unconfined, 1)
+            test.eq(orchestrator.agent_launch_unconfined[1], "bee.driver.grok:research_batch")
+            -- The named Codex route is the person's explicit host-home
+            -- choice, so it keeps the inherited home while gaining the
+            -- workspace-write CLI sandbox.
+            local named_entry = assert(registry.get("bee:launch_policy_codex_named_batch"))
+            local named, named_error = launch_policy.decode("bee:launch_policy_codex_named_batch", named_entry,
+                function(ref: string): (string?, string?)
+                    if ref == "bee.driver.codex:executable" then return "/usr/bin/named-agent", nil end
+                    if ref == "bee.driver.codex:config_home" then return "/home/person/.codex", nil end
+                    return nil, "unadmitted environment reference"
+                end)
+            if not named then error(tostring(named_error)) end
+            test.is_true(named.allow_host_home)
+            test.eq(named.prepare_options.sandbox, "workspace-write")
         end)
         test.it("ships every driver route with thread and workdir overrides its host policy admits, and no placement override", function()
             local shipped = {

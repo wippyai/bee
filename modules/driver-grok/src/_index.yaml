@@ -188,7 +188,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Grok batch route for a host-selected coordinator and caller-owned shared thread
+    comment: Component-owned bounded Grok batch route for a host-selected coordinator and caller-owned shared thread; the CLI offers no provable workdir confinement, so the host records it as unconfined
   data:
     schema_revision: bee.launch-definition@1
     launch_id: grok-research-batch
@@ -204,6 +204,7 @@ entries:
     session_resource: session
     credentials: []
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+    unconfined: true
 - name: credential_format
   kind: registry.entry
   meta:

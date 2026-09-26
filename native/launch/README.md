@@ -11,13 +11,13 @@ the client route, the owner it starts and a plain `bee start` all use it. An
 explicit --state is preserved unchanged. Planning does not create
 directories, write receipts, inspect databases or acquire locks.
 
-`bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT` is planned first: it
-runs the [hook POST helper](../hookpost/README.md) without project selection,
-state, the client route or the retained owner.
+`bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT` runs the
+[hook POST helper](../hookpost/README.md) before project selection, state
+opening, the client route or the retained owner.
 
-`bee help`, `bee -h` and `bee --help` are planned next: the host prints the
-command grammar and the state this invocation would use, computed from the
-launch alone, and exits 0 without selecting a project or reading state.
+`bee help`, `bee -h` and `bee --help` print the command grammar and the state
+this invocation would use, computed from the launch alone. The host exits 0
+without selecting a project or reading state.
 
 `bee daemon` takes no arguments and runs the owner route like `bee start`, under
 the owner command `bee-daemon`, with a desktop bridge that composes no folder

@@ -28,18 +28,14 @@ update notifications. It allocates no client database or discovery state.
 Terminal output must remain writable; arbitrary blocking writers cannot be
 interrupted by this adapter.
 
-Against the reviewed runtime checkout containing `terminal.NewEventInputReader`:
-
-```
-make -C native physical-client-check PHYSICAL_RUNTIME=/absolute/runtime/checkout
-```
-
 Real PTY checks cover stalled-operation detach, terminal restoration, preserved
 delivery errors, observers and denied control. A real runtime viewport check over
 a test-only in-memory mesh pair additionally verifies foreign-recipient denial,
 mount retirement and fresh attachment to retained owner content. This is not a
 separate OS-process or LAN acceptance test. CLI admission and startup composition
-remain required before public activation.
+remain required before public activation. `native/Makefile` does not define the
+documented `physical-client-check` target; running this acceptance through Make
+remains a proposal.
 
 Separate OS-process native mesh composition is checked in [mesh](../mesh/README.md),
 using fixture-selected grants. Public supervisor admission remains unfinished.

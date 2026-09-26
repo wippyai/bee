@@ -31,13 +31,14 @@ grants. Discovery never authorizes cluster membership, desktop control or a
 workspace operation. Enrollment secrets and private signing keys are kept out
 of the descriptor. Protection relies on OS-user file authority.
 
-Run `make -C native rendezvous-check RENDEZVOUS_RUNTIME=/path/to/runtime` against
-the runtime client integration branch. It tests strict decoding, atomic reads,
+The proposed `rendezvous-check` acceptance would test strict decoding, atomic reads,
 failure preservation, and publication from a real native mesh stack while the
-runtime application-state lock is held. It proves the published port is retained
+runtime application-state lock is held. It is intended to prove the published port is retained
 and later released, and that client reads preserve owner exclusion. Dependencies
-are resolved through a temporary module file. This is not yet a separate-process
-desktop attachment or remote enrollment acceptance check.
+are resolved through a temporary module file. `native/Makefile` does not define
+this target, so the acceptance is not callable through Make in this checkout.
+This is not yet a separate-process desktop attachment or remote enrollment
+acceptance check.
 
 ## Local bootstrap enrollment
 

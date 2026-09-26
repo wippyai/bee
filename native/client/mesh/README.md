@@ -71,25 +71,22 @@ peer may wait for transport registration within the caller deadline. A native
 request/reply test verifies the actor sender and payload, and that a canceled
 request is not delivered. This is transport acceptance, not supervisor admission.
 
-The combined `mesh-client-check` includes real client actors, post-exit frame and
-viewport denial, bounded inbox failure, and two separate OS clients under PTYs.
-The physical clients select native mutual TLS, verify the owner-native sender,
-render retained content, send a typed key, detach and reattach through
+The proposed combined `mesh-client-check` would cover real client actors, post-exit
+frame and viewport denial, bounded inbox failure, and two separate OS clients
+under PTYs. The physical clients select native mutual TLS, verify the owner-native
+sender, render retained content, send a typed key, detach and reattach through
 native sockets. Grant files are fixture coordination only; this is not production
 supervisor admission or a Bee Terminal/application acceptance test.
+`native/Makefile` does not define this target, so the combined gate is not
+callable from this checkout.
 
-The separate unresolved runtime gate is:
-
-```
-make -C native mesh-monitor-check MESH_RUNTIME=/absolute/reviewed/runtime
-```
-
-It currently fails: a remote monitor call is accepted, a FIFO barrier confirms
-later delivery, and the target actor completes, but no EXIT reaches the watcher.
-This gate must pass before claiming remote process observation or reliable owner
-cleanup of departed controllers. Do not implement the missing monitor protocol
-inside Bee. Public launch, supervisor admission, departed-controller cleanup and LAN
-acceptance remain incomplete.
+The source includes a separate failing runtime test in `monitor_gate_test.go`,
+gated by `meshclient` and `meshmonitorproof`. No `mesh-monitor-check` target is
+defined in `native/Makefile`, so this gate is not callable through Make in this
+checkout. It must pass before claiming remote process observation or reliable
+owner cleanup of departed controllers. Do not implement the missing monitor
+protocol inside Bee. Public launch, supervisor admission, departed-controller
+cleanup and LAN acceptance remain incomplete.
 
 ## Supervisor discovery
 

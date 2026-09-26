@@ -23,6 +23,7 @@ class NativeDesktop(Desktop):
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
         self.raw = bytearray()
         self.pending_output = ""
+        self.first_frame = None
         args = [str(binary)]
         if state is not None:
             args.extend(["--state", str(state)])

@@ -73,7 +73,7 @@ def bind_admission(project):
 
 
 def assert_overlay_authority(project):
-    """Overlays belong to the destination owner: nothing else may write one."""
+    """Only the destination and host-selected maintenance paths may write overlays."""
     granted, denied = set(), set()
     indexes = list((project / "src").rglob("_index.yaml")) + list((project / "modules/gov/src").rglob("_index.yaml"))
     for index in indexes:
@@ -84,7 +84,12 @@ def assert_overlay_authority(project):
                 continue
             identity = f'{document["namespace"]}:{entry["name"]}'
             (granted if policy.get("effect") == "allow" else denied).add(identity)
-    assert granted == {"bee.gov.security:destination_service_policy"}, granted
+    assert granted == {
+        "bee.gov.security:destination_service_policy",
+        "bee.gov.security:super_edit_execution_policy",
+        "bee.gov.security:super_edit_recovery_execution_policy",
+        "bee.gov.security:recovery_command_policy",
+    }, granted
     assert denied == {"bee.security:app_boundary_policy", "bee.security:scope_managing_app_boundary"}, denied
 
 

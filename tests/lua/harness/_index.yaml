@@ -435,6 +435,17 @@ entries:
     principals: bee.test.principals:bound
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
+- name: agent_confinement_acceptance_test
+  kind: function.lua
+  source: file://agent_confinement_acceptance_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "240s"}
+  modules: [funcs, security, registry, env, time, json]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
+  imports:
+    principals: bee.test.principals:bound
+    test: wippy.test:test
 - name: cross_session_acceptance_test
   kind: function.lua
   source: file://cross_session_acceptance_test.lua
@@ -995,6 +1006,69 @@ entries:
     policy_ref: bee.harness.catalog:agent_launch_worker_policy
     default_mode: batch
     allowed_overrides: [brief, thread]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+    allow_wider_tools: true
+- name: agent_confinement_orchestrator_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The confinement proof's orchestrator policy; its allow-list names exactly the confinement worker definition
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    gateway_tools: [thread_read, thread_wait, thread_launch]
+    agent_launch: [bee.harness.catalog:agent_confinement_worker]
+- name: agent_confinement_worker_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The confinement proof's worker policy; a private-home Claude batch route with no host inheritance and the default permission mode, so the probe child must show a private attempt home
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    allow_host_home: false
+    prepare_options: {permission_mode: default, max_turns: 1}
+    gateway_tools: [thread_read, thread_message]
+    gateway_hooks: []
+    agent_launch: []
+    allowed_overrides: [thread, workdir]
+- name: agent_confinement_worker
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The confinement proof's worker definition; it runs on the caller's own thread in the granted project workdir with the broker environment login, and the host explicitly admits its wider gateway tools
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agent-confinement-worker
+    title: Agent confinement worker
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:agent_confinement_worker_policy
+    default_mode: batch
+    allowed_overrides: [brief, thread, workdir]
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
     credentials: [anthropic]

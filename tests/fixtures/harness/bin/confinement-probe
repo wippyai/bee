@@ -1,0 +1,44 @@
+#!/bin/bash
+# Fixture-only agent confinement probe. It runs as a real placement child
+# under the worker's own launch policy and asserts the confinement vantage
+# that policy promises: a private attempt home holding no host file, the
+# granted workdir as working directory, and an environment that leaks no
+# host path. It then replays the standard JSONL run so the carrier settles.
+set -eu
+
+[ -n "${HOME:-}" ]
+[ -n "${BEE_FIXTURE_STREAM:-}" ]
+[ -n "${BEE_CONFINEMENT_REAL_HOME:-}" ]
+[ "${ANTHROPIC_API_KEY:-}" = "alternate-setup-sentinel" ]
+
+# No attempt sees the real HOME.
+[ "$HOME" != "$BEE_CONFINEMENT_REAL_HOME" ]
+
+# Names that exist only in a host home fail to read inside the private home.
+for name in .hive-identity-canary bee-state-canary provider-login-canary; do
+  [ ! -e "$HOME/$name" ]
+  if cat "$HOME/$name" 2>/dev/null; then exit 31; fi
+done
+
+# The private home holds no host file at all: the provider login travels as
+# a broker environment projection, never as bytes in the home.
+[ -z "$(ls -A "$HOME")" ]
+
+# The granted workdir is the attempt's working directory.
+[ "${PWD##*/}" = "carrier-project" ]
+
+# A file outside the workdir is not reachable from the attempt's vantage.
+[ ! -e "$PWD/outside-canary.txt" ]
+if cat "$PWD/outside-canary.txt" 2>/dev/null; then exit 32; fi
+
+# The placement runner supplies precisely policy environment, HOME, the
+# broker projection and the gateway credential destination. Bash adds these
+# interpreter bookkeeping names itself.
+for name in $(compgen -e); do
+  case "$name" in
+    ANTHROPIC_API_KEY|BEE_FIXTURE_STREAM|BEE_CONFINEMENT_REAL_HOME|BEE_GATEWAY_TOKEN|HOME|PATH|PWD|SHLVL|_) ;;
+    *) exit 42 ;;
+  esac
+done
+
+/bin/cat "$BEE_FIXTURE_STREAM"

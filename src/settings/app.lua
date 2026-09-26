@@ -182,14 +182,21 @@ local function main(value: unknown)
                     local operation = edit_query_op
                     local submitted = answer.value
                     edit_query, edit_query_op = "", ""
-                    if answer.error ~= "" then status = "Edit mode prompt is busy"
-                    elseif answer.action ~= "accept" then status = "Edit mode cancelled"
+                    if answer.error ~= "" then status = "Edit mode prompt is busy"; edit_input = ""
+                    elseif answer.action ~= "accept" then status = "Edit mode cancelled"; edit_input = ""
                     elseif operation == "enable_input" then
-                        if submitted == "" then status = "Enter at least one namespace and a duration"
+                        if submitted == "" then
+                            status = "Enter at least one namespace and a duration"
+                            edit_input = ""
                         else query_edit_mode("confirm", "enable_confirm", submitted) end
-                    elseif operation == "enable_confirm" then apply_edit_mode("enable", edit_input)
-                    elseif operation == "disable_confirm" then apply_edit_mode("disable", nil) end
-                    edit_input = ""
+                    elseif operation == "enable_confirm" then
+                        local namespaces = edit_input
+                        edit_input = ""
+                        apply_edit_mode("enable", namespaces)
+                    elseif operation == "disable_confirm" then
+                        edit_input = ""
+                        apply_edit_mode("disable", nil)
+                    else edit_input = "" end
                     dirty = true
                 end
             end

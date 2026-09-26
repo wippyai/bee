@@ -48,8 +48,9 @@ end
 function M.duration(raw: unknown): (string?, string?)
     if type(raw) ~= "string" or #raw > 16 then return nil, "duration must be a positive amount in s, m, h, or d" end
     local amount_text, unit = raw:match("^(%d+)([smhd])$")
-    local amount = amount_text and tonumber(amount_text) or nil
-    if not amount or amount < 1 then return nil, "duration must be a positive amount in s, m, h, or d" end
+    if not amount_text or not unit then return nil, "duration must be a positive amount in s, m, h, or d" end
+    local amount: number = tonumber(amount_text) or 0
+    if amount < 1 then return nil, "duration must be a positive amount in s, m, h, or d" end
     local seconds = amount * (unit == "s" and 1 or unit == "m" and 60 or unit == "h" and 3600 or 86400)
     if seconds > MAX_DURATION_SECONDS then return nil, "duration may not exceed 24h" end
     if unit == "d" then return tostring(amount * 24) .. "h", nil end

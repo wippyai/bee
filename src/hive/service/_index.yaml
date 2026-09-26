@@ -21,6 +21,7 @@ entries:
       - bee.security.hive:hive_supervisor_policy
       - bee.security.hive:hive_catalog_policy
       - bee.security.hive:hive_exposure_policy
+      - bee.security.hive:hive_exposure_facade_policy
       - bee.security.hive:hive_policy_exposure_policy
       - bee.security.hive:hive_dispatch_policy
       - bee.security.hive:hive_names_policy

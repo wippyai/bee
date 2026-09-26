@@ -44,6 +44,18 @@ end
 function M.exposure_action(mode: string): string
     return exposure_action(mode)
 end
+M.EXPOSURE_SCOPE = "bee.security.hive:hive_exposure_scope"
+-- The host ceiling for one operation: the caller's direct grant, or the
+-- exposure scope the supervisor loads through the host facade policy.
+-- Install grants join that scope; fixed host policies keep working.
+function M.admits(mode: string, operation_ref: string): boolean
+    if security.can(exposure_action(mode), operation_ref) then return true end
+    local actor = security.actor()
+    if actor == nil then return false end
+    local scope, scope_error = security.named_scope(M.EXPOSURE_SCOPE)
+    if scope == nil or scope_error ~= nil then return false end
+    return scope:evaluate(actor, exposure_action(mode), operation_ref) == "allow"
+end
 -- The invocation action a principal's own scope must grant on an
 -- operation; exposure publishes, invocation authorizes.
 M.INVOKE = "hive.invoke"
@@ -201,7 +213,7 @@ function M.snapshot(): (Snapshot?, string?)
                 local operation, operation_error = decode_operation(candidate)
                 if not operation then
                     note(snapshot, operation_error or "invalid operation")
-                elseif not security.can(exposure_action(operation.mode), operation.operation_ref) then
+                elseif not M.admits(operation.mode, operation.operation_ref) then
                     note(snapshot, operation.operation_ref .. ": host ceiling denies " .. operation.mode)
                 else
                     snapshot.operations[operation.operation_ref] = operation
@@ -235,7 +247,7 @@ function M.resolve(operation_ref: string): (Operation?, string?)
     if not candidate then return nil, "operation entry is unreadable" end
     local operation, operation_error = decode_operation(candidate)
     if not operation then return nil, operation_error end
-    if not security.can(exposure_action(operation.mode), operation.operation_ref) then
+    if not M.admits(operation.mode, operation.operation_ref) then
         return nil, operation.operation_ref .. ": host ceiling denies " .. operation.mode
     end
     return operation, nil

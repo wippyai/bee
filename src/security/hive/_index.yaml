@@ -22,6 +22,7 @@ entries:
     effect: allow
 - name: hive_exposure_policy
   kind: security.policy
+  groups: [hive_exposure_scope]
   meta:
     comment: The host ceiling; telemetry and the threads capabilities report may be open in this composition, and the two
       thread operations may reach forwarded principals under the destination's own policy
@@ -37,8 +38,18 @@ entries:
     - bee.hive.api:workspaces
     - bee.threads:capabilities
     effect: allow
+- name: hive_exposure_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The supervisor loads its Hive exposure scope through this group; the scope carries the host ceiling and install-granted operation exposure
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.security.hive:hive_exposure_scope")'
+    actions: [funcs.security, security.policy_group.get]
+    resources: [security, bee.security.hive:hive_exposure_scope]
+    effect: allow
 - name: hive_policy_exposure_policy
   kind: security.policy
+  groups: [hive_exposure_scope]
   meta:
     comment: Exact reviewed feed and node operations; a decision or withdrawal is node-local and never exposed, and destination principal and owner authorization is still required for what is
   policy:

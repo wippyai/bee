@@ -17,6 +17,7 @@ workspace:
     bee/hive: ./modules/hive
     bee/hive-telemetry: ./modules/hive-telemetry
     bee/hive-manager: ./modules/hive-manager
+    bee/threads-timeline: ./modules/threads-timeline
     bee/approvals: ./modules/approvals
     bee/application: ./modules/application
     bee/node: ./modules/node

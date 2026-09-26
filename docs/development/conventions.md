@@ -37,7 +37,8 @@ host wiring lives in the app root or beside its component.
 | `modules/application/src` | Public application helpers, appearance and rendering values |
 | `src/console`, `src/settings` | Standalone Terminal and Settings applications |
 | `src/approvals/inbox`, `src/hub/modules`, `src/gov/overlays` | Feature-owned standalone applications |
-| `src/workspace/manager`, `src/threads/timeline`, `src/host/processes` | Feature-owned standalone applications |
+| `src/workspace/manager`, `src/host/processes` | Feature-owned standalone applications |
+| `modules/threads-timeline/src` | Thread timeline viewer as an installable package |
 | `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |
 | `modules/docs/src` | Offline documentation protocol, corpus reader and read-only gateway facade |
 | `modules/resources/src` | Resource associations, scoped grants and owner-local ledger |

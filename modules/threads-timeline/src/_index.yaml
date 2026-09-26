@@ -1,6 +1,20 @@
 version: '1.0'
 namespace: bee.threads.timeline
 entries:
+- name: definition
+  kind: ns.definition
+  module: threads-timeline
+  meta:
+    title: Bee threads timeline
+    comment: Thread timeline viewer; host composition and policy selection remain in Bee
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: dependency_application
+  kind: ns.dependency
+  component: bee/application
+  version: '*'
 - name: app
   kind: process.lua
   source: file://app.lua

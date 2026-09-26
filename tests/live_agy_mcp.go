@@ -173,8 +173,8 @@ func check() error {
 		material := map[string]string{}
 		for topic, relative := range map[string]string{
 			"source": "modules/threads/src/records/canonical.lua", "corpus": "tests/fixtures/performance_research/corpus.lua",
-			"authoring": "tests/fixtures/research_author/AUTHORING.md", "application": "src/threads/timeline/app.lua",
-			"model": "src/threads/timeline/model.lua", "view": "src/threads/timeline/view.lua",
+			"authoring": "tests/fixtures/research_author/AUTHORING.md", "application": "modules/threads-timeline/src/app.lua",
+			"model": "modules/threads-timeline/src/model.lua", "view": "modules/threads-timeline/src/view.lua",
 		} {
 			data, readErr := os.ReadFile(filepath.Join(repo, relative))
 			if readErr != nil {

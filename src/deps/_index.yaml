@@ -108,6 +108,10 @@ entries:
   kind: ns.dependency
   component: bee/hive-manager
   version: 0.1.0-dev
+- name: threads_timeline
+  kind: ns.dependency
+  component: bee/threads-timeline
+  version: 0.1.0-dev
 - name: application
   kind: ns.dependency
   component: bee/application

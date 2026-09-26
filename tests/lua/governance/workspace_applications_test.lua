@@ -184,6 +184,63 @@ local function define_tests()
             test.eq(remote.source_node, "node-remote")
             test.eq(remote.component, "app.notes")
         end)
+        test.it("hardens a super-edit profile and leaves an ordinary row unchanged", function()
+            local function super_row(overrides: Object): Object
+                local row: Object = {workspace_id = WORKSPACE, source_node = NODE, source_workspace = "vendor",
+                    component = "vendor/app", overlay_owner = "bee.vendor:vendor",
+                    approval_policy = "super-edit-host", parameters = {}, expires_at = "2999-01-01T00:00:00.000Z",
+                    allow = {packages = {"vendor/app"}, namespaces = {"vendor.app"}, kinds = {"process.lua"},
+                        databases = {}, grants = {}, modules = {}, auto_start = false}}
+                for name, value in pairs(overrides) do row[name] = value end
+                return row
+            end
+            local config: Object = {profiles = {super_row({})}}
+            local decoded = assert(profiles.configuration(config, NODE))
+            test.is_true(decoded.profiles[1].super_edit)
+            test.eq(decoded.profiles[1].expires_at, "2999-01-01T00:00:00.000Z")
+            test.is_false(decoded.profiles[1].auto_start)
+            -- An ordinary row carries no expiry and is not a super-edit row.
+            local plain = assert(profiles.configuration({profiles = {}}, NODE))
+            test.is_nil(plain.profiles[1])
+            local ordinary: Object = {profiles = {{workspace_id = WORKSPACE, source_node = NODE,
+                source_workspace = "vendor", component = "vendor/app", overlay_owner = "bee.vendor:vendor",
+                approval_policy = "vendor-install", parameters = {},
+                allow = {packages = {"vendor/app"}, namespaces = {"vendor.app"}, kinds = {"process.lua"},
+                    databases = {}, grants = {}, modules = {}}}}}
+            local plain_row = assert(profiles.configuration(ordinary, NODE))
+            test.is_false(plain_row.profiles[1].super_edit)
+            test.is_true(plain_row.profiles[1].auto_start)
+            -- A super-edit row must withhold auto start.
+            test.is_nil(profiles.configuration({profiles = {super_row({allow = {packages = {"vendor/app"},
+                namespaces = {"vendor.app"}, kinds = {"process.lua"}, databases = {}, grants = {}, modules = {},
+                auto_start = true}})}}, NODE))
+            test.is_nil(profiles.configuration({profiles = {super_row({allow = {packages = {"vendor/app"},
+                namespaces = {"vendor.app"}, kinds = {"process.lua"}, databases = {}, grants = {}, modules = {}}})}}, NODE))
+            -- It may not carry a security-granting action.
+            for _, grant in ipairs({"security.actor.create", "funcs.security", "process.security",
+                    "registry.apply", "registry.overlay.apply"}) do
+                local refused, refusal = profiles.configuration({profiles = {super_row({allow = {packages = {"vendor/app"},
+                    namespaces = {"vendor.app"}, kinds = {"process.lua"}, databases = {}, grants = {grant}, modules = {},
+                    auto_start = false}})}}, NODE)
+                test.is_nil(refused)
+                test.not_nil(string.find(refusal :: string, "may not grant", 1, true))
+            end
+            -- An ordinary row may still carry what a super-edit row may not.
+            local allowed = assert(profiles.configuration({profiles = {{workspace_id = WORKSPACE, source_node = NODE,
+                source_workspace = "vendor", component = "vendor/app", overlay_owner = "bee.vendor:vendor",
+                approval_policy = "vendor-install", parameters = {},
+                allow = {packages = {"vendor/app"}, namespaces = {"vendor.app"}, kinds = {"process.lua"},
+                    databases = {}, grants = {"registry.apply"}, modules = {}}}}}, NODE))
+            test.is_true(allowed.profiles[1].grants["registry.apply"])
+            -- An unparsable expiry is refused.
+            test.is_nil(profiles.configuration({profiles = {super_row({expires_at = "tomorrow"})}}, NODE))
+            test.is_nil(profiles.configuration({profiles = {super_row({expires_at = 7})}}, NODE))
+            -- The measured policy carries the expiry so its digest binds it.
+            local measured = assert(profiles.select(decoded, WORKSPACE, NODE, "vendor"))
+            local moved = assert(profiles.configuration({profiles = {super_row({expires_at = "2999-06-01T00:00:00.000Z"})}}, NODE))
+            local moved_profile = assert(profiles.select(moved, WORKSPACE, NODE, "vendor"))
+            test.is_true(measured.policy_digest ~= moved_profile.policy_digest)
+        end)
         test.it("rejects a rule that widens authority by shape", function()
             local unknown_field = configured()
             local widened = rule()

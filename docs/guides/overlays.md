@@ -73,6 +73,16 @@ protected namespace, updates a package that owns kernel definitions, or aims a
 requirement target into the kernel. The kernel changes only through the host
 composition and a person-confirmed native upgrade.
 
+A host may open a protected namespace to one narrow, time-bounded profile: a
+row in `bee.env:gov_activation_profiles` that carries `expires_at`. Such a
+super-edit row is refused unless it withholds auto start
+(`allow.auto_start: false`), names a dedicated approver policy whose name
+begins `super-edit` and which the host declares with `confirm: explicit` and at
+least one approver, and carries no `allow.grants` entry for `security.*`,
+`funcs.security`, `process.security` or a registry apply action. The
+destination refuses an expired row before any effect, so the window closes
+without a further write.
+
 Durable registry publication is a different operation. Overlay activation does
 not become a registry-history write, and a registry publication guard must not
 be simulated with a Lua pre-read.

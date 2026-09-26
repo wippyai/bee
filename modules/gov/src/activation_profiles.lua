@@ -1,5 +1,6 @@
 -- MIT. Pure decoder for host-selected activation policy profiles.
 local hash = require("hash")
+local time = require("time")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local application_admission = require("application_admission")
@@ -19,7 +20,7 @@ type DecodedProfile = {workspace_id: string, source_node: string, source_workspa
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
-    auto_start: boolean}
+    auto_start: boolean, super_edit: boolean, expires_at: string}
 -- The host's rule for applications a workspace's own agents deliver to it:
 -- one profile per eligible local overlay, derived by workspace_applications.
 -- With hive admission the same rule covers a Hive-received overlay from
@@ -32,7 +33,7 @@ type Profile = {workspace_id: string, source_node: string, source_workspace: str
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, applications: {Object}?,
-    auto_start: boolean, policy_digest: string}
+    auto_start: boolean, super_edit: boolean, expires_at: string, policy_digest: string}
 type Configuration = {node_id: string, profiles: {Profile}, workspace_applications: Template?}
 
 local function list(raw: unknown, label: string): ({unknown}?, string?)
@@ -117,12 +118,36 @@ local function policy_ids(raw: unknown): (PolicyIds?, string?)
     return result, nil
 end
 
+-- Actions a super-edit row may never carry. The host names its grants as
+-- security policy ids; a row that could grant, create or apply security
+-- authority would let the profile widen itself, so it is refused here before
+-- the policy is measured or an approval is requested.
+local FORBIDDEN_GRANT_PREFIXES = {"security", "funcs.security", "process.security",
+    "registry.apply", "registry.overlay.apply"}
+local function forbidden_grant(grant: string): boolean
+    for _, prefix in ipairs(FORBIDDEN_GRANT_PREFIXES) do
+        if grant == prefix or grant:sub(1, #prefix + 1) == prefix .. "." then return true end
+    end
+    return false
+end
+-- A host row is a super-edit row when it carries expires_at: the instant it
+-- stops being usable. The value is a UTC timestamp the destination compares
+-- against its own clock; an expired row is refused before any effect.
+local FORMAT = "2006-01-02T15:04:05.000Z07:00"
+local function super_edit_expiry(raw: unknown): (string?, boolean, string?)
+    if raw == nil then return "", false, nil end
+    local text = bounds.text(raw, 40)
+    local parsed = text and time.parse(FORMAT, text) or nil
+    if not text or not parsed then return nil, false, "activation profile expires_at must be a UTC timestamp" end
+    return text, true, nil
+end
+
 local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
     local value = bounds.object(raw)
     if not value then return nil, nil, "activation profile must be an object" end
     local extra = bounds.fields(value, {"workspace_id", "source_node", "source_workspace", "component",
         "overlay_owner", "approval_policy", "resolver", "parameters", "allow", "database_bindings",
-        "migration_policies", "applications"})
+        "migration_policies", "applications", "expires_at"})
     if extra then return nil, nil, "activation profile: " .. extra end
     local workspace_id, source_node = bounds.id(value.workspace_id), bounds.id(value.source_node)
     local source_workspace, component = bounds.id(value.source_workspace), bounds.text(value.component, 160)
@@ -135,6 +160,8 @@ local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
         or not parameters or not allow then
         return nil, nil, parameters_error or "activation profile identity is invalid"
     end
+    local expires_at, super_edit, expiry_error = super_edit_expiry(value.expires_at)
+    if expiry_error then return nil, nil, expiry_error end
     local allow_extra = bounds.fields(allow, {"packages", "namespaces", "kinds", "databases", "grants", "modules", "auto_start"})
     if allow_extra then return nil, nil, "activation allowlist: " .. allow_extra end
     -- A host row admits entries that start themselves unless it withholds it.
@@ -142,6 +169,13 @@ local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
         return nil, nil, "activation allowlist auto_start must be a boolean"
     end
     local auto_start = allow.auto_start ~= false
+    -- A super-edit row is a person-confirmed, time-bounded, deliberately
+    -- narrow grant: it must withhold auto start and carry no security-granting
+    -- action. The destination separately checks its approver policy is the
+    -- dedicated explicit-confirmation one and that the row has not expired.
+    if super_edit and auto_start then
+        return nil, nil, "a super-edit activation profile must set allow.auto_start false"
+    end
     local packages, packages_error = set(allow.packages or {}, "allowed packages")
     local namespaces, namespaces_error = set(allow.namespaces or {}, "allowed namespaces")
     local kinds, kinds_error = set(allow.kinds or {}, "allowed kinds")
@@ -150,6 +184,13 @@ local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
     local modules, modules_error = set(allow.modules or {}, "allowed modules")
     if not packages or not namespaces or not kinds or not databases or not grants or not modules then
         return nil, nil, packages_error or namespaces_error or kinds_error or databases_error or grants_error or modules_error
+    end
+    if super_edit then
+        for grant in pairs(grants) do
+            if forbidden_grant(grant) then
+                return nil, nil, "a super-edit activation profile may not grant " .. grant
+            end
+        end
     end
     local bindings, measured_bindings, bindings_error = database_bindings(value.database_bindings, databases)
     if bindings_error then return nil, nil, bindings_error end
@@ -165,6 +206,7 @@ local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
         workspace_id = workspace_id, source_node = source_node,
         source_workspace = source_workspace, component = component, overlay_owner = overlay_owner,
         approval_policy = approval_policy, resolver = resolver_kind, parameters = parameters, allow = allow}
+    if super_edit then policy.expires_at = expires_at end
     if measured_bindings then policy.database_bindings = measured_bindings end
     if migration_policies then policy.migration_policies = migration_policies end
     if applications then policy.applications = applications end
@@ -174,7 +216,8 @@ local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
         parameters = parameters, packages = packages, namespaces = namespaces, kinds = kinds,
         databases = databases, grants = grants, modules = modules,
         database_bindings = bindings, migration_policies = migration_policies,
-        applications = applications, auto_start = auto_start}, policy, nil
+        applications = applications, auto_start = auto_start, super_edit = super_edit,
+        expires_at = expires_at :: string}, policy, nil
 end
 
 local function sorted_set(raw: unknown, label: string): ({string}?, string?)
@@ -294,7 +337,8 @@ local function measure(decoded_profile: DecodedProfile, policy: Object, node_id:
         databases = decoded_profile.databases, grants = decoded_profile.grants, modules = decoded_profile.modules,
         database_bindings = decoded_profile.database_bindings,
         migration_policies = decoded_profile.migration_policies, applications = decoded_profile.applications,
-        auto_start = decoded_profile.auto_start, policy_digest = policy_digest}, nil
+        auto_start = decoded_profile.auto_start, super_edit = decoded_profile.super_edit,
+        expires_at = decoded_profile.expires_at, policy_digest = policy_digest}, nil
 end
 
 -- Decode the complete host configuration without requiring a local node

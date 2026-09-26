@@ -1,6 +1,7 @@
 -- MIT. Host configuration is the authority boundary for destination activation.
 local test = require("test")
 local service = require("destination_service")
+local registry = require("registry")
 
 local function valid(): {[string]: unknown}
     return {profiles = {{workspace_id = "workspace-a", source_node = "node-source",
@@ -124,6 +125,71 @@ local function define_tests()
             test.is_true(changed.profiles[1].policy_digest ~= digest)
             applications[1].appearance_write = true
             test.is_nil(service.configuration(config, "node-destination"))
+        end)
+        test.it("admits a super-edit profile only while unexpired and explicitly confirmed", function()
+            local function install(name: string, confirm: unknown?, approvers: unknown?)
+                local current = assert(registry.get("bee:approver_policies"))
+                local data = current.data :: {[string]: unknown}
+                local rows: {{[string]: unknown}} = {}
+                for _, policy in ipairs(data.policies :: {{[string]: unknown}}) do
+                    if policy.name ~= name then rows[#rows + 1] = policy end
+                end
+                local row: {[string]: unknown} = {name = name, max_ttl_ms = 60000,
+                    approvers = approvers or {{definition_id = "bee.approvals.inbox:app"}}}
+                if confirm ~= nil then row.confirm = confirm end
+                rows[#rows + 1] = row
+                data.policies = rows
+                local changes = registry.snapshot():changes()
+                assert(changes:update(current))
+                local applied, apply_error = changes:apply()
+                if not applied then error("install super-edit policy: " .. tostring(apply_error)) end
+            end
+            local function row(overrides: {[string]: unknown}): {[string]: unknown}
+                local value: {[string]: unknown} = {workspace_id = "workspace-a", source_node = "node-source",
+                    source_workspace = "vendor/app", component = "vendor/app",
+                    overlay_owner = "bee.apps:workspace-a", approval_policy = "super-edit-host",
+                    parameters = {}, expires_at = "2999-01-01T00:00:00.000Z",
+                    allow = {packages = {"vendor/app"}, namespaces = {"vendor.app"},
+                        kinds = {"function.lua"}, databases = {}, grants = {}, modules = {}, auto_start = false}}
+                for name, item in pairs(overrides) do value[name] = item end
+                return value
+            end
+            local function profile_of(raw: {[string]: unknown}): {[string]: unknown}
+                local config = assert(service.configuration({profiles = {raw}}, "node-destination"))
+                return config.profiles[1]
+            end
+            install("super-edit-host", "explicit")
+            local admitted, refusal = service.super_edit_admission(profile_of(row({})))
+            if not admitted then error(tostring(refusal)) end
+            -- An expired row is refused at the destination.
+            local expired, expired_error = service.super_edit_admission(
+                profile_of(row({expires_at = "2000-01-01T00:00:00.000Z"})))
+            test.is_false(expired)
+            test.not_nil(string.find(expired_error :: string, "expired", 1, true))
+            -- A dedicated approver policy that does not confirm explicitly is refused.
+            install("super-edit-host", "standard")
+            local unconfirmed, unconfirmed_error = service.super_edit_admission(profile_of(row({})))
+            test.is_false(unconfirmed)
+            test.not_nil(string.find(unconfirmed_error :: string, "explicitly", 1, true))
+            -- An explicit policy that names no approver is refused.
+            install("super-edit-host", "explicit", {})
+            local approverless, approverless_error = service.super_edit_admission(profile_of(row({})))
+            test.is_false(approverless)
+            test.not_nil(string.find(approverless_error :: string, "names no approvers", 1, true))
+            -- A dedicated policy absent from the host table is refused.
+            local stripped = assert(registry.get("bee:approver_policies"))
+            local stripped_data = stripped.data :: {[string]: unknown}
+            stripped_data.policies = {{name = "workspace-application-delivery",
+                approvers = {{definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 600000}}
+            local changes = registry.snapshot():changes()
+            assert(changes:update(stripped))
+            assert(changes:apply())
+            local missing, missing_error = service.super_edit_admission(profile_of(row({})))
+            test.is_false(missing)
+            test.not_nil(string.find(missing_error :: string, "not configured", 1, true))
+            -- A non-super-edit profile bypasses the gate entirely.
+            local plain = assert(service.super_edit_admission({super_edit = false}))
+            test.is_true(plain)
         end)
         test.it("names one delivery action per operation and refuses unknown ones", function()
             test.eq(service.required_action("list"), "bee.gov.delivery.read")

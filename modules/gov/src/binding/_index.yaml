@@ -150,7 +150,7 @@ entries:
 - name: destination_service
   kind: library.lua
   source: file://destination_service.lua
-  modules: [registry, security, system, funcs, hash]
+  modules: [registry, security, system, funcs, hash, time]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical

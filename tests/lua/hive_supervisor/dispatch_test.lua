@@ -52,6 +52,27 @@ local function call_scoped(policies: {string}, req: types.Request): types.Reply
     return reply
 end
 
+local GROUP_SCOPE = {"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_facade_policy",
+    "bee.hive:mapping_test_policy"}
+
+local function set_audiences(rows: unknown)
+    local list: {security.Policy} = {}
+    for index, name in ipairs({"bee.security.hive:hive_catalog_policy", "bee.hive:mapping_test_policy"}) do
+        local policy, err = security.policy(name)
+        if not policy then error("policy " .. name .. ": " .. tostring(err)) end
+        list[index] = policy
+    end
+    local result, err = funcs.new():with_scope(security.new_scope(list)):call("bee.hive.supervisor:audiences_probe", rows)
+    if err or type(result) ~= "table" then error("audiences install failed: " .. tostring(err)) end
+end
+
+local function with_audiences(rows: unknown, fn: () -> ())
+    set_audiences(rows)
+    local ok, err = pcall(fn)
+    set_audiences({})
+    if not ok then error(err) end
+end
+
 local function define_tests()
     test.describe("Hive telemetry dispatch execution", function()
         test.it("successfully dispatches reviewed open telemetry operations", function()
@@ -215,6 +236,60 @@ local function define_tests()
             local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.security.hive:hive_dispatch_policy"}, req)
             test.is_true(rep.ok)
             test.is_nil(rep.error)
+        end)
+
+        test.it("admits an operation an install grant joins to the exposure scope", function()
+            -- No direct exposure grant in scope: the fixture grant policy
+            -- joins the exposure scope, and the facade loads it.
+            local req = make_request("bee.hive:probe_open", {name = "node-1", count = 2})
+            local rep = call_scoped(GROUP_SCOPE, req)
+            test.is_true(rep.ok)
+            test.is_nil(rep.error)
+        end)
+
+        test.it("admits the host ceiling through the exposure scope", function()
+            local req = make_request("bee.hive.telemetry:stats", {})
+            local scope = {"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_facade_policy",
+                "bee.security.hive:hive_dispatch_policy"}
+            local rep = call_scoped(scope, req)
+            test.is_true(rep.ok)
+            test.is_nil(rep.error)
+        end)
+
+        test.it("refuses callers outside the listed audience", function()
+            with_audiences({{operation_ref = "bee.hive:probe_open", peers = {"forge"}}}, function()
+                local req = make_request("bee.hive:probe_open", {name = "node-1", count = 2})
+                local rep = call_scoped(GROUP_SCOPE, req)
+                test.is_false(rep.ok)
+                test.not_nil(rep.error)
+                if rep.error then
+                    test.eq(rep.error.code, "DENIED")
+                end
+            end)
+        end)
+
+        test.it("admits listed peers and the owner's own callers", function()
+            with_audiences({{operation_ref = "bee.hive:probe_open", peers = {"laptop"}}}, function()
+                local req = make_request("bee.hive:probe_open", {name = "node-1", count = 2})
+                local rep = call_scoped(GROUP_SCOPE, req)
+                test.is_true(rep.ok)
+                local local_req = make_request("bee.hive:probe_open", {name = "node-1", count = 2})
+                local_req.caller_node_id = "forge"
+                local_req.principal_ref = {issuer = "forge", subject_id = "user-1"}
+                local local_rep = call_scoped(GROUP_SCOPE, local_req)
+                test.is_true(local_rep.ok)
+            end)
+        end)
+
+        test.it("refuses dispatch while the audience table is broken", function()
+            with_audiences("broken", function()
+                local req = make_request("bee.hive:probe_open", {name = "node-1", count = 2})
+                local rep = call_scoped(GROUP_SCOPE, req)
+                test.is_false(rep.ok)
+                if rep.error then
+                    test.eq(rep.error.code, "DENIED")
+                end
+            end)
         end)
     end)
 

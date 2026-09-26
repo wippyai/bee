@@ -31,6 +31,16 @@ entries:
     actions: [process.registry.register, process.registry.unregister, process.registry.foreign]
     resources: '*'
     effect: allow
+- name: telemetry_grant
+  kind: security.policy
+  meta:
+    comment: Install-grant equivalent exposing the staged telemetry operations through the supervisor exposure scope
+  groups: [bee.security.hive:hive_exposure_scope]
+  policy:
+    actions: [hive.expose.open]
+    resources: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list,
+      bee.hive.telemetry:holdings, bee.hive.telemetry:cluster]
+    effect: allow
 - name: coordinator
   kind: process.lua
   source: file://coordinator.lua

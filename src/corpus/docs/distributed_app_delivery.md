@@ -156,12 +156,14 @@ The shipped workspace application profile also admits `ns.requirement` entries
 for capability requests. A request declares `meta.value_kind: security.policy`,
 `meta.capability`, bounded `meta.parameters`, and a printable `meta.reason`. Its
 single target must be its own `bee.application` process entry at
-`.security.policies +=`. The destination resolver checks the request against
-the host-owned `bee:capability_catalog`, preserves the normalized parameters,
-reason, target, and catalog/template revisions in the measured candidate, and
-includes the catalog definition in the candidate's external-base digest. The
-request grants no policy. Preflight refuses app-shipped `security.actor` and
-`security.groups` on every entry with `SECURITY_DENIED`.
+`.security.policies +=`, except a `hive.expose` request, whose target is one of
+the artifact's own Hive operations at the requested mode. The destination
+resolver checks the request against the host-owned `bee:capability_catalog`,
+preserves the normalized parameters, reason, target, and catalog/template
+revisions in the measured candidate, and includes the catalog definition in
+the candidate's external-base digest. The request grants no policy. Preflight
+refuses app-shipped `security.actor` and `security.groups` on every entry with
+`SECURITY_DENIED`.
 
 The catalog currently describes `workspace.files.read`, `app.database`,
 `threads.read`, `threads.message`, `agents.launch`, `contract.call`, `http.api`,
@@ -178,8 +180,11 @@ approval and shows the full set, changes from the installed grant, and any
 combined data flows in Approvals. `threads.read` with `scope: owned`,
 `workspace.files.read`, `workspace.files.write`, `app.database`,
 `threads.message`, `agents.launch`, `contract.call` and `http.api` have
-installable host entries; `hive.expose` is review vocabulary only, and a
-request for it fails resolution. A file grant installs a host-created
+installable host entries. A `hive.expose` grant installs a host-owned policy
+over exactly the approved operations into the supervisor's exposure scope;
+the destination audience table admits the operation's peers, and policy-mode
+operations still check the caller through the destination principal mappings.
+A file grant installs a host-created
 `fs.directory` at a verified subroot of the destination workspace's own
 folder: the destination reads the workspace's root and subpath from the node
 workspace catalog (through `bee.workspace.catalog:read` under

@@ -29,11 +29,14 @@ anything or changes state.
 ## Host composition
 
 The package declares its requirements through `ns.dependency` on
-`bee/threads`, `bee/application` and `bee/hive`. Its operations run under
-host-selected policies: `bee.security.hive:hive_telemetry_policy` for node
-reads, `bee.hive.telemetry.security:holdings_policy` for the manager read,
+`bee/threads`, `bee/application` and `bee/hive`, and requests its exposure
+through an `ns.requirement` for the `hive.expose` capability naming its open
+operations. Its operations run under host-selected policies:
+`bee.security.hive:hive_telemetry_policy` for node reads,
+`bee.hive.telemetry.security:holdings_policy` for the manager read,
 and `bee.hive.telemetry.security:cluster_policy` for the supervisor fan-out.
-Exposure and execution stay host-selected through `hive.expose.open` and the
+Exposure and execution stay host-selected through the install-granted
+`hive.expose.open` ceiling in the supervisor exposure scope and the
 supervisor dispatch policy.
 
 ## Testing

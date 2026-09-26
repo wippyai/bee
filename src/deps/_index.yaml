@@ -106,6 +106,9 @@ entries:
   kind: ns.dependency
   component: bee/hive-telemetry
   version: 0.1.0-dev
+  parameters:
+  - name: target_exposure
+    value: bee.security.hive:hive_exposure_policy
 - name: hive_manager
   kind: ns.dependency
   component: bee/hive-manager

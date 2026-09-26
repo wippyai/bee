@@ -65,6 +65,26 @@ func stageHiveSupervisorDesktop(t *testing.T, source string) {
 	}
 }
 
+// The staged host admits node-0 to the telemetry stats operation on every
+// node; node-1 stays outside the audience while presence stays unlisted.
+func stageHiveExposureAudiences(t *testing.T, source string) {
+	t.Helper()
+	path := filepath.Join(source, "hive", "supervisor", "_index.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor := "  data:\n    audiences: []"
+	if strings.Count(string(data), anchor) != 1 {
+		t.Fatal("staged Hive supervisor has no default exposure_audiences entry")
+	}
+	staged := strings.Replace(string(data), anchor,
+		"  data:\n    audiences:\n    - operation_ref: bee.hive.telemetry:stats\n      peers: [node-0]", 1)
+	if err := os.WriteFile(path, []byte(staged), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Uses actual native peer authentication and process provenance. The only
 // configured identities are native nodes; no supervisor PID is passed at boot.
 func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
@@ -99,6 +119,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 		}
 	}
 	stageHiveSupervisorDesktop(t, sourceSnapshot)
+	stageHiveExposureAudiences(t, sourceSnapshot)
 	if err := os.CopyFS(fixtureSnapshot, os.DirFS(filepath.Join(repository, "tests/fixtures/hive_supervisor"))); err != nil {
 		t.Fatal(err)
 	}
@@ -468,6 +489,13 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 	marker(b, "ready ")
 	command(a, "probe", "probe_passed")
 	command(b, "probe", "probe_passed")
+	// Telemetry exposure arrives through the staged install grant, not the
+	// static ceiling: stats admits only its audience peer while unlisted
+	// presence stays open to both.
+	command(a, "expose-stats", "stats_ok")
+	command(b, "expose-stats", "stats_denied")
+	command(a, "expose-presence", "presence_ok")
+	command(b, "expose-presence", "presence_ok")
 	if feeds {
 		command(b, "feed-denied", "feed_denied")
 		if _, err := io.WriteString(b.stdin, "identity\n"); err != nil {

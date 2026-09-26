@@ -42,13 +42,14 @@ local function scope(): security.Scope
     end
     return security.new_scope(policies)
 end
-local function raw_call(target: string, request: unknown): Object
-    local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
+local function raw_call(target: string, request: unknown, workspace_id: string?): Object
+    local selected_workspace = workspace_id or principals.workspace(request)
+    local result, err = funcs.new():with_actor(principals.actor(ACTOR, selected_workspace)):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     return result :: Object
 end
-local function call(target: string, request: unknown): Object
-    local reply = raw_call(target, request)
+local function call(target: string, request: unknown, workspace_id: string?): Object
+    local reply = raw_call(target, request, workspace_id)
     if not reply.ok then
         local fault = reply.error :: Object
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
@@ -119,8 +120,8 @@ local function open_gateway(): integer
     local opened = call("bee.gateway.binding:open", {address = endpoint()})
     return math.floor(tonumber(opened.epoch) or 0)
 end
-local function thread(): string
-    local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Gateway carrier"})
+local function thread(workspace_id: string?): string
+    local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Gateway carrier"}, workspace_id)
     return created.thread_id :: string
 end
 local function request(thread_id: string, attempt_id: string, environment: {[string]: string}, subpath: string?, policy_ref: string?): Object
@@ -769,7 +770,7 @@ local function define_tests()
             local environment = {BEE_FIXTURE_GATEWAY_AUTHOR = "repair", BEE_FIXTURE_AUTHOR_WORKSPACE = source,
                 BEE_FIXTURE_AUTHOR_SOURCE = source, BEE_FIXTURE_AUTHOR_DESTINATION = AUTHOR_WORKSPACE,
                 BEE_FIXTURE_AUTHOR_VERSION = "1.0.0", BEE_FIXTURE_STREAM = stream("plain.jsonl")}
-            local thread_id = thread()
+            local thread_id = thread(AUTHOR_WORKSPACE)
             local attempt_id = fresh("author")
             -- The gateway takes the delivery destination from the binding, so
             -- the authoring session is bound to the destination workspace.

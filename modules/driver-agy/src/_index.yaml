@@ -134,7 +134,7 @@ entries:
         resume: *id002
         isolation_env:
           variables: [HOME]
-          private_home: false
+          private_home: true
         exit_codes_trustworthy: false
         input_ready: *id004
         interrupt: *id005

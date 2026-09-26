@@ -110,7 +110,7 @@ entries:
         isolation_env:
           variables:
           - HOME
-          private_home: false
+          private_home: true
         exit_codes_trustworthy: false
         input_ready:
           strategy: none
@@ -160,7 +160,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded OpenCode batch route for a host-selected coordinator and caller-owned shared thread
+    comment: Component-owned bounded OpenCode batch route for a host-selected coordinator and caller-owned shared thread; the CLI offers no sandbox or permission flag Bee can select, so the host records it as unconfined
   data:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-research-batch
@@ -176,6 +176,7 @@ entries:
     session_resource: session
     credentials: []
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+    unconfined: true
 - name: command
   kind: registry.entry
   meta:

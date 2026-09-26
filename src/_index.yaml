@@ -492,6 +492,8 @@ entries:
     - bee.driver.muse:research_batch
     - bee.driver.agy:research_batch
     - bee.driver.grok:research_batch
+    agent_launch_unconfined:
+    - bee.driver.grok:research_batch
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -523,12 +525,12 @@ entries:
     executable_env: {claude: bee.driver.claude:executable}
     environment: {}
     environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
-    allow_host_home: true
+    allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: default, max_turns: 1}
 - name: launch_policy_codex_window
   kind: registry.entry
   meta:
@@ -587,7 +589,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected read-only Codex batch policy for bounded research actions on a caller-owned thread
+    comment: Host-selected Codex batch policy for bounded research actions on a caller-owned thread; private home with no host inheritance, workspace-write CLI sandbox
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides: [thread, workdir]
@@ -601,12 +603,12 @@ entries:
     executable_env: {codex: bee.driver.codex:executable}
     environment: {}
     environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
-    allow_host_home: true
+    allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_instructions: true
     profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
-    prepare_options: {sandbox: read-only}
+    prepare_options: {sandbox: workspace-write}
 - name: launch_policy_codex_named_batch
   kind: registry.entry
   meta:
@@ -630,7 +632,7 @@ entries:
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_instructions: true
     profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
-    prepare_options: {sandbox: read-only}
+    prepare_options: {sandbox: workspace-write}
 - name: launch_policy_muse_window
   kind: registry.entry
   meta:
@@ -699,12 +701,12 @@ entries:
     executables: {}
     executable_env: {muse: bee.driver.muse:executable}
     environment: {}
-    allow_host_home: true
+    allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     hook_command_ref: bee.gateway:hook_executable
     profile_options: {effort: [low, medium, high]}
-    prepare_options: {approval_mode: never, max_steps: 1}
+    prepare_options: {approval_mode: on-request, max_steps: 1}
 - name: launch_policy_opencode_window
   kind: registry.entry
   meta:
@@ -760,7 +762,7 @@ entries:
     executables: {}
     executable_env: {opencode: bee.driver.opencode:executable}
     environment: {}
-    allow_host_home: true
+    allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
     gateway_hooks: []
     profile_options: {}
@@ -832,9 +834,9 @@ entries:
     executables: {}
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
-    allow_host_home: true
+    allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
-    prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m}
+    prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m, sandbox: true}
 - name: launch_policy_grok_window
   kind: registry.entry
   meta:
@@ -903,11 +905,11 @@ entries:
     executables: {}
     executable_env: {grok: bee.driver.grok:executable}
     environment: {}
-    allow_host_home: true
+    allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: default, max_turns: 1}
 - name: placement_path
   kind: env.variable
   meta:

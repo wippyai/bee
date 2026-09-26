@@ -25,7 +25,6 @@ import (
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 	"github.com/wippyai/runtime/api/event"
 	"github.com/wippyai/runtime/api/logs"
-	"github.com/wippyai/runtime/cluster/internode"
 )
 
 // joinHost is the native host of the owner's join listener. The supervisor
@@ -137,11 +136,11 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	// The listener owns the accepted socket, so it can report the local
 	// address each admitted join arrived on before the handshake is answered.
 	servedListener := &reachedListener{Listener: listener, admitter: a}
-	// The node states where it can be reached and whether it expects to be
-	// dialed, through the membership metadata the runtime re-broadcasts. The
-	// dial hint is additive: a runtime without the internode dial-direction
-	// hook ignores an unknown key.
-	publishMeshMeta(membership, l.address, meshDialHint(l.state))
+	// The node states whether it expects to be dialed, through the membership
+	// metadata the runtime re-broadcasts. Its internode endpoint needs no
+	// metadata: the runtime dials a member at its membership address, which the
+	// owner selected from hive/advertise at boot.
+	publishMeshMeta(membership, meshDialHint(l.state))
 	l.published = l.address
 	served, recorded := make(chan struct{}), make(chan struct{})
 	updates := subscribeNodeUpdates(lifetime, ctx)
@@ -219,10 +218,11 @@ func (l *joinListenerComponent) adoptReachedAddress(a *admitter) error {
 	return err
 }
 
-// republishAddress tells the mesh about a new advertise address when the
-// host's own pick changed since the last publication. The runtime's internode
-// service reacts to the NodeUpdated event by dialing the new endpoint, so a
-// DHCP lease change or a Tailscale toggle needs no restart.
+// republishAddress tells the mesh about this node's dial state when the
+// address it advertises to the mesh changed since the last publication. The
+// internode endpoint follows the membership address the runtime already knows,
+// so only the additive dial direction is republished: a runtime without the
+// internode dial-direction hook ignores the unknown key.
 func (l *joinListenerComponent) republishAddress(membership clusterapi.Membership) error {
 	address, err := resolveAdvertiseAddress(l.state)
 	if err != nil {
@@ -231,26 +231,19 @@ func (l *joinListenerComponent) republishAddress(membership clusterapi.Membershi
 	if address == l.published {
 		return nil
 	}
-	publishMeshMeta(membership, address, meshDialHint(l.state))
+	publishMeshMeta(membership, meshDialHint(l.state))
 	l.published = address
 	return nil
 }
 
-// publishMeshMeta advertises this node's internode endpoint and dial
-// direction. The port is the one the runtime actually bound, read back from
-// the local node's metadata.
-func publishMeshMeta(membership clusterapi.Membership, address netip.Addr, hint string) {
-	meta := map[string]string{}
-	if port := membership.LocalNode().Meta[internode.MetadataPort]; port != "" {
-		meta[internode.MetadataAdvertiseAddr] = address.String()
-		meta[internode.MetadataAdvertisePort] = port
+// publishMeshMeta advertises this node's dial direction through the membership
+// metadata the runtime re-broadcasts. The internode endpoint is not published:
+// the runtime dials a member at its membership address.
+func publishMeshMeta(membership clusterapi.Membership, hint string) {
+	if hint == "" {
+		return
 	}
-	if hint != "" {
-		meta[dialMetadataKey] = hint
-	}
-	if len(meta) > 0 {
-		membership.UpdateMeta(meta)
-	}
+	membership.UpdateMeta(map[string]string{dialMetadataKey: hint})
 }
 
 // subscribeNodeUpdates reports peer join, leave and metadata changes from the

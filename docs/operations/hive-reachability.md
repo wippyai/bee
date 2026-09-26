@@ -56,11 +56,13 @@ up or going away never advertises a stale address. The owner binds its mesh and
 invite listener on all interfaces of the pick's family and publishes loopback
 aliases in the local rendezvous descriptor for same-machine clients.
 
-A running owner republishes a changed address through the runtime's membership
-metadata, and rewrites each pinned peer's `.addr` seed from cluster
-`NodeJoined`, `NodeLeft` and `NodeUpdated` events, so a peer that restarts at a
-new address is seeded there on the next boot. Neither side needs a restart to
-learn the new internode endpoint.
+A member is dialed at its membership address, so the address the pick selects
+is the address the runtime dials for the internode endpoint too; there is no
+separate advertised endpoint. A running owner republishes the dial direction
+through the runtime's membership metadata when its address changes, and rewrites
+each pinned peer's `.addr` seed from cluster `NodeJoined`, `NodeLeft` and
+`NodeUpdated` events, so a peer that restarts at a new address is seeded there
+on the next boot.
 
 ### The address a peer proved it can reach
 
@@ -73,8 +75,9 @@ reachability either node has.
 - The hive node reports the IP it saw on the authenticated join TCP connection.
   The joiner adopts that address when this host owns it, and otherwise records
   it in `hive/nat` and publishes `internode_dial=out` in its membership
-  metadata, so the peer keeps the connection open instead of dialing an
-  address it cannot reach.
+  metadata, so a runtime with the dial-direction hook keeps the connection open
+  instead of dialing an address it cannot reach; the pinned runtime ignores the
+  key.
 - The join listener records the local address a remote peer's join arrived on,
   in `hive/reached`, and advertises that address in preference to the automatic
   pick while this host still owns it. A peer that reached the LAN address keeps
@@ -91,9 +94,10 @@ Memberlist gossip is the remaining gap. The runtime carries gossip over UDP in
 both directions and fixes its gossip advertise address at boot, so a NATed peer
 and its inviter can lose each other after a probe interval — most visibly when
 the peer on the other side restarts. The runtime's gossip-over-internode hook
+carries a copy of memberlist's packets over connected internode links and
 closes that gap; it is runtime work, not Bee work. `make hive-join-check` runs
 the two-node restart matrix across two machines and records each case that
-passes and each case that waits for that hook.
+passes and each case that still waits for the hook.
 
 ## Tailscale
 
@@ -135,4 +139,4 @@ NATed and dials out. The same gossip limitation as WSL2 applies.
 
 The runtime currently advertises one mesh address per node. `bee hive peers` reports supervisor-session state and has no live path report. Runtime reconnect uses its configured address and recorded gossip seeds; it does not retry a pool of authenticated candidates. The join channel does not trigger a reverse connect.
 
-A runtime extension can carry gossip over the authenticated internode link, let a node state its dial direction, and report per-peer transport state. Bee already sets the dial direction in membership metadata and republishes changed addresses; the runtime hooks that consume them are tracked separately. Until the gossip hook lands, a NATed peer depends on mirrored networking or on a forwarded UDP path for a complete mesh.
+A runtime extension can carry gossip over the authenticated internode link, let a node state its dial direction, and report per-peer transport state. The runtime already carries gossip over connected internode links and reports the connected link to each peer; Bee sets the dial direction in membership metadata and republishes it when its address changes. Until the dial-direction hook lands, a NATed peer depends on mirrored networking or on a forwarded UDP path for a complete mesh.

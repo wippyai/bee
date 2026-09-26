@@ -130,7 +130,11 @@ func (d Descriptor) validate() error {
 // Capture builds a descriptor from the local membership snapshot after native
 // cluster startup. Callers must hold the application-state lock and publish only
 // their own live node. This function cannot infer socket ownership from values.
-// Literal IP endpoints are required; DNS-only advertisements are not supported.
+// The transport endpoint is the member's own membership address with its
+// internode port: the runtime dials a member at its membership address and a
+// one-way reachable member dials in itself, so there is no separate advertise
+// address. Literal IP endpoints are required; DNS-only advertisements are not
+// supported.
 func Capture(node cluster.NodeInfo, execution string) (Descriptor, error) {
 	gossip, err := netip.ParseAddrPort(node.Addr)
 	if err != nil {
@@ -140,19 +144,8 @@ func Capture(node cluster.NodeInfo, execution string) (Descriptor, error) {
 	if err != nil || port == 0 {
 		return Descriptor{}, ErrDescriptor
 	}
-	address := gossip.Addr()
-	if advertised := node.Meta[internode.MetadataAdvertiseAddr]; advertised != "" {
-		address, err = netip.ParseAddr(advertised)
-		if err != nil {
-			return Descriptor{}, ErrDescriptor
-		}
-		port, err = strconv.ParseUint(node.Meta[internode.MetadataAdvertisePort], 10, 16)
-		if err != nil || port == 0 {
-			return Descriptor{}, ErrDescriptor
-		}
-	}
 	d := Descriptor{Version: 1, Execution: execution, Node: node.ID, Gossip: gossip.String(),
-		Transport: netip.AddrPortFrom(address, uint16(port)).String(), PublicKey: node.Meta[internode.MetadataPublicKey]}
+		Transport: netip.AddrPortFrom(gossip.Addr(), uint16(port)).String(), PublicKey: node.Meta[internode.MetadataPublicKey]}
 	if err := d.validate(); err != nil {
 		return Descriptor{}, err
 	}

@@ -162,11 +162,9 @@ func TestPublisherRequiresStartedMembershipAndPreservesDescriptor(t *testing.T) 
 	if _, err := store.Read(ctx); err != nil {
 		t.Fatal("shutdown removed discovery hint", err)
 	}
-	m.node.Meta[internode.MetadataAdvertiseAddr] = "192.168.1.10"
-	m.node.Meta[internode.MetadataAdvertisePort] = "45000"
-	external, err := Capture(m.node, d.Execution)
-	if err != nil || external.Transport != "192.168.1.10:45000" {
-		t.Fatalf("override: %v %v", external, err)
+	captured, err := Capture(m.node, d.Execution)
+	if err != nil || captured != d.Endpoint() {
+		t.Fatalf("capture %#v: %v", captured, err)
 	}
 }
 
@@ -195,10 +193,8 @@ func TestPublisherUsesLocalAliasForExternalOwner(t *testing.T) {
 func TestLocalAliasMatchesExternallyAdvertisedOwner(t *testing.T) {
 	publicKey := base64.RawStdEncoding.EncodeToString(make([]byte, 32))
 	node := cluster.NodeInfo{ID: "joined-node", Addr: "192.0.2.20:4400", Meta: cluster.NodeMeta{
-		internode.MetadataPort:          "4401",
-		internode.MetadataPublicKey:     publicKey,
-		internode.MetadataAdvertiseAddr: "192.0.2.20",
-		internode.MetadataAdvertisePort: "4501",
+		internode.MetadataPort:      "4401",
+		internode.MetadataPublicKey: publicKey,
 	}}
 	descriptor, err := CaptureLocal(node, strings.Repeat("c", 32), netip.MustParseAddr("127.0.0.1"), netip.MustParseAddr("::1"))
 	if err != nil {

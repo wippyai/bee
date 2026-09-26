@@ -239,7 +239,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 				"enabled": true, "name": fmt.Sprintf("node-%d", i),
 				"raft":       map[string]any{"role": role, "bootstrap_expect": expected, "max_voters": 1, "max_standbys": 0, "data_dir": "node-state"},
 				"membership": map[string]any{"bind_addr": address, "advertise_addr": address, "bind_port": 0, "join_addrs": seed, "secret_key": secretString},
-				"internode":  map[string]any{"bind_addr": address, "advertise_addr": address, "bind_port": 0, "auto_port": true, "identity_key": keys[i], "trusted_peer_keys": trusted, "tls": nodeTLS},
+				"internode":  map[string]any{"bind_addr": address, "bind_port": 0, "auto_port": true, "identity_key": keys[i], "trusted_peer_keys": trusted, "tls": nodeTLS},
 			},
 		}
 		data, err := json.Marshal(config)

@@ -199,9 +199,10 @@ func TestMeshDialHintOnlyForANATedNode(t *testing.T) {
 	}
 }
 
-// A NATed node advertises its internode endpoint and dial hint through the
-// membership metadata the runtime re-broadcasts. The pinned runtime has no
-// boot-config key for membership metadata, so UpdateMeta is the only path.
+// A NATed node advertises its dial hint through the membership metadata the
+// runtime re-broadcasts. The pinned runtime has no boot-config key for
+// membership metadata, so UpdateMeta is the only path, and its internode
+// endpoint needs none: a member is dialed at its membership address.
 func TestOwnerPublishesItsDialHintAndEndpoint(t *testing.T) {
 	state := t.TempDir()
 	if err := os.MkdirAll(ownerDirectory(state), 0o700); err != nil {
@@ -214,19 +215,16 @@ func TestOwnerPublishesItsDialHintAndEndpoint(t *testing.T) {
 		t.Fatalf("dial hint = %q, want %q", hint, dialOut)
 	}
 	membership := &recordingMembership{}
-	publishMeshMeta(membership, netip.MustParseAddr("192.168.1.5"), dialOut)
-	if membership.meta[internode.MetadataAdvertiseAddr] != "192.168.1.5" ||
-		membership.meta[internode.MetadataAdvertisePort] != "4100" || membership.meta[dialMetadataKey] != dialOut {
-		t.Fatalf("published meta = %#v", membership.meta)
+	publishMeshMeta(membership, dialOut)
+	if len(membership.meta) != 1 || membership.meta[dialMetadataKey] != dialOut {
+		t.Fatalf("published meta = %#v, want the dial direction alone", membership.meta)
 	}
-	// A directly reachable node publishes its endpoint without a dial hint.
+	// A directly reachable node publishes nothing: its endpoint follows the
+	// membership address and it has no dial hint to add.
 	direct := &recordingMembership{}
-	publishMeshMeta(direct, netip.MustParseAddr("192.168.1.5"), "")
-	if _, present := direct.meta[dialMetadataKey]; present {
-		t.Fatalf("a direct node published a dial hint: %#v", direct.meta)
-	}
-	if direct.meta[internode.MetadataAdvertiseAddr] != "192.168.1.5" {
-		t.Fatalf("direct meta = %#v", direct.meta)
+	publishMeshMeta(direct, "")
+	if len(direct.meta) != 0 {
+		t.Fatalf("a direct node published meta: %#v", direct.meta)
 	}
 }
 

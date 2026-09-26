@@ -12,9 +12,36 @@ type Request = {action: string, component: string, version: string, parameters: 
 type Module = {component: string, version: string, previous_version: string, digest: string,
     change: string, entries: integer, requirements: requirements.Result}
 type Migration = {id: string, component: string, target_db: string, timestamp: string}
+-- One security policy the plan adds, replaces with a new package version, or
+-- removes with its departing package, summarized from the policy definition.
+type PolicyChange = {id: string, component: string, change: string, actions: {string}, resources: {string},
+    expression: boolean}
 type Plan = {request: Request, base_revision: integer, root_id: string, digest: string,
-    modules: {Module}, missing: {string}, migrations: {Migration}, starts: {string}, capabilities: {string}, ready: boolean}
+    modules: {Module}, missing: {string}, migrations: {Migration}, starts: {string}, capabilities: {string},
+    policy_changes: {PolicyChange}, ready: boolean}
 type Prepared = {plan: Plan, resolved: graph.Result, installed: inventory.Result}
+
+local POLICY_KINDS: {[string]: boolean} = {["security.policy"] = true, ["security.policy.expr"] = true}
+
+local function names(raw: unknown): {string}
+    if type(raw) == "string" then return {raw} end
+    local result: {string} = {}
+    if type(raw) ~= "table" then return result end
+    for _, item in ipairs(raw :: {unknown}) do
+        if type(item) == "string" then result[#result + 1] = item end
+    end
+    return result
+end
+
+local function policy_change(id: string, component: string, change: string, data: unknown): PolicyChange
+    local body = bounds.object(data)
+    local definition = body and bounds.object(body.policy) or nil
+    if not definition then
+        return {id = id, component = component, change = change, actions = {}, resources = {}, expression = false}
+    end
+    return {id = id, component = component, change = change, actions = names(definition.actions),
+        resources = names(definition.resources), expression = definition.expression ~= nil}
+end
 
 function M.decode(raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
@@ -120,6 +147,9 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     local migrations: {Migration} = {}
     local starts: {string} = {}
     local capabilities: {string} = {}
+    local policy_changes: {PolicyChange} = {}
+    local proposed_policies: {[string]: boolean} = {}
+    local changed_components: {[string]: boolean} = {}
     local remaining: {[string]: boolean} = {}
     for _, item in ipairs(resolved.packages) do
         remaining[item.component] = true
@@ -131,10 +161,18 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         local change = previous == "" and "install" or ((semver.compare(previous, item.version) or 1) == 0 and "keep" or "update")
         modules[#modules + 1] = {component = item.component, version = item.version, previous_version = previous,
             digest = item.digest, change = change, entries = #item.entries, requirements = item.requirements}
+        if change ~= "keep" then changed_components[item.component] = true end
         for _, entry in ipairs(item.entries) do
             local owner = owners[entry.id]
             if owner ~= nil and owner ~= item.component then return nil, "package would replace another owner's entry: " .. entry.id end
-            if entry.kind == "security.policy" or entry.kind == "security.policy.expr" then capabilities[#capabilities + 1] = entry.id end
+            if POLICY_KINDS[entry.kind] then
+                capabilities[#capabilities + 1] = entry.id
+                proposed_policies[entry.id] = true
+                if change ~= "keep" then
+                    policy_changes[#policy_changes + 1] = policy_change(entry.id, item.component,
+                        owner == item.component and "update" or "add", entry.data)
+                end
+            end
             if change ~= "keep" then
                 local data = bounds.object(entry.data)
                 local lifecycle = data and bounds.object(data.lifecycle)
@@ -152,6 +190,16 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             local remove = controlled[item.component] == true
             modules[#modules + 1] = {component = item.component, version = remove and "" or item.version, previous_version = item.version,
                 digest = "", change = remove and "remove" or "keep", entries = item.entries, requirements = {requirements = {}, missing = {}}}
+            if remove then changed_components[item.component] = true end
+        end
+    end
+    for _, raw_entry in ipairs(raw_state.entries) do
+        local entry = bounds.object(raw_entry)
+        local id = entry and bounds.id(entry.id) or nil
+        local owner = id and owners[id] or nil
+        if entry and id and owner and changed_components[owner] and POLICY_KINDS[tostring(entry.kind)]
+            and not proposed_policies[id] then
+            policy_changes[#policy_changes + 1] = policy_change(id, owner, "remove", entry.data)
         end
     end
     if request.action == "uninstall" then
@@ -171,9 +219,11 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     end
     table.sort(modules, function(a: Module, b: Module): boolean return a.component < b.component end)
     table.sort(migrations, function(a: Migration, b: Migration): boolean return a.id < b.id end)
+    table.sort(policy_changes, function(a: PolicyChange, b: PolicyChange): boolean return a.id < b.id end)
     table.sort(starts); table.sort(capabilities)
     local plan: Plan = {request = request, base_revision = revision, root_id = root_id, digest = "", modules = modules,
-        missing = resolved.missing, migrations = migrations, starts = starts, capabilities = capabilities, ready = #resolved.missing == 0}
+        missing = resolved.missing, migrations = migrations, starts = starts, capabilities = capabilities,
+        policy_changes = policy_changes, ready = #resolved.missing == 0}
     local encoded, encode_error = canonical.encode(plan)
     if not encoded then return nil, encode_error end
     local digest, digest_error = hash.sha256(encoded)

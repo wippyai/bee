@@ -140,17 +140,19 @@ connection; the joiner adopts it as its advertised address when this host owns
 it, and otherwise records itself in `hive/nat` and publishes
 `internode_dial=out` so the peer keeps the connection open instead of dialing an
 address it cannot reach. The join listener records the local address a remote
-peer's join arrived on in `hive/reached` and advertises it in preference to the
+peer's join arrived on in `hive/reached` and uses it in preference to the
 automatic pick, so a peer that reached the LAN address keeps using it when the
 pick is a Tailscale address; a join from another node on this host is ignored.
 Each side seeds the other at the proven path and reports every candidate
 failure if none verifies.
 
-A running owner republishes a changed advertise address with
-`Membership.UpdateMeta` and rewrites each pinned peer's `.addr` seed from the
-cluster's `NodeJoined`, `NodeLeft` and `NodeUpdated` events, so a peer that
-restarts at a new address is seeded there on the next boot without a restart
-of either side.
+A member is dialed at its membership address, so the address the pick selects is
+the address the runtime dials for the internode endpoint too; there is no
+separate advertised endpoint to publish. A running owner republishes the dial
+direction with `Membership.UpdateMeta` when its address changes, and rewrites
+each pinned peer's `.addr` seed from the cluster's `NodeJoined`, `NodeLeft` and
+`NodeUpdated` events, so a peer that restarts at a new address is seeded there
+on the next boot.
 
 On detected WSL2 NAT the invite prints an informational notice: Bee needs no
 environment variable and no Windows port proxy, because it advertises the

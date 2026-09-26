@@ -7,7 +7,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/syncthing/notify v0.0.0-20250528144937-c7027d4f7465
 	github.com/wippyai/go-lua v1.5.23
-	github.com/wippyai/runtime v0.1.14-0.20260923192703-fd1741b1d86a
+	github.com/wippyai/runtime v0.1.14-0.20260926003056-10e5f8028e96
 	go.uber.org/zap v1.28.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0

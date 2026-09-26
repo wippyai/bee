@@ -355,10 +355,25 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
         request.action_id = binding.action_id
     end
     if tool.name == "thread_notify" then
-        local target, unreachable = resolve(binding, executor, tostring(request.session))
-        if not target then return unreachable :: Object end
-        local reply, call_error = executor:call(tool.operation, {thread_id = binding.thread_id, idempotency_key = request.idempotency_key,
-            target_thread_id = target.thread_id, target_action_id = target.action_id, watcher_action_id = binding.action_id})
+        local target_thread_id: string
+        local target_action_id: string? = nil
+        local target_attempt_id: string? = nil
+        if request.thread_id ~= nil then
+            local selected, missing = member_thread(executor, {member_thread = request.thread_id}, binding.thread_id)
+            if not selected then return missing :: Object end
+            target_thread_id = selected
+            target_attempt_id = tostring(request.attempt_id)
+        else
+            local target, unreachable = resolve(binding, executor, tostring(request.session))
+            if not target then return unreachable :: Object end
+            target_thread_id = target.thread_id
+            target_action_id = target.action_id
+        end
+        local body: Object = {thread_id = binding.thread_id, idempotency_key = request.idempotency_key,
+            target_thread_id = target_thread_id, watcher_action_id = binding.action_id}
+        if target_action_id then body.target_action_id = target_action_id end
+        if target_attempt_id then body.target_attempt_id = target_attempt_id end
+        local reply, call_error = executor:call(tool.operation, body)
         return reply_result(reply, call_error)
     end
     if tool.name == "thread_read" then

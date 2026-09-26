@@ -644,41 +644,9 @@ func reportOrchestratorRun(client *httpClient, url, authorization string, report
 	}
 	childThread, childAction, childAttempt := stringField(firstValue, "thread_id"), stringField(firstValue, "action_id"), stringField(firstValue, "attempt_id")
 	report["first_thread"] = childThread
-	// thread_notify addresses a running session: the child's gateway binding
-	// opens after its carrier admits the action, so wait until the session
-	// listing shows the child before notifying once. Pacing follows the
-	// child's thread wakeups, so a slow carrier under load only waits longer
-	// instead of outrunning a fixed poll bound and sending a notify the
-	// gateway must refuse.
-	sessionCursor := 0
-	sessionDeadline := time.Now().Add(170 * time.Second)
-	sessionVisible := false
-	for waited := 0; !sessionVisible && time.Now().Before(sessionDeadline); waited++ {
-		listed := call("thread_sessions", object{}, 100+waited)
-		if value := mustObject(listed["value"]); value != nil {
-			if sessions, ok := value["sessions"].([]any); ok {
-				for _, raw := range sessions {
-					if item := mustObject(raw); stringField(item, "action_id") == childAction {
-						sessionVisible = true
-					}
-				}
-			}
-		}
-		report["session_waits"] = waited + 1
-		if !sessionVisible && time.Now().Before(sessionDeadline) {
-			waitedReply := rpcWithTimeout(client, url, authorization, "tools/call", object{
-				"name":      "thread_wait",
-				"arguments": object{"after_sequence": sessionCursor, "wait_ms": 5000, "member_thread": childThread},
-			}, 200+waited, 20*time.Second)
-			if waitValue := mustObject(outcome(waitedReply)["value"]); waitValue != nil {
-				if head, ok := waitValue["head_sequence"].(float64); ok {
-					sessionCursor = int(head)
-				}
-			}
-		}
-	}
-	report["session_visible"] = sessionVisible
-	notifyReply := rpcWithTimeout(client, url, authorization, "tools/call", object{"name": "thread_notify", "arguments": object{"session": childAction, "idempotency_key": "run-first-notify"}}, 31, 20*time.Second)
+	// The launch reply names an admitted attempt before the child's gateway
+	// binding opens, so register the durable notice immediately.
+	notifyReply := rpcWithTimeout(client, url, authorization, "tools/call", object{"name": "thread_notify", "arguments": object{"thread_id": childThread, "attempt_id": childAttempt, "idempotency_key": "run-first-notify"}}, 31, 20*time.Second)
 	notified := outcome(notifyReply)
 	report["first_notify_ok"] = notified != nil && notified["ok"] == true
 	report["first_notify_status"] = notifyReply.status

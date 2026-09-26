@@ -219,6 +219,13 @@ entries:
     resources:
     - bee.launch:supervisor
     effect: allow
+- name: local_super_edit_recovery_call_policy
+  kind: security.policy
+  meta: {comment: Only the native local Bee command may request the startup fallback through the protected recovery facade}
+  policy:
+    actions: [funcs.call, bee.gov.super_edit.recover]
+    resources: [bee.gov.binding:super_edit_recovery_call, host-startup]
+    effect: allow
 - name: client_workspace_catalog_call_policy
   kind: security.policy
   meta:

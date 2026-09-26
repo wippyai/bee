@@ -5,7 +5,7 @@ entries:
   kind: registry.entry
   bindings:
   - definition_id: bee.settings:app
-    policies: [bee.security:ordinary_app_subsystem_boundary]
+    policies: [bee.security:ordinary_app_subsystem_boundary, bee.security:settings_edit_mode_policy]
     appearance_write: true
   - definition_id: bee.console:app
     policies:
@@ -107,6 +107,14 @@ entries:
     - bee.credentials:db
     - bee.gov:db
     effect: deny
+- name: settings_edit_mode_policy
+  kind: security.policy
+  meta:
+    comment: Bee Settings may request the protected host edit-mode operation; the governance facade validates the broker-minted Settings actor
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gov.binding:super_edit_call]
+    effect: allow
 - name: application_open_facade_policy
   kind: security.policy.expr
   meta:

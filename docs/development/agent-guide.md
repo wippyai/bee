@@ -21,7 +21,8 @@ Use the [UI brand book](../guides/ui.md) and
 [application visual style](../guides/app-style.md) for presentation and
 interaction rules. The offline toolkit reference gives compact, tested examples
 for `bee.application:frame` and `bee.application:viz`. Apps use
-public contracts such as `bee.application:client` and `bee.threads:client`;
+public contracts such as `bee.application:client` and
+`bee.threads:authority_local`;
 they do not import private broker or store modules.
 
 The workspace owns application state, checkpoints and its migration ledger.

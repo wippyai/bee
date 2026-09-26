@@ -1,0 +1,69 @@
+local test = require("test")
+local fallback = require("boot_fallback")
+
+local function define_tests()
+    test.describe("local host super-edit boot fallback", function()
+        test.it("disables overlays and retries once after readiness fails", function()
+            local starts, disabled = 0, 0
+            local ready, err = fallback.run(function()
+                starts = starts + 1
+                if starts == 1 then return nil, "startup timed out", true end
+                return {workspace_id = "workspace"}, nil, false
+            end, function()
+                disabled = disabled + 1
+                return true, nil
+            end)
+            test.eq(starts, 2)
+            test.eq(disabled, 1)
+            test.eq((ready :: {[string]: unknown}).workspace_id, "workspace")
+            test.is_nil(err)
+        end)
+
+        test.it("does not retry when there are no super-edit profiles", function()
+            local starts, disabled = 0, 0
+            local ready, err = fallback.run(function()
+                starts = starts + 1
+                return nil, "supervisor exited", true
+            end, function()
+                disabled = disabled + 1
+                return false, nil
+            end)
+            test.is_nil(ready)
+            test.eq(err, "supervisor exited")
+            test.eq(starts, 1)
+            test.eq(disabled, 1)
+        end)
+
+        test.it("does not retry for cancellation or after the single fallback", function()
+            local starts, disabled = 0, 0
+            local ready, err = fallback.run(function()
+                starts = starts + 1
+                return nil, starts == 1 and "startup timed out" or "still unavailable", true
+            end, function()
+                disabled = disabled + 1
+                return true, nil
+            end)
+            test.is_nil(ready)
+            test.eq(err, "local host startup failed after disabling super-edit overlays: still unavailable")
+            test.eq(starts, 2)
+            test.eq(disabled, 1)
+        end)
+
+        test.it("does not disable profiles after cancellation", function()
+            local starts, disabled = 0, 0
+            local ready, err = fallback.run(function()
+                starts = starts + 1
+                return nil, "cancelled", false
+            end, function()
+                disabled = disabled + 1
+                return true, nil
+            end)
+            test.is_nil(ready)
+            test.eq(err, "cancelled")
+            test.eq(starts, 1)
+            test.eq(disabled, 0)
+        end)
+    end)
+end
+
+return test.run_cases(define_tests)

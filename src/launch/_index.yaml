@@ -54,13 +54,18 @@ entries:
 - name: bootstrap
   kind: library.lua
   source: file://bootstrap.lua
-  modules: [process, channel, tty, security, time]
+  modules: [process, channel, tty, security, time, funcs]
   imports:
     physical: bee.terminal:display
     input_decode: bee.protocol:input
     contract: bee.protocol:application
     decode: bee.protocol:decode
     workspaces: bee.storage:binding
+    edit_mode_recovery: bee.gov.binding:super_edit_recovery_call
+    boot_fallback: bee.launch:boot_fallback
+- name: boot_fallback
+  kind: library.lua
+  source: file://boot_fallback.lua
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

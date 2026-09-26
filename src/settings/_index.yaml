@@ -12,11 +12,13 @@ entries:
   - uuid
   - time
   - json
+  - funcs
   imports:
     frame: bee.application:frame
     appearance: bee.application:appearance
     view: bee.settings:view
     client: bee.application:client
+    super_edit: bee.gov.binding:super_edit_call
   meta:
     type: bee.application
     application:

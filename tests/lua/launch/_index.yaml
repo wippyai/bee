@@ -67,3 +67,11 @@ entries:
     test: wippy.test:test
     desktops: bee.client:desktops
     desktop_lifecycle: bee.launch:desktop_lifecycle
+- name: boot_fallback_test
+  kind: function.lua
+  source: file://boot_fallback_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    boot_fallback: bee.launch:boot_fallback

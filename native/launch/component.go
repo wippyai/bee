@@ -82,6 +82,16 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		}}, nil
 	}
 	desktop := launch.Op == app.OpRun && launch.Command == desktopCommand
+	var governance *governanceCommand
+	if desktop {
+		parsed, matched, err := parseGovernance(launch.Args)
+		if err != nil {
+			return app.Plan{}, err
+		}
+		if matched {
+			governance = parsed
+		}
+	}
 	if desktop && len(launch.Args) > 0 && helpWords[launch.Args[0]] {
 		if len(launch.Args) != 1 {
 			return app.Plan{}, errors.New("bee help takes no arguments")
@@ -137,6 +147,11 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		}
 		plan.DefaultState = selected
 		state = selected
+	}
+	if governance != nil {
+		plan.Command = governanceRecoveryCommand
+		plan.Args = []string{"revert", governance.owner}
+		return plan, nil
 	}
 	// The retained owner route keeps the runtime's own application start, so it
 	// prepares the owner's cluster, desktop bridge and enrollment publisher.

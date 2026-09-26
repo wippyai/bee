@@ -63,7 +63,6 @@ local function contract(id: string, methods: {string}): Contract
 end
 function M.contracts(): {Contract}
     return {
-        contract("bee.threads:journal", {"claim", "append", "read_after"}),
         contract("bee.threads:authority", {"create", "get", "list", "list_workspace", "join", "leave", "close", "record", "read_after", "send", "send_status", "notify"}),
         contract("bee.threads:lifecycle", {"admit_action", "prepare_attempt", "start_attempt", "request_turn", "end_turn", "receipt"}),
         contract("bee.threads:delivery", {"claim", "dispatch", "ack", "release", "expire", "reconcile", "subscribe", "page", "ack_page", "unsubscribe", "resume", "close_subscription", "forget_subscription", "wait", "watch"}),

@@ -1,23 +1,21 @@
 # bee.threads
 
-Durable threads in a SQLite store owned by this module. Two surfaces share
-the store: the actor-owned `journal` contract (claimed runs and idempotent
-events, unchanged) and the `authority` and `lifecycle` contracts, which
-commit typed records, membership and work lifecycle for rich threads. The
-caller's authenticated actor owns its data and no payload can select another
-actor.
+Durable threads in a SQLite store owned by this module. The `authority`,
+`lifecycle`, `delivery`, `projection` and `carrier` contracts commit typed
+records, membership and work lifecycle for rich threads. The caller's
+authenticated actor owns its data and no payload can select another actor.
 
 ## Slices
 
 | Slice | Responsibility |
 |---|---|
-| `bee.threads` | Contracts (`journal`, `authority`, `lifecycle`, `delivery`, `projection`, `carrier`), local bindings, the journal client and methods, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
+| `bee.threads` | Contracts (`authority`, `lifecycle`, `delivery`, `projection`, `carrier`, `approvals`), local bindings, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
 | `bee.threads.records` | Pure typed decoders for the seven record families, bounds, the canonical record encoder and canonical JSON for request identity; no I/O |
 | `bee.threads.service` | The authority: access facade, authority, action inbox and lifecycle operations, one-shot notices, and owner methods |
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (17 migrations), owner incarnation, connection settings, typed readers, write transactions, the legacy journal and its `store` compatibility surface |
+| `bee.threads.persist` | The owned store: checked migration ledger (17 migrations), owner incarnation, connection settings, typed readers and write transactions |
 
 ## Dependency interface
 
@@ -48,9 +46,7 @@ storage access. Rights the host grants on the caller's scope, checked with
 
 Membership roles are checked inside the commit transaction: `owner`
 administers membership and closes, `participant` reads and submits,
-`observer` reads. Lifecycle authority is separate from ownership. Legacy
-journal threads keep actor-only ownership; rich membership never reaches
-them.
+`observer` reads. Lifecycle authority is separate from ownership.
 
 ## Delivery
 
@@ -107,8 +103,9 @@ in the same transaction, and acknowledgment or reply takes precedence over it.
 ## Storage
 
 Migrations are an inline ledger checked on every open, one transaction per
-migration: 1 `bee_thread_schema_v1` (journal), 2 `thread_authority` (heads,
-members, records, commands), 3 `work_lifecycle` (actions, attempts, turns,
+migration: 1 `bee_thread_schema_v1` (historical actor-owned journal tables
+retained for existing data; current contracts do not access them), 2
+`thread_authority` (heads, members, records, commands), 3 `work_lifecycle` (actions, attempts, turns,
 settlements), 4 `delivery` (record table rebuilt for the delivery families,
 owner, obligations, claim batches, deliveries, dispatch intents,
 subscriptions, pages), 5 `projection` (checkpoints), 6 `carrier`, 7

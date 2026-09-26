@@ -21,6 +21,42 @@ entries:
   method: handle
   imports: {service: bee.gov.binding:publication_service}
   security: {policies: [bee.gov.security:publication_service_policy]}
+- name: super_edit_call
+  kind: function.lua
+  source: file://super_edit_method.lua
+  method: handle
+  modules: [funcs, security]
+  imports: {bounds: bee.threads.records:bounds}
+  security: {policies: [bee.gov.security:super_edit_facade_policy]}
+- name: super_edit_recovery_call
+  kind: function.lua
+  source: file://super_edit_recovery_method.lua
+  method: handle
+  modules: [funcs, security]
+  imports: {bounds: bee.threads.records:bounds}
+  security: {policies: [bee.gov.security:super_edit_recovery_facade_policy]}
+- name: super_edit_backend_call
+  kind: function.lua
+  source: file://super_edit_backend.lua
+  method: handle
+  modules: [registry, security, system, time, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    transaction: bee.persist:transaction
+    super_edit: bee.gov:super_edit
+    activation_profiles: bee.gov:activation_profile_decoder
+    protected_kernel: bee.gov:protected_kernel
+  meta: {type: internal}
+- name: recovery_service
+  kind: library.lua
+  source: file://recovery_service.lua
+  modules: [system, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    resources: bee.gov:staging_resources
+    activation_store: bee.gov.persist:activation_store
+    headless_revert: bee.gov:headless_revert
+    destination_service: bee.gov.binding:destination_service
 - name: destination_call
   kind: function.lua
   source: file://destination_method.lua

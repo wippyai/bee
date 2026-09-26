@@ -24,32 +24,6 @@ entries:
     resources:
     - bee.threads:database_ref
     effect: allow
-- name: thread_read_client_policy
-  kind: security.policy
-  policy:
-    actions:
-    - contract.open
-    - contract.call
-    - funcs.call
-    resources:
-    - bee.threads:local
-    - read_after
-    - bee.threads:read_after
-    effect: allow
-- name: thread_write_client_policy
-  kind: security.policy
-  policy:
-    actions:
-    - contract.open
-    - contract.call
-    - funcs.call
-    resources:
-    - bee.threads:local
-    - claim
-    - append
-    - bee.threads:claim
-    - bee.threads:append
-    effect: allow
 - name: thread_authority_client_policy
   kind: security.policy
   policy:

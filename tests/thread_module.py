@@ -56,8 +56,8 @@ def main():
         run(folder, "lint")
         database = folder / "threads.db"
         output = run(folder, "run", "threads-isolation", env={"BEE_THREADS_DB": str(database)})
-        assert "threads module: definition, linked target_db, isolated closure, journal contract, authority and lifecycle contracts" in output, output
-        assert database.exists(), "journal did not open the linked database"
+        assert "threads module: definition, linked target_db, isolated closure, authority and lifecycle contracts" in output, output
+        assert database.exists(), "the owner service did not open the linked database"
 
     def broken_target(folder):
         index = folder / "modules/threads/src/_index.yaml"
@@ -68,15 +68,15 @@ def main():
         index.write_text(yaml.safe_dump(document, sort_keys=False))
 
     # The runtime linker must reject a dangling database target before any
-    # service starts or the journal creates its schema.
+    # service starts or the thread owner creates its schema.
     with tempfile.TemporaryDirectory(prefix="bee-thread-module-") as directory:
         folder = stage(Path(directory), broken_target)
         run(folder, "lint")
         output = run(folder, "run", "threads-isolation", ok=False, env={"BEE_THREADS_DB": str(folder / "threads.db")})
         assert "unresolved requirements" in output and "bee.threads:missing_ref" in output, output
-        assert not (folder / "threads.db").exists(), "rejected dependency created the journal database"
+        assert not (folder / "threads.db").exists(), "rejected dependency created the thread database"
 
-    print("Threads module: standalone host, lint, linked target_db default, isolated closure, journal through contract, unlinked database reference refused")
+    print("Threads module: standalone host, lint, linked target_db default, isolated closure, authority and lifecycle contracts through bindings, unlinked database reference refused")
 
 
 if __name__ == "__main__":

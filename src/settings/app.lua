@@ -6,6 +6,7 @@ local process = require("process")
 local uuid = require("uuid")
 local time = require("time")
 local json = require("json")
+local funcs = require("funcs")
 local appearance = require("appearance")
 local frame = require("frame")
 local view = require("view")
@@ -17,6 +18,7 @@ local function main(value: unknown)
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
+    local queries = assert(process.listen("bee.application.query.result", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
@@ -31,13 +33,17 @@ local function main(value: unknown)
     local last_checkpoint = ""
     if launch.resume_state ~= "" then
         local restored: unknown = json.decode(launch.resume_state)
-        if type(restored) ~= "table" or (restored.pane ~= "theme" and restored.pane ~= "background" and restored.pane ~= "taskbar" and restored.pane ~= "about")
+        if type(restored) ~= "table" or (restored.pane ~= "theme" and restored.pane ~= "background" and restored.pane ~= "taskbar"
+            and restored.pane ~= "edit_mode" and restored.pane ~= "about")
             or type(restored.offset) ~= "number" or restored.offset < 0 or restored.offset > 10000
             or restored.offset ~= math.floor(restored.offset) then error("Invalid Settings checkpoint") end
         pane = restored.pane; offset = math.floor(restored.offset)
     end
     local hits: {frame.Hit} = {}
     local pending = ""
+    local edit_query = ""
+    local edit_query_op = ""
+    local edit_input = ""
     local running, dirty = true, true
     local function count(): integer return pane == "taskbar" and 2 or (pane == "theme" and #appearance.themes() or (pane == "background" and #appearance.backgrounds() or (pane == "about" and view.about_count(width) or 0))) end
     local function selected(): integer
@@ -57,7 +63,7 @@ local function main(value: unknown)
         offset = view.offset(selected(), offset, view.grid(width, height), count(), true)
     end
     local function choose(index: integer)
-        if pane == "about" then return end
+        if pane == "about" or pane == "edit_mode" then return end
         local value = math.floor(math.max(1, math.min(count(), index)))
         local next_preferences: appearance.Preferences
         if pane == "theme" then next_preferences = {theme = appearance.themes()[value].id, background = preferences.background, taskbar = preferences.taskbar}
@@ -93,6 +99,41 @@ local function main(value: unknown)
     local function switch(next_pane: view.Pane)
         pane = next_pane; offset = 0; reveal(); dirty = true
     end
+    local function query_edit_mode(kind: "text" | "confirm", operation: string, initial: string?)
+        if edit_query ~= "" then status = "Finish the current edit-mode prompt first"; dirty = true; return end
+        local title = kind == "text" and "Enable edit mode" or (operation == "enable_confirm" and "Confirm edit mode" or "Disable edit mode")
+        local message = kind == "text"
+            and "Enter exact namespaces followed by --for DURATION (maximum 24h)."
+            or (operation == "enable_confirm" and ("Enable these exact namespaces and duration?\n" .. (initial or ""))
+                or "Remove this workspace's super-edit profiles and active overlays?")
+        local accept = kind == "text" and "Review" or (operation == "enable_confirm" and "Enable" or "Disable")
+        local request_id, query_error = client.query(launch, {kind = kind, title = title, message = message,
+            accept = accept, initial = kind == "text" and "" or ""})
+        if not request_id then status = tostring(query_error or "Could not ask the person"); dirty = true; return end
+        edit_query = request_id
+        edit_query_op = operation
+        edit_input = initial or ""
+        status = kind == "text" and "Waiting for namespace list" or "Waiting for confirmation"
+        dirty = true
+    end
+    local function apply_edit_mode(operation: "enable" | "disable", input: string?)
+        local request: {[string]: unknown} = {operation = operation, workspace_id = launch.workspace_id}
+        if input then request.input = input end
+        local ok, result, call_error = pcall(function()
+            local value, failure = funcs.new():call("bee.gov.binding:super_edit_call", request)
+            return value, failure
+        end)
+        if not ok then status = "Edit mode failed: " .. tostring(result); dirty = true; return end
+        if call_error then status = "Edit mode failed: " .. tostring(call_error); dirty = true; return end
+        local reply = type(result) == "table" and result :: {[string]: unknown} or nil
+        if not reply or reply.ok ~= true then
+            status = "Edit mode refused: " .. tostring(reply and (reply.message or reply.code) or "invalid reply")
+        else
+            local value = type(reply.value) == "table" and reply.value :: {[string]: unknown} or nil
+            status = value and type(value.message) == "string" and value.message or "Edit mode updated"
+        end
+        dirty = true
+    end
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
         if dirty then
@@ -107,7 +148,8 @@ local function main(value: unknown)
             end
             dirty = false
         end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), ticks:case_receive()})
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(),
+            queries:case_receive(), ticks:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then running = false end
@@ -132,6 +174,25 @@ local function main(value: unknown)
                     end
                 end
             end
+        elseif event.channel == queries then
+            local message = event.value
+            if broker and message:from() == broker then
+                local answer = client.query_result(launch, tostring(message:from()), message:payload():data())
+                if answer and answer.request_id == edit_query then
+                    local operation = edit_query_op
+                    local submitted = answer.value
+                    edit_query, edit_query_op = "", ""
+                    if answer.error ~= "" then status = "Edit mode prompt is busy"
+                    elseif answer.action ~= "accept" then status = "Edit mode cancelled"
+                    elseif operation == "enable_input" then
+                        if submitted == "" then status = "Enter at least one namespace and a duration"
+                        else query_edit_mode("confirm", "enable_confirm", submitted) end
+                    elseif operation == "enable_confirm" then apply_edit_mode("enable", edit_input)
+                    elseif operation == "disable_confirm" then apply_edit_mode("disable", nil) end
+                    edit_input = ""
+                    dirty = true
+                end
+            end
         else
             local data = event.value
             if data.type == "close" then running = false
@@ -141,7 +202,11 @@ local function main(value: unknown)
             elseif data.type == "key" and data.action ~= "release" then
                 local key = data.key_type
                 local grid = view.grid(width, height)
-                if key == "runes" and data.key == "d" and not data.ctrl and not data.alt then inherit()
+                if pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
+                    and (data.key == "e" or data.key == "E") then query_edit_mode("text", "enable_input", nil)
+                elseif pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
+                    and (data.key == "d" or data.key == "D") then query_edit_mode("confirm", "disable_confirm", nil)
+                elseif pane ~= "edit_mode" and key == "runes" and data.key == "d" and not data.ctrl and not data.alt then inherit()
                 elseif key == "left" then choose(selected() - 1)
                 elseif key == "right" then choose(selected() + 1)
                 elseif key == "up" then choose(selected() - grid.columns)
@@ -150,7 +215,9 @@ local function main(value: unknown)
                 elseif key == "end" then choose(count())
                 elseif key == "pgup" then browse(-math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
                 elseif key == "pgdown" then browse(math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
-                elseif key == "tab" then switch(pane == "theme" and "background" or (pane == "background" and "taskbar" or (pane == "taskbar" and "about" or "theme")))
+                elseif key == "tab" then switch(pane == "theme" and "background"
+                    or (pane == "background" and "taskbar" or (pane == "taskbar" and "edit_mode"
+                    or (pane == "edit_mode" and "about" or "theme"))))
                 elseif key == "esc" or key == "escape" then running = false end
             elseif data.type == "mouse" then
                 local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
@@ -165,6 +232,7 @@ local function main(value: unknown)
                         elseif hit.kind == "theme" then switch("theme")
                         elseif hit.kind == "background" then switch("background")
                         elseif hit.kind == "taskbar" then switch("taskbar")
+                        elseif hit.kind == "edit_mode" then switch("edit_mode")
                         elseif hit.kind == "about" then switch("about")
                         elseif hit.kind == "select" then choose(hit.index)
                         elseif hit.kind == "step" then choose(selected() + hit.index)
@@ -176,6 +244,7 @@ local function main(value: unknown)
     end
     ticker:stop()
     process.unlisten(states)
+    process.unlisten(queries)
     output:close()
     tty.stop()
 end

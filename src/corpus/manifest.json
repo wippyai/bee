@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 8809,
+      "bytes": 8818,
       "id": "docs/agent_guide",
-      "sha256": "b80e56eff4ddc8961b986b40dfebf781b650d2ffbacace1c7961874e8ada2af2",
+      "sha256": "d243cd9bcafd416bf1d0a60698b7e893009a57a5941eef34c9858dcb031dd8f5",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -179,9 +179,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 19249,
+      "bytes": 20050,
       "id": "docs/distributed_app_delivery",
-      "sha256": "ce2e5d4e97b2aecbc0f7e4154c893c054f8c5fa88159588c93799d163dfa679d",
+      "sha256": "aeae16a1078b84c32dfee8d4b6767cc93e6426252314c81fad8ee2491aba5e94",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 26080,
+      "bytes": 25971,
       "id": "docs/threads",
-      "sha256": "64e4c6a73ac218231c1429d038c51489747774753c7e8f9ee49b1bec17bdabcc",
+      "sha256": "de82dcec27fa2041888cd95951e35d3ed09a914cd9d49c1fc68adaf70043410a",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -379,9 +379,9 @@
       "topic": "component"
     },
     {
-      "bytes": 20383,
+      "bytes": 20992,
       "id": "component/gov",
-      "sha256": "5de42425d833033ac08d23d6fb962deb165a3f5e955f08add72ce34fefab1120",
+      "sha256": "89937fe45d89b769963879f6e3916537bcd2d47d313472cee1d59b31a4c4def9",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -403,9 +403,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2577,
+      "bytes": 3016,
       "id": "component/hive:telemetry",
-      "sha256": "14cea3bcedb42930ceb7b680fe162b6a1e6da3bf4a388295b517c619a025c9d8",
+      "sha256": "bc2f9ad544f1fa87adbf57c0efebab9d624e8ae06fde4382ef1b9e1b1b280acb",
       "source": "modules/hive-telemetry/src/README.md",
       "title": "bee.hive.telemetry",
       "topic": "component"
@@ -467,9 +467,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8686,
+      "bytes": 8523,
       "id": "component/threads",
-      "sha256": "a16a57185dfe7b5fad1433fc40e14817fa376f8df5b4b0fd7e17e866c5c417e5",
+      "sha256": "fe3e4093f75c65b8ed18e08cca9b7c7eab523d8047011afcb4aab5286e05d245",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -486,7 +486,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 599056,
+    "bytes": 600642,
     "documents": 60
   }
 }

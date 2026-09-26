@@ -85,6 +85,19 @@ least one approver, and carries no `allow.grants` entry for `security.*`,
 destination refuses an expired row before any effect, so the window closes
 without a further write.
 
+Bee Settings exposes a person-only **Edit mode** action. It accepts an exact
+list of namespaces and a duration up to 24 hours, then asks the person to
+confirm that list. The protected host writer adds one profile per namespace;
+it refuses the protected kernel, withholds auto start and security or registry
+grants, and requires an explicit `super-edit` approver. Agents and overlays
+cannot call this writer. Settings can disable the current workspace's profiles
+and remove their overlay entries. Enabling a namespace that already has a
+super-edit profile requires disabling it first.
+
+If local startup fails before the host publishes readiness, Bee removes all
+expiring activation profiles and their overlay entries, then retries startup
+once. The recovery path runs before the desktop is available.
+
 Durable registry publication is a different operation. Overlay activation does
 not become a registry-history write, and a registry publication guard must not
 be simulated with a Lua pre-read.

@@ -8,17 +8,6 @@ entries:
   imports:
     persist: bee.persist:database
     migrations: bee.threads.migrations:migrations
-- name: legacy
-  kind: library.lua
-  source: file://legacy.lua
-  modules: [sql, json]
-- name: store
-  kind: library.lua
-  source: file://store.lua
-  modules: [sql]
-  imports:
-    database: bee.threads.persist:database
-    legacy: bee.threads.persist:legacy
 - name: reader
   kind: library.lua
   source: file://reader.lua

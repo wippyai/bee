@@ -60,6 +60,8 @@ func (host *Host) usage(launch app.Launch) string {
 		"  bee start                        run this project's retained owner in the foreground",
 		"  bee stop                         stop this project's owner and report when it has stopped; Ctrl+Q",
 		"                                   in a desktop detaches only that client",
+		"  bee upgrade PATH --digest SHA256 verify and hand off to a candidate Bee executable",
+		"  bee upgrade --rollback           stop Bee and restart the retained previous executable",
 		"  bee daemon                       run this folder's node in the foreground without a folder workspace;",
 		"                                   it serves the workspaces of its catalog to clients",
 		"  bee MODULE:ENTRY [ARGUMENTS...]  run one application entry directly (recovery and development)",

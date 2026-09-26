@@ -207,6 +207,17 @@ fails does the manual termination guidance apply. A candidate that fails to
 boot falls back to the retained previous binary automatically. The state
 directory keeps `hive/previous-bee` and the `hive/cutover.json` ledger for a
 one-step rollback, which re-verifies the retained digest before booting it.
+Run a cutover from the local CLI with the exact lowercase SHA-256 confirmed by
+the person operating Bee:
+
+```sh
+bee upgrade PATH --digest SHA256
+bee upgrade --rollback
+```
+
+The first command prints the verified digest and the rollback command after a
+successful handoff. The rollback command prints a plain completion message.
+Cutover is a local CLI action; the gateway exposes no cutover operation.
 
 ### Command grammar
 
@@ -225,6 +236,8 @@ bee attach WORKSPACE DISPLAY     join one display of a running Bee with control
 bee desktops                     list the displays of a running Bee
 bee start                        run this project's retained owner in the foreground
 bee stop                         stop this project's owner and report when it has stopped
+bee upgrade PATH --digest SHA256 verify and hand off to a candidate executable
+bee upgrade --rollback           restart the retained previous executable
 bee daemon                       run this folder's node in the foreground without a folder workspace;
                                  it serves the workspaces of its catalog to clients
 bee workspace list [--archived] [--after CURSOR]

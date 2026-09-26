@@ -75,6 +75,9 @@ reobserves bridge readiness after controller replacement. `make
 retained-owner-check` checks a live definition change and incompatible
 checkpoint fallback in the source owner, plus packed owner startup.
 
-Hive supervisor and module service handoff, generation rollback and native
-binary cutover remain proposals. Viewport handles and registry metadata are
-never checkpoint authority or permission grants.
+Hive supervisor and module service handoff and generation rollback remain
+proposals. Native binary cutover is available through the local `bee upgrade`
+commands: a person confirms the candidate digest, and `bee upgrade --rollback`
+restarts the retained previous executable. No gateway operation exposes the
+cutover. Viewport handles and registry metadata are never checkpoint authority
+or permission grants.

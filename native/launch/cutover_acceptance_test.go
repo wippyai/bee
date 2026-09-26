@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 // cutoverStubSource is a tiny owner stand-in the acceptance builds twice.
@@ -230,6 +232,15 @@ func cutoverReady(t *testing.T, stubDir string) string {
 	return strings.TrimSpace(string(data))
 }
 
+func runCutoverCLI(t *testing.T, host *Host, state, dir string, args []string) (string, error) {
+	t.Helper()
+	t.Chdir(dir)
+	arguments := append([]string{"--state", state}, args...)
+	return captureStdout(t, func() error {
+		return app.Run(context.Background(), app.Executable{Name: desktopCommand, Command: desktopCommand, Host: host}, arguments)
+	})
+}
+
 // Two locally built binaries trade the running owner: the cutover verifies
 // the confirmed digest, drains the old binary, hands the lock to the new one
 // and retains the old for a one-step rollback.
@@ -237,13 +248,14 @@ func TestCutoverAcceptanceSwapsAndRollsBack(t *testing.T) {
 	first := buildCutoverStub(t, "A")
 	second := buildCutoverStub(t, "B")
 	state := t.TempDir()
+	project := t.TempDir()
 	stubDir := t.TempDir()
 	t.Setenv("CUTOVER_STUB_DIR", stubDir)
 	current := first
 	seams := cutoverLiveSeams(t, stubDir, &current)
 	ctx := context.Background()
 
-	if err := seams.start(ctx, state, state, first); err != nil {
+	if err := seams.start(ctx, state, project, first); err != nil {
 		t.Fatal(err)
 	}
 	if got := cutoverReady(t, stubDir); got != "A" {
@@ -253,9 +265,14 @@ func TestCutoverAcceptanceSwapsAndRollsBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := runCutover(ctx, CutoverRequest{State: state, Dir: state, Candidate: second, ConfirmedDigest: secondDigest}, seams)
+	host := newHost(systemHostResolver())
+	host.cutoverSeams = func() cutoverSeams { return seams }
+	output, err := runCutoverCLI(t, host, state, project, []string{"upgrade", second, "--digest", secondDigest})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(output, "Bee upgraded to "+secondDigest) || !strings.Contains(output, "bee upgrade --rollback") {
+		t.Fatalf("upgrade output = %q", output)
 	}
 	if got := cutoverReady(t, stubDir); got != "B" {
 		t.Fatalf("running version = %q, want B after the cutover", got)
@@ -264,7 +281,11 @@ func TestCutoverAcceptanceSwapsAndRollsBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	retained, err := sha256File(result.Previous)
+	ledger, err := readCutoverLedger(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained, err := sha256File(ledger.Previous)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,8 +293,12 @@ func TestCutoverAcceptanceSwapsAndRollsBack(t *testing.T) {
 		t.Fatal("the cutover did not retain the previous binary")
 	}
 	current = second
-	if err := runCutoverRollback(ctx, state, state, seams); err != nil {
+	output, err = runCutoverCLI(t, host, state, project, []string{"upgrade", "--rollback"})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if output != "Bee rolled back to the previous version.\n" {
+		t.Fatalf("rollback output = %q", output)
 	}
 	if got := cutoverReady(t, stubDir); got != "A" {
 		t.Fatalf("running version = %q, want A after the rollback", got)
@@ -286,6 +311,7 @@ func TestCutoverAcceptanceFallsBackOnFailedBoot(t *testing.T) {
 	first := buildCutoverStub(t, "A")
 	second := buildCutoverStub(t, "B")
 	state := t.TempDir()
+	project := t.TempDir()
 	stubDir := t.TempDir()
 	t.Setenv("CUTOVER_STUB_DIR", stubDir)
 	t.Setenv("CUTOVER_STUB_FAIL", "B")
@@ -293,14 +319,16 @@ func TestCutoverAcceptanceFallsBackOnFailedBoot(t *testing.T) {
 	seams := cutoverLiveSeams(t, stubDir, &current)
 	ctx := context.Background()
 
-	if err := seams.start(ctx, state, state, first); err != nil {
+	if err := seams.start(ctx, state, project, first); err != nil {
 		t.Fatal(err)
 	}
 	secondDigest, err := sha256File(second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = runCutover(ctx, CutoverRequest{State: state, Dir: state, Candidate: second, ConfirmedDigest: secondDigest}, seams)
+	host := newHost(systemHostResolver())
+	host.cutoverSeams = func() cutoverSeams { return seams }
+	_, err = runCutoverCLI(t, host, state, project, []string{"upgrade", second, "--digest", secondDigest})
 	if err == nil || !strings.Contains(err.Error(), "fell back to the previous binary") {
 		t.Fatalf("failed boot = %v, want an automatic fallback report", err)
 	}

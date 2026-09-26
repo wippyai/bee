@@ -25,6 +25,14 @@ workspace (`desktop.folder = false`); it serves the node's catalog workspaces
 to clients. A client of such a node shows a workspace picker, and Ctrl+] in a
 presented desktop returns to it.
 
+`bee upgrade PATH --digest SHA256` verifies the person-confirmed candidate
+digest and its `help` self-test before it stops the selected project's owner,
+then starts the candidate and retains the current executable for one-step
+rollback. If the candidate does not become ready, the retained executable is
+started again. `bee upgrade --rollback` verifies that retained executable and
+hands the project state back to it. These are local CLI commands; the gateway
+does not expose cutover.
+
 Every other ordinary launch is decoded before project selection. `bee start`
 takes no arguments; `bee MODULE:ENTRY` keeps the runtime's own entry; the rest
 is the client grammar (`observe`, `client`, `attach WORKSPACE DISPLAY`,

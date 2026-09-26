@@ -96,6 +96,8 @@ func TestPlanAnswersHelpBeforeProjectSelection(t *testing.T) {
 			"bee MODULE:ENTRY [ARGUMENTS...]",
 			"bee start",
 			"bee stop",
+			"bee upgrade PATH --digest SHA256",
+			"bee upgrade --rollback",
 			"bee daemon",
 			"bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT",
 			"bee workspace list [--archived] [--after CURSOR]",

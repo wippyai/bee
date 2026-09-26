@@ -172,13 +172,18 @@ func TestPeerSeedsFollowAPeerThatMoves(t *testing.T) {
 	}
 }
 
-// The republisher only tells the mesh about a changed address, and publishes
-// the internode endpoint and dial direction together.
+// The republisher only tells the mesh about a changed address, and republishes
+// the dial direction alone, because the internode endpoint follows the
+// membership address the runtime already dials. A directly reachable node has
+// no direction to add and publishes nothing.
 func TestRepublishAddressOnlyOnChange(t *testing.T) {
 	state := t.TempDir()
 	if _, release, err := prepareOwner(state, true); err != nil {
 		t.Fatal(err)
 	} else if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ownerDirectory(state), natFileName), []byte("203.0.113.7\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	published, err := resolveAdvertiseAddress(state)
@@ -197,9 +202,8 @@ func TestRepublishAddressOnlyOnChange(t *testing.T) {
 	if err := listener.republishAddress(membership); err != nil {
 		t.Fatal(err)
 	}
-	if membership.meta[internode.MetadataAdvertiseAddr] != published.String() ||
-		membership.meta[internode.MetadataAdvertisePort] != "4100" {
-		t.Fatalf("republished meta = %#v, want %s", membership.meta, published)
+	if len(membership.meta) != 1 || membership.meta[dialMetadataKey] != meshDialHint(state) {
+		t.Fatalf("republished meta = %#v, want the dial direction alone", membership.meta)
 	}
 	if listener.published != published {
 		t.Fatalf("tracked address = %v, want %v", listener.published, published)

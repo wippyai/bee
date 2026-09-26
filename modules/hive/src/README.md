@@ -123,12 +123,13 @@ records itself in `hive/nat` and publishes `internode_dial=out`; the join
 listener records the local address a remote peer's join arrived on in
 `hive/reached` and advertises it in preference to the automatic pick, so a peer
 that reached the LAN address keeps using it when the pick is a Tailscale
-address. A running owner republishes a changed address through the runtime's
-membership metadata and rewrites each pinned peer's `.addr` seed from cluster
-`NodeJoined`, `NodeLeft` and `NodeUpdated` events. The runtime does not yet
-carry memberlist gossip over the internode link and fixes its gossip advertise
-address at boot, so a NATed peer can lose its peer when that peer restarts until
-the runtime hook lands. The
+address. A member is dialed at its membership address, so the pick is also the
+internode endpoint the runtime dials. A running owner republishes the dial
+direction through the runtime's membership metadata when its address changes
+and rewrites each pinned peer's `.addr` seed from cluster `NodeJoined`,
+`NodeLeft` and `NodeUpdated` events. The runtime carries a copy of memberlist
+gossip over connected internode links, so a peer reached in only one direction
+keeps its link. The
 [reachability guide](../../../docs/operations/hive-reachability.md) describes
 the remaining runtime work.
 Peer membership also grants desktop access: every pinned peer may reach this

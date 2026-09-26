@@ -9,15 +9,38 @@ type HostConfig = {
     model: string?,
     timeout_ms: integer?,
     stream: boolean?,
+    admitted_delegates: {string}?,
+    max_turns: integer?,
 }
 
-type ToolCall = {[string]: unknown}
+-- One decoded function tool call: the wire nests name and arguments under
+-- a "function" object, which the client flattens on decode.
+type ToolCall = {
+    id: string,
+    kind: string,
+    name: string,
+    arguments: string,
+}
 
-type Message = {[string]: unknown}
+type Message = {
+    role: string,
+    content: string?,
+    tool_calls: {ToolCall}?,
+    tool_call_id: string?,
+}
 
-type ChatPayload = {[string]: unknown}
+type ChatPayload = {
+    model: string,
+    messages: {{[string]: unknown}},
+    tools: {{[string]: unknown}}?,
+    stream: boolean?,
+}
 
-type ChatResponse = {[string]: unknown}
+type ChatResponse = {
+    content: string?,
+    tool_calls: {ToolCall}?,
+    finish_reason: string?,
+}
 
 type RunRequest = {
     thread_id: string,
@@ -29,8 +52,6 @@ type RunRequest = {
     host_config: HostConfig?,
     idempotency_key: string?,
     carrier_epoch: integer?,
-    resume: boolean?,
-    session_ref: string?,
 }
 
 type RunReceipt = {

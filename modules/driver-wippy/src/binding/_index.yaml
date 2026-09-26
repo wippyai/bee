@@ -19,9 +19,11 @@ entries:
   method: handle
   imports:
     bounds: bee.threads.records:bounds
+    configuration: bee.driver:configuration
 - name: normalize
   kind: function.lua
   source: file://normalize.lua
   method: handle
   imports:
     bounds: bee.threads.records:bounds
+    protocol: bee.driver.wippy:protocol

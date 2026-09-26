@@ -319,29 +319,34 @@ local function model_driver(driver_id: string): boolean
     for _, known in ipairs(M.MODEL_DRIVERS) do if known == driver_id then return true end end
     return false
 end
--- check_route: admit one resolved closure for a CLI harness route. Optional
--- tuning hints pass only when the agent owner lists them as declinable;
--- every other unrepresentable capability is refused, never dropped.
+local function native_driver(driver_id: string): boolean
+    return driver_id == "wippy"
+end
+-- check_route: admit one resolved closure for a CLI or native harness route.
+-- Optional tuning hints pass only when the agent owner lists them as
+-- declinable; every other unrepresentable capability is refused, never
+-- dropped. The native route proves memory by committing memory control
+-- events under the attempt's fenced epoch; it proves no trait behavior,
+-- contract, wrapper, hook, option or delegate capability.
 function M.check_route(closure: Closure, route: Route): (Checked?, string?, string?)
     local agent_ref, driver_id = closure.ref, route.driver_id
-    if driver_id ~= "wippy" and not cli_driver(driver_id) then
-        return nil, "INVALID", "driver " .. driver_id .. " is not a CLI harness route"
+    local native = native_driver(driver_id)
+    if not native and not cli_driver(driver_id) then
+        return nil, "INVALID", "driver " .. driver_id .. " is not a CLI or native harness route"
     end
-    if driver_id ~= "wippy" then
-        if #closure.memory > 0 then
-            return nil, "UNSUPPORTED_CAPABILITY", "agent definition " .. agent_ref .. " requires memory the " .. driver_id .. " route cannot prove"
-        end
-        for _, trait in ipairs(closure.traits) do
-            local field: string? = nil
-            if trait.behavior then field = "behavior"
-            elseif trait.contracts then field = "contracts"
-            elseif trait.wrappers then field = "wrappers"
-            elseif trait.hooks then field = "hooks"
-            elseif trait.options then field = "options"
-            elseif trait.delegates then field = "delegates" end
-            if field then
-                return nil, "UNSUPPORTED_CAPABILITY", "agent trait " .. trait.ref .. " requires " .. field .. " the " .. driver_id .. " route cannot prove"
-            end
+    if #closure.memory > 0 and not native then
+        return nil, "UNSUPPORTED_CAPABILITY", "agent definition " .. agent_ref .. " requires memory the " .. driver_id .. " route cannot prove"
+    end
+    for _, trait in ipairs(closure.traits) do
+        local field: string? = nil
+        if trait.behavior then field = "behavior"
+        elseif trait.contracts then field = "contracts"
+        elseif trait.wrappers then field = "wrappers"
+        elseif trait.hooks then field = "hooks"
+        elseif trait.options then field = "options"
+        elseif trait.delegates then field = "delegates" end
+        if field then
+            return nil, "UNSUPPORTED_CAPABILITY", "agent trait " .. trait.ref .. " requires " .. field .. " the " .. driver_id .. " route cannot prove"
         end
     end
     local admitted: {[string]: boolean} = {}
@@ -357,7 +362,7 @@ function M.check_route(closure: Closure, route: Route): (Checked?, string?, stri
         if not mapped then
             return nil, "UNSUPPORTED_CAPABILITY", "host policy maps no driver model for agent model " .. closure.model
         end
-        if not (model_driver(driver_id) or driver_id == "wippy") then
+        if not (model_driver(driver_id) or native) then
             return nil, "UNSUPPORTED_CAPABILITY", "driver " .. driver_id .. " takes no model mapping for agent model " .. closure.model
         end
         if not mapped:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then

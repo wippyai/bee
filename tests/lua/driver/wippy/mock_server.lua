@@ -20,6 +20,75 @@ local function handle(): nil
     local messages = (type(payload.messages) == "table" and payload.messages or {}) :: {{[string]: unknown}}
     local is_stream = payload.stream == true
 
+    local function user_prompt_of(): string
+        local prompt = ""
+        for _, msg in ipairs(messages) do
+            if msg.role == "user" and type(msg.content) == "string" then
+                prompt = msg.content :: string
+            end
+        end
+        return prompt
+    end
+
+    -- Mode L: Runaway loop. A tool call on every turn, even after tool
+    -- results, so the driver must stop at its turn limit.
+    if user_prompt_of():find("call_tool_loop", 1, true) then
+        response:set_status(200)
+        response:set_content_type(http.CONTENT.JSON)
+        response:write_json({
+            id = "chatcmpl-loop",
+            object = "chat.completion",
+            created = 1234567,
+            model = "test-model",
+            choices = {{
+                index = 0,
+                message = {
+                    role = "assistant",
+                    content = nil,
+                    tool_calls = {{
+                        id = "call_loop",
+                        type = "function",
+                        ["function"] = {
+                            name = "FileReport",
+                            arguments = json.encode({summary = "loop-review"})
+                        }
+                    }}
+                },
+                finish_reason = "tool_calls"
+            }}
+        })
+        return nil
+    end
+
+    -- Mode M: More tool calls in one turn than the driver admits.
+    if user_prompt_of():find("call_tool_many", 1, true) then
+        local calls = {}
+        for index = 1, 20 do
+            calls[index] = {
+                id = "call_many_" .. tostring(index),
+                type = "function",
+                ["function"] = {
+                    name = "FileReport",
+                    arguments = json.encode({summary = "many-review-" .. tostring(index)})
+                }
+            }
+        end
+        response:set_status(200)
+        response:set_content_type(http.CONTENT.JSON)
+        response:write_json({
+            id = "chatcmpl-many",
+            object = "chat.completion",
+            created = 1234567,
+            model = "test-model",
+            choices = {{
+                index = 0,
+                message = {role = "assistant", content = nil, tool_calls = calls},
+                finish_reason = "tool_calls"
+            }}
+        })
+        return nil
+    end
+
     -- Check if the latest message is a tool result
     local last_msg = #messages > 0 and messages[#messages] or nil
     if last_msg and last_msg.role == "tool" then

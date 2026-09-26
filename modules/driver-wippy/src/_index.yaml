@@ -26,10 +26,12 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: client
   kind: library.lua
   source: file://client.lua
-  modules: [http_client, json, env, registry, funcs]
+  modules: [http_client, json, env, registry]
   imports:
     types: bee.driver.wippy:types
 - name: runner

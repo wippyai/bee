@@ -78,6 +78,8 @@ entries:
     value: bee.security.gateway:gateway_session_send_workspace_policy
   - name: target_tool_launch_policy
     value: bee.security.gateway:gateway_tool_launch_policy
+  - name: target_tool_run_policy
+    value: bee.security.gateway:gateway_tool_run_policy
   - name: target_tool_overlay_policy
     value: bee.security.gateway:gateway_tool_overlay_policy
   - name: target_tool_docs_policy
@@ -264,6 +266,8 @@ entries:
     value: bee.harness.host:environment
   - name: window_policy
     value: bee:launch_policy_grok_window
+  - name: batch_policy
+    value: bee:launch_policy_grok_batch
 - name: driver_muse
   kind: ns.dependency
   component: bee/driver-muse

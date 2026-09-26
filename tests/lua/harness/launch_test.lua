@@ -532,6 +532,9 @@ local function define_tests()
                     option = "approval_mode", expected = "never", additional_options = {max_steps = 1}},
                 {definition = "bee.driver.opencode:research_batch", policy = "bee:launch_policy_opencode_batch",
                     binding = "bee.driver.opencode:binding", executable = "bee.driver.opencode:executable"},
+                {definition = "bee.driver.grok:research_batch", policy = "bee:launch_policy_grok_batch",
+                    binding = "bee.driver.grok:binding", executable = "bee.driver.grok:executable",
+                    option = "permission_mode", expected = "dontAsk"},
             }
             for _, selected in ipairs(cases) do
                 local entry = assert(registry.get(selected.definition))
@@ -580,7 +583,7 @@ local function define_tests()
                 {"bee.driver.codex:named_batch", "bee:launch_policy_codex_named_batch"},
                 {"bee.driver.muse:default_window", "bee:launch_policy_muse_window"}, {"bee.driver.muse:research_batch", "bee:launch_policy_muse_batch"},
                 {"bee.driver.agy:default_window", "bee:launch_policy_agy_window"}, {"bee.driver.agy:research_batch", "bee:launch_policy_agy_batch"},
-                {"bee.driver.grok:default_window", "bee:launch_policy_grok_window"},
+                {"bee.driver.grok:default_window", "bee:launch_policy_grok_window"}, {"bee.driver.grok:research_batch", "bee:launch_policy_grok_batch"},
                 {"bee.driver.opencode:default_window", "bee:launch_policy_opencode_window"}, {"bee.driver.opencode:research_batch", "bee:launch_policy_opencode_batch"},
             }
             for _, pair in ipairs(shipped) do

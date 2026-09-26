@@ -10,5 +10,11 @@ if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   # gateway client reads the same two, and reports status codes only on stderr.
   "$(dirname "$0")/../bin/gateway-client" codex "${CODEX_HOME:-$HOME/.codex}/config.toml" >&2
 fi
+# A trailing hold keeps the child alive after its stream so a caller can register
+# a one-shot notice and observe the ending, exactly as the Claude fixture's
+# linger does. Unset, the fixture exits immediately.
 cat "$stream"
+if [ -n "${BEE_FIXTURE_LINGER:-}" ]; then
+  sleep "$BEE_FIXTURE_LINGER"
+fi
 exit "${BEE_FIXTURE_EXIT:-0}"

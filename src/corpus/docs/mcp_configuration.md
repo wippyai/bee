@@ -127,6 +127,22 @@ orphaned. Shipped driver definitions and their host policies allow the
 `thread` and `workdir` overrides; none allows `placement`, and no Docker
 placement binding is installed.
 
+The shipped Claude window policy is the orchestrator profile: select it as a
+saved profile in the Agent window (press `N` for a new profile, name it, and
+choose Claude Code). Its gateway tools include `thread_launch`,
+`launch_definitions`, `capabilities` and the managed-run tools, and its
+allow-list names the Codex batch and named_batch, Claude batch, Muse, agy and
+grok worker definitions. A child an orchestrator launches on a new thread is
+reachable through `thread_read`, `thread_wait` and `thread_message` with
+`member_thread` (see [Coordinating with other sessions](#coordinating-with-other-sessions)).
+
+`workdir` with `{root_ref, path}` names a folder under a root the host admits.
+The shipped host admits the workspace folder (`bee.env:workspace_root`) and
+its children as a placement root, so an orchestrator can target a folder it
+chose, such as a git worktree inside the workspace, without a host step and
+without an environment variable. A folder outside every admitted root is
+refused at setup.
+
 ## Coordinating with other sessions
 
 `thread_sessions`, `thread_message` with `session`, and `thread_notify` let one
@@ -159,6 +175,37 @@ a thread the subject cannot read is neither listed nor addressable by
 `thread_sessions`, and the owner refuses the write if membership changed.
 Sessions started with `thread_launch` on the caller's thread share it and its
 subject and reach each other through these tools.
+
+A child `thread_launch` starts on a new thread does not share the caller's
+thread. The launcher reaches it by naming it as `member_thread` on
+`thread_read`, `thread_wait` and `thread_message`: the caller is an active
+member of the child thread because it created and admitted it, the field
+defaults to the bound thread, and the thread owner checks membership again.
+An unrelated thread is refused as `NOT_FOUND`, and no `member_thread` field
+ever widens access beyond the caller's own membership.
+
+`run_status`, `run_wait` and `run_cancel` follow a managed run the caller
+started, named by the child thread and attempt `thread_launch` returned.
+`run_status` reads the run's state and its settled outcome and answer;
+`run_wait` waits, read-only and bounded, for it to end; `run_cancel` records a
+durable cancel intent, stops the attempt and reports its resulting state. A
+run whose child never started is settled as cancelled directly. The gateway
+refuses any run whose thread the caller is not an active member of - which is
+how a child thread_launch starts on a new thread belongs to its launcher - so a
+caller reaches only the runs it started.
+
+## Between turns and push
+
+A running agent receives a report through `thread_notify` plus `thread_wait`:
+the child's ending record triggers the owner's one-shot notice on the caller's
+own thread, and a `thread_wait` there wakes on it. Steering is cooperative and
+between turns only: a `thread_message` written to a child's thread is read at
+that child's next `thread_read`, and its `thread_wait` wakes on the record. No
+tool types into a running turn. Between-turn push into a running model needs a
+pinned acceptance the host records for an exact executable measurement
+(`push_acceptance`); shipped production policies ship none, so they never
+weaken that rule and every push path stays read-at-next-`thread_read` unless a
+host opts in with a pinned acceptance.
 
 Independent Agent windows have separate application actors and threads. For
 them, `session_directory` pages only live workspace peers the host permits

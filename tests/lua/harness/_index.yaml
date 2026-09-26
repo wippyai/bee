@@ -1079,6 +1079,83 @@ entries:
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
     allow_wider_tools: true
+- name: agent_run_orchestrator_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The scripted orchestrator's own launch policy for the managed-run proof; it reaches thread_launch, launch_definitions, capabilities and the managed-run tools, and its allow-list names exactly the one Codex worker definition it launches on a new thread
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_notify, thread_launch, launch_definitions, capabilities, run_status, run_wait, run_cancel]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    agent_launch: [bee.harness.catalog:agent_run_codex_worker]
+- name: agent_run_worker_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The Codex worker's own launch policy; its gateway tools are its own and it names no agent launch
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    allowed_overrides: [thread, workdir]
+    executables: {}
+    environment: {}
+    prepare_options: {sandbox: read-only}
+    provider_ref: bee.harness.catalog:codex_fixture_provider
+    gateway_tools: [thread_read, thread_message]
+    agent_launch: []
+- name: agent_run_codex_worker
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The Codex batch worker the scripted orchestrator launches on a new thread; it allows a thread override so the child runs on a thread of its own, which the orchestrator then reaches through member_thread and the managed-run tools
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agent-run-codex-worker
+    title: Codex run worker
+    command_names: []
+    binding_ref: bee.driver.codex:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:agent_run_worker_policy
+    default_mode: batch
+    allowed_overrides: [brief, thread, workdir]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    credentials: [codex_login]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: agent_run_acceptance_test
+  kind: function.lua
+  source: file://agent_run_acceptance_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "300s"}
+  modules: [funcs, security, process, registry, env, time, channel, json, system]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.credentials:credential_store_policy, bee.gateway.security:node_policy]
+  imports:
+    principals: bee.test.principals:bound
+    test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
+    catalog: bee.harness.catalog:catalog
+    policy: bee.harness.carrier:policy
 - name: agent_launch_window_policy
   kind: registry.entry
   meta:

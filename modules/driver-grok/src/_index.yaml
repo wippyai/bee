@@ -31,6 +31,13 @@ entries:
   targets:
   - entry: bee.driver.grok:default_window
     path: .data.policy_ref
+- name: batch_policy
+  kind: ns.requirement
+  meta:
+    comment: Host policy for the component-owned Grok batch route
+  targets:
+  - entry: bee.driver.grok:research_batch
+    path: .data.policy_ref
 - name: executable
   kind: env.variable
   storage: bee.harness.host:environment
@@ -177,6 +184,26 @@ entries:
     session_resource: session
     credentials: [grok_login]
     presentation: {start_menu: true, fullscreen: true, reuse: never}
+- name: research_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned bounded Grok batch route for a host-selected coordinator and caller-owned shared thread
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: grok-research-batch
+    title: Grok researcher
+    command_names: []
+    binding_ref: bee.driver.grok:binding
+    profile_id: batch
+    policy_ref: ''
+    default_mode: batch
+    allowed_overrides: [thread, workdir]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    session_resource: session
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
 - name: credential_format
   kind: registry.entry
   meta:

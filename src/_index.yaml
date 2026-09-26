@@ -439,8 +439,11 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Claude Code window; missing host executable
-      leaves the declaration unavailable
+    comment: 'Host-selected executable binding for the component-owned Claude Code window; missing host executable
+      leaves the declaration unavailable. It is the shipped orchestrator policy - a Claude window may launch the
+      allow-listed worker definitions below, reach a child it started on a new thread through the thread tools, and
+      follow a run with the managed-run tools. A person selects it as a saved profile in the Agent window (press N
+      for a new profile, name it, and choose Claude Code).' 
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides: [thread, workdir]
@@ -475,6 +478,19 @@ entries:
     - install_request
     - uninstall_request
     - install_status
+    - thread_launch
+    - launch_definitions
+    - capabilities
+    - run_status
+    - run_wait
+    - run_cancel
+    agent_launch:
+    - bee.driver.codex:research_batch
+    - bee.driver.codex:named_batch
+    - bee.driver.claude:research_batch
+    - bee.driver.muse:research_batch
+    - bee.driver.agy:research_batch
+    - bee.driver.grok:research_batch
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -869,6 +885,28 @@ entries:
       - high
     profile_instructions: true
     prepare_options: {}
+- name: launch_policy_grok_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected non-interactive Grok batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {grok: bee.driver.grok:executable}
+    environment: {}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
+    profile_options: {effort: [low, medium, high]}
+    profile_instructions: true
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
 - name: placement_path
   kind: env.variable
   meta:
@@ -894,9 +932,11 @@ entries:
   kind: registry.entry
   meta:
     type: bee.placement_roots
-    comment: fs.directory entries a launch may name as resource roots on this host with the widest access allowed; host policy, not a delegated grant
+    comment: fs.directory entries a launch may name as resource roots on this host with the widest access allowed; host policy, not a delegated grant. The workspace folder and its children are admitted so an agent can target a folder it chose, such as a git worktree, without a host step
   data:
-    roots: []
+    roots:
+    - root_ref: bee.env:workspace_root
+      access: write
 - name: placement_resource_mode
   kind: registry.entry
   meta:

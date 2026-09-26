@@ -181,7 +181,8 @@ a definition ID alone does not reveal whether the
 host lets this application launch it. The installed driver definitions include
 `bee.driver.claude:research_batch`,
 `bee.driver.codex:research_batch`, `bee.driver.codex:named_batch`,
-`bee.driver.agy:research_batch` and `bee.driver.muse:research_batch`. This is
+`bee.driver.agy:research_batch`, `bee.driver.muse:research_batch` and
+`bee.driver.opencode:research_batch`. This is
 an inventory of definitions, not an authorization list. An application has no
 public API to list the definitions it may launch or saved profile IDs and
 revisions. The Agent app manages saved profiles; a caller must obtain an exact
@@ -258,7 +259,7 @@ proposals; they require distinct owner operations.
 
 ## Built-in handlers and presentation
 
-`bee claude`, `bee codex`, `bee agy`, `bee grok` and `bee muse` select their
+`bee claude`, `bee codex`, `bee agy`, `bee grok`, `bee muse` and `bee opencode` select their
 reviewed managed launch definitions and use the same admission, carrier,
 thread, hook and MCP path as the Agent picker. They preserve the caller's
 working directory and accept no trailing raw arguments. `bee recover <name>`

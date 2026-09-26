@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 22909,
+      "bytes": 22963,
       "id": "docs/application_contracts",
-      "sha256": "d3a491dee97931b19b4972e9da98e6e1f217c4341cfaa4f31cb56fac10836f3b",
+      "sha256": "ac8e181f011ec15e36e286bd3942fb4930614588ec31fe6aeecc3d772b8afc7a",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -355,6 +355,14 @@
       "topic": "component"
     },
     {
+      "bytes": 2035,
+      "id": "component/driver:opencode",
+      "sha256": "df8f96b3fc1c23d443572048aacd33bd92a5e179ac6a1f39052cea3746fdda86",
+      "source": "modules/driver-opencode/src/README.md",
+      "title": "Bee OpenCode driver",
+      "topic": "component"
+    },
+    {
       "bytes": 6921,
       "id": "component/gateway",
       "sha256": "a1e6e23bb521eb6835e5fac3148fad47e0135992dc247b7bfef6785ed5a531d7",
@@ -470,7 +478,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 580649,
-    "documents": 58
+    "bytes": 582738,
+    "documents": 59
   }
 }

@@ -91,10 +91,10 @@ local replacements. `make portable-deployment-check` inspects each WAPP, then
 proves Linux network-isolated headless boot, restart and digest rejection after
 one vendor-pack byte changes.
 
-Agy, Claude, Codex, Grok and Muse each have a separate driver pack
-(`bee/driver-agy`, `bee/driver-claude`, `bee/driver-codex`, `bee/driver-grok`
-and `bee/driver-muse`). The shared `bee/driver` pack owns the contract, kit and
-transport. Installing a driver does not activate it or grant execution: the host
+Agy, Claude, Codex, Grok, Muse and OpenCode each have a separate driver pack
+(`bee/driver-agy`, `bee/driver-claude`, `bee/driver-codex`, `bee/driver-grok`,
+`bee/driver-muse` and `bee/driver-opencode`). The shared `bee/driver` pack owns
+the contract, kit and transport. Installing a driver does not activate it or grant execution: the host
 still selects its profile, executable and permissions.
 
 The pinned Go builder assembles only the sealed generated manifest. It verifies

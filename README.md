@@ -68,6 +68,7 @@ bee codex
 bee agy
 bee grok
 bee muse
+bee opencode
 ```
 
 Saved profiles live in the Agent app. Agents reach Bee through a scoped MCP

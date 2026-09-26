@@ -71,3 +71,8 @@ entries:
   source: file://host_resources.lua
   modules: [registry]
   imports: {bounds: bee.threads.records:bounds}
+- name: installation
+  kind: library.lua
+  source: file://installation.lua
+  modules: [hash]
+  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical, semver: bee.hub:semver}

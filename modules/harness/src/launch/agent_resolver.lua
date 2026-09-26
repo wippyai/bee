@@ -324,22 +324,24 @@ end
 -- every other unrepresentable capability is refused, never dropped.
 function M.check_route(closure: Closure, route: Route): (Checked?, string?, string?)
     local agent_ref, driver_id = closure.ref, route.driver_id
-    if not cli_driver(driver_id) then
+    if driver_id ~= "wippy" and not cli_driver(driver_id) then
         return nil, "INVALID", "driver " .. driver_id .. " is not a CLI harness route"
     end
-    if #closure.memory > 0 then
-        return nil, "UNSUPPORTED_CAPABILITY", "agent definition " .. agent_ref .. " requires memory the " .. driver_id .. " route cannot prove"
-    end
-    for _, trait in ipairs(closure.traits) do
-        local field: string? = nil
-        if trait.behavior then field = "behavior"
-        elseif trait.contracts then field = "contracts"
-        elseif trait.wrappers then field = "wrappers"
-        elseif trait.hooks then field = "hooks"
-        elseif trait.options then field = "options"
-        elseif trait.delegates then field = "delegates" end
-        if field then
-            return nil, "UNSUPPORTED_CAPABILITY", "agent trait " .. trait.ref .. " requires " .. field .. " the " .. driver_id .. " route cannot prove"
+    if driver_id ~= "wippy" then
+        if #closure.memory > 0 then
+            return nil, "UNSUPPORTED_CAPABILITY", "agent definition " .. agent_ref .. " requires memory the " .. driver_id .. " route cannot prove"
+        end
+        for _, trait in ipairs(closure.traits) do
+            local field: string? = nil
+            if trait.behavior then field = "behavior"
+            elseif trait.contracts then field = "contracts"
+            elseif trait.wrappers then field = "wrappers"
+            elseif trait.hooks then field = "hooks"
+            elseif trait.options then field = "options"
+            elseif trait.delegates then field = "delegates" end
+            if field then
+                return nil, "UNSUPPORTED_CAPABILITY", "agent trait " .. trait.ref .. " requires " .. field .. " the " .. driver_id .. " route cannot prove"
+            end
         end
     end
     local admitted: {[string]: boolean} = {}
@@ -355,7 +357,7 @@ function M.check_route(closure: Closure, route: Route): (Checked?, string?, stri
         if not mapped then
             return nil, "UNSUPPORTED_CAPABILITY", "host policy maps no driver model for agent model " .. closure.model
         end
-        if not model_driver(driver_id) then
+        if not (model_driver(driver_id) or driver_id == "wippy") then
             return nil, "UNSUPPORTED_CAPABILITY", "driver " .. driver_id .. " takes no model mapping for agent model " .. closure.model
         end
         if not mapped:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then

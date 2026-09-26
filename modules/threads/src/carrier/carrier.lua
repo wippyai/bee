@@ -18,8 +18,7 @@ M.CHECKPOINT_REVISION = "bee.carrier.checkpoint@1"
 M.PROVENANCE_REVISION = "bee.carrier.provenance@1"
 M.MAX_CHECKPOINT_BYTES = 65536
 M.MAX_RECORDS = 64
--- The control schemas a carrier may commit with source bee, and nothing else.
-M.CONTROL_EVENTS = {["bee.carrier.write"] = "1", ["bee.carrier.permission"] = "1", ["bee.carrier.output"] = "1", ["bee.carrier.input"] = "1", ["bee.placement.attempt"] = "1", ["bee.harness.hook"] = "1"}
+M.CONTROL_EVENTS = {["bee.carrier.write"] = "1", ["bee.carrier.permission"] = "1", ["bee.carrier.output"] = "1", ["bee.carrier.input"] = "1", ["bee.placement.attempt"] = "1", ["bee.harness.hook"] = "1", ["bee.carrier.memory"] = "1"}
 type Result = transaction.Result
 type Stored = {carrier_epoch: integer, checkpoint_revision: integer, checkpoint_json: string?}
 type Provenance = {stream_id: string, source_first_sequence: integer, source_last_sequence: integer, envelope_index: integer, event_index: integer}

@@ -54,7 +54,7 @@ local function both()
     install({{issuer = REMOTE, subject_id = ALPHA, policies = MEMBER_POLICIES}, {issuer = REMOTE, subject_id = BETA, policies = MEMBER_POLICIES}})
 end
 local function current_mappings(): principals.Mappings
-    local mappings, err = admission.mappings(registry.get(principals.ENTRY))
+    local mappings, err = adapter.mappings(registry.get(principals.ENTRY))
     if not mappings then error(tostring(err)) end
     return mappings
 end

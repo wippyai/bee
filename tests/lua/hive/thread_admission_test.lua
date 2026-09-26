@@ -44,7 +44,7 @@ local function both()
     install({{issuer = REMOTE, subject_id = ALPHA, policies = MEMBER_POLICIES}, {issuer = REMOTE, subject_id = BETA, policies = MEMBER_POLICIES}})
 end
 local function current_mappings(): principals.Mappings
-    local mappings, err = admission.mappings(registry.get(principals.ENTRY))
+    local mappings, err = adapter.mappings(registry.get(principals.ENTRY))
     if not mappings then error(tostring(err)) end
     return mappings
 end
@@ -147,7 +147,7 @@ local function define_tests()
             stray.extra = true
             test.eq(code(admitted(forwarded("bee.threads.service:send", stray, BETA))), "INVALID_ARGUMENT")
             local past = forwarded("bee.threads.service:send", send_input(thread_id, "k-9", "late"), BETA)
-            local expired = admission.admit(LOCAL, past, current_mappings(), time.now():add("60s"))
+            local expired = adapter.admit(LOCAL, past, current_mappings(), time.now():add("60s"))
             test.is_nil(expired)
             -- The owner reference must bind the thread the payload addresses.
             local unbound = forwarded("bee.threads.service:send", send_input(thread_id, "k-10", "no resource"), BETA, {owner_ref = {node_id = LOCAL, service_id = "bee.threads"}})

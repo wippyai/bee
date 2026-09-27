@@ -220,7 +220,7 @@ local function invoke(self: Client, target: string, value: unknown): caller.Repl
     outbound.approval_id = address.approval_id
     local answer = invoke_owner(self, address.source, target, outbound)
     if not answer then return nil end
-    local body = bounds.object(answer.value)
+    local body = answer.ok and bounds.object(answer.value) or nil
     if body and body.request ~= nil then
         local view, view_error = view_for(self, address.source, body.request)
         if not view then return failure("INVALID_REPLY", view_error or "invalid owner reply") end
@@ -228,12 +228,12 @@ local function invoke(self: Client, target: string, value: unknown): caller.Repl
         local copied: Object = {}
         for key, item in pairs(body) do copied[key] = item end
         copied.request = view
-        return {ok = answer.ok, error = answer.error, value = copied, replayed = answer.replayed}
+        return {ok = true, error = nil, value = copied, replayed = answer.replayed}
     end
     if body and body.approval_id ~= nil then
         local view, view_error = view_for(self, address.source, body)
         if not view then return failure("INVALID_REPLY", view_error or "invalid owner reply") end
-        return {ok = answer.ok, error = answer.error, value = view, replayed = answer.replayed}
+        return {ok = true, error = nil, value = view, replayed = answer.replayed}
     end
     if answer.ok then return failure("INVALID_REPLY", "approval owner returned no request view") end
     return answer

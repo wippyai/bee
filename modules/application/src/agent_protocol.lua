@@ -26,7 +26,7 @@ end
 function M.decode(value: unknown): (Launch?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown = fields(object, {"definition_ref", "brief", "idempotency_key", "workspace_id", "saved_profile_id", "saved_profile_revision", "workdir", "thread", "placement", "agent_ref", "owner_component_revision", "owner_revision", "spec_digest", "expected_spec_digest"})
+    local unknown = fields(object, {"definition_ref", "brief", "idempotency_key", "workspace_id", "saved_profile_id", "saved_profile_revision", "workdir", "thread", "placement", "agent_ref", "owner_component_revision", "spec_digest"})
     if unknown then return nil, unknown end
     local definition_ref = bounds.id(object.definition_ref)
     if not definition_ref then return nil, "definition_ref is not an identifier" end
@@ -91,16 +91,14 @@ function M.decode(value: unknown): (Launch?, string?)
         if not agent_ref then return nil, "agent_ref is not an identifier" end
     end
     local owner_component_revision: integer? = nil
-    local rev_raw = object.owner_component_revision ~= nil and object.owner_component_revision or object.owner_revision
-    if rev_raw ~= nil then
-        local count = bounds.count(rev_raw)
+    if object.owner_component_revision ~= nil then
+        local count = bounds.count(object.owner_component_revision)
         if not count or count < 1 then return nil, "owner_component_revision must be a positive integer" end
         owner_component_revision = count
     end
     local spec_digest: string? = nil
-    local digest_raw = object.spec_digest ~= nil and object.spec_digest or object.expected_spec_digest
-    if digest_raw ~= nil then
-        local digest = bounds.text(digest_raw, 64)
+    if object.spec_digest ~= nil then
+        local digest = bounds.text(object.spec_digest, 64)
         if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
             return nil, "spec_digest must be a lowercase SHA-256 hex digest"
         end

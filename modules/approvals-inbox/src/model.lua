@@ -8,6 +8,7 @@
 local json = require("json")
 local text = require("text")
 local bounds = require("bounds")
+local caller = require("caller")
 local M = {}
 M.TEXT_LIMIT = 512
 M.LINE_LIMIT = 160
@@ -15,7 +16,7 @@ M.MAX_ROWS = 256
 M.MAX_PAYLOAD_LINES = 24
 M.INBOX_PAGE = 64
 type Object = {[string]: unknown}
-type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown, replayed: boolean?}
+type Reply = caller.Reply
 type Decision = "approved" | "denied"
 type ApprovalState = "pending" | "decided" | "expired" | "withdrawn"
 type RequestKind = "permission" | "question"

@@ -1,16 +1,17 @@
 -- MIT. Bounded presentation values; decoding never grants thread access.
 local M = {}
+local bounds = require("bounds")
 type Badge = {glyph: string, text: string, tone: string}
 type Item = {tab_id: string, instance_id: string, thread_id: string, generation: integer,
     owner_authority: string, owner_incarnation: integer, badge: Badge}
 type Snapshot = {revision: integer, items: {Item}}
 local function text(value: unknown, limit: integer): string?
-    if type(value) ~= "string" or #value > limit or value:find("%c") then return nil end
-    return value
+    local decoded = bounds.text(value, limit)
+    if not decoded or decoded:find("%c") then return nil end
+    return decoded
 end
 local function count(value: unknown): integer?
-    if type(value) ~= "number" or value < 0 or value > 9007199254740990 or value ~= math.floor(value) then return nil end
-    return math.floor(value)
+    return bounds.count(value)
 end
 local function badge(value: unknown): Badge?
     if type(value) ~= "table" then return nil end

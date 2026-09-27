@@ -119,7 +119,7 @@ end
 -- Queue one operation through the broker-bound thread facade. The caller
 -- supplies operation data only; the broker authenticates this execution and
 -- injects the durable thread and stable application actor.
-function M.thread_request(launch: Launch, operation: string, values: unknown): (string?, string?)
+function M.thread_request(launch: Launch, operation: thread_protocol.Operation, values: unknown): (string?, string?)
     local request_id = uuid.v7()
     local request = thread_protocol.request({version = 1, request_id = request_id,
         instance_id = launch.instance_id, launch_token = launch.launch_token,
@@ -131,9 +131,9 @@ function M.thread_request(launch: Launch, operation: string, values: unknown): (
     return request_id, nil
 end
 
-function M.thread_result(launch: Launch, sender: string, value: unknown): thread_protocol.Reply?
+function M.thread_result(launch: Launch, sender: string, operation: thread_protocol.Operation, value: unknown): thread_protocol.Reply?
     if sender ~= launch.broker_pid then return nil end
-    local reply = thread_protocol.reply(value)
+    local reply = thread_protocol.reply(value, operation)
     if not reply or reply.instance_id ~= launch.instance_id
         or reply.execution_generation ~= launch.execution_generation then return nil end
     return reply

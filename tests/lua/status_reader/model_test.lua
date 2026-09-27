@@ -5,15 +5,17 @@
 -- last status as unavailable, never as idle.
 local test = require("test")
 local reader = require("reader")
+local bounds = require("bounds")
 type Object = {[string]: unknown}
 local function ok(value: Object): reader.Reply
+    if value.checkpoint == nil then value.checkpoint = {} end
     return {ok = true, error = nil, value = value, replayed = false}
 end
 local function fault(code: string, message: string): reader.Reply
     return {ok = false, error = {code = code, message = message}, value = nil, replayed = false}
 end
 local function status(activity: string, extra: Object?): Object
-    local s: Object = {activity = activity, waiting_on_you = false, waiting_message_ids = {}, open_requests = 0,
+    local s: Object = {activity = activity, stale = false, waiting_on_you = false, waiting_message_ids = {}, open_requests = 0,
         pending_approvals = 0, running_actions = 0, uncertain_actions = 0, open_actions = 0}
     for key, value in pairs(extra or {}) do s[key] = value end
     return s
@@ -80,6 +82,27 @@ local function define_tests()
             test.eq(r.revision, 1)
             test.is_nil(r.status)
             test.is_true(r.generation > before)
+        end)
+        test.it("rejects malformed projection counts, authority, outcomes, and waiting ids", function()
+            local cases: {{string, Object}} = {
+                {"numeric string", {revision = "1", through_sequence = 1, head_sequence = 1}},
+                {"fraction", {revision = 1, through_sequence = 1.5, head_sequence = 2}},
+                {"authority", {revision = 1, through_sequence = 1, head_sequence = 1, owner_authority = 7}},
+                {"outcome", {revision = 1, through_sequence = 1, head_sequence = 1,
+                    status = status("idle", {last_outcome = {kind = "receipt", outcome = "unknown", at_sequence = 1}})}},
+                {"waiting id", {revision = 1, through_sequence = 1, head_sequence = 1,
+                    status = status("waiting", {waiting_message_ids = {string.rep("x", bounds.MAX_ID_BYTES + 1)}})}},
+            }
+            for _, case in ipairs(cases) do
+                local value: Object = {owner_authority = "auth-1", owner_incarnation = 1,
+                    status = status("idle")}
+                for key, item in pairs(case[2]) do value[key] = item end
+                local r = reader.new()
+                reader.bind(r, "t-1")
+                reader.apply_read(r, r.generation, ok(value))
+                test.eq(r.availability, "unavailable", case[1])
+                test.is_nil(r.status, case[1])
+            end
         end)
         test.it("fences a delayed reply from the previous owner after a same-thread replacement", function()
             local r = reader.new()

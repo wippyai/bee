@@ -39,6 +39,7 @@ entries:
   imports:
     test: wippy.test:test
     reader: bee.application:status_reader
+    bounds: bee.threads.records:bounds
 - name: surface_test
   kind: function.lua
   source: file://surface_test.lua

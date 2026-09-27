@@ -5,21 +5,33 @@
 -- holds no authority of its own.
 local M = {}
 type Fault = {code: string, message: string}
-type Reply = {ok: boolean, error: Fault?, value: unknown, replayed: boolean?}
+type Reply = {ok: true, error: nil, value: unknown, replayed: boolean?}
+    | {ok: false, error: Fault, value: nil, replayed: boolean?}
 type Call = (string, unknown) -> (unknown, string?)
 type Client = {invoke: (Client, string, unknown) -> Reply?}
+local bounds = require("bounds")
 function M.decode(raw: unknown): Reply?
-    if type(raw) ~= "table" then return nil end
-    local reply = raw :: {[string]: unknown}
+    local reply = bounds.object(raw)
+    if not reply or bounds.fields(reply, {"ok", "error", "value", "replayed"}) then return nil end
     if type(reply.ok) ~= "boolean" then return nil end
-    local fault: Fault? = nil
-    if type(reply.error) == "table" then
-        local declared = reply.error :: {[string]: unknown}
-        fault = {code = tostring(declared.code or "INTERNAL"), message = tostring(declared.message or "")}
-    elseif reply.ok == false then
-        fault = {code = "INTERNAL", message = "the owner answered without a fault"}
+    local replayed: boolean? = nil
+    if reply.replayed ~= nil then
+        if type(reply.replayed) ~= "boolean" then return nil end
+        replayed = reply.replayed
     end
-    return {ok = reply.ok :: boolean, error = fault, value = reply.value, replayed = reply.replayed == true}
+    if reply.ok then
+        if reply.error ~= nil or reply.value == nil then return nil end
+        local decoded: Reply = {ok = true, error = nil, value = reply.value, replayed = replayed}
+        return decoded
+    end
+    if reply.value ~= nil then return nil end
+    local declared = bounds.object(reply.error)
+    if not declared or bounds.fields(declared, {"code", "message"}) then return nil end
+    local code = bounds.id(declared.code)
+    local message = bounds.text(declared.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+    if not code or not message then return nil end
+    local decoded: Reply = {ok = false, error = {code = code, message = message}, value = nil, replayed = replayed}
+    return decoded
 end
 function M.new(call: Call): Client
     local function invoke(_: Client, target: string, request: unknown): Reply?
@@ -32,6 +44,7 @@ end
 -- An answer the transport never delivered: unknown, never a refusal of
 -- the owner's own.
 function M.unknown(): Reply
-    return {ok = false, error = {code = "UNAVAILABLE", message = "no answer from the owner"}, value = nil, replayed = false}
+    local unknown: Reply = {ok = false, error = {code = "UNAVAILABLE", message = "no answer from the owner"}, value = nil, replayed = false}
+    return unknown
 end
 return M

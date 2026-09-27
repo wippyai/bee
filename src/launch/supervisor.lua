@@ -117,7 +117,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             if not held then error("Lease workspace host: " .. tostring(refusal)) end
             lease = held
             local announced_value, attach_error = leases.attach(held, "10s")
-            if attach_error then error("Attach workspace host: " .. attach_error) end
+            if not announced_value then error("Attach workspace host: " .. tostring(attach_error or "no readiness announcement")) end
             leased_ready = protocol.host(announced_value)
             if not leased_ready or leased_ready.workspace_id ~= selection.workspace_id then error("Invalid leased host readiness") end
             local manager = process.registry.lookup(leases.MANAGER)

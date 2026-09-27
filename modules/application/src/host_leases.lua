@@ -7,12 +7,18 @@ local process = require("process")
 local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
+local bounds = require("bounds")
 
 type Acquire = {request_id: string, workspace_id: string, lease: string}
 type Result = {request_id: string, workspace_id: string, host: string, managed: boolean, error_code: string, error: string}
 type Lease = {name: string, workspace_id: string, host: string, managed: boolean}
 type Attach = {request_id: string, lease: string}
-type Attached = {request_id: string, workspace_id: string, error_code: string, error: string, ready: unknown}
+type HostReadiness = {version: 1, workspace_id: string, saved: {desktop: unknown}, fresh: boolean?}
+type Attached = {request_id: string, workspace_id: string,
+    result: {kind: "ready", value: HostReadiness} | {kind: "failed", code: string, message: string}}
+type HostPhase = "starting" | "ready" | "stopping"
+type HeldWorkspace = {workspace_id: string, phase: HostPhase, lease_count: integer}
+type HoldingsPage = {workspaces: {HeldWorkspace}, has_more: boolean, next_after: string?}
 
 local M = {}
 M.MANAGER = "bee.workspace.hosts"
@@ -36,13 +42,33 @@ M.MAX_HOLDINGS_PAGE = 50
 M.MAX_CURSOR_BYTES = 160
 
 local function identity(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
-    return value
+    local id = bounds.id(value)
+    if not id or #id ~= 32 or id:find("[^0-9a-f]") then return nil end
+    return id
 end
 
 local function text(value: unknown, limit: integer): string?
-    if type(value) ~= "string" or #value > limit or value:find("%c") then return nil end
-    return value
+    local decoded = bounds.text(value, limit)
+    if not decoded or decoded:find("%c") then return nil end
+    return decoded
+end
+
+local function fields(value: {[string]: unknown}, allowed: {string}): boolean
+    return bounds.fields(value, allowed) == nil
+end
+
+local function readiness(value: unknown, workspace_id: string): HostReadiness?
+    local object = bounds.object(value)
+    if not object or not fields(object, {"version", "workspace_id", "saved", "fresh"})
+        or object.version ~= 1 or identity(object.workspace_id) ~= workspace_id then return nil end
+    local saved = bounds.object(object.saved)
+    if not saved or not bounds.object(saved.desktop) then return nil end
+    local fresh: boolean? = nil
+    if object.fresh ~= nil then
+        if type(object.fresh) ~= "boolean" then return nil end
+        fresh = object.fresh
+    end
+    return {version = 1, workspace_id = workspace_id, saved = {desktop = saved.desktop}, fresh = fresh}
 end
 
 function M.lease_name(value: unknown): string?
@@ -72,12 +98,21 @@ function M.attach_request(value: unknown): Attach?
 end
 
 function M.attached(value: unknown): Attached?
-    if type(value) ~= "table" or value.version ~= 1 then return nil end
-    local request_id, workspace_id = text(value.request_id, 80), identity(value.workspace_id)
-    local code, message = text(value.error_code, 64), text(value.error, 2000)
-    if not request_id or not workspace_id or not code or not message then return nil end
-    if (code == "") == (value.ready == nil) then return nil end
-    return {request_id = request_id, workspace_id = workspace_id, error_code = code, error = message, ready = value.ready}
+    local object = bounds.object(value)
+    if not object or not fields(object, {"version", "request_id", "workspace_id", "error_code", "error", "ready"})
+        or object.version ~= 1 then return nil end
+    local request_id, workspace_id = text(object.request_id, 80), identity(object.workspace_id)
+    local code, message = text(object.error_code, 64), text(object.error, 2000)
+    if not request_id or request_id == "" or not workspace_id or not code or message == nil then return nil end
+    if code == "" then
+        if message ~= "" then return nil end
+        local announced = readiness(object.ready, workspace_id)
+        if not announced then return nil end
+        return {request_id = request_id, workspace_id = workspace_id, result = {kind = "ready", value = announced}}
+    end
+    if message == "" or object.ready ~= nil then return nil end
+    return {request_id = request_id, workspace_id = workspace_id,
+        result = {kind = "failed", code = code, message = message}}
 end
 
 function M.result(value: unknown): Result?
@@ -118,46 +153,37 @@ function M.holdings_request(value: unknown): ({request_id: string, after: string
     return {request_id = request_id, after = after, limit = limit}, nil
 end
 
-local function phase(value: unknown): string?
+local function phase(value: unknown): HostPhase?
     if value ~= "starting" and value ~= "ready" and value ~= "stopping" then return nil end
     return value
 end
 
 -- The manager's answer: a bounded page of held workspaces, each with its host
 -- phase and lease count. A malformed row refuses the whole answer.
-function M.holdings_result(value: unknown): ({workspaces: {{workspace_id: string, phase: string, lease_count: integer}}, has_more: boolean, next_after: string?}?, string?)
-    if type(value) ~= "table" then return nil, "holdings answer must be an object" end
-    local object = value :: {[string]: unknown}
-    for key in pairs(object) do
-        if key ~= "version" and key ~= "request_id" and key ~= "workspaces" and key ~= "has_more" and key ~= "next_after" then
-            return nil, "holdings answer has an unknown field"
-        end
+function M.holdings_result(value: unknown): (HoldingsPage?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "holdings answer must be an object" end
+    if not fields(object, {"version", "request_id", "workspaces", "has_more", "next_after"}) then
+        return nil, "holdings answer has an unknown field"
     end
     if object.version ~= 1 then return nil, "holdings answer version must be 1" end
     if not text(object.request_id, 80) then return nil, "holdings answer has no request_id" end
     if type(object.has_more) ~= "boolean" then return nil, "has_more must be a boolean" end
-    if type(object.workspaces) ~= "table" then return nil, "workspaces must be a list" end
-    local list = object.workspaces :: {[unknown]: unknown}
-    local count = 0
-    for key in pairs(list) do
-        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "workspaces must be a dense list" end
-        count = count + 1
-    end
-    if count > M.MAX_HOLDINGS_PAGE then return nil, "workspaces exceeds the page bound" end
-    local workspaces: {{workspace_id: string, phase: string, lease_count: integer}} = {}
-    for index = 1, count do
-        local row = list[index]
-        if type(row) ~= "table" then return nil, "workspace row must be an object" end
-        local item = row :: {[string]: unknown}
-        for key in pairs(item) do
-            if key ~= "workspace_id" and key ~= "phase" and key ~= "lease_count" then return nil, "workspace row has an unknown field" end
-        end
+    local list, list_error = bounds.array(object.workspaces, M.MAX_HOLDINGS_PAGE)
+    if not list then return nil, "workspaces: " .. tostring(list_error) end
+    local workspaces: {HeldWorkspace} = {}
+    local previous = ""
+    for index, raw in ipairs(list) do
+        local item = bounds.object(raw)
+        if not item then return nil, "workspace row must be an object" end
+        if not fields(item, {"workspace_id", "phase", "lease_count"}) then return nil, "workspace row has an unknown field" end
         local workspace_id, selected = identity(item.workspace_id), phase(item.phase)
-        local lease_count = item.lease_count
-        if not workspace_id or not selected or type(lease_count) ~= "number" or lease_count ~= math.floor(lease_count) or lease_count < 0 then
+        local lease_count = bounds.count(item.lease_count)
+        if not workspace_id or workspace_id <= previous or not selected or not lease_count then
             return nil, "workspace row is malformed"
         end
-        workspaces[index] = {workspace_id = workspace_id, phase = selected, lease_count = math.floor(lease_count)}
+        workspaces[index] = {workspace_id = workspace_id, phase = selected, lease_count = lease_count}
+        previous = workspace_id
     end
     local next_after: string? = nil
     if object.next_after ~= nil then
@@ -165,13 +191,17 @@ function M.holdings_result(value: unknown): ({workspaces: {{workspace_id: string
         if not cursor or not identity(cursor) then return nil, "next_after is not a workspace identity" end
         next_after = cursor
     end
+    if object.has_more == true and (not next_after or #workspaces == 0 or next_after ~= workspaces[#workspaces].workspace_id) then
+        return nil, "next_after must identify the last workspace on a continuing page"
+    end
+    if object.has_more == false and next_after ~= nil then return nil, "a final page must not carry next_after" end
     return {workspaces = workspaces, has_more = object.has_more == true, next_after = next_after}, nil
 end
 
 -- Ask the node host manager for one page of this node's live workspace
 -- holdings. A missing manager or an unanswered request is an error, never an
 -- empty page, so an unreachable owner is never reported as holding nothing.
-function M.read_holdings(query: {after: string?, limit: integer?}?, timeout: string): (unknown?, string?)
+function M.read_holdings(query: {after: string?, limit: integer?}?, timeout: string): (HoldingsPage?, string?)
     local manager = process.registry.lookup(M.MANAGER)
     if not manager then return nil, "the node host manager is not running" end
     local answers, listen_error = process.listen(M.HOLDINGS_RESULT, {message = true})
@@ -195,7 +225,7 @@ function M.read_holdings(query: {after: string?, limit: integer?}?, timeout: str
         if not selected.ok or selected.channel == deadline then break end
         if tostring(selected.value:from()) == tostring(manager) then
             local data: unknown = selected.value:payload():data()
-            local object = type(data) == "table" and (data :: {[string]: unknown}) or nil
+            local object = bounds.object(data)
             if object and object.request_id == request_id then answer = data; break end
         end
     end
@@ -263,7 +293,7 @@ end
 -- Attach to a managed lease's host to admit desktops through the manager. The
 -- value is the host's readiness announcement, for the caller to decode. A
 -- timeout leaves the attachment unknown; the caller releases the lease.
-function M.attach(lease: Lease, timeout: string): (unknown, string?)
+function M.attach(lease: Lease, timeout: string): (HostReadiness?, string?)
     if not lease.managed then return nil, "the workspace is served by its own composition" end
     local manager = process.registry.lookup(M.MANAGER)
     if not manager then return nil, "the node host manager is not running" end
@@ -288,8 +318,9 @@ function M.attach(lease: Lease, timeout: string): (unknown, string?)
     process.unlisten(answers)
     if not answer then return nil, "the host manager did not answer the attach" end
     if answer.workspace_id ~= lease.workspace_id then return nil, "the host manager attached another workspace" end
-    if answer.error_code ~= "" then return nil, answer.error_code .. ": " .. answer.error end
-    return answer.ready, nil
+    if answer.result.kind == "failed" then return nil, answer.result.code .. ": " .. answer.result.message end
+    if answer.result.value.workspace_id ~= lease.workspace_id then return nil, "the host manager attached another workspace" end
+    return answer.result.value, nil
 end
 
 function M.release(lease: Lease)

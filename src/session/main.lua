@@ -84,6 +84,26 @@ local function main(owner: string, width: integer, height: integer, preferences:
         })
     end
 
+    local function apply_command(command: commands.Command): boolean
+        if command.op == "shutdown" then
+            if command.request_id then send_ack(command.request_id, "", "") end
+            return true
+        end
+        local stale = command.op == "appearance"
+            and command.expected_revision ~= nil
+            and command.expected_revision ~= desktop.scene.revision
+        if stale then
+            if command.request_id then send_ack(command.request_id, "stale_revision", "Desktop revision changed") end
+        else
+            local before = desktop
+            desktop = state.reduce(desktop, command)
+            statuses.layout(readers, desktop.scene, workspace_id, now())
+            if desktop ~= before or command.op == "snapshot" or command.op == "place" then send_scene() end
+            if command.request_id then send_ack(command.request_id, "", "") end
+        end
+        return false
+    end
+
     local function run()
     send_scene()
     if restored then
@@ -156,25 +176,14 @@ local function main(owner: string, width: integer, height: integer, preferences:
             local msg = selected.value
             if pending or msg:from() == owner then
                 local raw: unknown = pending and pending.payload or msg:payload():data()
-                local command = commands.decode(raw)
-                if command and (command.op ~= "add" or command.workspace_id == workspace_id) then
-                    if command.op == "shutdown" then
-                        if command.request_id then send_ack(command.request_id, "", "") end
+                local command: commands.Command? = commands.decode(raw)
+                if command then
+                    if command.op == "add" then
+                        if command.workspace_id ~= workspace_id then
+                            if command.request_id then send_ack(command.request_id, "invalid_command", "Command rejected") end
+                        elseif apply_command(command) then break end
+                    elseif apply_command(command) then
                         break
-                    end
-
-                    local stale = command.op == "appearance"
-                        and command.expected_revision ~= nil
-                        and command.expected_revision ~= desktop.scene.revision
-                    if stale then
-                        if command.request_id then send_ack(command.request_id, "stale_revision", "Desktop revision changed") end
-                    else
-                        local before = desktop
-                        desktop = state.reduce(desktop, command)
-                        statuses.layout(readers, desktop.scene, workspace_id, now())
-                        if desktop ~= before or command.op == "snapshot" or command.op == "place" then send_scene() end
-                        -- No-op commands still acknowledge the caller's input intent.
-                        if command.request_id then send_ack(command.request_id, "", "") end
                     end
                 else
                     -- Preserve correlation for malformed requests when the

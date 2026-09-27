@@ -24,6 +24,7 @@ entries:
       - bee.security.hive:hive_exposure_facade_policy
       - bee.security.hive:hive_policy_exposure_policy
       - bee.security.hive:hive_dispatch_policy
+      - bee.security.hive:hive_telemetry_policy
       - bee.security.hive:hive_names_policy
       - bee.security.hive:hive_advertise_policy
       - bee.security.hive:hive_execute_policy
@@ -38,6 +39,7 @@ entries:
       - bee.security.desktop:desktop_catalog_policy
       - bee.security.desktop:desktop_catalog_resource_policy
       - bee.security.storage:workspace_catalog_read_policy
+      - bee.hive.security:workspaces_policy
       - bee.hive.desktop:catalog_call_policy
   meta:
     comment: Default local Hive supervisor; a host overlay may replace input with admitted peer IDs and optional desktop configuration

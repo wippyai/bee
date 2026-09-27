@@ -17,13 +17,18 @@ end
 local function attached(): model.State
     local state = model.new("bee.threads.timeline.i1")
     model.open(state, "t-1", nil)
-    model.apply_get(state, ok({summary = {thread_id = "t-1", title = "Review \27[2Jrun", state = "open", head_sequence = 30, owner_id = "bee.test.alice"}, membership = {}}))
+    model.apply_get(state, ok({summary = {thread_id = "t-1", title = "Review run", state = "open", revision = 1, head_sequence = 30,
+        owner_id = "bee.test.alice", created_at = "2026-09-09T00:00:00.000Z"},
+        membership = {member_id = "bee.test.alice", role = "owner", revision = 1, active = true}}))
     model.apply_attach(state, ok({subscription_id = "s-1", after_sequence = 0, lease_generation = 1, owner_incarnation = 2, owner_authority = "auth", closed = false}))
-    model.apply_recap(state, ok({through_sequence = 20, revision = 3, checkpoint = {summary_lines = {"first line \7bell"}, last_turn = {turn_id = "turn-1", outcome = "uncertain"}}, head_sequence = 30}))
+    model.apply_recap(state, ok({through_sequence = 20, revision = 3, checkpoint = {schema = "bee.recap@1", messages = 2,
+        open_requests = {}, answered = 1, deliveries = {claimed = 0, delivered = 0, released = 0, uncertain = 0}, actions = {},
+        summary_lines = {"first line bell"}, last_turn = {turn_id = "turn-1", outcome = "uncertain"}},
+        digest = "recap-digest", head_sequence = 30, owner_authority = "auth", owner_incarnation = 2}))
     local records: {Object} = {}
     for sequence = 1, 30 do records[#records + 1] = message(sequence, "text " .. tostring(sequence) .. " \27[31mred\r") end
     model.apply_page(state, ok({subscription_id = "s-1", page_id = "p-1", lease_generation = 1, from_sequence = 0, scanned_through = 30, records = records, has_more = false}))
-    model.apply_ack(state, ok({after_sequence = 30}))
+    model.apply_ack(state, ok({subscription_id = "s-1", after_sequence = 30}))
     return state
 end
 local function define_tests()
@@ -33,7 +38,8 @@ local function define_tests()
             model.select(state, 12)
             model.toggle_technical(state)
             local picking = model.new("bee.threads.timeline.i2")
-            model.apply_list(picking, ok({threads = {{thread_id = "t-1", title = "One \27[31m", state = "open", head_sequence = 3, owner_id = "bee.test.alice"}}}))
+            model.apply_list(picking, ok({threads = {{thread_id = "t-1", title = "One [31m", state = "open", revision = 1,
+                head_sequence = 3, owner_id = "bee.test.alice", created_at = "2026-09-09T00:00:00.000Z"}}}))
             for _, subject in ipairs({state, picking}) do
                 for _, width in ipairs({1, 20, 40, 80, 120}) do
                     for _, height in ipairs({1, 6, 12, 24}) do
@@ -56,8 +62,8 @@ local function define_tests()
             end
             local frame = view.draw(140, 30, appearance.defaults(), state, 0, "")
             local text = table.concat(frame.rows, "\n")
-            test.is_true(text:find("TIMELINE  Review  [2Jrun · open", 1, true) ~= nil)
-            test.is_true(text:find("Recap: first line  bell · through 20 · last turn uncertain", 1, true) ~= nil)
+            test.is_true(text:find("TIMELINE  Review run · open", 1, true) ~= nil)
+            test.is_true(text:find("Recap: first line bell · through 20 · last turn uncertain", 1, true) ~= nil)
             test.is_true(text:find("Cursor 30 of 30  lease 1  owner incarnation 2", 1, true) ~= nil)
             test.is_true(text:find("sequence 12  kind message  source bee", 1, true) ~= nil)
             local kinds: {[string]: boolean} = {}
@@ -66,7 +72,7 @@ local function define_tests()
             local picker = table.concat(view.draw(120, 20, appearance.defaults(), picking, 0, "").rows, "\n")
             test.is_true(picker:find(" TIMELINE ", 1, true) ~= nil)
             test.is_true(picker:find("Choose a thread", 1, true) ~= nil)
-            test.is_true(picker:find("One  [31m", 1, true) ~= nil)
+            test.is_true(picker:find("One [31m", 1, true) ~= nil)
             test.is_true(picker:find("↑↓ select · Enter open", 1, true) ~= nil)
         end)
         test.it("puts human activity before record mechanics at compact widths", function()
@@ -118,8 +124,10 @@ local function define_tests()
         end)
         test.it("aligns the thread list into columns and marks the selected thread", function()
             local state = model.new("bee.threads.timeline.i5")
-            model.apply_list(state, ok({threads = {{thread_id = "t-1", title = "One", state = "open", head_sequence = 3, owner_id = "bee.test.alice"},
-                {thread_id = "t-2", title = "Second thread", state = "closed", head_sequence = 120, owner_id = "bee.test.bob"}}}))
+            model.apply_list(state, ok({threads = {{thread_id = "t-1", title = "One", state = "open", revision = 1, head_sequence = 3,
+                owner_id = "bee.test.alice", created_at = "2026-09-09T00:00:00.000Z"},
+                {thread_id = "t-2", title = "Second thread", state = "closed", revision = 1, head_sequence = 120,
+                    owner_id = "bee.test.bob", created_at = "2026-09-09T00:00:00.000Z"}}}))
             model.pick(state, "t-2")
             local rows: {string} = {}
             for index, row in ipairs(view.draw(80, 12, appearance.defaults(), state, 0, "").rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
@@ -133,7 +141,8 @@ local function define_tests()
         end)
         test.it("disables stale picker actions while the thread list is unavailable", function()
             local state = model.new("bee.threads.timeline.i3")
-            model.apply_list(state, ok({threads = {{thread_id = "t-1", title = "One", state = "open", head_sequence = 3, owner_id = "bee.test.alice"}}, next_after = "page-2"}))
+            model.apply_list(state, ok({threads = {{thread_id = "t-1", title = "One", state = "open", revision = 1, head_sequence = 3,
+                owner_id = "bee.test.alice", created_at = "2026-09-09T00:00:00.000Z"}}, next_after_thread_id = "page-2"}))
             state.picker.unavailable = "the owner cannot be reached"
             local frame = view.draw(100, 20, appearance.defaults(), state, 0, "")
             for _, hit in ipairs(frame.hits) do

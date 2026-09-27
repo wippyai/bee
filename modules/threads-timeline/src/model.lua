@@ -39,6 +39,7 @@ type State = {
     phase: Phase, session: session.Session?, subscription_id: string?, rows: {Row}, dropped_through: integer, gap_after: integer?,
     recap: Recap?, unavailable: string, notice: string, selected: integer?, follow: boolean, technical: boolean,
 }
+type PageResult = {kind: "accepted", has_more: boolean} | {kind: "refused"}
 function M.text(value: unknown, limit: integer?): string
     return text.bound(value, limit or format.LINE_LIMIT)
 end
@@ -282,61 +283,58 @@ local function append(state: State, row: Row)
 end
 -- A page counts only under the session's lease; its records fold in by
 -- sequence. has_more says whether the owner has more after it.
-function M.apply_page(state: State, reply: Reply): boolean
+function M.apply_page(state: State, reply: Reply): PageResult
     local current = state.session
-    if not current then return false end
+    if not current then return {kind = "refused"} end
     if not reply.ok then
         local code = reply.error and reply.error.code or ""
         if code == "CONFLICT" or code == "INVALID_STATE" then state.phase = "resume_required"; state.notice = fault_text(reply)
         else state.phase = "unavailable"; state.unavailable = fault_text(reply) end
-        return false
+        return {kind = "refused"}
     end
     local value = object(reply.value)
     local invalid = value and bounds.fields(value, {"subscription_id", "page_id", "lease_generation", "from_sequence", "scanned_through", "records", "has_more"})
     local rows = value and bounds.array(value.records, M.PAGE_LIMIT)
     local subscription_id = value and bounds.id(value.subscription_id)
-    local lease_generation = value and bounds.count(value.lease_generation)
     local from_sequence = value and bounds.cursor(value.from_sequence)
     local scanned_through = value and bounds.cursor(value.scanned_through)
     if not value or invalid or not rows then
-        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return false
+        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return {kind = "refused"}
     end
     if not subscription_id or subscription_id ~= current.subscription_id then
-        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return false
-    end
-    if not lease_generation then
-        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return false
+        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return {kind = "refused"}
     end
     if not from_sequence then
-        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return false
+        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return {kind = "refused"}
     end
     if not scanned_through or scanned_through < from_sequence then
-        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return false
+        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return {kind = "refused"}
     end
     if type(value.has_more) ~= "boolean" then
-        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return false
+        state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return {kind = "refused"}
     end
     local checked_has_more: boolean = value.has_more
     if value.page_id == nil then
-        if #rows ~= 0 or scanned_through ~= from_sequence then
-            state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed empty page"; return false
+        if value.lease_generation ~= nil or checked_has_more or #rows ~= 0 or scanned_through ~= from_sequence then
+            state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed empty page"; return {kind = "refused"}
         end
-        return false
+        return {kind = "accepted", has_more = checked_has_more}
     end
     local page_id = bounds.id(value.page_id)
-    if not page_id then state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return false end
+    local lease_generation = bounds.count(value.lease_generation)
+    if not page_id or not lease_generation then state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return {kind = "refused"} end
     local page: session.Page = {page_id = page_id, lease_generation = lease_generation,
         from_sequence = from_sequence, scanned_through = scanned_through}
     if current.outstanding and (current.outstanding.page_id ~= page.page_id or current.outstanding.lease_generation ~= page.lease_generation
         or current.outstanding.from_sequence ~= page.from_sequence or current.outstanding.scanned_through ~= page.scanned_through) then
-        state.phase = "unavailable"; state.unavailable = "thread owner changed an outstanding page"; return false
+        state.phase = "unavailable"; state.unavailable = "thread owner changed an outstanding page"; return {kind = "refused"}
     end
     local records: {record_types.Record} = {}
     local prior = from_sequence
     for _, item in ipairs(rows) do
         local decoded = record.decode(item)
         if not decoded or decoded.thread_id ~= state.thread_id or decoded.sequence <= prior or decoded.sequence > scanned_through then
-            state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return false
+            state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return {kind = "refused"}
         end
         records[#records + 1] = decoded
         prior = decoded.sequence
@@ -346,16 +344,16 @@ function M.apply_page(state: State, reply: Reply): boolean
         -- only an explicit resume takes the owner's cursor again.
         state.phase = "resume_required"
         state.notice = "a newer lease holds the subscription; resume required"
-        return false
+        return {kind = "refused"}
     end
     local accepted, err = session.accept_page(current, page)
-    if not accepted then state.notice = M.text(err); return false end
+    if not accepted then state.notice = M.text(err); return {kind = "refused"} end
     local last = state.rows[#state.rows]
     if last and page.from_sequence > last.sequence then state.gap_after = last.sequence end
     for _, decoded in ipairs(records) do append(state, format.row(decoded)) end
     if page.scanned_through > state.head_sequence then state.head_sequence = page.scanned_through end
     state.unavailable = ""
-    return value.has_more
+    return {kind = "accepted", has_more = checked_has_more}
 end
 function M.ack_intent(state: State, idempotency_key: string): Intent?
     local current = state.session
@@ -375,12 +373,14 @@ function M.apply_ack(state: State, reply: Reply)
         return
     end
     local value = object(reply.value)
-    if not value or bounds.fields(value, {"after_sequence"}) then
+    if not value or bounds.fields(value, {"subscription_id", "after_sequence"}) then
         state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed acknowledgment"; return
     end
+    local subscription_id = bounds.id(value.subscription_id)
     local after_sequence = bounds.cursor(value.after_sequence)
     local expected = session.acknowledgment(current)
-    if not after_sequence or not expected or after_sequence ~= expected.scanned_through then
+    if not subscription_id or subscription_id ~= current.subscription_id or not after_sequence or not expected
+        or after_sequence ~= expected.scanned_through then
         state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed acknowledgment"; return
     end
     state.session = session.acknowledged(current, after_sequence)

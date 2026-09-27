@@ -38,7 +38,7 @@ entries:
   imports:
     types: bee.hive:types
     sampling: bee.hive.telemetry:sampling
-    time_format: bee.protocol:time
+    clock: bee:clock
   meta:
     hive: open
     hive_operation:
@@ -68,7 +68,7 @@ entries:
   modules: [system]
   imports:
     sampling: bee.hive.telemetry:sampling
-    time_format: bee.protocol:time
+    clock: bee:clock
   meta:
     hive: open
     hive_operation:

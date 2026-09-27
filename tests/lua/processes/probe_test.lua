@@ -2,7 +2,7 @@ local test = require("test")
 local probe = require("probe")
 local viz = require("viz")
 
-local function snapshot(executed: number?, hosts: {[string]: number}, heap: number?, queue: number?): probe.Snapshot
+local function snapshot(executed: integer?, hosts: {[string]: integer}, heap: integer?, queue: integer?): probe.Snapshot
     return {
         processes = {},
         services = {},

@@ -22,7 +22,8 @@ local manager = funcs.new():with_actor(security.new_actor("bee.test.hive_workspa
     "bee.workspace.catalog:call_test_policy", "bee.security.storage:workspace_catalog_read_policy", "bee.security.storage:workspace_catalog_manage_policy"}))
 -- The supervisor dispatches as itself under the host's Hive policies.
 local supervisor = funcs.new():with_actor(security.new_actor("bee.hive.supervisor")):with_scope(scope({
-    "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.security.hive:hive_dispatch_policy"}))
+    "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.security.hive:hive_dispatch_policy",
+    "bee.security.storage:workspace_catalog_read_policy", "bee.hive.security:workspaces_policy"}))
 
 local function admit()
     local entry = registry.get("bee.resources:resource_roots")
@@ -114,11 +115,11 @@ local function define_tests()
             local row = {workspace_id = "0123456789abcdef0123456789abcdef", label = "Workspace"}
             local sparse, sparse_error = workspace_page.decode({items = {[1] = row, [3] = row}}, "forge", 50)
             test.is_nil(sparse)
-            test.eq(sparse_error, "the workspace catalog answered a malformed page")
+            test.eq(sparse_error, "the workspace catalog answered a malformed page: list keys must be dense")
 
             local malformed, row_error = workspace_page.decode({items = {{workspace_id = "bad", label = "Workspace"}}}, "forge", 50)
             test.is_nil(malformed)
-            test.eq(row_error, "the workspace catalog answered a malformed row")
+            test.eq(row_error, "the workspace catalog answered malformed row 1")
 
             local missing_node, node_error = workspace_page.decode({items = {}}, "", 50)
             test.is_nil(missing_node)

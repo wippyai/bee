@@ -16,7 +16,7 @@ local function stub_links(rows: {unknown})
     return links
 end
 local function holdings(node_id: string, rows: {unknown}, has_more: boolean): {[string]: unknown}
-    return {node_id = node_id, workspaces = rows, has_more = has_more}
+    return {node_id = node_id, workspaces = rows, has_more = has_more, next_after = has_more and A or nil}
 end
 local function row(workspace_id: string, phase: string, lease_count: integer): {[string]: unknown}
     return {workspace_id = workspace_id, phase = phase, lease_count = lease_count}

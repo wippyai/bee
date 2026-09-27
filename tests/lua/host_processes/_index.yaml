@@ -1,7 +1,7 @@
 version: '1.0'
 namespace: bee.host.processes
 entries:
-- name: probe_test
+- name: sampling_test
   kind: function.lua
   source: file://probe_test.lua
   method: run

@@ -11,6 +11,7 @@ entries:
     - cluster
     - memory
     - goroutines
+    - cpu
     effect: allow
 - name: hive_catalog_policy
   kind: security.policy

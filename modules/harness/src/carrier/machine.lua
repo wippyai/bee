@@ -542,6 +542,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
         environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
+        options = request.options,
     }
     if not private_home then
         placement_request.environment_refs.HOME = "bee.env:machine_home"

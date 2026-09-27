@@ -18,6 +18,7 @@ local quote = require("quote")
 local types = require("types")
 local materialization = require("materialization")
 local output_buffer = require("output_buffer")
+local service = require("service")
 type Stream = "stdout" | "stderr"
 type Chunk = {stream: Stream, data: string?, eof: boolean}
 type Pending = {sequence: integer, stream: Stream, data: string?, eof: boolean, bytes: integer, truncated: boolean?}
@@ -28,6 +29,7 @@ local function evidence(db, attempt_id: string, kind: string, detail: string, up
     return true, nil
 end
 local function main(attempt_id: string, starter: string, reply_topic: string, expected_binding: string?, materialization_key: string?)
+    local events = assert(process.events())
     local controls = assert(process.listen(protocol.TOPIC_CONTROL, {message = true}))
     local db, open_error = store.open()
     if not db then error("open placement store: " .. tostring(open_error)) end
@@ -57,7 +59,18 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         end
         evidence(db, attempt_id, "gateway.revoked", why .. "; binding " .. binding_id)
     end
+    local claimed = false
+    local child_created = false
     local function refuse(reason: string)
+        if claimed and not child_created then
+            store.transition(db, attempt_id, {execution = "exited", fields = {exit_source = "runner"},
+                evidence = {kind = "child.not_started", detail = reason}})
+            local attempt = store.attempt(db, attempt_id)
+            if attempt then
+                local cleaned = service.cleanup_attempt(attempt, true)
+                if not cleaned.ok then reason = reason .. "; cleanup: " .. tostring(cleaned.error and cleaned.error.message) end
+            end
+        end
         retire_gateway("start refused: " .. reason)
         process.send(starter, reply_topic, {started = false, reason = reason})
         db:release()
@@ -71,6 +84,11 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local group = row.capability == "process_group"
     local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "runner.started", detail = "runner " .. process.pid()}})
     if not starting.ok then return refuse(starting.message or "attempt is not intended") end
+    claimed = true
+    if recipient then
+        local monitored, monitor_error = process.monitor(recipient)
+        if not monitored then return refuse("monitor carrier: " .. tostring(monitor_error)) end
+    end
     local materialized, materialization_error, bound_gateway = materialization.prepare(db, request, attempt_id, generation, expected_binding, materialization_key)
     gateway_binding = bound_gateway
     if not materialized then return refuse(materialization_error or "attempt materialization") end
@@ -105,12 +123,15 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     end
     local stdout = proc:stdout_stream()
     local stderr = proc:stderr_stream()
+    local creating = store.transition(db, attempt_id, {expected_execution = "starting", evidence = {kind = "child.creating", detail = "native process start"}})
+    if not creating.ok then executor:release(); return refuse(creating.message or "attempt stopped before start") end
     local started, start_error = proc:start()
     if not started then
         evidence(db, attempt_id, "child.start_failed", "the child did not start", {execution = "exited"})
         executor:release()
         return refuse("the child did not start")
     end
+    child_created = true
     local fields: {[string]: unknown} = {}
     local recorded: identity.Identity? = nil
     local handle = proc :: {[string]: unknown}
@@ -214,7 +235,6 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     -- The recipient is watched: a carrier that dies while the child lives
     -- has its binding retired here, independently of any replacement.
     if recipient then
-        process.monitor(recipient :: string)
         process.send(recipient :: string, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
     end
     local pending: {Pending} = {}
@@ -256,7 +276,6 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local remembered_set: {[string]: boolean} = {}
     local inputs = assert(process.listen(protocol.TOPIC_INPUT, {message = true}))
     local acks = assert(process.listen(protocol.TOPIC_ACK, {message = true}))
-    local events = assert(process.events())
     local kill_timer = time.after("1ms")
     local kill_armed = false
     local kill_why = ""
@@ -408,8 +427,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                         end
                         generation = next_generation
                         recipient = data.recipient :: string
-                        process.monitor(recipient :: string)
-                        process.send(recipient :: string, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
+                                        process.send(recipient :: string, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
                         sent_through = consumed_through
                         flush()
                         if exited then process.send(recipient :: string, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested}) end
@@ -565,6 +583,8 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     process.unlisten(inputs)
     process.unlisten(acks)
     evidence(db, attempt_id, "runner.finished", "pending chunks " .. tostring(#pending) .. ", consumed through " .. tostring(consumed_through), {fields = {runner_pid = nil}})
+    local ended = store.attempt(db, attempt_id)
+    if ended and ended.execution_state == "exited" then service.cleanup_attempt(ended, true) end
     db:release()
 end
 return {main = main}

@@ -23,8 +23,11 @@ entries:
     - bee.placement.native:host_files_ref
     - bee.placement.native:admitted_roots_ref
     - bee.placement.native:resource_mode_ref
+    - bee.placement.native:workdir_preparers_ref
+    - bee.placement.native:placement_workdir_preparers
     - custom
     - security
+    - hosts
     - bee.placement.native:placement_admitted_roots
     - bee.placement.native:root
     - bee.placement.native:placement_host_files
@@ -53,6 +56,7 @@ entries:
     - process.monitor
     - process.unmonitor
     - process.send
+    - funcs.call
     resources:
     - bee.placement.native.service:runner
     - bee:workers

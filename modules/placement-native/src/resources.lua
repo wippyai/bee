@@ -13,6 +13,7 @@ M.EXECUTOR_REF = "bee.placement.native:executor_ref"
 M.HOST_FILES_REF = "bee.placement.native:host_files_ref"
 M.ADMITTED_ROOTS_REF = "bee.placement.native:admitted_roots_ref"
 M.RESOURCE_MODE_REF = "bee.placement.native:resource_mode_ref"
+M.WORKDIR_PREPARERS_REF = "bee.placement.native:workdir_preparers_ref"
 M.RESOLVE = "bee.resources.binding:resolve"
 M.CREDENTIAL_CHECK = "bee.credentials.binding:check"
 M.CREDENTIAL_MATERIALIZE = "bee.credentials.binding:materialize"
@@ -82,5 +83,26 @@ end
 -- The OS directory behind an admitted fs.directory root.
 function M.directory(root_ref: string): (string?, string?)
     return resource_authority.directory(root_ref)
+end
+function M.workdir_preparers(): ({string}?, string?)
+    local ref, ref_error = reference(M.WORKDIR_PREPARERS_REF, "resource_ref", "workdir preparers")
+    if not ref then return nil, ref_error end
+    local entry, err = registry.get(ref)
+    if err or not entry then return nil, "workdir preparers entry unavailable" end
+    local data = bounds.object(entry.data)
+    if not data then return nil, "workdir preparers declaration is not an object" end
+    local extra = bounds.fields(data, {"preparers"})
+    if extra then return nil, extra end
+    local preparers = bounds.array(data.preparers, 32)
+    if not preparers then return nil, "preparers must be a dense bounded array" end
+    local result: {string} = {}
+    local seen: {[string]: boolean} = {}
+    for _, item in ipairs(preparers) do
+        local id = bounds.id(item)
+        if not id or seen[id] then return nil, "invalid or duplicate preparer binding" end
+        seen[id] = true
+        result[#result + 1] = id
+    end
+    return result, nil
 end
 return M

@@ -176,3 +176,10 @@ entries:
   kind: ns.dependency
   component: bee/agents
   version: 0.1.0-dev
+- name: placement_native
+  kind: ns.dependency
+  component: bee/placement-native
+  version: 0.1.0-dev
+  parameters:
+  - name: target_workdir_preparers
+    value: bee:workdir_preparers

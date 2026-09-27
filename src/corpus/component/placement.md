@@ -9,7 +9,7 @@ executors, directories and receipts; this contract module owns none of them.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.placement` | `types`: request, grant, attempt, evidence and capability values; `request`: exact decoding and canonical digest; `transitions`: the execution and cleanup state machines; contract `placement` |
+| `bee.placement` | `types`: request, grant, attempt, evidence and capability values; `request`: exact decoding and canonical digest; `transitions`: the execution and cleanup state machines; contracts `placement` and `workdir_preparer` |
 | `bee.placement.registry` | `resolver`: measures one selected placement contract binding and its exact method targets from a caller-owned registry snapshot |
 
 The host resolves one `bee.placement:placement` contract binding from the
@@ -19,6 +19,12 @@ binding ID in `attempt.prepared` before placement preparation. Retries and
 recovery verify that recorded ID and digest before dispatching. The native
 implementation rejects requests naming another binding before durable intent;
 native windows require the exact native binding ID.
+
+Placement implementations also discover and invoke host-authorized
+`bee.placement:workdir_preparer` contract bindings (`plan`, `setup`, and `cleanup`).
+A preparer contributes extra writable roots inside already write-granted roots,
+persists read-only plan state before setup starts, and cleans up when the attempt ends.
+Failures are recorded as placement evidence.
 
 ## Rules
 

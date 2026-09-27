@@ -1,12 +1,9 @@
--- MIT. Resolve the two Git metadata directories that an edit-capable CLI
+-- MIT. Resolve Git metadata directories that an edit-capable CLI
 -- needs when its admitted working directory is a repository or worktree.
 -- Paths come from Git's small metadata files; no shell or Git process runs.
-local canonical = require("canonical")
-local driver_types = require("driver_types")
 local M = {}
 M.MAX_PATH_BYTES = 8192
 M.MAX_METADATA_BYTES = 4096
-type Adapter = driver_types.GitWritableRootsAdapter
 type ReadFile = (string) -> (string?, string?)
 type Exists = (string) -> (boolean?, string?)
 type IsDirectory = (string) -> (boolean?, string?)
@@ -52,21 +49,28 @@ local function parent(path: string): string
     return value == "" and "/" or value
 end
 
-function M.detect(workdir: string, exists: Exists, is_directory: IsDirectory, read_file: ReadFile): ({string}?, string?)
+function M.find_repository(workdir: string, exists: Exists): (string?, string?)
     local absolute_workdir, workdir_error = M.normalize(workdir, nil)
     if not absolute_workdir then return nil, workdir_error end
-    -- Git discovers a parent repository when the granted directory is a
-    -- subdirectory, so follow the same nearest-.git rule without spawning it.
     local repository = absolute_workdir
     local marker = repository == "/" and "/.git" or repository .. "/.git"
     while true do
         local present, exists_error = exists(marker)
         if exists_error then return nil, "inspect .git: " .. exists_error end
-        if present == true then break end
-        if repository == "/" then return {}, nil end
+        if present == true then return repository, nil end
+        if repository == "/" then return nil, nil end
         repository = parent(repository)
         marker = repository == "/" and "/.git" or repository .. "/.git"
     end
+end
+
+function M.detect(workdir: string, exists: Exists, is_directory: IsDirectory, read_file: ReadFile): ({string}?, string?)
+    local absolute_workdir, workdir_error = M.normalize(workdir, nil)
+    if not absolute_workdir then return nil, workdir_error end
+    local repository, repository_error = M.find_repository(absolute_workdir, exists)
+    if repository_error then return nil, repository_error end
+    if not repository then return {}, nil end
+    local marker = repository == "/" and "/.git" or repository .. "/.git"
 
     local marker_is_directory, marker_error = is_directory(marker)
     if marker_error then return nil, "inspect .git: " .. marker_error end
@@ -141,66 +145,6 @@ function M.writable_roots(paths: {string}, write_roots: {string}): ({string}?, s
     end
     table.sort(result)
     return result, nil
-end
-
-local function codex_enabled(argv: {string}): boolean
-    for index, argument in ipairs(argv) do
-        if argument == "--sandbox=workspace-write" or (argument == "--sandbox" and argv[index + 1] == "workspace-write") then return true end
-    end
-    return false
-end
-
-local function claude_enabled(argv: {string}): boolean
-    for index, argument in ipairs(argv) do
-        if argument == "--permission-mode" then
-            local mode = argv[index + 1]
-            if mode == "default" or mode == "acceptEdits" or mode == "dontAsk" then return true end
-        elseif argument:match("^%-%-permission%-mode=") then
-            local mode = argument:match("=(.*)$")
-            if mode == "default" or mode == "acceptEdits" or mode == "dontAsk" then return true end
-        end
-    end
-    return false
-end
-
-local function agy_enabled(argv: {string}): boolean
-    for _, argument in ipairs(argv) do
-        if argument == "--sandbox" or argument == "--sandbox=true" then return true end
-    end
-    return false
-end
-
-local function codex_arguments(roots: {string}): ({string}?, string?)
-    local encoded, encode_error = canonical.encode(roots)
-    if not encoded then return nil, "encode Codex writable roots: " .. tostring(encode_error) end
-    return {"--config", "sandbox_workspace_write.writable_roots=" .. encoded}, nil
-end
-
-local function add_directory_arguments(roots: {string}): ({string}?, string?)
-    local result: {string} = {}
-    for _, root in ipairs(roots) do
-        result[#result + 1] = "--add-dir"
-        result[#result + 1] = root
-    end
-    return result, nil
-end
-
-type AdapterHandler = {enabled: ({string}) -> boolean, arguments: ({string}) -> ({string}?, string?)}
-local ADAPTERS: {[Adapter]: AdapterHandler} = {}
-ADAPTERS[driver_types.GIT_WRITABLE_ROOTS_ADAPTERS.CODEX_WORKSPACE_WRITE] = {enabled = codex_enabled, arguments = codex_arguments}
-ADAPTERS[driver_types.GIT_WRITABLE_ROOTS_ADAPTERS.CLAUDE_ADD_DIR] = {enabled = claude_enabled, arguments = add_directory_arguments}
-ADAPTERS[driver_types.GIT_WRITABLE_ROOTS_ADAPTERS.AGY_ADD_DIR] = {enabled = agy_enabled, arguments = add_directory_arguments}
-
-function M.enabled(adapter: Adapter, argv: {string}): boolean
-    local handler = ADAPTERS[adapter]
-    return handler ~= nil and handler.enabled(argv)
-end
-
-function M.arguments(adapter: Adapter, roots: {string}): ({string}?, string?)
-    if #roots == 0 then return {}, nil end
-    local handler = ADAPTERS[adapter]
-    if not handler then return nil, "unsupported Git writable-roots adapter" end
-    return handler.arguments(roots)
 end
 
 return M

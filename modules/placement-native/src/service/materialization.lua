@@ -19,7 +19,8 @@ local credential_protocol = require("credential_protocol")
 local service_reply = require("service_reply")
 local formats = require("formats")
 local configuration = require("configuration")
-local git_roots = require("git_roots")
+local workdir_preparers = require("workdir_preparers")
+local writable_roots_adapter = require("writable_roots_adapter")
 local M = {}
 type WriteBack = {projection_id: string, generation: integer, source_digest: string, path: string}
 type WriteBackResult = {projection_id: string, ok: boolean, code: string?, message: string?, written: boolean?}
@@ -241,41 +242,36 @@ local function resolve_work_dir(request: types.LaunchRequest, home: string): (st
     end
     return nil, "working directory grant is missing"
 end
-local function git_sandbox_arguments(request: types.LaunchRequest, work_dir: string): ({string}?, string?)
+local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRequest, attempt_id: string, initial_work_dir: string): (string?, {string}?, string?)
+    local write_roots: {string} = {}
+    for _, grant in ipairs(request.resources) do
+        if grant.access == "write" then
+            local root, root_error = resources.directory(grant.root_ref)
+            if not root then return nil, nil, root_error or "write-granted root unavailable" end
+            write_roots[#write_roots + 1] = root
+        end
+    end
+    local work_dir, extra_roots, preparer_error = workdir_preparers.setup(db, request, attempt_id, initial_work_dir, write_roots)
+    if not work_dir or not extra_roots or preparer_error then
+        return nil, nil, preparer_error or "workdir preparation failed"
+    end
     local delivery = request.delivery
     local adapter = delivery and delivery.git_writable_roots_adapter or nil
-    local workdir_ref = request.launch.working_directory_ref
-    if not adapter or not workdir_ref or not git_roots.enabled(adapter, request.launch.argv) then return {}, nil end
-    local workdir_grant: types.ResourceGrant? = nil
+    if not adapter or #extra_roots == 0 then
+        return work_dir, {}, nil
+    end
+    local writable_workdir = false
     for _, grant in ipairs(request.resources) do
-        if grant.name == workdir_ref then workdir_grant = grant; break end
+        if grant.name == request.launch.working_directory_ref and grant.access == "write" then writable_workdir = true end
     end
-    if not workdir_grant or workdir_grant.access ~= "write" then return {}, nil end
-    local root, root_error = resources.directory(workdir_grant.root_ref)
-    if not root then return nil, root_error or "working-directory resource root is unavailable" end
-    local host_files, host_files_error = resources.host_files()
-    if not host_files then return nil, host_files_error or "host files are unavailable for Git metadata" end
-    local volume, volume_error = fs.get(host_files)
-    if not volume then return nil, "host files are unavailable for Git metadata: " .. tostring(volume_error) end
-    local function exists(path: string): (boolean?, string?)
-        return volume:exists(path)
+    if not writable_workdir or not writable_roots_adapter.enabled(adapter, request.launch.argv) then
+        return work_dir, {}, nil
     end
-    local function is_directory(path: string): (boolean?, string?)
-        return volume:isdir(path)
+    local sandbox_args, args_error = writable_roots_adapter.arguments(adapter, extra_roots)
+    if not sandbox_args then
+        return nil, nil, args_error or "render writable roots arguments"
     end
-    local function read_file(path: string): (string?, string?)
-        local info, stat_error = volume:stat(path)
-        if not info then return nil, tostring(stat_error or "unavailable") end
-        if info.type ~= "file" or info.is_dir == true then return nil, "metadata path is not a file" end
-        local size = math.floor(tonumber(info.size) or (git_roots.MAX_METADATA_BYTES + 1))
-        if size < 0 or size > git_roots.MAX_METADATA_BYTES then return nil, "metadata file is too large" end
-        return volume:readfile(path)
-    end
-    local detected, detect_error = git_roots.detect(work_dir, exists, is_directory, read_file)
-    if not detected then return nil, detect_error or "Git metadata resolution failed" end
-    local admitted, admit_error = git_roots.writable_roots(detected, {root})
-    if not admitted then return nil, admit_error or "Git metadata is outside write-granted roots" end
-    return git_roots.arguments(adapter, admitted)
+    return work_dir, sandbox_args, nil
 end
 function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?): (Prepared?, string?, string?)
     local gateway_binding: string? = nil
@@ -624,15 +620,15 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         end
         evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (retained_home and " published" or " created"))
     end
-    local work_dir, work_dir_error = resolve_work_dir(request, home_os)
-    if not work_dir then
-        evidence(db, attempt_id, "workdir.failed", work_dir_error or "working directory", {execution = "exited"})
-        return refused(work_dir_error or "working directory")
+    local initial_work_dir, initial_work_dir_error = resolve_work_dir(request, home_os)
+    if not initial_work_dir then
+        evidence(db, attempt_id, "workdir.failed", initial_work_dir_error or "working directory", {execution = "exited"})
+        return refused(initial_work_dir_error or "working directory")
     end
-    local sandbox_arguments, sandbox_error = git_sandbox_arguments(request, work_dir)
-    if not sandbox_arguments then
-        evidence(db, attempt_id, "sandbox.roots_refused", sandbox_error or "Git metadata is not admitted", {execution = "exited"})
-        return refused(sandbox_error or "Git metadata is not admitted")
+    local work_dir, sandbox_arguments, prepare_error = prepare_workdir_and_arguments(db, request, attempt_id, initial_work_dir)
+    if not work_dir or not sandbox_arguments then
+        evidence(db, attempt_id, "workdir.failed", prepare_error or "workdir preparation failed", {execution = "exited"})
+        return refused(prepare_error or "workdir preparation failed")
     end
     for _, argument in ipairs(sandbox_arguments) do arguments[#arguments + 1] = argument end
     for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end

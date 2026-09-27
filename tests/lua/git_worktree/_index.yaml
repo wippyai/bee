@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.git_worktree.test
+entries:
+- name: git_roots_test
+  kind: function.lua
+  source: file://git_roots_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: '30s'}
+  imports:
+    test: wippy.test:test
+    git_roots: bee.git_worktree:git_roots
+- name: worktree_test
+  kind: function.lua
+  source: file://worktree_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: '60s'}
+  modules: [time]
+  security:
+    policies: [bee.git_worktree:worktree_policy]
+  imports:
+    test: wippy.test:test
+    worktree: bee.git_worktree:worktree
+    setup_method: bee.git_worktree:setup
+    cleanup_method: bee.git_worktree:cleanup

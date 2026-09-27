@@ -630,7 +630,8 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
         placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
-        previous_attempt_id = previous and previous.previous_attempt_id or nil, reauthorize = previous and previous.reauthorize or nil, origin_view = request.origin_view}
+        previous_attempt_id = previous and previous.previous_attempt_id or nil, reauthorize = previous and previous.reauthorize or nil, origin_view = request.origin_view,
+        options = launch.options}
     return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,
         thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref,
         saved_profile_revision = plan.saved_profile_revision,

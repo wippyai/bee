@@ -48,7 +48,7 @@ local function error_text(value: unknown): string?
     return tostring(value)
 end
 
-local function fail(db, reason: string, gateway_binding: string?, attempt_id: string?): (Window?, string?)
+local function fail(db, reason: string, gateway_binding: string?, attempt_id: string?, child_created: boolean?): (Window?, string?)
     if gateway_binding then
         -- A gateway binding may have been minted before a later PTY step
         -- failed. Revoke it here; bytes never enter this facade's return
@@ -61,6 +61,17 @@ local function fail(db, reason: string, gateway_binding: string?, attempt_id: st
             end
         elseif attempt_id then
             store.transition(db, attempt_id, {evidence = {kind = "gateway.revoked", detail = "window open failed; binding revoked"}})
+        end
+    end
+    if db and attempt_id then
+        if not child_created then
+            store.transition(db, attempt_id, {execution = "exited", fields = {exit_source = "runner"},
+                evidence = {kind = "child.not_started", detail = reason}})
+        end
+        local attempt = store.attempt(db, attempt_id)
+        if attempt and attempt.execution_state == "exited" then
+            local cleaned = service.cleanup_attempt(attempt, true)
+            if not cleaned.ok then reason = reason .. "; cleanup: " .. tostring(cleaned.error and cleaned.error.message) end
         end
     end
     if db then db:release() end
@@ -221,6 +232,12 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     -- executor:terminal() consumes the broker-installed terminal grant of this
     -- actor and returns only after the child has started, so the handle
     -- carries the host process identity from its first use.
+    local creating = store.transition(db, attempt_id, {expected_execution = "starting", evidence = {kind = "child.creating", detail = "native terminal start"}})
+    if not creating.ok then
+        process.unlisten(controls)
+        executor:release()
+        return fail(db, creating.message or "attempt stopped before terminal start", gateway_binding, attempt_id)
+    end
     local started, start_error = executor:terminal(quote.line(argv), {work_dir = prepared.working_directory, env = prepared.environment,
         pty = {width = chosen.width, height = chosen.height, term = chosen.term}, process_group = row.capability == "process_group"})
     if not started then
@@ -277,7 +294,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         local current = store.row(db, attempt_id)
         if not current or current.execution_state ~= "stopping" then
             executor:release()
-            return fail(db, settled.message or "record terminal start", gateway_binding, attempt_id)
+            return fail(db, settled.message or "record terminal start", gateway_binding, attempt_id, true)
         end
         local stopped
         if started:status() == "done" then
@@ -286,14 +303,14 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
             stopped = store.transition(db, attempt_id, {expected_execution = "stopping", fields = fields, evidence = {kind = "stop.pending", detail = "terminal close requested during startup; " .. identity_detail}})
         end
         executor:release()
-        if not stopped.ok then return fail(db, stopped.message or "record terminal stop", gateway_binding, attempt_id) end
-        return fail(db, "window stopped during startup", gateway_binding, attempt_id)
+        if not stopped.ok then return fail(db, stopped.message or "record terminal stop", gateway_binding, attempt_id, true) end
+        return fail(db, "window stopped during startup", gateway_binding, attempt_id, true)
     end
     if startup_exit then
         finished = true
         process.unlisten(controls)
         executor:release()
-        return fail(db, "terminal completed during startup", gateway_binding, attempt_id)
+        return fail(db, "terminal completed during startup", gateway_binding, attempt_id, true)
     end
 
     local function retire_gateway(why: string)
@@ -323,8 +340,14 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         process.unlisten(controls)
         retire_gateway("terminal process completed")
         executor:release()
+        local attempt = store.attempt(db, attempt_id)
+        local cleanup_error: string? = nil
+        if attempt then
+            local cleaned = service.cleanup_attempt(attempt, true)
+            if not cleaned.ok then cleanup_error = cleaned.error and cleaned.error.message or "cleanup failed" end
+        end
         db:release()
-        return true, nil
+        return cleanup_error == nil, cleanup_error
     end
     local facade: Window = {
         send = function(_, event: tty.TTYEvent): (boolean, string?)

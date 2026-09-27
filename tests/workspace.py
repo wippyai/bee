@@ -334,7 +334,7 @@ AGENT_PACKAGES = (
     "bee/agents", "bee/harness", "bee/credentials", "bee/placement",
     "bee/placement-native", "bee/resources", "bee/driver", "bee/driver-agy",
     "bee/driver-claude", "bee/driver-codex", "bee/driver-grok", "bee/driver-muse",
-    "bee/driver-opencode", "bee/driver-wippy",
+    "bee/driver-opencode", "bee/driver-wippy", "bee/git-worktree",
 )
 BUNDLE_PACKAGES = (
     "bee/hive-manager", "bee/threads-timeline", "bee/workspace-manager",

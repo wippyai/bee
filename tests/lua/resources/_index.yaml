@@ -55,6 +55,7 @@ entries:
     principals: bee.test.principals:bound
     test: wippy.test:test
     authority: bee.resources.persist:authority
+    capability_model: bee.capability:model
     migrations: bee.resources.migrations:migrations
     persist: bee.persist:database
     resources: bee.resources:resources

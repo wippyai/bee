@@ -16,6 +16,10 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: '*'
+- name: dependency_capability
+  kind: ns.dependency
+  component: bee/capability
+  version: '*'
 - name: protected_namespace
   kind: ns.requirement
   meta:

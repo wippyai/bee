@@ -15,6 +15,7 @@ local persist = require("persist")
 local transaction = require("transaction")
 local migrations = require("migrations")
 local resources = require("resources")
+local capability_model = require("capability_model")
 local M = {}
 M.LEDGER = {table = "bee_resource_schema_migrations", label = "resource"}
 M.MANAGE = "bee.resources.manage"
@@ -73,10 +74,6 @@ end
 local function integer(value: unknown): integer?
     if type(value) ~= "number" then return nil end
     return math.floor(value)
-end
-local function rank(access: string): integer
-    if access == "write" then return 2 end
-    return 1
 end
 local function association_view(row: Row): {[string]: unknown}
     return {workspace_id = row.workspace_id, name = row.name, association_id = row.association_id, revision = row.revision, root_ref = row.root_ref,
@@ -140,7 +137,9 @@ function M.associate(value: unknown): Reply
     if not roots then return fail("STORAGE", roots_error or "host roots") end
     local ceiling = roots[root_ref]
     if not ceiling then return fail("FORBIDDEN", "root " .. root_ref .. " is not admitted on this host") end
-    if rank(allowed) > rank(ceiling) then return fail("FORBIDDEN", "root " .. root_ref .. " is admitted " .. ceiling .. " only") end
+    if not capability_model.scope_contains({access = ceiling}, {access = allowed}) then
+        return fail("FORBIDDEN", "root " .. root_ref .. " is admitted " .. ceiling .. " only")
+    end
     local root, root_error = resources.root(root_ref)
     if not root then return fail("INVALID", root_error or "root") end
     local root_digest, digest_error = digest_of(root)
@@ -279,7 +278,10 @@ function M.grant(value: unknown): Reply
         db:release()
         return fail("CONFLICT", "root definition changed; the association needs replacement")
     end
-    if rank(access) > rank(text(association.allowed_access) or "read") then
+    local ceiling = capability_model.resource(workspace_id, name, text(association.subpath) or "",
+        text(association.allowed_access) or "read")
+    local requested = capability_model.resource(workspace_id, name, text(association.subpath) or "", access)
+    if not ceiling or not requested or not capability_model.contains(ceiling, requested) then
         db:release()
         return fail("FORBIDDEN", "association " .. name .. " allows " .. tostring(association.allowed_access) .. " only")
     end
@@ -337,6 +339,14 @@ function M.revoke(value: unknown): Reply
         db:release()
         return fail("DENIED", "only the subject or a workspace manager revokes a grant")
     end
+    local meaning = capability_model.resource(workspace_id, text(grant.name) or "",
+        text(grant.subpath) or "", text(grant.access) or "")
+    if not meaning then db:release(); return fail("STORAGE", "revoked resource grant has no capability meaning") end
+    local attempts: {string} = {}
+    local attempt_id = text(grant.attempt_id)
+    if attempt_id then attempts[1] = attempt_id end
+    local revocation, report_error = capability_model.revocation_report({meaning}, attempts)
+    if not revocation then db:release(); return fail("STORAGE", report_error or "report resource revocation") end
     if grant.revoked_at == nil then
         local _, update_error = db:execute("UPDATE bee_resource_grants SET revoked_at = ? WHERE grant_id = ?", {stamp(now_ms()), grant_id})
         if update_error then
@@ -347,7 +357,9 @@ function M.revoke(value: unknown): Reply
     local stored = grant_of(db, grant_id)
     db:release()
     if not stored then return fail("STORAGE", "read grant") end
-    return succeed(grant_view(stored))
+    local result = grant_view(stored)
+    result.revocation = revocation
+    return succeed(result)
 end
 function M.revoke_all(value: unknown): Reply
     local object = bounds.object(value)
@@ -376,10 +388,13 @@ function M.revoke_all(value: unknown): Reply
         local attempt = text((row :: Row).attempt_id)
         if attempt then fenced[#fenced + 1] = attempt end
     end
+    local revocation, report_error = capability_model.revocation_report({}, fenced)
+    if not revocation then db:release(); return fail("STORAGE", report_error or "report workspace revocation") end
     local _, upsert_error = db:execute("INSERT INTO bee_resource_epochs (workspace_id, epoch) VALUES (?, ?) ON CONFLICT(workspace_id) DO UPDATE SET epoch = excluded.epoch", {workspace_id, epoch + 1})
     db:release()
     if upsert_error then return fail("STORAGE", "advance authorization epoch") end
-    return succeed({workspace_id = workspace_id, authorization_epoch = epoch + 1, fenced_attempts = fenced})
+    return succeed({workspace_id = workspace_id, authorization_epoch = epoch + 1,
+        fenced_attempts = revocation.fenced_attempts, revocation = revocation})
 end
 -- resolve: a placement asks with the subject and audience it admitted
 -- itself; every binding of the grant is re-checked against the present.

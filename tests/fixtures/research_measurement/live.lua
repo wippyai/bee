@@ -83,13 +83,17 @@ local function decide_exact_request(request: Object, proposal: Object?, actor: s
         or request.thread_id ~= THREAD or request.request_kind ~= "permission" then
         error("live access request has the wrong actor, thread, workspace, kind, or policy")
     end
-    if not proposal or proposal.kind ~= "attempt" or proposal.revision ~= "bee.mcp-access@1"
+    if not proposal or proposal.kind ~= "attempt" or proposal.revision ~= "bee.capability-model@1"
         or proposal.action_id ~= action_id or proposal.ref ~= attempt_id then
         error("live access request is bound to the wrong action or attempt")
     end
     local payload = bounds.object(proposal.payload)
-    local traits = payload and bounds.ids(payload.traits, true) or nil
+    local capability = payload and bounds.object(payload.capability)
+    local capability_scope = capability and bounds.object(capability.scope)
+    local traits = capability_scope and bounds.ids(capability_scope.traits, true) or nil
     if not payload or payload.subject ~= actor or payload.thread_id ~= THREAD
+        or not capability or capability.capability ~= "mcp.access" or capability.operation ~= "mcp.traits"
+        or capability.resource ~= payload.binding_id
         or not traits or #traits ~= 1 or traits[1] ~= TRAIT then
         error("live access request must contain only the research:measure trait")
     end

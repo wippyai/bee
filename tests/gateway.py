@@ -20,7 +20,7 @@ from workspace import ROOT, RUNTIME, configure_managed_gateway, database_environ
 # Sync, Approvals and Hub, and Threads brings the Hive identity contract.
 # Codex is retained only for the configuration-scope proof in the probe.
 MODULES = (
-    "persist", "hive", "threads", "application", "sync", "approvals", "hub", "gov",
+    "persist", "hive", "threads", "application", "sync", "approvals", "hub", "gov", "capability",
     "docs", "driver", "driver-codex", "gateway",
 )
 

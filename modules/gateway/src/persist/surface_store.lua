@@ -2,12 +2,22 @@
 -- The caller owns authorization, decoding and transaction commit/rollback.
 local bounds = require("bounds")
 local json = require("json")
+local capability_model = require("capability_model")
 local M = {}
 type State = {surface_json: string, active_json: string, context_json: string, revision: integer}
 type Fault = {code: string, message: string}
 type Grant = {approval_id: string, proposal_digest: string, traits: {string}}
 local function fault(code: string, message: string): Fault return {code = code, message = message} end
 local function text(value: string, limit: integer): boolean return #value > 0 and #value <= limit end
+local function decode_traits(binding_id: string, encoded: string, code: string,
+    message: string): ({string}?, Fault?)
+    local decoded, decode_error = json.decode(encoded)
+    local traits, traits_error = bounds.ids(decoded, true)
+    if decode_error or not traits or not capability_model.traits(binding_id, traits) then
+        return nil, fault(code, traits_error or message)
+    end
+    return traits, nil
+end
 function M.read(tx: sql.Transaction, binding_id: string): (State?, Fault?)
     local rows, err = tx:query("SELECT surface_json, active_json, context_json, revision FROM bee_gateway_surfaces WHERE binding_id = ?", {binding_id})
     if err or not rows then return nil, fault("STORAGE", "read binding surface") end
@@ -56,9 +66,8 @@ function M.grants(tx: sql.Transaction, binding_id: string): ({string}?, Fault?)
         local row = bounds.object(raw)
         local encoded = row and bounds.text(row.traits_json, 8192)
         if not encoded then return nil, fault("STORAGE", "invalid grant receipt") end
-        local decoded, decode_error = json.decode(encoded)
-        local traits, traits_error = bounds.ids(decoded, true)
-        if decode_error or not traits then return nil, fault("STORAGE", traits_error or "invalid grant traits") end
+        local traits, invalid = decode_traits(binding_id, encoded, "STORAGE", "invalid grant traits")
+        if not traits then return nil, invalid :: Fault end
         for _, id in ipairs(traits) do
             if not seen[id] then seen[id] = true; result[#result + 1] = id end
         end
@@ -80,13 +89,12 @@ function M.runtime_grant(tx: sql.Transaction, binding_id: string, trait_id: stri
         local approval_id = row and bounds.id(row.approval_id)
         local proposal_digest = row and bounds.text(row.proposal_digest, 64)
         local encoded = row and bounds.text(row.traits_json, 8192)
-        local decoded: unknown = nil
-        local decode_error: string? = nil
-        if encoded then decoded, decode_error = json.decode(encoded) end
-        local traits, traits_error = bounds.ids(decoded, true)
-        if not approval_id or not proposal_digest or #proposal_digest ~= 64 or not proposal_digest:match("^[0-9a-f]+$") or decode_error or not traits then
-            return nil, fault("STORAGE", traits_error or "invalid application runtime access receipt")
+        if not approval_id or not proposal_digest or #proposal_digest ~= 64
+            or not proposal_digest:match("^[0-9a-f]+$") or not encoded then
+            return nil, fault("STORAGE", "invalid application runtime access receipt")
         end
+        local traits, invalid = decode_traits(binding_id, encoded, "STORAGE", "invalid application runtime access receipt")
+        if not traits then return nil, invalid :: Fault end
         for _, id in ipairs(traits) do
             if id == trait_id then return {approval_id = approval_id :: string, proposal_digest = proposal_digest :: string, traits = traits}, nil end
         end
@@ -96,6 +104,8 @@ end
 function M.grant(tx: sql.Transaction, binding_id: string, approval_id: string, digest: string, traits_json: string): (State?, Fault?)
     if not bounds.id(binding_id) or not bounds.id(approval_id) or #digest ~= 64 or not digest:match("^%x+$")
         or not text(traits_json, 8192) then return nil, fault("INVALID", "invalid grant receipt") end
+    local added, traits_fault = decode_traits(binding_id, traits_json, "INVALID", "invalid grant receipt")
+    if not added then return nil, traits_fault :: Fault end
     local rows, err = tx:query("SELECT proposal_digest, traits_json FROM bee_gateway_access_grants WHERE binding_id = ? AND approval_id = ?", {binding_id, approval_id})
     if not rows or err then return nil, fault("STORAGE", "read grant receipt") end
     if #rows > 0 then
@@ -112,10 +122,8 @@ function M.grant(tx: sql.Transaction, binding_id: string, approval_id: string, d
     local current, current_error = M.read(tx, binding_id)
     if not current then return nil, current_error end
     local old_raw, old_error = json.decode(current.active_json)
-    local added_raw, added_error = json.decode(traits_json)
     local active = bounds.ids(old_raw, true)
-    local added = bounds.ids(added_raw, true)
-    if old_error or added_error or not active or not added then return nil, fault("STORAGE", "invalid active traits") end
+    if old_error or not active then return nil, fault("STORAGE", "invalid active traits") end
     local seen: {[string]: boolean} = {}
     for _, id in ipairs(active) do seen[id] = true end
     for _, id in ipairs(added) do if not seen[id] then active[#active + 1] = id; seen[id] = true end end

@@ -17,6 +17,7 @@ local base64 = require("base64")
 local http_client = require("http_client")
 local bounds = require("bounds")
 local canonical = require("canonical")
+local capability_model = require("capability_model")
 local persist = require("persist")
 local migrations = require("migrations")
 local registry = require("registry")
@@ -673,6 +674,8 @@ function M.revoke(value: unknown): Reply
         db:release()
         return fail("DENIED", "caller may not revoke bindings for action " .. binding.action_id)
     end
+    local revocation = capability_model.revocation_report({}, {binding.attempt_id})
+    if not revocation then db:release(); return fail("STORAGE", "report binding revocation") end
     -- Revocation invalidates credentials and rejects rows no carrier began.
     -- A claimed row can be the thread commit whose acknowledgement was lost,
     -- so it remains queued for a current or replacement carrier to reconcile.
@@ -682,9 +685,11 @@ function M.revoke(value: unknown): Reply
     local _, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding revoked', updated_at = ? WHERE binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {at, binding_id})
     db:release()
     if reject_error then return fail("STORAGE", "reject queued hooks") end
-    binding.revoked = true
-    binding.sealed = true
-    return succeed(view(binding))
+    local result = view(binding)
+    result.revoked = true
+    result.sealed = true
+    result.revocation = revocation
+    return succeed(result)
 end
 -- seal: intake ends, credentials stay. New submissions are refused from
 -- the seal's linearization point, which is the same transaction any
@@ -728,6 +733,8 @@ function M.revoke_attempt(value: unknown): Reply
     if not carrier_epoch or carrier_epoch < 1 then return fail("INVALID", "carrier_epoch must be a positive integer") end
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.MANAGE, "bindings") then return fail("DENIED", "caller does not manage gateway bindings") end
+    local revocation = capability_model.revocation_report({}, {attempt_id})
+    if not revocation then return fail("INVALID", "report attempt revocation") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
     local at = stamp(now_ms())
@@ -736,7 +743,8 @@ function M.revoke_attempt(value: unknown): Reply
     local _, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding revoked', updated_at = ? WHERE status = 'queued' AND claimed_epoch = 0 AND binding_id IN (SELECT binding_id FROM bee_gateway_bindings WHERE attempt_id = ? AND revoked_at = ?)", {at, attempt_id, at})
     db:release()
     if reject_error then return fail("STORAGE", "reject queued hooks") end
-    return succeed({attempt_id = attempt_id, carrier_epoch = carrier_epoch, revoked = result and (integer(result.rows_affected) or 0) or 0})
+    return succeed({attempt_id = attempt_id, carrier_epoch = carrier_epoch,
+        revoked = result and (integer(result.rows_affected) or 0) or 0, revocation = revocation})
 end
 -- check: a binding as it stands now, named by id or by attempt and carrier
 -- epoch, for placement's recheck of what an attempt still holds. Bindings,

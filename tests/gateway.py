@@ -48,12 +48,13 @@ HOST_ENTRIES = {
         "thread_lifecycle_policy", "thread_carrier_policy", "thread_approval_policy",
         "thread_approval_client_policy", "thread_waiter_policy",
     },
-    "src/_index.yaml": {"approver_policies", "module_installation", "docs_corpus"},
+    "src/_index.yaml": {"approver_policies", "module_installation", "docs_corpus", "clock"},
     "src/env/_index.yaml": {"gov_publication_profiles", "gov_activation_profiles"},
     "src/security/_index.yaml": {"ordinary_app_subsystem_boundary"},
     "modules/placement-native/src/security/_index.yaml": {"placement_store_policy", "placement_exec_policy"},
     "src/security/docs/_index.yaml": {"docs_policy"},
     "src/security/gov/_index.yaml": {"workspace_folder_read_policy"},
+    "src/protocol/_index.yaml": {"bounds", "canonical", "application"},
 }
 
 
@@ -64,6 +65,7 @@ def selected_host_entries():
         document = yaml.safe_load((ROOT / relative).read_text())
         assert (document["namespace"] in {"bee", "bee.env"}
                 or document["namespace"].startswith("bee.security")
+                or document["namespace"] == "bee.protocol"
                 or document["namespace"] == "bee.placement.native.security"), relative
         available = {entry["name"]: entry for entry in document["entries"]}
         assert names <= available.keys(), f"missing host entries in {relative}: {sorted(names - available.keys())}"
@@ -173,6 +175,13 @@ def write_gateway_host(folder, native):
     (folder / "src" / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "bee", "entries": entries}, sort_keys=False))
     for relative, document in host_entries.items():
         if relative == "src/_index.yaml":
+            target = folder / "src" / "_index.yaml"
+            source_root = ROOT / "src"
+            for entry in document["entries"]:
+                source = entry.get("source", "")
+                if source.startswith("file://"):
+                    source_path = Path(source.removeprefix("file://"))
+                    shutil.copy2(source_root / source_path, target.parent / source_path)
             continue
         destination = relative
         if relative == "modules/placement-native/src/security/_index.yaml":
@@ -180,6 +189,14 @@ def write_gateway_host(folder, native):
         target = folder / destination
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(yaml.safe_dump(document, sort_keys=False))
+        source_root = ROOT / Path(relative).parent
+        for entry in document["entries"]:
+            source = entry.get("source", "")
+            if source.startswith("file://"):
+                source_path = Path(source.removeprefix("file://"))
+                destination_path = target.parent / source_path
+                destination_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_root / source_path, destination_path)
     (folder / "src" / "placement").mkdir()
     (folder / "src" / "placement" / "_index.yaml").write_text(yaml.safe_dump({
         "version": "1.0", "namespace": "bee.placement.native", "entries": [

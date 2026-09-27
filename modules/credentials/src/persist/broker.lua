@@ -15,7 +15,9 @@ local env = require("env")
 local fs = require("fs")
 local json = require("json")
 local bounds = require("bounds")
+local clock = require("clock")
 local canonical = require("canonical")
+local credential_protocol = require("credential_protocol")
 local persist = require("persist")
 local transaction = require("transaction")
 local migrations = require("migrations")
@@ -29,8 +31,8 @@ M.MATERIALIZE = "bee.credentials.materialize"
 M.WRITE_BACK = "bee.credentials.write_back"
 M.MAX_TTL_MS = 86400000
 M.DEFAULT_TTL_MS = 3600000
-M.MAX_SECRET_BYTES = 8192
-M.MAX_FILE_BYTES = 65536
+M.MAX_SECRET_BYTES = credential_protocol.MAX_SECRET_BYTES
+M.MAX_FILE_BYTES = credential_protocol.MAX_FILE_BYTES
 M.MAX_LIST = 64
 M.SOURCE_KINDS = {"env_variable", "fs_directory"}
 type Fault = {code: string, message: string}
@@ -57,10 +59,12 @@ local function actor(): string?
     if not current then return nil end
     return bounds.id(current:id())
 end
-local function node(): string
+local function node(): (string?, string?)
     local id, err = system.node.id()
-    if err or type(id) ~= "string" or id == "" then return "local" end
-    return id
+    if err then return nil, "node identity is unavailable" end
+    local decoded = bounds.id(id)
+    if not decoded then return nil, "node identity is invalid" end
+    return decoded, nil
 end
 local function open(): (sql.DB?, Reply?)
     local resource, resource_error = sources.database()
@@ -109,8 +113,7 @@ local function format_for(admitted: sources.SourceSet, provider: string, kind: s
     return selected, nil, encoded
 end
 local function integer(value: unknown): integer?
-    if type(value) ~= "number" then return nil end
-    return math.floor(value)
+    return bounds.integer(value)
 end
 -- Read one host-selected supplemental file with the same bounded, typed
 -- source read used for provider login files. The bytes remain transient.
@@ -188,27 +191,43 @@ local function epoch_of(db: sql.DB, workspace_id: string): (integer?, string?)
     local rows, err = db:query("SELECT epoch FROM bee_credential_epochs WHERE workspace_id = ?", {workspace_id})
     if err or not rows then return nil, "read authorization epoch" end
     if #rows == 0 then return 0, nil end
-    return integer(rows[1].epoch) or 0, nil
+    local epoch = integer(rows[1].epoch)
+    if not epoch or epoch < 0 then return nil, "authorization epoch is corrupt" end
+    return epoch, nil
 end
 local function epoch_in(tx: sql.Transaction, workspace_id: string): (integer?, string?)
     local rows, err = tx:query("SELECT epoch FROM bee_credential_epochs WHERE workspace_id = ?", {workspace_id})
     if err or not rows then return nil, "read authorization epoch" end
     if #rows == 0 then return 0, nil end
-    return integer(rows[1].epoch) or 0, nil
+    local epoch = integer(rows[1].epoch)
+    if not epoch or epoch < 0 then return nil, "authorization epoch is corrupt" end
+    return epoch, nil
 end
-local function definition_view(row: Row): {[string]: unknown}
-    return {workspace_id = row.workspace_id, name = row.name, definition_id = row.definition_id, revision = row.revision, provider = row.provider,
-        source_kind = row.source_kind, source_ref = row.source_ref, projection_kind = row.projection_kind, destination = row.destination, optional = integer(row.optional) == 1, digest = row.digest,
-        format = stored_format(row), owner_node = row.owner_node, created_at = row.created_at, updated_at = row.updated_at}
+local function definition_view(row: Row): ({[string]: unknown}?, string?)
+    local revision, optional = integer(row.revision), integer(row.optional)
+    if not revision or revision < 1 or (optional ~= 0 and optional ~= 1) then return nil, "credential definition numeric fields are corrupt" end
+    local format, format_error = stored_format(row)
+    if not format then return nil, format_error or "credential definition format is corrupt" end
+    return {workspace_id = row.workspace_id, name = row.name, definition_id = row.definition_id, revision = revision, provider = row.provider,
+        source_kind = row.source_kind, source_ref = row.source_ref, projection_kind = row.projection_kind, destination = row.destination, optional = optional == 1, digest = row.digest,
+        format = format, owner_node = row.owner_node, created_at = row.created_at, updated_at = row.updated_at}, nil
 end
 -- A projection as callers see it: bindings, never bytes.
-local function projection_view(row: Row): {[string]: unknown}
-    return {projection_id = row.projection_id, workspace_id = row.workspace_id, name = row.name, definition_id = row.definition_id, definition_revision = row.definition_revision,
-        issuer_owner = row.issuer_owner, issuer_incarnation = row.issuer_incarnation, subject = row.subject, audience = row.audience, attempt_id = row.attempt_id,
+local function projection_view(row: Row): ({[string]: unknown}?, string?)
+    local definition_revision, issuer_incarnation = integer(row.definition_revision), integer(row.issuer_incarnation)
+    local generation, authorization_epoch = integer(row.materialization_generation), integer(row.authorization_epoch)
+    if not definition_revision or definition_revision < 1 or not issuer_incarnation or issuer_incarnation < 1
+        or not generation or generation < 0 or not authorization_epoch or authorization_epoch < 0 then
+        return nil, "credential projection numeric fields are corrupt"
+    end
+    local format, format_error = stored_format(row)
+    if not format then return nil, format_error or "credential projection format is corrupt" end
+    return {projection_id = row.projection_id, workspace_id = row.workspace_id, name = row.name, definition_id = row.definition_id, definition_revision = definition_revision,
+        issuer_owner = row.issuer_owner, issuer_incarnation = issuer_incarnation, subject = row.subject, audience = row.audience, attempt_id = row.attempt_id,
         profile_id = row.profile_id, profile_digest = row.profile_digest, binding_digest = row.binding_digest, launch_policy_digest = row.launch_policy_digest,
         provider = row.provider, projection_kind = row.projection_kind, destination = row.destination, materializer = row.materializer,
-        materialization_generation = row.materialization_generation, expires_at = row.expires_at, authorization_epoch = row.authorization_epoch,
-        format = stored_format(row), revoked_at = row.revoked_at, created_at = row.created_at}
+        materialization_generation = generation, expires_at = row.expires_at, authorization_epoch = authorization_epoch,
+        format = format, revoked_at = row.revoked_at, created_at = row.created_at}, nil
 end
 -- define: a workspace manager names a credential from a host-admitted
 -- source; the digest covers configuration and source identity, never
@@ -245,6 +264,8 @@ function M.define(value: unknown): Reply
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.MANAGE, workspace_id) then return fail("DENIED", "caller does not manage workspace " .. workspace_id) end
+    local owner_node, node_error = node()
+    if not owner_node then return fail("UNAVAILABLE", node_error or "node identity is unavailable") end
     local admitted, admitted_error = sources.host_sources()
     if not admitted then return fail("STORAGE", admitted_error or "host sources") end
 
@@ -317,11 +338,11 @@ function M.define(value: unknown): Reply
         local at = stamp(now_ms())
         if existing then
             local _, update_error = tx:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = ?, source_ref = ?, projection_kind = ?, destination = ?, optional = ?, digest = ?, format_json = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
-            {definition_id, current_revision + 1, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, format_json, node(), at, workspace_id, name})
+            {definition_id, current_revision + 1, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, format_json, owner_node, at, workspace_id, name})
             if update_error then return transaction.failure("STORAGE", "replace definition") :: TransactionResult end
         else
             local _, insert_error = tx:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, optional, digest, format_json, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, name) DO NOTHING",
-                {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, format_json, node(), at, at})
+                {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, format_json, owner_node, at, at})
             if insert_error then return transaction.failure("STORAGE", "record definition") :: TransactionResult end
         end
         local stored, stored_error = definition_in(tx, workspace_id, name)
@@ -329,13 +350,29 @@ function M.define(value: unknown): Reply
         if stored.definition_id ~= definition_id then
             return transaction.failure("CONFLICT", "credential definition was created concurrently") :: TransactionResult
         end
-        return transaction.success(definition_view(stored), false) :: TransactionResult
+        local view, view_error = definition_view(stored)
+        if not view then return transaction.failure("STORAGE", view_error or "credential definition is corrupt") :: TransactionResult end
+        return transaction.success(view, false) :: TransactionResult
     end) :: TransactionResult
     db:release()
     if not result.ok then return fail(result.code or "STORAGE", result.message or "define failed") end
     return succeed(result.value)
 end
 type Issue = {workspace_id: string, name: string, audience: string, attempt_id: string, profile_id: string, profile_digest: string, binding_digest: string, launch_policy_digest: string, idempotency_key: string, ttl: integer}
+local function same_issue(row: Row, request: Issue): (boolean?, string?)
+    if row.workspace_id ~= request.workspace_id or row.name ~= request.name or row.audience ~= request.audience
+        or row.attempt_id ~= request.attempt_id or row.profile_id ~= request.profile_id
+        or row.profile_digest ~= request.profile_digest or row.binding_digest ~= request.binding_digest
+        or row.launch_policy_digest ~= request.launch_policy_digest then
+        return false, nil
+    end
+    local created_at = clock.parse(row.created_at)
+    local expires_at = clock.parse(row.expires_at)
+    if not created_at or not expires_at then return nil, "projection timestamps are corrupt" end
+    if expires_at:unix_nano() - created_at:unix_nano() ~= request.ttl * 1000000 then return false, nil end
+    return true, nil
+end
+
 local function decode_issue(value: unknown): (Issue?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
@@ -369,6 +406,8 @@ function M.issue_projection(value: unknown): Reply
     local subject = actor()
     if not subject then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.ISSUE, request.workspace_id) then return fail("DENIED", "caller may not take credential projections in workspace " .. request.workspace_id) end
+    local owner_node, node_error = node()
+    if not owner_node then return fail("UNAVAILABLE", node_error or "node identity is unavailable") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
     local replay, replay_error = db:query("SELECT * FROM bee_credential_projections WHERE subject = ? AND idempotency_key = ?", {subject, request.idempotency_key})
@@ -377,9 +416,13 @@ function M.issue_projection(value: unknown): Reply
         return fail("STORAGE", "read projections")
     end
     if #replay == 1 then
-        local view = projection_view(replay[1] :: Row)
+        local row = replay[1] :: Row
+        local same, same_error = same_issue(row, request)
         db:release()
-        if view.attempt_id ~= request.attempt_id or view.name ~= request.name then return fail("CONFLICT", "idempotency key reused with a different request") end
+        if same_error then return fail("STORAGE", same_error) end
+        if not same then return fail("CONFLICT", "idempotency key reused with a different request") end
+        local view, view_error = projection_view(row)
+        if not view then return fail("STORAGE", view_error or "credential projection is corrupt") end
         return succeed(view)
     end
     local definition, definition_error = definition_of(db, request.workspace_id, request.name)
@@ -434,7 +477,7 @@ function M.issue_projection(value: unknown): Reply
     local _, insert_error = db:execute([[INSERT INTO bee_credential_projections (projection_id, workspace_id, name, definition_id, definition_revision, issuer_owner, issuer_incarnation,
         subject, audience, attempt_id, profile_id, profile_digest, binding_digest, launch_policy_digest, provider, projection_kind, destination, format_json, materializer, idempotency_key,
         materialization_generation, expires_at, authorization_epoch, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)]],
-        {projection_id, request.workspace_id, request.name, definition.definition_id, definition.revision, node(), 1, subject, request.audience, request.attempt_id,
+        {projection_id, request.workspace_id, request.name, definition.definition_id, definition.revision, owner_node, 1, subject, request.audience, request.attempt_id,
             request.profile_id, request.profile_digest, request.binding_digest, request.launch_policy_digest, definition.provider, definition.projection_kind, definition.destination,
             format_json, materializer, request.idempotency_key, stamp(created + request.ttl), epoch, stamp(created)})
     if insert_error then
@@ -444,7 +487,9 @@ function M.issue_projection(value: unknown): Reply
     local stored = projection_of(db, projection_id)
     db:release()
     if not stored then return fail("STORAGE", "read projection") end
-    return succeed(projection_view(stored))
+    local view, view_error = projection_view(stored)
+    if not view then return fail("STORAGE", view_error or "credential projection is corrupt") end
+    return succeed(view)
 end
 -- Recheck the host-selected file source against the definition before using
 -- its capability. Host edits cannot retarget an already-issued projection.
@@ -470,9 +515,11 @@ local function file_binding(definition: Row, workspace_id: string, audience: str
     if write_back_error or write_back == nil then return nil, fail("FORBIDDEN", write_back_error or "file write-back admission unavailable") end
     local directory, directory_error = sources.directory(ref)
     if not directory then return nil, fail("INVALID", directory_error or "file source unavailable") end
+    local optional_value = integer(definition.optional)
+    if optional_value ~= 0 and optional_value ~= 1 then return nil, fail("STORAGE", "credential optional flag is corrupt") end
     local digest_payload: {[string]: unknown} = {provider = provider, source_kind = "fs_directory", source_ref = ref, directory = directory,
         path = path, setup = setup, auxiliary_files = auxiliary_files, write_back = write_back,
-        projection_kind = "file", destination = definition.destination, optional = integer(definition.optional) == 1}
+        projection_kind = "file", destination = definition.destination, optional = optional_value == 1}
     local digest = digest_of(digest_payload)
     if not digest or digest ~= definition.digest then return nil, fail("CONFLICT", "credential source changed; redefine before use") end
     return path, nil, setup, write_back
@@ -484,7 +531,9 @@ local function binding_holds(projection: Row, subject: string, audience: string,
     if projection.subject ~= subject or projection.audience ~= audience then return fail("DENIED", "projection binds another subject or audience") end
     if projection.attempt_id ~= attempt_id then return fail("DENIED", "projection is scoped to another attempt") end
     local workspace_id = text(projection.workspace_id) or ""
-    if (integer(projection.authorization_epoch) or 0) < epoch then return fail("REVOKED", "workspace authorization epoch advanced past the projection") end
+    local projection_epoch = integer(projection.authorization_epoch)
+    if not projection_epoch or projection_epoch < 0 then return fail("STORAGE", "projection authorization epoch is corrupt") end
+    if projection_epoch < epoch then return fail("REVOKED", "workspace authorization epoch advanced past the projection") end
     if not definition or definition.definition_id ~= projection.definition_id or definition.revision ~= projection.definition_revision then
         return fail("CONFLICT", "credential definition was replaced; the projection needs re-issue")
     end
@@ -703,21 +752,32 @@ function M.check(value: unknown): Reply
     -- Report only its source's existence; no login bytes are opened here.
     local source_present: boolean? = nil
     if not refused and projection.projection_kind == "file" then
-        local definition = definition_of(db, workspace_id, text(projection.name) or "")
-        if definition then
-            local path = file_binding(definition, workspace_id, object.audience :: string)
+        local definition, definition_error = definition_of(db, workspace_id, text(projection.name) or "")
+        if definition_error then
+            refused = fail("STORAGE", definition_error)
+        elseif not definition then
+            refused = fail("CONFLICT", "credential definition is gone")
+        else
+            local path, binding_error = file_binding(definition, workspace_id, object.audience :: string)
+            if not path then refused = binding_error or fail("INVALID", "file source is unavailable") end
             local source_ref = bounds.id(definition.source_ref)
             local volume = source_ref and fs.get(source_ref) or nil
-            if path and volume then
+            if not source_ref then refused = fail("STORAGE", "credential source reference is corrupt")
+            elseif not volume then refused = fail("UNAVAILABLE", "credential source volume is unavailable") end
+            if path and volume and not refused then
                 local info, stat_error = volume:stat("/" .. path)
                 if info then source_present = info.type == "file" and info.is_dir ~= true
-                elseif stat_error and stat_error:kind() == errors.NOT_FOUND then source_present = false end
+                elseif stat_error and stat_error:kind() == errors.NOT_FOUND then source_present = false
+                else refused = fail("UNAVAILABLE", "credential login path could not be inspected") end
             end
         end
     end
     db:release()
     if refused then return refused end
-    local result = projection_view(projection)
+    local result, view_error = projection_view(projection)
+    if not result then
+        return fail("STORAGE", view_error or "credential projection is corrupt")
+    end
     result.source_present = source_present
     return succeed(result)
 end
@@ -732,44 +792,65 @@ function M.materialize(value: unknown): Reply
     if not provider_files then return fail("INVALID", provider_files_error or "provider_files is invalid") end
     local generation_key = bounds.id(object.generation_key)
     if not generation_key then return fail("INVALID", "generation_key is not an identifier") end
-    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
+    local materializer = actor()
+    if not materializer then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
-    local projection, projection_error = projection_of(db, object.projection_id :: string)
-    if projection_error then
+    local projection_id = bounds.id(object.projection_id)
+    local subject, audience, attempt_id = bounds.id(object.subject), bounds.id(object.audience), bounds.id(object.attempt_id)
+    if not projection_id or not subject or not audience or not attempt_id then
         db:release()
-        return fail("STORAGE", projection_error)
+        return fail("INVALID", "materialization identity is malformed")
     end
-    if not projection then
-        db:release()
-        return fail("NOT_FOUND", "projection does not exist")
-    end
-    local workspace_id = text(projection.workspace_id) or ""
-    if not security.can(M.MATERIALIZE, workspace_id) then
-        db:release()
-        return fail("DENIED", "caller is not a materializer admitted in workspace " .. workspace_id)
-    end
-    local refused = holds(db, projection, object.subject :: string, object.audience :: string, object.attempt_id :: string)
-    if refused then
-        db:release()
-        return refused
-    end
-    local definition = definition_of(db, workspace_id, text(projection.name) or "")
-    if not definition then
-        db:release()
-        return fail("CONFLICT", "credential definition is gone")
-    end
-    local generation = (integer(projection.materialization_generation) or 0) + 1
-    local _, key_error = db:execute("INSERT INTO bee_credential_generations (projection_id, generation_key, generation, materializer_actor, created_at) VALUES (?, ?, ?, ?, ?)",
-        {projection.projection_id, generation_key, generation, actor(), stamp(now_ms())})
-    if key_error then
-        db:release()
-        return fail("CONFLICT", "generation key " .. generation_key .. " was already used; a lost reply is not repaired by a second read")
-    end
-    local _, update_error = db:execute("UPDATE bee_credential_projections SET materialization_generation = ? WHERE projection_id = ?", {generation, projection.projection_id})
-    if update_error then
-        db:release()
-        return fail("STORAGE", "record materialization")
+    local reserved: TransactionResult = transaction.write(db, "credential materialization", function(tx: sql.Transaction): TransactionResult
+        local projection, projection_error = projection_in(tx, projection_id)
+        if projection_error then return transaction.failure("STORAGE", projection_error) :: TransactionResult end
+        if not projection then return transaction.failure("NOT_FOUND", "projection does not exist") :: TransactionResult end
+        local workspace_id = bounds.id(projection.workspace_id)
+        local name = bounds.id(projection.name)
+        if not workspace_id or not name then return transaction.failure("STORAGE", "projection identity is corrupt") :: TransactionResult end
+        if not security.can(M.MATERIALIZE, workspace_id) then
+            return transaction.failure("DENIED", "caller is not a materializer admitted in workspace " .. workspace_id) :: TransactionResult
+        end
+        local refused = holds_in(tx, projection, subject, audience, attempt_id)
+        if refused then return transaction.failure(refused.error and refused.error.code or "DENIED",
+            refused.error and refused.error.message or "projection binding is invalid") :: TransactionResult end
+        local definition, definition_error = definition_in(tx, workspace_id, name)
+        if definition_error then return transaction.failure("STORAGE", definition_error) :: TransactionResult end
+        if not definition then return transaction.failure("CONFLICT", "credential definition is gone") :: TransactionResult end
+        local current_generation = integer(projection.materialization_generation)
+        if current_generation == nil then
+            return transaction.failure("STORAGE", "materialization generation is corrupt") :: TransactionResult
+        end
+        if current_generation < 0 then
+            return transaction.failure("STORAGE", "materialization generation is corrupt") :: TransactionResult
+        end
+        if current_generation >= 9007199254740991 then
+            return transaction.failure("STORAGE", "materialization generation has reached its safe integer limit") :: TransactionResult
+        end
+        local used, used_error = tx:query("SELECT generation_key FROM bee_credential_generations WHERE projection_id = ? AND generation_key = ?",
+            {projection_id, generation_key})
+        if used_error or not used then return transaction.failure("STORAGE", "read materialization generation key") :: TransactionResult end
+        if #used > 0 then
+            return transaction.failure("CONFLICT", "generation key " .. generation_key .. " was already used; a lost reply is not repaired by a second read") :: TransactionResult
+        end
+        local generation = current_generation + 1
+        local _, key_error = tx:execute("INSERT INTO bee_credential_generations (projection_id, generation_key, generation, materializer_actor, created_at) VALUES (?, ?, ?, ?, ?)",
+            {projection_id, generation_key, generation, materializer, stamp(now_ms())})
+        if key_error then return transaction.failure("STORAGE", "reserve materialization generation") :: TransactionResult end
+        local _, update_error = tx:execute("UPDATE bee_credential_projections SET materialization_generation = ? WHERE projection_id = ?",
+            {generation, projection_id})
+        if update_error then return transaction.failure("STORAGE", "advance materialization generation") :: TransactionResult end
+        return transaction.success({projection = projection, definition = definition, generation = generation}, false) :: TransactionResult
+    end)
+    db:release()
+    if not reserved.ok then return fail(reserved.code or "STORAGE", reserved.message or "reserve materialization generation") end
+    local allocation = bounds.object(reserved.value)
+    local projection = allocation and bounds.object(allocation.projection)
+    local definition = allocation and bounds.object(allocation.definition)
+    local generation = allocation and bounds.count(allocation.generation)
+    if not projection or not definition or not generation or generation < 1 then
+        return fail("STORAGE", "materialization reservation returned corrupt data")
     end
     local source_ref = text(definition.source_ref) or ""
     local proj_kind = text(projection.projection_kind) or "environment"
@@ -777,23 +858,19 @@ function M.materialize(value: unknown): Reply
     local provider = text(definition.provider) or ""
     local optional_value = integer(definition.optional)
     if optional_value ~= 0 and optional_value ~= 1 then
-        db:release()
         return fail("STORAGE", "credential optional flag is corrupt")
     end
     local optional = optional_value == 1
     if #provider_files > 0 and proj_kind ~= "file" then
-        db:release()
         return fail("INVALID", "provider_files is only valid for file projections")
     end
     local frozen_format, frozen_format_error = stored_format(definition)
     if not frozen_format then
-        db:release()
         return fail("CONFLICT", frozen_format_error or "credential format is not frozen")
     end
 
     if proj_kind == "environment" then
         local secret, secret_error = env.get(source_ref)
-        db:release()
         if secret_error or type(secret) ~= "string" or secret == "" then
             if optional and (not secret_error or secret_error:kind() == errors.NOT_FOUND) then
                 return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "environment", encoding = "utf-8",
@@ -810,17 +887,14 @@ function M.materialize(value: unknown): Reply
         local content_format = file_object and file_object.content_format or nil
         local expected_dest = sources.destination(frozen_format, "file")
         if not expected_dest or destination ~= expected_dest or (content_format ~= "json" and content_format ~= "opaque") then
-            db:release()
             return fail("CONFLICT", "projection destination does not match credential format")
         end
         if not content_format then
-            db:release()
             return fail("CONFLICT", "projection content format is unavailable")
         end
         local path, binding_error, setup, write_back = file_binding(definition, text(projection.workspace_id) or "", text(projection.audience))
-        if not path then db:release(); return binding_error or fail("INVALID", "file source unavailable") end
+        if not path then return binding_error or fail("INVALID", "file source unavailable") end
         local volume = fs.get(source_ref)
-        db:release()
         if not volume then return fail("UNAVAILABLE", "source root " .. source_ref .. " unavailable") end
         local resolved_format = frozen_format
         if setup then
@@ -952,6 +1026,9 @@ function M.write_back(value: unknown): Reply
         if refused then return transaction.failure(refused.error and refused.error.code or "DENIED",
             refused.error and refused.error.message or "projection no longer holds") :: TransactionResult end
         if current_projection.projection_kind ~= "file" or integer(current_projection.materialization_generation) ~= generation then
+            if integer(current_projection.materialization_generation) == nil then
+                return transaction.failure("STORAGE", "materialization generation is corrupt") :: TransactionResult
+            end
             return transaction.failure("DENIED", "write-back does not match the active file projection generation") :: TransactionResult
         end
         local definition, definition_error = definition_in(tx, workspace_id, text(current_projection.name) or "")
@@ -1045,7 +1122,9 @@ function M.revoke(value: unknown): Reply
     local stored = projection_of(db, projection_id)
     db:release()
     if not stored then return fail("STORAGE", "read projection") end
-    return succeed(projection_view(stored))
+    local view, view_error = projection_view(stored)
+    if not view then return fail("STORAGE", view_error or "credential projection is corrupt") end
+    return succeed(view)
 end
 function M.revoke_all(value: unknown): Reply
     local object = bounds.object(value)
@@ -1084,14 +1163,24 @@ function M.list(value: unknown): Reply
     db:release()
     if definitions_error or not definitions or projections_error or not projections then return fail("STORAGE", "read workspace credentials") end
     local definition_views: {{[string]: unknown}} = {}
-    for index, row in ipairs(definitions) do definition_views[index] = definition_view(row :: Row) end
+    for index, row in ipairs(definitions) do
+        local view, view_error = definition_view(row :: Row)
+        if not view then return fail("STORAGE", view_error or "credential definition is corrupt") end
+        definition_views[index] = view
+    end
     local projection_views: {{[string]: unknown}} = {}
-    for index, row in ipairs(projections) do projection_views[index] = projection_view(row :: Row) end
+    for index, row in ipairs(projections) do
+        local view, view_error = projection_view(row :: Row)
+        if not view then return fail("STORAGE", view_error or "credential projection is corrupt") end
+        projection_views[index] = view
+    end
     return succeed({workspace_id = workspace_id, definitions = definition_views, projections = projection_views})
 end
 function M.capabilities(): Reply
     local admitted, admitted_error = sources.host_sources()
     if not admitted then return fail("STORAGE", admitted_error or "host sources") end
+    local local_node, node_error = node()
+    if not local_node then return fail("UNAVAILABLE", node_error or "node identity is unavailable") end
     local providers = sources.providers(admitted)
     local destinations: {[string]: string} = {}
     local file_destinations: {[string]: string} = {}
@@ -1107,6 +1196,6 @@ function M.capabilities(): Reply
     return succeed({credential_broker = true, projection_kinds = {"environment", "file"}, providers = providers, destinations = destinations,
         file_destinations = file_destinations, file_projections = true, provider_revocation = false, refresh = false, write_back = true,
         rotation = "next_materialization", repeat_generation = "refused", max_secret_bytes = M.MAX_SECRET_BYTES, max_file_bytes = M.MAX_FILE_BYTES,
-        max_ttl_ms = M.MAX_TTL_MS, revocation_enforcement = "stop_on_reconcile", node = node()})
+        max_ttl_ms = M.MAX_TTL_MS, revocation_enforcement = "stop_on_reconcile", node = local_node})
 end
 return M

@@ -1,42 +1,47 @@
 # bee.git_worktree
 
-Git worktree and repository metadata preparation plugin for Bee placement.
+Git metadata discovery and dedicated worktrees are a placement plugin. The
+component root contains its registry index and the `git_roots`, `worktree`,
+`plan`, `setup`, `cleanup`, and `binding` entries.
 
-| Slice | Responsibility |
-|---|---|
-| `bee.git_worktree` | `git_roots`: pure discovery of Git metadata directories (`.git` and `commondir`) without spawning Git; `worktree`: dedicated worktree and branch creation, unmerged status verification and cleanup; `setup`: workdir preparer setup handler; `cleanup`: workdir preparer cleanup handler; `binding`: contract binding for `bee.placement:workdir_preparer` |
+The host selects `bee.git_worktree:binding` through placement's
+`target_workdir_preparers` requirement. Its default list is empty; Bee's host
+composition selects this plugin. Registry metadata never authorizes execution.
+The contract has three methods: `plan` performs read-only inspection, placement
+persists its ownership state, `setup` applies that plan, and `cleanup` consumes
+the recorded state. Setup and cleanup can be repeated after interruption.
 
-## Extension point integration
+Without a dedicated option, setup reads the repository's `.git` and `commondir`
+metadata. Physical directory resolution checks symlinks before contributing
+roots. Metadata outside admitted write roots contributes no additional access.
+Placement independently checks every contributed root and changed workdir.
+The driver profile selects the CLI adapter; placement renders its arguments.
 
-This package implements the `bee.placement:workdir_preparer` contract binding:
-- `meta.type`: `bee.placement.workdir_preparer`
-- `contracts`: `bee.placement:workdir_preparer` (`setup` and `cleanup`)
+A launch definition can set `worktree: dedicated` (or
+`options: {worktree: dedicated}`, but not both). No other options are accepted.
+Simple bounded alphanumeric, underscore and hyphen attempt IDs keep their names.
+Namespaced IDs (including the harness's `attempt:` prefix), dotted IDs and
+longer IDs use `_` plus their SHA-256 digest. Separators and whitespace are
+refused. The plugin creates `<physical-workdir>/.worktrees/<component>` and
+`bee-worker-<component>`, preserving the original attempt ID in ownership state.
+The working directory and Git common directory must already be write-granted.
+Preexisting names and symlinked worktree parents are refused. Git receives
+quoted arguments through the native executor; setup and cleanup disable hooks.
 
-The host authorizes this binding by including `bee.git_worktree:binding` in its placement
-`target_workdir_preparers` configuration. Registry metadata alone never authorizes execution.
+Ownership evidence records the repository, common directory, physical workdir,
+worktree path, branch, original commit and fully qualified destination branch
+(or original commit for detached repositories). Cleanup verifies that identity
+and retains dirty, untracked, ignored, detached, switched or unmerged work.
+Index flags that suppress change detection (`assume-unchanged` or
+`skip-worktree`) also retain the worktree.
+It uses non-forced worktree removal and safe branch deletion; command and
+storage failures surface as placement evidence and failed cleanup replies.
+An already removed worktree or branch is handled idempotently. Missing or
+changed ownership evidence refuses deletion. Locked worktrees remain intact.
 
-## Operations
-
-### Repository metadata discovery
-
-When a launch definition does not ask for a dedicated worktree, `setup` inspects the working
-directory for a repository or worktree `.git` marker. It resolves the exact Git directory and
-common directory using filesystem reads only. The detected directories are contributed as
-extra writable roots within the host-admitted write roots.
-
-### Dedicated worktree creation
-
-When a launch definition requests a dedicated worktree (`options.worktree = "dedicated"`),
-`setup` creates a dedicated branch (`bee-worker-<attempt_id>`) and a separate worktree under
-`<workdir>/.worktrees/<attempt_id>`. It returns the worktree as the attempt's working directory,
-contributes the worktree's Git directories as extra writable roots, and records state for cleanup.
-
-### Cleanup
-
-When the attempt exits, placement invokes `cleanup`:
-1. If the worktree has uncommitted changes (`git status --porcelain` is non-empty), the worktree
-   is retained and reported as evidence (`workdir_preparer.retained`).
-2. If the worker branch has unmerged commits (`git merge-base --is-ancestor` fails), the worktree
-   is retained and reported as evidence (`workdir_preparer.retained`).
-3. If the worktree has no unmerged or uncommitted changes, it is removed cleanly via
-   `git worktree remove` and the temporary worker branch is deleted.
+Placement runs cleanup on proven attempt ends, including failed startup, and
+its sweep recovers ended attempts. Before child creation, an absent runner and
+a durable plan without a child-creation intent prove that cleanup is safe.
+An interruption during child creation without a recorded process identity
+remains uncertain; placement preserves the work until absence is proven.
+Retained work is reported through `workdir_preparer.retained` evidence.

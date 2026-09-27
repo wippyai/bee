@@ -83,6 +83,8 @@ entries:
   meta:
     comment: Generic workdir preparer extension point for contributing extra writable roots, setup before child start, and cleanup after child ends
   methods:
+  - name: plan
+    description: Plan setup without mutations; placement persists the returned state before setup
   - name: setup
     description: Run setup before the child starts, optionally returning modified working_directory, extra writable roots, and state
   - name: cleanup

@@ -67,18 +67,10 @@ end
 function M.detect(workdir: string, exists: Exists, is_directory: IsDirectory, read_file: ReadFile): ({string}?, string?)
     local absolute_workdir, workdir_error = M.normalize(workdir, nil)
     if not absolute_workdir then return nil, workdir_error end
-    -- Git discovers a parent repository when the granted directory is a
-    -- subdirectory, so follow the same nearest-.git rule without spawning it.
-    local repository = absolute_workdir
+    local repository, repository_error = M.find_repository(absolute_workdir, exists)
+    if repository_error then return nil, repository_error end
+    if not repository then return {}, nil end
     local marker = repository == "/" and "/.git" or repository .. "/.git"
-    while true do
-        local present, exists_error = exists(marker)
-        if exists_error then return nil, "inspect .git: " .. exists_error end
-        if present == true then break end
-        if repository == "/" then return {}, nil end
-        repository = parent(repository)
-        marker = repository == "/" and "/.git" or repository .. "/.git"
-    end
 
     local marker_is_directory, marker_error = is_directory(marker)
     if marker_error then return nil, "inspect .git: " .. marker_error end

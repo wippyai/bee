@@ -73,17 +73,27 @@ there is no automatic retry or replay of the user's prompt.
 
 Placement exposes a generic `bee.placement:workdir_preparer` extension point discovered
 from the registry and authorized by the host through `target_workdir_preparers` (registry
-metadata alone never authorizes). A workdir preparer runs setup before the child starts
-and cleanup after it ends. It may contribute extra writable roots inside already
+metadata alone never authorizes). The default preparer list is empty; the host
+explicitly selects bindings. Each binding implements read-only `plan`, idempotent
+`setup`, and idempotent `cleanup`. Placement persists plan state and the selected
+method targets before calling setup, including for preparers without state.
+Setup declares the option names it handles; unhandled requested options refuse the launch.
+Changed bindings cannot replace a recorded plan during setup replay.
+Cleanup runs on proven attempt ends and the supervisor sweeps outstanding plans.
+Failures do not prevent other planned preparers from receiving cleanup. It may contribute extra writable roots inside already
 write-granted roots, update the working directory (such as creating a dedicated Git worktree),
-and preserve state between setup and cleanup. Failures are recorded as placement evidence
+and preserve planned ownership state between setup and cleanup. Failures are recorded as placement evidence
 (`workdir_preparer.failed`).
 
 The per-CLI argument rendering stays owned by placement's `writable_roots_adapter`.
 When extra writable roots are contributed and remain inside host-admitted write roots,
 placement renders the driver profile's `git_writable_roots_adapter`: Codex receives
 `sandbox_workspace_write.writable_roots`; Claude Code and Agy receive `--add-dir` for each path.
-Placement refuses materialization when contributed roots escape write-granted roots.
+Placement resolves physical directories (including symlinks and parent components)
+and refuses malformed roots or roots and changed workdirs outside write grants.
+Cleanup preserves uncertainty when process absence cannot be proven. It records
+retention, checks evidence writes, and surfaces preparer failures even if home
+removal also fails.
 A read-only workdir, a profile without the matching edit-capable CLI mode, or a launch
 without contributed writable roots receives no extra arguments.
 

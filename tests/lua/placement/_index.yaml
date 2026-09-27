@@ -75,6 +75,7 @@ entries:
   imports:
     test: wippy.test:test
     writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
+    driver_types: bee.driver:types
 - name: workdir_preparer_test
   kind: function.lua
   source: file://workdir_preparer_test.lua
@@ -86,6 +87,7 @@ entries:
   imports:
     test: wippy.test:test
     workdir_preparers: bee.placement.native.service:workdir_preparers
+    service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
     request_codec: bee.placement:request
     quote: bee.driver.kit:quote
@@ -330,3 +332,30 @@ entries:
     configuration_protocol: bee.driver:configuration
     canonical: bee.threads.records:canonical
     fixture_builder: bee.placement.native:fixture_instruction_builder
+- name: preparer_fixture_config
+  kind: registry.entry
+  data: {}
+- name: preparer_fixture_binding
+  kind: contract.binding
+  meta: {type: bee.placement.workdir_preparer}
+  contracts:
+  - contract: bee.placement:workdir_preparer
+    methods:
+      plan: bee.placement.native:preparer_fixture_plan
+      setup: bee.placement.native:preparer_fixture_setup
+      cleanup: bee.placement.native:preparer_fixture_cleanup
+- name: preparer_fixture_plan
+  kind: function.lua
+  source: file://preparer_fixture.lua
+  method: plan
+  modules: [registry]
+- name: preparer_fixture_setup
+  kind: function.lua
+  source: file://preparer_fixture.lua
+  method: setup
+  modules: [registry]
+- name: preparer_fixture_cleanup
+  kind: function.lua
+  source: file://preparer_fixture.lua
+  method: cleanup
+  modules: [registry]

@@ -8,6 +8,8 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    placement_request: bee.placement:request
+    placement_types: bee.placement:types
 - name: admission
   kind: library.lua
   source: file://admission.lua

@@ -21,9 +21,9 @@ implementation rejects requests naming another binding before durable intent;
 native windows require the exact native binding ID.
 
 Placement implementations also discover and invoke host-authorized
-`bee.placement:workdir_preparer` contract bindings (`setup` and `cleanup`).
+`bee.placement:workdir_preparer` contract bindings (`plan`, `setup`, and `cleanup`).
 A preparer contributes extra writable roots inside already write-granted roots,
-runs setup before the child starts, and cleans up when the attempt ends.
+persists read-only plan state before setup starts, and cleans up when the attempt ends.
 Failures are recorded as placement evidence.
 
 ## Rules

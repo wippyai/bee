@@ -53,6 +53,12 @@ entries:
   imports:
     canonical: bee.threads.records:canonical
     driver_types: bee.driver:types
+- name: paths
+  kind: library.lua
+  source: file://paths.lua
+  modules: [exec]
+  imports:
+    quote: bee.driver.kit:quote
 - name: workdir_preparers
   kind: library.lua
   source: file://workdir_preparers.lua
@@ -61,12 +67,12 @@ entries:
     resources: bee.placement.native:resources
     types: bee.placement:types
     bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
     store: bee.placement.native.persist:store
+    paths: bee.placement.native.service:paths
 - name: service
   kind: library.lua
   source: file://service.lua
-  modules: [process, channel, time, security, uuid, json, funcs, registry]
+  modules: [process, channel, time, security, uuid, json, funcs, registry, system]
   imports:
     gateway_configuration: bee.gateway:configuration
     configuration: bee.driver:configuration
@@ -115,6 +121,7 @@ entries:
   method: main
   modules: [process, channel, time, exec, funcs]
   imports:
+    service: bee.placement.native.service:service
     materialization: bee.placement.native.service:materialization
     store: bee.placement.native.persist:store
     executable: bee.placement.native.service:executable

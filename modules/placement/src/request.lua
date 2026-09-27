@@ -333,6 +333,16 @@ local function decode_timeouts(value: unknown): (types.Timeouts?, string?)
     end
     return result, nil
 end
+function M.decode_options(value: unknown): (types.WorkdirOptions?, string?)
+    if value == nil then return nil, nil end
+    local object = bounds.object(value)
+    if not object then return nil, "options must be an object" end
+    local extra = bounds.fields(object, {"worktree"})
+    if extra then return nil, "options: " .. extra end
+    if object.worktree == nil then return {}, nil end
+    if object.worktree ~= "dedicated" then return nil, "options.worktree must be dedicated" end
+    return {worktree = "dedicated"}, nil
+end
 function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
@@ -470,12 +480,8 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not observation then return nil, "required_exit_observation must be independent or eof_gated" end
     local timeouts, timeouts_error = decode_timeouts(object.timeouts)
     if not timeouts then return nil, timeouts_error end
-    local options: {[string]: any}? = nil
-    if object.options ~= nil then
-        local declared = bounds.object(object.options)
-        if not declared then return nil, "options must be an object" end
-        options = declared
-    end
+    local options, options_error = M.decode_options(object.options)
+    if options_error then return nil, options_error end
     local decoded: types.LaunchRequest = {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
         preferences = selected,
         binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,

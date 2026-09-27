@@ -246,8 +246,9 @@ local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRe
     local write_roots: {string} = {}
     for _, grant in ipairs(request.resources) do
         if grant.access == "write" then
-            local root = resources.directory(grant.root_ref)
-            if root then write_roots[#write_roots + 1] = root end
+            local root, root_error = resources.directory(grant.root_ref)
+            if not root then return nil, nil, root_error or "write-granted root unavailable" end
+            write_roots[#write_roots + 1] = root
         end
     end
     local work_dir, extra_roots, preparer_error = workdir_preparers.setup(db, request, attempt_id, initial_work_dir, write_roots)
@@ -259,12 +260,14 @@ local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRe
     if not adapter or #extra_roots == 0 then
         return work_dir, {}, nil
     end
-    local active_adapter: string = tostring(adapter)
-    local active_roots: {string} = extra_roots :: {string}
-    if not writable_roots_adapter.enabled(active_adapter, request.launch.argv) then
+    local writable_workdir = false
+    for _, grant in ipairs(request.resources) do
+        if grant.name == request.launch.working_directory_ref and grant.access == "write" then writable_workdir = true end
+    end
+    if not writable_workdir or not writable_roots_adapter.enabled(adapter, request.launch.argv) then
         return work_dir, {}, nil
     end
-    local sandbox_args, args_error = writable_roots_adapter.arguments(active_adapter, active_roots)
+    local sandbox_args, args_error = writable_roots_adapter.arguments(adapter, extra_roots)
     if not sandbox_args then
         return nil, nil, args_error or "render writable roots arguments"
     end

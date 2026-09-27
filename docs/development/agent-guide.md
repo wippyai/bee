@@ -112,9 +112,9 @@ batch routes as `unconfined`: the orchestrator launches them only where
 its own launch policy names them in `agent_launch_unconfined`, and
 `launch_definitions` reports the mark.
 
-For an edit-capable profile with a write-granted workdir, placement also
-resolves the repository's Git directory and shared common directory from Git's
-metadata files. It passes those exact paths to the CLI sandbox only when both
+For an edit-capable profile with a write-granted workdir, the host-selected
+Git worktree plugin resolves the repository's Git directory and shared common
+directory from Git's metadata files. Placement passes those physical paths to the CLI sandbox only when both
 remain within a host-admitted write root; this lets a worktree commit while
 keeping the host's admitted roots as the outer boundary.
 

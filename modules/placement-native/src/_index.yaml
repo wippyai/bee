@@ -250,6 +250,5 @@ entries:
     type: bee.placement_workdir_preparers
     comment: Contract bindings authorized by host policy to run workdir setup and cleanup
   data:
-    preparers:
-    - bee.git_worktree:binding
+    preparers: []
 

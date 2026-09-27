@@ -4,7 +4,7 @@
 local canonical = require("canonical")
 local driver_types = require("driver_types")
 local M = {}
-type Adapter = string
+type Adapter = driver_types.GitWritableRootsAdapter
 
 local function codex_enabled(argv: {string}): boolean
     for index, argument in ipairs(argv) do

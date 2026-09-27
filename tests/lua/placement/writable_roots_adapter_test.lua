@@ -1,6 +1,7 @@
 -- MIT. Tests for writable roots CLI adapter rendering.
 local test = require("test")
 local writable_roots_adapter = require("writable_roots_adapter")
+local driver_types = require("driver_types")
 
 local function define_tests()
     test.describe("Writable roots adapter", function()
@@ -39,7 +40,8 @@ local function define_tests()
         end)
 
         test.it("rejects unsupported adapter kind", function()
-            local args, err = writable_roots_adapter.arguments("unsupported", {"/workspace/a"})
+            local invalid = "unsupported" :: unknown as driver_types.GitWritableRootsAdapter
+            local args, err = writable_roots_adapter.arguments(invalid, {"/workspace/a"})
             test.is_nil(args)
             test.not_nil(err)
         end)

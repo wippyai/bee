@@ -315,6 +315,24 @@ local function define_tests()
     test.describe("Launch admission", function()
         local workspace = fresh("ws")
         prepare_host(workspace)
+        test.it("decodes dedicated worktrees without mutable or untyped definition options", function()
+            local entry = assert(registry.get(DEFINITION))
+            local data = entry.data :: {[string]: unknown}
+            data.options = {worktree = "dedicated"}
+            local decoded = assert(definitions.decode(DEFINITION, entry))
+            test.eq(decoded.options and decoded.options.worktree, "dedicated")
+            data.options = {worktree = "dedicated", path = "/outside"}
+            local invalid, err = definitions.decode(DEFINITION, entry)
+            test.is_nil(invalid); test.not_nil(err)
+            data.options = nil
+            data.worktree = "dedicated"
+            decoded = assert(definitions.decode(DEFINITION, entry))
+            test.eq(decoded.options and decoded.options.worktree, "dedicated")
+            test.is_nil(data.options)
+            data.options = {worktree = "dedicated"}
+            invalid, err = definitions.decode(DEFINITION, entry)
+            test.is_nil(invalid); test.not_nil(err)
+        end)
         test.it("fences a saved profile revision before admission and rejects preferences outside host policy", function()
             local workspace_id, saved_id = workspace, fresh("profile")
             local function save(revision: integer, title: string, options: {[string]: unknown})

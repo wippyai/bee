@@ -20,6 +20,14 @@ entries:
   kind: ns.dependency
   component: bee/placement
   version: '*'
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+- name: dependency_native
+  kind: ns.dependency
+  component: bee/placement-native
+  version: '*'
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -30,9 +38,21 @@ entries:
 - name: worktree
   kind: library.lua
   source: file://worktree.lua
-  modules: [exec, fs, registry]
+  modules: [exec, fs, registry, hash]
   imports:
     git_roots: bee.git_worktree:git_roots
+    paths: bee.placement.native.service:paths
+    bounds: bee.threads.records:bounds
+    quote: bee.driver.kit:quote
+- name: plan
+  kind: function.lua
+  source: file://setup_method.lua
+  method: plan
+  imports:
+    worktree: bee.git_worktree:worktree
+    bounds: bee.threads.records:bounds
+  security:
+    policies: [bee.git_worktree:worktree_policy]
 - name: setup
   kind: function.lua
   source: file://setup_method.lua
@@ -58,6 +78,7 @@ entries:
   contracts:
   - contract: bee.placement:workdir_preparer
     methods:
+      plan: bee.git_worktree:plan
       setup: bee.git_worktree:setup
       cleanup: bee.git_worktree:cleanup
 - name: worktree_policy

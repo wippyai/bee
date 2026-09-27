@@ -360,3 +360,9 @@ entries:
     methods:
       describe: bee.gateway.binding:describe
       search: bee.gateway.binding:search
+- name: workdir_preparers
+  kind: registry.entry
+  meta:
+    type: bee.placement_workdir_preparers
+  data:
+    preparers: [bee.git_worktree:binding]

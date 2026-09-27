@@ -33,6 +33,7 @@ local service_reply = require("service_reply")
 local credential_protocol = require("credential_protocol")
 local resource_resolution = require("resource_resolution")
 local workdir_preparers = require("workdir_preparers")
+local system = require("system")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
 M.RECONCILE_TIMEOUT_MS = 5000
@@ -761,11 +762,42 @@ local function runner_status(row: store.Row?, attempt: types.Attempt): (string?,
     process.unlisten(replies)
     return execution, detail
 end
--- shares; M.reconcile authenticates the owner first.
+local function preparer_runner_absent(row: store.Row?, attempt_id: string): boolean
+    local runner = row and bounds.id(row.runner_pid)
+    if not runner then return false end
+    local db = store.open()
+    if not db then return false end
+    local intents, err = db:query("SELECT kind FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('workdir_preparer.state', 'child.creating')", {attempt_id})
+    db:release()
+    if err or not intents or #intents == 0 then return false end
+    for _, item in ipairs(intents) do if item.kind == "child.creating" then return false end end
+    local raw_hosts, hosts_error = system.hosts.list()
+    local hosts = bounds.array(raw_hosts, 1024)
+    if hosts_error or not hosts or #hosts == 0 then return false end
+    for _, raw in ipairs(hosts) do
+        local host = bounds.object(raw)
+        local id = host and bounds.id(host.id)
+        if not id then return false end
+        local raw_processes, processes_error = system.hosts.processes(id)
+        local processes = bounds.array(raw_processes, 65536)
+        if processes_error or not processes then return false end
+        for _, item in ipairs(processes) do
+            local proc = bounds.object(item)
+            local pid = proc and bounds.id(proc.pid)
+            if not pid or pid == runner then return false end
+        end
+    end
+    return true
+end
 function M.reconcile_attempt(attempt: types.Attempt): Reply
     if attempt.execution_state == "exited" or attempt.execution_state == "intended" then return succeed(attempt) end
     local recorded, _, row = recorded_identity(attempt.attempt_id)
     if not recorded then
+        if preparer_runner_absent(row, attempt.attempt_id) then
+            retire_gateway(attempt, "runner ended before child creation")
+            return transition(attempt.attempt_id, {execution = "exited", fields = {exit_source = "runner"},
+                evidence = {kind = "child.not_started", detail = "preparer intent persisted; runner absent; no child creation intent"}})
+        end
         if attempt.execution_state == "uncertain" then return succeed(attempt) end
         local supervised, supervised_detail = runner_status(row, attempt)
         if supervised then
@@ -808,7 +840,7 @@ end
 function M.sweep(): Reply
     local db, open_error = store.open()
     if not db then return fail("STORAGE", open_error or "open placement store") end
-    local rows, err = db:query("SELECT attempt_id FROM bee_placement_attempts WHERE execution_state IN ('starting', 'running', 'stopping') ORDER BY updated_at LIMIT ?", {M.SWEEP_BOUND})
+    local rows, err = db:query("SELECT attempt_id FROM bee_placement_attempts WHERE execution_state IN ('starting', 'running', 'stopping') OR (execution_state = 'exited' AND cleanup_state != 'complete' AND EXISTS (SELECT 1 FROM bee_placement_evidence e WHERE e.attempt_id = bee_placement_attempts.attempt_id AND e.kind = 'workdir_preparer.state') AND NOT EXISTS (SELECT 1 FROM bee_placement_evidence e WHERE e.attempt_id = bee_placement_attempts.attempt_id AND e.kind = 'workdir_preparers.settled')) ORDER BY updated_at LIMIT ?", {M.SWEEP_BOUND})
     if err or not rows then
         db:release()
         return fail("STORAGE", "read live attempts")
@@ -830,7 +862,7 @@ function M.sweep(): Reply
     db:release()
     local outcomes: {{attempt_id: string, ok: boolean, code: string?}} = {}
     for index, attempt in ipairs(live) do
-        local result = M.reconcile_attempt(attempt)
+        local result = attempt.execution_state == "exited" and M.cleanup_attempt(attempt, true) or M.reconcile_attempt(attempt)
         outcomes[index] = {attempt_id = attempt.attempt_id, ok = result.ok, code = result.error and result.error.code or nil}
     end
     return succeed({reconciled = #live, outcomes = outcomes})
@@ -842,6 +874,7 @@ local function scope_proven(attempt: types.Attempt, recorded: identity.Identity?
     if attempt.required_cleanup == "contained_tree" then return false, "no runtime here proves a contained tree" end
     if attempt.required_cleanup == "direct_process" then
         if attempt.exit_source == "runner" then return true, "exit observed by the runner" end
+        if attempt.exit_source == "terminal" then return true, "exit observed by the terminal owner" end
         if attempt.exit_source == "reconcile" then return true, "leader absence proven by identity" end
         return false, "exit not observed"
     end
@@ -889,6 +922,9 @@ function M.cleanup(value: unknown): Reply
     if not id then return invalid :: Reply end
     local attempt, denied = load(id)
     if not attempt then return denied :: Reply end
+    return M.cleanup_attempt(attempt)
+end
+function M.cleanup_attempt(attempt: types.Attempt, preparers_only: boolean?): Reply
     if attempt.cleanup_state == "complete" then return succeed(attempt) end
     if not transitions.may_clean(attempt.execution_state) then return fail("CONFLICT", "cleanup needs a proven exit; execution is " .. attempt.execution_state) end
     local recorded, identity_error, row = recorded_identity(attempt.attempt_id)
@@ -917,16 +953,19 @@ function M.cleanup(value: unknown): Reply
         if not noted.ok then return noted end
         return fail("CONFLICT", message)
     end
-    local home_key = row and row.home_key or nil
-    if type(home_key) == "string" and home_key ~= "" then
-        local remove_error = homes.remove_attempt(home_key)
-        if remove_error then
-            return transition(attempt.attempt_id, {cleanup = "uncertain", evidence = {kind = "cleanup.failed", detail = remove_error}})
-        end
-    end
     local preparers_ok, preparers_err = workdir_preparers.cleanup(attempt)
-    if not preparers_ok then
-        return transition(attempt.attempt_id, {cleanup = "uncertain", evidence = {kind = "cleanup.failed", detail = preparers_err or "workdir preparers cleanup failed"}})
+    if preparers_only then
+        if not preparers_ok then return fail("UNAVAILABLE", preparers_err or "workdir cleanup failed") end
+        return transition(attempt.attempt_id, {evidence = {kind = "workdir_preparers.settled", detail = "all planned preparers cleaned or retained"}})
+    end
+    local home_key = row.home_key
+    local remove_error: string? = nil
+    if type(home_key) == "string" and home_key ~= "" then remove_error = homes.remove_attempt(home_key) end
+    if not preparers_ok or remove_error then
+        local message = preparers_err and remove_error and (preparers_err .. "; " .. remove_error) or preparers_err or remove_error or "workdir cleanup failed"
+        local noted = transition(attempt.attempt_id, {cleanup = "uncertain", evidence = {kind = "cleanup.failed", detail = message}})
+        if not noted.ok then return noted end
+        return fail("UNAVAILABLE", message)
     end
     return transition(attempt.attempt_id, {cleanup = "complete", evidence = {kind = "cleanup.complete", detail = (home_key and "attempt home removed" or "no attempt home was created") .. "; " .. why}})
 end

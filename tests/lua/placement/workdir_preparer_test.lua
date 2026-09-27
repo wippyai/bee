@@ -1,9 +1,10 @@
 -- MIT. Tests for workdir preparers extension point, discovery, setup, and cleanup.
 local test = require("test")
+local registry = require("registry")
+local service = require("service")
 local time = require("time")
 local exec = require("exec")
 local json = require("json")
-local funcs = require("funcs")
 local workdir_preparers = require("workdir_preparers")
 local store = require("store")
 local request_codec = require("request_codec")
@@ -50,7 +51,7 @@ local function init_repo(dir: string)
     run_cmd({"git", "-C", dir, "commit", "-m", "initial commit"})
 end
 
-local function make_request(attempt_id: string, options: {[string]: any}?): types.LaunchRequest
+local function make_request(attempt_id: string, options: types.WorkdirOptions?): types.LaunchRequest
     local env_names: {string} = {}
     local argv_list: {string} = {"worker"}
     local req: types.LaunchRequest = {
@@ -98,8 +99,113 @@ local function claim_attempt(db, request: types.LaunchRequest)
     if not starting.ok then error(tostring(starting.message)) end
 end
 
+local function with_preparer(config: {[string]: unknown}, body: () -> ())
+    local host = registry.get("bee:workdir_preparers")
+    local fixture = registry.get("bee.placement.native:preparer_fixture_config")
+    if not host or not fixture then error("fixture configuration missing") end
+    local original_host, original_config = host.data, fixture.data
+    host.data = {preparers = {"bee.placement.native:preparer_fixture_binding"}}
+    fixture.data = config
+    local changes = registry.snapshot():changes()
+    changes:update(host); changes:update(fixture)
+    assert(changes:apply())
+    local ok, err = pcall(body)
+    host.data, fixture.data = original_host, original_config
+    local restoration = registry.snapshot():changes()
+    restoration:update(host); restoration:update(fixture)
+    assert(restoration:apply())
+    if not ok then error(tostring(err)) end
+end
+
 local function define_tests()
     test.describe("Workdir preparers extension point", function()
+        test.it("registry metadata alone never selects a preparer", function()
+            local preparers = workdir_preparers.authorized_preparers()
+            if not preparers then error("resolve preparers") end
+            for _, item in ipairs(preparers) do test.is_true(item.binding_id ~= "bee.placement.native:preparer_fixture_binding") end
+        end)
+
+        test.it("rejects escaped roots and workdirs and preserves cleanup intent", function()
+            local root, outside = temp_dir(), temp_dir()
+            run_cmd({"ln", "-s", outside, root .. "/escape"})
+            for _, output in ipairs({{extra_writable_roots = {root .. "/../" .. outside:match("[^/]+$")}},
+                {extra_writable_roots = {root .. "/escape"}}, {working_directory = outside},
+                {extra_writable_roots = {17}}, {extra_writable_roots = "invalid"}}) do
+                with_preparer(output, function()
+                    local db = assert(store.open())
+                    local req = make_request(fresh("escape"))
+                    claim_attempt(db, req)
+                    local dir, _, err = workdir_preparers.setup(db, req, req.attempt_id, root, {root})
+                    test.is_nil(dir)
+                    test.not_nil(err)
+                    local intents = assert(db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'workdir_preparer.state'", {req.attempt_id}))
+                    test.eq(#intents, 1)
+                    store.transition(db, req.attempt_id, {execution = "exited", fields = {exit_source = "runner"}, evidence = {kind = "test.exited", detail = "fixture exit"}})
+                    local attempt = assert(store.attempt(db, req.attempt_id))
+                    db:release()
+                    test.is_true(workdir_preparers.cleanup(attempt))
+                end)
+            end
+            cleanup_dir(root); cleanup_dir(outside)
+        end)
+
+        test.it("cleanup failures surface and a later call completes from evidence", function()
+            local root = temp_dir()
+            with_preparer({cleanup_failure = true}, function()
+                local db = assert(store.open())
+                local req = make_request(fresh("cleanup-fail"))
+                claim_attempt(db, req)
+                test.not_nil(workdir_preparers.setup(db, req, req.attempt_id, root, {root}))
+                store.transition(db, req.attempt_id, {execution = "exited", fields = {exit_source = "runner"}, evidence = {kind = "test.exited", detail = "fixture exit"}})
+                local attempt = assert(store.attempt(db, req.attempt_id))
+                db:release()
+                local result = service.cleanup_attempt(attempt)
+                test.is_false(result.ok)
+                test.contains(result.error.message, "fixture cleanup failure")
+                local entry = assert(registry.get("bee.placement.native:preparer_fixture_config"))
+                entry.data = {}
+                local changes = registry.snapshot():changes(); changes:update(entry); assert(changes:apply())
+                test.is_true(service.cleanup_attempt(attempt).ok)
+            end)
+            cleanup_dir(root)
+        end)
+
+        test.it("recovers a vanished runner before child creation and cleans via sweep", function()
+            local repo = temp_dir()
+            init_repo(repo)
+            local db = assert(store.open())
+            local req = make_request(fresh("crash"), {worktree = "dedicated"})
+            claim_attempt(db, req)
+            local path = assert(workdir_preparers.setup(db, req, req.attempt_id, repo, {repo}))
+            local replay = assert(workdir_preparers.setup(db, req, req.attempt_id, repo, {repo}))
+            test.eq(path, replay)
+            store.transition(db, req.attempt_id, {fields = {runner_pid = "00000000-0000-0000-0000-000000000001"}, evidence = {kind = "test.crashed", detail = "absent fixture runner"}})
+            local attempt = assert(store.attempt(db, req.attempt_id))
+            local recovered = service.reconcile_attempt(attempt)
+            test.is_true(recovered.ok)
+            local ended = assert(store.attempt(db, req.attempt_id))
+            test.eq(ended.execution_state, "exited")
+            db:release()
+            test.is_true(service.sweep().ok)
+            local _, present = run_cmd({"test", "-e", path})
+            test.is_true(present ~= 0)
+            cleanup_dir(repo)
+        end)
+
+        test.it("requires an authorized preparer to consume requested options", function()
+            local root = temp_dir()
+            with_preparer({}, function()
+                local db = assert(store.open())
+                local req = make_request(fresh("unhandled"), {worktree = "dedicated"})
+                claim_attempt(db, req)
+                local path, _, err = workdir_preparers.setup(db, req, req.attempt_id, root, {root})
+                test.is_nil(path)
+                test.contains(tostring(err), "no authorized preparer handled option worktree")
+                db:release()
+            end)
+            cleanup_dir(root)
+        end)
+
         test.it("discovers and authorizes registered preparers", function()
             local preparers, err = workdir_preparers.authorized_preparers()
             if not preparers then error(tostring(err)) end
@@ -121,7 +227,7 @@ local function define_tests()
             local db, open_err = store.open()
             if not db then error(tostring(open_err)) end
 
-            local attempt_id = fresh("att-prep")
+            local attempt_id = fresh("attempt:prep")
             local req = make_request(attempt_id, {worktree = "dedicated"})
             claim_attempt(db, req)
 

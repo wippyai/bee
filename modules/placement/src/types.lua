@@ -71,26 +71,30 @@ type LaunchRequest = {
     timeouts: Timeouts,
     placement_binding_ref: string?,
     placement_binding_digest: string?,
-    options: {[string]: any}?,
+    options: WorkdirOptions?,
 }
+type WorkdirOptions = {worktree: "dedicated"?}
 type WorkdirPreparerSetupInput = {
+    state: unknown,
     attempt_id: string,
     owner_id: string,
     workspace_id: string?,
     working_directory: string,
     write_roots: {string},
-    options: {[string]: any}?,
+    options: WorkdirOptions?,
     argv: {string},
 }
+type WorkdirPreparerPlanOutput = {state: unknown}
 type WorkdirPreparerSetupOutput = {
+    handled_options: {string}?,
     working_directory: string?,
     extra_writable_roots: {string}?,
-    state: any?,
+    state: unknown,
 }
 type WorkdirPreparerCleanupInput = {
     attempt_id: string,
     owner_id: string,
-    state: any?,
+    state: unknown,
     exit: Exit?,
     execution_state: ExecutionState?,
 }

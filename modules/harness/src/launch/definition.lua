@@ -5,6 +5,8 @@ local hash = require("hash")
 local registry = require("registry")
 local bounds = require("bounds")
 local canonical = require("canonical")
+local placement_request = require("placement_request")
+local placement_types = require("placement_types")
 local M = {}
 M.SCHEMA = "bee.launch-definition@1"
 M.TYPE = "bee.launch_definition"
@@ -40,7 +42,7 @@ type Definition = {
     -- restricts it. An orchestrator launches it only through the explicit
     -- agent_launch_unconfined allow-list on its own launch policy.
     unconfined: boolean,
-    options: {[string]: any}?,
+    options: placement_types.WorkdirOptions?,
 }
 local function decode_workdir(value: unknown): (WorkdirPolicy?, string?)
     local object = bounds.object(value == nil and {kind = "caller_workspace"} or value)
@@ -128,21 +130,12 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if data.unconfined ~= nil and type(data.unconfined) ~= "boolean" then
         return nil, ref .. ": unconfined must be a boolean"
     end
-    local options: {[string]: any}? = nil
-    if data.options ~= nil then
-        local declared_options = bounds.object(data.options)
-        if not declared_options then return nil, ref .. ": options must be an object" end
-        options = declared_options
-    end
+    local options, options_error = placement_request.decode_options(data.options)
+    if options_error then return nil, ref .. ": " .. options_error end
     if data.worktree ~= nil then
-        local worktree_opt = bounds.member(data.worktree, {"dedicated"})
-        if not worktree_opt then return nil, ref .. ": worktree must be dedicated" end
-        options = options or {}
-        options.worktree = worktree_opt
-    end
-    if options and options.worktree ~= nil then
-        local worktree_val = bounds.member(options.worktree, {"dedicated"})
-        if not worktree_val then return nil, ref .. ": options.worktree must be dedicated" end
+        if data.worktree ~= "dedicated" then return nil, ref .. ": worktree must be dedicated" end
+        if options and options.worktree then return nil, ref .. ": duplicate worktree option" end
+        options = {worktree = "dedicated"}
     end
     local encoded, encode_error = canonical.encode(data)
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end

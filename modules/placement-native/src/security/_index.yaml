@@ -27,6 +27,7 @@ entries:
     - bee.placement.native:placement_workdir_preparers
     - custom
     - security
+    - hosts
     - bee.placement.native:placement_admitted_roots
     - bee.placement.native:root
     - bee.placement.native:placement_host_files

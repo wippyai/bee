@@ -91,13 +91,17 @@ function M.workdir_preparers(): ({string}?, string?)
     if err or not entry then return nil, "workdir preparers entry unavailable" end
     local data = bounds.object(entry.data)
     if not data then return nil, "workdir preparers declaration is not an object" end
-    local preparers = data.preparers
-    if type(preparers) ~= "table" then return {}, nil end
+    local extra = bounds.fields(data, {"preparers"})
+    if extra then return nil, extra end
+    local preparers = bounds.array(data.preparers, 32)
+    if not preparers then return nil, "preparers must be a dense bounded array" end
     local result: {string} = {}
-    for _, item in ipairs(preparers :: {unknown}) do
-        if type(item) == "string" and bounds.id(item) then
-            result[#result + 1] = item
-        end
+    local seen: {[string]: boolean} = {}
+    for _, item in ipairs(preparers) do
+        local id = bounds.id(item)
+        if not id or seen[id] then return nil, "invalid or duplicate preparer binding" end
+        seen[id] = true
+        result[#result + 1] = id
     end
     return result, nil
 end

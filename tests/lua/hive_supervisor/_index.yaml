@@ -19,7 +19,7 @@ entries:
     test: wippy.test:test
     peers: bee.hive.supervisor:peers
     types: bee.hive:types
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
 - name: registration_test
   kind: function.lua
   source: file://registration_test.lua
@@ -59,7 +59,7 @@ entries:
     test: wippy.test:test
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
     audiences: bee.hive.supervisor:audiences
 - name: audiences_probe
   kind: function.lua

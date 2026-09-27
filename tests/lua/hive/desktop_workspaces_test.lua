@@ -63,7 +63,8 @@ local function harness(tag: string): Harness
     local leased_served: owner.Served = {supervisor = leased, workspace_id = LEASED, desktop_id = "", folder = false, ready = false}
     local state: owner.State = {
         bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = NODE,
-        allowed = {}, allowed_peers = {}, enrolled = {[client_node] = true}, peers = {}, config = {execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {}, allowed_peers = {}, local_clients = true, folder = true},
+        allowed = {}, allowed_peers = {}, enrolled = {[client_node] = true}, peers = {}, execution = EXECUTION,
+        config = {expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {}, allowed_peers = {}, local_clients = true, folder = true},
         ready = ready, results = results, copies = unused, launches = unused, activations = activations, observers = unused, switches = switches, retiring = {},
         catalog = catalog.new(), spawn_scope = security.new_scope({}), executor = funcs.new(), folder = folder_served,
         served = {[folder] = folder_served, [leased] = leased_served}, workspaces = {[FOLDER] = folder_served, [LEASED] = leased_served}, served_count = 1,
@@ -78,11 +79,14 @@ local function close(h: Harness)
     for _, subscription in ipairs(h.unused) do process.unlisten(subscription) end
 end
 -- The stand-in sends one call as the native client; the bridge admits it.
-local function send_call(h: Harness, operation: string, key: string, input: Object)
-    process.send(h.standin, "bee.test.standin.call", {protocol_revision = types.REVISION, request_id = key, idempotency_key = key,
+local function send_call_with_identity(h: Harness, operation: string, request_id: string, key: string, input: Object, deadline_after: string)
+    process.send(h.standin, "bee.test.standin.call", {protocol_revision = types.REVISION, request_id = request_id, idempotency_key = key,
         owner_ref = {node_id = NODE, service_id = protocol.SERVICE}, target = {operation_ref = operation}, input = input,
-        deadline = time.now():add("20s"):utc():format(FORMAT)})
+        deadline = time.now():add(deadline_after):utc():format(FORMAT)})
     owner.request(h.state, next_message(h.requests, "stand-in call"), 1)
+end
+local function send_call(h: Harness, operation: string, key: string, input: Object)
+    send_call_with_identity(h, operation, key, key, input, "20s")
 end
 local function request(h: Harness, operation: string, key: string, input: Object)
     input.owner_execution = EXECUTION
@@ -197,6 +201,21 @@ local function define_tests()
                 local event = selected.value
                 if event.kind == process.event.EXIT and tostring(event.from) == h.leased then break end
             end
+            close(h)
+        end)
+        test.it("replays a completed attach with a fresh request id and deadline", function()
+            local h = harness("replay")
+            local first = attach_leased(h)
+            if not first.ok then error(tostring(first.error and first.error.message)) end
+            local original = first.value :: Object
+            send_call_with_identity(h, protocol.ATTACH, "attach-replay-correlation", "attach-1",
+                {owner_execution = EXECUTION, workspace_id = LEASED, desktop_id = DISPLAY, mode = "control"}, "5s")
+            local replay = answer(h)
+            test.is_true(replay.ok)
+            local repeated = replay.value :: Object
+            test.eq(repeated.session_id, original.session_id)
+            test.eq(repeated.mount_ref, original.mount_ref)
+            silent(h.received, "a second retained attach for a completed idempotency key")
             close(h)
         end)
         test.it("attaches a Hive display client from an admitted node to a workspace by identity", function()

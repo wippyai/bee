@@ -55,6 +55,9 @@ entries:
     caller: bee.application:caller
     session: bee.threads.delivery:session
     record: bee.threads.records:record
+    record_types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+    contract: bee.protocol:application
     format: bee.threads.timeline:format
 - name: view
   kind: library.lua

@@ -1,6 +1,6 @@
 -- Versioned application boundary. Records contain values, never terminal handles.
 local arguments = require("arguments")
-local thread_bounds = require("thread_bounds")
+local bounds = require("bounds")
 local M = {}
 type ReplyOp = "open" | "close" | "closed" | "focus" | "attached" | "bind" | "unbind" | "page" | "title" | "closing" | "quit" | "shutdown" | "fence"
 type Reply = {version: integer, request_id: string, op: ReplyOp, id: string, instance_id: string, workspace_id: string?,
@@ -24,7 +24,7 @@ function M.workspace_id(value: unknown): string?
     return nil
 end
 function M.thread_id(value: unknown): string?
-    return thread_bounds.id(value)
+    return bounds.id(value)
 end
 function M.text(value: unknown, limit: integer): string?
     if type(value) ~= "string" or #value > limit or value:find("%c") then return nil end
@@ -49,7 +49,7 @@ function M.request(value: unknown): Request?
     if op == "open" and definition_id == "" then return nil end
     local thread_id: string? = nil
     if value.thread_id ~= nil then
-        thread_id = thread_bounds.id(value.thread_id)
+        thread_id = bounds.id(value.thread_id)
         if not thread_id or op ~= "open" then return nil end
     end
     if op == "close" and id == "" then return nil end

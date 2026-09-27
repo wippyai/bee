@@ -27,6 +27,8 @@ entries:
     probe: bee.host.processes:probe
     view: bee.host.processes:view
     client: bee.application:client
+    time_format: bee.protocol:time
+    stop_request: bee.host.processes:stop_request
   meta:
     type: bee.application
     application:
@@ -45,6 +47,10 @@ entries:
   - system
   imports:
     viz: bee.application:viz
+    bounds: bee.protocol:bounds
+- name: stop_request
+  kind: library.lua
+  source: file://stop_request.lua
 - name: view
   kind: library.lua
   source: file://view.lua

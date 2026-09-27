@@ -9,6 +9,8 @@ local appearance = require("appearance")
 local probe = require("probe")
 local view = require("view")
 local frame = require("frame")
+local time_format = require("time_format")
+local stop_request = require("stop_request")
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
@@ -33,13 +35,13 @@ local function main(value: unknown)
     local hits: {frame.Hit} = {}
     local paused, confirming, by_steps, services = false, false, false, false
     local rows: {view.Row} = {}
-    local status, pending = "", ""
-    local pending_ticks = 0
+    local status = ""
+    local pending: stop_request.Pending? = nil
     local running, dirty = true, true
     local function order()
         rows = view.items(snapshot, services)
         table.sort(rows, function(a, b)
-            if by_steps and a.steps ~= b.steps then return a.steps > b.steps end
+            if by_steps and a.steps ~= b.steps then return (a.steps or -1) > (b.steps or -1) end
             if a.source ~= b.source then return a.source < b.source end
             return a.pid < b.pid
         end)
@@ -66,7 +68,7 @@ local function main(value: unknown)
     local function sample()
         local now = time.now():unix_nano()
         local next_snapshot = probe.sample()
-        probe.append(history, next_snapshot, snapshot, (now - last_time) / 1000000000)
+        probe.append(history, next_snapshot, snapshot, time_format.elapsed_seconds(now, last_time))
         snapshot, last_time = next_snapshot, now
         order(); reveal(); dirty = true
     end
@@ -81,7 +83,7 @@ local function main(value: unknown)
         dirty = true
     end
     local function end_app()
-        if not services and broker and selected ~= "" and pending == "" then confirming = true; dirty = true end
+        if not services and broker and selected ~= "" and pending == nil then confirming = true; dirty = true end
     end
     order()
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
@@ -98,9 +100,10 @@ local function main(value: unknown)
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then break end
         elseif event.channel == ticks then
-            if pending ~= "" then
-                pending_ticks = pending_ticks + 1
-                if pending_ticks >= 5 then pending = ""; status = "Stop result timed out; refresh before retrying"; dirty = true end
+            if pending then
+                local next_pending, timeout = stop_request.tick(pending)
+                pending = next_pending
+                if timeout then status = timeout; dirty = true end
             end
             if not paused then sample() end
         elseif event.channel == states then
@@ -113,9 +116,9 @@ local function main(value: unknown)
             local msg = event.value
             if broker and msg:from() == broker then
                 local data: unknown = msg:payload():data()
-                if type(data) == "table" and data.version == 1 and pending ~= "" and data.request_id == pending and type(data.error) == "string" then
+                if type(data) == "table" and data.version == 1 and stop_request.matches(pending, data.request_id) and type(data.error) == "string" then
                     status = data.error ~= "" and data.error or "Application ended"
-                    pending = ""; sample()
+                    pending = nil; sample()
                 end
             end
         else
@@ -126,9 +129,13 @@ local function main(value: unknown)
                 local key = data.key_type
                 if confirming then
                     if key == "enter" and broker then
-                        pending = uuid.v7(); pending_ticks = 0
-                        process.send(broker, "bee.application.control", {version = 1, request_id = pending, op = "stop", execution_pid = selected})
-                        confirming = false; status = "Stopping application…"; dirty = true
+                        local request_id = uuid.v7()
+                        pending = stop_request.begin(request_id)
+                        local sent, send_error = process.send(broker, "bee.application.control", {version = 1, request_id = request_id, op = "stop", execution_pid = selected})
+                        confirming = false
+                        if sent and not send_error then status = "Stopping application…"
+                        else pending = nil; status = "Stop request failed: " .. tostring(send_error) end
+                        dirty = true
                     elseif key == "esc" or key == "escape" then confirming = false; dirty = true end
                 elseif key == "tab" then
                     services = not services; selected = ""; offset = 0; status = ""; order(); dirty = true

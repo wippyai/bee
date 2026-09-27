@@ -4,13 +4,11 @@ local types = require("types")
 local peers = require("peers")
 local catalog = require("catalog")
 local time = require("time")
+local clock = require("clock")
 local M = {}
-local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 local MAX_LIFETIME_MS = 30000
 local function timestamp(value: string): time.Time?
-    local parsed, err = time.parse(FORMAT, value)
-    if err or not parsed or parsed:utc():format(FORMAT) ~= value then return nil end
-    return parsed
+    return clock.parse(value)
 end
 local function fail(code: string, message: string): types.Fault
     return types.fault(code, message)
@@ -47,7 +45,7 @@ function M.accept(local_node: string, peer: peers.Peer?, sender: string, value: 
     if not expires:after(now) or not deadline:after(now) then
         return nil, fail("DEADLINE_EXCEEDED", "request or assertion has expired")
     end
-    if expires:sub(issued):milliseconds() > MAX_LIFETIME_MS or deadline:sub(now):milliseconds() > MAX_LIFETIME_MS then
+    if clock.elapsed_ms(issued, expires) > MAX_LIFETIME_MS or clock.elapsed_ms(now, deadline) > MAX_LIFETIME_MS then
         return nil, fail("INVALID_ARGUMENT", "request exceeds the 30 second lifetime")
     end
     return request, nil
@@ -75,8 +73,8 @@ function M.forward(local_node: string, incarnation: string, sender: string, exch
         input = resolved.input, input_digest = resolved.input_digest,
         principal_ref = {issuer = local_node, subject_id = sender},
         principal_assertion = {method = types.ASSERTION_METHOD, audience = call.owner_ref.node_id,
-            issued_at = now:utc():format(FORMAT), expires_at = deadline:utc():format(FORMAT)},
-        delegation_refs = {}, deadline = deadline:utc():format(FORMAT),
+            issued_at = clock.utc(now), expires_at = clock.utc(deadline)},
+        delegation_refs = {}, deadline = clock.utc(deadline),
     }
     local checked, err = types.decode_request(value)
     if not checked then return nil, fail("INVALID_ARGUMENT", err or "cannot construct forwarded request") end

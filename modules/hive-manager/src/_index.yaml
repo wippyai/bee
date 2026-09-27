@@ -32,6 +32,7 @@ entries:
     types: bee.hive:types
     remote: bee.hive.manager:remote
     desktop_protocol: bee.hive.desktop:protocol
+    clock: bee:clock
   meta:
     type: bee.application
     application:
@@ -52,6 +53,9 @@ entries:
   imports:
     text: bee.application:text
     directory: bee.hive.manager:directory
+    contract: bee.protocol:application
+    types: bee.hive:types
+    hive_bounds: bee.protocol:bounds
     names: bee.application:names
 - name: view
   kind: library.lua
@@ -65,6 +69,7 @@ entries:
   kind: library.lua
   source: file://remote.lua
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.application:appearance
     frame: bee.application:frame
     names: bee.application:names
@@ -73,7 +78,8 @@ entries:
   source: file://directory.lua
   imports:
     types: bee.hive:types
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
+    contract: bee.protocol:application
 - name: names
   kind: registry.entry
   meta:

@@ -16,7 +16,7 @@ type Fault = display.Fault
 type Operations = {
     list: () -> types.Reply,
     create: (string, string) -> types.Reply,
-    open: (display.Target) -> (display.Handle?, Fault?),
+    open: (display.Target, string) -> (display.Handle?, Fault?),
     new_id: () -> string,
 }
 type Opened = {handle: display.Handle, target: display.Target}
@@ -29,44 +29,53 @@ end
 -- The owner execution and display identities a listing answered, default first.
 function M.displays(value: unknown): (string?, {string}?)
     local object = bounds.object(value)
-    if not object then return nil, nil end
+    if not object or bounds.fields(object, {"owner_execution", "desktops", "workspaces", "next_after", "default_workspace"}) then return nil, nil end
     local execution = contract.workspace_id(object.owner_execution)
-    local rows = object.desktops
-    if not execution or type(rows) ~= "table" then return nil, nil end
+    local rows = bounds.array(object.desktops, M.MAX_DISPLAYS)
+    if not execution or not rows then return nil, nil end
     local ids: {string} = {}
-    for index, raw in ipairs(rows :: {unknown}) do
+    local seen: {[string]: boolean} = {}
+    for index, raw in ipairs(rows) do
         local row = bounds.object(raw)
+        if row and bounds.fields(row, {"desktop_id", "is_default"}) then row = nil end
         local id = row and contract.workspace_id(row.desktop_id)
-        if not row or not id or index > M.MAX_DISPLAYS then return nil, nil end
+        if not row or not id or seen[id] or row.is_default ~= (index == 1) then return nil, nil end
+        seen[id] = true
         ids[#ids + 1] = id
     end
     return execution, ids
 end
-function M.choose(ops: Operations, node: string, workspace_id: string, mode: Mode): (Opened?, Fault?)
+function M.choose(ops: Operations, node: string, workspace_id: string, mode: Mode,
+    idempotency_key: string): (Opened?, Fault?, display.Target?)
     local listed = ops.list()
-    if not listed.ok then return nil, refused(listed, "The node did not list its displays") end
+    if not listed.ok then return nil, refused(listed, "The node did not list its displays"), nil end
     local execution, ids = M.displays(listed.value)
-    if not execution or not ids then return nil, {code = "INVALID_STATE", message = "The node answered a malformed display listing"} end
-    local function attach(desktop_id: string): (Opened?, Fault?)
+    if not execution or not ids then return nil, {code = "INVALID_STATE", message = "The node answered a malformed display listing"}, nil end
+    local function attach(desktop_id: string): (Opened?, Fault?, display.Target?)
         local target, target_error = display.target(node, execution, workspace_id, desktop_id, mode)
-        if not target then return nil, {code = "INVALID_ARGUMENT", message = target_error or "invalid remote target"} end
-        local handle, fault = ops.open(target)
-        if not handle then return nil, fault or {code = "UNAVAILABLE", message = "desktop attach refused"} end
-        return {handle = handle, target = target}, nil
+        if not target then return nil, {code = "INVALID_ARGUMENT", message = target_error or "invalid remote target"}, nil end
+        local handle, failure = ops.open(target, idempotency_key)
+        if not handle then
+            local fault = failure or {code = "UNAVAILABLE", message = "desktop attach refused"}
+            if fault.code == "UNCERTAIN" then return nil, fault, target end
+            return nil, fault, nil
+        end
+        return {handle = handle, target = target}, nil, nil
     end
     if mode == "observe" then
         local first = ids[1]
-        if not first then return nil, {code = "NOT_FOUND", message = "The node has no display to observe"} end
+        if not first then return nil, {code = "NOT_FOUND", message = "The node has no display to observe"}, nil end
         return attach(first)
     end
     for _, id in ipairs(ids) do
-        local opened, fault = attach(id)
+        local opened, fault, uncertain_target = attach(id)
         if opened then return opened, nil end
-        if not fault or fault.code ~= "DESKTOP_CONTROLLED" then return nil, fault end
+        if fault and fault.code == "UNCERTAIN" then return nil, fault, uncertain_target end
+        if not fault or fault.code ~= "DESKTOP_CONTROLLED" then return nil, fault, nil end
     end
     local id = ops.new_id()
     local created = ops.create(execution, id)
-    if not created.ok then return nil, refused(created, "The node did not allocate a display") end
+    if not created.ok then return nil, refused(created, "The node did not allocate a display"), nil end
     return attach(id)
 end
 return M

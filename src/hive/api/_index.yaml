@@ -7,7 +7,7 @@ entries:
   method: handle
   modules: [funcs, process, system]
   imports:
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
     workspace_query: bee.hive:workspace_query
     workspace_page: bee.hive.api:workspaces_page
   meta:
@@ -48,6 +48,6 @@ entries:
   kind: library.lua
   source: file://workspaces_page.lua
   imports:
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
     contract: bee.protocol:application
     workspace_query: bee.hive:workspace_query

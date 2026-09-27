@@ -7,6 +7,8 @@ entries:
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
+  imports:
+    shared: bee.protocol:bounds
 - name: app_identity
   kind: library.lua
   source: file://app_identity.lua
@@ -55,7 +57,7 @@ entries:
     types: bee.threads.records:types
     bounds: bee.threads.records:bounds
     values: bee.threads.records:values
-    canonical: bee.threads.records:canonical
+    canonical: bee.protocol:canonical
 - name: record
   kind: library.lua
   source: file://record.lua
@@ -66,11 +68,12 @@ entries:
     values: bee.threads.records:values
     observation: bee.threads.records:observation
     approval: bee.threads.records:approval
-    canonical: bee.threads.records:canonical
+    canonical: bee.protocol:canonical
     message: bee.threads.records:message
     lifecycle: bee.threads.records:lifecycle
     delivery: bee.threads.records:delivery
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
-  modules: [json]
+  imports:
+    shared: bee.protocol:canonical

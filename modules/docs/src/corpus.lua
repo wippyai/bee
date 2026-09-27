@@ -6,17 +6,18 @@
 -- reaches no host path, network or registry beyond the one volume it was given.
 local fs = require("fs")
 local json = require("json")
+local hash = require("hash")
 local bounds = require("bounds")
+local protocol = require("protocol")
 local M = {}
 M.MANIFEST = "manifest.json"
 M.SCHEMA = "bee.docs-corpus@1"
--- Bounds, in one place, matching the request decoder and the tool description.
-M.MAX_LIST = 64
-M.MAX_RESULTS = 16
-M.MAX_READ_BYTES = 16384
+M.MAX_DOCUMENTS = 256
+M.MAX_CORPUS_BYTES = 4194304
 type Document = {id: string, topic: string, title: string, source: string, bytes: integer, sha256: string}
 type Manifest = {schema: string, selection_rule: string, totals: {documents: integer, bytes: integer}, documents: {Document}}
 type Excerpt = {id: string, title: string, topic: string, section: string, line: integer, text: string}
+type ReadFile = (string) -> (string?, string?)
 -- Opens the corpus volume. The volume does not require release; the system
 -- detaches it with the filesystem. A missing volume is a build fault, not a
 -- caller fault, and is reported as such.
@@ -30,29 +31,66 @@ function M.manifest(volume: fs.FS): (Manifest?, string?)
     if not read then return nil, "corpus manifest is unavailable: " .. tostring(read_error) end
     local payload = read :: string
     local decoded: unknown = json.decode(payload)
+    return M.decode_manifest(decoded, function(path: string): (string?, string?)
+        return volume:readfile(path)
+    end)
+end
+function M.decode_manifest(decoded: unknown, readfile: ReadFile): (Manifest?, string?)
     local value = bounds.object(decoded)
-    if not value or type(value.schema) ~= "string" or value.schema ~= M.SCHEMA then return nil, "corpus manifest has an unknown schema" end
-    local raw = value.documents
-    if type(raw) ~= "table" then return nil, "corpus manifest lists no documents" end
+    if not value or bounds.fields(value, {"schema", "selection_rule", "base", "ceiling_bytes", "totals", "documents"}) then
+        return nil, "corpus manifest has an invalid shape"
+    end
+    if value.schema ~= M.SCHEMA then return nil, "corpus manifest has an unknown schema" end
+    local selection_rule = bounds.line(value.selection_rule, 2048)
+    local base = bounds.line(value.base, 256)
+    local ceiling = bounds.count(value.ceiling_bytes)
+    local totals = bounds.object(value.totals)
+    if not selection_rule then return nil, "corpus manifest metadata is malformed" end
+    if not base or not base:match("^https://[^/]+/.+$") then return nil, "corpus manifest metadata is malformed" end
+    if not ceiling or ceiling < 1 or ceiling > M.MAX_CORPUS_BYTES then return nil, "corpus manifest metadata is malformed" end
+    if not totals or bounds.fields(totals, {"documents", "bytes"}) then return nil, "corpus manifest metadata is malformed" end
+    local declared_documents = bounds.count(totals.documents)
+    local declared_bytes = bounds.count(totals.bytes)
+    local raw = bounds.array(value.documents, M.MAX_DOCUMENTS)
+    if not declared_documents or not declared_bytes then return nil, "corpus manifest totals are malformed" end
+    if not raw or #raw == 0 then return nil, "corpus manifest lists no bounded documents" end
     local documents: {Document} = {}
+    local seen: {[string]: boolean} = {}
+    local total_bytes = 0
     for _, item in ipairs(raw) do
         local entry = bounds.object(item)
-        if not entry then return nil, "corpus manifest has an invalid document" end
-        local id, topic, title = entry.id, entry.topic, entry.title
-        local source, sha256 = entry.source, entry.sha256
-        local size = entry.bytes
-        if type(id) ~= "string" or type(topic) ~= "string" or type(title) ~= "string"
-            or type(source) ~= "string" or type(size) ~= "number" or type(sha256) ~= "string" then
-            return nil, "corpus manifest has an incomplete document"
+        if not entry or bounds.fields(entry, {"id", "topic", "title", "source", "bytes", "sha256"}) then
+            return nil, "corpus manifest has an invalid document"
         end
+        local id = protocol.document_id(entry.id)
+        local topic = bounds.line(entry.topic, 64)
+        local title = bounds.line(entry.title, 240)
+        local source = bounds.line(entry.source, 512)
+        local size = bounds.count(entry.bytes)
+        local sha256 = bounds.line(entry.sha256, 64)
+        if not id or seen[id] or not topic or not topic:match("^[a-z0-9_-]+$") or not title or not source
+            or not source:match("^https://[^/]+/.+$") or not sha256 or not sha256:match("^[0-9a-f]+$") or #sha256 ~= 64 then
+            return nil, "corpus manifest has an invalid document identity or metadata"
+        end
+        if not size then return nil, "corpus manifest has an invalid document byte count" end
+        local byte_count: integer = size
+        local payload, document_error = readfile(M.path(id))
+        if not payload then return nil, "corpus document is unavailable: " .. tostring(document_error) end
+        if #payload ~= byte_count then return nil, "corpus document byte count does not match its manifest" end
+        local measured, hash_error = hash.sha256(payload)
+        if not measured then return nil, "corpus document digest could not be measured: " .. tostring(hash_error) end
+        if measured ~= sha256 then return nil, "corpus document digest does not match its manifest" end
+        seen[id] = true
+        total_bytes = total_bytes + byte_count
+        if total_bytes > ceiling then return nil, "corpus manifest exceeds its declared byte ceiling" end
         documents[#documents + 1] = {id = id, topic = topic, title = title, source = source,
-            bytes = math.floor(size), sha256 = sha256}
+            bytes = byte_count, sha256 = sha256}
     end
-    if #documents == 0 then return nil, "corpus manifest lists no documents" end
-    local totals = bounds.object(value.totals) or {}
-    local rule = type(value.selection_rule) == "string" and value.selection_rule or ""
-    return {schema = value.schema :: string, selection_rule = rule,
-        totals = {documents = #documents, bytes = math.floor(tonumber(totals.bytes) or 0)}, documents = documents}, nil
+    if declared_documents ~= #documents or declared_bytes ~= total_bytes then
+        return nil, "corpus manifest totals do not match its documents"
+    end
+    return {schema = M.SCHEMA, selection_rule = selection_rule,
+        totals = {documents = declared_documents, bytes = declared_bytes}, documents = documents}, nil
 end
 -- The path of one document inside the volume: its id is the document path.
 function M.path(id: string): string

@@ -11,34 +11,29 @@ local M = {}
 function M.decode(value: unknown, node_id: unknown, limit: integer): (Page?, string?)
     local checked_node = bounds.id(node_id)
     if not checked_node then return nil, "the local node has no identity" end
+    if limit < 1 or limit > workspace_query.MAX_PAGE then return nil, "the workspace page size is invalid" end
 
     local page = bounds.object(value)
     if not page or bounds.fields(page, {"items", "next_after"}) then
         return nil, "the workspace catalog answered without a valid page"
     end
-    local items = page.items
-    if type(items) ~= "table" then return nil, "the workspace catalog answered without rows" end
-
-    local count = 0
-    for key in pairs(items) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then
-            return nil, "the workspace catalog answered a malformed page"
-        end
-        count = count + 1
-        if count > limit or count > workspace_query.MAX_PAGE then
-            return nil, "the workspace catalog answered a malformed page"
-        end
-    end
-    for index = 1, count do
-        if items[index] == nil then return nil, "the workspace catalog answered a malformed page" end
-    end
+    local items, list_error = bounds.array(page.items, limit)
+    if not items then return nil, "the workspace catalog answered a malformed page: " .. tostring(list_error) end
 
     local workspaces: {Workspace} = {}
-    for index = 1, count do
-        local row = bounds.object(items[index])
+    for index, raw in ipairs(items) do
+        local row = bounds.object(raw)
+        if row and bounds.fields(row, {"workspace_id", "label", "root_ref", "subpath", "state", "created_at", "last_used_at"}) then row = nil end
         local id = row and contract.workspace_id(row.workspace_id)
         local label = row and contract.text(row.label, workspace_query.MAX_LABEL)
-        if not id or label == nil then return nil, "the workspace catalog answered a malformed row" end
+        local root_ref = row and bounds.id(row.root_ref)
+        local subpath = row and bounds.subpath(row.subpath)
+        local state: string? = row and (row.state == "active" and "active" or (row.state == "archived" and "archived" or nil)) or nil
+        local created_at = row and bounds.timestamp(row.created_at)
+        local last_used_at = row and bounds.timestamp(row.last_used_at)
+        if not id or label == nil or not root_ref or subpath == nil or not state or not created_at or not last_used_at then
+            return nil, "the workspace catalog answered malformed row " .. tostring(index)
+        end
         workspaces[index] = {workspace_id = id, label = label}
     end
 

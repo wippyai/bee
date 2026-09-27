@@ -25,7 +25,8 @@ local function bridge(local_clients: boolean, topic: string): owner.State
     local unused = listen("bee.test.desktop_enrollment." .. topic)
     local state: owner.State = {
         bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = "owner-node",
-        allowed = {}, allowed_peers = {}, enrolled = {}, peers = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, allowed_peers = {}, local_clients = local_clients, folder = true},
+        allowed = {}, allowed_peers = {}, enrolled = {}, peers = {}, execution = WORKSPACE,
+        config = {expires_at = "", allowed_nodes = {}, allowed_peers = {}, local_clients = local_clients, folder = true},
         ready = unused, results = unused, copies = unused, launches = unused,
         activations = unused, observers = unused, switches = unused, retiring = {}, catalog = catalog.new(),
         spawn_scope = security.new_scope({}), executor = funcs.new(), folder = nil, served = {}, workspaces = {}, served_count = 0,

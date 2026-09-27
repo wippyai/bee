@@ -8,6 +8,7 @@ local process = require("process")
 local security = require("security")
 local channel = require("channel")
 local time = require("time")
+local clock = require("clock")
 local uuid = require("uuid")
 local funcs = require("funcs")
 local types = require("types")
@@ -36,7 +37,7 @@ type Receipt = {session_id: string?, digest: string, reply: types.Reply, expires
 -- from readiness; a leased workspace is selected by identity.
 type Served = {supervisor: string, workspace_id: string, desktop_id: string, folder: boolean, ready: boolean}
 type State = {
-    config: protocol.Configuration, node: string, bridge_name: string, owner_name: string,
+    config: protocol.Configuration, execution: string, node: string, bridge_name: string, owner_name: string,
     ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
     activations: Channel<process.Message>, switches: Channel<process.Message>,
     observers: Channel<process.Message>, catalog: catalog.State, spawn_scope: security.Scope, executor: funcs.Executor,
@@ -45,7 +46,6 @@ type State = {
     clients: {[string]: Client}, receipts: {[string]: Receipt}, client_count: integer, receipt_count: integer,
     retiring: {[string]: Retiring}, expires_at: time.Time, stopped: boolean,
 }
-local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 -- Leased workspaces one bridge serves at once, besides the folder workspace.
 M.MAX_SERVED = 32
 local function listen(topic: string): Channel<process.Message>
@@ -82,7 +82,10 @@ end
 -- grants. Neither is inferred from transport, discovery, metadata or a PID.
 function M.start(config: protocol.Configuration, node: string): State
     if not security.can("bee.desktop.host", "bee.desktop") then error("Host did not authorize desktop admission") end
-    local expiry = time.parse(FORMAT, config.expires_at)
+    local raw_execution, execution_error = uuid.v4()
+    if not raw_execution or execution_error then error("Cannot allocate desktop owner incarnation: " .. tostring(execution_error)) end
+    local execution = raw_execution:gsub("-", "")
+    local expiry = clock.parse(config.expires_at)
     if not expiry or not time.now():before(expiry) then error("Desktop owner execution expired") end
     local allowed: {[string]: boolean} = {}
     for _, peer in ipairs(config.allowed_nodes) do
@@ -122,7 +125,7 @@ function M.start(config: protocol.Configuration, node: string): State
     local registered, name_error = process.registry.register(bridge_name)
     if not registered then abandon(name_error) end
     named = true
-    local state: State = {config = config, node = node, bridge_name = bridge_name, owner_name = owner_name, ready = ready, results = results,
+    local state: State = {config = config, execution = execution, node = node, bridge_name = bridge_name, owner_name = owner_name, ready = ready, results = results,
         copies = copies, launches = launches, activations = activations, switches = switches, observers = observers,
         catalog = catalog.new(), spawn_scope = spawn_scope, executor = executor, folder = nil, served = {}, workspaces = {}, served_count = 0,
         allowed = allowed, allowed_peers = allowed_peers, enrolled = {}, peers = {}, clients = {}, receipts = {}, client_count = 0, receipt_count = 0, retiring = {}, expires_at = expiry,
@@ -356,7 +359,7 @@ function M.enroll(state: State, nodes: {[string]: boolean}, peers: {[string]: bo
 end
 -- The listing a catalog reply describes.
 function M.listing(state: State): catalog.Listing
-    return {execution = state.config.execution, default_workspace = M.folder_workspace(state),
+    return {execution = state.execution, default_workspace = M.folder_workspace(state),
         served = function(workspace_id: string): boolean return M.serves(state, workspace_id) end}
 end
 -- The channels of pending catalog work the owning loop selects on.
@@ -394,10 +397,10 @@ function M.request(state: State, message: process.Message, now: integer): ()
     end
     local input = protocol.input(operation, call.input)
     if not input then failure(sender, call.request_id, "INVALID_ARGUMENT", "Invalid desktop operation input"); return end
-    if input.execution ~= nil and input.execution ~= state.config.execution then failure(sender, call.request_id, "DENIED", "Owner execution changed"); return end
-    local deadline = call.deadline and time.parse(FORMAT, call.deadline)
+    if input.execution ~= nil and input.execution ~= state.execution then failure(sender, call.request_id, "DENIED", "Owner execution changed"); return end
+    local deadline = call.deadline and clock.parse(call.deadline)
     local wall = time.now()
-    local remaining = deadline and math.floor(deadline:sub(wall):milliseconds()) or 0
+    local remaining = deadline and clock.elapsed_ms(wall, deadline) or 0
     if not deadline then failure(sender, call.request_id, "INVALID_ARGUMENT", "A valid desktop call deadline is required"); return end
     if remaining <= 0 then failure(sender, call.request_id, "DEADLINE_EXCEEDED", "Desktop call deadline has passed"); return end
     -- Bound work on the owner, as ordinary supervisor admission does. A caller's
@@ -421,7 +424,7 @@ function M.request(state: State, message: process.Message, now: integer): ()
         local session = current and current.session
         if not current or not session or current.closing then failure(sender, call.request_id, "NOT_FOUND", "Desktop session not found"); return end
         if current.pending then failure(sender, call.request_id, "BUSY", "Desktop request already pending"); return end
-        send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {owner_execution = state.config.execution,
+        send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {owner_execution = state.execution,
             workspace_id = current.workspace_id, desktop_id = current.desktop_id, session_id = session.id,
             recipient = sender, mode = session.mode, mount_ref = session.mount, expires_at = state.config.expires_at}))
         return
@@ -433,7 +436,9 @@ function M.request(state: State, message: process.Message, now: integer): ()
         return
     end
     local key = sender .. "\0" .. call.idempotency_key
-    local digest = types.digest({operation = operation, input = call.input, deadline = call.deadline})
+    -- Deadlines bound each delivery attempt; they do not change the identity
+    -- or meaning of an idempotent desktop operation.
+    local digest = types.digest({operation = operation, input = call.input})
     if not digest then failure(sender, call.request_id, "INVALID_ARGUMENT", "Unmeasurable desktop request"); return end
     local receipt = state.receipts[key]
     if receipt then
@@ -542,7 +547,7 @@ function M.launched(state: State, message: process.Message, now: integer): ()
                 if result.error_code == "DENIED" or result.error_code == "BUSY" or result.error_code == "INVALID_ARGUMENT" then code = result.error_code end
                 reply = types.reply_error(pending.call.request_id, types.fault(code, result.error))
             else
-                reply = types.reply_ok(pending.call.request_id, {owner_execution = state.config.execution,
+                reply = types.reply_ok(pending.call.request_id, {owner_execution = state.execution,
                     workspace_id = client.workspace_id, desktop_id = client.desktop_id, session_id = session.id,
                     id = result.id, instance_id = result.instance_id})
             end
@@ -565,7 +570,7 @@ function M.copied(state: State, message: process.Message, now: integer): ()
             if not session or client.closing then return end
             local reply: types.Reply
             if result.error ~= "" then reply = types.reply_error(pending.call.request_id, types.fault(result.selected and "INVALID_STATE" or "UNAVAILABLE", result.error))
-            else reply = types.reply_ok(pending.call.request_id, {owner_execution = state.config.execution,
+            else reply = types.reply_ok(pending.call.request_id, {owner_execution = state.execution,
                 workspace_id = client.workspace_id, desktop_id = client.desktop_id, session_id = session.id,
                 selected = result.selected, text = result.text}) end
             remember(state, client, pending, reply, now)
@@ -631,10 +636,10 @@ function M.result(state: State, message: process.Message, now: integer): ()
                     elseif result.error_code == "invalid_argument" then code = "INVALID_ARGUMENT" end
                     reply = types.reply_error(pending.call.request_id, types.fault(code, result.error))
                 elseif client.session then
-                    reply = types.reply_ok(pending.call.request_id, {owner_execution = state.config.execution,
+                    reply = types.reply_ok(pending.call.request_id, {owner_execution = state.execution,
                         workspace_id = client.workspace_id, desktop_id = client.desktop_id, session_id = client.session.id,
                         recipient = client.recipient, mode = client.session.mode, mount_ref = client.session.mount, expires_at = state.config.expires_at})
-                else reply = types.reply_ok(pending.call.request_id, {owner_execution = state.config.execution,
+                else reply = types.reply_ok(pending.call.request_id, {owner_execution = state.execution,
                     workspace_id = client.workspace_id, desktop_id = client.desktop_id, detached = true}) end
                 remember(state, client, pending, reply, now)
             end

@@ -10,7 +10,8 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
+    sampling: bee.hive.telemetry:sampling
 - name: holdings_test
   kind: function.lua
   source: file://holdings_test.lua

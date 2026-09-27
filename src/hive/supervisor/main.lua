@@ -25,10 +25,10 @@ local catalog = require("catalog")
 local desktop_owner = require("desktop_owner")
 local desktop_protocol = require("desktop_protocol")
 local workspace_commands = require("workspace_commands")
+local clock = require("clock")
 local MAX_ROUTES = 64
 local MAX_EXECUTIONS = 8
 local MAX_CALLER_ROUTES = 8
-local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 type Channel = channel.Channel
 -- Receiver-local shapes; no remote type identity is trusted. Domain decoders
 -- still enforce exact fields, protocol revisions, bounds and authorization.
@@ -84,7 +84,7 @@ local function main(configuration: unknown)
     local hive_peers: {[string]: boolean} = {}
     local invitations = invites.new()
     local started = time.now()
-    local function elapsed(): integer return math.floor(time.now():sub(started):milliseconds()) end
+    local function elapsed(): integer return clock.elapsed_ms(started) end
     local log = logger:named("bee.hive.supervisor")
     local function send(recipient: string, topic: string, value: unknown): boolean
         local sent, err = process.send(recipient, topic, value)
@@ -334,7 +334,7 @@ local function main(configuration: unknown)
             if not id or id_error or not secret or secret_error or not digest then
                 failed(sender, call.request_id, "INTERNAL", "invite secret unavailable"); return
             end
-            local expires_at = time.now():add(tostring(invites.LIFETIME_MS) .. "ms"):utc():format(FORMAT)
+            local expires_at = clock.utc(time.now():add(tostring(invites.LIFETIME_MS) .. "ms"))
             local minted, mint_error = invites.mint(invitations, id, digest, now_ms, expires_at)
             if not minted then failed(sender, call.request_id, "LIMIT_EXCEEDED", mint_error or "invite refused"); return end
             send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {invite_id = minted.invite_id, secret = secret, expires_at = minted.expires_at}))
@@ -414,9 +414,9 @@ local function main(configuration: unknown)
         if route_count >= MAX_ROUTES then failed(sender, call.request_id, "BUSY", "supervisor request capacity reached"); return end
         if (caller_routes[sender] or 0) >= MAX_CALLER_ROUTES then failed(sender, call.request_id, "BUSY", "caller request capacity reached"); return end
         if execution_count >= MAX_EXECUTIONS then failed(sender, call.request_id, "BUSY", "operation capacity reached"); return end
-        local deadline = call.deadline and time.parse(FORMAT, call.deadline)
+        local deadline = call.deadline and clock.parse(call.deadline)
         if not deadline then failed(sender, call.request_id, "INVALID_ARGUMENT", "a workspace command needs a deadline"); return end
-        local remaining = math.floor(deadline:sub(time.now()):milliseconds())
+        local remaining = clock.elapsed_ms(time.now(), deadline)
         if remaining <= 0 then failed(sender, call.request_id, "DEADLINE_EXCEEDED", "workspace command deadline has passed"); return end
         if remaining > workspace_commands.MAX_MS then remaining = workspace_commands.MAX_MS end
         local exchange_id = nonce()
@@ -519,13 +519,13 @@ local function main(configuration: unknown)
             request.request_id = exchange_id
         end
         if not request then return end
-        local deadline = time.parse(FORMAT, request.deadline)
+        local deadline = clock.parse(request.deadline)
         if not deadline then failed(sender, id, "INVALID_ARGUMENT", "invalid deadline"); return end
         local fingerprint = types.digest(object)
         if not fingerprint then failed(sender, id, "INVALID_ARGUMENT", "request is not measurable"); return end
         local route: Route = {id = exchange_id, original_id = id, recipient = sender, origin = origin,
             fingerprint = fingerprint, operation_ref = request.operation_ref, idempotency_key = request.idempotency_key, source_incarnation = source_incarnation,
-            expires_at = elapsed() + math.floor(deadline:sub(wall_now):milliseconds()), abandoned = false}
+            expires_at = elapsed() + clock.elapsed_ms(wall_now, deadline), abandoned = false}
         if request.owner_ref.node_id == node then
             if execution_count >= MAX_EXECUTIONS then failed(sender, id, "BUSY", "operation capacity reached"); return end
             -- A forwarded operation the host mapped to a feature-owned

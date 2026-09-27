@@ -43,6 +43,8 @@ entries:
   imports:
     text: bee.application:text
     caller: bee.application:caller
+    bounds: bee.protocol:bounds
+    contract: bee.protocol:application
 - name: creation
   kind: library.lua
   source: file://creation.lua

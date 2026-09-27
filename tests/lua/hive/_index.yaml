@@ -129,7 +129,7 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
 - name: catalog_test
   kind: function.lua
   source: file://catalog_test.lua

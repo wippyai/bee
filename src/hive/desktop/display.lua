@@ -13,6 +13,7 @@ local client = require("client")
 local types = require("types")
 local protocol = require("protocol")
 local contract = require("contract")
+local clock = require("clock")
 local delivery = require("delivery")
 local input = require("input")
 
@@ -32,7 +33,7 @@ local DEFAULT_TIMEOUT = "10s"
 local sessions: {[string]: Session} = {}
 
 local function deadline(): string
-    return time.now():add(DEFAULT_TIMEOUT):utc():format("2006-01-02T15:04:05.000Z07:00")
+    return clock.deadline(DEFAULT_TIMEOUT)
 end
 
 local function fault(code: string, message: string): Fault
@@ -144,19 +145,31 @@ local function detach(target: Target, receipt: Receipt, handle: client.Client): 
     return true, nil
 end
 
-function M.open(target: Target): (Handle?, Fault?)
+function M.open(target: Target, idempotency_key: string?): (Handle?, Fault?)
     local handle, open_error = client.open(target.node_id)
     if not handle then return nil, fault("UNAVAILABLE", open_error or "Hive client unavailable") end
     local lifetime_id, lifetime_error = register_lifetime(target.node_id)
     if lifetime_error then handle:close(); return nil, fault("UNAVAILABLE", lifetime_error) end
     local recipient = tostring(process.pid())
+    local key = idempotency_key
+    if not key then
+        local generated, key_error = uuid.v4()
+        if not generated then
+            unregister_lifetime(lifetime_id)
+            handle:close()
+            return nil, fault("UNAVAILABLE", tostring(key_error))
+        end
+        key = generated
+    end
     local reply = handle:call({node_id = target.node_id, service_id = protocol.SERVICE}, {operation_ref = protocol.ATTACH}, {
         owner_execution = target.owner_execution, workspace_id = target.workspace_id, desktop_id = target.desktop_id, mode = target.mode,
-    }, {deadline = deadline(), timeout = DEFAULT_TIMEOUT})
+    }, {idempotency_key = key, deadline = deadline(), timeout = DEFAULT_TIMEOUT})
     if not reply.ok then
-        if reply.error and reply.error.code ~= "UNCERTAIN" and reply.error.code ~= "DEADLINE_EXCEEDED" then unregister_lifetime(lifetime_id) end
+        if reply.error and reply.error.code ~= "UNCERTAIN" and reply.error.code ~= "DEADLINE_EXCEEDED" and reply.error.code ~= "BUSY" then unregister_lifetime(lifetime_id) end
         handle:close()
-        return nil, fault(reply.error and reply.error.code or "UNAVAILABLE", reply.error and reply.error.message or "desktop attach refused")
+        local code = reply.error and reply.error.code or "UNAVAILABLE"
+        if code == "DEADLINE_EXCEEDED" or code == "BUSY" then code = "UNCERTAIN" end
+        return nil, fault(code, reply.error and reply.error.message or "desktop attach refused")
     end
     local accepted, receipt_error = M.receipt(reply.value, target, recipient)
     if not accepted then

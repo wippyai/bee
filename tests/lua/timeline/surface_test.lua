@@ -73,7 +73,7 @@ local function define_tests()
             local watch = model.watch_intent(state)
             if not watch then error("watch") end
             watch.request.wait_ms = 0
-            model.apply_watch(state, ask(state, bob, watch))
+            test.is_true(ask(state, bob, watch).ok)
             model.apply_page(state, ask(state, bob, model.page_intent(state)))
             test.eq(#state.rows, 4)
             model.apply_ack(state, ask(state, bob, model.ack_intent(state, harness.key())))

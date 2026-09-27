@@ -41,9 +41,8 @@ function M.decode(value: unknown): (Mappings?, string?)
     if not object then return nil, "principal mappings must be an object" end
     local unknown_field = bounds.fields(object, {"mappings"})
     if unknown_field then return nil, unknown_field end
-    if type(object.mappings) ~= "table" then return nil, "mappings must be a list" end
-    local raw = object.mappings :: {unknown}
-    if #raw > M.MAX_MAPPINGS then return nil, "mappings exceeds " .. tostring(M.MAX_MAPPINGS) .. " entries" end
+    local raw = bounds.array(object.mappings, M.MAX_MAPPINGS)
+    if not raw then return nil, "mappings must be a dense list of at most " .. tostring(M.MAX_MAPPINGS) .. " entries" end
     local list: {Mapping} = {}
     local index: {[string]: Mapping} = {}
     for position, item in ipairs(raw) do

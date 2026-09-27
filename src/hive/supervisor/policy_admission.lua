@@ -5,6 +5,7 @@ local security = require("security")
 local registry = require("registry")
 local system = require("system")
 local time = require("time")
+local clock = require("clock")
 local types = require("types")
 local bounds = require("bounds")
 local catalog = require("catalog")
@@ -39,8 +40,8 @@ function M.handle(value: unknown): types.Reply
     if request.owner_ref.service_id ~= service or request.owner_ref.resource_ref ~= nil then return denied(id, "INVALID_ARGUMENT", "feed owner service does not match") end
     if request.principal_ref.issuer ~= request.caller_node_id then return denied(id, "DENIED", "principal issuer does not match the verified peer") end
     if not catalog.admits("policy", request.operation_ref) then return denied(id, "DENIED", "host does not expose this operation") end
-    local deadline = time.parse("2006-01-02T15:04:05.000Z07:00", request.deadline)
-    if not deadline or not deadline:after(time.now()) then return denied(id, "DEADLINE_EXCEEDED", "request deadline passed") end
+    local deadline = clock.parse(request.deadline)
+    if not deadline or clock.elapsed_ms(time.now(), deadline) <= 0 then return denied(id, "DEADLINE_EXCEEDED", "request deadline passed") end
     local entry = registry.get(principals.ENTRY)
     if not entry or type(entry.data) ~= "table" then return denied(id, "UNAVAILABLE", "principal mappings unavailable") end
     local mappings, mapping_error = principals.decode(entry.data)

@@ -33,7 +33,7 @@ local function populated(): model.State
     local state = model.new()
     local items: {Object} = {}
     for index = 1, 30 do
-        items[index] = {workspace_id = string.format("%032x", index), label = index == 2 and "Legacy billing\27[2J" or ("Project " .. tostring(index)),
+        items[index] = {workspace_id = string.format("%032x", index), label = index == 2 and "Legacy billing" or ("Project " .. tostring(index)),
             root_ref = "bee.env:workspace_root", subpath = "legacy/" .. tostring(index), state = "active",
             created_at = "2026-09-20T08:00:00.000Z", last_used_at = "2026-09-24T09:30:00.000Z"}
     end

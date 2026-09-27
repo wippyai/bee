@@ -4,7 +4,7 @@ local frame = require("frame")
 local probe = require("probe")
 local text = require("text")
 local viz = require("viz")
-type Row = {pid: string, source: string, state: string, steps: number}
+type Row = {pid: string, source: string, state: string, steps: integer?}
 type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
 local M = {}
 function M.items(snapshot: probe.Snapshot, services: boolean): {Row}
@@ -72,7 +72,7 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
         if item.source ~= "" and (source_counts[item.source] or 0) > 1 then
             label = label .. " · " .. text.bound(M.pid_suffix(item.pid), 64)
         end
-        cells[index] = {label, text.bound(item.state, 64), string.format("%.0f", item.steps)}
+        cells[index] = {label, text.bound(item.state, 64), number(item.steps)}
         keys[index] = item.pid
         if item.pid == selected then selected_index = index end
     end

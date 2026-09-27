@@ -1,22 +1,10 @@
--- MIT. Shared conversion from runtime time values to epoch seconds.
+-- Canonical time conversions used at Bee protocol and presentation boundaries.
 local time = require("time")
-
 local M = {}
 M.FORMAT = "2006-01-02T15:04:05.000Z07:00"
 
-function M.epoch_seconds(value: time.Time): number
-    return value:unix_nano() / 1000000000
-end
-
 function M.utc(value: time.Time): string
     return value:utc():format(M.FORMAT)
-end
-
-function M.parse(value: unknown): time.Time?
-    if type(value) ~= "string" then return nil end
-    local parsed, err = time.parse(M.FORMAT, value)
-    if err or not parsed or M.utc(parsed) ~= value then return nil end
-    return parsed
 end
 
 function M.now(): string

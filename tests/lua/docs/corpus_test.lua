@@ -3,6 +3,7 @@
 -- match sits under, read returns one bounded window and every bound holds.
 local test = require("test")
 local fs = require("fs")
+local hash = require("hash")
 local corpus = require("corpus")
 local protocol = require("protocol")
 local resources = require("resources")
@@ -100,7 +101,7 @@ local function define_tests()
             test.eq(refused, nil)
             local bad = method.handle({operation = "list", topic = "nope"}) :: {[string]: unknown}
             test.eq(bad.ok, false)
-            test.eq(bad.code, "INVALID")
+            test.eq(bad.code, "INVALID_ARGUMENT")
         end)
         test.it("searches the corpus and returns the section a match sits under", function()
             local found = call({operation = "search", query = "tty.canvas"})
@@ -154,7 +155,7 @@ local function define_tests()
             test.eq(unknown, nil)
             local refused = method.handle({operation = "read", id = "toolkit", section = "no-such-heading"}) :: {[string]: unknown}
             test.eq(refused.ok, false)
-            test.eq(refused.code, "INVALID")
+            test.eq(refused.code, "INVALID_ARGUMENT")
         end)
         test.it("keeps the anchors stable for the cross-node and terminal questions", function()
             local volume = volume()
@@ -164,6 +165,47 @@ local function define_tests()
             local anchors: {[string]: boolean} = {}
             for _, document in ipairs(manifest.documents) do anchors[document.topic] = true end
             test.is_true(anchors["cluster"] and anchors["terminal"] and anchors["component"])
+        end)
+        test.it("rejects malformed manifest shapes, totals, document metadata and content hashes", function()
+            local payload = "# One\n\nA bounded document.\n"
+            local digest, digest_error = hash.sha256(payload)
+            if not digest then error(tostring(digest_error)) end
+            local document = {id = "guides/one", topic = "core", title = "One", source = "https://example.test/one",
+                bytes = #payload, sha256 = digest}
+            local function manifest(documents: unknown, document_count: number, byte_count: number): {[string]: unknown}
+                return {schema = corpus.SCHEMA, selection_rule = "selected core reference", base = "https://example.test/docs",
+                    ceiling_bytes = 4096, totals = {documents = document_count, bytes = byte_count}, documents = documents}
+            end
+            local function decode(value: unknown, content: string?): (corpus.Manifest?, string?)
+                return corpus.decode_manifest(value, function(path: string): (string?, string?)
+                    if path ~= "/guides/one.md" or content == nil then return nil, "not found" end
+                    return content, nil
+                end)
+            end
+            local valid, valid_error = decode(manifest({document}, 1, #payload), payload)
+            if not valid then error(tostring(valid_error)) end
+            test.eq(valid.documents[1].sha256, digest)
+
+            local extra = manifest({document}, 1, #payload)
+            extra.unreviewed = true
+            test.is_nil(decode(extra, payload))
+            test.is_nil(decode(manifest({[1] = document, [3] = document}, 2, #payload * 2), payload))
+            test.is_nil(decode(manifest({document}, 2, #payload), payload))
+            test.is_nil(decode(manifest({document}, 1, #payload + 1), payload))
+
+            local fractional: {[string]: unknown} = {id = document.id, topic = document.topic, title = document.title,
+                source = document.source, bytes = #payload + 0.5, sha256 = digest}
+            test.is_nil(decode(manifest({fractional}, 1, #payload), payload))
+            local wrong_hash: {[string]: unknown} = {id = document.id, topic = document.topic, title = document.title,
+                source = document.source, bytes = #payload, sha256 = string.rep("0", 64)}
+            test.is_nil(decode(manifest({wrong_hash}, 1, #payload), payload))
+            test.is_nil(decode(manifest({document}, 1, #payload), payload .. "changed"))
+            local oversized = manifest({document}, 1, #payload)
+            oversized.ceiling_bytes = corpus.MAX_CORPUS_BYTES + 1
+            test.is_nil(decode(oversized, payload))
+            local invalid_id: {[string]: unknown} = {id = "../escape", topic = document.topic, title = document.title,
+                source = document.source, bytes = #payload, sha256 = digest}
+            test.is_nil(decode(manifest({invalid_id}, 1, #payload), payload))
         end)
     end)
 end

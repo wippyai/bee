@@ -67,6 +67,14 @@ local function define_tests()
             test.eq(nodes[2].workspace_count, 0)
             test.is_false(nodes[2].has_more)
         end)
+        test.it("refuses sparse or duplicate node requests and mismatched owner pages", function()
+            test.is_nil(cluster.decode({nodes = {[1] = "node-a", [3] = "node-c"}}))
+            test.is_nil(cluster.decode({nodes = {"node-a", "node-a"}}))
+            local nodes = cluster.aggregate(scripted({["node-a"] = types.reply_ok("r", holdings("other-node", {}, false))}),
+                assert(cluster.decode({nodes = {"node-a"}})), stub_links({{id = "node-a", is_local = false}}))
+            test.eq(nodes[1].status, "unavailable")
+            test.is_nil(nodes[1].workspace_count)
+        end)
         test.it("reports a refused or unreachable node as unavailable, never as empty", function()
             local call = scripted({
                 ["node-a"] = types.reply_error("r", types.fault("DENIED", "not admitted")),

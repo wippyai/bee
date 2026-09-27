@@ -3,6 +3,7 @@ local test = require("test")
 local funcs = require("funcs")
 local types = require("types")
 local bounds = require("bounds")
+local sampling = require("sampling")
 local function call(id: string, request: {[string]: unknown}): {[string]: unknown}
     local result, err = funcs.call(id, request)
     if err or type(result) ~= "table" then error(id .. ": " .. tostring(err)) end
@@ -31,6 +32,45 @@ local function define_tests()
                 test.is_true(type(value) == "number")
                 test.is_true(name == "alloc" or name == "total_alloc" or name == "sys" or name == "heap_alloc" or name == "heap_objects" or name == "num_gc")
             end
+        end)
+        test.it("refuses unavailable or malformed runtime samples instead of fabricating measurements", function()
+            local valid_time = function(): string return "2026-09-26T12:00:00.000Z" end
+            local missing = function(): (unknown, unknown?) return nil, "source unavailable" end
+            local presence, presence_error = sampling.presence({
+                node_id = missing,
+                role = function(): (unknown, unknown?) return "leader", nil end,
+                cluster_size = function(): (unknown, unknown?) return 3, nil end,
+                sampled_at = valid_time,
+            }, types.REVISION)
+            test.is_nil(presence)
+            test.not_nil(presence_error)
+
+            local invalid_role, role_error = sampling.presence({
+                node_id = function(): (unknown, unknown?) return "node-a", nil end,
+                role = function(): (unknown, unknown?) return "", nil end,
+                cluster_size = function(): (unknown, unknown?) return 3, nil end,
+                sampled_at = valid_time,
+            }, types.REVISION)
+            test.is_nil(invalid_role)
+            test.not_nil(role_error)
+
+            local stats, stats_error = sampling.stats({
+                memory = missing,
+                goroutines = function(): (unknown, unknown?) return 4, nil end,
+                cpu_count = function(): (unknown, unknown?) return 8, nil end,
+                sampled_at = valid_time,
+            })
+            test.is_nil(stats)
+            test.not_nil(stats_error)
+
+            local invalid_counters, counter_error = sampling.stats({
+                memory = function(): (unknown, unknown?) return {heap_alloc = 1024}, nil end,
+                goroutines = function(): (unknown, unknown?) return 1.5, nil end,
+                cpu_count = function(): (unknown, unknown?) return 8, nil end,
+                sampled_at = valid_time,
+            })
+            test.is_nil(invalid_counters)
+            test.not_nil(counter_error)
         end)
         test.it("lists the public catalog in bounded pages", function()
             local page = call("bee.hive.telemetry:catalog_list", {})

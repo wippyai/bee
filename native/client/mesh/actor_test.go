@@ -32,10 +32,10 @@ func TestNativeActorReceivesOwnerReplyAndRetiresFrame(t *testing.T) {
 			err := WithActor(ctx, stack, descriptor.Node, func(frame context.Context, actor *Actor) error {
 				retained = frame
 				actual, ok := runtime.GetFramePID(frame)
-				if !ok || !samePID(actual, actor.PID()) || actual.Node != stack.Node.ID() || actual.Host != ActorHost || actual.UniqID == "" {
+				if !ok || !actual.Equal(actor.PID()) || actual.Node != stack.Node.ID() || actual.Host != ActorHost || actual.UniqID == "" {
 					t.Fatalf("invalid runtime recipient: %v", actual)
 				}
-				if samePID(actual, previous) {
+				if actual.Equal(previous) {
 					t.Fatal("reused client identity")
 				}
 				previous = actual
@@ -51,7 +51,9 @@ func TestNativeActorReceivesOwnerReplyAndRetiresFrame(t *testing.T) {
 				if !ctxapi.FrameFromContext(frame).IsSealed() {
 					t.Fatal("mutable recipient frame")
 				}
-				source := pid.PID{Node: descriptor.Node, Host: "fixture", UniqID: "supervisor"}
+				// The actual transport peer is the owner node. Keep a different
+				// logical sender to verify admission uses runtime ingress provenance.
+				source := pid.PID{Node: "claimed-node", Host: "fixture", UniqID: "supervisor"}
 				body := []byte(`{"request_id":"proof","from":"payload-is-not-identity"}`)
 				// The owner fixture sends through actual internode routing; it is not a
 				// production supervisor or an admission decision.
@@ -65,7 +67,7 @@ func TestNativeActorReceivesOwnerReplyAndRetiresFrame(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if !samePID(message.From, source) || message.Topic != "bee.client.reply" || string(message.Body) != string(body) {
+				if !message.From.Equal(source) || message.Topic != "bee.client.reply" || string(message.Body) != string(body) {
 					t.Fatalf("changed peer envelope: %#v", message)
 				}
 				return nil
@@ -88,21 +90,21 @@ func TestNativeActorReceivesOwnerReplyAndRetiresFrame(t *testing.T) {
 }
 
 func TestActorInboxOverflowCancelsConsumer(t *testing.T) {
-	ctx, dir, _, _, _ := localOwner(t)
+	ctx, dir, owner, _, _ := localOwner(t)
 	err := joinFresh(ctx, dir, internode.ManagerTLSConfig{}, func(ctx context.Context, stack *stackpkg.Stack, descriptor rendezvous.Descriptor) error {
 		return WithActor(ctx, stack, descriptor.Node, func(frame context.Context, actor *Actor) error {
 			source := pid.PID{Node: descriptor.Node, Host: "fixture", UniqID: "supervisor"}
 			pkg := relay.AcquirePackage()
 			pkg.Source = source
-			// Trusted local injection exercises queue overflow after owner-node admission.
 			pkg.Target = actor.PID()
+			pkg.IngressNode = pid.NodeID(descriptor.Node)
 			for range maxMessages + 1 {
 				msg := relay.AcquireMessage()
 				msg.Topic = "bee.client.reply"
 				msg.Payloads = payload.Payloads{payload.NewPayload([]byte(`{"id":1}`), payload.JSON)}
 				pkg.Messages = append(pkg.Messages, msg)
 			}
-			if err := stack.Node.Send(pkg); err != nil {
+			if err := owner.Router.Send(pkg); err != nil {
 				relay.ReleasePackage(pkg)
 				return err
 			}
@@ -125,16 +127,18 @@ func TestActorInboxOverflowCancelsConsumer(t *testing.T) {
 
 func TestActorRejectsForeignOwnerNodes(t *testing.T) {
 	for _, test := range []struct {
-		name   string
-		source string
+		name    string
+		source  string
+		ingress string
 	}{
-		{name: "empty", source: ""},
-		{name: "different-peer", source: "other"},
+		{name: "empty-ingress", source: "owner", ingress: ""},
+		{name: "foreign-ingress", source: "owner", ingress: "intruder"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			actor := &Actor{owner: "owner", inbox: make(chan Message, 1)}
 			proc := &nativeActor{actor: actor}
 			pkg := relay.NewPackage(pid.PID{Node: test.source, Host: "supervisor", UniqID: "one"}, pid.PID{}, "reply", payload.NewPayload([]byte(`{"id":"claim"}`), payload.JSON))
+			pkg.IngressNode = pid.NodeID(test.ingress)
 			var output process.StepOutput
 			if err := proc.Step([]process.Event{{Type: process.EventMessage, Data: pkg}}, &output); err != nil {
 				t.Fatal(err)
@@ -143,5 +147,25 @@ func TestActorRejectsForeignOwnerNodes(t *testing.T) {
 				t.Fatal("unverified owner claim entered inbox")
 			}
 		})
+	}
+}
+
+func TestActorAuthenticatesIngressAndPreservesLogicalSender(t *testing.T) {
+	actor := &Actor{owner: "owner", inbox: make(chan Message, 1)}
+	proc := &nativeActor{actor: actor}
+	source := pid.PID{Node: "claimed-node", Host: "supervisor", UniqID: "one"}
+	pkg := relay.NewPackage(source, pid.PID{}, "reply", payload.NewPayload([]byte(`{"id":"reply"}`), payload.JSON))
+	pkg.IngressNode = pid.NodeID("owner")
+	var output process.StepOutput
+	if err := proc.Step([]process.Event{{Type: process.EventMessage, Data: pkg}}, &output); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case message := <-actor.inbox:
+		if !message.From.Equal(source) || string(message.Body) != `{"id":"reply"}` {
+			t.Fatalf("logical sender or body changed: %+v", message)
+		}
+	default:
+		t.Fatal("authenticated owner ingress did not reach the client inbox")
 	}
 }

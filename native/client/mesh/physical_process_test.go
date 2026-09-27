@@ -80,7 +80,7 @@ func TestSeparatePhysicalClientsReattachToRetainedViewport(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if samePID(recipient, previous) {
+		if recipient.Equal(previous) {
 			t.Fatal("reused physical client recipient")
 		}
 		previous = recipient

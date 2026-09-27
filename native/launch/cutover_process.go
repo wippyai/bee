@@ -27,9 +27,9 @@ func defaultCutoverSeams() cutoverSeams {
 				clientIntent{stop: true})
 		},
 		stopOldCompatible: stopCutoverCompatible,
-		waitReleased:       waitReleased,
-		start:              startCutoverOwner,
-		currentExecutable:  os.Executable,
+		waitReleased:      waitReleased,
+		start:             startCutoverOwner,
+		currentExecutable: os.Executable,
 	}
 }
 

@@ -7,10 +7,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/wippyai/bee/native/internal/jsonwire"
+	"github.com/wippyai/bee/native/internal/timewire"
 )
 
 type Identity struct {
@@ -53,57 +55,7 @@ func identifier(s string) bool {
 // JSON objects reject duplicate keys recursively, including inside operation
 // values. RawMessage fields must not create a bypass around the envelope check.
 func uniqueJSON(raw []byte) bool {
-	if len(raw) == 0 || len(raw) > maxBytes || !utf8.Valid(raw) {
-		return false
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var value func(int) bool
-	value = func(depth int) bool {
-		if depth > 32 {
-			return false
-		}
-		token, err := decoder.Token()
-		if err != nil {
-			return false
-		}
-		delim, container := token.(json.Delim)
-		if !container {
-			return true
-		}
-		switch delim {
-		case '{':
-			keys := map[string]bool{}
-			for decoder.More() {
-				key, err := decoder.Token()
-				name, ok := key.(string)
-				if err != nil || !ok || keys[name] {
-					return false
-				}
-				keys[name] = true
-				if !value(depth + 1) {
-					return false
-				}
-			}
-			end, err := decoder.Token()
-			return err == nil && end == json.Delim('}')
-		case '[':
-			for decoder.More() {
-				if !value(depth + 1) {
-					return false
-				}
-			}
-			end, err := decoder.Token()
-			return err == nil && end == json.Delim(']')
-		default:
-			return false
-		}
-	}
-	if !value(0) {
-		return false
-	}
-	_, err := decoder.Token()
-	return err == io.EOF
+	return jsonwire.Validate(raw, maxBytes) == nil
 }
 func object(raw []byte) bool {
 	if len(raw) > maxBytes {
@@ -120,9 +72,15 @@ func strict(raw []byte, into any) error {
 func present(raw json.RawMessage) bool {
 	return len(raw) > 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
 }
-func canonicalTime(s string) bool {
-	parsed, err := time.Parse("2006-01-02T15:04:05.000Z", s)
-	return err == nil && parsed.UTC().Format("2006-01-02T15:04:05.000Z") == s
+
+func parseCanonicalTime(value string) (time.Time, bool) {
+	parsed, err := timewire.ParseCanonicalUTC(value)
+	return parsed, err == nil
+}
+
+func canonicalTime(value string) bool {
+	_, ok := parseCanonicalTime(value)
+	return ok
 }
 func decodeReply(raw []byte) (Reply, error) {
 	invalid := errors.New("invalid Hive reply envelope")

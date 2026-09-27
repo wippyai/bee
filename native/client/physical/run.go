@@ -186,13 +186,8 @@ func RunWithCopy(ctx context.Context, client Viewport, rights tty.MountRights, s
 						err = context.Cause(ctx)
 					}
 					if err == nil && selected && !refused {
-						clipboard, ok := any(surface).(interface{ Clipboard(string) error })
-						if !ok {
-							err = errors.New("physical clipboard output unsupported")
-						} else {
-							err = clipboard.Clipboard(text)
-							copyReleasePending = err == nil
-						}
+						err = surface.Clipboard(text)
+						copyReleasePending = err == nil
 					} else if err == nil && !refused {
 						operation = "input"
 						err = client.SendContext(ctx, item.event)

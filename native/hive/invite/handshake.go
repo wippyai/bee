@@ -20,6 +20,8 @@ import (
 	"net/netip"
 	"sync"
 	"time"
+
+	"github.com/wippyai/bee/native/internal/jsonwire"
 )
 
 const (
@@ -81,14 +83,27 @@ type Refused struct {
 
 func (r *Refused) Error() string { return "invite refused: " + r.Code + ": " + r.Message }
 
-type response struct {
-	Admission *Admission `json:"admission,omitempty"`
-	Refused   *Refused   `json:"refused,omitempty"`
-}
+// Decision is one typed answer from a join handler.
+type Decision interface{ inviteDecision() }
+
+// Accepted carries the mesh credentials issued to an admitted joiner.
+type Accepted struct{ Admission Admission }
+
+// Rejected carries a definite protocol refusal from the listener.
+type Rejected struct{ Refusal Refused }
+
+func (Accepted) inviteDecision() {}
+func (Rejected) inviteDecision() {}
+
+// Accept admits the authenticated joiner with the supplied mesh credentials.
+func Accept(admission Admission) Decision { return Accepted{Admission: admission} }
+
+// Reject refuses the authenticated joiner with a definite protocol fault.
+func Reject(refusal Refused) Decision { return Rejected{Refusal: refusal} }
 
 // Handler admits or refuses one joiner. peer is the identity key the joiner
 // proved with its client certificate.
-type Handler func(ctx context.Context, peer ed25519.PublicKey, request Request) (Admission, *Refused)
+type Handler func(ctx context.Context, peer ed25519.PublicKey, request Request) Decision
 
 // certificate is a self-signed TLS certificate carrying the identity key.
 // Only the key matters: each side pins or records it, never the name or chain.
@@ -120,33 +135,106 @@ func peerKey(raw [][]byte) (ed25519.PublicKey, error) {
 	return key, nil
 }
 
-func readMessage(connection net.Conn, into any) error {
+func readFrame(connection net.Conn) ([]byte, error) {
 	reader := bufio.NewReader(io.LimitReader(connection, MaxMessageBytes+1))
 	line, err := reader.ReadBytes('\n')
-	if err != nil {
-		return err
-	}
 	if len(line) > MaxMessageBytes {
-		return errors.New("invite handshake message exceeds its bound")
+		return nil, errors.New("invite handshake message exceeds its bound")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(line))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(into); err != nil {
-		return err
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return line, nil
 }
 
-func writeMessage(connection net.Conn, value any) error {
+func readRequest(connection net.Conn) (Request, error) {
+	line, err := readFrame(connection)
+	if err != nil {
+		return Request{}, err
+	}
+	request, err := jsonwire.DecodeObject[Request](line, MaxMessageBytes,
+		"version", "invite", "secret", "node", "tls_key")
+	if err != nil {
+		return Request{}, err
+	}
+	return request, nil
+}
+
+type responseEnvelope struct {
+	Admission json.RawMessage `json:"admission,omitempty"`
+	Refused   json.RawMessage `json:"refused,omitempty"`
+}
+
+func readDecision(connection net.Conn) (Decision, error) {
+	line, err := readFrame(connection)
+	if err != nil {
+		return nil, err
+	}
+	envelope, err := jsonwire.DecodeObject[responseEnvelope](line, MaxMessageBytes)
+	if err != nil {
+		return nil, err
+	}
+	hasAdmission := present(envelope.Admission)
+	hasRefusal := present(envelope.Refused)
+	if hasAdmission == hasRefusal {
+		return nil, errors.New("invite handshake response must contain one decision")
+	}
+	if hasAdmission {
+		admission, err := jsonwire.DecodeObject[Admission](envelope.Admission, MaxMessageBytes,
+			"version", "node", "gossip", "secret", "certificate", "authorities")
+		if err != nil {
+			return nil, err
+		}
+		return Accepted{Admission: admission}, nil
+	}
+	refusal, err := jsonwire.DecodeObject[Refused](envelope.Refused, MaxMessageBytes, "code", "message")
+	if err != nil {
+		return nil, err
+	}
+	if refusal.Code == "" || len(refusal.Code) > 128 || refusal.Message == "" || len(refusal.Message) > 4096 {
+		return nil, errors.New("invite handshake refusal is invalid")
+	}
+	return Rejected{Refusal: refusal}, nil
+}
+
+func writeMessage[T any](connection net.Conn, value T) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	if len(data) > MaxMessageBytes {
+	if len(data)+1 > MaxMessageBytes {
 		return errors.New("invite handshake message exceeds its bound")
 	}
 	_, err = connection.Write(append(data, '\n'))
 	return err
+}
+
+func writeDecision(connection net.Conn, decision Decision) error {
+	var envelope responseEnvelope
+	switch value := decision.(type) {
+	case Accepted:
+		body, err := json.Marshal(value.Admission)
+		if err != nil {
+			return err
+		}
+		envelope.Admission = body
+	case Rejected:
+		if value.Refusal.Code == "" || len(value.Refusal.Code) > 128 || value.Refusal.Message == "" || len(value.Refusal.Message) > 4096 {
+			return errors.New("invite handshake refusal is invalid")
+		}
+		body, err := json.Marshal(value.Refusal)
+		if err != nil {
+			return err
+		}
+		envelope.Refused = body
+	default:
+		return errors.New("invite handshake handler returned no decision")
+	}
+	return writeMessage(connection, envelope)
+}
+
+func present(value json.RawMessage) bool {
+	return len(value) > 0 && !bytes.Equal(bytes.TrimSpace(value), []byte("null"))
 }
 
 // Dial redeems invite as identity, trying every bounded candidate. It pins the
@@ -247,18 +335,21 @@ func DialCandidates(ctx context.Context, line Invite, identity ed25519.PrivateKe
 	if err := writeMessage(connection, request); err != nil {
 		return Admission{}, nil, Candidate{}, err
 	}
-	var reply response
-	if err := readMessage(connection, &reply); err != nil {
+	reply, err := readDecision(connection)
+	if err != nil {
 		return Admission{}, nil, Candidate{}, fmt.Errorf("join %s: %w", selected.candidate.Endpoint, err)
 	}
-	switch {
-	case reply.Refused != nil && reply.Admission == nil:
-		return Admission{}, nil, Candidate{}, reply.Refused
-	case reply.Admission != nil && reply.Refused == nil && reply.Admission.Version == Version && reply.Admission.Node == line.Node &&
-		validObserved(reply.Admission.Observed):
-		return *reply.Admission, selected.pinned, selected.candidate, nil
-	default:
+	switch value := reply.(type) {
+	case Rejected:
+		return Admission{}, nil, Candidate{}, &value.Refusal
+	case Accepted:
+		admission := value.Admission
+		if admission.Version == Version && admission.Node == line.Node && validObserved(admission.Observed) {
+			return admission, selected.pinned, selected.candidate, nil
+		}
 		return Admission{}, nil, Candidate{}, errors.New("hive node sent an invalid admission")
+	default:
+		return Admission{}, nil, Candidate{}, errors.New("hive node sent an invalid decision")
 	}
 }
 
@@ -329,8 +420,8 @@ func serve(ctx context.Context, connection *tls.Conn, handler Handler) {
 	if err != nil {
 		return
 	}
-	var request Request
-	if err := readMessage(connection, &request); err != nil {
+	request, err := readRequest(connection)
+	if err != nil {
 		return
 	}
 	// The accepted socket is the only trustworthy statement of where this
@@ -344,19 +435,18 @@ func serve(ctx context.Context, connection *tls.Conn, handler Handler) {
 		request.Local = host
 	}
 	if request.Version != Version {
-		_ = writeMessage(connection, response{Refused: &Refused{Code: "UNSUPPORTED_SCHEMA", Message: "unsupported invite handshake version"}})
+		_ = writeDecision(connection, Reject(Refused{Code: "UNSUPPORTED_SCHEMA", Message: "unsupported invite handshake version"}))
 		return
 	}
 	decision, cancelDecision := context.WithTimeout(ctx, decisionTimeout)
 	defer cancelDecision()
-	admission, refused := handler(decision, peer, request)
-	if refused != nil {
-		_ = writeMessage(connection, response{Refused: refused})
-		return
+	answer := handler(decision, peer, request)
+	if admission, ok := answer.(Accepted); ok {
+		admission.Admission.Version = Version
+		// The listener owns the observed address: whatever the handler said is
+		// replaced with what the accepted socket actually showed.
+		admission.Admission.Observed = request.Observed
+		answer = admission
 	}
-	admission.Version = Version
-	// The listener owns the observed address: whatever the handler said is
-	// replaced with what the accepted socket actually showed.
-	admission.Observed = request.Observed
-	_ = writeMessage(connection, response{Admission: &admission})
+	_ = writeDecision(connection, answer)
 }

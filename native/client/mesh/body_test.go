@@ -72,6 +72,7 @@ func TestActorDeliversNormalizedSupervisorReply(t *testing.T) {
 	proc := &nativeActor{actor: actor}
 	sender := pid.PID{Node: "owner", Host: "bee.hive.service:supervisor_host", UniqID: "one"}
 	pkg := relay.NewPackage(sender, pid.PID{}, "bee.hive.reply", payload.NewPayload(map[string]any{"request_id": "one", "ok": true}, payload.Golang))
+	pkg.IngressNode = "owner"
 	var output process.StepOutput
 	if err := proc.Step([]process.Event{{Type: process.EventMessage, Data: pkg}}, &output); err != nil {
 		t.Fatal(err)

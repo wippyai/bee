@@ -37,7 +37,7 @@ func (s *scripted) OwnerSupervisor(ctx context.Context) (pid.PID, error) {
 	return p, nil
 }
 func (s *scripted) Send(ctx context.Context, target pid.PID, topic string, raw []byte) error {
-	if !samePID(target, ownerPID) || topic != requestTopic {
+	if !target.Equal(ownerPID) || topic != requestTopic {
 		return ErrProtocol
 	}
 	var call wireCall

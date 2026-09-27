@@ -21,7 +21,7 @@ changed: re-admission, never silent retargeting) or `RESOURCE_NOT_LOCAL`
 |---|---|
 | root `bee.resources` | Definition, `target_db`/`target_roots` requirements, linked references, contract `contract`, and stable `local` binding |
 | `persist/` | Immutable resource schema migrations and `authority`, the SQL-owning association and grant authority opened through `bee.persist` |
-| `binding/` | Existing stable operation entry sources for associate, grant, revoke, revoke-all, resolve, list, describe, search, and capabilities |
+| `binding/` | Owner operation entry sources for associate, grant, check-grant, revoke, revoke-all, resolve, list, describe, search, and capabilities |
 | root `bee.resources` | The linked database/root reference reader, including the narrow environment resolution used to digest admitted roots |
 
 Actions: `bee.resources.manage` (associate, list, revoke any, revoke_all;
@@ -37,7 +37,10 @@ catalog extension, and the host binds them to that contract as
 `bee.resources:resources_workspace_extension`. Resource root path interpolation uses the narrow
 `bee.resources.security:resource_environment_policy` and resolves before the root digest is
 stored or checked; unrelated environment variables remain inaccessible.
-Revocation stops future resolution. `revoke_all` reports its fenced attempts
-and asks the placement owner to recheck their recorded grants and stop any
-attempt that lost access. Placement reconciliation remains the enforcement
+The private `check_grant` binding validates an association, its admitted root
+and the requested access without writing a grant. Gateway elevation calls it
+before filing approval and again before consuming an approved decision.
+Revocation stops future resolution. Both `revoke` and `revoke_all` report their
+fenced attempts and ask the placement owner to recheck recorded grants and stop
+each attempt that lost access. Placement reconciliation remains the enforcement
 backstop until exit is proven.

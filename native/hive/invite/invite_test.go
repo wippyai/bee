@@ -67,8 +67,8 @@ func TestInviteCarriesBoundedTypedCandidates(t *testing.T) {
 
 func TestDialTriesCandidatesAndReportsEachFailure(t *testing.T) {
 	hive := identity(t)
-	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) (Admission, *Refused) {
-		return Admission{Node: "bee-owner-0123456789abcdef", Gossip: "127.0.0.1:1"}, nil
+	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) Decision {
+		return Accept(Admission{Node: "bee-owner-0123456789abcdef", Gossip: "127.0.0.1:1"})
 	})
 	item := sample(netip.MustParseAddrPort("127.0.0.1:1"), hive)
 	item.Candidates = []Candidate{{Kind: "interface", Scope: "host", Endpoint: address.String()}}
@@ -120,8 +120,8 @@ func TestDialAcrossASecondLocalInterface(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- Serve(ctx, listener, hive, func(context.Context, ed25519.PublicKey, Request) (Admission, *Refused) {
-			return Admission{Node: "bee-owner-0123456789abcdef", Gossip: "127.0.0.1:1"}, nil
+		done <- Serve(ctx, listener, hive, func(context.Context, ed25519.PublicKey, Request) Decision {
+			return Accept(Admission{Node: "bee-owner-0123456789abcdef", Gossip: "127.0.0.1:1"})
 		})
 	}()
 	defer func() {
@@ -184,10 +184,10 @@ func TestDialRedeemsAgainstThePinnedHiveNode(t *testing.T) {
 	hive, joiner := identity(t), identity(t)
 	var seen atomic.Pointer[Request]
 	var peer atomic.Pointer[ed25519.PublicKey]
-	address := listen(t, hive, func(_ context.Context, key ed25519.PublicKey, request Request) (Admission, *Refused) {
+	address := listen(t, hive, func(_ context.Context, key ed25519.PublicKey, request Request) Decision {
 		seen.Store(&request)
 		peer.Store(&key)
-		return Admission{Node: "bee-owner-0123456789abcdef", Gossip: "127.0.0.1:1", Secret: "c2VjcmV0", Certificate: "leaf", Authorities: "pool"}, nil
+		return Accept(Admission{Node: "bee-owner-0123456789abcdef", Gossip: "127.0.0.1:1", Secret: "c2VjcmV0", Certificate: "leaf", Authorities: "pool"})
 	})
 	invite := sample(address, hive)
 	admission, pinned, err := Dial(context.Background(), invite, joiner, Request{Node: "bee-owner-joiner", Addresses: []string{"127.0.0.1"}, Key: "a2V5"})
@@ -214,9 +214,9 @@ func TestDialRedeemsAgainstThePinnedHiveNode(t *testing.T) {
 func TestDialRefusesAnUnpinnedHiveNode(t *testing.T) {
 	impostor, expected := identity(t), identity(t)
 	var called atomic.Bool
-	address := listen(t, impostor, func(context.Context, ed25519.PublicKey, Request) (Admission, *Refused) {
+	address := listen(t, impostor, func(context.Context, ed25519.PublicKey, Request) Decision {
 		called.Store(true)
-		return Admission{}, nil
+		return Accept(Admission{})
 	})
 	_, _, err := Dial(context.Background(), sample(address, expected), identity(t), Request{Node: "bee-owner-joiner"})
 	if err == nil || !strings.Contains(err.Error(), "does not match the invite") {
@@ -229,8 +229,8 @@ func TestDialRefusesAnUnpinnedHiveNode(t *testing.T) {
 
 func TestDialReportsTheHiveNodeRefusal(t *testing.T) {
 	hive := identity(t)
-	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) (Admission, *Refused) {
-		return Admission{}, &Refused{Code: "CONFLICT", Message: "invite was already used"}
+	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) Decision {
+		return Reject(Refused{Code: "CONFLICT", Message: "invite was already used"})
 	})
 	_, _, err := Dial(context.Background(), sample(address, hive), identity(t), Request{Node: "bee-owner-joiner"})
 	var refused *Refused
@@ -242,8 +242,8 @@ func TestDialReportsTheHiveNodeRefusal(t *testing.T) {
 // An admission for another node than the invite names is not accepted.
 func TestDialRefusesAnAdmissionForAnotherNode(t *testing.T) {
 	hive := identity(t)
-	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) (Admission, *Refused) {
-		return Admission{Node: "bee-owner-elsewhere"}, nil
+	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) Decision {
+		return Accept(Admission{Node: "bee-owner-elsewhere"})
 	})
 	if _, _, err := Dial(context.Background(), sample(address, hive), identity(t), Request{Node: "bee-owner-joiner"}); err == nil {
 		t.Fatal("accepted an admission for another node")

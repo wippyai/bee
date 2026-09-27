@@ -17,11 +17,11 @@ import (
 const maxMessageBytes = 16 * 1024
 const maxMessages = 32
 
-// Message preserves the actual relay sender. Body is owned bounded JSON, not a
-// borrowed scheduler payload. The operation decoder must still validate fields,
-// request identity and the exact admitted supervisor PID before using a reply.
+// Message preserves the logical relay sender from an authenticated owner-node
+// ingress. Body is owned bounded JSON, not a borrowed scheduler payload. The
+// operation decoder still validates request identity and the admitted process.
 type Message struct {
-	// From is the runtime-established sending process, never decoded from the body.
+	// From is the logical sender carried by the owner's relay envelope.
 	From  pid.PID
 	Topic string
 	Body  json.RawMessage
@@ -101,5 +101,3 @@ func (a *Actor) Receive(ctx context.Context) (Message, error) {
 		return message, nil
 	}
 }
-
-func samePID(a, b pid.PID) bool { return a.Node == b.Node && a.Host == b.Host && a.UniqID == b.UniqID }

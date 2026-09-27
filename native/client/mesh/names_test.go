@@ -42,7 +42,7 @@ func TestActorDiscoversOwnerThroughRuntimeNames(t *testing.T) {
 			for {
 				found, err := actor.OwnerSupervisor(deadline)
 				if err == nil {
-					if !samePID(found, expected) {
+					if !found.Equal(expected) {
 						t.Fatalf("wrong discovered owner: %v", found)
 					}
 					return nil

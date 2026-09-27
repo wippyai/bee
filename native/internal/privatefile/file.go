@@ -50,6 +50,27 @@ func (e *PublishedSyncError) Is(target error) bool {
 // DefaultMaxBytes is the default bound for file reads when no positive limit is supplied.
 const DefaultMaxBytes = 64 * 1024
 
+// WriteAtomic publishes an owner-only file by syncing a temporary file,
+// checking any existing target, renaming it into place, and syncing its
+// directory. The parent directory must already exist.
+func WriteAtomic(path string, data []byte) error {
+	if strings.TrimSpace(path) == "" {
+		return ErrInvalidName
+	}
+	directory, name := filepath.Dir(path), filepath.Base(path)
+	if err := validateBasename(name); err != nil {
+		return err
+	}
+	info, err := os.Lstat(directory)
+	if err != nil {
+		return fmt.Errorf("stat parent directory: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("parent path %q is not a directory", directory)
+	}
+	return writeAtomicFile(directory, path, name, data)
+}
+
 // File represents a single protected private document and its companion lock file
 // under a validated private directory. It is an immutable path descriptor holding no
 // long-lived descriptors or locks; operations acquire and release resources internally.

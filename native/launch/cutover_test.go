@@ -5,10 +5,13 @@ package launch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wippyai/bee/native/internal/privatefile"
 )
 
 // cutoverFake records the handoff sequence a cutover drives.
@@ -106,6 +109,36 @@ func TestCutoverVerifiesDigestAndHandsTheLock(t *testing.T) {
 	}
 	if ledger.PreviousDigest != currentDigest || ledger.CandidateDigest != result.Digest {
 		t.Fatalf("ledger = %+v", ledger)
+	}
+}
+
+func TestReadCutoverLedgerRejectsHostileDocuments(t *testing.T) {
+	state := t.TempDir()
+	if err := privatefile.EnsurePrivateDir(ownerDirectory(state)); err != nil {
+		t.Fatal(err)
+	}
+	valid := fmt.Sprintf(`{"version":1,"previous":%q,"previous_digest":%q,"candidate":"/candidate","candidate_digest":%q}`,
+		filepath.Join(ownerDirectory(state), cutoverPreviousName), strings.Repeat("a", 64), strings.Repeat("b", 64))
+	invalidPrevious := fmt.Sprintf(`{"version":1,"previous":"/outside/previous","previous_digest":%q,"candidate":"/candidate","candidate_digest":%q}`,
+		strings.Repeat("a", 64), strings.Repeat("b", 64))
+	invalidDigest := fmt.Sprintf(`{"version":1,"previous":%q,"previous_digest":"not-a-digest","candidate":"/candidate","candidate_digest":%q}`,
+		filepath.Join(ownerDirectory(state), cutoverPreviousName), strings.Repeat("b", 64))
+	for name, data := range map[string]string{
+		"oversized":          strings.Repeat("x", 8193),
+		"trailing":           valid + ` {}`,
+		"duplicate":          strings.Replace(valid, `"version":1`, `"version":1,"version":1`, 1),
+		"missing-field":      `{"version":1,"previous":"/previous","previous_digest":"` + strings.Repeat("a", 64) + `"}`,
+		"untrusted-previous": invalidPrevious,
+		"invalid-digest":     invalidDigest,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := writeOwnerFile(cutoverLedgerPath(state), []byte(data)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := readCutoverLedger(state); err == nil {
+				t.Fatal("accepted malformed cutover ledger")
+			}
+		})
 	}
 }
 

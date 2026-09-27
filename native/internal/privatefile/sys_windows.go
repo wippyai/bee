@@ -190,10 +190,6 @@ func rejectReparsePoint(path string) error {
 	return nil
 }
 
-func CheckWindowsProtectedOwnerACL(path string) error {
-	return checkWindowsProtectedOwnerACL(path)
-}
-
 func checkWindowsProtectedOwnerACL(path string) error {
 	tok, err := windows.OpenCurrentProcessToken()
 	if err != nil {

@@ -3,9 +3,14 @@
 local M = {}
 M.REVISION = "bee.capability-model@1"
 type Value = {[string]: unknown}
+type Parameter = string | {string}
+type Parameters = {[string]: Parameter}
 type Template = {id: string, revision: integer, confirm: string, parameters: {[string]: string},
     text: string, policies: {Value}, resources: {Value}}
 type Vocabulary = {revision: integer, never: {[string]: boolean}, capabilities: {[string]: Template}}
+type Grant = {capability: string, template_revision: integer, operation: string,
+    resource: string, scope: Value, parameters: Value?}
+type Revocation = {grants: {Grant}, fenced_attempts: {string}}
 
 local function object(raw: unknown): Value?
     if type(raw) ~= "table" then return nil end
@@ -48,6 +53,10 @@ local KINDS: {[string]: boolean} = {relative_subpath = true, name = true, owned_
     https_origin = true, url_path_prefix = true, binding = true, contract = true,
     hive_operations = true, hive_mode = true, hive_audiences = true}
 local HIVE_MODES: {[string]: boolean} = {open = true, policy = true}
+local function collection_kind(kind: string): boolean
+    return kind == "definitions" or kind == "methods" or kind == "http_methods"
+        or kind == "hive_operations" or kind == "hive_audiences"
+end
 
 local function template_value(raw: unknown, parameters: {[string]: string}): boolean
     if type(raw) == "string" then
@@ -58,6 +67,12 @@ local function template_value(raw: unknown, parameters: {[string]: string}): boo
     if not value then return false end
     for _, child in pairs(value) do if not template_value(child, parameters) then return false end end
     return true
+end
+local function resource_template(raw: unknown, parameters: {[string]: string}): boolean
+    if not word(raw, 160) then return false end
+    local parameter = (raw :: string):match("^%$([a-z_]+)$")
+    local kind = parameter and parameters[parameter] or nil
+    return parameter == nil or (type(kind) == "string" and not collection_kind(kind))
 end
 
 local function decode_entry(raw: unknown): (Vocabulary?, string?)
@@ -111,7 +126,7 @@ local function decode_entry(raw: unknown): (Vocabulary?, string?)
             local operation = object(raw_operation)
             if not operation or not fields(operation, {operation = true, resource = true, scope = true})
                 or not identity(operation.operation) or not word(operation.resource, 160)
-                or not object(operation.scope) or not template_value(operation.resource, schema)
+                or not object(operation.scope) or not resource_template(operation.resource, schema)
                 or not template_value(operation.scope, schema) then
                 return nil, "capability operation template is malformed"
             end
@@ -138,8 +153,7 @@ function M.decode(raw: unknown): (Vocabulary?, string?)
     return decode_entry(raw)
 end
 
-function M.revisions(raw: unknown, id_raw: unknown): (integer?, integer?)
-    local catalog = raw :: Vocabulary
+function M.revisions(catalog: Vocabulary, id_raw: string): (integer?, integer?)
     local id = identity(id_raw)
     if not id then return nil, nil end
     local template = catalog.capabilities[id]
@@ -147,13 +161,12 @@ function M.revisions(raw: unknown, id_raw: unknown): (integer?, integer?)
     return catalog.revision, template.revision
 end
 
-function M.template(raw: unknown, id_raw: unknown): (Value?, string?)
-    local catalog = raw :: Vocabulary
+function M.template(catalog: Vocabulary, id_raw: string): (Template?, string?)
     local id = identity(id_raw)
     if not id then return nil, "unknown capability or malformed parameters" end
     local template = catalog.capabilities[id]
     if not template then return nil, "unknown capability or malformed parameters" end
-    return template :: Value, nil
+    return template, nil
 end
 
 local function clean_path(raw: unknown, absolute: boolean): string?
@@ -202,7 +215,7 @@ local function audience_list(raw: unknown): {string}?
     end
     return result
 end
-local function parameter(raw: unknown, kind: string): unknown?
+local function parameter(raw: unknown, kind: string): Parameter?
     if kind == "relative_subpath" then return clean_path(raw, false) end
     if kind == "url_path_prefix" then return clean_path(raw, true) end
     if kind == "owned_scope" then return raw == "owned" and "owned" or nil end
@@ -233,12 +246,12 @@ local function parameter(raw: unknown, kind: string): unknown?
     return value
 end
 
-local function normalize_decoded(catalog: Vocabulary, id_raw: unknown, raw: unknown): (Value?, string?)
+local function normalize_decoded(catalog: Vocabulary, id_raw: unknown, raw: unknown): (Parameters?, string?)
     local id = identity(id_raw)
     local template = id and catalog.capabilities[id] or nil
     local input = object(raw)
     if not template or not input then return nil, "unknown capability or malformed parameters" end
-    local result: Value = {}
+    local result: Parameters = {}
     for key in pairs(input) do if not template.parameters[key] then return nil, "unknown capability parameter" end end
     for key, kind in pairs(template.parameters) do
         local value = parameter(input[key], kind)
@@ -248,11 +261,11 @@ local function normalize_decoded(catalog: Vocabulary, id_raw: unknown, raw: unkn
     return result, nil
 end
 
-function M.normalize(catalog: unknown, id_raw: unknown, raw: unknown): (Value?, string?)
-    return normalize_decoded(catalog :: Vocabulary, id_raw, raw)
+function M.normalize(catalog: Vocabulary, id_raw: string, raw: unknown): (Parameters?, string?)
+    return normalize_decoded(catalog, id_raw, raw)
 end
 
-local function expand(raw: unknown, parameters: Value): unknown
+local function expand(raw: unknown, parameters: Parameters): unknown
     if type(raw) == "string" then
         local key = raw:match("^%$([a-z_]+)$")
         return key and parameters[key] or raw
@@ -263,22 +276,34 @@ local function expand(raw: unknown, parameters: Value): unknown
     return result
 end
 
-local function resolve_decoded(catalog: Vocabulary, id_raw: unknown, raw: unknown): ({Value}?, string?)
-    local id = identity(id_raw)
-    local template = id and catalog.capabilities[id] or nil
-    local parameters, error_message = normalize_decoded(catalog, id_raw, raw)
-    if not template or not parameters then return nil, error_message end
-    local result: {Value} = {}
+local function resolve_parameters(catalog: Vocabulary, id: string, parameters: Parameters): ({Grant}?, string?)
+    local template = catalog.capabilities[id]
+    if not template then return nil, "unknown capability or malformed parameters" end
+    local result: {Grant} = {}
     for _, operation in ipairs(template.policies) do
+        local resource = expand(operation.resource, parameters)
+        local scope = expand(operation.scope, parameters)
+        if type(resource) ~= "string" or type(scope) ~= "table" then
+            return nil, "capability operation did not resolve to a grant"
+        end
         result[#result + 1] = {capability = id, template_revision = template.revision,
-            operation = operation.operation, resource = expand(operation.resource, parameters),
-            scope = expand(operation.scope, parameters), parameters = parameters}
+            operation = operation.operation :: string, resource = resource,
+            scope = scope :: Value, parameters = parameters}
     end
     return result, nil
 end
 
-function M.resolve(catalog: unknown, id_raw: unknown, raw: unknown): ({Value}?, string?)
-    return resolve_decoded(catalog :: Vocabulary, id_raw, raw)
+function M.resolve_normalized(catalog: Vocabulary, id_raw: string, parameters: Parameters): ({Grant}?, string?)
+    local id = identity(id_raw)
+    if not id then return nil, "unknown capability or malformed parameters" end
+    return resolve_parameters(catalog, id, parameters)
+end
+
+function M.resolve(catalog: Vocabulary, id_raw: string, raw: unknown): ({Grant}?, string?)
+    local id = identity(id_raw)
+    local parameters, normalize_error = normalize_decoded(catalog, id_raw, raw)
+    if not id or not parameters then return nil, normalize_error end
+    return resolve_parameters(catalog, id, parameters)
 end
 
 local function printable(value: unknown): string
@@ -297,8 +322,7 @@ local function equal(left: unknown, right: unknown, depth: integer): boolean
     end
     return true
 end
-function M.render(raw: unknown, grants_raw: unknown): ({string}?, string?)
-    local catalog = raw :: Vocabulary
+function M.render(catalog: Vocabulary, grants_raw: unknown): ({string}?, string?)
     local grants = list(grants_raw, 128)
     if not grants then return nil, "capability grants are malformed" end
     local lines: {string} = {}
@@ -314,7 +338,7 @@ function M.render(raw: unknown, grants_raw: unknown): ({string}?, string?)
         if not params or grant.template_revision ~= template.revision then
             return nil, "capability grant meaning is unavailable"
         end
-        local expected, resolve_error = resolve_decoded(catalog, id, params)
+        local expected, resolve_error = resolve_parameters(catalog, id, params)
         if not expected then return nil, resolve_error end
         local found = false
         for _, operation in ipairs(expected) do
@@ -341,11 +365,9 @@ function M.render(raw: unknown, grants_raw: unknown): ({string}?, string?)
     return lines, nil
 end
 
-type Grant = {capability: string, template_revision: integer, operation: string,
-    resource: string, scope: Value, parameters: Value?}
 type Change = {before: Grant?, after: Grant?}
 type Diff = {added: {Change}, widened: {Change}, narrowed: {Change},
-    removed: {Change}, changed: {Change}, requires_approval: boolean, revocation: Value}
+    removed: {Change}, changed: {Change}, requires_approval: boolean, revocation: Revocation}
 
 local SCOPE_FIELDS: {[string]: boolean} = {subpath = true, path_prefix = true, methods = true,
     definitions = true, operations = true, traits = true, audiences = true, scope = true,
@@ -504,7 +526,7 @@ function M.resource(workspace_raw: unknown, name_raw: unknown, subpath_raw: unkn
 end
 -- Revocation reports carry the removed capability meanings and unique live
 -- attempt IDs. Each owner can report effects without sharing its ledger.
-function M.revocation_report(grants_raw: unknown, attempts_raw: unknown): (Value?, string?)
+function M.revocation_report(grants_raw: unknown, attempts_raw: unknown): (Revocation?, string?)
     local grants, grant_error = decode_grants(grants_raw)
     local attempts, attempt_error = list(attempts_raw, 128)
     if not grants or not attempts then return nil, grant_error or attempt_error end
@@ -524,14 +546,14 @@ function M.compare(installed_raw: unknown, proposed_raw: unknown): (Diff?, strin
     if not installed or not proposed then return nil, old_error or new_error end
     local diff: Diff = {added = {}, widened = {}, narrowed = {}, removed = {}, changed = {},
         requires_approval = false, revocation = {grants = {}, fenced_attempts = {}}}
-    local revision_pairs: {[integer]: boolean} = {}
+    local changed_pairs: {[integer]: boolean} = {}
     for _, next_grant in ipairs(proposed) do
         if not covered(next_grant, installed) then
             local changed_index: integer? = nil
             local widened_index: integer? = nil
             for old_index, old_grant in ipairs(installed) do
                 if same_operation(old_grant, next_grant) then
-                    if not same_meaning(old_grant, next_grant) and not revision_pairs[old_index] then
+                    if not same_meaning(old_grant, next_grant) and not changed_pairs[old_index] then
                         changed_index = old_index; break
                     elseif same_meaning(old_grant, next_grant) and scope_contains(next_grant.scope, old_grant.scope) then
                         widened_index = old_index
@@ -539,7 +561,7 @@ function M.compare(installed_raw: unknown, proposed_raw: unknown): (Diff?, strin
                 end
             end
             if changed_index then
-                revision_pairs[changed_index] = true
+                changed_pairs[changed_index] = true
                 diff.changed[#diff.changed + 1] = {before = installed[changed_index], after = next_grant}
             elseif widened_index then
                 diff.widened[#diff.widened + 1] = {before = installed[widened_index], after = next_grant}
@@ -550,7 +572,7 @@ function M.compare(installed_raw: unknown, proposed_raw: unknown): (Diff?, strin
     end
     local revoked: {Grant} = {}
     for index, old_grant in ipairs(installed) do
-        if not revision_pairs[index] and not covered(old_grant, proposed) then
+        if not covered(old_grant, proposed) then
             local narrower: Grant? = nil
             for _, next_grant in ipairs(proposed) do
                 if same_meaning(old_grant, next_grant) and scope_contains(old_grant.scope, next_grant.scope) then

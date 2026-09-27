@@ -58,6 +58,9 @@ func waitEnrolled(ctx context.Context, state, node string, public ed25519.Public
 			return err
 		}
 		descriptor, err := readDescriptor(ctx, filepath.Join(state, rendezvous.DirectoryName))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 		if err == nil {
 			if key, ok := enrollment.Resolve(ctx, descriptor.Execution, node); ok && key.Equal(public) {
 				return nil

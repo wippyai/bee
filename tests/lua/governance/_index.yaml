@@ -359,7 +359,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    capability_catalog: bee.capability:model
+    capability_model: bee.capability:model
     capability_grants: bee.gov:capability_grants
 - name: capability_files_test
   kind: function.lua

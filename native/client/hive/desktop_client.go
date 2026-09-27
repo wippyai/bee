@@ -138,7 +138,7 @@ func (d *Desktop) Attach(ctx context.Context, key, workspace, desktop string, mo
 // presents; after a switch it names another workspace, session and mount.
 func (d *Desktop) Current(ctx context.Context, key string, mounted DesktopMount) (DesktopMount, error) {
 	if d == nil || !mounted.Selection.valid() || mounted.Selection.Execution != d.execution || mounted.owner != d.owner ||
-		!samePID(mounted.Recipient, d.recipient) {
+		!mounted.Recipient.Equal(d.recipient) {
 		return DesktopMount{}, errors.New("desktop session unavailable or belongs to another recipient")
 	}
 	reply, err := d.call(ctx, DesktopCurrent, key, struct {
@@ -156,7 +156,7 @@ func (d *Desktop) Current(ctx context.Context, key string, mounted DesktopMount)
 }
 func (d *Desktop) Detach(ctx context.Context, key string, mounted DesktopMount) error {
 	if d == nil || !mounted.Selection.valid() || mounted.Selection.Execution != d.execution || mounted.owner != d.owner ||
-		!samePID(mounted.Recipient, d.recipient) || !identifier(mounted.Session) || !live(mounted.lifetime) {
+		!mounted.Recipient.Equal(d.recipient) || !identifier(mounted.Session) || !live(mounted.lifetime) {
 		return errors.New("desktop session unavailable or belongs to another recipient")
 	}
 	input := struct {

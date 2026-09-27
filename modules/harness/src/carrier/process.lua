@@ -284,6 +284,13 @@ end
 local function main(request: machine.Request, mode: string, controller: string?): {[string]: unknown}
     local chosen: Mode = "open"
     if mode == "resume" then chosen = "resume" end
-    return run(request, chosen, controller, nil)
+    local name = machine.CARRIER_REGISTRY_PREFIX .. request.attempt_id
+    local registered, register_error = process.registry.register(name)
+    if not registered then error("register carrier: " .. tostring(register_error)) end
+    local ok, result = pcall(run, request, chosen, controller, nil)
+    local _, unregister_error = process.registry.unregister(name)
+    if not ok then error(result) end
+    if unregister_error then error("unregister carrier: " .. tostring(unregister_error)) end
+    return result :: {[string]: unknown}
 end
 return {main = main, run = run}

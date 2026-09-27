@@ -15,13 +15,17 @@ const (
 // alone set the owner stops only when no other local client is enrolled. It
 // reports whether the owner is stopping.
 func StopOwner(ctx context.Context, client *Client, alone bool) (bool, error) {
-	var result struct {
-		Stopping bool `json:"stopping"`
-	}
 	input := struct {
 		Alone bool `json:"alone"`
 	}{alone}
-	if err := callService(ctx, client, Owner{Node: client.owner, Service: OwnerService}, OwnerStop, input, &result); err != nil {
+	raw, err := callService(ctx, client, Owner{Node: client.owner, Service: OwnerService}, OwnerStop, input)
+	if err != nil {
+		return false, err
+	}
+	result, err := decodeServiceObject[struct {
+		Stopping bool `json:"stopping"`
+	}](raw, "stopping")
+	if err != nil {
 		return false, err
 	}
 	return result.Stopping, nil

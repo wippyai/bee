@@ -193,6 +193,10 @@ local function prepare_host(): string
     unpinned_data.executables = {claude = executable}
     unpinned_data.permission_exchange = {adapter_ref = ADAPTER, acceptance_ref = ACCEPTANCE, fixture_digest = fixture_digest, approver_policy = APPROVER_POLICY, poll_ms = 2000, ttl_ms = 60000}
     apply(unpinned)
+    local mode = registry.get("bee.placement.native:placement_resource_mode")
+    if not mode then error("placement resource mode entry") end
+    mode.data = {mode = "host_configured"}
+    apply(mode)
     local policies_entry = registry.get("bee:approver_policies")
     if not policies_entry then error("approver policies entry") end
     local list = (policies_entry.data :: Object).policies :: {Object}

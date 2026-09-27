@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 4214,
+      "bytes": 4297,
       "id": "docs/readme",
-      "sha256": "3b33fc3d8f50f9124b9aae891965ee09e554cb68d04ef78923347e0f1dfaa7d6",
+      "sha256": "e29ac0ad74fb5b7eafdc035e41a455e634ad208d409ee72cdfca4cea61f50122",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -179,9 +179,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 20050,
+      "bytes": 20710,
       "id": "docs/distributed_app_delivery",
-      "sha256": "aeae16a1078b84c32dfee8d4b6767cc93e6426252314c81fad8ee2491aba5e94",
+      "sha256": "91cb9b6a4e26ed5829f970c931dd8efcfd98452652e313ab1d2d3022eb990bb1",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 23203,
+      "bytes": 23380,
       "id": "docs/application_contracts",
-      "sha256": "ec851e47b4a5ef29208ff59c52b5ba7ccd6a91ed289e30122339a6f6c132a57b",
+      "sha256": "def414d4cbd333b3035a549002b6ff6cfdd15bf60edfb7806694de822fd02508",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -296,6 +296,14 @@
       "sha256": "59877aa53c7adde1b16e5e24b4ec984cd52643390075501acd31f83199e5f8a6",
       "source": "modules/approvals/src/README.md",
       "title": "Bee approvals",
+      "topic": "component"
+    },
+    {
+      "bytes": 363,
+      "id": "component/capability",
+      "sha256": "29d8b8d1885265613875632f92a3b24ff6b6c89bee3f42b70f2f707cacf3e9f8",
+      "source": "modules/capability/src/README.md",
+      "title": "Capability model",
       "topic": "component"
     },
     {
@@ -379,9 +387,9 @@
       "topic": "component"
     },
     {
-      "bytes": 7370,
+      "bytes": 7847,
       "id": "component/gateway",
-      "sha256": "c50e2345ca05c32649376223083dca0e2d5444c5ad42672d107455a57c964864",
+      "sha256": "0cf6fd11922ed295f4fa35b67b2abecfb5ed8fff55022c37042ab13b38729fd9",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -459,9 +467,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3072,
+      "bytes": 3365,
       "id": "component/resources",
-      "sha256": "aaab681e16c88f96685c11b35f3e76488b9453297e662905affaee871e0ccf88",
+      "sha256": "7fedf24e7a6c78af0e33bc1f20af26b502015c4ce89367f8fb1057dab71751eb",
       "source": "modules/resources/src/README.md",
       "title": "bee.resources",
       "topic": "component"
@@ -494,7 +502,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 609568,
-    "documents": 61
+    "bytes": 611621,
+    "documents": 62
   }
 }

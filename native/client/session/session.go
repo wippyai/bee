@@ -56,21 +56,8 @@ func (cfg Config) join(node string, private ed25519.PrivateKey) mesh.JoinConfig 
 	return mesh.JoinConfig{Directory: cfg.Directory, EnrollmentDirectory: cfg.EnrollmentDir, Node: node, Key: private, TLS: cfg.TLS}
 }
 
-// selectDesktop checks an explicit selection against the node's displays. The
-// workspace is the owner's to admit; the attach names it exactly.
-func selectDesktop(catalog hive.DesktopCatalog, selection Selection) (Selection, error) {
-	if (selection.Workspace == "") != (selection.Desktop == "") {
-		return Selection{}, errors.New("workspace and desktop must be selected together")
-	}
-	for _, desktop := range catalog.Desktops {
-		if desktop.ID == selection.Desktop {
-			return selection, nil
-		}
-	}
-	return Selection{}, errors.New("selected owner has no matching desktop")
-}
-
 type desktopOperations interface {
+	Plan(context.Context, string, hive.SessionPlanRequest) (hive.SessionPlan, error)
 	Create(context.Context, string) (string, error)
 	Attach(context.Context, string, string, string, hive.DesktopMode) (hive.DesktopMount, error)
 }
@@ -83,43 +70,75 @@ func randomDesktopID() (string, error) {
 	return hex.EncodeToString(value[:]), nil
 }
 
-// attachDesktop makes ordinary local launch useful with several terminals. It
-// only retries after the owner definitively says an existing display already
-// has another controller. Unknown outcomes and every other refusal return
-// immediately. Explicit selections remain exact and never allocate.
-func attachDesktop(ctx context.Context, client desktopOperations, catalog hive.DesktopCatalog, workspace string, selection Selection, mode hive.DesktopMode) (hive.DesktopMount, error) {
-	if selection.Workspace != "" || selection.Desktop != "" {
-		selected, err := selectDesktop(catalog, selection)
-		if err != nil {
-			return hive.DesktopMount{}, err
-		}
-		return client.Attach(ctx, "session-attach", selected.Workspace, selected.Desktop, mode)
-	}
-	if workspace == "" {
-		return hive.DesktopMount{}, errors.New("no workspace selected; select a workspace and desktop")
-	}
+func desktopIDs(catalog hive.DesktopCatalog) []string {
+	ids := make([]string, len(catalog.Desktops))
 	for index, desktop := range catalog.Desktops {
-		mounted, err := client.Attach(ctx, fmt.Sprintf("session-attach-%s-%d", workspace[:8], index), workspace, desktop.ID, mode)
-		if err == nil {
-			return mounted, nil
+		ids[index] = desktop.ID
+	}
+	return ids
+}
+
+func attachDesktop(ctx context.Context, client desktopOperations, request hive.SessionPlanRequest, initial hive.SessionPlan) (hive.DesktopMount, error) {
+	for attempt := 0; ; attempt++ {
+		plan := initial
+		initial = nil
+		if plan == nil {
+			var err error
+			plan, err = client.Plan(ctx, fmt.Sprintf("session-plan-%d", attempt), request)
+			if err != nil {
+				return hive.DesktopMount{}, err
+			}
 		}
-		var rejected *hive.Rejected
-		if mode != hive.Control || !errors.As(err, &rejected) || rejected.Fault.Code != "DESKTOP_CONTROLLED" {
-			return hive.DesktopMount{}, err
+		switch selected := plan.(type) {
+		case hive.AttachSessionPlan:
+			key := fmt.Sprintf("session-attach-%s-%d", selected.Workspace[:8], attempt)
+			if _, explicit := request.(*hive.SelectedSessionRequest); explicit {
+				key = "session-attach-selected"
+			}
+			mounted, err := client.Attach(ctx, key, selected.Workspace, selected.Desktop, selected.Mode)
+			if err == nil {
+				return mounted, nil
+			}
+			var rejected *hive.Rejected
+			if selected.Mode != hive.Control || !errors.As(err, &rejected) || rejected.Fault.Code != "DESKTOP_CONTROLLED" {
+				return hive.DesktopMount{}, err
+			}
+			switch current := request.(type) {
+			case *hive.AutomaticSessionRequest:
+				request = &hive.WorkspaceSessionRequest{
+					Workspace: selected.Workspace,
+					Mode:      current.Mode,
+					Desktops:  append([]string(nil), current.Desktops...),
+					Excluded:  []string{selected.Desktop},
+				}
+			case *hive.WorkspaceSessionRequest:
+				excluded := append([]string(nil), current.Excluded...)
+				excluded = append(excluded, selected.Desktop)
+				request = &hive.WorkspaceSessionRequest{
+					Workspace: current.Workspace,
+					Mode:      current.Mode,
+					Desktops:  append([]string(nil), current.Desktops...),
+					Excluded:  excluded,
+				}
+			default:
+				return hive.DesktopMount{}, err
+			}
+		case hive.AllocateSessionPlan:
+			desktop, err := randomDesktopID()
+			if err != nil {
+				return hive.DesktopMount{}, err
+			}
+			created, err := client.Create(ctx, desktop)
+			if err != nil {
+				return hive.DesktopMount{}, err
+			}
+			return client.Attach(ctx, "session-attach-created-"+created, selected.Workspace, created, hive.Control)
+		case hive.ChooseWorkspacePlan:
+			return hive.DesktopMount{}, errors.New("owner requires a workspace selection")
+		default:
+			return hive.DesktopMount{}, errors.New("owner returned an invalid desktop session plan")
 		}
 	}
-	if mode != hive.Control {
-		return hive.DesktopMount{}, errors.New("selected owner has no display to observe")
-	}
-	desktop, err := randomDesktopID()
-	if err != nil {
-		return hive.DesktopMount{}, err
-	}
-	created, err := client.Create(ctx, desktop)
-	if err != nil {
-		return hive.DesktopMount{}, err
-	}
-	return client.Attach(ctx, "session-attach-created-"+created, workspace, created, mode)
 }
 
 // JoinEnrolled joins an owner whose local enrollment already lists node with the
@@ -144,7 +163,9 @@ func JoinEnrolled(ctx context.Context, cfg Config, node string, private ed25519.
 	defer closeTransport()
 	return mesh.Joined(transport, cfg.join(node, private), func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			pinSupervisor(actor, owner)
+			if err := pinSupervisor(actor, owner); err != nil {
+				return err
+			}
 			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
 		})
 	})
@@ -162,7 +183,9 @@ func ListEnrolled(ctx context.Context, cfg Config, node string, private ed25519.
 	defer cancel()
 	err := mesh.Joined(bounded, cfg.join(node, private), func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			pinSupervisor(actor, owner)
+			if err := pinSupervisor(actor, owner); err != nil {
+				return err
+			}
 			_, result, err := readyDesktop(frame, frame, actor, owner)
 			if err == nil {
 				catalog = result
@@ -187,7 +210,9 @@ func Operate(ctx context.Context, cfg Config, node string, private ed25519.Priva
 	defer cancel()
 	return mesh.Joined(bounded, cfg.join(node, private), func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			pinSupervisor(actor, owner)
+			if err := pinSupervisor(actor, owner); err != nil {
+				return err
+			}
 			if err := awaitSupervisor(frame, actor); err != nil {
 				return err
 			}
@@ -209,6 +234,8 @@ func awaitSupervisor(ctx context.Context, actor *mesh.Actor) error {
 	for {
 		if _, err := actor.OwnerSupervisor(ready); err == nil {
 			return nil
+		} else if !errors.Is(err, mesh.ErrSupervisorNotDiscovered) {
+			return fmt.Errorf("discover owner supervisor: %w", err)
 		}
 		select {
 		case <-ready.Done():
@@ -221,13 +248,16 @@ func awaitSupervisor(ctx context.Context, actor *mesh.Actor) error {
 // pinSupervisor addresses the owner's supervisor directly. The descriptor
 // publishes its address because a raft-disabled owner never registers the
 // cluster-wide name; OwnerSupervisor still verifies node, host and identity.
-func pinSupervisor(actor *mesh.Actor, owner rendezvous.Descriptor) {
+func pinSupervisor(actor *mesh.Actor, owner rendezvous.Descriptor) error {
 	if owner.Supervisor == "" {
-		return
+		return nil
 	}
-	if address, err := pid.ParsePID(owner.Supervisor); err == nil {
-		actor.PinSupervisor(address)
+	address, err := pid.ParsePID(owner.Supervisor)
+	if err != nil || address.Node != owner.Node || address.Host != "bee.hive.service:supervisor_host" || address.UniqID == "" {
+		return errors.New("owner rendezvous contains an invalid supervisor address")
 	}
+	actor.PinSupervisor(address)
+	return nil
 }
 
 // present attaches the selected workspace, the owner's folder workspace, or,
@@ -252,10 +282,37 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 		return err
 	}
 	if cfg.Selection.Workspace != "" {
-		return settled(presentWorkspace(ctx, operations, client, catalog, cfg.Selection.Workspace, cfg.Selection, cfg, cfg.Command, stdin, stdout))
+		request := &hive.SelectedSessionRequest{
+			Workspace: cfg.Selection.Workspace,
+			Desktop:   cfg.Selection.Desktop,
+			Mode:      cfg.Mode,
+			Desktops:  desktopIDs(catalog),
+		}
+		return settled(presentWorkspace(ctx, operations, client, request, nil, cfg, cfg.Command, stdin, stdout))
 	}
-	if catalog.Default != "" {
-		return settled(presentWorkspace(ctx, operations, client, catalog, catalog.Default, Selection{}, cfg, cfg.Command, stdin, stdout))
+	automatic := &hive.AutomaticSessionRequest{Mode: cfg.Mode, Desktops: desktopIDs(catalog), Excluded: []string{}}
+	initial, err := client.Plan(operations, "session-plan-0", automatic)
+	if err != nil {
+		return err
+	}
+	switch plan := initial.(type) {
+	case hive.ChooseWorkspacePlan:
+		if catalog.Default != "" {
+			return hive.ErrDesktopReply
+		}
+	case hive.AttachSessionPlan:
+		if catalog.Default == "" || plan.Workspace != catalog.Default {
+			return hive.ErrDesktopReply
+		}
+	case hive.AllocateSessionPlan:
+		if catalog.Default == "" || plan.Workspace != catalog.Default {
+			return hive.ErrDesktopReply
+		}
+	default:
+		return hive.ErrDesktopReply
+	}
+	if _, choose := initial.(hive.ChooseWorkspacePlan); !choose {
+		return settled(presentWorkspace(ctx, operations, client, automatic, initial, cfg, cfg.Command, stdin, stdout))
 	}
 	reads := 0
 	list := func(ctx context.Context, query hive.CatalogQuery) (hive.DesktopCatalog, error) {
@@ -271,13 +328,18 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 		if err != nil {
 			return err
 		}
-		// Displays belong to the node; reread them, since an earlier
-		// workspace may have allocated one.
+		// Refresh node displays since an earlier workspace may have allocated one.
 		current, err := list(operations, hive.CatalogQuery{})
 		if err != nil {
 			return err
 		}
-		err = presentWorkspace(ctx, operations, client, current, workspace, Selection{}, cfg, command, stdin, stdout)
+		request := &hive.WorkspaceSessionRequest{
+			Workspace: workspace,
+			Mode:      cfg.Mode,
+			Desktops:  desktopIDs(current),
+			Excluded:  []string{},
+		}
+		err = presentWorkspace(ctx, operations, client, request, nil, cfg, command, stdin, stdout)
 		command = nil
 		if !errors.Is(err, physical.ErrDetached) {
 			return err
@@ -289,9 +351,9 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 // ends and detaches it. When the display is switched to another workspace from
 // inside the desktop, its old mount ends; the presentation continues with the
 // client's new session on the same display.
-func presentWorkspace(ctx context.Context, operations context.Context, client *hive.Desktop, catalog hive.DesktopCatalog, workspace string,
-	selection Selection, cfg Config, command *hive.DesktopCommand, stdin *os.File, stdout io.Writer) (result error) {
-	mounted, err := attachDesktop(operations, client, catalog, workspace, selection, cfg.Mode)
+func presentWorkspace(ctx context.Context, operations context.Context, client *hive.Desktop, request hive.SessionPlanRequest,
+	initial hive.SessionPlan, cfg Config, command *hive.DesktopCommand, stdin *os.File, stdout io.Writer) (result error) {
+	mounted, err := attachDesktop(operations, client, request, initial)
 	if err != nil {
 		return err
 	}

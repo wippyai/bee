@@ -34,9 +34,9 @@ func runWorkspace(ctx context.Context, out io.Writer, catalog *hive.Workspaces, 
 		}
 		return nil
 	case workspaceList:
-		state := "active"
+		state := hive.WorkspaceActive
 		if command.archived {
-			state = "archived"
+			state = hive.WorkspaceArchived
 		}
 		page, err := catalog.List(ctx, state, command.after, workspacePage)
 		if err != nil {

@@ -1,6 +1,6 @@
 -- MIT. Installed grant records and generated policy bindings are host output.
 local test = require("test")
-local catalog = require("capability_catalog")
+local capability_model = require("capability_model")
 local grants = require("capability_grants")
 local registry = require("registry")
 local hash = require("hash")
@@ -8,14 +8,15 @@ local hash = require("hash")
 local OWNER = "bee.gov.apps:workspace-1.notes"
 local APP = "app.notes:app"
 
-local function vocabulary(): unknown
-    return assert(catalog.decode(assert(registry.get("bee:capability_catalog"))))
+local function vocabulary(): capability_model.Vocabulary
+    return assert(capability_model.decode(assert(registry.get("bee:capability_catalog"))))
 end
 
 local function request(capability: string, parameters: {[string]: unknown}, template_revision: integer?): {[string]: unknown}
+    local catalog_revision = capability_model.revisions(vocabulary(), capability)
     return {id = "app.notes:request", expected_kind = "security.policy", value = nil,
         targets = {APP}, capability_request = {capability = capability, parameters = parameters,
-            catalog_revision = assert(vocabulary()).revision,
+            catalog_revision = catalog_revision,
             template_revision = template_revision or 1, reason = "show the person's threads",
             target = APP, path = ".security.policies +="}}
 end
@@ -68,6 +69,20 @@ local function define_tests()
             local policies = changed.policies :: {{[string]: unknown}}
             policies[1].data = {policy = {actions = {"registry.overlay.apply"}, resources = "*", effect = "allow"}}
             test.is_nil(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
+        end)
+        test.it("renders replaced meanings from the shared revocation report", function()
+            local words = vocabulary()
+            local previous = assert(capability_model.resolve(words, "threads.read", {scope = "owned"}))
+            previous[1].template_revision = 2
+            local proposed = assert(grants.propose(words, OWNER, APP,
+                {request("threads.read", {scope = "owned"})}))
+            local compared = assert(grants.diff(words, {capabilities = previous}, proposed))
+            test.eq(#(compared.changed :: {unknown}), 1)
+            local revocation = compared.revocation :: Object
+            local revoked = revocation.grants :: {Object}
+            test.eq(#revoked, 1)
+            test.eq(revoked[1].template_revision :: number, 2)
+            test.is_true(table.concat(compared.lines :: {string}, "\n"):find("revoked:", 1, true) ~= nil)
         end)
         test.it("reads approval-bound grants installed before the namespace rename", function()
             local old_owner = "bee.governance.workspace_applications:workspace-1.notes"
@@ -217,7 +232,7 @@ local function define_tests()
             installed_entries["app.notes:request"] = {kind = "ns.requirement",
                 data = {default = generated.id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
-            local lines = assert(catalog.render(vocabulary(), proposed.capabilities))
+            local lines = assert(capability_model.render(vocabulary(), proposed.capabilities))
             test.is_true(table.concat(lines, "\n"):find("Hive operations bee.hive.telemetry:presence", 1, true) ~= nil)
         end)
         test.it("targets the supervisor exposure scope with a loadable grant", function()
@@ -270,7 +285,7 @@ local function define_tests()
                     end
                 end
                 test.is_true(found)
-                local lines = assert(catalog.render(vocabulary_value, proposed.capabilities))
+                local lines = assert(capability_model.render(vocabulary_value, proposed.capabilities))
                 test.eq(#lines, 1)
             end
         end)

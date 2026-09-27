@@ -14,12 +14,115 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
+	"github.com/wippyai/bee/native/internal/privatefile"
 	app "github.com/wippyai/runtime/cmd/app"
 )
+
+func TestConcurrentClientCleanupAndReacquisitionKeepOneLockInode(t *testing.T) {
+	state := t.TempDir()
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = private
+	const node = "bee-client-lock-stability"
+	initialRelease, err := enrollClient(context.Background(), state, node, public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(ownerTrustedDirectory(state), clientLockName(node))
+	lockFile, err := os.Open(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lockFile.Close()
+	identity, err := lockFile.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type contender struct {
+		turn chan struct{}
+		done chan error
+		err  error
+	}
+	const count = 16
+	ready := make(chan struct{}, count)
+	acquired := make(chan contender, count)
+	var workers sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
+	for range count {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			ready <- struct{}{}
+			for {
+				release, err := enrollClient(ctx, state, node, public)
+				if errors.Is(err, privatefile.ErrLockBusy) {
+					select {
+					case <-ctx.Done():
+						acquired <- contender{err: ctx.Err()}
+						return
+					case <-time.After(time.Millisecond):
+					}
+					continue
+				}
+				if err != nil {
+					acquired <- contender{err: err}
+					return
+				}
+				file, openErr := os.Open(lockPath)
+				var same bool
+				if openErr == nil {
+					current, statErr := file.Stat()
+					same = statErr == nil && os.SameFile(identity, current)
+					openErr = errors.Join(statErr, file.Close())
+				}
+				item := contender{turn: make(chan struct{}), done: make(chan error, 1)}
+				if openErr != nil {
+					item.err = openErr
+				} else if !same {
+					item.err = errors.New("client cleanup replaced the stable lock inode")
+				}
+				acquired <- item
+				select {
+				case <-item.turn:
+				case <-ctx.Done():
+					item.done <- ctx.Err()
+					return
+				}
+				item.done <- release()
+				return
+			}
+		}()
+	}
+	for range count {
+		<-ready
+	}
+	if err := initialRelease(); err != nil {
+		t.Fatal(err)
+	}
+	for range count {
+		item := <-acquired
+		if item.err != nil {
+			t.Fatal(item.err)
+		}
+		close(item.turn)
+		if err := <-item.done; err != nil {
+			t.Fatal(err)
+		}
+	}
+	workers.Wait()
+}
 
 func clientLaunch(state string) app.Launch {
 	return app.Launch{Op: app.OpRun, Command: desktopCommand, State: state, Dir: state, Explicit: true}
@@ -305,12 +408,18 @@ func TestClientIdentityIsPerLaunchAndRetiredOnExit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 0 {
-		names := make([]string, 0, len(entries))
-		for _, entry := range entries {
-			names = append(names, entry.Name())
+	wantLocks := make(map[string]bool, len(nodes))
+	for _, node := range nodes {
+		wantLocks[clientLockName(node)] = true
+	}
+	for _, entry := range entries {
+		if !wantLocks[entry.Name()] || !entry.Type().IsRegular() {
+			t.Fatalf("unexpected trusted entry after departure: %s", entry.Name())
 		}
-		t.Fatalf("departed clients left %v", names)
+		delete(wantLocks, entry.Name())
+	}
+	if len(wantLocks) != 0 {
+		t.Fatalf("departed clients lost stable lock files: %v", wantLocks)
 	}
 }
 

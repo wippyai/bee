@@ -312,12 +312,13 @@ contract and HTTP grants are registry authority for the selected application
 scope. Runtime agent elevation is implemented through the gateway
 `request_capability` and `capability_status` tools: an approval bound to the
 authenticated thread and attempt consumes once and writes one thread-actor
-resources grant the attempt's placement resolves. Active revocation fencing is
-implemented: an epoch advance reports its fenced attempts, and an owner fence
-withdraws the fenced instance's thread delegation before stopping it.
-Resources `revoke_all` also passes its fenced attempt IDs to Placement, which
-rechecks each recorded grant and requests a cooperative stop when that attempt
-lost access.
+resources grant the attempt's placement resolves. The host verifies the named
+resource association and requested access before approval and before consuming
+an approved decision. Active revocation fencing is implemented: an epoch
+advance reports its fenced attempts, and an owner fence withdraws the fenced
+instance's thread delegation before stopping it. Resources `revoke` and
+`revoke_all` pass their fenced attempt IDs to Placement, which rechecks each
+recorded grant and requests a cooperative stop when that attempt lost access.
 
 Destination migration execution requires a captured immutable registry view and
 is not supplied by ordinary overlay activation. Automatic Hive enrollment and

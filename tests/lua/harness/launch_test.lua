@@ -42,7 +42,7 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
+local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:launch_recovery_client_policy", "bee.harness.catalog:launch_recovery_runtime_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
     "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
     "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
 local function scope(): security.Scope
@@ -1362,6 +1362,38 @@ local function define_tests()
             local send_reply = sent :: {[string]: unknown}
             test.eq(send_reply.ok, true)
         end)
+        test.it("reconciles a prepared and claimed attempt after its carrier disappears", function()
+            local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("orphan-prestart"),
+                definition_ref = DEFINITION, workspace_id = workspace, brief = "fail during placement preparation"})) :: admission.Admitted
+            with_entry(POLICY, function(changed)
+                changed.placement_binding = "bee.placement.native.binding:binding"
+                changed.placement_options = {}
+            end, function()
+                local io = carrier_io()
+                local planned, plan_error = machine.plan(io, admitted.request)
+                if not planned then error(tostring(plan_error)) end
+                local prepared, preparation_error, failed = machine.prepare_attempt(io, planned)
+                test.is_nil(prepared)
+                test.is_true(tostring(preparation_error):find("native placement does not support placement_options", 1, true) ~= nil)
+                test.not_nil(failed)
+                test.not_nil(failed and failed.epoch)
+                local db = assert(placement_store.open())
+                local row = placement_store.row(db, admitted.attempt_id)
+                db:release()
+                test.is_nil(row)
+
+                local reply, call_error = funcs.new():with_actor(principals.actor(REQUESTER, workspace))
+                    :with_scope(scope()):call("bee.harness.launch:agent_call_backend", {operation = "wait",
+                        thread_id = admitted.thread_id, attempt_id = admitted.attempt_id, wait_ms = 0})
+                if call_error then error("reconcile wait: " .. tostring(call_error)) end
+                local settled = value(reply :: admission.Reply)
+                test.eq(settled.state, "ended")
+                test.eq(settled.outcome, "failed")
+                local failure = settled.error :: {[string]: unknown}?
+                test.not_nil(failure)
+                test.is_true(tostring(failure and failure.message):find("carrier exited during launch preparation", 1, true) ~= nil)
+            end)
+        end)
         test.it("launches a shipped executable_env policy from the generated agents.launch grant and the run settles", function()
             -- The shipped batch policies resolve their driver executable
             -- through executable_env, so only a run against the shipped
@@ -1421,6 +1453,29 @@ local function define_tests()
             local environment = policy_data.environment :: {[string]: unknown}
             environment.BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl"
             apply(policy_entry)
+            with_entry(SHIPPED_BATCH_POLICY, function(changed)
+                changed.placement_binding = "bee.placement.native.binding:binding"
+                changed.placement_options = {}
+                changed.allow_host_home = true
+            end, function()
+                local started = value(generated_call({operation = "launch", definition_ref = SHIPPED_SHAPE_DEFINITION,
+                    brief = "fail during native preparation", idempotency_key = fresh("app-prepare-refused")}))
+                local settled = value(generated_call({operation = "wait", thread_id = started.thread_id,
+                    attempt_id = started.attempt_id, wait_ms = 5000}))
+                test.eq(settled.state, "ended")
+                test.eq(settled.outcome, "failed")
+                local failure = settled.error :: {[string]: unknown}?
+                test.not_nil(failure)
+                test.is_true(tostring(failure and failure.message):find("native placement does not support placement_options", 1, true) ~= nil)
+                local inspected = value(generated_call({operation = "status", thread_id = started.thread_id,
+                    attempt_id = started.attempt_id}))
+                test.eq(inspected.state, "ended")
+                test.eq((inspected.error :: {[string]: unknown}).message, (failure :: {[string]: unknown}).message)
+                local db = assert(placement_store.open())
+                local row = placement_store.row(db, started.attempt_id :: string)
+                db:release()
+                test.is_nil(row)
+            end)
             local ok, failure = pcall(function()
                 local run = value(generated_call({operation = "run", definition_ref = SHIPPED_SHAPE_DEFINITION, brief = "ping shipped",
                     idempotency_key = fresh("shipped-shape")}))

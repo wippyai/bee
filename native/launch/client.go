@@ -387,11 +387,11 @@ func enrollClient(ctx context.Context, state, node string, public ed25519.Public
 	key := filepath.Join(trusted, node+".pub")
 	encoded := base64.RawStdEncoding.EncodeToString(public)
 	if err := writeOwnerFile(key, []byte(encoded+"\n")); err != nil {
-		return nil, errors.Join(err, unlock(), os.Remove(filepath.Join(trusted, clientLockName(node))))
+		return nil, errors.Join(err, unlock())
 	}
 	return func() error {
 		removed := os.Remove(key)
-		return errors.Join(removed, unlock(), os.Remove(filepath.Join(trusted, clientLockName(node))))
+		return errors.Join(removed, unlock())
 	}, nil
 }
 

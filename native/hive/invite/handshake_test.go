@@ -3,21 +3,68 @@
 package invite
 
 import (
+	"bufio"
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"io"
+	"net"
 	"strings"
 	"testing"
 	"time"
 )
 
+func TestHandshakeRejectsMalformedRequestObjects(t *testing.T) {
+	valid := `{"version":1,"invite":"invite","secret":"secret","node":"node","addresses":[],"tls_key":"key"}`
+	cases := map[string]string{
+		"duplicate":        `{"version":1,"version":1,"invite":"invite","secret":"secret","node":"node","addresses":[],"tls_key":"key"}`,
+		"case-alias":       `{"Version":1,"invite":"invite","secret":"secret","node":"node","addresses":[],"tls_key":"key"}`,
+		"trailing-value":   valid + ` {}`,
+		"missing-required": `{"version":1,"invite":"invite","secret":"secret","node":"node","addresses":[]}`,
+		"oversized":        strings.Repeat("x", MaxMessageBytes+1),
+	}
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			left, right := net.Pipe()
+			defer left.Close()
+			defer right.Close()
+			go func() { _, _ = io.WriteString(left, raw+"\n") }()
+			if _, err := readRequest(right); err == nil {
+				t.Fatal("accepted malformed handshake request")
+			}
+		})
+	}
+}
+
+func TestHandshakeRejectsMalformedDecisionObjects(t *testing.T) {
+	cases := map[string]string{
+		"duplicate":      `{"refused":{"code":"DENIED","message":"no"},"refused":{"code":"DENIED","message":"no"}}`,
+		"both-decisions": `{"admission":{},"refused":{"code":"DENIED","message":"no"}}`,
+		"case-alias":     `{"Refused":{"code":"DENIED","message":"no"}}`,
+		"trailing-value": `{"refused":{"code":"DENIED","message":"no"}} {}`,
+		"missing-field":  `{"refused":{"code":"DENIED"}}`,
+		"oversized":      strings.Repeat("x", MaxMessageBytes+1),
+	}
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			left, right := net.Pipe()
+			defer left.Close()
+			defer right.Close()
+			go func() { writer := bufio.NewWriter(left); _, _ = writer.WriteString(raw + "\n"); _ = writer.Flush() }()
+			if _, err := readDecision(right); err == nil {
+				t.Fatal("accepted malformed handshake decision")
+			}
+		})
+	}
+}
+
 // A decision bounded by its own deadline is still delivered within the
 // connection's deadline, even when the handler waited for all of it.
 func TestHandlerDeadlineLeavesTimeForTheAnswer(t *testing.T) {
 	hive := identity(t)
-	address := listen(t, hive, func(ctx context.Context, _ ed25519.PublicKey, _ Request) (Admission, *Refused) {
+	address := listen(t, hive, func(ctx context.Context, _ ed25519.PublicKey, _ Request) Decision {
 		<-ctx.Done()
-		return Admission{}, &Refused{Code: "UNAVAILABLE", Message: "no decision in time"}
+		return Reject(Refused{Code: "UNAVAILABLE", Message: "no decision in time"})
 	})
 	_, _, err := Dial(context.Background(), sample(address, hive), identity(t), Request{Node: "bee-owner-joiner"})
 	var refused *Refused
@@ -28,9 +75,9 @@ func TestHandlerDeadlineLeavesTimeForTheAnswer(t *testing.T) {
 
 func TestDialReceivesALargeAdmissionAfterASlowRedemption(t *testing.T) {
 	hive := identity(t)
-	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) (Admission, *Refused) {
+	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) Decision {
 		time.Sleep(300 * time.Millisecond)
-		return Admission{Node: "bee-owner-0123456789abcdef", Certificate: strings.Repeat("c", 3000), Authorities: strings.Repeat("a", 3000)}, nil
+		return Accept(Admission{Node: "bee-owner-0123456789abcdef", Certificate: strings.Repeat("c", 3000), Authorities: strings.Repeat("a", 3000)})
 	})
 	admission, _, err := Dial(context.Background(), sample(address, hive), identity(t), Request{Node: "bee-owner-joiner"})
 	if err != nil || len(admission.Certificate) != 3000 {
@@ -44,10 +91,10 @@ func TestDialReceivesALargeAdmissionAfterASlowRedemption(t *testing.T) {
 func TestListenerReportsTheObservedJoinAddress(t *testing.T) {
 	hive := identity(t)
 	var observed, local string
-	address := listen(t, hive, func(_ context.Context, _ ed25519.PublicKey, request Request) (Admission, *Refused) {
+	address := listen(t, hive, func(_ context.Context, _ ed25519.PublicKey, request Request) Decision {
 		observed = request.Observed
 		local = request.Local
-		return Admission{Node: "bee-owner-0123456789abcdef"}, nil
+		return Accept(Admission{Node: "bee-owner-0123456789abcdef"})
 	})
 	admission, _, err := Dial(context.Background(), sample(address, hive), identity(t),
 		Request{Node: "bee-owner-joiner", Observed: "203.0.113.9", Local: "203.0.113.10"})
@@ -83,8 +130,8 @@ func TestValidObservedAcceptsOnlyBareIPLiterals(t *testing.T) {
 // hive node keeps working.
 func TestDialAcceptsAnAdmissionWithoutAnObservedAddress(t *testing.T) {
 	hive := identity(t)
-	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) (Admission, *Refused) {
-		return Admission{Node: "bee-owner-0123456789abcdef"}, nil
+	address := listen(t, hive, func(context.Context, ed25519.PublicKey, Request) Decision {
+		return Accept(Admission{Node: "bee-owner-0123456789abcdef"})
 	})
 	if _, _, err := Dial(context.Background(), sample(address, hive), identity(t), Request{Node: "bee-owner-joiner"}); err != nil {
 		t.Fatal(err)

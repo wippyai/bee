@@ -54,14 +54,14 @@ The control inbox retains at most 32 JSON messages of 16 KiB each. At its native
 boundary it accepts explicit JSON objects and the Go maps Wippy normalizes from
 Lua replies. Map traversal is bounded before encoding; unsupported native values,
 cycles, excessive nesting and oversized encoded results are rejected. Conversion
-does not authorize a reply; the Hive binding still checks its exact contract. Messages carry
-the runtime-established relay sender separately from their JSON body. The actor
-accepts only a sender from the enrolled owner node. Production remote admission
-requires the runtime to enforce source provenance; current main and the historical
-`944736c999` candidate do not establish that guarantee. The earlier
-`actor-provenance.patch` enforced it, and the cluster lane must resolve this
-native routing boundary before release. No Lua ingress or connection evidence
-API is required by Bee. Exact supervisor PID, operation,
+does not authorize a reply; the Hive binding still checks its exact contract.
+Remote packages carry the logical relay sender separately from `IngressNode`.
+The pinned runtime sets `IngressNode` from the authenticated internode connection
+and does not encode it on the wire. The actor accepts only packages whose ingress
+is the enrolled owner node, then preserves the logical sender for the Hive
+decoder's exact supervisor PID check. An integration test sends a different
+logical sender through the owner transport to verify this boundary. No Lua
+connection evidence API is required by Bee. Exact supervisor PID, operation,
 execution and request validation still belong to the admission decoder. This is
 an inbox bound, not a claim of a host-enforced limit on all upstream network queues.
 `Actor.Send` requires cancellable runtime routing. The client runtime candidate
@@ -71,22 +71,18 @@ peer may wait for transport registration within the caller deadline. A native
 request/reply test verifies the actor sender and payload, and that a canceled
 request is not delivered. This is transport acceptance, not supervisor admission.
 
-The proposed combined `mesh-client-check` would cover real client actors, post-exit
-frame and viewport denial, bounded inbox failure, and two separate OS clients
-under PTYs. The physical clients select native mutual TLS, verify the owner-native
-sender, render retained content, send a typed key, detach and reattach through
-native sockets. Grant files are fixture coordination only; this is not production
-supervisor admission or a Bee Terminal/application acceptance test.
-`native/Makefile` does not define this target, so the combined gate is not
-callable from this checkout.
+`make native-client-check` runs the public client acceptance, builds the compiled
+Hive client fixture and exercises its calls against a retained owner. The Lua
+desktop-enrollment tests cover admission of the configured client host and
+rejection of other hosts. The compiled fixture is disposable acceptance code;
+it does not grant itself owner admission.
 
-The source includes a separate failing runtime test in `monitor_gate_test.go`,
-gated by `meshclient` and `meshmonitorproof`. No `mesh-monitor-check` target is
-defined in `native/Makefile`, so this gate is not callable through Make in this
-checkout. It must pass before claiming remote process observation or reliable
-owner cleanup of departed controllers. Do not implement the missing monitor
-protocol inside Bee. Public launch, supervisor admission, departed-controller
-cleanup and LAN acceptance remain incomplete.
+The same target runs `TestNativeRemoteMonitorMustObserveClientActorExit` with
+`meshclient,meshmonitorproof`. That required release acceptance still fails
+because the pinned runtime sends no remote EXIT after a client actor completes.
+Keep remote release blocked until the runtime monitor protocol reports that
+exit. Public remote process observation and reliable owner cleanup of departed
+controllers therefore remain incomplete.
 
 ## Supervisor discovery
 

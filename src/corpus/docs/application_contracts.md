@@ -66,6 +66,9 @@ through the gateway `request_capability` tool: the approval shows the host
 catalog's own wording bound to the authenticated thread and attempt, and
 consumption writes one resources grant row for that thread actor, which
 placement resolves for the attempt alone; a child attempt resolves nothing.
+The host verifies that the named resource association exists and allows the
+requested access before filing approval, then checks it again before consuming
+an approved decision.
 File and database provisioning and contract gateways remain later work, while
 active revocation fencing is implemented: an epoch advance reports its fenced
 attempts, and an owner fence withdraws the fenced instance's thread

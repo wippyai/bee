@@ -3,6 +3,7 @@
 package launch
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wippyai/bee/native/internal/privatefile"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 	app "github.com/wippyai/runtime/cmd/app"
@@ -260,6 +262,28 @@ func TestPrepareOwnerIsIdempotentAcrossRuns(t *testing.T) {
 	}
 	if _, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(key))); err != nil {
 		t.Fatalf("internode identity key is not base64: %v", err)
+	}
+}
+
+func TestExistingMembershipSecretMustHaveTheRequestedLength(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "owner")
+	if err := privatefile.EnsurePrivateDir(directory); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "membership.secret")
+	wrongLength := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 31)) + "\n"
+	if err := os.WriteFile(path, []byte(wrongLength), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ensureSecretFile(path, 32); err == nil {
+		t.Fatal("accepted a valid base64 secret with the wrong decoded length")
+	}
+	correctLength := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)) + "\n"
+	if err := os.WriteFile(path, []byte(correctLength), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ensureSecretFile(path, 32); err != nil || got != path {
+		t.Fatalf("accepted valid membership secret = %q, %v", got, err)
 	}
 }
 

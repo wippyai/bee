@@ -23,11 +23,19 @@ const (
 // Event is a filesystem change hint. Rescan events require reconciliation of
 // the watched directory because the operating system may coalesce or lose hints.
 type Event struct {
-	Kind      string
+	Kind      EventKind
 	Resource  string
 	Path      string
 	Operation string
 }
+
+// EventKind is one filesystem notification the native service emits.
+type EventKind string
+
+const (
+	EventChange EventKind = "change"
+	EventRescan EventKind = "rescan"
+)
 
 // Manager owns native watches independently of any presentation process.
 type Manager struct {
@@ -102,7 +110,7 @@ func (manager *Manager) Start(ctx context.Context, owner, resource, root, relati
 		defer release()
 		defer notify.Stop(raw)
 		watchEvents(ctx, raw, manager.rescanInterval, root,
-			Event{Kind: "rescan", Resource: resource, Path: filepath.ToSlash(filepath.Clean(relative))}, emit)
+			Event{Kind: EventRescan, Resource: resource, Path: filepath.ToSlash(filepath.Clean(relative))}, emit)
 	}()
 	return watch, nil
 }
@@ -132,7 +140,7 @@ func watchEvents(ctx context.Context, raw <-chan notify.EventInfo, rescanInterva
 			if err != nil || !filepath.IsLocal(relativePath) {
 				continue
 			}
-			event := Event{Kind: "change", Resource: rescan.Resource, Path: filepath.ToSlash(relativePath), Operation: eventOperation(rawEvent.Event())}
+			event := Event{Kind: EventChange, Resource: rescan.Resource, Path: filepath.ToSlash(relativePath), Operation: eventOperation(rawEvent.Event())}
 			if err := emit(event); err != nil {
 				return
 			}

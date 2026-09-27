@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -59,6 +60,19 @@ func joinAdmitter(t *testing.T, redeem redeemer) (*admitter, string) {
 		membership: fakeMembership{local: clusterapi.NodeInfo{ID: ownerNodeName(state), Addr: "127.0.0.1:4100"}}, redeem: redeem}, state
 }
 
+func admitted(t *testing.T, decision invite.Decision) invite.Admission {
+	t.Helper()
+	switch answer := decision.(type) {
+	case invite.Accepted:
+		return answer.Admission
+	case invite.Rejected:
+		t.Fatal(&answer.Refusal)
+	default:
+		t.Fatalf("unknown invite decision %T", decision)
+	}
+	return invite.Admission{}
+}
+
 func redeemRequest(t *testing.T) (invite.Request, ed25519.PublicKey) {
 	t.Helper()
 	public, _, err := ed25519.GenerateKey(rand.Reader)
@@ -79,10 +93,7 @@ func TestJoinListenerPinsAndCertifiesAnAdmittedJoiner(t *testing.T) {
 		t.Fatal(err)
 	}
 	request, key := redeemRequest(t)
-	admission, refused := a.admit(context.Background(), identity, request)
-	if refused != nil {
-		t.Fatal(refused)
-	}
+	admission := admitted(t, a.admit(context.Background(), identity, request))
 	if len(redeem.calls) != 1 || redeem.calls[0] != request.Invite+"/"+request.Secret+"/bee-owner-joiner" {
 		t.Fatalf("supervisor redemption = %v", redeem.calls)
 	}
@@ -113,9 +124,10 @@ func TestJoinListenerRefusesWithoutPinning(t *testing.T) {
 	if err == nil && len(assigned) > 0 {
 		request.Local = assigned[0].address.String()
 	}
-	_, refused := a.admit(context.Background(), ed25519.PublicKey(make([]byte, ed25519.PublicKeySize)), request)
-	if refused == nil || refused.Code != "CONFLICT" {
-		t.Fatalf("refusal = %v", refused)
+	decision := a.admit(context.Background(), ed25519.PublicKey(make([]byte, ed25519.PublicKeySize)), request)
+	refused, ok := decision.(invite.Rejected)
+	if !ok || refused.Refusal.Code != "CONFLICT" {
+		t.Fatalf("refusal = %v", decision)
 	}
 	if _, err := os.Stat(filepath.Join(ownerPeersDirectory(state), "bee-owner-joiner.pub")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("a refused joiner was pinned: %v", err)
@@ -129,8 +141,10 @@ func TestJoinListenerRefusesWithoutPinning(t *testing.T) {
 		func() invite.Request { r := request; r.Key = "short"; return r }(),
 		func() invite.Request { r := request; r.Addresses = []string{"0.0.0.0"}; return r }(),
 	} {
-		if _, refused := a.admit(context.Background(), nil, bad); refused == nil || refused.Code != "INVALID_ARGUMENT" {
-			t.Fatalf("malformed request %+v = %v", bad, refused)
+		decision := a.admit(context.Background(), nil, bad)
+		refused, ok := decision.(invite.Rejected)
+		if !ok || refused.Refusal.Code != "INVALID_ARGUMENT" {
+			t.Fatalf("malformed request %+v = %v", bad, decision)
 		}
 	}
 	if len(redeem.calls) != 1 {
@@ -198,7 +212,7 @@ func TestRepublishAddressOnlyOnChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	membership := &recordingMembership{}
-	listener := &joinListenerComponent{state: state, published: published}
+	listener := &joinListenerComponent{state: state, published: published, publishedDialHint: dialOut}
 	if err := listener.republishAddress(membership); err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +223,7 @@ func TestRepublishAddressOnlyOnChange(t *testing.T) {
 	if err := listener.republishAddress(membership); err != nil {
 		t.Fatal(err)
 	}
-	if len(membership.meta) != 1 || membership.meta[dialMetadataKey] != meshDialHint(state) {
+	if len(membership.meta) != 1 || membership.meta[dialMetadataKey] != dialHintForTest(t, state) {
 		t.Fatalf("republished meta = %#v, want the dial direction alone", membership.meta)
 	}
 	if listener.published != published {
@@ -232,7 +246,7 @@ func TestAdmissionObservesTheLocalAddressOfAJoin(t *testing.T) {
 	remote := "203.0.113.7"
 	// A peer on another machine that reached a local address teaches the path
 	// this node must advertise.
-	a.observeReached(remote, local.String())
+	a.observeReached(socketAddress(remote), socketAddress(local.String()))
 	reached, ok := a.reachedAddress()
 	if !ok || reached != local {
 		t.Fatalf("reached = %v, %v; want %v", reached, ok, local)
@@ -240,14 +254,14 @@ func TestAdmissionObservesTheLocalAddressOfAJoin(t *testing.T) {
 	// A peer on this host teaches nothing: its local address may be one no
 	// other machine can route.
 	a.reached.Store(nil)
-	a.observeReached(local.String(), local.String())
+	a.observeReached(socketAddress(local.String()), socketAddress(local.String()))
 	if _, ok := a.reachedAddress(); ok {
 		t.Fatal("a same-host peer was recorded as a reached path")
 	}
 	// A loopback or unspecified local address teaches nothing either.
 	for _, address := range []string{"127.0.0.1", "0.0.0.0"} {
 		a.reached.Store(nil)
-		a.observeReached(remote, address)
+		a.observeReached(socketAddress(remote), socketAddress(address))
 		if _, ok := a.reachedAddress(); ok {
 			t.Fatalf("local address %v was recorded", address)
 		}
@@ -269,8 +283,9 @@ func TestSameHostJoinDoesNotRecordAHairpinPath(t *testing.T) {
 	request.Observed = local.String()
 	request.Local = local.String()
 	identity := ed25519.PublicKey(make([]byte, ed25519.PublicKeySize))
-	if _, refused := a.admit(context.Background(), identity, request); refused != nil {
-		t.Fatal(refused)
+	decision := a.admit(context.Background(), identity, request)
+	if _, ok := decision.(invite.Accepted); !ok {
+		t.Fatalf("same-host admission = %v", decision)
 	}
 	if _, ok := a.reachedAddress(); ok {
 		t.Fatal("a same-host hairpin was recorded as a remotely reached path")
@@ -302,9 +317,7 @@ func TestAdmissionSeedsAJoinerAtAReachableAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 	request, _ := redeemRequest(t)
-	if admission, refused := a.admit(context.Background(), identity, request); refused != nil {
-		t.Fatal(refused)
-	} else if admission.Gossip != "127.0.0.1:4100" {
+	if admission := admitted(t, a.admit(context.Background(), identity, request)); admission.Gossip != "127.0.0.1:4100" {
 		t.Fatalf("unobserved gossip seed = %q, want the node's own gossip address", admission.Gossip)
 	}
 	assigned, err := assignedInterfaceAddresses()
@@ -312,11 +325,8 @@ func TestAdmissionSeedsAJoinerAtAReachableAddress(t *testing.T) {
 		t.Skip("no non-loopback interface to seed a remote joiner with")
 	}
 	local := assigned[0].address
-	a.observeReached("203.0.113.7", local.String())
-	admission, refused := a.admit(context.Background(), identity, request)
-	if refused != nil {
-		t.Fatal(refused)
-	}
+	a.observeReached(socketAddress("203.0.113.7"), &net.TCPAddr{IP: net.IP(local.AsSlice()), Port: 5000})
+	admission := admitted(t, a.admit(context.Background(), identity, request))
 	if want := netip.AddrPortFrom(local, 4100).String(); admission.Gossip != want {
 		t.Fatalf("gossip seed = %q, want the proven path %q", admission.Gossip, want)
 	}

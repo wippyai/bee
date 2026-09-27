@@ -14,6 +14,7 @@ import (
 
 const DesktopService = "bee.desktop"
 const DesktopList = "bee.desktop:list"
+const DesktopPlan = "bee.desktop:plan"
 const DesktopCreate = "bee.desktop:create"
 const DesktopAttach = "bee.desktop:attach"
 const DesktopDetach = "bee.desktop:detach"
@@ -101,6 +102,15 @@ func durableID(s string) bool {
 	}
 	return true
 }
+
+func lowerHex(value string) bool {
+	for _, character := range value {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f') {
+			return false
+		}
+	}
+	return true
+}
 func (s DesktopSelection) valid() bool {
 	return durableID(s.Execution) && durableID(s.Workspace) && durableID(s.Desktop)
 }
@@ -147,29 +157,25 @@ func DecodeDesktopCatalog(reply Reply, execution string) (DesktopCatalog, error)
 		}
 		result.Default = *wire.Default
 	}
-	var rawDesktops []json.RawMessage
-	if !desktopList(wire.Desktops, &rawDesktops) || len(rawDesktops) == 0 || len(rawDesktops) > maxDesktops {
+	desktops, err := list[DesktopDescription](wire.Desktops, maxDesktops, "desktop_id", "is_default")
+	if err != nil || len(desktops) == 0 {
 		return DesktopCatalog{}, ErrDesktopReply
 	}
 	ids := map[string]bool{}
-	for index, raw := range rawDesktops {
-		var desktop DesktopDescription
-		if !exactDesktopFields(raw, "desktop_id", "is_default") || strict(raw, &desktop) != nil ||
-			!durableID(desktop.ID) || ids[desktop.ID] || desktop.IsDefault != (index == 0) {
+	for index, desktop := range desktops {
+		if !durableID(desktop.ID) || ids[desktop.ID] || desktop.IsDefault != (index == 0) {
 			return DesktopCatalog{}, ErrDesktopReply
 		}
 		ids[desktop.ID] = true
 		result.Desktops = append(result.Desktops, desktop)
 	}
-	var rawWorkspaces []json.RawMessage
-	if !desktopList(wire.Workspaces, &rawWorkspaces) || len(rawWorkspaces) > MaxCatalogPage {
+	workspaces, err := list[WorkspaceSummary](wire.Workspaces, MaxCatalogPage, "workspace_id", "label", "served")
+	if err != nil {
 		return DesktopCatalog{}, ErrDesktopReply
 	}
 	seen := map[string]bool{}
-	for _, raw := range rawWorkspaces {
-		var workspace WorkspaceSummary
-		if !exactDesktopFields(raw, "workspace_id", "label", "served") || strict(raw, &workspace) != nil ||
-			!durableID(workspace.ID) || seen[workspace.ID] || len(workspace.Label) > maxLabelBytes || !printable(workspace.Label) {
+	for _, workspace := range workspaces {
+		if !durableID(workspace.ID) || seen[workspace.ID] || len(workspace.Label) > maxLabelBytes || !printable(workspace.Label) {
 			return DesktopCatalog{}, ErrDesktopReply
 		}
 		seen[workspace.ID] = true
@@ -208,17 +214,6 @@ func DecodeDesktopCreated(reply Reply, execution, desktop string) error {
 	}
 	return nil
 }
-func desktopList(raw json.RawMessage, into any) bool {
-	if !present(raw) {
-		return false
-	}
-	if object(raw) {
-		var members map[string]json.RawMessage
-		return json.Unmarshal(raw, &members) == nil && len(members) == 0
-	}
-	return strict(raw, into) == nil
-}
-
 func DecodeDesktopMount(reply Reply, selected DesktopSelection, recipient pid.PID, mode DesktopMode, now time.Time) (DesktopMount, error) {
 	if !selected.valid() || recipient.Node == "" || recipient.Host != mesh.ActorHost || recipient.UniqID == "" ||
 		(mode != Control && mode != Observe) || now.IsZero() || !desktopValue(reply) {
@@ -236,8 +231,8 @@ func DecodeDesktopMount(reply Reply, selected DesktopSelection, recipient pid.PI
 		wire.Recipient != recipient.String() || wire.Mode != mode || !boundedMount(wire.Mount) || !canonicalTime(wire.Expires) {
 		return DesktopMount{}, ErrDesktopReply
 	}
-	expiry, err := time.Parse("2006-01-02T15:04:05.000Z", wire.Expires)
-	if err != nil || !now.Before(expiry) || !live(reply.lifetime) {
+	expiry, validTime := parseCanonicalTime(wire.Expires)
+	if !validTime || !now.Before(expiry) || !live(reply.lifetime) {
 		return DesktopMount{}, ErrDesktopReply
 	}
 	return DesktopMount{Selection: selected, Session: wire.Session, Recipient: recipient, Mode: mode, Mount: wire.Mount, Expires: expiry, lifetime: reply.lifetime}, nil

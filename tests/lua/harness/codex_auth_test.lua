@@ -47,10 +47,10 @@ local function codex_bin(): string?
 end
 local function define_tests()
     test.describe("Codex authentication path", function()
-        test.it("sends the projected API key to the configured endpoint from an isolated home, or reports the gate open", function()
+        test.it("sends the projected API key to the configured endpoint from an isolated home, when the executable is available", function()
             local codex = codex_bin()
             if not codex then
-                test.eq(launch.CODEX_AUTHENTICATION, "unproven")
+                test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
                 return
             end
             local version = shell(codex .. " --version")

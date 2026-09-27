@@ -329,10 +329,10 @@ local function marker_count(name: string): integer
 end
 local function define_tests()
     test.describe("Carrier permission exchange with the real Claude executable", function()
-        test.it("asks, answers and acknowledges allow, deny and expiry through placement, or reports the gate open", function()
+        test.it("asks, answers and acknowledges allow, deny and expiry through placement, when the executable is available", function()
             local claude = claude_bin()
             if not claude then
-                test.eq(launch.CLAUDE_AUTHENTICATION, "unproven")
+                test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
                 return
             end
             if not shell(claude .. " --version"):find("Claude Code", 1, true) then error("not the Claude executable") end
@@ -414,12 +414,11 @@ local function define_tests()
             test.eq(tool_results(expired, "failed"), 1)
             test.eq(tool_results(expired, "succeeded"), 0)
             shell("rm -rf " .. root)
-            test.eq(launch.CLAUDE_AUTHENTICATION, "unproven")
         end)
         test.it("recovers every boundary with one approval, one response and one effect against the executable, and loses nothing to a lost runner, a takeover or a late decision", function()
             local claude = claude_bin()
             if not claude then
-                test.eq(launch.CLAUDE_AUTHENTICATION, "unproven")
+                test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
                 return
             end
             local root = ".wippy/claude-matrix-" .. fresh("run")

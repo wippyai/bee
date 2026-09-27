@@ -75,13 +75,15 @@ local function define_tests()
             test.eq(value.owner_component_revision, 3)
             test.eq(value.spec_digest, valid_digest)
 
-            local aliased, alias_err = protocol.profile({
+            local canonical, canonical_err = protocol.profile({
                 title = "Research Assistant",
                 definition_ref = "bee:codex",
-                owner_revision = 2,
+                owner_component_revision = 2,
             })
-            if not aliased then error(tostring(alias_err)) end
-            test.eq(aliased.owner_component_revision, 2)
+            if not canonical then error(tostring(canonical_err)) end
+            test.eq(canonical.owner_component_revision, 2)
+            local _, alias_err = protocol.profile({title = "Research Assistant", definition_ref = "bee:codex", owner_revision = 2})
+            test.eq(alias_err, "unknown field owner_revision")
         end)
         test.it("refuses malformed agent reference, owner component revision or spec digest", function()
             local _, bad_ref = protocol.profile({title = "P", definition_ref = "bee:codex", agent_ref = "bad\0ref"})

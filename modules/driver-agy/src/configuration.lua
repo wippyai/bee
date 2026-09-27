@@ -15,10 +15,6 @@ M.MCP_REVISION = "bee.agy-mcp@2"
 M.CUSTOMIZATION_DIRECTORY = ".agents"
 M.MCP_PATH = M.CUSTOMIZATION_DIRECTORY .. "/mcp_config.json"
 
-M.AGY_AUTHENTICATION = "unproven"
-M.AGY_HOOKS = "unproven"
-M.AGY_MCP = "unproven"
-
 function M.render_mcp(gateway: configure_protocol.GatewayInput): string
     local url = "http://" .. gateway.endpoint .. "/mcp/" .. gateway.action_id
     local doc = {

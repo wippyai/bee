@@ -54,6 +54,7 @@ entries:
     events: bee.driver.kit:events
     types: bee.driver:types
     bounds: bee.threads.records:bounds
+    values: bee.threads.records:values
 - name: launch
   kind: library.lua
   source: file://launch.lua

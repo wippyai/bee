@@ -5,6 +5,7 @@ local json = require("json")
 local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
+local values = require("values")
 
 local M = {}
 M.PROTOCOL_REVISION = "streaming-json-1"
@@ -18,7 +19,7 @@ type State = {
     terminal: types.Terminal?,
     answer: string?,
     answer_truncated: boolean,
-    usage: {[string]: unknown}?,
+    usage: events.Usage?,
 }
 type Step = {observations: {Observation}, terminal: types.Terminal?}
 
@@ -35,23 +36,14 @@ function M.new(resumed: boolean): State
     return state
 end
 
-local function decode_usage(value: unknown): ({[string]: unknown}?, string?)
+local function decode_usage(value: unknown): (events.Usage?, string?)
     if value == nil then return nil, nil end
-    local object = bounds.object(value)
-    if not object or bounds.fields(object, {"input_tokens", "output_tokens", "cached_tokens"}) then return nil, "usage must be an object with known counters" end
-    local values: {[string]: unknown} = {}
-    local count = 0
-    for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens"}) do
-        local raw = object[name]
-        if raw ~= nil then
-            local number = bounds.count(raw)
-            if not number then return nil, "usage." .. name .. " is not a nonnegative integer" end
-            values[name] = number
-            count = count + 1
-        end
+    local usage, usage_error = values.usage(value)
+    if usage_error then return nil, usage_error end
+    if usage and usage.input_tokens == nil and usage.output_tokens == nil and usage.cached_tokens == nil then
+        return nil, "usage must contain a counter"
     end
-    if count == 0 then return nil, "usage must contain a counter" end
-    return values :: {[string]: unknown}, nil
+    return usage, nil
 end
 
 local function decode_terminal(value: unknown): types.Terminal?
@@ -128,7 +120,7 @@ local function text_of(value: unknown): string
     return tostring(value or "")
 end
 
-local function usage_of(value: unknown): {[string]: unknown}?
+local function usage_of(value: unknown): events.Usage?
     if type(value) ~= "table" then return nil end
     local usage = value :: {[string]: unknown}
     local input = usage.input_tokens or usage.prompt_tokens

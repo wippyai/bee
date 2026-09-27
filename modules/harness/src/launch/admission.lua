@@ -373,7 +373,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "thread_title", "placement", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id", "origin_view", "agent_ref", "owner_component_revision", "owner_revision", "spec_digest"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "thread_title", "placement", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id", "origin_view", "agent_ref", "owner_component_revision", "spec_digest"})
     if unknown_field then return nil, unknown_field end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
@@ -390,9 +390,8 @@ function M.decode_request(value: unknown): (Request?, string?)
         if not agent_ref then return nil, "agent_ref is not an identifier" end
     end
     local owner_component_revision: integer? = nil
-    local rev_raw = object.owner_component_revision ~= nil and object.owner_component_revision or object.owner_revision
-    if rev_raw ~= nil then
-        local count = bounds.count(rev_raw)
+    if object.owner_component_revision ~= nil then
+        local count = bounds.count(object.owner_component_revision)
         if not count or count < 1 then return nil, "owner_component_revision must be a positive integer" end
         owner_component_revision = count
     end

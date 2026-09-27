@@ -126,6 +126,34 @@ local function admit_login_source(source: string, private_codex_home: boolean?)
     local applied, apply_error = changes:apply()
     if not applied then error("admit login source: " .. tostring(apply_error)) end
 end
+local function admit_claude_login_source(source: string)
+    local entry = registry.get("bee.credentials:credential_sources")
+    if not entry then error("credential sources entry") end
+    local data = entry.data :: {[string]: unknown}
+    local list = data.sources :: {{[string]: unknown}}
+    local matched = false
+    for _, item in ipairs(list) do
+        if item.ref == source and item.provider == "claude" and item.audience == OWNER then
+            matched = true
+        end
+    end
+    if not matched then
+        list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "claude", projection_kinds = {"file"},
+            path = ".claude/.credentials.json", write_back = false, setup_path = ".claude/settings.json",
+            setup_destination = ".claude/settings.json", setup_content_format = "opaque"}
+    end
+    local file_policy = registry.get("bee.credentials.security:credential_file_policy")
+    local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
+    if not file_policy or not write_policy then error("credential file policy entry") end
+    file_policy.data.policy.resources = {source}
+    write_policy.data.policy.resources = {source}
+    local changes = registry.snapshot():changes()
+    changes:update(entry)
+    changes:update(file_policy)
+    changes:update(write_policy)
+    local applied, apply_error = changes:apply()
+    if not applied then error("admit Claude login source: " .. tostring(apply_error)) end
+end
 local function admit_grok_login_source(source: string)
     local entry = registry.get("bee.credentials:credential_sources")
     if not entry then error("credential sources entry") end
@@ -419,6 +447,84 @@ local function define_tests()
                 local remove_error = homes.remove_attempt(key)
                 test.is_nil(remove_error)
             end
+        end)
+        test.it("launches Claude with its private config directory and exact login layout", function()
+            local source = "bee.credentials:placement_claude_login_fixture"
+            local source_root = ".wippy/placement-claude-login-fixture"
+            admit_claude_login_source(source)
+            local login = '{"fixture":"private-claude-login"}'
+            local settings = '{"model":"fixture"}'
+            test.eq(shell("mkdir -p " .. source_root .. "/.claude && printf %s " .. quote.posix(login) .. " > " .. source_root .. "/.claude/.credentials.json"
+                .. " && printf %s " .. quote.posix(settings) .. " > " .. source_root .. "/.claude/settings.json"), "")
+            local workspace = fresh("claude-private-home-workspace")
+            credential_call("define", {workspace_id = workspace, name = "claude_login", provider = "claude", source = {kind = "fs_directory", ref = source}})
+            local attempt_id = fresh("claude-private-home-attempt")
+            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "claude_login", audience = OWNER,
+                attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
+                launch_policy_digest = DIGEST, idempotency_key = fresh("claude-private-home-key")})
+            local decoded = assert(claude_launch.decode({profile_id = "batch", brief = "fixture"}))
+            local spec = claude_launch.specification(decoded)
+            local provider_home = spec.provider_home :: {[string]: unknown}
+            test.eq(provider_home.provider, "claude")
+            test.is_true(provider_home.private == true)
+            test.eq(provider_home.variable, "CLAUDE_CONFIG_DIR")
+            test.eq(provider_home.directory, ".claude")
+            local provider_files = provider_home.files :: {{[string]: unknown}}
+            local login_path = ""
+            for _, file in ipairs(provider_files) do
+                if file.kind == "login" then
+                    test.eq(file.path, ".claude/.credentials.json")
+                    login_path = file.path :: string
+                    -- This fixture checks the CLI-visible layout; it does not
+                    -- exercise refreshing or return synthetic bytes to a host.
+                    file.write_back = false
+                elseif file.kind == "config" then
+                    test.eq(file.path, ".claude/settings.json")
+                    test.eq(file.source_path, ".claude/settings.json")
+                elseif file.kind == "state" then
+                    test.eq(file.path, ".claude.json")
+                end
+            end
+            test.eq(login_path, ".claude/.credentials.json")
+            local script = 'set -eu'
+                .. ' && case "$HOME" in */attempts/*/home) ;; *) exit 41 ;; esac'
+                .. ' && test "$CLAUDE_CONFIG_DIR" = "$HOME/.claude"'
+                .. ' && test -n "$PATH"'
+                .. ' && test -s "$CLAUDE_CONFIG_DIR/.credentials.json"'
+                .. ' && test -s "$CLAUDE_CONFIG_DIR/settings.json"'
+                .. ' && test -s "$HOME/.claude.json"'
+                .. ' && actual="$(find "$HOME" -type f | sed "s|^$HOME/||" | sort)"'
+                .. ' && expected="$(printf "%s\\n" .claude.json .claude/.credentials.json .claude/settings.json | sort)"'
+                .. ' && test "$actual" = "$expected"'
+                .. ' && ! env | cut -d= -f1 | grep -q "^XDG_"'
+                .. ' && ! env | cut -d= -f1 | grep -q "^ANTHROPIC_"'
+                .. ' && ! env | cut -d= -f1 | grep -q "^CLAUDE_CODE_"'
+                .. ' && printf claude-private-home-ok'
+            local request = launch({"sh", "-c", script}, "process_group")
+            request.attempt_id = attempt_id
+            request.projections = {projection.projection_id}
+            (request.launch :: {[string]: unknown}).provider_home = provider_home
+            attempt_of(call(OWNER, "prepare", request))
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            attempt_of(call(OWNER, "attach", {attempt_id = attempt_id, recipient = process.pid(), generation = 1}))
+            attempt_of(call(OWNER, "start", {attempt_id = attempt_id}))
+            local output = ""
+            local ended: {[string]: boolean} = {}
+            local deadline = time.after("10s")
+            while not ended.stdout or not ended.stderr do
+                local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
+                if not selected.ok or selected.channel == deadline then error("Claude private-home fixture did not report success") end
+                local data = selected.value:payload():data() :: protocol.Output
+                if data.attempt_id == attempt_id and data.generation == 1 then
+                    if type(data.data) == "string" then output = output .. (data.data :: string) end
+                    if data.eof then ended[data.stream] = true end
+                    process.send(tostring(selected.value:from()), protocol.TOPIC_ACK,
+                        {generation = 1, consumed_through = data.sequence})
+                end
+            end
+            process.unlisten(outputs)
+            test.is_true(output:find("claude-private-home-ok", 1, true) ~= nil)
+            attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
         end)
         test.it("refuses provider login write-back until runtime no-follow fs is available and leaves files unchanged", function()
             local key = assert(homes.attempt_key(OWNER, fresh("provider-home-link")))

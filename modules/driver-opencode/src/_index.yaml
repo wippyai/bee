@@ -58,6 +58,7 @@ entries:
     events: bee.driver.kit:events
     types: bee.driver:types
     bounds: bee.threads.records:bounds
+    values: bee.threads.records:values
 - name: configuration
   kind: library.lua
   source: file://configuration.lua

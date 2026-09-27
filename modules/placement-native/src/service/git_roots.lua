@@ -2,10 +2,11 @@
 -- needs when its admitted working directory is a repository or worktree.
 -- Paths come from Git's small metadata files; no shell or Git process runs.
 local canonical = require("canonical")
+local driver_types = require("driver_types")
 local M = {}
 M.MAX_PATH_BYTES = 8192
 M.MAX_METADATA_BYTES = 4096
-type Adapter = "codex_workspace_write" | "claude_add_dir" | "agy_add_dir"
+type Adapter = driver_types.GitWritableRootsAdapter
 type ReadFile = (string) -> (string?, string?)
 type Exists = (string) -> (boolean?, string?)
 type IsDirectory = (string) -> (boolean?, string?)
@@ -142,41 +143,65 @@ function M.writable_roots(paths: {string}, write_roots: {string}): ({string}?, s
     return result, nil
 end
 
-function M.enabled(adapter: Adapter, argv: {string}): boolean
+local function codex_enabled(argv: {string}): boolean
     for index, argument in ipairs(argv) do
-        if adapter == "codex_workspace_write" then
-            if argument == "--sandbox=workspace-write" or (argument == "--sandbox" and argv[index + 1] == "workspace-write") then return true end
-        elseif adapter == "claude_add_dir" then
-            if argument == "--permission-mode" then
-                local mode = argv[index + 1]
-                if mode == "default" or mode == "acceptEdits" or mode == "dontAsk" then return true end
-            elseif argument:match("^%-%-permission%-mode=") then
-                local mode = argument:match("=(.*)$")
-                if mode == "default" or mode == "acceptEdits" or mode == "dontAsk" then return true end
-            end
-        elseif adapter == "agy_add_dir" then
-            if argument == "--sandbox" or argument == "--sandbox=true" then return true end
+        if argument == "--sandbox=workspace-write" or (argument == "--sandbox" and argv[index + 1] == "workspace-write") then return true end
+    end
+    return false
+end
+
+local function claude_enabled(argv: {string}): boolean
+    for index, argument in ipairs(argv) do
+        if argument == "--permission-mode" then
+            local mode = argv[index + 1]
+            if mode == "default" or mode == "acceptEdits" or mode == "dontAsk" then return true end
+        elseif argument:match("^%-%-permission%-mode=") then
+            local mode = argument:match("=(.*)$")
+            if mode == "default" or mode == "acceptEdits" or mode == "dontAsk" then return true end
         end
     end
     return false
 end
 
-function M.arguments(adapter: Adapter, roots: {string}): ({string}?, string?)
-    if #roots == 0 then return {}, nil end
+local function agy_enabled(argv: {string}): boolean
+    for _, argument in ipairs(argv) do
+        if argument == "--sandbox" or argument == "--sandbox=true" then return true end
+    end
+    return false
+end
+
+local function codex_arguments(roots: {string}): ({string}?, string?)
+    local encoded, encode_error = canonical.encode(roots)
+    if not encoded then return nil, "encode Codex writable roots: " .. tostring(encode_error) end
+    return {"--config", "sandbox_workspace_write.writable_roots=" .. encoded}, nil
+end
+
+local function add_directory_arguments(roots: {string}): ({string}?, string?)
     local result: {string} = {}
-    if adapter == "codex_workspace_write" then
-        local encoded, encode_error = canonical.encode(roots)
-        if not encoded then return nil, "encode Codex writable roots: " .. tostring(encode_error) end
-        result = {"--config", "sandbox_workspace_write.writable_roots=" .. encoded}
-    elseif adapter == "claude_add_dir" or adapter == "agy_add_dir" then
-        for _, root in ipairs(roots) do
-            result[#result + 1] = "--add-dir"
-            result[#result + 1] = root
-        end
-    else
-        return nil, "unsupported Git writable-roots adapter"
+    for _, root in ipairs(roots) do
+        result[#result + 1] = "--add-dir"
+        result[#result + 1] = root
     end
     return result, nil
+end
+
+type AdapterHandler = {enabled: ({string}) -> boolean, arguments: ({string}) -> ({string}?, string?)}
+local ADAPTERS: {[Adapter]: AdapterHandler} = {
+    codex_workspace_write = {enabled = codex_enabled, arguments = codex_arguments},
+    claude_add_dir = {enabled = claude_enabled, arguments = add_directory_arguments},
+    agy_add_dir = {enabled = agy_enabled, arguments = add_directory_arguments},
+}
+
+function M.enabled(adapter: Adapter, argv: {string}): boolean
+    local handler = ADAPTERS[adapter]
+    return handler ~= nil and handler.enabled(argv)
+end
+
+function M.arguments(adapter: Adapter, roots: {string}): ({string}?, string?)
+    if #roots == 0 then return {}, nil end
+    local handler = ADAPTERS[adapter]
+    if not handler then return nil, "unsupported Git writable-roots adapter" end
+    return handler.arguments(roots)
 end
 
 return M

@@ -2,6 +2,7 @@
 -- This helper is pure: it does not resolve profiles, registry entries or
 -- permissions, and it never expands the host-selected authority.
 local bounds = require("bounds")
+local instructions = require("instructions")
 
 local M = {}
 -- Nine leaves room for one historical top-level option translated by the
@@ -10,7 +11,7 @@ M.MAX_OPTIONS = 9
 M.MAX_OPTION_VALUES = 32
 M.MAX_OPTION_VALUE_BYTES = 512
 M.MAX_MCP_TOOLS = 64
-M.MAX_INSTRUCTIONS_BYTES = 4096
+M.MAX_INSTRUCTIONS_BYTES = instructions.MAX_BYTES
 
 type Object = {[string]: unknown}
 type Scalar = string | number | boolean
@@ -61,7 +62,7 @@ local function decode_options(value: unknown, label: string): ({[string]: Scalar
     local count = 0
     for name, item in pairs(object) do
         count = count + 1
-        if count > M.MAX_OPTIONS then return nil, label .. " exceeds 8 options" end
+        if count > M.MAX_OPTIONS then return nil, label .. " exceeds " .. tostring(M.MAX_OPTIONS) .. " options" end
         if not option_name(name) then
             if RESERVED_OPTIONS[name] then return nil, label .. " contains reserved option " .. name end
             return nil, label .. " contains an invalid option name"
@@ -146,21 +147,6 @@ end
 
 M.decode_profile_options = decode_profile_options
 
-local function instructions(value: unknown, label: string, empty_allowed: boolean): (string?, string?)
-    if value == nil then return "", nil end
-    local text = bounds.text(value, M.MAX_INSTRUCTIONS_BYTES)
-    if not text or (not empty_allowed and text == "") then
-        return nil, label .. " must contain at most 4096 bytes"
-    end
-    for index = 1, #text do
-        local byte = text:byte(index)
-        if (byte < 32 and byte ~= 9 and byte ~= 10 and byte ~= 13) or byte == 127 then
-            return nil, label .. " contain unsupported control bytes"
-        end
-    end
-    return text, nil
-end
-
 local function dense_tools(value: unknown, label: string): ({string}?, string?)
     if value == nil then return {}, nil end
     local tools, tools_error = bounds.ids(value, true)
@@ -179,7 +165,7 @@ function M.decode(value: unknown): (Value?, string?)
     if not options then return nil, options_error end
     local mcp_tools, tools_error = dense_tools(object.mcp_tools, "mcp_tools")
     if not mcp_tools then return nil, tools_error end
-    local text, instructions_error = instructions(object.instructions, "instructions", true)
+    local text, instructions_error = instructions.decode(object.instructions, "instructions", true)
     if not text then return nil, instructions_error end
     return {options = options, mcp_tools = mcp_tools, instructions = text}, nil
 end
@@ -227,7 +213,7 @@ function M.apply(policy_data: Object, raw: unknown): (Object?, string?)
         if not host_tool_set[tool] then return nil, "mcp_tools contains a tool outside host gateway_tools" end
     end
 
-    local host_instructions, host_instructions_error = instructions(policy.instructions, "host instructions", true)
+    local host_instructions, host_instructions_error = instructions.decode(policy.instructions, "host instructions", true)
     if not host_instructions then return nil, host_instructions_error end
     if not profile_instructions and saved.instructions ~= "" then
         return nil, "profile instructions are disabled by the host policy"

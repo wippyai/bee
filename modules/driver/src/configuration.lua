@@ -5,9 +5,10 @@ local canonical = require("canonical")
 local funcs = require("funcs")
 local security = require("security")
 local driver_types = require("types")
+local instructions = require("instructions")
 local M = {}
 M.MAX_CONFIGURATION_BYTES = 8192
-M.MAX_INSTRUCTIONS_BYTES = 4096
+M.MAX_INSTRUCTIONS_BYTES = instructions.MAX_BYTES
 M.MAX_DELIVERY_ARGUMENTS = 32
 M.MAX_DELIVERY_ARGUMENT_BYTES = 16384
 M.MAX_DELIVERY_FILES = 8
@@ -15,6 +16,7 @@ M.MAX_DELIVERY_FILE_BYTES = 24576
 M.MAX_GATEWAY_TOOLS = 32
 M.MAX_GATEWAY_HOOKS = 32
 M.MAX_HOME_DIRECTORY_BYTES = 4096
+M.MAX_ENDPOINT_BYTES = 512
 M.GATEWAY_PROVIDER_REF = "bee:gateway_endpoint"
 M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
 type Object = {[string]: unknown}
@@ -28,17 +30,25 @@ type Delivery = {arguments: {string}, files: {Configuration}, git_writable_roots
 type Request = {instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, attempt_id: string?, fixture: boolean}
 
 -- Profile guidance is separate from a turn brief and grants no authority.
-function M.instructions(value: unknown): (string?, string?)
-    if value == nil then return nil, nil end
-    local text = bounds.text(value, M.MAX_INSTRUCTIONS_BYTES)
-    if not text or text == "" then return nil, "instructions must be nonempty text up to 4096 bytes" end
-    for index = 1, #text do
-        local byte = text:byte(index)
-        if (byte < 32 and byte ~= 9 and byte ~= 10 and byte ~= 13) or byte == 127 then
-            return nil, "instructions contain unsupported control bytes"
+M.instructions = instructions.decode
+function M.endpoint(value: unknown, allow_loopback: boolean, field: string?): (string?, string?)
+    local name = field or "endpoint"
+    local url = bounds.text(value, M.MAX_ENDPOINT_BYTES)
+    if not url or url == "" or url:find("%s") then return nil, name .. " must be one bounded URL" end
+    local scheme, host, rest = url:match("^(https?)://([^/]+)(.*)$")
+    if not scheme or not host then return nil, name .. " must be an http(s) URL with a host" end
+    if rest:find("[?#]") then return nil, name .. " carries no query or fragment" end
+    if scheme == "http" then
+        if not allow_loopback then
+            if name == "base_url" then return nil, "plain http is permitted only for the loopback fixture" end
+            return nil, "plain http is permitted only for the 127.0.0.1 loopback fixture"
+        end
+        if not host:match("^127%.0%.0%.1:%d+$") then
+            if name == "base_url" then return nil, "the loopback fixture endpoint must be 127.0.0.1 with a port" end
+            return nil, "plain http is permitted only for the 127.0.0.1 loopback fixture"
         end
     end
-    return text, nil
+    return url, nil
 end
 function M.instruction_builder(value: unknown): (InstructionBuilder?, string?)
     if value == nil then return nil, nil end
@@ -302,9 +312,9 @@ function M.decode_stored_delivery(value: unknown): (Delivery?, string?)
     if unexpected then return nil, "delivery: " .. unexpected end
     local adapter: driver_types.GitWritableRootsAdapter? = nil
     if item.git_writable_roots_adapter ~= nil then
-        local selected_adapter = bounds.member(item.git_writable_roots_adapter, {"codex_workspace_write", "claude_add_dir", "agy_add_dir"})
+        local selected_adapter = driver_types.git_writable_roots_adapter(item.git_writable_roots_adapter)
         if not selected_adapter then return nil, "delivery.git_writable_roots_adapter is not supported" end
-        adapter = selected_adapter :: driver_types.GitWritableRootsAdapter
+        adapter = selected_adapter
     end
     local decoded, decode_error = M.decode_delivery({arguments = item.arguments, files = item.files})
     if not decoded then return nil, decode_error end

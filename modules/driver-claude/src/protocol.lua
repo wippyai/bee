@@ -4,6 +4,7 @@
 local json = require("json")
 local events = require("events")
 local types = require("types")
+local bounds = require("bounds")
 local M = {}
 M.PROTOCOL_REVISION = "stream-json-2"
 type Observation = {[string]: unknown}
@@ -12,15 +13,29 @@ type State = {
     started: boolean,
     resumed: boolean,
     terminal: types.Terminal?,
-    segments: {[string]: boolean},
-    tools: {[string]: string},
 }
 type Step = {observations: {Observation}, terminal: types.Terminal?}
 function M.new(resumed: boolean): State
-    local segments: {[string]: boolean} = {}
-    local tools: {[string]: string} = {}
-    local state: State = {started = false, resumed = resumed, segments = segments, tools = tools}
-    return state
+    return {started = false, resumed = resumed}
+end
+function M.decode_state(value: unknown): (State?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "state must be an object" end
+    local unknown = bounds.fields(object, {"session_id", "started", "resumed", "terminal"})
+    if unknown then return nil, "state: " .. unknown end
+    if type(object.started) ~= "boolean" or type(object.resumed) ~= "boolean" then return nil, "state flags must be booleans" end
+    local session_id: string? = nil
+    if object.session_id ~= nil then
+        session_id = bounds.id(object.session_id)
+        if not session_id then return nil, "state.session_id is not an identifier" end
+    end
+    local terminal: types.Terminal? = nil
+    if object.terminal ~= nil then
+        local decoded, terminal_error = types.decode_terminal(object.terminal)
+        if not decoded then return nil, terminal_error end
+        terminal = decoded
+    end
+    return {session_id = session_id, started = object.started, resumed = object.resumed, terminal = terminal}, nil
 end
 local function key(index: integer, suffix: string): string
     return "claude:" .. tostring(index) .. ":" .. suffix
@@ -41,7 +56,7 @@ local function text_of(value: unknown): string
     end
     return tostring(value)
 end
-local function usage_of(value: unknown): {[string]: unknown}?
+local function usage_of(value: unknown): events.Usage?
     if type(value) ~= "table" then return nil end
     local usage = value :: {[string]: unknown}
     return events.usage(usage.input_tokens, usage.output_tokens, usage.cache_read_input_tokens)
@@ -61,7 +76,6 @@ local function content_blocks(state: State, index: integer, message: unknown, ou
                 local input_text = "{}"
                 local encoded, err = json.encode(item.input)
                 if not err and encoded then input_text = encoded end
-                state.tools[item.id] = item.name
                 out[#out + 1] = events.tool_call(key(index, suffix), item.id, item.name, input_text)
             elseif item.type == "tool_result" and type(item.tool_use_id) == "string" then
                 local outcome = "succeeded"

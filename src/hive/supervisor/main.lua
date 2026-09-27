@@ -741,6 +741,7 @@ local function main(configuration: unknown)
         end
     end
     local ok, err = pcall(run)
+    if not ok and desktop_config then desktop_owner.startup_failure(desktop, tostring(err)) end
     tick:stop()
     if desktop then desktop_owner.close(desktop) end
     if advertising then advertising:cancel() end

@@ -53,6 +53,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     events: bee.driver.kit:events
+    values: bee.threads.records:values
     types: bee.driver:types
 - name: configuration
   kind: library.lua
@@ -61,6 +62,7 @@ entries:
   imports:
     canonical: bee.threads.records:canonical
     quote: bee.driver.kit:quote
+    toml: bee.driver.kit:toml
     configure_protocol: bee.driver:configuration
 - name: launch
   kind: library.lua

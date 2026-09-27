@@ -834,10 +834,7 @@ local function define_tests()
         end)
 
         test.it("renders gateway MCP with an admitted private credential field", function()
-            test.eq(configuration.AGY_AUTHENTICATION, "unproven")
-            test.eq(configuration.AGY_HOOKS, "unproven")
-            test.eq(configuration.AGY_MCP, "unproven")
-
+            test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
             local reply_mcp, err_mcp = funcs.call("bee.driver.agy.binding:configure", {
                 gateway = {
                     endpoint = "127.0.0.1:18790",

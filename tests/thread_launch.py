@@ -57,6 +57,7 @@ def run_live_smokes():
                 "BEE_FIXTURE_BIN": str(folder / "fixtures/harness/bin"),
                 "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
                 "BEE_AMBIENT_LIVE_PROVIDER": provider,
+                f"BEE_{provider.upper()}_BIN": str(Path(shutil.which(provider)).resolve()),
             }
             started = time.time()
             try:

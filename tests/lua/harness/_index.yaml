@@ -223,6 +223,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
     launch: bee.driver.claude:launch
+    driver_types: bee.driver:types
     placement_fixture: bee.harness.catalog:placement_fixture
     sends: bee.threads.service:sends
 - name: placement_fixture
@@ -595,6 +596,13 @@ entries:
   meta: {type: test_support}
   storage: bee.placement.native:environment
   variable: BEE_FIXTURE_BIN
+  readonly: true
+- name: live_claude_bin
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_CLAUDE_BIN
+  default: ""
   readonly: true
 - name: git_commit_enabled
   kind: env.variable
@@ -1713,6 +1721,7 @@ entries:
   imports:
     test: wippy.test:test
     launch: bee.driver.codex:launch
+    driver_types: bee.driver:types
     quote: bee.driver.kit:quote
 - name: codex_sentinel_storage
   kind: env.storage.memory
@@ -1822,6 +1831,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     launch: bee.driver.claude:launch
+    driver_types: bee.driver:types
     placement_fixture: bee.harness.catalog:placement_fixture
 - name: claude_adapter_test
   kind: function.lua
@@ -1880,6 +1890,7 @@ entries:
     approvals: bee.approvals:service
     policy: bee.harness.carrier:policy
     launch: bee.driver.claude:launch
+    driver_types: bee.driver:types
     placement_fixture: bee.harness.catalog:placement_fixture
 - name: claude_acceptance_test
   kind: function.lua
@@ -1895,6 +1906,7 @@ entries:
     protocol: bee.driver.claude:protocol
     adapter: bee.harness.permission:adapter
     launch: bee.driver.claude:launch
+    driver_types: bee.driver:types
 - name: codex_credential_client_policy
   kind: security.policy
   meta: {type: test_support}
@@ -1916,6 +1928,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     launch: bee.driver.codex:launch
+    driver_types: bee.driver:types
     placement: bee.placement.native.service:service
     placement_fixture: bee.harness.catalog:placement_fixture
 - name: continuation_test

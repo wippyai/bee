@@ -228,7 +228,7 @@ func (host *Host) Start(ctx context.Context) error {
 	if host.ownerState == "" {
 		return nil
 	}
-	execution, err := ensureExecution(ownerDirectory(host.ownerState))
+	execution, err := readExecution(ownerDirectory(host.ownerState))
 	if err != nil {
 		return err
 	}

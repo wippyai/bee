@@ -1,7 +1,11 @@
 -- MIT. Type definitions for the native Wippy in-process agent driver.
 local M = {}
+local driver_types = require("driver_types")
 
 type Object = {[string]: unknown}
+type RunState = "starting" | "running" | "ended" | "cancelling"
+type Outcome = driver_types.Outcome
+type Role = "system" | "user" | "assistant" | "tool"
 
 type HostConfig = {
     endpoint: string,
@@ -17,17 +21,14 @@ type HostConfig = {
 -- a "function" object, which the client flattens on decode.
 type ToolCall = {
     id: string,
-    kind: string,
+    kind: "function",
     name: string,
     arguments: string,
 }
 
-type Message = {
-    role: string,
-    content: string?,
-    tool_calls: {ToolCall}?,
-    tool_call_id: string?,
-}
+type Message = {role: "system" | "user", content: string}
+    | {role: "assistant", content: string?, tool_calls: {ToolCall}?}
+    | {role: "tool", tool_call_id: string, content: string}
 
 type ChatPayload = {
     model: string,
@@ -66,33 +67,24 @@ type ExecutionContext = {
 }
 
 type RunReceipt = {
-    scope: string,
+    scope: "attempt",
     thread_id: string,
     action_id: string,
     attempt_id: string,
-    state: string,
+    state: RunState,
     idempotency_key: string?,
 }
 
-type RunResult = {
-    ok: boolean,
-    error: string?,
-    outcome: string?,
-    answer: string?,
-    thread_id: string,
-    action_id: string,
-    attempt_id: string,
-    receipt: RunReceipt?,
-    state: string?,
-    status: string?,
-}
+type RunResult =
+    {ok: true, error: nil, outcome: Outcome, answer: string?, thread_id: string, action_id: string,
+        attempt_id: string, receipt: RunReceipt?, state: RunState?, status: RunState?}
+    | {ok: false, error: string, outcome: Outcome, answer: string?, thread_id: string, action_id: string,
+        attempt_id: string, receipt: RunReceipt?, state: RunState?, status: RunState?}
 
-type ExecutionResult = {
-    outcome: string,
-    error: string?,
-    answer: string?,
-    settle: boolean?,
-    checkpoint: Object?,
-}
+type ExecutionResult =
+    {outcome: "succeeded", error: nil, answer: string?, checkpoint: Object?}
+    | {outcome: "failed", error: string, answer: string?, checkpoint: Object?}
+    | {outcome: "cancelled", error: nil, answer: string?, checkpoint: Object?}
+    | {outcome: "uncertain", error: string, answer: string?, checkpoint: Object?}
 
 return M

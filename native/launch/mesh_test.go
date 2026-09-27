@@ -15,6 +15,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -468,6 +469,94 @@ func TestPrepareOwnerKeepsItsGossipAddressAndSeedsKnownPeers(t *testing.T) {
 	}
 	if _, seeds := prepareBindPort(t, state); seeds != "" {
 		t.Fatalf("a retired peer is still seeded: %q", seeds)
+	}
+}
+
+func TestRecordAddressesRefreshesTheJoinedHiveSeed(t *testing.T) {
+	state := t.TempDir()
+	directory := ownerDirectory(state)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ownerPeersDirectory(state), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeOwnerFile(filepath.Join(ownerPeersDirectory(state), "bee-owner-hive.pub"),
+		[]byte(base64.RawStdEncoding.EncodeToString(public)+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	document, err := meshtls.NewAuthority(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority, err := meshtls.DecodeAuthority(document, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := json.Marshal(joinedRecord{Node: "bee-owner-hive", Gossip: "127.0.0.1:4100",
+		Authorities: string(authority.Certificate())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeOwnerFile(filepath.Join(directory, joinedRecordName), record); err != nil {
+		t.Fatal(err)
+	}
+	membership := fakeMembership{local: clusterapi.NodeInfo{ID: ownerNodeName(state), Addr: "127.0.0.1:45123"},
+		others: []clusterapi.NodeInfo{{ID: "bee-owner-hive", Addr: "127.0.0.1:45999",
+			Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: base64.RawStdEncoding.EncodeToString(public)}}}}
+	if err := recordAddresses(state, membership); err != nil {
+		t.Fatal(err)
+	}
+	updated, joined, err := readJoined(state)
+	if err != nil || !joined || updated.Gossip != "127.0.0.1:45999" {
+		t.Fatalf("joined hive seed = %q, joined=%v err=%v", updated.Gossip, joined, err)
+	}
+}
+
+func TestPrepareOwnerDoesNotReuseAnOccupiedPersistedGossipPort(t *testing.T) {
+	state := t.TempDir()
+	directory := ownerDirectory(state)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tcp, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tcp.Close() })
+	port := tcp.Addr().(*net.TCPAddr).Port
+	udp, err := net.ListenPacket("udp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = udp.Close() })
+	if err := writeOwnerFile(filepath.Join(directory, gossipPortName), []byte(strconv.Itoa(port)+"\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	config, release, err := prepareOwner(state, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cluster := config.Sub("cluster")
+	value, _ := cluster.Get("membership.bind_port")
+	if value != 0 {
+		t.Fatalf("occupied persisted gossip port = %v, want an OS-selected port", value)
+	}
+	if err := recordAddresses(state, fakeMembership{local: clusterapi.NodeInfo{
+		ID: ownerNodeName(state), Addr: "127.0.0.1:45123",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := readGossipPort(directory); err != nil || got != 45123 {
+		t.Fatalf("persisted gossip port after rebinding = %d, %v; want the live address", got, err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
 	}
 }
 

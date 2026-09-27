@@ -115,7 +115,7 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 	}
 	public := private.Public().(ed25519.PublicKey)
 
-	execution, err := ensureExecution(directory)
+	execution, err := beginExecution(directory)
 	if err != nil {
 		return nil, err
 	}
@@ -217,28 +217,17 @@ func ownerExpiry() string {
 	return timewire.FormatCanonicalUTC(now)
 }
 
-// executionName persists the owner execution identity so the rendezvous
-// descriptor the publisher writes names the same execution the desktop bridge
-// admits, across the planning and boot phases of one owner run.
+// executionName retains this boot's owner incarnation between plan preparation
+// and component startup. The next owner boot replaces it before publishing.
 const executionName = "execution"
 
-// ensureExecution returns this owner's execution identity, creating it once.
-func ensureExecution(directory string) (string, error) {
+// beginExecution selects a fresh incarnation for one owner boot. The native
+// rendezvous publisher and the desktop bridge both read this value.
+func beginExecution(directory string) (string, error) {
 	if err := privatefile.EnsurePrivateDir(directory); err != nil {
 		return "", err
 	}
 	path := filepath.Join(directory, executionName)
-	if data, err := os.ReadFile(path); err == nil {
-		value := strings.TrimSpace(string(data))
-		if len(value) == 32 {
-			if _, decodeErr := hex.DecodeString(value); decodeErr == nil {
-				return value, nil
-			}
-		}
-		return "", errors.New("owner execution identity is invalid")
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
 	value, err := randomExecution()
 	if err != nil {
 		return "", err

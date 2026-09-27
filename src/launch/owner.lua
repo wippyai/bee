@@ -14,6 +14,7 @@ local decode = require("decode")
 local workspaces = require("workspaces")
 local command_stop = require("command_stop")
 local handoff = require("owner_handoff")
+local startup_failure = require("startup_failure")
 local uuid = require("uuid")
 
 -- The terminal.host command retains the route and supervisor. This ordinary
@@ -76,6 +77,7 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
     if not owner_name or not bridge_name then error("Invalid retained workspace selection") end
     local ready, ready_error = process.listen("bee.retained.ready", {message = true})
     if not ready then error(tostring(ready_error)) end
+    local failures = assert(process.listen("bee.retained.failure", {message = true}))
     local controller_ready = assert(process.listen("bee.owner.controller_ready", {message = true}))
     local replacing = assert(process.listen("bee.owner.replacing", {message = true}))
     local stops, stops_error = command_stop.open()
@@ -130,13 +132,18 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
         local deadline = time.after("10s")
         while true do
             local cases = {ready:case_receive(), controller_ready:case_receive(), replacing:case_receive(),
-                events:case_receive(), stops.channel:case_receive()}
+                events:case_receive(), stops.channel:case_receive(), failures:case_receive()}
             if not announced then cases[#cases + 1] = deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Retained owner channel closed") end
             if selected.channel == deadline then error("Retained workspace startup timed out") end
             if selected.channel == stops.channel then
                 if command_stop.accept(selected.value) then return end
+            elseif selected.channel == failures then
+                local message = selected.value
+                local node = startup_failure.node_id(tostring(process.pid()))
+                local reason = node and startup_failure.decode(tostring(message:from()), message:payload():data(), node) or nil
+                if reason then error(reason) end
             elseif selected.channel == events then
                 local event = selected.value
                 if event.kind == process.event.CANCEL then return end
@@ -206,6 +213,7 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
     command_stop.close(stops)
     process.unlisten(ready)
     process.unlisten(controller_ready); process.unlisten(replacing)
+    process.unlisten(failures)
     if not ok then error(err) end
 end
 

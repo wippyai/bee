@@ -14,7 +14,7 @@ type Request = {operation: string, workspace_id: string, profile_id: string, pro
 function M.profile(value: unknown): (Profile?, string?)
     local object = bounds.object(value)
     if not object then return nil, "profile must be an object" end
-    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "workdir", "thread", "agent_ref", "owner_component_revision", "owner_revision", "spec_digest"})
+    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest"})
     if extra then return nil, extra end
     local title = bounds.line(object.title, 80)
     if not title or title:match("^%s*$") then return nil, "title must contain 1 to 80 printable bytes" end
@@ -71,9 +71,8 @@ function M.profile(value: unknown): (Profile?, string?)
         if not agent_ref then return nil, "agent_ref must be an identifier" end
     end
     local owner_component_revision: integer? = nil
-    local rev_raw = object.owner_component_revision ~= nil and object.owner_component_revision or object.owner_revision
-    if rev_raw ~= nil then
-        local count = bounds.count(rev_raw)
+    if object.owner_component_revision ~= nil then
+        local count = bounds.count(object.owner_component_revision)
         if not count or count < 1 then return nil, "owner_component_revision must be a positive integer" end
         owner_component_revision = count
     end

@@ -4,6 +4,10 @@ entries:
 - name: ownership
   kind: library.lua
   source: file://ownership.lua
+- name: startup_failure
+  kind: library.lua
+  source: file://startup_failure.lua
+  imports: {types: bee.hive:types, bounds: bee.protocol:bounds}
 - name: owner_handoff
   kind: library.lua
   source: file://owner_handoff.lua
@@ -54,7 +58,7 @@ entries:
 - name: bootstrap
   kind: library.lua
   source: file://bootstrap.lua
-  modules: [process, channel, tty, security, time, funcs]
+  modules: [process, channel, tty, security, time]
   imports:
     physical: bee.terminal:display
     input_decode: bee.protocol:input
@@ -104,6 +108,7 @@ entries:
   imports: &owner_imports
     retained: bee.launch:retained_protocol
     ownership: bee.launch:ownership
+    startup_failure: bee.launch:startup_failure
     decode: bee.protocol:decode
     workspaces: bee.storage:binding
     command_stop: bee.launch:command_stop

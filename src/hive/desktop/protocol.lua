@@ -40,7 +40,7 @@ M.VIEW_RESIZE = "bee.hive.viewer.resize"
 M.VIEW_CLOSE = "bee.hive.viewer.close"
 M.VIEW_RETRY = "bee.hive.viewer.retry"
 -- folder: whether the bridge composes the owner's folder workspace; a daemon's does not.
-type Configuration = {expires_at: string, allowed_nodes: {string}, allowed_peers: {string}, application: string?, local_clients: boolean?, folder: boolean}
+type Configuration = {execution: string?, expires_at: string, allowed_nodes: {string}, allowed_peers: {string}, application: string?, local_clients: boolean?, folder: boolean}
 type Mode = "control" | "observe"
 type AutomaticPlan = {kind: "automatic", mode: Mode, desktops: {string}, excluded: {string}}
 type WorkspacePlan = {kind: "workspace", workspace_id: string, mode: Mode, desktops: {string}, excluded: {string}}
@@ -121,11 +121,16 @@ end
 function M.configuration(value: unknown): (Configuration?, string?)
     local object = bounds.object(value)
     if not object then return nil, "desktop configuration must be an object" end
-    -- Older host configurations carried an execution value. Accept and validate
-    -- it, but the owner now mints the runtime incarnation at startup.
+    -- Native hosts select the incarnation before boot so rendezvous and the
+    -- desktop service share one value. Other hosts may leave it empty; then
+    -- the desktop owner mints an incarnation at startup.
     local fields_error = bounds.fields(object, {"execution", "expires_at", "allowed_nodes", "allowed_peers", "application", "local_clients", "folder"})
     if fields_error then return nil, fields_error end
-    if object.execution ~= nil and not contract.workspace_id(object.execution) then return nil, "execution must be 32 lowercase hexadecimal characters" end
+    local execution: string? = nil
+    if object.execution ~= nil then
+        execution = contract.workspace_id(object.execution)
+        if not execution then return nil, "execution must be 32 lowercase hexadecimal characters" end
+    end
     local expires = bounds.timestamp(object.expires_at)
     local nodes = bounds.ids(object.allowed_nodes)
     local peers = object.allowed_peers == nil and {} or bounds.ids(object.allowed_peers)
@@ -143,7 +148,7 @@ function M.configuration(value: unknown): (Configuration?, string?)
         application = bounds.id(object.application)
         if not application then return nil, "application must be a bounded entry identity" end
     end
-    return {expires_at = expires, allowed_nodes = nodes, allowed_peers = peers, application = application, local_clients = object.local_clients == true,
+    return {execution = execution, expires_at = expires, allowed_nodes = nodes, allowed_peers = peers, application = application, local_clients = object.local_clients == true,
         folder = object.folder ~= false}, nil
 end
 function M.input(operation: string, value: unknown): DesktopInput?

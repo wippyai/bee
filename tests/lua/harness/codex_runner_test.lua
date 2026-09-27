@@ -251,9 +251,12 @@ function bounds_content(value: unknown): string
 end
 local function define_tests()
     test.describe("Codex authentication path through placement", function()
-        test.it("resumes the real Codex session across two native attempts in one thread, or reports the gate open", function()
+        test.it("resumes the real Codex session across two native attempts in one thread, when the executable is available", function()
             local codex = codex_bin()
-            if not codex then test.eq(launch.CODEX_AUTHENTICATION, "unproven"); return end
+            if not codex then
+                test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
+                return
+            end
             local root = ".wippy/codex-resume-" .. fresh("run")
             shell("mkdir -p " .. root)
             local ok, err = pcall(function()
@@ -310,10 +313,10 @@ local function define_tests()
             shell("rm -rf " .. root)
             if not ok then error(tostring(err)) end
         end)
-        test.it("selects the API-key path through the runner with a generated configuration and a projected sentinel, or reports why not", function()
+        test.it("selects the API-key path through the runner with a generated configuration and a projected sentinel, when the executable is available", function()
             local codex = codex_bin()
             if not codex then
-                test.eq(launch.CODEX_AUTHENTICATION, "unproven")
+                test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
                 return
             end
             local capabilities_reply = placement.capabilities()
@@ -416,7 +419,6 @@ local function define_tests()
             test.eq(shell("cat " .. record), endpoint_before)
             stop_endpoint()
             shell("rm -rf " .. root)
-            test.eq(launch.CODEX_AUTHENTICATION, "unproven")
         end)
     end)
 end

@@ -80,6 +80,7 @@ entries:
   imports:
     events: bee.driver.kit:events
     types: bee.driver:types
+    bounds: bee.threads.records:bounds
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -87,6 +88,8 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    shared_configuration: bee.driver:configuration
+    toml: bee.driver.kit:toml
 - name: launch
   kind: library.lua
   source: file://launch.lua

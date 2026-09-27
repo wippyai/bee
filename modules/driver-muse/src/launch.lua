@@ -1,9 +1,6 @@
 local bounds = require("bounds")
 local types = require("types")
 local M = {}
--- Muse authentication uses the admitted login copied into a retained private
--- HOME.
-M.MUSE_AUTHENTICATION = "unproven"
 M.APPROVAL_MODES = {"untrusted", "on-request", "never"}
 M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 M.MAX_STEPS = 32

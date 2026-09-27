@@ -191,9 +191,9 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if not features then return nil, what .. ".sandbox.required_placement_features: " .. tostring(features_error) end
         local roots_adapter: types.GitWritableRootsAdapter? = nil
         if declared.git_writable_roots_adapter ~= nil then
-            local selected_adapter = bounds.member(declared.git_writable_roots_adapter, {"codex_workspace_write", "claude_add_dir", "agy_add_dir"})
+            local selected_adapter = types.git_writable_roots_adapter(declared.git_writable_roots_adapter)
             if not selected_adapter then return nil, what .. ".sandbox.git_writable_roots_adapter is not supported" end
-            roots_adapter = selected_adapter :: types.GitWritableRootsAdapter
+            roots_adapter = selected_adapter
         end
         sandbox = {providers = providers, required_placement_features = features, git_writable_roots_adapter = roots_adapter}
     end

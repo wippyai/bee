@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.launch
 entries:
+- name: startup_failure_test
+  kind: function.lua
+  source: file://startup_failure_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    startup_failure: bee.launch:startup_failure
 - name: ownership_test
   kind: function.lua
   source: file://ownership_test.lua

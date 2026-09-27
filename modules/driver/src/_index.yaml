@@ -15,6 +15,15 @@ entries:
 - name: types
   kind: library.lua
   source: file://types.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    events: bee.driver.kit:events
+    values: bee.threads.records:values
+- name: instructions
+  kind: library.lua
+  source: file://instructions.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: profile
   kind: library.lua
   source: file://profile.lua
@@ -37,11 +46,13 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     types: bee.driver:types
+    instructions: bee.driver:instructions
 - name: preferences
   kind: library.lua
   source: file://preferences.lua
   imports:
     bounds: bee.threads.records:bounds
+    instructions: bee.driver:instructions
 - name: driver
   kind: contract.definition
   methods:

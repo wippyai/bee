@@ -2,10 +2,12 @@
 -- returns a table that bee.threads.records:observation decodes; the caller
 -- supplies the event key so repeats deduplicate at the authority.
 local bounds = require("bounds")
+local record_types = require("record_types")
 local M = {}
 M.MAX_TEXT_BYTES = 12288
 type Content = {text: string?, artifact_ref: string?}
 type Observation = {[string]: unknown}
+type Usage = record_types.Usage
 local function content(text: string): Content
     if #text == 0 then return {text = " "} end
     return {text = text}
@@ -57,18 +59,12 @@ function M.extension(event_key: string, event_name: string, event_revision: stri
     return {type = "extension", event_key = event_key, data = {type = "extension", event_name = event_name, event_revision = event_revision, payload_json = payload}}
 end
 -- Usage as the records contract expects it; unknown counters stay absent.
-function M.usage(input_tokens: unknown, output_tokens: unknown, cached_tokens: unknown): {[string]: unknown}?
-    local usage: {[string]: unknown} = {}
-    local any = false
-    for name, value in pairs({input_tokens = input_tokens, output_tokens = output_tokens, cached_tokens = cached_tokens}) do
-        local count = bounds.count(value)
-        if count then
-            usage[name] = count
-            any = true
-        end
-    end
-    if not any then return nil end
-    return usage :: {[string]: unknown}
+function M.usage(input_tokens: unknown, output_tokens: unknown, cached_tokens: unknown): Usage?
+    local input = bounds.count(input_tokens)
+    local output = bounds.count(output_tokens)
+    local cached = bounds.count(cached_tokens)
+    if input == nil and output == nil and cached == nil then return nil end
+    return {input_tokens = input, output_tokens = output, cached_tokens = cached}
 end
 function M.fault(code: string, message: string, retryable: boolean): {code: string, message: string, retryable: boolean}
     return {code = bounds.id(code) or "unknown", message = message:sub(1, 4096), retryable = retryable}

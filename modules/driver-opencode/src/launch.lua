@@ -12,10 +12,6 @@
 local bounds = require("bounds")
 local types = require("types")
 local M = {}
--- OpenCode authentication uses the user's own `opencode providers login`
--- flow; the proof through the placement runner runs only where the pinned
--- executable is bound, so the gate stays open until the pinned build runs it.
-M.OPENCODE_AUTHENTICATION = "unproven"
 local function provider_home(private: boolean): types.ProviderHome
     return {provider = "opencode", private = private, extra_variables = {
         {variable = "XDG_CONFIG_HOME", directory = ".config"},

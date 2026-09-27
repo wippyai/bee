@@ -28,4 +28,4 @@ entries:
   method: handle
   imports:
     protocol: bee.driver.codex:protocol
-    bounds: bee.threads.records:bounds
+    normalizer: bee.driver.kit:normalize

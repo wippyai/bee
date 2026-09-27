@@ -16,6 +16,10 @@ type Checkpoint = {messages: {types.Message}, terminal: CheckpointTerminal?}
 type InboxContent = {text: string?, artifact_ref: string?}
 type InboxOffer = {kind: "empty"}
     | {kind: "item", sequence: integer, record_id: string, content: InboxContent, dispatch: boolean}
+type InboxCall = (string, {[string]: unknown}) -> (unknown, string?)
+type InboxDelivery = {kind: "empty"}
+    | {kind: "item", content: InboxContent}
+    | {kind: "failed", outcome: "failed" | "uncertain", message: string}
 
 M.MAX_TURNS = 16
 M.MAX_TOOL_CALLS_PER_TURN = 16
@@ -44,9 +48,13 @@ local function reply_value(reply: unknown): ({[string]: unknown}?, string?, bool
     local extra = bounds.fields(object, {"ok", "error", "value", "replayed"})
     if extra then return nil, "reply: " .. extra, false end
     if type(object.ok) ~= "boolean" then return nil, "reply.ok must be a boolean", false end
+    if object.replayed ~= nil and type(object.replayed) ~= "boolean" then return nil, "reply.replayed must be a boolean", false end
     if object.ok == false then
+        if object.value ~= nil then return nil, "failed reply carries a value", false end
         local fault = bounds.object(object.error)
-        if not fault or bounds.fields(fault, {"code", "message"}) then return nil, "owner returned a malformed fault", false end
+        if not fault or bounds.fields(fault, {"code", "message", "retryable"}) or type(fault.retryable) ~= "boolean" then
+            return nil, "owner returned a malformed fault", false
+        end
         local code, message = bounds.id(fault.code), bounds.text(fault.message, bounds.MAX_FAULT_MESSAGE_BYTES)
         if not code or not message then return nil, "owner returned an invalid fault", false end
         return nil, code .. ": " .. message, true
@@ -54,7 +62,6 @@ local function reply_value(reply: unknown): ({[string]: unknown}?, string?, bool
     if object.error ~= nil then return nil, "successful reply carries a fault", false end
     local value = bounds.object(object.value)
     if not value then return nil, "successful reply has no object value", false end
-    if object.replayed ~= nil and type(object.replayed) ~= "boolean" then return nil, "reply.replayed must be a boolean", false end
     return value, nil
 end
 
@@ -121,6 +128,50 @@ local function decode_inbox_offer(value: unknown, thread_id: string, action_id: 
         return nil, "reply offer has no correlation"
     end
     return {kind = "item", sequence = sequence, record_id = record_id, content = content, dispatch = dispatch}, nil
+end
+
+function M.process_inbox(thread_id: string, action_id: string, attempt_id: string, carrier_epoch: integer,
+    idempotency_key: string, call: InboxCall): InboxDelivery
+    local offered_raw, offer_call_error = call("inbox_offer", {thread_id = thread_id, action_id = action_id,
+        attempt_id = attempt_id, carrier_epoch = carrier_epoch})
+    if offer_call_error then return {kind = "failed", outcome = "failed", message = "offer inbox: " .. offer_call_error} end
+    local offered, offer_error = reply_value(offered_raw)
+    if not offered then return {kind = "failed", outcome = "failed", message = "offer inbox: " .. tostring(offer_error)} end
+    local decoded, decode_error = decode_inbox_offer(offered, thread_id, action_id)
+    if not decoded then return {kind = "failed", outcome = "failed", message = "decode inbox offer: " .. tostring(decode_error)} end
+    if decoded.kind == "empty" or not decoded.dispatch then return {kind = "empty"} end
+
+    local transport_raw, transport_call_error = call("inbox_transport", {thread_id = thread_id, action_id = action_id,
+        attempt_id = attempt_id, carrier_epoch = carrier_epoch, inbox_sequence = decoded.sequence, record_id = decoded.record_id})
+    if transport_call_error then
+        return {kind = "failed", outcome = "uncertain", message = "transport inbox item: " .. transport_call_error}
+    end
+    local transport, transport_error, transport_refused = reply_value(transport_raw)
+    if not transport then
+        local outcome: "failed" | "uncertain" = transport_refused and "failed" or "uncertain"
+        return {kind = "failed", outcome = outcome, message = "transport inbox item: " .. tostring(transport_error)}
+    end
+    local transport_state = bounds.member(transport.state, {"transport_accepted", "acknowledged", "replied"})
+    if bounds.fields(transport, {"record_id", "inbox_sequence", "state"})
+        or transport.record_id ~= decoded.record_id or transport.inbox_sequence ~= decoded.sequence or not transport_state then
+        return {kind = "failed", outcome = "uncertain", message = "transport inbox item returned a malformed receipt"}
+    end
+
+    local acknowledged_raw, ack_call_error = call("inbox_ack", {thread_id = thread_id, action_id = action_id,
+        inbox_sequence = decoded.sequence, idempotency_key = idempotency_key .. "-ack-" .. tostring(decoded.sequence)})
+    if ack_call_error then
+        return {kind = "failed", outcome = "uncertain", message = "acknowledge inbox item: " .. ack_call_error}
+    end
+    local acknowledged, ack_error = reply_value(acknowledged_raw)
+    if not acknowledged then
+        return {kind = "failed", outcome = "uncertain", message = "acknowledge inbox item: " .. tostring(ack_error)}
+    end
+    local ack_state = bounds.member(acknowledged.state, {"acknowledged", "replied"})
+    if bounds.fields(acknowledged, {"record_id", "inbox_sequence", "state"})
+        or acknowledged.record_id ~= decoded.record_id or acknowledged.inbox_sequence ~= decoded.sequence or not ack_state then
+        return {kind = "failed", outcome = "uncertain", message = "acknowledge inbox item returned a malformed receipt"}
+    end
+    return {kind = "item", content = decoded.content}
 end
 
 local function model_id(value: unknown): string?
@@ -305,6 +356,7 @@ end
 local function decode_tool_arguments(value: unknown): ({[string]: unknown}?, string?)
     local text = bounds.text(value, M.MAX_TOOL_ARGUMENT_BYTES)
     if not text then return nil, "tool arguments must be bounded JSON text" end
+    if not text:match("^%s*{") then return nil, "tool arguments must decode to an object" end
     local decoded, decode_error = json.decode(text)
     local object = bounds.object(decoded)
     if decode_error or not object then return nil, "tool arguments must decode to an object" end
@@ -736,65 +788,17 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
                 end
             end
 
-            local inbox_offer, offer_call_error = call_func(THREADS .. ":inbox_offer", {
-                thread_id = thread_id,
-                action_id = action_id,
-                attempt_id = attempt_id,
-                carrier_epoch = epoch,
-            })
-            if offer_call_error then
-                return settle("failed", final_answer, "offer inbox: " .. offer_call_error)
-            end
-            local offered, offer_error = reply_value(inbox_offer)
-            if not offered then return settle("failed", final_answer, "offer inbox: " .. tostring(offer_error)) end
-            local decoded_offer, decode_offer_error = decode_inbox_offer(offered, thread_id, action_id)
-            if not decoded_offer then return settle("failed", final_answer, "decode inbox offer: " .. tostring(decode_offer_error)) end
-            if decoded_offer.kind == "empty" or not decoded_offer.dispatch then
-                return settle("succeeded", final_answer)
-            end
-
-            local transport_res, transport_call_error = call_func(THREADS .. ":inbox_transport", {
-                    thread_id = thread_id,
-                    action_id = action_id,
-                    attempt_id = attempt_id,
-                    carrier_epoch = epoch,
-                    inbox_sequence = decoded_offer.sequence,
-                    record_id = decoded_offer.record_id,
-                })
-            if transport_call_error then
-                return settle("uncertain", final_answer, "transport inbox item: " .. transport_call_error)
-            end
-            local transport, transport_error, transport_refused = reply_value(transport_res)
-            if not transport then
-                local outcome: types.Outcome = transport_refused and "failed" or "uncertain"
-                return settle(outcome, final_answer, "transport inbox item: " .. tostring(transport_error))
-            end
-            local transport_state = bounds.member(transport.state, {"transport_accepted", "acknowledged", "replied"})
-            if bounds.fields(transport, {"record_id", "inbox_sequence", "state"})
-                or transport.record_id ~= decoded_offer.record_id or transport.inbox_sequence ~= decoded_offer.sequence or not transport_state then
-                return settle("uncertain", final_answer, "transport inbox item returned a malformed receipt")
-            end
-
-            local ack_res, ack_call_error = call_func(THREADS .. ":inbox_ack", {
-                    thread_id = thread_id,
-                    action_id = action_id,
-                    inbox_sequence = decoded_offer.sequence,
-                    idempotency_key = idempotency_key .. "-ack-" .. tostring(decoded_offer.sequence),
-                })
-            if ack_call_error then return settle("uncertain", final_answer, "acknowledge inbox item: " .. ack_call_error) end
-            local acknowledged, ack_error = reply_value(ack_res)
-            if not acknowledged then return settle("uncertain", final_answer, "acknowledge inbox item: " .. tostring(ack_error)) end
-            local ack_state = bounds.member(acknowledged.state, {"acknowledged", "replied"})
-            if bounds.fields(acknowledged, {"record_id", "inbox_sequence", "state"})
-                or acknowledged.record_id ~= decoded_offer.record_id or acknowledged.inbox_sequence ~= decoded_offer.sequence or not ack_state then
-                return settle("uncertain", final_answer, "acknowledge inbox item returned a malformed receipt")
-            end
-
+            local inbox = M.process_inbox(thread_id, action_id, attempt_id, epoch, idempotency_key,
+                function(operation: string, value: {[string]: unknown}): (unknown, string?)
+                    return call_func(THREADS .. ":" .. operation, value)
+                end)
+            if inbox.kind == "failed" then return settle(inbox.outcome, final_answer, inbox.message) end
+            if inbox.kind == "empty" then return settle("succeeded", final_answer) end
             local user_text: string
-            if decoded_offer.content.text then
-                user_text = truncate_text(decoded_offer.content.text, M.MAX_TEXT_BYTES)
+            if inbox.content.text then
+                user_text = truncate_text(inbox.content.text, M.MAX_TEXT_BYTES)
             else
-                user_text = "Delivered artifact " .. truncate_text(decoded_offer.content.artifact_ref or "", 512) .. "."
+                user_text = "Delivered artifact " .. truncate_text(inbox.content.artifact_ref or "", 512) .. "."
             end
             messages[#messages + 1] = {role = "user", content = user_text}
         end

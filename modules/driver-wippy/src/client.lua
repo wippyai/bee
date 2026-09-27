@@ -73,6 +73,9 @@ local function parse_sse_line(line: string): (ParsedLine?, string?)
     return {kind = "data", event = event}, nil
 end
 
+type StreamRead = (integer) -> (string?, string?)
+type StreamClose = () -> ()
+
 local function decode_arguments(value: unknown): (string?, string?)
     local text = bounds.text(value, M.MAX_TOOL_ARGUMENT_BYTES)
     if not text then return nil, "tool arguments exceed their byte bound" end
@@ -213,12 +216,27 @@ function M.stream_completions(url: string, headers: {[string]: string}, encoded_
     local stream = resp.stream
     if not stream then return nil, "no stream available on response" end
 
+    return M.consume_stream(function(size: integer): (string?, string?)
+        return stream:read(size)
+    end, function()
+        stream:close()
+    end, cancel_check)
+end
+
+function M.consume_stream(read: StreamRead, close: StreamClose, cancel_check: (() -> boolean)?): (types.ChatResponse?, string?)
     local content_parts: {string} = {}
     local tool_map: {[integer]: StreamTool} = {}
     local finish_reason: string? = nil
     local framer = framing.new(M.MAX_SSE_FRAME_BYTES)
     local total_bytes = 0
     local done = false
+    local closed = false
+
+    local function close_stream()
+        if closed then return end
+        closed = true
+        close()
+    end
 
     local function consume_event(event: Object): string?
         local choices, choices_error = bounds.array(event.choices, 16)
@@ -310,30 +328,30 @@ function M.stream_completions(url: string, headers: {[string]: string}, encoded_
 
     while true do
         if cancel_check and cancel_check() then
-            stream:close()
+            close_stream()
             return nil, "cancelled"
         end
 
-        local chunk, read_err = stream:read(4096)
+        local chunk, read_err = read(4096)
         if read_err then
-            stream:close()
+            close_stream()
             return nil, "read SSE stream: " .. tostring(read_err)
         end
         if not chunk or #chunk == 0 then break end
         total_bytes = total_bytes + #chunk
         if total_bytes > M.MAX_STREAM_BYTES then
-            stream:close()
+            close_stream()
             return nil, "SSE stream exceeds " .. tostring(M.MAX_STREAM_BYTES) .. " bytes"
         end
         local lines, frame_error = framing.feed(framer, chunk)
         if not lines then
-            stream:close()
+            close_stream()
             return nil, "frame SSE stream: " .. tostring(frame_error)
         end
         for _, line in ipairs(lines) do
             local line_error = consume_line(line)
             if line_error then
-                stream:close()
+                close_stream()
                 return nil, line_error
             end
         end
@@ -341,19 +359,19 @@ function M.stream_completions(url: string, headers: {[string]: string}, encoded_
     end
     local partial, frame_error = framing.finish(framer)
     if frame_error then
-        stream:close()
+        close_stream()
         return nil, "finish SSE stream: " .. frame_error
     end
     if partial then
-        stream:close()
+        close_stream()
         return nil, "SSE stream ended with an incomplete frame"
     end
     if not done then
-        stream:close()
+        close_stream()
         return nil, "SSE stream ended before [DONE]"
     end
 
-    stream:close()
+    close_stream()
 
     local final_tools: {types.ToolCall}? = nil
     local indices: {integer} = {}

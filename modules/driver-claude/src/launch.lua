@@ -5,11 +5,6 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local types = require("types")
 local M = {}
--- The API-key path is the environment projection of ANTHROPIC_API_KEY
--- with the host-selected endpoint in ANTHROPIC_BASE_URL; the proof through
--- the placement runner runs only where the pinned executable is bound, so
--- the gate stays open until the pinned build runs it.
-M.CLAUDE_AUTHENTICATION = "unproven"
 M.PERMISSION_MODES = {"default", "acceptEdits", "plan", "dontAsk"}
 M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 M.MAX_TURNS = 32

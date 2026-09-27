@@ -4,6 +4,7 @@
 -- output. Envelopes carry observations verbatim; only their shape is
 -- checked, never their content.
 local bounds = require("bounds")
+local driver_types = require("driver_types")
 
 local M = {}
 M.PROTOCOL_REVISION = "native-1"
@@ -11,7 +12,7 @@ M.MAX_OBSERVATIONS = 64
 
 type State = {
     resumed: boolean,
-    terminal: {[string]: unknown}?,
+    terminal: driver_types.Terminal?,
 }
 
 type Step = {
@@ -21,6 +22,21 @@ type Step = {
 
 function M.new(resumed: boolean): State
     return {resumed = resumed, terminal = nil}
+end
+
+function M.decode_state(value: unknown): (State?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "state must be an object" end
+    local unknown = bounds.fields(object, {"resumed", "terminal"})
+    if unknown then return nil, "state: " .. unknown end
+    if type(object.resumed) ~= "boolean" then return nil, "state.resumed must be a boolean" end
+    local terminal: driver_types.Terminal? = nil
+    if object.terminal ~= nil then
+        local decoded, terminal_error = driver_types.decode_terminal(object.terminal)
+        if not decoded then return nil, terminal_error end
+        terminal = decoded
+    end
+    return {resumed = object.resumed, terminal = terminal}, nil
 end
 
 local function observation(value: unknown, index: integer): ({[string]: unknown}?, string?)

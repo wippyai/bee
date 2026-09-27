@@ -18,7 +18,11 @@ local function handle(value: unknown): {[string]: unknown}
         if provider.developer_instructions then return {ok = false, error = "instructions are declared in both the launch policy and provider"} end
     end
     local section: string? = nil
-    if request.gateway then section = configuration.gateway_section(request.gateway) end
+    if request.gateway then
+        local generated = configuration.gateway_section(request.gateway)
+        if type(generated) ~= "string" then return {ok = false, error = "Codex gateway configuration is malformed"} end
+        section = generated
+    end
     local projected, projection_error = configuration.projection(provider, section, request.instructions)
     if not projected then return {ok = false, error = tostring(projection_error)} end
     local files = {{revision = projected.revision, path = projected.path, content = projected.content, digest = projected.digest, provider_ref = projected.provider_ref}}

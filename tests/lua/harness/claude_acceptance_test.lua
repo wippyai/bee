@@ -174,10 +174,10 @@ local function close(session: Session)
 end
 local function define_tests()
     test.describe("Claude permission exchange acceptance", function()
-        test.it("waits on a typed request, executes once on a correlated allow, refuses on deny, and keeps waiting through a wrong correlation and silence, or reports the gate open", function()
+        test.it("waits on a typed request, executes once on a correlated allow, refuses on deny, and keeps waiting through a wrong correlation and silence, when the executable is available", function()
             local claude = claude_bin()
             if not claude then
-                test.eq(launch.CLAUDE_AUTHENTICATION, "unproven")
+                test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
                 return
             end
             if not shell(claude .. " --version"):find("Claude Code", 1, true) then error("not the Claude executable") end
@@ -261,7 +261,6 @@ local function define_tests()
                 test.eq(shell("ls " .. work):find("proof.txt", 1, true), nil)
             end)
             shell("rm -rf " .. root)
-            test.eq(launch.CLAUDE_AUTHENTICATION, "unproven")
         end)
     end)
 end

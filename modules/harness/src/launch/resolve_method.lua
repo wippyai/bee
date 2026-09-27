@@ -7,7 +7,7 @@ end
 local function handle(request: unknown): admission.Reply
     local object = bounds.object(request)
     if not object then return invalid("request must be an object") end
-    local extra = bounds.fields(object, {"definition_ref", "mode", "workspace_id", "saved_profile_id", "saved_profile_revision", "agent_ref", "owner_component_revision", "owner_revision", "spec_digest"})
+    local extra = bounds.fields(object, {"definition_ref", "mode", "workspace_id", "saved_profile_id", "saved_profile_revision", "agent_ref", "owner_component_revision", "spec_digest"})
     if extra then return invalid(extra) end
     local definition_ref = bounds.id(object.definition_ref)
     if not definition_ref then return invalid("definition_ref must be an identifier") end
@@ -26,9 +26,8 @@ local function handle(request: unknown): admission.Reply
         if not agent_ref then return invalid("agent_ref must be an identifier") end
     end
     local owner_component_revision: integer? = nil
-    local rev_raw = object.owner_component_revision ~= nil and object.owner_component_revision or object.owner_revision
-    if rev_raw ~= nil then
-        local count = bounds.count(rev_raw)
+    if object.owner_component_revision ~= nil then
+        local count = bounds.count(object.owner_component_revision)
         if not count or count < 1 then return invalid("owner_component_revision must be a positive integer") end
         owner_component_revision = count
     end

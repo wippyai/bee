@@ -1,7 +1,6 @@
 local bounds = require("bounds")
 local types = require("types")
 local M = {}
-M.CODEX_AUTHENTICATION = "unproven"
 M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 M.SANDBOXES = {"read-only", "workspace-write"}
 -- A named Codex configuration profile is `$CODEX_HOME/<name>.config.toml`,

@@ -23,17 +23,22 @@ entries:
 - name: types
   kind: library.lua
   source: file://types.lua
+  imports:
+    driver_types: bee.driver:types
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   imports:
     bounds: bee.threads.records:bounds
+    driver_types: bee.driver:types
 - name: client
   kind: library.lua
   source: file://client.lua
   modules: [http_client, json, env, registry]
   imports:
     types: bee.driver.wippy:types
+    bounds: bee.threads.records:bounds
+    framing: bee.driver.kit:framing
 - name: runner
   kind: library.lua
   source: file://runner.lua
@@ -42,6 +47,8 @@ entries:
     client: bee.driver.wippy:client
     types: bee.driver.wippy:types
     bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    driver_configuration: bee.driver:configuration
     agent_resolver: bee.harness.launch:agent_resolver
 - name: run
   kind: function.lua

@@ -5,6 +5,7 @@ local json = require("json")
 local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
+local values = require("values")
 
 local M = {}
 M.PROTOCOL_REVISION = "agy-stream-json-1"
@@ -39,7 +40,7 @@ local function decode_fault(value: unknown, field: string): ({code: string, mess
     return {code = code, message = message, retryable = object.retryable :: boolean}, nil
 end
 
-local function decode_usage(value: unknown, field: string, provider_wire: boolean?): ({[string]: unknown}?, string?)
+local function decode_usage(value: unknown, field: string, provider_wire: boolean?): (types.Usage?, string?)
     if value == nil then return nil, nil end
     local object = bounds.object(value)
     if not object then return nil, field .. " must be an object" end
@@ -53,13 +54,17 @@ local function decode_usage(value: unknown, field: string, provider_wire: boolea
     end
     local unknown_field = bounds.fields(object, allowed_fields)
     if unknown_field then return nil, field .. ": " .. unknown_field end
-    local usage: {[string]: unknown} = {}
+    local input_tokens: integer? = nil
+    local output_tokens: integer? = nil
+    local cached_tokens: integer? = nil
     for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens"}) do
         local raw: unknown = object[name]
         if raw ~= nil then
             local count = bounds.count(raw)
             if not count then return nil, field .. "." .. name .. " must be a nonnegative integer" end
-            usage[name] = count
+            if name == "input_tokens" then input_tokens = count
+            elseif name == "output_tokens" then output_tokens = count
+            else cached_tokens = count end
         end
     end
     if provider_wire then
@@ -67,10 +72,10 @@ local function decode_usage(value: unknown, field: string, provider_wire: boolea
         if cache_read ~= nil then
             local count = bounds.count(cache_read)
             if not count then return nil, field .. ".cache_read_tokens must be a nonnegative integer" end
-            if object.cached_tokens ~= nil and usage.cached_tokens ~= count then
+            if cached_tokens ~= nil and cached_tokens ~= count then
                 return nil, field .. ".cached_tokens conflicts with cache_read_tokens"
             end
-            if usage.cached_tokens == nil then usage.cached_tokens = count end
+            if cached_tokens == nil then cached_tokens = count end
         end
         for _, name in ipairs({"thinking_tokens", "total_tokens"}) do
             local raw: unknown = object[name]
@@ -79,21 +84,27 @@ local function decode_usage(value: unknown, field: string, provider_wire: boolea
             end
         end
     end
-    local cost: unknown, currency: unknown = object.cost_decimal, object.currency
-    if (cost == nil) ~= (currency == nil) then
+    local cost: string? = nil
+    local currency: string? = nil
+    if (object.cost_decimal == nil) ~= (object.currency == nil) then
         return nil, field .. ".cost_decimal and currency come together"
     end
-    if cost ~= nil then
-        if type(cost) ~= "string" or not cost:match("^%d+%.?%d*$") or #cost > 40 then
+    if object.cost_decimal ~= nil or object.currency ~= nil then
+        local selected_cost = bounds.text(object.cost_decimal, 40)
+        if not selected_cost or not selected_cost:match("^%d+%.?%d*$") then
             return nil, field .. ".cost_decimal must be a decimal string"
         end
-        if type(currency) ~= "string" or not currency:match("^%u%u%u$") then
+        local selected_currency = bounds.text(object.currency, 3)
+        if not selected_currency or not selected_currency:match("^%u%u%u$") then
             return nil, field .. ".currency must be a three-letter code"
         end
-        usage.cost_decimal = cost
-        usage.currency = currency
+        cost, currency = selected_cost, selected_currency
     end
-    return usage, nil
+    local normalized: {[string]: unknown} = {input_tokens = input_tokens, output_tokens = output_tokens,
+        cached_tokens = cached_tokens, cost_decimal = cost, currency = currency}
+    local decoded, usage_error = values.usage(normalized)
+    if not decoded then return nil, field .. ": " .. tostring(usage_error) end
+    return decoded, nil
 end
 
 local function decode_terminal(value: unknown): (types.Terminal?, string?)
@@ -137,7 +148,7 @@ function M.new(resumed: boolean): State
     }
 end
 
-function M.validate_state(value: unknown): (State?, string?)
+function M.decode_state(value: unknown): (State?, string?)
     local object = bounds.object(value)
     if not object then return nil, "state must be an object" end
     local unknown_field = bounds.fields(object, {"session_id", "started", "resumed", "terminal", "answer", "answer_truncated"})

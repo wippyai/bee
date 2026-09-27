@@ -217,9 +217,12 @@ local function evidence_of(attempt_id: string): {Object}
 end
 local function define_tests()
     test.describe("Claude authentication path through placement", function()
-        test.it("resumes the real Claude session across two native attempts in one thread, or reports the gate open", function()
+        test.it("resumes the real Claude session across two native attempts in one thread, when the executable is available", function()
             local claude = claude_bin()
-            if not claude then test.eq(launch.CLAUDE_AUTHENTICATION, "unproven"); return end
+            if not claude then
+                test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
+                return
+            end
             local root = ".wippy/claude-resume-" .. fresh("run")
             shell("mkdir -p " .. root)
             local ok, err = pcall(function()
@@ -276,10 +279,10 @@ local function define_tests()
             shell("rm -rf " .. root)
             if not ok then error(tostring(err)) end
         end)
-        test.it("selects the API-key path with the environment projection and the host-selected endpoint, or reports the gate open", function()
+        test.it("selects the API-key path with the environment projection and the host-selected endpoint, when the executable is available", function()
             local claude = claude_bin()
             if not claude then
-                test.eq(launch.CLAUDE_AUTHENTICATION, "unproven")
+                test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
                 return
             end
             local version = shell(claude .. " --version")
@@ -315,7 +318,6 @@ local function define_tests()
             test.is_nil(json.encode(outcome.value):find(SENTINEL, 1, true))
             stop_endpoint()
             shell("rm -rf " .. root)
-            test.eq(launch.CLAUDE_AUTHENTICATION, "unproven")
         end)
     end)
 end

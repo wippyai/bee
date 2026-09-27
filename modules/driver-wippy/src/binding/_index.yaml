@@ -25,5 +25,5 @@ entries:
   source: file://normalize.lua
   method: handle
   imports:
-    bounds: bee.threads.records:bounds
     protocol: bee.driver.wippy:protocol
+    normalizer: bee.driver.kit:normalize

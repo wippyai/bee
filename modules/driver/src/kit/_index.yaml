@@ -7,8 +7,17 @@ entries:
 - name: quote
   kind: library.lua
   source: file://quote.lua
+- name: toml
+  kind: library.lua
+  source: file://toml.lua
+- name: normalize
+  kind: library.lua
+  source: file://normalize.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: events
   kind: library.lua
   source: file://events.lua
   imports:
     bounds: bee.threads.records:bounds
+    record_types: bee.threads.records:types

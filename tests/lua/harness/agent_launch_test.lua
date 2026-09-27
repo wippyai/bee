@@ -234,16 +234,25 @@ local function define_tests()
             test.eq(req and req.spec_digest, valid_digest)
             test.eq(req and req.agent_ref, "bee.agents:code_search")
 
-            local aliased = agent_protocol.decode({
+            local canonical = agent_protocol.decode({
                 definition_ref = PERMITTED,
                 brief = "do task",
                 idempotency_key = "k2",
-                owner_revision = 3,
-                expected_spec_digest = valid_digest
+                owner_component_revision = 3,
+                spec_digest = valid_digest
             })
-            test.not_nil(aliased)
-            test.eq(aliased and aliased.owner_component_revision, 3)
-            test.eq(aliased and aliased.spec_digest, valid_digest)
+            test.not_nil(canonical)
+            test.eq(canonical and canonical.owner_component_revision, 3)
+            test.eq(canonical and canonical.spec_digest, valid_digest)
+
+            local _, revision_alias = agent_protocol.decode({
+                definition_ref = PERMITTED, brief = "do task", idempotency_key = "k-alias", owner_revision = 3
+            })
+            test.eq(revision_alias, "unknown field owner_revision")
+            local _, digest_alias = agent_protocol.decode({
+                definition_ref = PERMITTED, brief = "do task", idempotency_key = "k-alias", expected_spec_digest = valid_digest
+            })
+            test.eq(digest_alias, "unknown field expected_spec_digest")
 
             for _, bad in ipairs({0, -1, "1", 1.5}) do
                 local _, err = agent_protocol.decode({

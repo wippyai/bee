@@ -4,18 +4,44 @@
 local json = require("json")
 local events = require("events")
 local types = require("types")
+local bounds = require("bounds")
 local M = {}
 M.PROTOCOL_REVISION = "exec-json-1"
 type Observation = {[string]: unknown}
 type State = {thread_id: string?, resumed: boolean, answer: string?, terminal: types.Terminal?}
 type Step = {observations: {Observation}, terminal: types.Terminal?}
+M.MAX_ANSWER_BYTES = 32768
 function M.new(resumed: boolean): State
     return {resumed = resumed}
+end
+function M.decode_state(value: unknown): (State?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "state must be an object" end
+    local unknown = bounds.fields(object, {"thread_id", "resumed", "answer", "terminal"})
+    if unknown then return nil, "state: " .. unknown end
+    if type(object.resumed) ~= "boolean" then return nil, "state.resumed must be a boolean" end
+    local thread_id: string? = nil
+    if object.thread_id ~= nil then
+        thread_id = bounds.id(object.thread_id)
+        if not thread_id then return nil, "state.thread_id is not an identifier" end
+    end
+    local answer: string? = nil
+    if object.answer ~= nil then
+        answer = bounds.text(object.answer, M.MAX_ANSWER_BYTES)
+        if not answer then return nil, "state.answer exceeds the retained answer bound" end
+    end
+    local terminal: types.Terminal? = nil
+    if object.terminal ~= nil then
+        local decoded, terminal_error = types.decode_terminal(object.terminal)
+        if not decoded then return nil, terminal_error end
+        terminal = decoded
+    end
+    return {thread_id = thread_id, resumed = object.resumed, answer = answer, terminal = terminal}, nil
 end
 local function key(index: integer, suffix: string): string
     return "codex:" .. tostring(index) .. ":" .. suffix
 end
-local function usage_of(value: unknown): {[string]: unknown}?
+local function usage_of(value: unknown): events.Usage?
     if type(value) ~= "table" then return nil end
     local usage = value :: {[string]: unknown}
     return events.usage(usage.input_tokens, usage.output_tokens, usage.cached_input_tokens)

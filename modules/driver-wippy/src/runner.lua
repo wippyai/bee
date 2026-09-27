@@ -4,17 +4,28 @@ local registry = require("registry")
 local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
+local canonical = require("canonical")
 local client = require("client")
 local types = require("types")
+local driver_configuration = require("driver_configuration")
 
 local M = {}
 local THREADS = "bee.threads.service"
+type CheckpointTerminal = {outcome: types.Outcome, answer: string?}
+type Checkpoint = {messages: {types.Message}, terminal: CheckpointTerminal?}
+type InboxContent = {text: string?, artifact_ref: string?}
+type InboxOffer = {kind: "empty"}
+    | {kind: "item", sequence: integer, record_id: string, content: InboxContent, dispatch: boolean}
 
 M.MAX_TURNS = 16
 M.MAX_TOOL_CALLS_PER_TURN = 16
 M.MAX_TOOL_OUTPUT_BYTES = 8192
 M.MAX_TEXT_BYTES = 32768
 M.MAX_CHECKPOINT_BYTES = 60000
+M.MAX_CHECKPOINT_MESSAGES = 512
+M.MAX_TOOL_ARGUMENT_BYTES = 8192
+M.MAX_TOOL_EVENT_OUTPUT_BYTES = 3000
+M.MAX_TOOL_EVENT_BATCH_BYTES = 262144
 M.MAX_ENDPOINT_BYTES = 512
 M.CHECKPOINT_REVISION = "bee.carrier.checkpoint@1"
 
@@ -27,12 +38,89 @@ local function call_func(target: string, request: unknown): (unknown, string?)
     return reply, nil
 end
 
-local function reply_value(reply: unknown): {[string]: unknown}?
-    if type(reply) ~= "table" then return nil end
-    local object = reply :: {[string]: unknown}
-    if object.ok ~= true then return nil end
-    if type(object.value) ~= "table" then return nil end
-    return object.value :: {[string]: unknown}
+local function reply_value(reply: unknown): ({[string]: unknown}?, string?, boolean?)
+    local object = bounds.object(reply)
+    if not object then return nil, "reply must be an object", false end
+    local extra = bounds.fields(object, {"ok", "error", "value", "replayed"})
+    if extra then return nil, "reply: " .. extra, false end
+    if type(object.ok) ~= "boolean" then return nil, "reply.ok must be a boolean", false end
+    if object.ok == false then
+        local fault = bounds.object(object.error)
+        if not fault or bounds.fields(fault, {"code", "message"}) then return nil, "owner returned a malformed fault", false end
+        local code, message = bounds.id(fault.code), bounds.text(fault.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+        if not code or not message then return nil, "owner returned an invalid fault", false end
+        return nil, code .. ": " .. message, true
+    end
+    if object.error ~= nil then return nil, "successful reply carries a fault", false end
+    local value = bounds.object(object.value)
+    if not value then return nil, "successful reply has no object value", false end
+    if object.replayed ~= nil and type(object.replayed) ~= "boolean" then return nil, "reply.replayed must be a boolean", false end
+    return value, nil
+end
+
+local function decode_inbox_content(value: unknown): (InboxContent?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "content must be an object" end
+    local extra = bounds.fields(object, {"text", "artifact_ref"})
+    if extra then return nil, "content: " .. extra end
+    local text: string? = nil
+    if object.text ~= nil then
+        text = bounds.text(object.text, M.MAX_TEXT_BYTES)
+        if not text then return nil, "content.text is malformed" end
+    end
+    local artifact_ref: string? = nil
+    if object.artifact_ref ~= nil then
+        artifact_ref = bounds.id(object.artifact_ref)
+        if not artifact_ref then return nil, "content.artifact_ref is malformed" end
+    end
+    if text == nil and artifact_ref == nil then return nil, "content is empty" end
+    return {text = text, artifact_ref = artifact_ref}, nil
+end
+
+local function decode_inbox_offer(value: unknown, thread_id: string, action_id: string): (InboxOffer?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "offer must be an object" end
+    if object.empty == true then
+        if bounds.fields(object, {"empty"}) then return nil, "empty offer has unknown fields" end
+        return {kind = "empty"}, nil
+    end
+    local extra = bounds.fields(object, {"thread_id", "action_id", "inbox_sequence", "record_id", "payload_digest",
+        "message_id", "message_kind", "content", "sender_action_id", "sender_thread_id", "sender_node_id",
+        "state", "dispatch", "offer_count", "in_reply_to"})
+    if extra then return nil, "offer: " .. extra end
+    local offered_thread, offered_action = bounds.id(object.thread_id), bounds.id(object.action_id)
+    local sequence, record_id = bounds.sequence(object.inbox_sequence), bounds.id(object.record_id)
+    local digest = bounds.text(object.payload_digest, 64)
+    local message_id = bounds.id(object.message_id)
+    local message_kind = bounds.member(object.message_kind, {"request", "progress", "reply", "notification"})
+    local sender_action, sender_thread, sender_node = bounds.id(object.sender_action_id), bounds.id(object.sender_thread_id), bounds.id(object.sender_node_id)
+    local state = bounds.member(object.state, {"committed", "offered", "transport_accepted", "acknowledged", "replied"})
+    local count = bounds.count(object.offer_count)
+    local content, content_error = decode_inbox_content(object.content)
+    if not offered_thread or offered_thread ~= thread_id then return nil, "offer thread identity is malformed" end
+    if not offered_action or offered_action ~= action_id then return nil, "offer action identity is malformed" end
+    if not sequence then return nil, "offer sequence is malformed" end
+    if not record_id then return nil, "offer record identity is malformed" end
+    if not digest or #digest ~= 64 or digest:find("[^0-9a-f]") then return nil, "offer payload digest is malformed" end
+    if not message_id or not message_kind or not sender_action or not sender_thread or not sender_node or not state then
+        return nil, "offer message identity is malformed"
+    end
+    local dispatch: boolean
+    if object.dispatch == true then dispatch = true
+    elseif object.dispatch == false then dispatch = false
+    else return nil, "offer dispatch must be a boolean" end
+    if not count or count < 1 then return nil, "offer count is malformed" end
+    if not content then return nil, "offer content is malformed: " .. tostring(content_error) end
+    if object.in_reply_to ~= nil then
+        local reference = bounds.object(object.in_reply_to)
+        if not reference or bounds.fields(reference, {"thread_id", "record_id"})
+            or not bounds.id(reference.thread_id) or not bounds.id(reference.record_id) then
+            return nil, "offer.in_reply_to is malformed"
+        end
+    elseif message_kind == "reply" then
+        return nil, "reply offer has no correlation"
+    end
+    return {kind = "item", sequence = sequence, record_id = record_id, content = content, dispatch = dispatch}, nil
 end
 
 local function model_id(value: unknown): string?
@@ -44,24 +132,12 @@ end
 -- The endpoint is a host-selected chat destination: https to a named host,
 -- or plain http to the loopback address only, mirroring the managed
 -- provider endpoint rule. The key itself is never read here.
-local function endpoint(value: unknown): (string?, string?)
-    local url = bounds.text(value, M.MAX_ENDPOINT_BYTES)
-    if not url or url == "" or url:find("%s") then return nil, "endpoint must be one bounded URL" end
-    local scheme, host, rest = url:match("^(https?)://([^/]+)(.*)$")
-    if not scheme or not host then return nil, "endpoint must be an http(s) URL with a host" end
-    if rest:find("[?#]") then return nil, "endpoint carries no query or fragment" end
-    if scheme == "http" and not host:match("^127%.0%.0%.1:%d+$") then
-        return nil, "plain http is permitted only for the 127.0.0.1 loopback fixture"
-    end
-    return url, nil
-end
-
 function M.decode_host_config(value: unknown): (types.HostConfig?, string?)
     local object = bounds.object(value == nil and {} or value)
     if not object then return nil, "host_config must be an object" end
     local unknown_field = bounds.fields(object, {"endpoint", "credential_ref", "model", "timeout_ms", "stream", "admitted_delegates", "max_turns"})
     if unknown_field then return nil, "host_config: " .. unknown_field end
-    local url, url_error = endpoint(object.endpoint)
+    local url, url_error = driver_configuration.endpoint(object.endpoint, true, "endpoint")
     if not url then return nil, "host_config: " .. tostring(url_error) end
     local credential_ref: string? = nil
     if object.credential_ref ~= nil then
@@ -197,13 +273,157 @@ local function truncate_text(value: string, limit: integer): string
 end
 
 local function encode_tool_output(output: unknown): string
-    local encoded, encode_err = json.encode(output)
-    if not encoded then return '{"code":"FAILED","message":"tool output is not encodable: ' .. tostring(encode_err) .. '"}' end
-    return truncate_text(encoded, M.MAX_TOOL_OUTPUT_BYTES)
+    local encoded, encode_err = canonical.encode(output)
+    if not encoded then
+        local failure = canonical.encode({code = "FAILED", message = "tool output is not encodable: " .. tostring(encode_err)})
+        return failure or "{}"
+    end
+    if #encoded > M.MAX_TOOL_OUTPUT_BYTES then
+        return canonical.encode({code = "OUTPUT_TOO_LARGE", message = "tool output exceeds its byte bound"}) or "{}"
+    end
+    return encoded
 end
 
-local function checkpoint_fits(messages: {types.Message}): boolean
-    local encoded, _ = json.encode({messages = messages})
+local function output_record(event_key: string, payload: {[string]: unknown}): ({[string]: unknown}?, string?)
+    local payload_json, encode_error = canonical.encode(payload)
+    if not payload_json then return nil, "encode tool event: " .. tostring(encode_error) end
+    local record: {[string]: unknown} = {source = "bee", body = {type = "extension", event_key = event_key,
+        data = {type = "extension", event_name = "bee.carrier.output", event_revision = "1", payload_json = payload_json}}}
+    local encoded_record, record_error = canonical.encode(record)
+    if not encoded_record or #encoded_record > bounds.MAX_RECORD_BYTES then
+        return nil, "tool event record exceeds " .. tostring(bounds.MAX_RECORD_BYTES) .. " bytes: " .. tostring(record_error or "")
+    end
+    return record, nil
+end
+
+local function copy_messages(messages: {types.Message}): {types.Message}
+    local copied: {types.Message} = {}
+    for index, message in ipairs(messages) do copied[index] = message end
+    return copied
+end
+
+local function decode_tool_arguments(value: unknown): ({[string]: unknown}?, string?)
+    local text = bounds.text(value, M.MAX_TOOL_ARGUMENT_BYTES)
+    if not text then return nil, "tool arguments must be bounded JSON text" end
+    local decoded, decode_error = json.decode(text)
+    local object = bounds.object(decoded)
+    if decode_error or not object then return nil, "tool arguments must decode to an object" end
+    local encoded, encode_error = canonical.encode(object)
+    if not encoded or #encoded > M.MAX_TOOL_ARGUMENT_BYTES then
+        return nil, "tool arguments exceed " .. tostring(M.MAX_TOOL_ARGUMENT_BYTES) .. " bytes: " .. tostring(encode_error or "")
+    end
+    return object, nil
+end
+M.decode_tool_arguments = decode_tool_arguments
+
+local function decode_tool_call(value: unknown, index: integer): (types.ToolCall?, string?)
+    local raw = bounds.object(value)
+    if not raw then return nil, "tool call must be an object" end
+    local unknown = bounds.fields(raw, {"id", "kind", "name", "arguments"})
+    if unknown then return nil, "tool call: " .. unknown end
+    local id, name = bounds.id(raw.id), bounds.id(raw.name)
+    if not id or not name or raw.kind ~= "function" then return nil, "tool call identity or kind is invalid" end
+    local arguments = bounds.text(raw.arguments, M.MAX_TOOL_ARGUMENT_BYTES)
+    if not arguments then return nil, "tool call arguments exceed their byte bound" end
+    local _, arguments_error = decode_tool_arguments(arguments)
+    if arguments_error then return nil, arguments_error end
+    return {id = id, kind = "function", name = name, arguments = arguments}, nil
+end
+
+local function decode_message(value: unknown, index: integer): (types.Message?, string?)
+    local raw = bounds.object(value)
+    if not raw then return nil, "checkpoint messages[" .. tostring(index) .. "] must be an object" end
+    local role = bounds.member(raw.role, {"system", "user", "assistant", "tool"})
+    if role == "system" or role == "user" then
+        local unknown = bounds.fields(raw, {"role", "content"})
+        local content = bounds.text(raw.content, M.MAX_TEXT_BYTES)
+        if unknown or not content then return nil, "checkpoint message content or fields are invalid" end
+        return {role = role, content = content}, nil
+    elseif role == "tool" then
+        local unknown = bounds.fields(raw, {"role", "tool_call_id", "content"})
+        local call_id, content = bounds.id(raw.tool_call_id), bounds.text(raw.content, M.MAX_TOOL_OUTPUT_BYTES + 128)
+        if unknown or not call_id or not content then return nil, "checkpoint tool message is invalid" end
+        return {role = "tool", tool_call_id = call_id, content = content}, nil
+    elseif role == "assistant" then
+        local unknown = bounds.fields(raw, {"role", "content", "tool_calls"})
+        if unknown then return nil, "checkpoint assistant message: " .. unknown end
+        local content: string? = nil
+        if raw.content ~= nil then
+            content = bounds.text(raw.content, M.MAX_TEXT_BYTES)
+            if not content then return nil, "checkpoint assistant content exceeds its byte bound" end
+        end
+        local calls: {types.ToolCall}? = nil
+        if raw.tool_calls ~= nil then
+            local list, list_error = bounds.array(raw.tool_calls, M.MAX_TOOL_CALLS_PER_TURN)
+            if not list then return nil, "checkpoint assistant tool_calls: " .. tostring(list_error) end
+            if #list == 0 then return nil, "checkpoint assistant tool_calls must not be empty" end
+            calls = {}
+            for position, raw_call in ipairs(list) do
+                local call, call_error = decode_tool_call(raw_call, position)
+                if not call then return nil, "checkpoint tool_calls[" .. tostring(position) .. "]: " .. tostring(call_error) end
+                calls[position] = call
+            end
+        end
+        if content == nil and calls == nil then return nil, "checkpoint assistant message has no content or tool calls" end
+        return {role = "assistant", content = content, tool_calls = calls}, nil
+    end
+    return nil, "checkpoint message role is invalid"
+end
+
+local function execution_outcome(value: unknown): types.Outcome?
+    if value == "succeeded" then return "succeeded" end
+    if value == "failed" then return "failed" end
+    if value == "cancelled" then return "cancelled" end
+    if value == "uncertain" then return "uncertain" end
+    return nil
+end
+
+local function decode_checkpoint(value: unknown): (Checkpoint?, string?)
+    if value == nil then return {messages = {}, terminal = nil}, nil end
+    local checkpoint = bounds.object(value)
+    if not checkpoint then return nil, "checkpoint must be an object" end
+    local unknown = bounds.fields(checkpoint, {"schema_revision", "normalizer_state", "terminal"})
+    if unknown then return nil, "checkpoint: " .. unknown end
+    if checkpoint.schema_revision ~= M.CHECKPOINT_REVISION then return nil, "checkpoint schema revision is unsupported" end
+    local state = bounds.object(checkpoint.normalizer_state)
+    if not state then return nil, "checkpoint.normalizer_state must be an object" end
+    local state_unknown = bounds.fields(state, {"messages"})
+    if state_unknown then return nil, "checkpoint.normalizer_state: " .. state_unknown end
+    local list, list_error = bounds.array(state.messages, M.MAX_CHECKPOINT_MESSAGES)
+    if not list then return nil, "checkpoint.normalizer_state.messages: " .. tostring(list_error) end
+    local messages: {types.Message} = {}
+    for index, raw in ipairs(list) do
+        local decoded, decode_error = decode_message(raw, index)
+        if not decoded then return nil, decode_error end
+        messages[index] = decoded
+    end
+    local decoded_terminal: CheckpointTerminal? = nil
+    if checkpoint.terminal ~= nil then
+        local terminal = bounds.object(checkpoint.terminal)
+        if not terminal or bounds.fields(terminal, {"outcome", "answer"}) then return nil, "checkpoint.terminal is malformed" end
+        local terminal_outcome = execution_outcome(terminal.outcome)
+        if not terminal_outcome then
+            return nil, "checkpoint.terminal.outcome is invalid"
+        end
+        local answer: string? = nil
+        if terminal.answer ~= nil then
+            answer = bounds.text(terminal.answer, M.MAX_TEXT_BYTES)
+            if not answer then return nil, "checkpoint.terminal.answer exceeds its byte bound" end
+        end
+        decoded_terminal = {outcome = terminal_outcome, answer = answer}
+    end
+    local encoded, encode_error = canonical.encode(checkpoint)
+    if not encoded or #encoded > M.MAX_CHECKPOINT_BYTES then
+        return nil, "checkpoint exceeds " .. tostring(M.MAX_CHECKPOINT_BYTES) .. " bytes: " .. tostring(encode_error or "")
+    end
+    return {messages = messages, terminal = decoded_terminal}, nil
+end
+M.decode_checkpoint = decode_checkpoint
+
+local function checkpoint_fits(messages: {types.Message}, terminal: {[string]: unknown}?): boolean
+    local value: {[string]: unknown} = {schema_revision = M.CHECKPOINT_REVISION, normalizer_state = {messages = messages}}
+    if terminal then value.terminal = terminal end
+    local encoded, _ = canonical.encode(value)
     return encoded ~= nil and #encoded <= M.MAX_CHECKPOINT_BYTES
 end
 
@@ -253,16 +473,23 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
     end
 
     local function fail_run(message: string): types.ExecutionResult
-        return {outcome = "failed", error = message, settle = false}
+        return {outcome = "failed", error = message, answer = nil, checkpoint = nil}
     end
 
-    local checkpoint_data = bounds.object(context.checkpoint)
-    if checkpoint_data then
-        local state_val = type(checkpoint_data.normalizer_state) == "table"
-            and (checkpoint_data.normalizer_state :: {[string]: unknown}) or {}
-        if type(state_val.messages) == "table" then
-            messages = state_val.messages :: {types.Message}
+    local restored, checkpoint_error = decode_checkpoint(context.checkpoint)
+    if not restored then return fail_run("decode Wippy checkpoint: " .. tostring(checkpoint_error)) end
+    messages = restored.messages
+    if restored.terminal then
+        local terminal = restored.terminal
+        local saved = checkpoint({outcome = terminal.outcome, answer = terminal.answer})
+        if terminal.outcome == "succeeded" then
+            return {outcome = "succeeded", answer = terminal.answer, error = nil, checkpoint = saved}
+        elseif terminal.outcome == "cancelled" then
+            return {outcome = "cancelled", answer = terminal.answer, error = nil, checkpoint = saved}
+        elseif terminal.outcome == "uncertain" then
+            return {outcome = "uncertain", answer = terminal.answer, error = "resumed terminal checkpoint records an uncertain outcome", checkpoint = saved}
         end
+        return {outcome = "failed", answer = terminal.answer, error = "resumed terminal checkpoint records a failed outcome", checkpoint = saved}
     end
 
     local raw_config: unknown = request.host_config
@@ -283,9 +510,16 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
         return context.commit(idem, records, checkpoint(terminal))
     end
 
-    local function settle(outcome: string, answer: string?, error: string?): types.ExecutionResult
-        return {outcome = outcome, answer = answer, error = error,
-            checkpoint = checkpoint({outcome = outcome, answer = answer})}
+    local function settle(outcome: types.Outcome, answer: string?, error: string?): types.ExecutionResult
+        local saved = checkpoint({outcome = outcome, answer = answer})
+        if outcome == "succeeded" then
+            return {outcome = "succeeded", answer = answer, error = nil, checkpoint = saved}
+        elseif outcome == "cancelled" then
+            return {outcome = "cancelled", answer = answer, error = nil, checkpoint = saved}
+        elseif outcome == "uncertain" then
+            return {outcome = "uncertain", answer = answer, error = error or "outcome is uncertain", checkpoint = saved}
+        end
+        return {outcome = "failed", answer = answer, error = error or "execution failed", checkpoint = saved}
     end
 
     -- 4. Resolve agent closure if agent_ref provided
@@ -387,45 +621,60 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
                 return settle("failed", final_answer,
                     "turn requests " .. tostring(#resp.tool_calls) .. " tool calls, above the limit of " .. tostring(M.MAX_TOOL_CALLS_PER_TURN))
             end
+            local calls: {types.ToolCall} = resp.tool_calls
+            local decoded_arguments: {{[string]: unknown}} = {}
+            local seen_call_ids: {[string]: boolean} = {}
+            for index, tc in ipairs(calls) do
+                local call, call_error = decode_tool_call(tc, index)
+                if not call then return settle("failed", final_answer, "decode tool call: " .. tostring(call_error)) end
+                if seen_call_ids[call.id] then return settle("failed", final_answer, "tool call IDs must be unique") end
+                seen_call_ids[call.id] = true
+                local arguments, arguments_error = decode_tool_arguments(call.arguments)
+                if not arguments then return settle("failed", final_answer, "decode tool arguments: " .. tostring(arguments_error)) end
+                decoded_arguments[index] = arguments
+            end
+
             local assistant_msg: types.Message = {
                 role = "assistant",
-                content = resp.content,
-                tool_calls = resp.tool_calls,
+                content = resp.content and truncate_text(resp.content, M.MAX_TEXT_BYTES) or nil,
+                tool_calls = calls,
             }
-            messages[#messages + 1] = assistant_msg
+            local prospective_messages: {types.Message} = copy_messages(messages)
+            prospective_messages[#prospective_messages + 1] = assistant_msg
+            for _, tc in ipairs(calls) do
+                local reserved_result: types.Message = {role = "tool", tool_call_id = tc.id,
+                    content = string.rep("x", M.MAX_TOOL_EVENT_OUTPUT_BYTES)}
+                prospective_messages[#prospective_messages + 1] = reserved_result
+            end
+            if not checkpoint_fits(prospective_messages) then
+                return settle("failed", final_answer, "prospective tool checkpoint exceeds " .. tostring(M.MAX_CHECKPOINT_BYTES) .. " bytes")
+            end
 
             local tool_records: {{[string]: unknown}} = {}
+            local result_record_indices: {integer} = {}
+            for index, tc in ipairs(calls) do
+                local call_record, call_error = output_record("tool_call:" .. attempt_id .. ":" .. tostring(turn_sequence) .. ":" .. tc.id,
+                    {type = "tool_call", id = tc.id, tool = tc.name, input = decoded_arguments[index]})
+                if not call_record then return settle("failed", final_answer, tostring(call_error)) end
+                tool_records[#tool_records + 1] = call_record
+                local result_record, result_error = output_record("tool_result:" .. attempt_id .. ":" .. tostring(turn_sequence) .. ":" .. tc.id,
+                    {type = "tool_result", id = tc.id, tool = tc.name, outcome = "failed",
+                        output = string.rep("x", M.MAX_TOOL_EVENT_OUTPUT_BYTES)})
+                if not result_record then return settle("failed", final_answer, tostring(result_error)) end
+                tool_records[#tool_records + 1] = result_record
+                result_record_indices[index] = #tool_records
+            end
+            local prospective_events, events_error = canonical.encode(tool_records)
+            if not prospective_events or #prospective_events > M.MAX_TOOL_EVENT_BATCH_BYTES then
+                return settle("failed", final_answer, "prospective tool events exceed " .. tostring(M.MAX_TOOL_EVENT_BATCH_BYTES)
+                    .. " bytes: " .. tostring(events_error or ""))
+            end
 
-            for _, tc in ipairs(resp.tool_calls) do
+            messages = prospective_messages
+            local first_result_message = #messages - #calls + 1
+            for index, tc in ipairs(calls) do
+                local decoded_args = decoded_arguments[index]
                 local fn_name = tc.name
-                local fn_args_str = tc.arguments
-                local decoded_args: {[string]: unknown} = {}
-                if #fn_args_str > 0 then
-                    local dec, dec_err = json.decode(fn_args_str)
-                    if not dec_err and type(dec) == "table" then
-                        decoded_args = dec :: {[string]: unknown}
-                    end
-                end
-
-                tool_records[#tool_records + 1] = {
-                    source = "bee",
-                    body = {
-                        type = "extension",
-                        event_key = "tool_call:" .. attempt_id .. ":" .. tostring(turn_sequence) .. ":" .. tc.id,
-                        data = {
-                            type = "extension",
-                            event_name = "bee.carrier.output",
-                            event_revision = "1",
-                            payload_json = json.encode({
-                                type = "tool_call",
-                                id = tc.id,
-                                tool = fn_name,
-                                input = decoded_args,
-                            }),
-                        },
-                    },
-                }
-
                 local matched_tool = tool_map[fn_name]
                 local ok_exec, tool_output
                 if matched_tool then
@@ -434,37 +683,20 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
                     ok_exec = false
                     tool_output = {code = "NOT_FOUND", message = "tool " .. fn_name .. " is not admitted in the agent capability grant"}
                 end
+                local output_encoded, output_error = canonical.encode(tool_output)
+                if not output_encoded or #output_encoded > M.MAX_TOOL_EVENT_OUTPUT_BYTES then
+                    ok_exec = false
+                    tool_output = {code = "OUTPUT_TOO_LARGE", message = "tool result exceeds " .. tostring(M.MAX_TOOL_EVENT_OUTPUT_BYTES) .. " bytes"}
+                end
 
-                local result_payload = {
-                    type = "tool_result",
-                    id = tc.id,
-                    tool = fn_name,
-                    outcome = ok_exec and "succeeded" or "failed",
-                    output = tool_output,
-                }
-                tool_records[#tool_records + 1] = {
-                    source = "bee",
-                    body = {
-                        type = "extension",
-                        event_key = "tool_result:" .. attempt_id .. ":" .. tostring(turn_sequence) .. ":" .. tc.id,
-                        data = {
-                            type = "extension",
-                            event_name = "bee.carrier.output",
-                            event_revision = "1",
-                            payload_json = json.encode(result_payload),
-                        },
-                    },
-                }
-
-                messages[#messages + 1] = {
-                    role = "tool",
-                    tool_call_id = tc.id,
-                    content = encode_tool_output(tool_output),
-                }
-            end
-
-            if not checkpoint_fits(messages) then
-                return settle("failed", final_answer, "checkpoint exceeds " .. tostring(M.MAX_CHECKPOINT_BYTES) .. " bytes")
+                local result_record, result_error = output_record("tool_result:" .. attempt_id .. ":" .. tostring(turn_sequence) .. ":" .. tc.id,
+                    {type = "tool_result", id = tc.id, tool = fn_name, outcome = ok_exec and "succeeded" or "failed", output = tool_output})
+                if not result_record then
+                    return settle("failed", final_answer, "encode tool result: " .. tostring(result_error))
+                end
+                tool_records[result_record_indices[index]] = result_record
+                messages[first_result_message + index - 1] = {role = "tool", tool_call_id = tc.id,
+                    content = encode_tool_output(tool_output)}
             end
 
             local committed, commit_err = commit(idempotency_key .. "-turn-" .. tostring(turn_sequence), tool_records, nil)
@@ -504,54 +736,67 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
                 end
             end
 
-            local inbox_offer, _ = call_func(THREADS .. ":inbox_offer", {
+            local inbox_offer, offer_call_error = call_func(THREADS .. ":inbox_offer", {
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
                 carrier_epoch = epoch,
             })
-            local offered = reply_value(inbox_offer)
-            if offered and offered.dispatch == true and offered.empty ~= true then
-                local seq = math.floor(tonumber(offered.inbox_sequence) or 0)
-                local rec_id = offered.record_id
-                if seq < 1 or type(rec_id) ~= "string" or rec_id == "" then
-                    return settle("succeeded", final_answer)
-                end
+            if offer_call_error then
+                return settle("failed", final_answer, "offer inbox: " .. offer_call_error)
+            end
+            local offered, offer_error = reply_value(inbox_offer)
+            if not offered then return settle("failed", final_answer, "offer inbox: " .. tostring(offer_error)) end
+            local decoded_offer, decode_offer_error = decode_inbox_offer(offered, thread_id, action_id)
+            if not decoded_offer then return settle("failed", final_answer, "decode inbox offer: " .. tostring(decode_offer_error)) end
+            if decoded_offer.kind == "empty" or not decoded_offer.dispatch then
+                return settle("succeeded", final_answer)
+            end
 
-                local transport_res = call_func(THREADS .. ":inbox_transport", {
+            local transport_res, transport_call_error = call_func(THREADS .. ":inbox_transport", {
                     thread_id = thread_id,
                     action_id = action_id,
                     attempt_id = attempt_id,
                     carrier_epoch = epoch,
-                    inbox_sequence = seq,
-                    record_id = rec_id,
+                    inbox_sequence = decoded_offer.sequence,
+                    record_id = decoded_offer.record_id,
                 })
-                if not reply_value(transport_res) then
-                    return settle("succeeded", final_answer)
-                end
-                local ack_res = call_func(THREADS .. ":inbox_ack", {
+            if transport_call_error then
+                return settle("uncertain", final_answer, "transport inbox item: " .. transport_call_error)
+            end
+            local transport, transport_error, transport_refused = reply_value(transport_res)
+            if not transport then
+                local outcome: types.Outcome = transport_refused and "failed" or "uncertain"
+                return settle(outcome, final_answer, "transport inbox item: " .. tostring(transport_error))
+            end
+            local transport_state = bounds.member(transport.state, {"transport_accepted", "acknowledged", "replied"})
+            if bounds.fields(transport, {"record_id", "inbox_sequence", "state"})
+                or transport.record_id ~= decoded_offer.record_id or transport.inbox_sequence ~= decoded_offer.sequence or not transport_state then
+                return settle("uncertain", final_answer, "transport inbox item returned a malformed receipt")
+            end
+
+            local ack_res, ack_call_error = call_func(THREADS .. ":inbox_ack", {
                     thread_id = thread_id,
                     action_id = action_id,
-                    inbox_sequence = seq,
-                    idempotency_key = idempotency_key .. "-ack-" .. tostring(seq),
+                    inbox_sequence = decoded_offer.sequence,
+                    idempotency_key = idempotency_key .. "-ack-" .. tostring(decoded_offer.sequence),
                 })
-                if not reply_value(ack_res) then
-                    return settle("succeeded", final_answer)
-                end
-
-                local user_text: string? = nil
-                if type(offered.content) == "table" then
-                    local content = offered.content :: {[string]: unknown}
-                    if type(content.text) == "string" and content.text ~= "" then
-                        user_text = truncate_text(content.text :: string, M.MAX_TEXT_BYTES)
-                    elseif type(content.artifact_ref) == "string" and content.artifact_ref ~= "" then
-                        user_text = "Delivered artifact " .. truncate_text(content.artifact_ref :: string, 512) .. "."
-                    end
-                end
-                messages[#messages + 1] = {role = "user", content = user_text or "New inbox message."}
-            else
-                return settle("succeeded", final_answer)
+            if ack_call_error then return settle("uncertain", final_answer, "acknowledge inbox item: " .. ack_call_error) end
+            local acknowledged, ack_error = reply_value(ack_res)
+            if not acknowledged then return settle("uncertain", final_answer, "acknowledge inbox item: " .. tostring(ack_error)) end
+            local ack_state = bounds.member(acknowledged.state, {"acknowledged", "replied"})
+            if bounds.fields(acknowledged, {"record_id", "inbox_sequence", "state"})
+                or acknowledged.record_id ~= decoded_offer.record_id or acknowledged.inbox_sequence ~= decoded_offer.sequence or not ack_state then
+                return settle("uncertain", final_answer, "acknowledge inbox item returned a malformed receipt")
             end
+
+            local user_text: string
+            if decoded_offer.content.text then
+                user_text = truncate_text(decoded_offer.content.text, M.MAX_TEXT_BYTES)
+            else
+                user_text = "Delivered artifact " .. truncate_text(decoded_offer.content.artifact_ref or "", 512) .. "."
+            end
+            messages[#messages + 1] = {role = "user", content = user_text}
         end
     end
 

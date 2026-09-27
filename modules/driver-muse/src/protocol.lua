@@ -5,6 +5,7 @@ local json = require("json")
 local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
+local values = require("values")
 
 local M = {}
 M.PROTOCOL_REVISION = "msp-exec-1"
@@ -68,21 +69,11 @@ local function decode_terminal(value: unknown): (types.Terminal?, string?)
         resume_ref = bounds.id(object.resume_ref)
         if not resume_ref then return nil, "state.terminal.resume_ref is not an identifier" end
     end
-    local usage: {[string]: unknown}? = nil
+    local usage: types.Usage? = nil
     if object.usage ~= nil then
-        local usage_object = bounds.object(object.usage)
-        if not usage_object then return nil, "state.terminal.usage must be an object" end
-        local usage_unknown = bounds.fields(usage_object, {"input_tokens", "output_tokens", "cached_tokens"})
-        if usage_unknown then return nil, "state.terminal.usage: " .. usage_unknown end
-        usage = {}
-        for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens"}) do
-            local raw: unknown = usage_object[name]
-            if raw ~= nil then
-                local count = bounds.count(raw)
-                if not count then return nil, "state.terminal.usage." .. name .. " is not a nonnegative integer" end
-                usage[name] = count
-            end
-        end
+        local usage_error: string?
+        usage, usage_error = values.usage(object.usage)
+        if usage_error then return nil, "state.terminal." .. usage_error end
     end
     local fault, fault_error = decode_fault(object.error, "state.terminal.error")
     if fault_error then return nil, fault_error end

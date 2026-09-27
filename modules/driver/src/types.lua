@@ -85,12 +85,64 @@ type Launch = {
 }
 -- What a normalizer reports when the protocol says the turn is over.
 type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
+type Usage = events.Usage
+type Fault = {code: string, message: string, retryable: boolean}
 type Terminal = {
     outcome: Outcome,
     answer: string?,
     resume_ref: string?,
-    usage: {[string]: unknown}?,
-    error: {code: string, message: string, retryable: boolean}?,
+    usage: Usage?,
+    error: Fault?,
 }
+local bounds = require("bounds")
+local events = require("events")
+local values = require("values")
 local M = {}
+-- Executable-backed provider login flows remain an explicit integration gate.
+M.AUTHENTICATION_STATUS = "unproven"
+function M.git_writable_roots_adapter(value: unknown): GitWritableRootsAdapter?
+    if value == "codex_workspace_write" or value == "claude_add_dir" or value == "agy_add_dir" then
+        return value
+    end
+    return nil
+end
+function M.decode_terminal(value: unknown): (Terminal?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "terminal must be an object" end
+    local unknown = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
+    if unknown then return nil, "terminal: " .. unknown end
+    local outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
+    if not outcome then return nil, "terminal.outcome is not a carrier outcome" end
+    local answer: string? = nil
+    if object.answer ~= nil then
+        answer = bounds.text(object.answer, 32768)
+        if not answer then return nil, "terminal.answer exceeds its byte bound" end
+    end
+    local resume_ref: string? = nil
+    if object.resume_ref ~= nil then
+        resume_ref = bounds.id(object.resume_ref)
+        if not resume_ref then return nil, "terminal.resume_ref is not an identifier" end
+    end
+    local usage: Usage? = nil
+    if object.usage ~= nil then
+        local raw_usage = bounds.object(object.usage)
+        if not raw_usage then return nil, "terminal.usage must be an object" end
+        local decoded, usage_error = values.usage(raw_usage)
+        if usage_error then return nil, "terminal." .. tostring(usage_error) end
+        usage = decoded
+    end
+    local fault: Fault? = nil
+    if object.error ~= nil then
+        local raw_fault = bounds.object(object.error)
+        if not raw_fault then return nil, "terminal.error must be an object" end
+        local fault_unknown = bounds.fields(raw_fault, {"code", "message", "retryable"})
+        if fault_unknown then return nil, "terminal.error: " .. fault_unknown end
+        local code = bounds.id(raw_fault.code)
+        local message = bounds.text(raw_fault.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+        if not code or not message or type(raw_fault.retryable) ~= "boolean" then return nil, "terminal.error is malformed" end
+        fault = {code = code, message = message, retryable = raw_fault.retryable}
+    end
+    if outcome == "failed" and not fault then return nil, "failed terminal must include an error" end
+    return {outcome = outcome :: Outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}, nil
+end
 return M

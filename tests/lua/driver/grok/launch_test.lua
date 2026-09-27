@@ -123,15 +123,17 @@ local function define_tests()
             test.is_true(line:find("-r session-1234", 1, true) ~= nil)
             test.is_true(line:find('--allow MCPTool(bee__*)', 1, true) ~= nil)
 
-            -- Check reasoning_effort alias
-            local alias_decoded = assert(launch.decode({
+            local canonical = assert(launch.decode({
                 profile_id = "session",
-                brief = "test alias",
-                reasoning_effort = "max",
+                brief = "test effort",
+                effort = "max",
             }))
-            test.eq(alias_decoded.effort, "max")
-            local alias_spec = launch.specification(alias_decoded)
-            test.is_true(table.concat(alias_spec.argv, " "):find("--reasoning-effort max", 1, true) ~= nil)
+            test.eq(canonical.effort, "max")
+            local canonical_spec = launch.specification(canonical)
+            test.is_true(table.concat(canonical_spec.argv, " "):find("--reasoning-effort max", 1, true) ~= nil)
+            local alias, alias_error = launch.decode({profile_id = "session", brief = "test effort", reasoning_effort = "max"})
+            test.is_nil(alias)
+            test.eq(alias_error, "unknown field reasoning_effort")
         end)
 
         test.it("rejects invalid options and out-of-bounds parameters", function()

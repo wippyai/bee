@@ -332,10 +332,10 @@ local function define_tests()
             end
             test.is_true(first_end > 0 and pushed > first_end, "production push was not observed after the initial turn")
         end)
-        test.it("admits the push acceptance against the pinned Claude executable, or reports the gate open", function()
+        test.it("admits the push acceptance against the pinned Claude executable, when the executable is available", function()
             local claude = claude_bin()
             if not claude then
-                test.eq(launch.CLAUDE_AUTHENTICATION, "unproven")
+                test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
                 return
             end
             if not shell(claude .. " --version"):find("Claude Code", 1, true) then error("not the Claude executable") end
@@ -361,7 +361,6 @@ local function define_tests()
                 return
             end
             test.is_true(admitted, "the pinned executable run admitted no action")
-            test.eq(launch.CLAUDE_AUTHENTICATION, "unproven")
             for _ = 1, 120 do
                 outcome = observe_exit(pid)
                 if outcome then break end

@@ -11,6 +11,7 @@ local json = require("json")
 local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
+local values = require("values")
 local M = {}
 M.PROTOCOL_REVISION = "opencode-run-json-1"
 M.MAX_ANSWER_BYTES = events.MAX_TEXT_BYTES
@@ -22,7 +23,7 @@ type State = {
     resumed: boolean,
     answer: string?,
     answer_truncated: boolean,
-    usage: {[string]: unknown}?,
+    usage: events.Usage?,
     error: Fault?,
     terminal: types.Terminal?,
 }
@@ -155,21 +156,11 @@ function M.decode_state(value: unknown): (State?, string?)
     if object.answer_truncated == true and answer ~= nil then
         return nil, "state.answer must be absent after truncation"
     end
-    local usage: {[string]: unknown}? = nil
+    local usage: events.Usage? = nil
     if object.usage ~= nil then
-        local usage_object = bounds.object(object.usage)
-        if not usage_object then return nil, "state.usage must be an object" end
-        local usage_unknown = bounds.fields(usage_object, {"input_tokens", "output_tokens", "cached_tokens"})
-        if usage_unknown then return nil, "state.usage: " .. usage_unknown end
-        usage = {}
-        for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens"}) do
-            local raw: unknown = usage_object[name]
-            if raw ~= nil then
-                local count = bounds.count(raw)
-                if not count then return nil, "state.usage." .. name .. " is not a nonnegative integer" end
-                usage[name] = count
-            end
-        end
+        local usage_error: string?
+        usage, usage_error = values.usage(object.usage)
+        if usage_error then return nil, "state." .. usage_error end
     end
     local fault: Fault? = nil
     if object.error ~= nil then
@@ -198,21 +189,11 @@ function M.decode_state(value: unknown): (State?, string?)
             resume_ref = bounds.id(terminal_object.resume_ref)
             if not resume_ref then return nil, "state.terminal.resume_ref is not an identifier" end
         end
-        local terminal_usage: {[string]: unknown}? = nil
+        local terminal_usage: events.Usage? = nil
         if terminal_object.usage ~= nil then
-            local usage_object = bounds.object(terminal_object.usage)
-            if not usage_object then return nil, "state.terminal.usage must be an object" end
-            local usage_unknown = bounds.fields(usage_object, {"input_tokens", "output_tokens", "cached_tokens"})
-            if usage_unknown then return nil, "state.terminal.usage: " .. usage_unknown end
-            terminal_usage = {}
-            for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens"}) do
-                local raw: unknown = usage_object[name]
-                if raw ~= nil then
-                    local count = bounds.count(raw)
-                    if not count then return nil, "state.terminal.usage." .. name .. " is not a nonnegative integer" end
-                    terminal_usage[name] = count
-                end
-            end
+            local terminal_usage_error: string?
+            terminal_usage, terminal_usage_error = values.usage(terminal_object.usage)
+            if terminal_usage_error then return nil, "state.terminal." .. terminal_usage_error end
         end
         local terminal_fault: Fault? = nil
         if terminal_object.error ~= nil then

@@ -35,6 +35,7 @@ entries:
   source: file://git_roots.lua
   imports:
     canonical: bee.threads.records:canonical
+    driver_types: bee.driver:types
 - name: service
   kind: library.lua
   source: file://service.lua

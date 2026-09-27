@@ -2,9 +2,6 @@ local bounds = require("bounds")
 local types = require("types")
 local M = {}
 
--- The API-key path uses environment projection of XAI_API_KEY (or browser/device
--- credentials in GROK_HOME).
-M.GROK_AUTHENTICATION = "unproven"
 M.PERMISSION_MODES = {"default", "acceptEdits", "auto", "dontAsk", "bypassPermissions", "plan"}
 M.EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 M.MAX_TURNS = 32
@@ -29,7 +26,7 @@ type Request = {
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "max_turns", "model", "effort", "reasoning_effort", "resume_ref", "gateway_tools", "gateway_hooks"})
+    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "max_turns", "model", "effort", "resume_ref", "gateway_tools", "gateway_hooks"})
     if unknown_field then return nil, "launch request: " .. unknown_field end
     local profile_id = bounds.id(object.profile_id)
     if not profile_id then return nil, "profile_id is not an identifier" end
@@ -69,9 +66,8 @@ function M.decode(value: unknown): (Request?, string?)
         model = declared
     end
     local effort: string? = nil
-    local raw_effort = object.effort ~= nil and object.effort or object.reasoning_effort
-    if raw_effort ~= nil then
-        local declared = bounds.member(raw_effort, M.EFFORTS)
+    if object.effort ~= nil then
+        local declared = bounds.member(object.effort, M.EFFORTS)
         if not declared then return nil, "effort is not one Bee admits" end
         effort = declared
     end

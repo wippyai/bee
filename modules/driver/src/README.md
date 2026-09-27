@@ -56,6 +56,11 @@ Provider-specific command syntax, profile options, authentication, hook wire
 formats, and MCP configuration belong in that provider's component guide and
 Lua package.
 
+`bee.driver:types.AUTHENTICATION_STATUS` is the shared release gate for
+executable-backed provider login acceptance. `unproven` records that the
+configured provider executables have not all been exercised through placement;
+it does not decide whether a login is valid or admit a launch.
+
 An activated driver profile may declare a typed Git writable-roots adapter.
 Native placement reads that choice from the pinned profile, then uses it only
 when the granted workdir is writable and the launch arguments select the

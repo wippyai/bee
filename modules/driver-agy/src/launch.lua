@@ -4,10 +4,6 @@ local types = require("types")
 
 local M = {}
 
-M.AGY_AUTHENTICATION = "unproven"
-M.AGY_HOOKS = "unproven"
-M.AGY_MCP = "unproven"
-
 local function provider_home(private: boolean): types.ProviderHome
     return {provider = "agy", private = private, files = {
         {source_path = ".gemini/antigravity-cli/antigravity-oauth-token", path = ".gemini/antigravity-cli/antigravity-oauth-token", kind = "login", optional = true, write_back = true},

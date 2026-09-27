@@ -91,5 +91,6 @@ with a new package version or removes with a departing package, with its
 actions, resources and whether an expression limits it. `installation` is the
 pure value library for agent installation requests: it decodes a request,
 selects install or update and the newest release, renders one approval body
-from a ready plan, verifies a recorded request belongs to the asking attempt
-and maps an apply reply to the agent's status. The gateway performs the calls.
+from a ready plan bound to the asking gateway binding, verifies a recorded
+request belongs to that binding and attempt, and maps an apply reply to the
+agent's status. The gateway performs the calls.

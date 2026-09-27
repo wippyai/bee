@@ -165,6 +165,33 @@ local function define_tests()
             for _, hit in ipairs(detailed.hits) do detailed_kinds[hit.kind] = true end
             test.is_true(detailed_kinds.step and detailed_kinds.recover and detailed_kinds.status)
         end)
+
+        test.it("does not offer install for a locally rejected plan with a ready preflight", function()
+            local state = model.new("workspace-destination")
+            local digest = string.rep("b", 64)
+            local report, report_digest = preflight.encode_report({schema_revision = "bee.governance-preflight@1",
+                plan_digest = digest, destination_node = "node-destination", base_revision = 7,
+                policy_digest = digest, ready = true, diagnostics = {}, pending_migrations = {}})
+            if not report or not report_digest then error("valid ready preflight report was rejected") end
+            model.toggle_pane(state)
+            model.apply_list(state, {ok = true, error = nil, replayed = false, value = {
+                owner_node = "node-destination", workspace_id = "workspace-destination", plans = {{
+                    owner_node = "node-destination", workspace_id = "workspace-destination", source_node = "node-source",
+                    source_workspace = "example-app", version = "2.0.0", plan_digest = digest,
+                    candidate_digest = digest, artifact_digest = digest, preflight_digest = report_digest,
+                    revision = 3, status = "reviewed", review_status = "rejected", selected = false}}}})
+            local detail = state.plans[1]
+            detail.preflight_bytes = report
+            model.apply_plan(state, {ok = true, error = nil, replayed = false, value = detail})
+            model.show_pane(state, "review")
+            local kind, _, enabled = view.primary(state)
+            test.eq(kind, "read")
+            test.is_true(enabled)
+            local drawn = view.draw(80, 18, appearance.defaults(), state, 0)
+            for _, hit in ipairs(drawn.hits) do
+                test.is_false(hit.kind == "install" or hit.kind == "update")
+            end
+        end)
     end)
 end
 

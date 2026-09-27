@@ -13,10 +13,10 @@ M.SOURCE = "hub"
 type Object = {[string]: unknown}
 type Kind = "install" | "uninstall"
 type Decoded = {kind: Kind, component: string, version: string?}
-type Context = {thread_id: string, action_id: string, attempt_id: string}
+type Context = {binding_id: string, thread_id: string, action_id: string, attempt_id: string}
 type Request = {action: string, component: string, version: string, migration_policy: string}
 type Verified = {request: Request, digest: string}
-type Status = {status: string, code: string?, message: string?, state: string?}
+type Status = {status: string, code: string?, message: string?, state: string?, replayed: boolean?}
 
 local function hex(value: unknown): string?
     if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
@@ -128,10 +128,10 @@ local function measured(value: unknown): string?
     return hash.sha256(encoded)
 end
 
--- The idempotency key binds the asking attempt to the exact plan, so a
+-- The idempotency key binds the asking gateway attempt to the exact plan, so a
 -- retried request replays one approval instead of asking twice.
 function M.idempotency_key(context: Context, digest: string): string?
-    local sum = measured({attempt_id = context.attempt_id, plan_digest = digest})
+    local sum = measured({binding_id = context.binding_id, attempt_id = context.attempt_id, plan_digest = digest})
     return sum and "hub-install:" .. sum or nil
 end
 
@@ -187,7 +187,7 @@ function M.proposal(plan_raw: unknown, context: Context): (Object?, string?, str
         payload = {action = action, component = component, version = version, source = M.SOURCE,
             plan_digest = digest, base_revision = revision, migration_policy = migration_policy,
             dependency_changes = dependencies, permission_changes = policies, migrations = migrations,
-            auto_start = starts, thread_id = context.thread_id, action_id = context.action_id,
+            auto_start = starts, binding_id = context.binding_id, thread_id = context.thread_id, action_id = context.action_id,
             attempt_id = context.attempt_id}}
     local verb = action == "uninstall" and "Remove " or (action == "update" and "Update " or "Install ")
     local prompt = verb .. component .. (version ~= "" and (" " .. version) or "") .. " from the Hub?"
@@ -209,7 +209,8 @@ function M.verify(view_raw: unknown, subject: string, workspace_id: string, poli
         or view.policy ~= policy then
         return nil, "request does not belong to this agent, thread and workspace"
     end
-    if payload.attempt_id ~= context.attempt_id or payload.action_id ~= context.action_id then
+    if payload.binding_id ~= context.binding_id or payload.attempt_id ~= context.attempt_id
+        or payload.action_id ~= context.action_id then
         return nil, "request does not belong to this attempt"
     end
     local digest = hex(payload.plan_digest)
@@ -252,8 +253,8 @@ function M.decision(view_raw: unknown): Status
 end
 
 -- status: the Hub apply reply as the agent's outcome. An uncertain or
--- unavailable apply stays approved: the next poll repeats the same
--- digest-bound apply, which replays its recorded receipt.
+-- unavailable apply stays approved so the owner worker can repeat the same
+-- digest-bound effect; agent polling only reads status and recorded receipts.
 function M.status(reply_raw: unknown): Status
     local reply = bounds.object(reply_raw) or {}
     local receipt = bounds.object(reply.value)
@@ -261,12 +262,30 @@ function M.status(reply_raw: unknown): Status
     local message = bounds.text(reply.message, 4096)
     local state = receipt and bounds.line(receipt.state, 80) or nil
     if receipt and not message then message = bounds.text(receipt.message, 4096) end
-    if reply.ok == true and state == "complete" then return {status = "applied", state = state, message = message} end
-    if reply.ok ~= true and (code == "UNCERTAIN" or code == "UNAVAILABLE") then
-        return {status = "approved", code = code, message = message}
+    if reply.ok == true and state == "complete" then
+        return {status = "applied", state = state, message = message, replayed = reply.replayed == true}
+    end
+    if reply.ok ~= true and (code == "UNCERTAIN" or code == "UNAVAILABLE" or code == "NOT_FOUND") then
+        return {status = "approved", code = code, message = message, replayed = reply.replayed == true}
     end
     return {status = "failed", code = code or "FAILED", state = state,
-        message = message or "the Hub operation did not complete"}
+        message = message or "the Hub operation did not complete", replayed = reply.replayed == true}
+end
+
+-- effect_result: keep the status receipt the agent needs without copying
+-- potentially large package migration definitions from Hub's durable record.
+function M.effect_result(reply_raw: unknown): Object
+    local reply = bounds.object(reply_raw) or {}
+    local receipt = bounds.object(reply.value)
+    local state = receipt and bounds.line(receipt.state, 80) or nil
+    local message = bounds.text(reply.message, 4096)
+    if receipt and not message then message = bounds.text(receipt.message, 4096) end
+    local applied = reply.ok == true and state == "complete"
+    local result: Object = {ok = applied, replayed = reply.replayed == true}
+    if not applied then result.code = bounds.line(reply.code, 160) or "FAILED" end
+    if message then result.message = message end
+    if state then result.value = {state = state, message = message} end
+    return result
 end
 
 return M

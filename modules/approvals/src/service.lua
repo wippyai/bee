@@ -27,6 +27,7 @@ M.DECIDE = "bee.approvals.decide"
 M.MANAGE = "bee.approvals.manage"
 M.OWN = "bee.approvals.own"
 M.CONSUME = "bee.approvals.consume"
+M.INSTALLATION_EFFECTS = "installation_effects"
 M.WORKER_NAME = "bee.approvals.outbox"
 M.AUTHORITY_NAME = "bee.approvals.authority"
 M.THREAD_GET = "bee.threads.service:get"
@@ -116,7 +117,8 @@ function M.reply(result: Result): Reply
 end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
-local mutating: {[string]: boolean} = {request = true, decide = true, withdraw = true, consume = true, revalidate = true, reconcile = true}
+local mutating: {[string]: boolean} = {request = true, decide = true, withdraw = true, consume = true, revalidate = true,
+    complete_installation_effect = true, reconcile = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
 -- other authorities through the executor; the operation then runs inside
@@ -161,7 +163,9 @@ function M.view(row: Row): Object
         prompt = decode(row.prompt_json), response_schema = decode(row.response_schema_json), thread_id = row.thread_id, binding = decode(row.binding_json), revision = row.revision, state = row.state,
         decision = row.decision, decider_id = row.decider_id, decided_at = row.decided_at, response = decode(row.response_json), validated_incarnation = row.validated_incarnation,
         validated_by = row.validated_by, validated_at = row.validated_at, consumer_id = row.consumer_id, consumed_effect = row.consumed_effect,
-        consumed_at = row.consumed_at, expires_at = row.expires_at, created_at = row.created_at, updated_at = row.updated_at}
+        consumed_at = row.consumed_at, effect_completed_at = row.effect_completed_at,
+        effect_result = decode(row.effect_result_json),
+        expires_at = row.expires_at, created_at = row.created_at, updated_at = row.updated_at}
 end
 local function load(tx: sql.Transaction, approval_id: string): (Row?, string?)
     local rows, err = tx:query("SELECT * FROM bee_approval_requests WHERE approval_id = ?", {approval_id})
@@ -561,6 +565,64 @@ local function op_consume(tx: sql.Transaction, actor: string, object: Object, no
     if not updated then return storage("read approval request") end
     return success(M.view(updated), false)
 end
+local function op_installation_effects(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"limit"})
+    if unknown_field then return failure("INVALID", unknown_field) end
+    local limit = bounds.integer(object.limit == nil and 16 or object.limit)
+    if not limit or limit < 1 or limit > 64 then return failure("INVALID", "limit must be between 1 and 64") end
+    if not security.can(M.OWN, M.INSTALLATION_EFFECTS) then
+        return failure("DENIED", "caller may not enumerate approved installation effects")
+    end
+    local rows, err = tx:query([[SELECT * FROM bee_approval_requests
+        WHERE state = 'decided' AND decision = 'approved' AND effect_completed_at IS NULL
+        AND ((consumed_effect IS NULL AND expires_ms > ?)
+            OR (consumer_id = requester_id AND consumed_effect = 'hub-install:' || approval_id))
+        AND proposal_json LIKE '%"ref":"bee.hub:apply"%'
+        ORDER BY approval_id LIMIT ?]], {now, limit})
+    if err or not rows then return storage("read approved installation effects") end
+    local effects: {Object} = {}
+    for _, row in ipairs(rows) do
+        effects[#effects + 1] = M.view(row :: Row)
+    end
+    return success({effects = effects}, false)
+end
+local function op_complete_installation_effect(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "effect_key", "result"})
+    if unknown_field then return failure("INVALID", unknown_field) end
+    local approval_id = bounds.id(object.approval_id)
+    local proposal_digest = bounds.id(object.proposal_digest)
+    local effect_key = bounds.id(object.effect_key)
+    if not approval_id or not proposal_digest or not effect_key then
+        return failure("INVALID", "approval_id, proposal_digest and effect_key are required")
+    end
+    local result = bounds.object(object.result)
+    local result_json: string? = nil
+    local encode_error: string? = nil
+    if result then result_json, encode_error = canonical.encode(result) end
+    if not result or not result_json then return failure("INVALID", "result must be a bounded Hub reply: " .. tostring(encode_error or "invalid result")) end
+    if #result_json > 8192 then return failure("INVALID", "Hub reply exceeds the installation receipt bound") end
+    local row, load_error = load(tx, approval_id)
+    if load_error then return storage(load_error) end
+    if not row then return failure("NOT_FOUND", "approval request does not exist") end
+    if not security.can(M.CONSUME, text(row.workspace_id) or "") then
+        return failure("DENIED", "caller is not an effect owner for this workspace")
+    end
+    if row.requester_id ~= actor then return failure("DENIED", "only the consuming requester completes this effect") end
+    if row.state ~= "decided" or row.decision ~= "approved" or row.proposal_digest ~= proposal_digest
+        or row.consumed_effect ~= effect_key or row.consumer_id ~= actor then
+        return failure("CONFLICT", "installation effect is not consumed by this requester", M.view(row))
+    end
+    if row.effect_completed_at ~= nil then
+        if row.effect_result_json ~= result_json then return failure("CONFLICT", "installation effect already has a different receipt", M.view(row)) end
+        return success(M.view(row), true)
+    end
+    local _, update_error = tx:execute("UPDATE bee_approval_requests SET effect_completed_at = ?, effect_result_json = ?, updated_at = ? WHERE approval_id = ? AND effect_completed_at IS NULL",
+        {stamp(now), result_json, stamp(now), approval_id})
+    if update_error then return storage("record completed installation effect") end
+    local updated = load(tx, approval_id)
+    if not updated then return storage("read completed installation effect") end
+    return success(M.view(updated), false)
+end
 local function may_read(actor: string, row: Row): (boolean, string?)
     if row.requester_id == actor then return true, nil end
     if security.can(M.MANAGE, text(row.workspace_id) or "") then return true, nil end
@@ -808,6 +870,7 @@ function M.node(): string
     return node()
 end
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
+operations.installation_effects, operations.complete_installation_effect = op_installation_effects, op_complete_installation_effect
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
 operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
@@ -815,6 +878,8 @@ function M.request(value: unknown): Reply return run(value, "request") end
 function M.decide(value: unknown): Reply return run(value, "decide") end
 function M.withdraw(value: unknown): Reply return run(value, "withdraw") end
 function M.consume(value: unknown): Reply return run(value, "consume") end
+function M.installation_effects(value: unknown): Reply return run(value, "installation_effects") end
+function M.complete_installation_effect(value: unknown): Reply return run(value, "complete_installation_effect") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
 function M.read(value: unknown): Reply return run(value, "read") end
 function M.inbox(value: unknown): Reply return run(value, "inbox") end

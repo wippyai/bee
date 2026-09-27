@@ -40,11 +40,16 @@ selects the approver. Filing the request grants nothing.
 installation requests the same way. The gateway resolves the exact Hub plan as
 the bound subject with Hub read authority only, and files one thread-bound
 approval under the approval policy the host's `target_install_configuration`
-entry names. An owner worker applies approved decisions by consuming them
-under one effect key and calling Hub apply with the approved digest; status
-polling returns the decision and the applied outcome once completed even if
-the asking session ended. Elevation, MCP access and installation share
-`subject_call` for subject-bound owner calls and approval consumption.
+entry names. An owner worker reads approved installation effects from the
+approvals owner and resolves each proposal's binding ID through the gateway
+owner, then checks the host-selected policy and persisted attempt context before
+consuming the decision and calling Hub apply with the approved digest. Consumed
+requests stay in the owner's queue until its bounded applied or terminal outcome
+is recorded; restarting the worker replays Hub's idempotent operation after an
+uncertain call. Hub retains the complete receipt, and status polling returns its
+recorded state and message even if the asking session ended. Elevation, MCP
+access and installation share `subject_call` for subject-bound owner calls and
+approval consumption.
 
 The HTTP MCP route bounds each JSON request at 512 KiB. Overlay calls through MCP
 accept at most 64 KiB of text or 87,384 bytes of canonical base64 per put

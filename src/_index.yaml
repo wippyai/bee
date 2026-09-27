@@ -235,11 +235,14 @@ entries:
       - bee.gateway.security:database_ref_policy
       - bee.gateway.security:execute_policy
       - bee.gateway.security:installation_policy
+      - bee.gateway.security:installation_queue_policy
+      - bee.gateway.security:installation_resolver_policy
+      - bee.gateway.security:installation_worker_policy
       - bee.gateway.security:installation_read_policy
       - bee.gateway.security:installation_apply_policy
       - bee.gateway.security:access_reference_policy
       - bee.gateway.security:access_policy_read_policy
-      - bee.security.approvals:approval_store_policy
+      - bee.security.approvals:approval_installation_effects_policy
       - bee.security.approvals:approval_request_policy
       - bee.security.approvals:approval_consume_policy
       - bee.security.desktop:host_policy

@@ -48,6 +48,18 @@ one effect key. Retention forgets a request only after its lifetime plus the
 retention window, with every delivery acknowledged; an idempotency key older
 than that horizon creates a fresh request.
 
+The host-authorized Hub installation worker reads its bounded queue through
+`bee.approvals.binding:installation_effects`, which returns approved installation
+requests whose effect result is not complete. After Hub returns an applied or
+terminal result, the requesting attempt records its bounded status outcome through
+`bee.approvals.binding:complete_installation_effect`. The operation checks the
+requester, workspace consume authority, proposal digest and consumed effect key;
+an identical completion replays and a different result conflicts. A worker
+restart can therefore submit an already-consumed request again until the Hub
+outcome is recorded, without reading the approvals table from the gateway store.
+Hub retains the complete receipt, including migration details; the approval
+owner stores only the bounded state and message needed for status.
+
 Approver policies are host-owned under `bee:approver_policies`:
 each names its approvers and the longest lifetime a request may ask for. An
 approver needs both the `bee.approvals.decide` action on the workspace and a
@@ -59,7 +71,7 @@ ceiling names only the feed, read and replica operations.
 | Slice | Responsibility |
 |---|---|
 | root `bee.approvals` | Contract, stable local binding, linked host references, default database and the owner domain library |
-| `binding/` | Callable approval operations, including the Hive policy operations |
+| `binding/` | Callable approval operations, including the host-authorized installation effect queue and completion, and the Hive policy operations |
 | `persist/` | Durable thread-projection outbox |
 | root `bee.approvals` | Linked database and host-policy readers |
 | `migrations/` | Immutable approval schema ledger |

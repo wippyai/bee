@@ -44,7 +44,7 @@ function M.primary(state: model.State): (string, string, boolean)
         if intent.phase == "settled" then return "read", " Read details ", true end
         return "status", " Check status ", true
     end
-    if verdict == "ready" then
+    if verdict == "ready" and (model.accepts_review(item) or model.can_select(item)) then
         local is_update = (state.changes and state.changes.base_revision > 0) or (state.report and state.report.base_revision > 0)
         if is_update then return "update", " Update ", true end
         return "install", " Install ", true

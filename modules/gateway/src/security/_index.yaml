@@ -153,7 +153,33 @@ entries:
     comment: Private per-binding installation requests call the approval operations and the Hub facade and read the host installation link; the thread-bound approval is the authority for the apply
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.hub.binding:call, bee.gateway:install_configuration_ref, bee.threads.service:get, bee.threads.service:read_after]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate,
+      bee.approvals.binding:complete_installation_effect, bee.hub.binding:call, bee.gateway:install_configuration_ref,
+      bee.threads.service:get, bee.threads.service:read_after]
+    effect: allow
+- name: installation_queue_policy
+  kind: security.policy
+  meta:
+    comment: The installation owner worker reads only the approvals owner's bounded installation effect queue
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:installation_effects]
+    effect: allow
+- name: installation_resolver_policy
+  kind: security.policy
+  meta:
+    comment: The installation owner worker resolves an approved request through the gateway binding owner
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.binding:installation_binding]
+    effect: allow
+- name: installation_worker_policy
+  kind: security.policy
+  meta:
+    comment: The installation owner worker resolves only gateway-owned attempt bindings for an approved effect
+  policy:
+    actions: [bee.gateway.installation_work]
+    resources: [resolve_binding]
     effect: allow
 - name: installation_read_policy
   kind: security.policy
@@ -174,7 +200,7 @@ entries:
 - name: installation
   kind: library.lua
   source: file://installation.lua
-  modules: [registry, sql, json]
+  modules: [registry, funcs]
   imports:
     bounds: bee.threads.records:bounds
     installation: bee.hub:installation

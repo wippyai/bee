@@ -8,6 +8,7 @@ local settle = require("settle")
 local driver_types = require("driver_types")
 local hook_records = require("hook_records")
 local gateway_hooks = require("gateway_hooks")
+local gateway_protocol = require("gateway_protocol")
 local canonical = require("canonical")
 
 type Object = {[string]: unknown}
@@ -123,6 +124,89 @@ local function define_tests()
             local wrong = checkpoint.new(pinned, 1)
             wrong.schema_revision = "bee.carrier.checkpoint@0"
             test.is_nil(checkpoint.decode(wrong))
+            local sparse = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            sparse.pending_writes = {[1] = {}, [3] = {}}
+            local sparse_decoded, sparse_error = checkpoint.decode(sparse)
+            test.is_nil(sparse_decoded)
+            test.eq(sparse_error, "pending_writes must be a bounded dense list: list keys must be dense")
+            local keyed = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            keyed.pending_writes = {unexpected = {}}
+            local keyed_decoded, keyed_error = checkpoint.decode(keyed)
+            test.is_nil(keyed_decoded)
+            test.eq(keyed_error, "pending_writes must be a bounded dense list: list keys must be dense")
+            local too_many = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            local writes: {[integer]: unknown} = {}
+            for index = 1, checkpoint.MAX_PENDING_WRITES + 1 do writes[index] = {} end
+            too_many.pending_writes = writes
+            local bounded, bounded_error = checkpoint.decode(too_many)
+            test.is_nil(bounded)
+            test.eq(bounded_error, "pending_writes must be a bounded dense list: list exceeds 8 items")
+        end)
+        test.it("rejects malformed gateway materialization credentials and nested bindings", function()
+            local binding: {[string]: unknown} = {binding_id = "binding", subject = "owner", action_id = "action", attempt_id = "attempt",
+                thread_id = "thread", owner_incarnation = 1, carrier_epoch = 2, tools = {}, hooks = {}, epoch = 0,
+                credential_generation = 3, expires_at = "2025-01-01T00:00:00.000Z", revoked = false, sealed = false,
+                workspace_name = "Workspace"}
+            local expected = {attempt_id = "attempt", carrier_epoch = 2, binding_id = "binding"}
+            local malformed_token, token_error = gateway_protocol.materialization_reply({ok = true,
+                value = {binding = binding, token = 17, generation = 3}}, expected)
+            test.is_nil(malformed_token)
+            test.eq(token_error, "materialization credentials or generation are malformed")
+            local malformed_binding, binding_error = gateway_protocol.materialization_reply({ok = true,
+                value = {binding = {}, token = "opaque", generation = 3}}, expected)
+            test.is_nil(malformed_binding)
+            test.is_true(tostring(binding_error):find("materialization binding", 1, true) ~= nil)
+            local accepted, accepted_error = gateway_protocol.materialization_reply({ok = true,
+                value = {binding = binding, token = "opaque", generation = 3}}, expected)
+            if not accepted then error(tostring(accepted_error)) end
+            test.eq(accepted.binding.attempt_id, "attempt")
+            test.eq(accepted.generation, 3)
+            local checked_value: {[string]: unknown} = {}
+            for key, value in pairs(binding) do checked_value[key] = value end
+            checked_value.valid = true
+            checked_value.generation = {epoch = 2, restarts = 1}
+            checked_value.presented_count = 0
+            local checked, checked_error = gateway_protocol.checked_binding(checked_value)
+            if not checked then error(tostring(checked_error)) end
+            test.eq(checked.generation.epoch, 2)
+            test.eq(checked.generation.restarts, 1)
+            checked_value.generation = {epoch = 2, restarts = 1, unexpected = true}
+            local malformed_checked, checked_generation_error = gateway_protocol.checked_binding(checked_value)
+            test.is_nil(malformed_checked)
+            test.eq(checked_generation_error, "checked binding fields are malformed: generation: unknown field unexpected")
+            local readiness, readiness_error = gateway_protocol.readiness({generation = {epoch = 2, restarts = 1}, address = "127.0.0.1:4312",
+                listening = true, binding = binding, binding_valid = true}, "binding")
+            if not readiness then error(tostring(readiness_error)) end
+            test.eq(readiness.generation.epoch, 2)
+            test.eq(readiness.generation.restarts, 1)
+            local bad_readiness, bad_readiness_error = gateway_protocol.readiness({generation = {epoch = 2, restarts = 1, extra = true},
+                address = "127.0.0.1:4312", listening = true, binding = binding, binding_valid = true}, "binding")
+            test.is_nil(bad_readiness)
+            test.eq(bad_readiness_error, "readiness generation: unknown field extra")
+        end)
+        test.it("decodes hook claims against their binding and carrier epoch", function()
+            local value = {binding_id = "binding", carrier_epoch = 4, hooks = {{event_id = "event"}}}
+            local claim, claim_error = gateway_protocol.hook_claim(value, "binding", 4)
+            if not claim then error(tostring(claim_error)) end
+            test.eq(claim.binding_id, "binding")
+            test.eq(claim.carrier_epoch, 4)
+            test.eq(#claim.hooks, 1)
+
+            local missing_id, missing_id_error = gateway_protocol.hook_claim({carrier_epoch = 4, hooks = {}}, "binding", 4)
+            test.is_nil(missing_id)
+            test.eq(missing_id_error, "hook claim binding_id is malformed")
+            local wrong_binding, wrong_binding_error = gateway_protocol.hook_claim({binding_id = "other", carrier_epoch = 4, hooks = {}}, "binding", 4)
+            test.is_nil(wrong_binding)
+            test.eq(wrong_binding_error, "hook claim names another binding")
+            local wrong_epoch, wrong_epoch_error = gateway_protocol.hook_claim({binding_id = "binding", carrier_epoch = 3, hooks = {}}, "binding", 4)
+            test.is_nil(wrong_epoch)
+            test.eq(wrong_epoch_error, "hook claim names another carrier epoch")
+            local unexpected, unexpected_error = gateway_protocol.hook_claim({binding_id = "binding", carrier_epoch = 4, hooks = {}, extra = true}, "binding", 4)
+            test.is_nil(unexpected)
+            test.eq(unexpected_error, "hook claim: unknown field extra")
+            local malformed, malformed_error = gateway_protocol.hook_claim({binding_id = "binding", carrier_epoch = 4, hooks = {[1] = {}, [3] = {}}}, "binding", 4)
+            test.is_nil(malformed)
+            test.eq(malformed_error, "hook claim: list keys must be dense")
         end)
         test.it("settles from the terminal envelope and never from exit alone", function()
             local terminal: driver_types.Terminal = {outcome = "succeeded", answer = "42", resume_ref = "s1", usage = nil, error = nil}

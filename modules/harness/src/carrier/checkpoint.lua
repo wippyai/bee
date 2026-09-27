@@ -25,6 +25,7 @@ type EventCursor = {envelope_index: integer, events_committed: integer}
 -- recorded; a resuming carrier asks the runner before deciding.
 type PendingWrite = {write_id: string, input_digest: string, data: string, dispatched: boolean}
 type PermissionPhase = "intended" | "requested" | "decided" | "consumed" | "declined" | "written" | "acknowledged" | "closed"
+type PermissionDecision = "approved" | "denied" | "expired" | "withdrawn"
 type AttemptState = "prepared" | "running" | "ended"
 type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
 -- One permission exchange from the request the harness emitted to the
@@ -44,7 +45,7 @@ type Permission = {
     write_id: string,
     phase: PermissionPhase,
     approval_id: string?,
-    decision: string?,
+    decision: PermissionDecision?,
     incarnation: integer?,
     response: string?,
 }
@@ -113,6 +114,13 @@ local function permission_phase(value: unknown): PermissionPhase?
     if value == "written" then return "written" end
     if value == "acknowledged" then return "acknowledged" end
     if value == "closed" then return "closed" end
+    return nil
+end
+local function permission_decision(value: unknown): PermissionDecision?
+    if value == "approved" then return "approved" end
+    if value == "denied" then return "denied" end
+    if value == "expired" then return "expired" end
+    if value == "withdrawn" then return "withdrawn" end
     return nil
 end
 local function terminal(value: unknown): (driver_types.Terminal?, string?)
@@ -360,9 +368,9 @@ function M.decode(value: unknown): (Checkpoint?, string?)
                 approval_id = bounds.id(permission.approval_id)
                 if not approval_id then return nil, "permissions[" .. tostring(index) .. "] approval_id is not an identifier" end
             end
-            local decision: string? = nil
+            local decision: PermissionDecision? = nil
             if permission.decision ~= nil then
-                decision = bounds.id(permission.decision)
+                decision = permission_decision(permission.decision)
                 if not decision then return nil, "permissions[" .. tostring(index) .. "] decision is not an identifier" end
             end
             local incarnation: integer? = nil
@@ -403,7 +411,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
     local stream_ended: boolean? = nil
     if object.stream_ended ~= nil then
         if type(object.stream_ended) ~= "boolean" then return nil, "stream_ended must be a boolean" end
-        stream_ended = object.stream_ended :: boolean
+        stream_ended = object.stream_ended
     end
     if object.dropping_stdout ~= nil and type(object.dropping_stdout) ~= "boolean" then
         return nil, "dropping_stdout must be a boolean"
@@ -411,7 +419,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
     local input_closed: boolean? = nil
     if object.input_closed ~= nil then
         if type(object.input_closed) ~= "boolean" then return nil, "input_closed must be a boolean" end
-        input_closed = object.input_closed :: boolean
+        input_closed = object.input_closed
     end
     local hint_subscription: string? = nil
     if object.hint_subscription ~= nil then

@@ -1570,11 +1570,23 @@ local function define_tests()
                 test.not_nil(run.attempt_id)
                 test.not_nil(run.receipt)
                 local settled: {[string]: unknown}? = nil
-                while settled == nil do
-                    local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60000}))
+                for _ = 1, 12 do
+                    local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 5000}))
                     if current.state == "ended" then settled = current end
+                    if settled ~= nil then break end
+                end
+                if settled == nil then
+                    local current = value(generated_call({operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id}))
+                    local failure = type(current.error) == "table" and current.error :: {[string]: unknown} or nil
+                    error("shipped executable_env launch did not settle within 60 seconds; state=" .. tostring(current.state)
+                        .. "; outcome=" .. tostring(current.outcome) .. "; detail=" .. tostring(failure and failure.message))
                 end
                 test.not_nil(settled)
+                if settled and settled.outcome ~= "succeeded" then
+                    local failure = settled.error :: {[string]: unknown}?
+                    error("shipped executable_env launch ended " .. tostring(settled.outcome)
+                        .. ": " .. tostring(failure and failure.message))
+                end
                 test.eq(settled and settled.outcome, "succeeded")
                 test.not_nil(settled and settled.answer)
                 local status = value(generated_call({operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id}))

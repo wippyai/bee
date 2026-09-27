@@ -105,6 +105,7 @@ entries:
     driver_types: bee.driver:types
     hook_records: bee.harness.carrier:hook_records
     gateway_hooks: bee.gateway:hooks
+    gateway_protocol: bee.gateway:protocol
     canonical: bee.threads.records:canonical
 - name: policy_test
   kind: function.lua
@@ -204,6 +205,7 @@ entries:
     test: wippy.test:test
     machine: bee.harness.carrier:machine
     driver_types: bee.driver:types
+    bounds: bee.threads.records:bounds
     policy: bee.harness.carrier:policy
     placement_types: bee.placement:types
     classify: bee.harness.catalog:classify

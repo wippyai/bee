@@ -1442,7 +1442,7 @@ entries:
     hook_records: bee.harness.carrier:hook_records
     placement_store: bee.placement.native.persist:store
     capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
+    capability_catalog: bee.capability:model
     sends: bee.threads.service:sends
 - name: codex_profile_test
   kind: function.lua

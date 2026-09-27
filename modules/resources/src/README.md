@@ -37,7 +37,7 @@ catalog extension, and the host binds them to that contract as
 `bee.resources:resources_workspace_extension`. Resource root path interpolation uses the narrow
 `bee.resources.security:resource_environment_policy` and resolves before the root digest is
 stored or checked; unrelated environment variables remain inaccessible.
-Revocation stops future authorization; an
-attempt already holding a materialized resource is fenced by the placement
-at its next reconciliation, which the placement reports as pending
-enforcement until then.
+Revocation stops future resolution. `revoke_all` reports its fenced attempts
+and asks the placement owner to recheck their recorded grants and stop any
+attempt that lost access. Placement reconciliation remains the enforcement
+backstop until exit is proven.

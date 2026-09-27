@@ -4,7 +4,7 @@
 local registry = require("registry")
 local activation_profiles = require("activation_profiles")
 local capability_grants = require("capability_grants")
-local capability_catalog = require("capability_catalog")
+local capability_model = require("capability_model")
 local workspace_applications = require("workspace_applications")
 local governed_admission = require("governed_admission")
 
@@ -86,9 +86,9 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
                 installed = package_grant and lookup(package_grant) or nil
             end
         end
-        local vocabulary: capability_catalog.Catalog? = nil
+        local vocabulary: unknown = nil
         if installed then
-            vocabulary = capability_catalog.decode(lookup("bee:capability_catalog"))
+            vocabulary = capability_model.decode(lookup("bee:capability_catalog"))
             local grant = vocabulary and application_id and capability_grants.decode(installed,
                 record.overlay_owner, workspace_id, application_id, vocabulary) or nil
             local live = grant and capability_grants.live(grant, lookup) or false

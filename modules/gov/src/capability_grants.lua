@@ -3,8 +3,7 @@
 local bounds = require("bounds")
 local canonical = require("canonical")
 local hash = require("hash")
-local catalog = require("capability_catalog")
-local containment = require("capability_containment")
+local capability_model = require("capability_model")
 local files = require("capability_files")
 local gateway = require("capability_gateway")
 
@@ -62,18 +61,9 @@ function M.reserved(raw: unknown): boolean
 end
 
 local function string_list(raw: unknown, pattern: string): {string}?
-    if type(raw) ~= "table" then return nil end
-    local result: {string} = {}
-    local seen: {[string]: boolean} = {}
-    for _, item in ipairs(raw :: {unknown}) do
-        if type(item) ~= "string" or not (item :: string):match(pattern) or seen[item :: string] then
-            return nil
-        end
-        seen[item :: string] = true
-        result[#result + 1] = item :: string
-    end
-    if #result == 0 or #result > 16 then return nil end
-    table.sort(result)
+    local result = capability_model.strings(raw)
+    if not result then return nil end
+    for _, value in ipairs(result) do if not value:match(pattern) then return nil end end
     return result
 end
 
@@ -85,19 +75,11 @@ local VIEWER_EXPRESSION = '((action == "process.spawn" || action == "process.spa
 local LEASE_EXPRESSION = '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$") || (action == "process.registry.lookup" && resource == "bee.workspace.hosts") || action == "process.send"'
 
 local function exposure_audiences(raw: unknown): {string}?
-    if type(raw) ~= "table" then return nil end
-    local result: {string} = {}
-    local seen: {[string]: boolean} = {}
-    for _, item in ipairs(raw :: {unknown}) do
-        if type(item) ~= "string" or #item == 0 or #item > 160 or seen[item :: string]
-            or ((item :: string) ~= "*" and not (item :: string):match("^[a-z][a-z0-9_.-]*$")) then
-            return nil
-        end
-        seen[item :: string] = true
-        result[#result + 1] = item :: string
+    local result = capability_model.strings(raw)
+    if not result then return nil end
+    for _, item in ipairs(result) do
+        if item ~= "*" and not item:match("^[a-z][a-z0-9_.-]*$") then return nil end
     end
-    if #result == 0 or #result > 16 then return nil end
-    table.sort(result)
     return result
 end
 
@@ -257,6 +239,21 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
     return nil, nil, nil, "capability has no application-installable enforcement"
 end
 
+-- Runtime requests use the same host policy generator as installation before
+-- they can reach approval. A synthetic workspace lets file templates be
+-- checked without creating entries or needing a destination workspace.
+function M.installable(operations_raw: unknown): (boolean?, string?)
+    local operations = list(operations_raw, 8)
+    if not operations or #operations ~= 1 then return nil, "capability template needs unsupported policy count" end
+    local grant = bounds.object(operations[1])
+    if not grant then return nil, "resolved capability is malformed" end
+    local folder: Object = {root_ref = "bee.resources:capability_check", directory = ".", subpath = ""}
+    local generated, _, _, realize_error = policy("capability_check", grant,
+        M.PREFIX .. "policy.check", folder)
+    if not generated then return nil, realize_error or "capability has no application-installable enforcement" end
+    return true, nil
+end
+
 -- The workspace folder is part of the measured set whenever a volume is
 -- rooted in it, so a moved workspace cannot reuse a grant for its old tree.
 local function digest_shape(capabilities: {Object}, bindings: {Object}, policies: {Object},
@@ -269,7 +266,7 @@ local function digest_shape(capabilities: {Object}, bindings: {Object}, policies
 end
 
 -- folder is the host-resolved workspace folder file grants are rooted in.
-function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unknown,
+function M.propose(vocabulary: unknown, owner_raw: unknown, app_raw: unknown,
     requirements_raw: unknown, prior: boolean?, folder: unknown?): (Proposal?, string?)
     local owner, app = bounds.id(owner_raw), bounds.id(app_raw)
     local rows = list(requirements_raw, 8)
@@ -292,8 +289,7 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
         if not item or not request or not requirement_id or seen[requirement_id]
             or not targets or #targets ~= 1
             or item.value ~= nil or item.expected_kind ~= "security.policy"
-            or request.path ~= ".security.policies +="
-            or request.catalog_revision ~= vocabulary.revision then
+            or request.path ~= ".security.policies +=" then
             return nil, "capability requirement is not a measured app policy append"
         end
         -- A Hive exposure grant joins the supervisor scope instead of an
@@ -306,20 +302,22 @@ function M.propose(vocabulary: catalog.Catalog, owner_raw: unknown, app_raw: unk
         elseif targets[1] ~= app or request.target ~= app then
             return nil, "capability requirement is not a measured app policy append"
         end
-        local template = type(request.capability) == "string" and vocabulary.capabilities[request.capability] or nil
-        if not template or request.template_revision ~= template.revision then
+        local catalog_revision, template_revision = capability_model.revisions(vocabulary, request.capability)
+        if not catalog_revision or not template_revision or request.catalog_revision ~= catalog_revision
+            or request.template_revision ~= template_revision then
             return nil, "capability template changed since resolution"
         end
-        local resolved, resolve_error = catalog.resolve(vocabulary, request.capability, request.parameters)
+        local resolved, resolve_error = capability_model.resolve(vocabulary, request.capability, request.parameters)
         if not resolved then return nil, resolve_error end
-        if #resolved ~= 1 then return nil, "capability template needs unsupported policy count" end
+        local resolved_operations = resolved :: {Object}
+        if #resolved_operations ~= 1 then return nil, "capability template needs unsupported policy count" end
         local id = policy_id(owner :: string, requirement_id :: string, prior and PRIOR_PREFIX or nil)
         if not id then return nil, "measure generated policy identity" end
-        local generated, volume, database, policy_error = policy(owner :: string, resolved[1], id, folder)
+        local generated, volume, database, policy_error = policy(owner :: string, resolved_operations[1], id, folder)
         if not generated then return nil, policy_error end
         seen[requirement_id] = true
-        requirement_of[resolved[1]] = requirement_id :: string
-        capabilities[#capabilities + 1] = resolved[1]
+        requirement_of[resolved_operations[1]] = requirement_id :: string
+        capabilities[#capabilities + 1] = resolved_operations[1]
         policies[#policies + 1] = generated
         bindings[#bindings + 1] = {requirement_id = requirement_id, policy_id = id}
         if volume then
@@ -380,7 +378,7 @@ function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
 end
 
 function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
-    app_raw: unknown, vocabulary: catalog.Catalog): (Object?, string?)
+    app_raw: unknown, vocabulary: unknown): (Object?, string?)
     local item, owner = bounds.object(raw), bounds.id(owner_raw)
     local data = item and bounds.object(item.data) or nil
     local expected = M.record_id(owner)
@@ -431,7 +429,8 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
         reproduced[index] = {id = binding.requirement_id, value = nil,
             expected_kind = "security.policy", targets = {app_raw}, capability_request = {
                 capability = grant.capability, parameters = grant.parameters,
-                template_revision = grant.template_revision, catalog_revision = vocabulary.revision,
+                template_revision = grant.template_revision,
+                catalog_revision = capability_model.revisions(vocabulary, grant.capability),
                 target = app_raw, path = ".security.policies +="}}
     end
     local resolved, resolve_error = M.propose(vocabulary, owner, app_raw, reproduced, item.id == prior_id,
@@ -500,21 +499,21 @@ function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
     return true, nil
 end
 
-function M.diff(vocabulary: catalog.Catalog, installed: Object?, proposal: Proposal): (Object?, string?)
+function M.diff(vocabulary: unknown, installed: Object?, proposal: Proposal): (Object?, string?)
     local old = installed and installed.capabilities or table.create(1, 0)
-    local compared, compare_error = containment.compare(old, proposal.capabilities)
+    local compared, compare_error = capability_model.compare(old, proposal.capabilities)
     if not compared then return nil, compare_error end
     local lines: {string} = {}
     for _, category in ipairs({"added", "widened", "narrowed", "removed", "changed"}) do
         for _, raw_change in ipairs(compared[category] :: {unknown}) do
             local change = raw_change :: Object
             local value = category == "removed" and change.before or change.after
-            local rendered, render_error = catalog.render(vocabulary, {value})
+            local rendered, render_error = capability_model.render(vocabulary, {value})
             if not rendered then return nil, render_error end
             lines[#lines + 1] = category .. ": " .. tostring(rendered[1])
         end
     end
-    local flows, flow_error = catalog.render(vocabulary, proposal.capabilities)
+    local flows, flow_error = capability_model.render(vocabulary, proposal.capabilities)
     if not flows then return nil, flow_error end
     for _, line in ipairs(flows) do
         if line:find(" may be sent to ", 1, true) then lines[#lines + 1] = line end

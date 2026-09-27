@@ -16,6 +16,10 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: '*'
+- name: dependency_capability
+  kind: ns.dependency
+  component: bee/capability
+  version: '*'
 - name: dependency_sync
   kind: ns.dependency
   component: bee/sync
@@ -48,9 +52,6 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
     transaction: bee.persist:transaction
-- name: capability_catalog
-  kind: library.lua
-  source: file://capability_catalog.lua
 - name: capability_files
   kind: library.lua
   source: file://capability_files.lua
@@ -62,9 +63,6 @@ entries:
   source: file://capability_gateway.lua
   imports:
     bounds: bee.threads.records:bounds
-- name: capability_containment
-  kind: library.lua
-  source: file://capability_containment.lua
 - name: capability_grants
   kind: library.lua
   source: file://capability_grants.lua
@@ -72,8 +70,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
-    capability_catalog: bee.gov:capability_catalog
-    capability_containment: bee.gov:capability_containment
+    capability_model: bee.capability:model
     capability_files: bee.gov:capability_files
     capability_gateway: bee.gov:capability_gateway
 - name: capability_request
@@ -83,7 +80,8 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    capability_catalog: bee.gov:capability_catalog
+    capability_model: bee.capability:model
+    capability_grants: bee.gov:capability_grants
 - name: delivery_protocol
   kind: library.lua
   source: file://delivery_protocol.lua
@@ -214,7 +212,7 @@ entries:
     application_admission: bee.gov:governed_application_admission
     workspace_applications: bee.gov:workspace_applications
     capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
+    capability_model: bee.capability:model
 - name: application_admissions
   kind: library.lua
   source: file://application_admissions.lua
@@ -222,7 +220,7 @@ entries:
   imports:
     activation_profiles: bee.gov:activation_profile_decoder
     capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
+    capability_model: bee.capability:model
     workspace_applications: bee.gov:workspace_applications
     governed_admission: bee.gov:governed_application_admission
 - name: workspace_applications
@@ -284,7 +282,7 @@ entries:
     bounds: bee.threads.records:bounds
     application_admission: bee.gov:governed_application_admission
     protected_kernel: bee.gov:protected_kernel
-    capability_catalog: bee.gov:capability_catalog
+    capability_model: bee.capability:model
     capability_grants: bee.gov:capability_grants
     capability_files: bee.gov:capability_files
 - name: staging_resources

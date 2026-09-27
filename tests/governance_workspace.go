@@ -43,7 +43,7 @@ func copyFile(destination, source string) error {
 }
 
 func setup(root string) error {
-	for _, name := range []string{"approvals", "gov", "hub", "persist", "sync", "threads"} {
+	for _, name := range []string{"approvals", "capability", "gov", "hive", "hub", "persist", "sync", "threads"} {
 		if err := copyTree(filepath.Join(root, "modules", name), filepath.Join("modules", name)); err != nil {
 			return fmt.Errorf("stage %s component: %w", name, err)
 		}
@@ -166,13 +166,13 @@ entries:
 	}
 
 	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
-	for _, name := range []string{"approvals", "gov", "hub", "persist", "sync", "threads"} {
+	for _, name := range []string{"approvals", "capability", "gov", "hive", "hub", "persist", "sync", "threads"} {
 		lock += "  - name: bee/" + name + "\n    version: 0.1.0-dev\n"
 	}
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write runtime lock: %w", err)
 	}
-	config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/gov: ./modules/gov\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/capability: ./modules/capability\n    bee/gov: ./modules/gov\n    bee/hive: ./modules/hive\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
 	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write bounded shutdown config: %w", err)
 	}

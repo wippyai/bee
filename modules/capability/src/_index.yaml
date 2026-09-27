@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.capability
+entries:
+- name: definition
+  kind: ns.definition
+  module: capability
+  readme: file://README.md
+  meta:
+    title: Bee capability model
+    comment: Pure catalog interpretation, grant scope comparison and revocation reports
+- name: model
+  kind: library.lua
+  source: file://model.lua

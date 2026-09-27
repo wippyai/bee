@@ -27,6 +27,7 @@ workspace:
     bee/application: ./modules/application
     bee/node: ./modules/node
     bee/resources: ./modules/resources
+    bee/capability: ./modules/capability
     bee/placement: ./modules/placement
     bee/placement-native: ./modules/placement-native
     bee/harness: ./modules/harness

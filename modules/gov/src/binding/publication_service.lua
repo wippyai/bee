@@ -19,7 +19,7 @@ local application_admission = require("application_admission")
 local publication_profiles = require("publication_profiles")
 local workspace_applications = require("workspace_applications")
 local capability_grants = require("capability_grants")
-local capability_catalog = require("capability_catalog")
+local capability_model = require("capability_model")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -203,7 +203,8 @@ function M.call(raw: unknown): Result
             or capability_grants.record_id(active.overlay_owner)
         local installed = record_id and registry.get(record_id) or nil
         if installed then
-            local vocabulary, catalog_error = capability_catalog.decode(registry.get("bee:capability_catalog"))
+            local raw_catalog = registry.get("bee:capability_catalog")
+            local vocabulary, catalog_error = capability_model.decode(raw_catalog)
             local record, record_error = vocabulary and capability_grants.decode(installed, active.overlay_owner,
                 workspace_id, identity.definition_id, vocabulary) or nil
             local live, live_error = false, nil

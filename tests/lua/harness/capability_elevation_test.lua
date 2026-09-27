@@ -86,29 +86,34 @@ local function admit_root()
     roots[#roots + 1] = {root_ref = ROOT, access = "write"}
     apply(entry)
 end
--- A test-only elevation template with a $parameter resource source, so
--- consumption maps the approved capability to one workspace association.
--- The row is removed again before the test ends.
-local function template_count(): integer
-    local entry = registry.get("bee:capability_catalog")
-    if not entry then error("capability catalog entry") end
-    return #(((entry.data :: Object).capabilities) :: {unknown})
-end
-local function add_template()
+-- Temporarily map the installable database capability to a workspace
+-- association so the runtime approval effect can be exercised end to end.
+local function set_database_source(source: string): string
     local entry = registry.get("bee:capability_catalog")
     if not entry then error("capability catalog entry") end
     local rows = (entry.data :: Object).capabilities :: {Object}
-    rows[#rows + 1] = {id = "test.elevation", revision = 1, confirm = "standard",
-        parameters = {name = "name"}, text = "Use test elevation database {name}",
-        policies = {{operation = "database.use", resource = "$name", scope = {name = "$name"}}},
-        resources = {{kind = "db.sql.sqlite", mode = "dedicated", source = "$name"}}}
-    apply(entry)
+    for _, row in ipairs(rows) do
+        if row.id == "app.database" then
+            local resources = row.resources :: {Object}
+            local previous = resources[1].source :: string
+            resources[1].source = source
+            apply(entry)
+            return previous
+        end
+    end
+    error("application database capability missing")
 end
-local function remove_template(previous: integer)
+local function restore_database_source(source: string)
     local entry = registry.get("bee:capability_catalog")
     if not entry then error("capability catalog entry") end
     local rows = (entry.data :: Object).capabilities :: {Object}
-    while #rows > previous do rows[#rows] = nil end
+    for _, row in ipairs(rows) do
+        if row.id == "app.database" then
+            local resources = row.resources :: {Object}
+            resources[1].source = source
+            break
+        end
+    end
     apply(entry)
 end
 local function define_tests()
@@ -136,13 +141,17 @@ local function define_tests()
                 attempt_id = attempt, thread_id = thread, owner_incarnation = 1, carrier_epoch = 1,
                 tools = tools, ttl_ms = 600000, idempotency_key = fresh("admit"), surface = surface, workspace_id = workspace})
             local binding_id = (binding.binding :: Object).binding_id :: string
+            local unrealizable = raw_call(AGENT, workspace, "bee.gateway.binding:request_capability",
+                {binding_id = binding_id, capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
+            test.is_false(unrealizable.ok)
+            test.eq((unrealizable.error :: Object).code, "INVALID")
+            test.is_true(tostring((unrealizable.error :: Object).message):find("fixed by its host resolver", 1, true) ~= nil)
             call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
                 name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "write"})
-            local previous = template_count()
-            add_template()
+            local previous_source = set_database_source("$name")
             local outcome = (function(): Object
                 local requested = call(AGENT, workspace, "bee.gateway.binding:request_capability", {binding_id = binding_id,
-                    capability = "test.elevation", parameters = {name = "elevdb"}, ttl_ms = 60000})
+                    capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
                 local approval_id = requested.approval_id :: string
                 test.is_nil(requested.grant_id)
                 local pending = call(AGENT, workspace, "bee.gateway.binding:capability_status",
@@ -152,9 +161,9 @@ local function define_tests()
                 test.eq(read.requester_id, AGENT)
                 test.eq(read.thread_id, thread)
                 local proposal = (read.proposal :: Object).payload :: Object
-                test.eq(proposal.capability, "test.elevation")
+                test.eq(proposal.capability, "app.database")
                 test.eq(proposal.attempt_id, attempt)
-                test.is_true(tostring(proposal.wording):find("Use test elevation database elevdb", 1, true) ~= nil)
+                test.is_true(tostring(proposal.wording):find("Use an isolated application database named elevdb", 1, true) ~= nil)
                 call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = approval_id,
                     expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
                 local granted = call(AGENT, workspace, "bee.gateway.binding:capability_status",
@@ -175,9 +184,8 @@ local function define_tests()
                     {grant_id = grant_id, subject = AGENT, audience = AGENT, attempt_id = attempt}), "REVOKED")
                 return granted
             end)()
-            remove_template(previous)
+            restore_database_source(previous_source)
             test.eq(outcome.status, "granted")
-            test.eq(template_count(), previous)
         end)
     end)
 end

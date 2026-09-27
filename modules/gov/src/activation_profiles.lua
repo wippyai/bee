@@ -6,7 +6,7 @@ local canonical = require("canonical")
 local application_admission = require("application_admission")
 local workspace_applications = require("workspace_applications")
 local capability_grants = require("capability_grants")
-local capability_catalog = require("capability_catalog")
+local capability_model = require("capability_model")
 
 local M = {}
 local MAX_PROFILES = 64
@@ -331,7 +331,7 @@ end
 -- One eligible overlay's profile, built as host configuration and
 -- decoded by the same rules as an explicit row.
 local function instantiate(rule: Template, workspace_id: string, source_node: string,
-    source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?,
+    source_workspace: string, installed_raw: unknown?, vocabulary: unknown?,
     owner_hint: string?): (DecodedProfile?, Object?, string?)
     local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace)
     if not identity then
@@ -392,7 +392,7 @@ end
 -- adds its capability-derived policy IDs beside the entry's base admission.
 local function instantiate_package(rule: Template, entry: PackageApplication, workspace_id: string,
     source_node: string, installed_raw: unknown?,
-    vocabulary: capability_catalog.Catalog?): (DecodedProfile?, Object?, string?)
+    vocabulary: unknown?): (DecodedProfile?, Object?, string?)
     local owner = M.package_owner(workspace_id, entry.component)
     if not owner then return nil, nil, "package application owner is invalid" end
     local policies: {unknown} = empty_list()
@@ -529,7 +529,7 @@ end
 -- source cannot replace it as an upgrade. The refusal names what a host
 -- configures.
 local function derived(rule: Template?, workspace_id: string, source_node: string, source_workspace: string,
-    node_id: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?,
+    node_id: string, installed_raw: unknown?, vocabulary: unknown?,
     owner_hint: string?, slot_source: string?): (DecodedProfile?, Object?, string?)
     if not rule or (source_node ~= node_id and not rule.hive) then
         return nil, nil, missing(workspace_id, source_node, source_workspace)
@@ -543,7 +543,7 @@ end
 
 function M.select_decoded(configuration: DecodedConfiguration, workspace_id: string, source_node: string,
     source_workspace: string, node_id: string, installed_raw: unknown?,
-    vocabulary: capability_catalog.Catalog?, owner_hint: string?): (DecodedProfile?, string?)
+    vocabulary: unknown?, owner_hint: string?): (DecodedProfile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
@@ -565,7 +565,7 @@ end
 -- is the source node of the desired activation the derived owner already
 -- holds, when one exists.
 function M.select(configuration: Configuration, workspace_id: string, source_node: string,
-    source_workspace: string, installed_raw: unknown?, vocabulary: capability_catalog.Catalog?,
+    source_workspace: string, installed_raw: unknown?, vocabulary: unknown?,
     owner_hint: string?, slot_source: string?): (Profile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
@@ -596,7 +596,7 @@ function M.package_admissions(configuration: DecodedConfiguration, workspace_id:
     if not rule or not rule.applications or #rule.applications == 0 then
         return admissions, nil
     end
-    local vocabulary: capability_catalog.Catalog? = nil
+    local vocabulary: unknown = nil
     for _, entry in ipairs(rule.applications) do
         local owner = M.package_owner(workspace_id, entry.component)
         if not owner then return nil, "package application owner is invalid" end
@@ -611,7 +611,7 @@ function M.package_admissions(configuration: DecodedConfiguration, workspace_id:
         if installed_raw ~= nil then
             if not vocabulary then
                 local raw_catalog = lookup("bee:capability_catalog")
-                local decoded_catalog = raw_catalog and capability_catalog.decode(raw_catalog) or nil
+                local decoded_catalog = raw_catalog and capability_model.decode(raw_catalog) or nil
                 if not decoded_catalog then return nil, "host capability catalog is unavailable" end
                 vocabulary = decoded_catalog
             end

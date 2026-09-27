@@ -11,7 +11,7 @@ local http_client = require("http_client")
 local bounds = require("bounds")
 local gateway = require("capability_gateway")
 local grants = require("capability_grants")
-local catalog = require("capability_catalog")
+local capability_model = require("capability_model")
 local workspace_applications = require("workspace_applications")
 local files = require("capability_files")
 
@@ -51,9 +51,11 @@ local function granted(): (unknown?, Object?, boolean, Reply?)
         if raw then owner = prior_owner :: string end
     end
     if not raw then return nil, nil, false, fail("DENIED", "the caller holds no installed application grants") end
-    local vocabulary, vocabulary_error = catalog.decode(registry.get("bee:capability_catalog"))
+    local raw_catalog = registry.get("bee:capability_catalog")
+    local vocabulary, vocabulary_error = capability_model.decode(raw_catalog)
     if not vocabulary then return nil, nil, false, fail("UNAVAILABLE", tostring(vocabulary_error)) end
-    local record, record_error = grants.decode(raw, owner, caller.workspace_id, caller.definition_id, vocabulary)
+    local record, record_error = grants.decode(raw, owner, caller.workspace_id, caller.definition_id,
+        vocabulary)
     if not record then return nil, nil, false, fail("DENIED", tostring(record_error)) end
     local live = grants.live(record, function(id: string): unknown return registry.get(id) end)
     return caller, record, live, nil

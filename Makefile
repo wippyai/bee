@@ -433,9 +433,14 @@ managed-launch-check: fixture-gateway-client
 managed-launch-fixture-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_launch_fixture.py
 
-.PHONY: thread-launch-check
+.PHONY: thread-launch-check thread-launch-live-check
 thread-launch-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py
+
+# Explicit provider login smoke. The subprocess receives no provider API key
+# variables; it uses the local CLI login file when both file and CLI exist.
+thread-launch-live-check: fixture-gateway-client
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py --live
 
 .PHONY: cross-session-check
 cross-session-check: fixture-gateway-client

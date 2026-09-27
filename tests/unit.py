@@ -59,11 +59,13 @@ def environment(folder):
     # PATH; every shard gets the binary, driver streams, and subsystem stores
     # from its own disposable fixture.
     fixture_bin = folder / "fixtures/harness/bin"
-    return {**database_environment(folder),
-            "WIPPY_CACHE_DIR": str(Path(os.environ.get("WIPPY_CACHE_DIR") or TEST_CACHE).resolve()),
-            "BEE_FIXTURE_BIN": str(fixture_bin),
-            "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
-            "PATH": str(fixture_bin) + os.pathsep + os.environ.get("PATH", "")}
+    variables = {**database_environment(folder),
+                 "WIPPY_CACHE_DIR": str(Path(os.environ.get("WIPPY_CACHE_DIR") or TEST_CACHE).resolve()),
+                 "BEE_FIXTURE_BIN": str(fixture_bin),
+                 "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
+                 "BEE_AMBIENT_LIVE_PROVIDER": "none",
+                 "PATH": str(fixture_bin) + os.pathsep + os.environ.get("PATH", "")}
+    return variables
 
 
 def run_shard(index, folder, entries, timeout=None):

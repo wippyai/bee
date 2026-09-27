@@ -366,6 +366,10 @@ local function shell(command: string): string
     executor:release()
     return output
 end
+local function fixture_home_file(home_path: string, relative: string): string
+    local target = assert(homes.os_path(home_path .. "/home/" .. relative))
+    return shell("cat " .. quote.posix(target))
+end
 local function has(list: {string}, wanted: string): boolean
     for _, item in ipairs(list) do
         if item == wanted then return true end
@@ -406,22 +410,17 @@ local function define_tests()
                 local projected, project_error = homes.project_attempt_login(attempt_home,
                     {provider = case.provider, definition_id = "bee.test." .. case.provider .. "_login", definition_revision = 1, format = format}, login, {})
                 if not projected then error(case.provider .. " fixture projection: " .. tostring(project_error)) end
-                local login_bytes, login_error = homes.read_provider_file(attempt_home, login_path)
-                if not login_bytes then error(case.provider .. " login missing: " .. tostring(login_error)) end
-                test.is_true(login_bytes == login)
+                test.eq(fixture_home_file(attempt_home, login_path), login)
                 for path, expected_bytes in pairs(expected) do
-                    local found, read_error = homes.read_provider_file(attempt_home, path)
-                    if not found then error(case.provider .. " config missing: " .. tostring(read_error)) end
-                    test.is_true(found == expected_bytes)
+                    test.eq(fixture_home_file(attempt_home, path), expected_bytes)
                 end
-                local unrelated, unrelated_error = homes.read_provider_file(attempt_home, "machine-home-only.txt")
-                test.is_nil(unrelated)
-                test.eq(unrelated_error, "provider file is missing")
+                local unrelated = assert(homes.os_path(attempt_home .. "/home/machine-home-only.txt"))
+                test.eq(shell("test ! -e " .. quote.posix(unrelated) .. " && printf missing"), "missing")
                 local remove_error = homes.remove_attempt(key)
                 test.is_nil(remove_error)
             end
         end)
-        test.it("refuses provider login reads through links created inside an attempt home", function()
+        test.it("refuses provider login write-back until runtime no-follow fs is available and leaves files unchanged", function()
             local key = assert(homes.attempt_key(OWNER, fresh("provider-home-link")))
             local attempt_home = assert(homes.create_attempt(key))
             local home = assert(homes.os_path(attempt_home .. "/home"))
@@ -431,11 +430,28 @@ local function define_tests()
             local projected, project_error = homes.project_attempt_login(attempt_home,
                 {provider = "codex", definition_id = "bee.test.codex_link_login", definition_revision = 1, format = format}, login, {})
             if not projected then error(tostring(project_error)) end
-            test.eq(shell("mv " .. quote.posix(home .. "/.codex/auth.json") .. " " .. quote.posix(home .. "/outside-login")
-                .. " && ln -s ../outside-login " .. quote.posix(home .. "/.codex/auth.json")), "")
-            local linked, linked_error = homes.read_provider_file(attempt_home, ".codex/auth.json")
+            local target = ".codex/auth.json"
+            local file_path = assert(homes.os_path(attempt_home .. "/home/" .. target))
+            local content, read_error = homes.read_provider_file(attempt_home, target)
+            test.is_nil(content)
+            test.eq(read_error, "provider login write-back requires runtime no-follow fs")
+            test.eq(shell("test \"$(cat " .. quote.posix(file_path) .. ")\" = " .. quote.posix(login) .. " && printf unchanged"), "unchanged")
+
+            test.eq(shell("mv " .. quote.posix(file_path) .. " " .. quote.posix(home .. "/.codex/original-login")
+                .. " && ln -s original-login " .. quote.posix(file_path)), "")
+            local linked, linked_error = homes.read_provider_file(attempt_home, target)
             test.is_nil(linked)
-            test.eq(linked_error, "provider file is not a regular file")
+            test.eq(linked_error, "provider login write-back requires runtime no-follow fs")
+            test.eq(shell("test -L " .. quote.posix(file_path) .. " && test \"$(cat " .. quote.posix(home .. "/.codex/original-login")
+                .. ")\" = " .. quote.posix(login) .. " && printf unchanged"), "unchanged")
+
+            test.eq(shell("mv " .. quote.posix(home .. "/.codex") .. " " .. quote.posix(home .. "/.codex-target")
+                .. " && ln -s .codex-target " .. quote.posix(home .. "/.codex")), "")
+            local linked_parent, parent_error = homes.read_provider_file(attempt_home, target)
+            test.is_nil(linked_parent)
+            test.eq(parent_error, "provider login write-back requires runtime no-follow fs")
+            test.eq(shell("test -L " .. quote.posix(home .. "/.codex") .. " && test \"$(cat "
+                .. quote.posix(home .. "/.codex-target/original-login") .. ")\" = " .. quote.posix(login) .. " && printf unchanged"), "unchanged")
             test.is_nil(homes.remove_attempt(key))
         end)
         test.it("checks login evidence in the selected provider home without opening files", function()
@@ -1964,17 +1980,18 @@ local function define_tests()
                 return has(observed, "credential.write_back") or has(observed, "credential.write_back_failed")
             end, 8000) then error("refreshed fixture login write-back did not settle") end
             test.eq(shell("test \"$(cat " .. quote.posix(source_root .. "/.codex/auth.json") .. ")\" = "
-                .. quote.posix(refreshed_login) .. " && printf refreshed"), "refreshed")
+                .. quote.posix(original_login) .. " && printf unchanged"), "unchanged")
             local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
-            local wrote_back = false
+            local write_back_refused = false
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                 test.is_nil(tostring(item.detail):find("ambient-refresh", 1, true))
-                if item.kind == "credential.write_back" then wrote_back = true end
+                if item.kind == "credential.write_back" then error("fixture login unexpectedly wrote back") end
                 if item.kind == "credential.write_back_failed" then
-                    error("refreshed fixture login write-back failed: " .. tostring(item.detail))
+                    test.is_true(tostring(item.detail):find("provider login write-back requires runtime no-follow fs", 1, true) ~= nil)
+                    write_back_refused = true
                 end
             end
-            if not wrote_back then error("fixture token write-back evidence was missing") end
+            if not write_back_refused then error("fixture token write-back refusal evidence was missing") end
             attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
 
             test.eq(shell("printf %s " .. quote.posix(original_login) .. " > " .. source_root .. "/.codex/auth.json"), "")

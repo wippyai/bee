@@ -17,6 +17,7 @@ Required environment: BEE_RUNTIME (the combined runtime binary) only.
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -31,9 +32,57 @@ ROOT = Path(__file__).resolve().parents[1]
 ACCEPTANCE = "starts an allow-listed child, delivers the brief, and waits for its answer and settlement"
 RUN_ACCEPTANCE = "launches a Codex worker on a new thread, follows its run by notify and wait, steers it, and cancels a second worker"
 TESTS = ("bee.harness.catalog:agent_launch_acceptance_test", "bee.harness.catalog:agent_run_acceptance_test")
+LIVE_TEST = ("bee.harness.catalog:agent_launch_acceptance_test",)
+
+
+def run_live_smokes():
+    home = Path.home()
+    logins = {
+        "claude": home / ".claude/.credentials.json",
+        "codex": home / ".codex/auth.json",
+    }
+    for provider, login_path in logins.items():
+        if not login_path.is_file():
+            print(f"Live {provider} orchestrator smoke: skipped (login file absent)")
+            continue
+        if not shutil.which(provider):
+            print(f"Live {provider} orchestrator smoke: skipped (CLI absent)")
+            continue
+        with fixture_workspace(managed_gateway=True) as folder:
+            # Pass only the home and command search path needed by the real CLI,
+            # plus fixture settings. Provider/API key variables are not passed.
+            environment = {
+                "HOME": str(home),
+                "PATH": os.environ.get("PATH", os.defpath),
+                "BEE_FIXTURE_BIN": str(folder / "fixtures/harness/bin"),
+                "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
+                "BEE_AMBIENT_LIVE_PROVIDER": provider,
+            }
+            started = time.time()
+            try:
+                run = subprocess.run([str(RUNTIME), "test", "--host", "bee:terminal", "test", *LIVE_TEST],
+                                     cwd=folder, capture_output=True, text=True, timeout=600, env=environment)
+            except subprocess.TimeoutExpired:
+                sys.exit(f"Live {provider} orchestrator smoke failed (runtime timeout; output withheld)")
+            out = re.sub(r"\x1b\[[0-9;]*m", "", run.stdout + run.stderr).replace("\r", "\n")
+            passed = re.search(r"^\s+o .*" + re.escape(ACCEPTANCE), out, re.M)
+            if run.returncode != 0 or not passed:
+                safe_failure = "completion proof failed"
+                for stage in ("host setup", "orchestrator completion", "orchestrator settlement", "child launch report",
+                              "child identity", "child completion"):
+                    if f"live {provider} smoke failed during {stage}" in out:
+                        safe_failure = "acceptance stage " + stage
+                        break
+                sys.exit(f"Live {provider} orchestrator smoke failed (runtime exit {run.returncode}; "
+                         f"{safe_failure}); output withheld")
+            print(f"Live {provider} orchestrator smoke: a real batch worker completed through the provider login profile "
+                  f"in {time.time() - started:.1f} s")
 
 
 def main():
+    if sys.argv[1:] not in ([], ["--live"]):
+        sys.exit("usage: thread_launch.py [--live]")
+    run_live = sys.argv[1:] == ["--live"]
     if not RUNTIME.is_file():
         sys.exit(f"BEE_RUNTIME must name the combined runtime binary; got {RUNTIME!r}")
     with fixture_workspace(managed_gateway=True) as folder:
@@ -47,7 +96,8 @@ def main():
         subprocess.run(["git", "-C", str(repository), "commit", "--quiet", "-m", "fixture base"], check=True)
         subprocess.run(["git", "-C", str(repository), "worktree", "add", "--quiet", "-b", "bee-fixture-worker", str(worktree)], check=True)
         environment = {**os.environ, "BEE_FIXTURE_BIN": str(folder / "fixtures/harness/bin"),
-                       "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"), "BEE_FIXTURE_GIT_COMMIT": "1"}
+                       "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"), "BEE_FIXTURE_GIT_COMMIT": "1",
+                       "BEE_AMBIENT_LIVE_PROVIDER": "none"}
         environment.pop("ANTHROPIC_API_KEY", None)
         started = time.time()
         run = subprocess.run([str(RUNTIME), "test", "--host", "bee:terminal", "test", *TESTS],
@@ -76,6 +126,9 @@ def main():
               "orchestrator's thread_wait returns its answer and terminal outcome; a managed orchestrator "
               "launches a confined Codex fixture worker that commits in a Git worktree, follows its run by "
               "notify and wait, steers it, and cancels a second worker")
+
+    if run_live:
+        run_live_smokes()
 
 
 if __name__ == "__main__":

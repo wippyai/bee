@@ -18,7 +18,7 @@ local configuration = require("configuration")
 local git_roots = require("git_roots")
 local M = {}
 type WriteBack = {projection_id: string, generation: integer, source_digest: string, path: string}
-type WriteBackResult = {projection_id: string, ok: boolean, code: string?, written: boolean?}
+type WriteBackResult = {projection_id: string, ok: boolean, code: string?, message: string?, written: boolean?}
 type Prepared = {environment: {[string]: string}, working_directory: string, arguments: {string}, home_path: string, writebacks: {WriteBack}}
 local function provider_home_matches(home: types.ProviderHome, source_path: unknown, format: unknown, source_write_back: unknown): boolean
     if type(source_path) ~= "string" or type(source_write_back) ~= "boolean" then return false end
@@ -61,7 +61,7 @@ function M.write_back(home_path: string, writebacks: {WriteBack}, owner_id: stri
     for index, candidate in ipairs(writebacks) do
         local content, read_error = homes.read_provider_file(home_path, candidate.path)
         if not content then
-            results[index] = {projection_id = candidate.projection_id, ok = false, code = read_error and "UNAVAILABLE" or "NOT_FOUND"}
+            results[index] = {projection_id = candidate.projection_id, ok = false, code = read_error and "UNAVAILABLE" or "NOT_FOUND", message = read_error}
         else
             local raw, call_error = funcs.call(resources.CREDENTIAL_WRITE_BACK, {projection_id = candidate.projection_id, subject = owner_id,
                 audience = owner_id, attempt_id = attempt_id, generation = candidate.generation, source_digest = candidate.source_digest, value = content})

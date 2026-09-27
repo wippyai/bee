@@ -512,7 +512,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 if result.ok then
                     evidence(db, attempt_id, "credential.write_back", "projection " .. result.projection_id .. (result.written and " refreshed token persisted" or " token unchanged"))
                 else
-                    evidence(db, attempt_id, "credential.write_back_failed", "projection " .. result.projection_id .. ": " .. tostring(result.code or "UNAVAILABLE"))
+                    evidence(db, attempt_id, "credential.write_back_failed", "projection " .. result.projection_id .. ": " .. tostring(result.message or result.code or "UNAVAILABLE"))
                 end
             end
         else

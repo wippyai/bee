@@ -277,35 +277,9 @@ local function read_bounded(vol: fs.FS, path: string, bound: integer, label: str
     if found == nil then return nil, read_error end
     return found, nil
 end
-function M.read_provider_file(home_path: string, relative: string): (string?, string?)
+function M.read_provider_file(_: string, relative: string): (string?, string?)
     if not formats.path(relative) then return nil, "provider file path escapes the home" end
-    local vol, vol_error = volume()
-    if not vol then return nil, vol_error end
-    local privacy_error = private_root(vol)
-    if privacy_error then return nil, privacy_error end
-    local target = home_path .. "/home/" .. relative
-    if not vol:exists(target) then return nil, "provider file is missing" end
-    local file, open_error = vol:open(target, "r")
-    if not file then return nil, "read provider file: " .. tostring(open_error) end
-    -- Keep the handle unread until atomic publication has rejected links and
-    -- pinned the directory entry away from the stopped worker.
-    local claimed, claim_error = vol:writefile(target, "", {atomic = true})
-    if not claimed then
-        file:close()
-        local details = bounds.object(claim_error and claim_error:details() or nil)
-        if details and details.published == true then return nil, "provider file claim durability is uncertain" end
-        return nil, "provider file is not a regular file"
-    end
-    local content, read_error = read_handle_bounded(file, M.MAX_LOGIN_BYTES, "provider file")
-    local closed, close_error = file:close()
-    if closed == false then return nil, "close provider file: " .. tostring(close_error) end
-    if content == nil then return nil, read_error end
-    local restored, restore_error = vol:writefile(target, content, {atomic = true})
-    if not restored then
-        local details = bounds.object(restore_error and restore_error:details() or nil)
-        return nil, details and details.published == true and "provider file restore durability is uncertain" or "provider file restore failed"
-    end
-    return content, nil
+    return nil, "provider login write-back requires runtime no-follow fs"
 end
 -- Read a composition base from this retained private home and compare the bytes
 -- read in this call with the durable initializer digest. Provider state is

@@ -128,18 +128,19 @@ copied as admitted, or created empty only when its host declaration marks it as
 a composition base. Bee's generated provider configuration is then composed by
 the selected driver.
 
-The CLI may refresh its own login file while it runs. After exit the runner
-first proves that the launch's required process group is empty, then atomically
-claims each declared login destination, refusing linked parents and linked or
-nonregular files. It calls the credential broker's `write_back` operation with
-the projection ID, generation and original source digest. The broker serializes
-comparison and atomic replacement, checks the active projection and source
-binding, and replaces only the original login file if its contents still match
-that digest. A newer machine login is left untouched.
+The CLI may refresh its own login file while it runs. The pinned runtime has
+no Lua filesystem operation that opens a regular file while refusing symlinks
+in every path component. The runner therefore refuses provider login
+write-back with `provider login write-back requires runtime no-follow fs` after
+the child exits. It leaves the worker file unchanged and never truncates or
+rewrites it to validate the path. Host-to-private-home projection remains
+available because the credential broker reads only the host-declared source
+files before the worker starts.
+
 Configuration and state files are never returned. Evidence records status and
-projection identity only; it never contains login bytes. Host filesystem
-access for write-back is limited to the credential broker and the declared file
-source.
+projection identity only; it never contains login bytes. The runtime feature
+branch adds the descriptor-relative no-follow read needed to resume write-back;
+Bee keeps the behavior disabled while its manifest pins the earlier runtime.
 
 Retained homes keep their existing identity marker and seed rules. The first
 seed records provider, definition ID and revision only after the login file is
@@ -166,7 +167,10 @@ explicitly authorized host HOME and select no login projection; private batch
 profiles project their declared files into attempt homes. Fixture unit tests
 cover all six driver declarations and placement paths, and the confined Codex
 fixture worker verifies that unrelated machine-home files stay outside its
-attempt home. Standard gates use only synthetic logins and fixture CLIs.
+attempt home. `thread-launch-check` uses fixture CLIs only. The opt-in
+`thread-launch-live-check` uses an installed Claude or Codex CLI with its local
+login file, passes no provider API key variables, and withholds runtime output.
+Standard gates never run the live smoke.
 
 ## Capability
 

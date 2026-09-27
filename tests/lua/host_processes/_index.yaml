@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.host.processes
+entries:
+- name: probe_test
+  kind: function.lua
+  source: file://probe_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    probe: bee.host.processes:probe
+    stop_request: bee.host.processes:stop_request

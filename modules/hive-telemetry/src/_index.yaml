@@ -8,10 +8,6 @@ entries:
   meta:
     title: Bee hive telemetry
     comment: Optional cluster telemetry; host composition and policy selection remain in Bee
-- name: dependency_threads
-  kind: ns.dependency
-  component: bee/threads
-  version: '*'
 - name: dependency_application
   kind: ns.dependency
   component: bee/application
@@ -38,9 +34,11 @@ entries:
   kind: function.lua
   source: file://presence.lua
   method: handle
-  modules: [system, time]
+  modules: [system]
   imports:
     types: bee.hive:types
+    sampling: bee.hive.telemetry:sampling
+    time_format: bee.protocol:time
   meta:
     hive: open
     hive_operation:
@@ -58,11 +56,19 @@ entries:
           sampled_at: {type: string}
   security:
     policies: [bee.security.hive:hive_telemetry_policy]
+- name: sampling
+  kind: library.lua
+  source: file://sampling.lua
+  imports:
+    bounds: bee.protocol:bounds
 - name: stats
   kind: function.lua
   source: file://stats.lua
   method: handle
-  modules: [system, time]
+  modules: [system]
+  imports:
+    sampling: bee.hive.telemetry:sampling
+    time_format: bee.protocol:time
   meta:
     hive: open
     hive_operation:
@@ -94,8 +100,7 @@ entries:
   method: handle
   imports:
     catalog: bee.hive:catalog
-    types: bee.hive:types
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
   meta:
     hive: open
     hive_operation:
@@ -123,7 +128,7 @@ entries:
   method: handle
   modules: [process, system]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.protocol:bounds
     leases: bee.application:host_leases
   meta:
     comment: Open Hive operation paging this node's live workspace holdings with each host phase and lease count
@@ -162,9 +167,10 @@ entries:
   kind: function.lua
   source: file://cluster.lua
   method: handle
-  modules: [process, channel, time, uuid, system]
+  modules: [system]
   imports:
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
+    contract: bee.protocol:application
     types: bee.hive:types
     client: bee.hive:client
   meta:

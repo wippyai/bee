@@ -50,11 +50,13 @@ type Result = transaction.Result
 type ResolverRoot = {component: string, version: string, parameters: {unknown}}
 type ResolverPolicy = {node_id: string, policy_digest: string, packages: Set,
     namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
-    database_bindings: DatabaseBindings?, applied: {[string]: unknown}, applied_databases: {[string]: unknown},
+    database_bindings: DatabaseBindings?, applied: {[string]: preflight.Migration},
+    applied_databases: {[string]: preflight.DatabaseEvidence},
     migration_barrier: boolean, auto_start: boolean, applications: {Object}?, workspace_id: string?, overlay_owner: string?,
     source_node: string?, source_workspace: string?, workspace_application: boolean?,
     base_policy_digest: string?}
-type Resolver = {resolve: (Resolver, unknown) -> (unknown?, unknown?, string?)}
+type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
+type OwnerConfigResult = {ok: true, config: owner.Config} | {ok: false, error: string}
 
 local function failure(code: string, message: string): Result
     return transaction.failure(code, message)
@@ -203,14 +205,20 @@ local function migration_binding(profile_value: Profile, target: string): (Datab
     return binding, nil
 end
 
-local function approval_executor(): (unknown?, string?)
+local function approval_executor(): (owner.Executor?, string?)
     local request_id, request_ref_error = resources.approval_request_policy()
     local consume_id, consume_ref_error = resources.approval_consume_policy()
     if not request_id or not consume_id then return nil, tostring(request_ref_error or consume_ref_error or "approval policies are unavailable") end
     local request, request_error = security.policy(request_id)
     local consume, consume_error = security.policy(consume_id)
     if not request or not consume then return nil, tostring(request_error or consume_error or "load approval policies") end
-    return funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope({request, consume})), nil
+    local caller = funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope({request, consume}))
+    local executor: owner.Executor = {call = function(_self: owner.Executor, target: string, input: unknown): (unknown?, unknown?)
+        local result, problem = caller:call(target, input)
+        local value = bounds.object(result)
+        return value, problem and tostring(problem) or nil
+    end}
+    return executor, nil
 end
 
 -- The destination workspace's folder, read from the node workspace catalog
@@ -254,37 +262,68 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
         if not version then return nil, "selected plan version is invalid" end
         return {component = profile_value.component, version = version, parameters = profile_value.parameters}, nil
     end
-    local function selected_policy(spec_raw: unknown, _captured: unknown, _preview: Object): (ResolverPolicy?, string?)
+    local function selected_policy(spec_raw: unknown, _captured: unknown, _preview: unknown): (ResolverPolicy?, string?)
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id then return nil, "activation policy belongs to another node" end
-        local applied: Object = {}
-        local applied_databases: Object = {}
+        local applied: {[string]: preflight.Migration} = {}
+        local applied_databases: {[string]: preflight.DatabaseEvidence} = {}
         if activation_store then
             local known = activations.applied(activation_store, profile_value.component)
             if not known.ok then return nil, tostring(known.message or "read applied migration facts") end
             local evidence = bounds.object(known.value)
-            applied = evidence and bounds.object(evidence.migrations) or {}
-            local historical = evidence and bounds.object(evidence.databases) or {}
-            applied_databases = historical
-            for _, fact in pairs(applied) do
-                local item = bounds.object(fact)
+            local historical_migrations = evidence and bounds.object(evidence.migrations) or nil
+            local historical_databases = evidence and bounds.object(evidence.databases) or nil
+            if not evidence or not historical_migrations or not historical_databases then
+                return nil, "stored applied migration evidence is malformed"
+            end
+            for key, raw in pairs(historical_migrations) do
+                local item = bounds.object(raw)
                 local target = item and bounds.id(item.target_db) or nil
                 local migration_id = item and bounds.id(item.id) or nil
-                if not target or not migration_id then return nil, "stored applied migration fact is malformed" end
-                local captured = bounds.object(historical[target])
+                local checksum = item and bounds.text(item.checksum, 64) or nil
+                local ordinal = item and bounds.count(item.ordinal) or nil
+                if type(key) ~= "string" or not target or not migration_id or key ~= target .. "\n" .. migration_id
+                    or not checksum or #checksum ~= 64 or not checksum:match("^[0-9a-f]+$")
+                    or ordinal == nil then return nil, "stored applied migration fact is malformed" end
+                applied[key] = {id = migration_id, target_db = target, checksum = checksum, ordinal = ordinal}
+            end
+            for target_key, raw in pairs(historical_databases) do
+                local captured = bounds.object(raw)
+                local target = bounds.id(target_key)
+                local database_id = captured and bounds.id(captured.database_id) or nil
+                local kind = captured and bounds.id(captured.kind) or nil
+                local package = captured and bounds.id(captured.package) or nil
+                local digest = captured and bounds.text(captured.digest, 64) or nil
+                local table_prefix: string? = nil
+                if captured and captured.table_prefix ~= nil then
+                    table_prefix = bounds.text(captured.table_prefix, 64)
+                    if not table_prefix or not table_prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then
+                        return nil, "stored applied migration table prefix is malformed"
+                    end
+                end
+                if not target or not captured or captured.target_db ~= target or not database_id or not kind
+                    or not package or not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$")
+                    or captured.planned ~= false then
+                    return nil, "stored applied migration database evidence is malformed"
+                end
+                applied_databases[target] = {database_id = database_id, table_prefix = table_prefix,
+                    kind = kind, package = package, digest = digest}
+            end
+            for _, fact in pairs(applied) do
+                local captured = applied_databases[fact.target_db]
                 if not captured then return nil, "stored applied migration has no database evidence" end
-                local binding, binding_error = migration_binding(profile_value, target)
+                local binding, binding_error = migration_binding(profile_value, fact.target_db)
                 if binding_error then return nil, binding_error end
-                local current_database = binding and binding.database_id or target
+                local current_database = binding and binding.database_id or fact.target_db
                 local current_prefix = binding and binding.table_prefix or nil
                 if captured.database_id ~= current_database or captured.table_prefix ~= current_prefix then
-                    return nil, "activation profile changes an applied migration database binding: " .. target
+                    return nil, "activation profile changes an applied migration database binding: " .. fact.target_db
                 end
                 local frozen = {database_id = captured.database_id :: string,
                     table_prefix = captured.table_prefix :: string?}
-                local present, ledger_error = migration_runner.is_applied(target, migration_id, frozen)
+                local present, ledger_error = migration_runner.is_applied(fact.target_db, fact.id, frozen)
                 if present == nil then return nil, tostring(ledger_error or "read target migration ledger") end
-                if not present then return nil, "target migration ledger differs from Governance facts: " .. migration_id end
+                if not present then return nil, "target migration ledger differs from Governance facts: " .. fact.id end
             end
         end
         return {node_id = node_id, policy_digest = profile_value.policy_digest,
@@ -390,9 +429,9 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
 end
 
 local function owner_config(config: Configuration, profile_value: Profile, plan_store: plans.Store,
-    activation_store: activations.Store): (owner.Config?, string?)
+    activation_store: activations.Store): OwnerConfigResult
     local executor, executor_error = approval_executor()
-    if not executor then return nil, executor_error end
+    if not executor then return {ok = false, error = tostring(executor_error or "approval executor is unavailable")} end
     local workspace_identity = workspace_applications.identity(profile_value.workspace_id,
         profile_value.source_workspace)
     local base_digest: string? = nil
@@ -402,7 +441,7 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
         and workspace_identity.component == profile_value.component then
         local base, base_error = activation_profiles.select(config, profile_value.workspace_id,
             profile_value.source_node, profile_value.source_workspace, nil, nil, profile_value.overlay_owner)
-        if not base then return nil, base_error end
+        if not base then return {ok = false, error = tostring(base_error or "read activation profile base")} end
         base_digest = base.policy_digest
     end
     local resolved = destination_resolver(profile_value, activation_store.node,
@@ -410,13 +449,13 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     local migration_adapter = {
         matches = migration_effect.matches, prepare = migration_effect.prepare,
         clear = migration_effect.clear, cleared = migration_effect.cleared,
-        execute = function(work: unknown): ({bytes: string, digest: string}?, boolean, string?)
+        execute = function(work: migration_work.Work): ({bytes: string, digest: string}?, boolean, string?)
             local receipt, complete, execute_error = migration_effect.execute(work, profile_value.migration_policies)
             return receipt, complete, execute_error
         end,
     }
-    return {plans = plan_store, activations = activation_store, resolver = resolved :: owner.Resolver,
-        approvals = executor :: owner.Executor, actor_id = ACTOR, consumer_id = ACTOR,
+    local owner_configuration: owner.Config = {plans = plan_store, activations = activation_store, resolver = resolved,
+        approvals = executor, actor_id = ACTOR, consumer_id = ACTOR,
         overlay_owner = profile_value.overlay_owner, approval_policy = profile_value.approval_policy,
         apply = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): ({[string]: unknown}?, string?)
             local generated, generated_error = generated_install(profile_value, intent)
@@ -426,7 +465,8 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
             local generated, generated_error = generated_install(profile_value, intent)
             if generated_error then return nil, generated_error end
             return materializer.matches_composed(overlay_owner, entries, admission, generated)
-        end, migrations = migration_adapter}, nil
+        end, migrations = migration_adapter}
+    return {ok = true, config = owner_configuration}
 end
 
 -- Read-only entry-set comparison for one staged plan. It decodes the exact
@@ -765,22 +805,23 @@ function M.call(raw: unknown): Result
         if config and source_node and source_workspace then
             chosen, profile_error = selected(config, workspace_id, source_node, source_workspace, activation_store)
         end
-        local composed: any = nil
+        local composed: owner.Config? = nil
         local compose_error: string? = nil
         if chosen and config then
-            composed, compose_error = owner_config(config, chosen, plan_store, activation_store)
+            local configured = owner_config(config, chosen, plan_store, activation_store)
+            if configured.ok then composed = configured.config else compose_error = configured.error end
         end
         if result == nil then
             if not config or not chosen or not composed then
                 result = failure("BLOCKED", config_error or profile_error or compose_error or "activation configuration is unavailable")
             elseif operation == "prepare" then
-                result = owner.prepare(composed :: owner.Config, {source_node = request.source_node,
+                result = owner.prepare(composed, {source_node = request.source_node,
                     source_workspace = request.source_workspace, version = request.version,
                     intent_id = request.intent_id, receipt_key = request.receipt_key})
             elseif operation == "step" then
-                result = owner.step(composed :: owner.Config, request.intent_id, request.receipt_key)
+                result = owner.step(composed, request.intent_id, request.receipt_key)
             elseif operation == "recover" then
-                result = owner.recover(composed :: owner.Config, request.receipt_key)
+                result = owner.recover(composed, request.receipt_key)
             else
                 result = failure("INVALID", "unsupported destination operation")
             end
@@ -827,16 +868,16 @@ function M.recover_all(): (boolean, string?)
             end
             local chosen = selected(config, workspace_id, source_node, source_workspace, activation_store)
             if not chosen or chosen.overlay_owner ~= overlay_owner then break end
-            local composed, compose_error = owner_config(config, chosen, plan_store, activation_store)
-            if not composed then
+            local configured = owner_config(config, chosen, plan_store, activation_store)
+            if not configured.ok then
                 close(plan_store, activation_store)
-                return false, compose_error or "desired activation has no host profile"
+                return false, configured.error
             end
             local receipt_bytes = canonical.encode({schema_revision = "bee.governance-recovery@1",
                 workspace_id = workspace_id, intent_id = intent.intent_id, revision = intent.revision, attempt = attempt})
             local receipt = receipt_bytes and hash.sha256(receipt_bytes) or nil
             if not receipt then close(plan_store, activation_store); return false, "measure activation recovery" end
-            local recovered = owner.recover(composed :: owner.Config, receipt)
+            local recovered = owner.recover(configured.config, receipt)
             if not recovered.ok then close(plan_store, activation_store); return false, recovered.message end
             local recovered_value = bounds.object(recovered.value)
             if recovered_value and recovered_value.phase == "settled" then break end

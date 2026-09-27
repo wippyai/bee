@@ -52,6 +52,7 @@ entries:
   source: file://model.lua
   modules: [json, hash]
   imports:
+    bounds: bee.threads.records:bounds
     text: bee.application:text
     canonical: bee.sync:canonical
 - name: view

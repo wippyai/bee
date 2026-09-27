@@ -57,6 +57,7 @@ entries:
     activation_store: bee.gov.persist:activation_store
     headless_revert: bee.gov:headless_revert
     destination_service: bee.gov.binding:destination_service
+    transaction: bee.persist:transaction
 - name: destination_call
   kind: function.lua
   source: file://destination_method.lua
@@ -203,6 +204,7 @@ entries:
     destination: bee.gov.binding:destination
     materializer: bee.gov:materializer
     migration_effect: bee.gov.binding:migration_effect
+    migration_work: bee.gov:migration_work
     migration_runner: bee.hub.binding:migration_runner
     activation_profiles: bee.gov:activation_profile_decoder
     capability_grants: bee.gov:capability_grants

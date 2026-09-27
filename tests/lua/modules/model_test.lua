@@ -122,6 +122,25 @@ local function define_tests()
             test.eq(catalog.request and catalog.request.keyword, "")
             test.eq(catalog.request and catalog.request.query, "docker")
         end)
+        test.it("rejects malformed catalog counters and object keys without replacing valid state", function()
+            local state = model.new()
+            model.apply_catalog(state, ok({total = 1, items = {{component = "acme/valid", title = "Valid", description = "", latest_version = "1.0.0"}}}))
+            local original = state.catalog[1]
+            local malformed = {
+                {total = "2", items = {{component = "acme/replacement"}}},
+                {total = 1.5, items = {{component = "acme/replacement"}}},
+                {total = 0 / 0, items = {{component = "acme/replacement"}}},
+                {total = math.huge, items = {{component = "acme/replacement"}}},
+                {[1] = "unexpected object key"},
+            }
+            for _, value in ipairs(malformed) do
+                model.apply_catalog(state, ok(value))
+                test.eq(#state.catalog, 1)
+                test.eq(state.catalog[1].component, original.component)
+                test.eq(state.total, 1)
+                test.neq(state.notice, "")
+            end
+        end)
         test.it("accepts JSON parameter values with their native types and invalidates a displayed plan", function()
             local state = model.new()
             model.select(state, "userspace/docker")
@@ -135,6 +154,35 @@ local function define_tests()
             test.is_nil(model.set_parameter(state, "userspace.docker:enabled", "false"))
             test.is_nil(state.plan)
             test.not_nil(model.set_parameter(state, "userspace.docker:bad", "not-json"))
+        end)
+        test.it("rejects malformed plan revisions and collections without replacing the displayed plan", function()
+            local state = model.new()
+            model.select(state, "acme/app")
+            model.select_version(state, "1.0.0")
+            local valid: {[string]: unknown} = {digest = string.rep("a", 64), ready = true, base_revision = 7,
+                modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {},
+                request = {action = "install", component = "acme/app", version = "1.0.0",
+                    migration_policy = "none", parameters = {}}}
+            model.apply_plan(state, ok(valid))
+            test.not_nil(state.plan)
+            local accepted_digest = state.plan and state.plan.digest
+            local missing_revision: {[string]: unknown} = {digest = string.rep("b", 64), ready = true,
+                modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {}, request = valid.request}
+            local malformed: {unknown} = {
+                missing_revision,
+                {digest = string.rep("b", 64), ready = true, base_revision = "8", modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {}, request = valid.request},
+                {digest = string.rep("b", 64), ready = true, base_revision = 7.5, modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {}, request = valid.request},
+                {digest = string.rep("b", 64), ready = true, base_revision = 0 / 0, modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {}, request = valid.request},
+                {digest = string.rep("b", 64), ready = true, base_revision = math.huge, modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {}, request = valid.request},
+                {digest = string.rep("b", 64), ready = "yes", base_revision = 8, modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {}, request = valid.request},
+                {digest = string.rep("b", 64), ready = true, base_revision = 8, modules = {[1] = {}, [3] = {}}, missing = {}, migrations = {}, starts = {}, capabilities = {}, request = valid.request},
+                {[1] = "malformed object key"},
+            }
+            for _, value in ipairs(malformed) do
+                model.apply_plan(state, ok(value))
+                test.eq(state.plan and state.plan.digest, accepted_digest)
+                test.neq(state.notice, "")
+            end
         end)
         test.it("hydrates an update from the installed root's typed parameters", function()
             local state = model.new()

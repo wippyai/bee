@@ -38,17 +38,13 @@ local function main()
         if not db then logger:warn("Forwarding pump cannot open its store", {cause = tostring(open_error)}); return end
         local claimed = outbox.claim_pump_due(db, {holder = "bee.threads.pump", limit = pump.BATCH})
         db:release()
-        if not claimed.ok then logger:warn("Forwarding pump claim was refused", {cause = tostring(claimed.message)}); return end
-        local value = type(claimed.value) == "table" and (claimed.value :: {[string]: unknown}) or {}
-        local deliveries = value.deliveries
-        if type(deliveries) ~= "table" then return end
-        for _, raw_delivery in ipairs(deliveries :: {unknown}) do
-            local delivery = type(raw_delivery) == "table" and (raw_delivery :: {[string]: unknown}) or {}
-            local outbox_id = tostring(delivery.outbox_id or "")
-            local input: {[string]: unknown} = {}
-            for name, item in pairs(delivery) do
-                if name ~= "outbox_id" then input[name] = item end
-            end
+        local deliveries, decode_error = pump.claimed(claimed)
+        if not deliveries then logger:error("Forwarding pump received a malformed claim", {cause = tostring(decode_error)}); return end
+        for _, delivery in ipairs(deliveries) do
+            local outbox_id = delivery.outbox_id
+            local input = bounds.object(delivery)
+            if not input then logger:error("Forwarding pump decoded a non-object delivery", {outbox_id = outbox_id}); return end
+            input.outbox_id = nil
             local reply, transport_error = sender.deliver(input, {timeout = "25s"})
             local outcome = pump.outcome(reply, transport_error)
             if outcome.decision == "delivered" then

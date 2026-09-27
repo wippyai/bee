@@ -70,6 +70,7 @@ entries:
     plan_store: bee.gov.persist:plan_store
     materializer: bee.gov:materializer
     overlay_resolver: bee.gov:overlay_resolver
+    preflight: bee.gov:preflight
     publisher: bee.gov.binding:publisher
     sync: bee.sync.persist:store
   meta:

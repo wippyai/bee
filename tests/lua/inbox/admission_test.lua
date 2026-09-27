@@ -155,7 +155,7 @@ local function define_tests()
             local forged = probe(app_actor,
                 {workspace_id = workspace, approval_id = approval_id, decide = true, decision = "approved", forge = true},
                 app_metadata)
-            test.eq(forged.decide, "refused: INVALID")
+            test.eq(forged.decide, "refused: INVALID_ARGUMENT")
             local approver = probe(app_actor, {workspace_id = workspace, approval_id = approval_id, decide = true, decision = "approved"}, app_metadata)
             test.eq(approver.visible, 1)
             test.eq(approver.decide, "ok")

@@ -36,24 +36,6 @@ local function line_or_empty(value: unknown, limit: integer): string?
     return value
 end
 
-local function dense(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
-    if type(value) ~= "table" then return nil, label .. " must be a list" end
-    local count = 0
-    for key in pairs(value) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then
-            return nil, label .. " must be a dense list"
-        end
-        count = count + 1
-    end
-    if count > maximum then return nil, label .. " exceeds " .. tostring(maximum) .. " items" end
-    local items: {unknown} = {}
-    for index = 1, count do
-        if value[index] == nil then return nil, label .. " must be a dense list" end
-        items[index] = value[index]
-    end
-    return items, nil
-end
-
 local function title(value: unknown, fallback: string): string?
     if type(value) ~= "string" then return nil end
     if value == "" then return fallback end
@@ -122,7 +104,7 @@ function M.decode_browse(raw: unknown): (Browse?, string?)
     if not value then return nil, "Hub catalog response must be an object" end
     local extra = bounds.fields(value, {"items", "total", "page", "page_size"})
     if extra then return nil, extra end
-    local raw_items, items_error = dense(value.items, "Hub catalog items", M.MAX_ITEMS)
+    local raw_items, items_error = bounds.dense_list(value.items, M.MAX_ITEMS, "Hub catalog items")
     if not raw_items then return nil, items_error end
     local total = bounds.count(value.total)
     if total == nil then return nil, "Hub catalog has an invalid total" end
@@ -145,7 +127,7 @@ function M.decode_versions(raw: unknown): (VersionPage?, string?)
     if not value then return nil, "Hub version response must be an object" end
     local extra = bounds.fields(value, {"items", "total", "page", "page_size"})
     if extra then return nil, extra end
-    local raw_items, items_error = dense(value.items, "Hub versions", M.MAX_VERSIONS)
+    local raw_items, items_error = bounds.dense_list(value.items, M.MAX_VERSIONS, "Hub versions")
     if not raw_items then return nil, items_error end
     local total = bounds.count(value.total)
     if total == nil then return nil, "Hub versions has an invalid total" end

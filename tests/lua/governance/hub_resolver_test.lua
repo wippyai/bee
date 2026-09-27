@@ -7,26 +7,19 @@ local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, en
     {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
 local artifact = require("artifact")
 local resolver = require("hub_resolver")
+local preflight = require("preflight")
 
 type Object = {[string]: unknown}
 type Spec = {owner_node: string, source_node: string, artifact_bytes: string, artifact_digest: string,
     parameters: {unknown}?}
-type Artifact = {schema_revision: string, entries: {Object}, bytes: string, digest: string}
-type CandidateEntry = {id: string, kind: string, package: string, digest: string,
-    references: {string}, auto_start: boolean, grants: {string}, modules: {string}}
-type Candidate = {destination_node: string, source_node: string, base_revision: integer,
-    base_digest: string, artifacts: {Object}, entries: {CandidateEntry}, requirements: {Object}, migrations: {Object}}
-type Context = {node_id: string, registry_revision: integer, registry_digest: string,
-    policy_digest: string, packages: {[string]: boolean}, namespaces: {[string]: boolean},
-    kinds: {[string]: boolean}, databases: {[string]: boolean}, grants: {[string]: boolean},
-    modules: {[string]: boolean}, database_bindings: {[string]: Object}?, entries: {[string]: CandidateEntry}, applied: {[string]: Object},
-    exact_expansion: boolean, migration_barrier: boolean}
-type Facts = {candidate: Candidate, context: Context}
-type Captured = {revision: integer, entries: {Object}, resolution: Object?, preview: (Object) -> (Object?, string?)}
-type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
-    namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
-    grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    database_bindings: {[string]: Object}?, migration_barrier: boolean}
+type Artifact = artifact.Artifact
+type CandidateEntry = preflight.Entry
+type Candidate = preflight.Candidate
+type Context = preflight.Context
+type Facts = {candidate: preflight.Candidate, context: preflight.Context}
+type Captured = resolver.Captured
+type Policy = resolver.Policy
+type Deps = resolver.Deps
 
 local SHA = string.rep("a", 64)
 
@@ -47,7 +40,7 @@ local function source_artifact(): Artifact
     return made
 end
 
-local function deps_fixture(policy: Object?): (Object, Spec, {root: Object?, captured: Captured?})
+local function deps_fixture(policy: Policy?): (Deps, Spec, {root: Object?, captured: Captured?})
     local supplied = source_artifact()
     local spec: Spec = {owner_node = "node-destination", source_node = "node-source",
         artifact_bytes = supplied.bytes, artifact_digest = supplied.digest}
@@ -65,7 +58,7 @@ local function deps_fixture(policy: Object?): (Object, Spec, {root: Object?, cap
     local updated_entry = entry("app:claimed", "vendor/app", "registry-owner")
     local preview_entry = entry("app:new", "vendor/app", "preview-created")
     local deleted_entry = entry("app:removed", "vendor/app", "removed-by-preview")
-    local preview: Object = {
+    local preview: resolver.RegistryPlan = {
         -- A runtime plan normally contains changes, so this intentionally
         -- omits app:kept.  The resolver must flatten the selected package's
         -- unchanged registry entries together with these changes.
@@ -80,9 +73,9 @@ local function deps_fixture(policy: Object?): (Object, Spec, {root: Object?, cap
     }
     local captured: Captured = {
         revision = 23, entries = current, resolution = {base = "captured"},
-        preview = function(root_entry: Object): (Object?, string?)
-            observed.root = root_entry
-            return preview, nil
+            preview = function(root_entry: Object): (resolver.RegistryPlan?, string?)
+                observed.root = root_entry
+                return preview, nil
         end,
     }
     observed.captured = captured
@@ -93,25 +86,27 @@ local function deps_fixture(policy: Object?): (Object, Spec, {root: Object?, cap
         selected_policy = {node_id = "node-destination", policy_digest = SHA,
             packages = {["vendor/app"] = true}, namespaces = {app = true},
             kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
-            grants = {}, modules = {}, applied = {}, migration_barrier = true}
+            grants = {}, modules = {}, applied = {}, migration_barrier = true, auto_start = false}
     end
-    local deps: Object = {
-        capture = function(): (unknown?, string?) return captured, nil end,
-        root = function(root_spec: Object): (Object?, string?)
-            return {component = "vendor/app", version = "1.2.0", parameters = root_spec.parameters or {}}, nil
+    local deps: Deps = {
+        capture = function(): (resolver.Captured?, string?) return captured, nil end,
+        root = function(_root_spec: unknown): (resolver.Root?, string?)
+            local parameters: {unknown} = spec.parameters or {}
+            return {component = "vendor/app", version = "1.2.0", parameters = parameters}, nil
         end,
-        policy = function(_: Object, _: Captured, _: Object): (Policy?, string?) return selected_policy, nil end,
+        policy = function(_: unknown, _: unknown, _: unknown): (Policy?, string?) return selected_policy, nil end,
     }
     return deps, spec, observed
 end
 
-local function facts(deps: Object, spec: Spec): Facts
+local function facts(deps: Deps, spec: Spec): Facts
     local candidate, context, err = resolver.resolve_with(deps, spec)
-    if not candidate or not context then error(tostring(err)) end
-    return {candidate = candidate :: Candidate, context = context :: Context}
+    if not candidate then error(tostring(err)) end
+    if not context then error(tostring(err)) end
+    return {candidate = candidate, context = context}
 end
 
-local function find_entry(entries: {CandidateEntry}, id: string): CandidateEntry?
+local function find_entry(entries: {preflight.Entry}, id: string): preflight.Entry?
     for _, item in ipairs(entries) do if item.id == id then return item end end
     return nil
 end
@@ -142,10 +137,11 @@ local function define_tests()
         end)
 
         test.it("retains copied host database bindings in the preflight context", function()
-            local policy: Object = {node_id = "node-destination", policy_digest = SHA,
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
                 packages = {["vendor/app"] = true}, namespaces = {app = true},
                 kinds = {["function.lua"] = true}, databases = {["app:data"] = true},
                 grants = {}, modules = {}, applied = {}, migration_barrier = true,
+                auto_start = false,
                 database_bindings = {["app:data"] = {database_id = "host:db", table_prefix = "app_"}}}
             local deps, spec = deps_fixture(policy)
             local resolved = facts(deps, spec)
@@ -206,12 +202,12 @@ local function define_tests()
         end)
 
         test.it("keeps the host policy authoritative over package claims", function()
-            local denied: Object = {
+            local denied: Policy = {
                 node_id = "node-destination", registry_digest = SHA, policy_digest = SHA,
                 packages = {["vendor/app"] = false}, namespaces = {app = false},
                 kinds = {["function.lua"] = false}, databases = {["host:db"] = true},
                 grants = {}, modules = {}, entries = {}, applied = {},
-                exact_expansion = true, protected = KERNEL, migration_barrier = true,
+                exact_expansion = true, protected = KERNEL, migration_barrier = true, auto_start = false,
             }
             local deps, spec = deps_fixture(denied)
             local candidate, context, err = resolver.resolve_with(deps, spec)

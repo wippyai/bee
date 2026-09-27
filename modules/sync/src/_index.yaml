@@ -1,6 +1,10 @@
 version: '1.0'
 namespace: bee.sync
 entries:
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
 - name: definition
   kind: ns.definition
   module: sync
@@ -59,12 +63,14 @@ entries:
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
+  imports:
+    shared: bee.protocol:bounds
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
-  modules: [json]
   imports:
     bounds: bee.sync:bounds
+    encoder: bee.threads.records:canonical
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

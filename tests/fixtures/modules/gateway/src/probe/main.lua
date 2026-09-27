@@ -13,9 +13,12 @@ local time = require("time")
 local process = require("process")
 local registry = require("registry")
 local security = require("security")
+local sql = require("sql")
 local ACTOR = "bee.test.gateway"
 local THREAD = "gateway-thread"
 type Object = {[string]: unknown}
+type HookPost = (string, string, unknown, string?) -> (number, string, unknown)
+type HeaderOf = (unknown, string) -> string?
 local ADDRESS = ""
 local function endpoint(): string
     local selected, err = funcs.call("bee.gateway:address", {})
@@ -76,6 +79,36 @@ local function tool(action: string, token: string, name: string, arguments: Obje
     assert(type(text) == "table", name .. " returned no reply")
     return text :: Object
 end
+local function validate_output(value: unknown, schema_value: unknown, location: string)
+    local schema = schema_value :: Object
+    local kind = schema.type
+    if kind == "object" then
+        assert(type(value) == "table", location .. " must be an object")
+        local object = value :: Object
+        local properties = (schema.properties or {}) :: Object
+        for _, name in ipairs((schema.required :: {string}?) or {}) do
+            assert(object[name] ~= nil, location .. " is missing " .. name)
+        end
+        for name, child in pairs(object) do
+            local child_schema = properties[name]
+            assert(child_schema ~= nil or schema.additionalProperties ~= false, location .. " has unexpected " .. name)
+            if child_schema ~= nil then validate_output(child, child_schema, location .. "." .. name) end
+        end
+    elseif kind == "array" then
+        assert(type(value) == "table", location .. " must be an array")
+        local item_schema = schema.items
+        assert(item_schema ~= nil, location .. " has no item schema")
+        for index, item in ipairs(value :: {unknown}) do validate_output(item, item_schema, location .. "[" .. tostring(index) .. "]") end
+    elseif kind == "string" then
+        assert(type(value) == "string", location .. " must be a string")
+    elseif kind == "integer" then
+        assert(type(value) == "number" and value == math.floor(value :: number), location .. " must be an integer")
+    elseif kind == "boolean" then
+        assert(type(value) == "boolean", location .. " must be a boolean")
+    else
+        error(location .. " has unsupported output schema type " .. tostring(kind))
+    end
+end
 -- The real-harness MCP contract: tools/list validity, per-operation effects in
 -- annotations, schema-valid calls, cursor paging, structured results with the
 -- normalized error shape, and the authoring path of guide index, section,
@@ -121,9 +154,11 @@ local function prove_mcp_contract(token: string)
     -- The authoring path: a bare guide read is the short index with sections
     -- and no example; one section reads alone; the example is explicit.
     local index = tool("contract-action", contract_token, "overlay", {operation = "guide"})
-    assert(type((index.value :: Object).document) == "string", "guide index")
-    assert(#((index.value :: Object).sections :: {unknown}) >= 8, "guide section list")
-    assert((index.value :: Object).example == nil, "guide index carries no example")
+    assert(index.ok == true, "guide index: " .. tostring(json.encode(index)))
+    local index_value = index.value :: Object
+    assert(type(index_value.document) == "string", "guide index document")
+    assert(#(index_value.sections :: {unknown}) >= 8, "guide section list")
+    assert(index_value.example == nil, "guide index carries no example")
     local section = tool("contract-action", contract_token, "overlay", {operation = "guide", section = "delivery"})
     assert((section.value :: Object).section == "delivery" and type((section.value :: Object).text) == "string", "guide section")
     local example = tool("contract-action", contract_token, "overlay", {operation = "guide", include_example = true})
@@ -137,11 +172,16 @@ local function prove_mcp_contract(token: string)
     local sessions_value = sessions.value :: Object
     assert(type(sessions_value.sessions) == "table" and #sessions_value.sessions <= 1, "session page")
     assert(sessions_value.eof ~= nil, "session page end marker")
+    validate_output(sessions, by_name.thread_sessions.outputSchema, "thread_sessions result")
     -- The capability report names the admitted surface before authoring.
     local report = tool("contract-action", contract_token, "capabilities", {})
     local report_value = report.value :: Object
     assert(type(report_value.thread_id) == "string", "capability thread")
     assert(type(report_value.tools) == "table" and type(report_value.launch) == "table", "capability tools and launch")
+    validate_output(report, by_name.capabilities.outputSchema, "capabilities result")
+    local capability_schema = (((by_name.capabilities.outputSchema :: Object).properties :: Object).value :: Object)
+    local traits_schema = (capability_schema.properties :: Object).traits :: Object
+    assert(traits_schema.type == "array" and type(traits_schema.items) == "table", "capability traits are advertised as typed array items")
     assert(type((report_value.authoring :: Object).preflight_operation) == "string", "capability authoring path")
     -- A delivery without its frozen digest is refused before anything stages;
     -- a delivery for an unknown overlay fails in the normalized tool shape.
@@ -307,7 +347,7 @@ end
 -- subject reads; thread_message with session records on that session's
 -- thread addressed to its action and naming the sender's; thread_notify
 -- tells the caller once, on its own thread, when that session's turn ends.
-local SESSION_TOOLS = {"thread_sessions", "thread_read", "thread_wait", "thread_message", "thread_notify"}
+local SESSION_TOOLS = {"thread_sessions", "session_directory", "thread_read", "thread_wait", "thread_message", "thread_notify"}
 local function session(action: string, thread_id: string, workspace_id: string?, subject: string?): string
     local request: Object = {subject = subject or ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = thread_id,
         owner_incarnation = 1, carrier_epoch = 1, tools = SESSION_TOOLS, ttl_ms = 60000}
@@ -325,21 +365,46 @@ local function running(thread_id: string, action: string)
 end
 local function prove_sessions()
     local thread_a, thread_b = "session-a-thread", "session-b-thread"
-    ok(call("bee.threads.service:create", {thread_id = thread_a, idempotency_key = key(), title = "Parser fix"}), "create session a thread")
-    ok(call("bee.threads.service:create", {thread_id = thread_b, idempotency_key = key(), title = "Release notes"}), "create session b thread")
+    local session_workspace, other_workspace = string.rep("b", 32), string.rep("e", 32)
+    local workspace_actor = security.new_actor(ACTOR, {workspace_id = session_workspace})
+    assert(workspace_actor, "construct session workspace actor")
+    local workspace_executor = funcs.new():with_actor(workspace_actor)
+    for _, selected in ipairs({{thread_id = thread_a, title = "Parser fix"}, {thread_id = thread_b, title = "Release notes"}}) do
+        local created, create_error = workspace_executor:call("bee.threads.service:create",
+            {thread_id = selected.thread_id, idempotency_key = key(), title = selected.title})
+        assert(not create_error and type(created) == "table" and (created :: Object).ok == true,
+            "create workspace session thread: " .. tostring(create_error or json.encode(created)))
+    end
     running(thread_a, "session-a")
     running(thread_b, "session-b")
-    local token_a = session("session-a", thread_a, "cross-ws")
-    local token_b = session("session-b", thread_b, "cross-ws")
-    session("session-hidden", "session-hidden-thread", "cross-ws")
-    session("session-elsewhere", thread_b, "other-ws")
+    local token_a = session("session-a", thread_a, session_workspace)
+    local token_b = session("session-b", thread_b, session_workspace)
+    session("session-hidden", "session-hidden-thread", session_workspace)
+    session("session-elsewhere", thread_b, other_workspace)
     local token_none = session("session-none", thread_a, nil)
+    for _, destination in ipairs({{thread_id = thread_a, action_id = "session-a"}, {thread_id = thread_b, action_id = "session-b"}}) do
+        ok(call("bee.threads.service:inbox_accept", {thread_id = destination.thread_id, action_id = destination.action_id,
+            sender_id = ACTOR, allow = true, expected_epoch = 0, idempotency_key = key()}), "accept session sender")
+    end
     local listed = tool("session-a", token_a, "thread_sessions", {})
     assert(listed.ok == true, "thread_sessions refused: " .. tostring(json.encode(listed)))
     local views = (listed.value :: Object).sessions :: {Object}
     assert(#views == 2, "thread_sessions listed other than the two reachable sessions: " .. tostring(json.encode(views)))
     assert(views[1].session == "session-a" and views[1].self == true and views[1].title == "Parser fix" and views[1].thread_id == thread_a, "the caller's own session")
     assert(views[2].session == "session-b" and views[2].self == false and views[2].title == "Release notes" and views[2].attempt_id == "session-b-attempt", "the peer session")
+    local directory = tool("session-a", token_a, "session_directory", {limit = 1})
+    assert(directory.ok == true, "session_directory refused: " .. tostring(json.encode(directory)))
+    local peers = (directory.value :: Object).peers :: {Object}
+    assert(#peers == 1 and peers[1].action_id ~= nil and peers[1].grant_epoch == 1,
+        "session_directory returned a typed peer: " .. tostring(json.encode(directory)))
+    local _, listed = rpc("session-a", token_a, "tools/list")
+    assert(listed, "session_directory tools/list")
+    local directory_schema: Object? = nil
+    for _, entry in ipairs((listed.result :: Object).tools :: {Object}) do
+        if entry.name == "session_directory" then directory_schema = entry.outputSchema :: Object end
+    end
+    assert(directory_schema, "session_directory output schema")
+    validate_output(directory, directory_schema, "session_directory result")
     local unscoped = tool("session-none", token_none, "thread_sessions", {})
     assert(unscoped.ok == false and (unscoped.error :: Object).code == "UNAVAILABLE", "a binding without a workspace listed sessions")
     local b_head = tonumber((ok(call("bee.threads.service:get", {thread_id = thread_b}), "b head").summary :: Object).head_sequence)
@@ -377,6 +442,58 @@ local function prove_sessions()
     local notice_body = notice.body :: Object
     assert((notice_body.recipient_action_ids :: {string})[1] == "session-a" and notice_body.outcome == "succeeded" and (notice.causation :: Object).record_id == ended.record_id,
         "the notice was not addressed to session a with the ending record: " .. tostring(json.encode(notice)))
+end
+local function prove_remote_send()
+    local action, attempt, thread_id = "remote-sender", "remote-sender-attempt", "remote-sender-thread"
+    local source_workspace, destination_workspace = string.rep("a", 32), string.rep("d", 32)
+    local workspace_actor = security.new_actor(ACTOR, {workspace_id = source_workspace})
+    assert(workspace_actor, "construct remote sender workspace actor")
+    local created, create_error = funcs.new():with_actor(workspace_actor):call("bee.threads.service:create",
+        {thread_id = thread_id, idempotency_key = key(), title = "Remote sender"})
+    assert(not create_error and type(created) == "table" and (created :: Object).ok == true,
+        "create remote sender thread: " .. tostring(create_error or json.encode(created)))
+    running(thread_id, action)
+    local admitted = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action, attempt_id = attempt,
+        thread_id = thread_id, owner_incarnation = 1, carrier_epoch = 1, workspace_id = source_workspace,
+        tools = {"session_send"}, ttl_ms = 60000}), "admit remote sender")
+    local binding_id = tostring((admitted.binding :: Object).binding_id)
+    local minted = ok(materialize(attempt, 1, binding_id), "materialize remote sender")
+    local token = tostring(minted.token)
+    local denied = tool(action, token, "session_send", {address = {node_id = "remote-test-node", action_id = "remote-denied-target"},
+        grant_epoch = 1, idempotency_key = "remote-denied", message_id = "remote-denied", content = {text = "no grant"}})
+    assert(denied.ok == false and (denied.error :: Object).code == "DENIED", "remote send without a host grant was accepted")
+    local idempotency_key = "remote-send"
+    local sent = tool(action, token, "session_send", {address = {node_id = "remote-test-node", action_id = "remote-send-target"},
+        grant_epoch = 1, idempotency_key = idempotency_key, message_id = "remote-send", content = {text = "send under destination grant"}})
+    assert(sent.ok == true and (sent.value :: Object).queued == true, "host-resolved remote send was not queued: " .. tostring(json.encode(sent)))
+    local database, database_error = sql.get("bee.threads:db")
+    assert(database and not database_error, "open thread outbox for acceptance proof: " .. tostring(database_error))
+    local rows, query_error = database:query("SELECT dest_node_id, dest_workspace_id, dest_thread_id, dest_action_id, grant_epoch FROM bee_thread_inbox_outbox WHERE sender_thread_id = ? AND sender_actor = ? AND idempotency_key = ?",
+        {thread_id, ACTOR, idempotency_key})
+    database:release()
+    assert(rows and not query_error and #rows == 1, "read host-resolved remote send")
+    local outbox = rows[1] :: Object
+    assert(outbox.dest_node_id == "remote-test-node" and outbox.dest_workspace_id == destination_workspace
+        and outbox.dest_thread_id == "remote-send-thread" and outbox.dest_action_id == "remote-send-target"
+        and outbox.grant_epoch == 17, "remote send did not bind the resolver's destination and current grant epoch")
+end
+local function prove_corrupt_hooks(hook_post: HookPost, header_of: HeaderOf)
+    local corrupt = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-corrupt-hooks", attempt_id = "act-corrupt-hooks-attempt",
+        thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"Stop"}, ttl_ms = 60000}), "admit corrupt hook probe")
+    local binding_id = tostring((corrupt.binding :: Object).binding_id)
+    local tokens = ok(materialize("act-corrupt-hooks-attempt", 1, binding_id), "materialize corrupt hook probe")
+    local status, _, headers = hook_post("act-corrupt-hooks", tostring(tokens.hook_token),
+        {hook_event_name = "Stop", session_id = "corrupt", prompt_id = "corrupt-prompt", stop_hook_active = false})
+    assert(status == 202, "valid hook queues before storage corruption")
+    local event_id = tostring(header_of(headers, "X-Bee-Event"))
+    local database, database_error = sql.get("bee.gateway:db")
+    assert(database and not database_error, "open gateway store for corruption probe: " .. tostring(database_error))
+    local _, write_error = database:execute("UPDATE bee_gateway_hooks SET fields_json = ? WHERE event_id = ?", {"not-json", event_id})
+    database:release()
+    assert(not write_error, "corrupt stored hook fields")
+    assert(code(call("bee.gateway.binding:hook_queue", {binding_id = binding_id})) == "STORAGE", "hook_queue rejects malformed stored fields_json")
+    assert(code(call("bee.gateway.binding:hook_claim", {binding_id = binding_id, carrier_epoch = 1, limit = 1})) == "STORAGE",
+        "hook_claim rejects malformed stored fields_json")
 end
 -- A launcher reaches a child it started on a new thread. The orchestrator's
 -- binding is on THREAD; a separate child thread it owns (created and admitted
@@ -499,7 +616,9 @@ local function main()
     local foreign_workspace_binding = tostring((foreign_admission.binding :: Object).binding_id)
     local foreign_workspace_token = tostring(ok(materialize("foreign-workspace-attempt", 1, foreign_workspace_binding), "materialize foreign workspace actor").token)
     local foreign_workspace = tool("foreign-workspace-action", foreign_workspace_token, "overlay", {operation = "list", overlay_id = "gateway-research"})
-    assert(foreign_workspace.ok == false and foreign_workspace.code == "DENIED", "foreign MCP actor read another workspace")
+    local foreign_fault = type(foreign_workspace.error) == "table" and (foreign_workspace.error :: Object).code or foreign_workspace.code
+    assert(foreign_workspace.ok == false and foreign_fault == "DENIED",
+        "foreign MCP actor read another workspace: " .. tostring(json.encode(foreign_workspace)))
     ok(call("bee.gateway.binding:revoke", {binding_id = workspace_binding}), "revoke workspace binding")
     end
     -- The credential lifecycle: the same generation cannot be materialized
@@ -581,9 +700,10 @@ local function main()
     assert(select(1, rpc("act-a", token_b, "tools/list")) == 403, "cross-attempt token refused")
     assert(select(1, rpc("act-b", token_a, "tools/list")) == 403, "cross-attempt token refused the other way")
     -- An expired token is refused.
-    local token_c = admit("act-c", 200)
-    assert(select(1, rpc("act-c", token_c, "tools/list")) == 200, "token works before expiry")
-    time.sleep("250ms")
+    local token_c = admit("act-c", 2000)
+    local before_expiry_status, before_expiry = rpc("act-c", token_c, "tools/list")
+    assert(before_expiry_status == 200, "token works before expiry: " .. tostring(before_expiry_status) .. " " .. tostring(json.encode(before_expiry)))
+    time.sleep("2050ms")
     assert(select(1, rpc("act-c", token_c, "tools/list")) == 401, "expired token refused")
     -- A revoked token is refused.
     ok(call("bee.gateway.binding:revoke", {binding_id = binding_a}), "revoke")
@@ -647,6 +767,7 @@ local function main()
     end
     prove_child_thread()
     prove_sessions()
+    prove_remote_send()
     -- Hooks: a binding that admits hook events gets a second credential of
     -- its own kind; neither credential opens the other endpoint.
     local function header_of(headers: unknown, name: string): string?
@@ -915,6 +1036,7 @@ local function main()
         "expiry retains and reclaims a claimed row")
     assert(ok(call("bee.gateway.binding:hook_ack", {binding_id = expiring_binding, carrier_epoch = 2, event_ids = {expiring_id}}), "ack after expiry").acknowledged == 1,
         "the reclaimed expired row acknowledges normally")
+    prove_corrupt_hooks(hook_post, header_of)
     -- Drain during a wait: a helper drains while this wait is in flight; the
     -- wait returns a released outcome well before its own deadline, new
     -- admissions are refused, and a bounded read still finishes before the

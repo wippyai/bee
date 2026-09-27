@@ -97,6 +97,12 @@ local function define_tests()
             local _, stamp_error = record.decode(stamped)
             test.eq(stamp_error, "recorded_at is not a canonical UTC timestamp")
             test.is_nil(bounds.timestamp("2026-13-08T10:00:00.000Z"))
+            for _, impossible in ipairs({"2026-02-29T10:00:00.000Z", "2026-02-31T10:00:00.000Z",
+                    "2026-04-31T10:00:00.000Z", "1900-02-29T10:00:00.000Z"}) do
+                test.is_nil(bounds.timestamp(impossible))
+            end
+            test.eq(bounds.timestamp("2024-02-29T10:00:00.000Z"), "2024-02-29T10:00:00.000Z")
+            test.eq(bounds.timestamp("2000-02-29T10:00:00.000Z"), "2000-02-29T10:00:00.000Z")
         end)
         test.it("bounds arrays, identifiers and the encoded record", function()
             local many: {string} = {}

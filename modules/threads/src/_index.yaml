@@ -8,10 +8,6 @@ entries:
   meta:
     title: Bee threads
     comment: Durable local threads with checked SQLite storage and actor-owned contracts
-- name: dependency_hive
-  kind: ns.dependency
-  component: bee/hive
-  version: '*'
 - name: target_db
   kind: ns.requirement
   meta:

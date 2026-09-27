@@ -26,6 +26,10 @@ local hooks = require("hooks")
 local mcp = require("mcp")
 local surface = require("surface")
 local surface_store = require("surface_store")
+local binding_store = require("binding_store")
+local credential_store = require("credential_store")
+local hook_store = require("hook_store")
+local listener_store = require("listener_store")
 local access = require("access")
 local elevation = require("elevation")
 local installation = require("installation")
@@ -66,6 +70,11 @@ type Generation = {epoch: integer, restarts: integer}
 type BoundSurface = {configuration: surface.Surface, selection: surface.Selection, revision: integer, digest: string}
 type RuntimeGrant = {access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
 type Drain = {draining: boolean, past_deadline: boolean}
+type HookRecord = {event_id: string, event: string, occurrence: string, ambiguous: boolean, digest: string, fields: Object,
+    provenance: string, sequence: integer, created_at: string}
+type HookQueueItem = HookRecord & {status: string, claimed_epoch: integer, rejected_reason: string?}
+type HookStatus = {status: string, event: string, occurrence: string, ambiguous: boolean, sequence: integer,
+    claimed_epoch: integer, rejected_reason: string?}
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}}
@@ -89,9 +98,7 @@ local function text(value: unknown): string?
     return value :: string
 end
 local function integer(value: unknown): integer?
-    local number = tonumber(value)
-    if not number then return nil end
-    return math.floor(number)
+    return bounds.integer(value)
 end
 local function reference(id: string, field: string, what: string): (string?, string?)
     local entry, err = registry.get(id)
@@ -134,11 +141,43 @@ local function random_text(): (string?, string?)
     if encode_error or not encoded then return nil, "encode random bytes" end
     return encoded, nil
 end
+-- SQLite stores absent optional text as NULL or an empty string.
+local function optional_text(value: unknown, limit: integer): (string?, boolean)
+    if value == nil then return nil, true end
+    local declared = bounds.text(value, limit)
+    if not declared then return nil, false end
+    if declared == "" then return nil, true end
+    return declared, true
+end
+local function optional_timestamp(value: unknown): (string?, boolean)
+    local declared, valid = optional_text(value, 64)
+    if not valid or not declared then return declared, valid end
+    local parsed, parse_error = time.parse(FORMAT, declared)
+    if parse_error or not parsed then return nil, false end
+    return declared, true
+end
 local function listener_of(db: sql.DB): (Row?, string?)
-    local rows, err = db:query("SELECT epoch, address, secret, drained, opened_at, drain_deadline_at, native_key FROM bee_gateway_listener WHERE singleton = 1")
+    local rows, err = listener_store.read(db)
     if err or not rows then return nil, "read listener" end
     if #rows == 0 then return nil, nil end
-    return rows[1] :: Row, nil
+    if #rows ~= 1 then return nil, "listener row is duplicated" end
+    local row = bounds.object(rows[1])
+    local epoch = row and bounds.count(row.epoch)
+    local address = row and bounds.line(row.address, 120)
+    local secret = row and bounds.text(row.secret, 128)
+    local drained = row and bounds.count(row.drained)
+    local opened_at = row and bounds.text(row.opened_at, 64)
+    local opened, opened_error = time.parse(FORMAT, opened_at or "")
+    local deadline_at, deadline_valid = optional_timestamp(row and row.drain_deadline_at)
+    local native_key, native_valid = optional_text(row and row.native_key, 160)
+    if not row or epoch == nil or epoch == 0 or not address or not configuration.valid_address(address, false)
+        or not secret or secret == "" or (drained ~= 0 and drained ~= 1) or not opened_at or opened_error or not opened
+        or not deadline_valid or not native_valid then
+        return nil, "listener row is corrupt"
+    end
+    if drained == 1 and not deadline_at then return nil, "listener drain deadline is absent" end
+    if drained == 0 and deadline_at then return nil, "listener has an unexpected drain deadline" end
+    return row, nil
 end
 -- The listener service's restart count is part of the generation, so a
 -- service restart invalidates every readiness taken before it.
@@ -147,18 +186,13 @@ local function restarts(): (integer?, string?)
     if not service then return nil, service_error end
     local state, state_error = system.supervisor.state(service)
     if state_error or not state then return nil, "listener service state unavailable" end
-    return integer(state.retry_count) or 0, nil
-end
--- An optional text column: the SQL binder cannot carry a trailing nil, so an
--- absent value is stored as the empty string and read back as nil.
-local function optional_text(value: unknown): string?
-    if value == nil then return nil end
-    local text = tostring(value)
-    if text == "" then return nil end
-    return text
+    local retry_count = bounds.count(state.retry_count)
+    if not retry_count then return nil, "listener service retry count is invalid" end
+    return retry_count, nil
 end
 local function decode_origin_view(value: unknown): (OriginView?, string?)
-    local encoded = optional_text(value)
+    local encoded, valid = optional_text(value, 1024)
+    if not valid then return nil, "binding origin view is corrupt" end
     if not encoded then return nil, nil end
     local decoded, decode_error = json.decode(encoded)
     if decode_error then return nil, "binding origin view is corrupt" end
@@ -169,28 +203,123 @@ local function decode_origin_view(value: unknown): (OriginView?, string?)
     return {view_id = view_id, instance_id = instance_id}, nil
 end
 local function binding_of(row: Row): (Binding?, string?)
-    local tools: unknown, decode_error = json.decode(tostring(row.tools_json))
-    if decode_error or type(tools) ~= "table" then return nil, "binding tools are corrupt" end
-    local names: {string} = {}
-    for _, name in ipairs(tools :: {unknown}) do names[#names + 1] = tostring(name) end
-    local hook_names: {string} = {}
-    local admitted_hooks: unknown, hooks_error = json.decode(tostring(row.hooks_json or "[]"))
-    if hooks_error or type(admitted_hooks) ~= "table" then return nil, "binding hooks are corrupt" end
-    for _, name in ipairs(admitted_hooks :: {unknown}) do hook_names[#hook_names + 1] = tostring(name) end
+    local binding_id, subject = bounds.id(row.binding_id), bounds.id(row.subject)
+    local action_id, attempt_id, thread_id = bounds.id(row.action_id), bounds.id(row.attempt_id), bounds.id(row.thread_id)
+    local owner_incarnation = bounds.count(row.owner_incarnation)
+    local carrier_epoch, epoch = bounds.count(row.carrier_epoch), bounds.count(row.epoch)
+    local credential_generation = bounds.count(row.credential_generation)
+    local tools_json, hooks_json = bounds.text(row.tools_json, 8192), bounds.text(row.hooks_json, 8192)
+    local request_digest = bounds.text(row.request_digest, 64)
+    local created_at = bounds.text(row.created_at, 64)
+    local idempotency_key, idempotency_valid = optional_text(row.idempotency_key, 160)
+    local created, created_error = time.parse(FORMAT, created_at or "")
+    if not binding_id then return nil, "binding identity is corrupt" end
+    if not subject then return nil, "binding identity is corrupt" end
+    if not action_id then return nil, "binding identity is corrupt" end
+    if not attempt_id then return nil, "binding identity is corrupt" end
+    if not thread_id then return nil, "binding identity is corrupt" end
+    if owner_incarnation == nil or owner_incarnation == 0 then return nil, "binding incarnation is corrupt" end
+    if carrier_epoch == nil or carrier_epoch == 0 then return nil, "binding carrier epoch is corrupt" end
+    if epoch == nil or epoch == 0 then return nil, "binding listener epoch is corrupt" end
+    if credential_generation == nil then return nil, "binding credential generation is corrupt" end
+    if not tools_json then return nil, "binding tools are corrupt" end
+    if not hooks_json then return nil, "binding hooks are corrupt" end
+    if not request_digest or #request_digest ~= 64 or not request_digest:match("^[0-9a-f]+$") then return nil, "binding request digest is corrupt" end
+    if not created_at or created_error or not created then return nil, "binding creation time is corrupt" end
+    if not idempotency_valid or (idempotency_key ~= nil and not bounds.id(idempotency_key)) then return nil, "binding idempotency key is corrupt" end
+    local tools_raw, tools_error = json.decode(tools_json)
+    local names = bounds.ids(tools_raw, true)
+    if tools_error or not names or #names > M.MAX_TOOLS then return nil, "binding tools are corrupt" end
+    local hooks_raw, hooks_error = json.decode(hooks_json)
+    local hook_names = bounds.ids(hooks_raw, true)
+    if hooks_error or not hook_names or #hook_names > #hooks.EVENTS then return nil, "binding hooks are corrupt" end
+    for _, name in ipairs(hook_names) do
+        if not hooks.known(name) then return nil, "binding hooks are corrupt" end
+    end
+    local expires_at = bounds.text(row.expires_at, 64)
+    local expires, expires_error = time.parse(FORMAT, expires_at or "")
+    if not expires_at then return nil, "binding expiry is corrupt" end
+    if expires_error or not expires then return nil, "binding expiry is corrupt" end
+    local revoked_at, revoked_valid = optional_timestamp(row.revoked_at)
+    local sealed_at, sealed_valid = optional_timestamp(row.sealed_at)
+    local policy_ref, policy_valid = optional_text(row.policy_ref, 160)
+    local workspace_id, workspace_valid = optional_text(row.workspace_id, 160)
+    local stored_name = bounds.line(row.workspace_name, 80)
+    if not revoked_valid or not sealed_valid or not policy_valid or not workspace_valid or not stored_name then
+        return nil, "binding optional fields are corrupt"
+    end
+    if stored_name:match("^%s*$") then return nil, "binding optional fields are corrupt" end
+    if (policy_ref ~= nil and not bounds.id(policy_ref)) or (workspace_id ~= nil and not bounds.id(workspace_id)) then
+        return nil, "binding references are corrupt"
+    end
     local origin, origin_error = decode_origin_view(row.origin_view_json)
     if origin_error then return nil, origin_error end
-    return {binding_id = tostring(row.binding_id), subject = tostring(row.subject), action_id = tostring(row.action_id), attempt_id = tostring(row.attempt_id),
-        thread_id = tostring(row.thread_id), owner_incarnation = integer(row.owner_incarnation) or 0, carrier_epoch = integer(row.carrier_epoch) or 0, tools = names, hooks = hook_names,
-        epoch = integer(row.epoch) or 0, credential_generation = integer(row.credential_generation) or 0, expires_at = tostring(row.expires_at), revoked = row.revoked_at ~= nil, sealed = row.sealed_at ~= nil,
-        policy_ref = optional_text(row.policy_ref), workspace_id = optional_text(row.workspace_id), workspace_name = optional_text(row.workspace_name) or tostring(row.action_id), origin_view = origin}, nil
+    return {binding_id = binding_id, subject = subject, action_id = action_id, attempt_id = attempt_id,
+        thread_id = thread_id, owner_incarnation = owner_incarnation, carrier_epoch = carrier_epoch, tools = names, hooks = hook_names,
+        epoch = epoch, credential_generation = credential_generation, expires_at = expires_at, revoked = revoked_at ~= nil, sealed = sealed_at ~= nil,
+        policy_ref = policy_ref, workspace_id = workspace_id, workspace_name = stored_name, origin_view = origin}, nil
 end
 local function view(binding: Binding): Object
     return {binding_id = binding.binding_id, subject = binding.subject, action_id = binding.action_id, attempt_id = binding.attempt_id, thread_id = binding.thread_id,
         owner_incarnation = binding.owner_incarnation, carrier_epoch = binding.carrier_epoch, tools = binding.tools, hooks = binding.hooks, epoch = binding.epoch,
         credential_generation = binding.credential_generation, expires_at = binding.expires_at, revoked = binding.revoked, sealed = binding.sealed, policy_ref = binding.policy_ref, workspace_id = binding.workspace_id, workspace_name = binding.workspace_name, origin_view = binding.origin_view}
 end
+local function stored_hook_fields(value: unknown): (Object?, string?)
+    local encoded = bounds.text(value, 8192)
+    if not encoded then return nil, "hook fields JSON is corrupt" end
+    local decoded, decode_error = json.decode(encoded)
+    if decode_error then return nil, "hook fields JSON is corrupt" end
+    local fields, fields_error = hooks.stored_fields(decoded)
+    if not fields then return nil, fields_error or "hook fields are corrupt" end
+    return fields, nil
+end
+local function hook_record(value: unknown): (HookRecord?, string?)
+    local row = bounds.object(value)
+    if not row then return nil, "hook row is corrupt" end
+    local event_id, event = bounds.id(row.event_id), bounds.text(row.event, 64)
+    local occurrence = bounds.text(row.occurrence, 256)
+    local ambiguous = bounds.count(row.ambiguous)
+    local digest = bounds.text(row.digest, 64)
+    local provenance = bounds.text(row.provenance, 80)
+    local sequence = bounds.count(row.sequence)
+    local created_at = bounds.text(row.created_at, 64)
+    local created, created_error = time.parse(FORMAT, created_at or "")
+    local fields, fields_error = stored_hook_fields(row.fields_json)
+    if not event_id then return nil, "hook row identity is corrupt" end
+    if not event or not hooks.known(event) then return nil, "hook event is corrupt" end
+    if not occurrence or occurrence == "" then return nil, "hook occurrence is corrupt" end
+    if ambiguous == nil or (ambiguous ~= 0 and ambiguous ~= 1) then return nil, "hook ambiguity flag is corrupt" end
+    if not digest then return nil, "hook digest is corrupt" end
+    if #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "hook digest is corrupt" end
+    if not provenance or provenance == "" then return nil, "hook provenance is corrupt" end
+    if sequence == nil or sequence == 0 then return nil, "hook sequence is corrupt" end
+    if not created_at or created_error or not created then return nil, "hook creation time is corrupt" end
+    if not fields then return nil, fields_error or "hook fields are corrupt" end
+    if fields.event ~= event then return nil, "hook row event does not match its fields" end
+    return {event_id = event_id, event = event, occurrence = occurrence, ambiguous = ambiguous == 1, digest = digest,
+        fields = fields, provenance = provenance, sequence = sequence, created_at = created_at}, nil
+end
+local function hook_status(value: unknown): (HookStatus?, string?)
+    local row = bounds.object(value)
+    if not row then return nil, "hook status row is corrupt" end
+    local event = bounds.text(row.event, 64)
+    local occurrence = bounds.text(row.occurrence, 256)
+    local ambiguous = bounds.count(row.ambiguous)
+    local status = bounds.text(row.status, 16)
+    local sequence, claimed_epoch = bounds.count(row.sequence), bounds.count(row.claimed_epoch)
+    local rejected_reason, reason_valid = optional_text(row.rejected_reason, 120)
+    if not event or not hooks.known(event) then return nil, "hook status event is corrupt" end
+    if not occurrence or occurrence == "" then return nil, "hook status occurrence is corrupt" end
+    if ambiguous == nil or (ambiguous ~= 0 and ambiguous ~= 1) then return nil, "hook status ambiguity flag is corrupt" end
+    if status ~= "queued" and status ~= "committed" and status ~= "rejected" then return nil, "hook status state is corrupt" end
+    if sequence == nil or sequence == 0 then return nil, "hook status sequence is corrupt" end
+    if claimed_epoch == nil then return nil, "hook claimed epoch is corrupt" end
+    if not reason_valid then return nil, "hook rejection reason is corrupt" end
+    return {status = status, event = event, occurrence = occurrence, ambiguous = ambiguous == 1, sequence = sequence,
+        claimed_epoch = claimed_epoch, rejected_reason = rejected_reason}, nil
+end
 local function binding_by_id(db: sql.DB, binding_id: string): (Binding?, Reply?)
-    local rows, err = db:query("SELECT * FROM bee_gateway_bindings WHERE binding_id = ?", {binding_id})
+    local rows, err = binding_store.by_id(db, binding_id)
     if err or not rows then return nil, fail("STORAGE", "read binding") end
     if #rows == 0 then return nil, fail("NOT_FOUND", "binding does not exist") end
     local binding, decode_error = binding_of(rows[1] :: Row)
@@ -233,9 +362,7 @@ local function synchronize_native_listener(db: sql.DB): (boolean, string?)
     if not current or not current.native_key then return false, current_error or "native listener identity is unavailable" end
     local secret, secret_error = random_text()
     if not secret then return false, secret_error end
-    local _, write_error = db:execute("INSERT INTO bee_gateway_listener (singleton, epoch, address, secret, drained, opened_at, native_key) VALUES (1, 1, ?, ?, 0, ?, ?) " ..
-        "ON CONFLICT(singleton) DO UPDATE SET epoch = bee_gateway_listener.epoch + 1, address = excluded.address, secret = excluded.secret, drained = 0, drain_deadline_at = NULL, opened_at = excluded.opened_at, native_key = excluded.native_key " ..
-        "WHERE bee_gateway_listener.native_key IS NOT excluded.native_key", {current.address, secret, stamp(now_ms()), current.native_key})
+    local _, write_error = listener_store.initialize_native(db, current.address, secret, stamp(now_ms()), current.native_key)
     if write_error then return false, "record native listener" end
     local rechecked, recheck_error = configuration.current()
     if not rechecked or rechecked.native_key ~= current.native_key then return false, recheck_error or "native listener changed during admission" end
@@ -253,7 +380,9 @@ function M.generation(db: sql.DB): (Generation?, Reply?)
     end
     local count, count_error = restarts()
     if not count then return nil, fail("UNAVAILABLE", count_error or "listener restarts unknown") end
-    return {epoch = integer(listener.epoch) or 0, restarts = count}, nil
+    local epoch = bounds.count(listener.epoch)
+    if epoch == nil then return nil, fail("STORAGE", "listener epoch is corrupt") end
+    return {epoch = epoch, restarts = count}, nil
 end
 -- Validity of a binding now: current epoch, not revoked, not expired.
 function M.valid(binding: Binding, generation: Generation): (boolean, string)
@@ -282,12 +411,18 @@ function M.open(value: unknown): Reply
     if not secret then return fail("STORAGE", secret_error or "listener secret") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
-    local current, current_error = listener_of(db)
-    if current_error then db:release(); return fail("STORAGE", current_error) end
-    local epoch = (current and (integer(current.epoch) or 0) or 0) + 1
-    local _, write_error = db:execute("INSERT INTO bee_gateway_listener (singleton, epoch, address, secret, drained, drain_deadline_at, opened_at, native_key) VALUES (1, ?, ?, ?, 0, NULL, ?, NULLIF(?, '')) " ..
-        "ON CONFLICT(singleton) DO UPDATE SET epoch = excluded.epoch, address = excluded.address, secret = excluded.secret, drained = 0, drain_deadline_at = NULL, opened_at = excluded.opened_at, native_key = excluded.native_key",
-        {epoch, address, secret, stamp(now_ms()), selected.native_key or ""})
+    local current_epoch: integer = 0
+    local rows, read_error = listener_store.read(db)
+    if read_error or not rows then db:release(); return fail("STORAGE", "read listener for recovery") end
+    if #rows > 1 then db:release(); return fail("STORAGE", "listener row is duplicated") end
+    if #rows == 1 then
+        local current = bounds.object(rows[1])
+        local declared_epoch = current and bounds.count(current.epoch)
+        if declared_epoch == nil or declared_epoch == 0 then db:release(); return fail("STORAGE", "listener epoch is corrupt") end
+        current_epoch = declared_epoch
+    end
+    local epoch = current_epoch + 1
+    local _, write_error = listener_store.open(db, epoch, address, secret, stamp(now_ms()), selected.native_key or "")
     db:release()
     if write_error then return fail("STORAGE", "record listener") end
     if selected.native_key then
@@ -392,17 +527,20 @@ function M.admit(value: unknown): Reply
     local listener, listener_error = listener_of(db)
     if listener_error then db:release(); return fail("STORAGE", listener_error) end
     if not listener then db:release(); return fail("UNAVAILABLE", "the gateway listener has not been opened") end
-    if integer(listener.drained) == 1 then db:release(); return fail("UNAVAILABLE", "the gateway is draining; no new admissions") end
-    local epoch = integer(listener.epoch) or 0
+    local drained = bounds.count(listener.drained)
+    if drained ~= 0 and drained ~= 1 then db:release(); return fail("STORAGE", "listener drain state is corrupt") end
+    if drained == 1 then db:release(); return fail("UNAVAILABLE", "the gateway is draining; no new admissions") end
+    local epoch = bounds.count(listener.epoch)
+    if not epoch or epoch == 0 then db:release(); return fail("STORAGE", "listener epoch is corrupt") end
     if idempotency_key then
-        local replay, replay_error = db:query("SELECT * FROM bee_gateway_bindings WHERE subject = ? AND idempotency_key = ?", {caller, idempotency_key})
+        local replay, replay_error = binding_store.by_idempotency_key(db, caller, idempotency_key)
         if replay_error or not replay then db:release(); return fail("STORAGE", "read bindings") end
         if #replay == 1 then
             local stored = replay[1] :: Row
             db:release()
+            local binding, decode_error = binding_of(stored)
+            if not binding then return fail("STORAGE", decode_error or "binding is corrupt") end
             if stored.request_digest ~= request_digest then return fail("CONFLICT", "idempotency key reused with a different request") end
-            local binding = binding_of(stored)
-            if not binding then return fail("STORAGE", "binding is corrupt") end
             return succeed({binding = view(binding), replayed = true})
         end
     end
@@ -417,28 +555,30 @@ function M.admit(value: unknown): Reply
     if not tx then db:release(); return fail("STORAGE", "begin admission") end
     -- An epoch below the highest the attempt was ever admitted under is a
     -- delayed admission from a fenced carrier, live binding or not.
-    local highest_rows, highest_error = tx:query("SELECT MAX(carrier_epoch) AS highest FROM bee_gateway_bindings WHERE attempt_id = ?", {attempt_id})
+    local highest_rows, highest_error = binding_store.highest_carrier_epoch(tx, attempt_id)
     if highest_error or not highest_rows then tx:rollback(); db:release(); return fail("STORAGE", "read bindings") end
-    local highest = #highest_rows == 1 and integer((highest_rows[1] :: Row).highest) or nil
+    if #highest_rows ~= 1 then tx:rollback(); db:release(); return fail("STORAGE", "binding carrier epoch is corrupt") end
+    local highest_raw = (bounds.object(highest_rows[1]) or {}).highest
+    local highest = highest_raw == nil and nil or bounds.count(highest_raw)
+    if highest_raw ~= nil and (highest == nil or highest == 0) then tx:rollback(); db:release(); return fail("STORAGE", "binding carrier epoch is corrupt") end
     if highest and carrier_epoch < highest then
         tx:rollback()
         db:release()
         return fail("CONFLICT", "carrier epoch " .. tostring(carrier_epoch) .. " is below the highest epoch " .. tostring(highest) .. " admitted for attempt " .. attempt_id)
     end
-    local live, live_error = tx:query("SELECT * FROM bee_gateway_bindings WHERE attempt_id = ? AND carrier_epoch = ? AND revoked_at IS NULL", {attempt_id, carrier_epoch})
+    local live, live_error = binding_store.live_at_carrier_epoch(tx, attempt_id, carrier_epoch)
     if live_error or not live then tx:rollback(); db:release(); return fail("STORAGE", "read bindings") end
     if #live > 0 then
         local stored = live[1] :: Row
         tx:rollback()
         db:release()
+        local binding, decode_error = binding_of(stored)
+        if not binding then return fail("STORAGE", decode_error or "binding is corrupt") end
         if stored.request_digest ~= request_digest then return fail("CONFLICT", "attempt " .. attempt_id .. " already holds a different binding under carrier epoch " .. tostring(carrier_epoch)) end
-        local binding = binding_of(stored)
-        if not binding then return fail("STORAGE", "binding is corrupt") end
         return succeed({binding = view(binding), replayed = true})
     end
     if workspace_id then
-        local names, name_error = tx:query("SELECT action_id FROM bee_gateway_bindings WHERE workspace_id = ? AND workspace_name = ? AND action_id <> ? AND revoked_at IS NULL AND sealed_at IS NULL AND epoch = ? LIMIT 1",
-            {workspace_id, workspace_name, action_id, epoch})
+        local names, name_error = binding_store.workspace_name_conflict(tx, workspace_id, workspace_name, action_id, epoch)
         if name_error or not names then tx:rollback(); db:release(); return fail("STORAGE", "read workspace session names") end
         if #names > 0 then tx:rollback(); db:release(); return fail("CONFLICT", "workspace_name is already assigned to another live action") end
     end
@@ -446,15 +586,15 @@ function M.admit(value: unknown): Reply
     -- acknowledgement was lost. Supersession fences future intake, but it
     -- cannot truthfully reject that durable uncertainty; a replacement can
     -- reclaim the row under its newer carrier epoch.
-    local _, reject_superseded = tx:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding superseded', updated_at = ? WHERE status = 'queued' AND claimed_epoch = 0 AND binding_id IN (SELECT binding_id FROM bee_gateway_bindings WHERE attempt_id = ? AND carrier_epoch < ? AND revoked_at IS NULL)", {stamp(created), attempt_id, carrier_epoch})
+    local _, reject_superseded = hook_store.reject_superseded(tx, stamp(created), attempt_id, carrier_epoch)
     if reject_superseded then tx:rollback(); db:release(); return fail("STORAGE", "reject superseded hooks") end
-    local _, supersede_error = tx:execute("UPDATE bee_gateway_bindings SET revoked_at = ? WHERE attempt_id = ? AND carrier_epoch < ? AND revoked_at IS NULL", {stamp(created), attempt_id, carrier_epoch})
+    local _, supersede_error = binding_store.supersede_older(tx, stamp(created), attempt_id, carrier_epoch)
     if supersede_error then tx:rollback(); db:release(); return fail("STORAGE", "supersede earlier bindings") end
     local origin_json = origin_view and json.encode(origin_view) or ""
     if origin_view and not origin_json then tx:rollback(); db:release(); return fail("INVALID", "origin_view is not JSON") end
-    local _, insert_error = tx:execute([[INSERT INTO bee_gateway_bindings (binding_id, subject, action_id, attempt_id, thread_id, owner_incarnation, carrier_epoch, tools_json, hooks_json,
-        epoch, credential_generation, expires_at, revoked_at, idempotency_key, request_digest, created_at, policy_ref, workspace_id, workspace_name, origin_view_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?)]],
-        {binding_id, subject, action_id, attempt_id, thread_id, incarnation, carrier_epoch, json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), idempotency_key, request_digest, stamp(created), policy_ref or "", workspace_id or "", workspace_name, origin_json})
+    local _, insert_error = binding_store.insert(tx, binding_id, subject, action_id, attempt_id, thread_id, incarnation, carrier_epoch,
+        json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), idempotency_key, request_digest, stamp(created),
+        policy_ref or "", workspace_id or "", workspace_name, origin_json)
     if insert_error then tx:rollback(); db:release(); return fail("STORAGE", "record binding") end
     local initialized, initialize_error = surface_store.initialize(tx, binding_id, surface_json, json.encode(initial.active) or "[]", "{}")
     if not initialized then tx:rollback(); db:release(); return fail("STORAGE", initialize_error and initialize_error.message or "record binding surface") end
@@ -470,8 +610,7 @@ end
 -- a running child inherits the binding its child already holds. The live
 -- one for materialization, the latest for a check that reports revocation.
 local function binding_by_carrier(db: sql.DB, attempt_id: string, carrier_epoch: integer, live: boolean): (Binding?, Reply?)
-    local filter = live and " AND revoked_at IS NULL" or ""
-    local rows, err = db:query("SELECT * FROM bee_gateway_bindings WHERE attempt_id = ? AND carrier_epoch <= ?" .. filter .. " ORDER BY carrier_epoch DESC, created_at DESC, binding_id DESC LIMIT 1", {attempt_id, carrier_epoch})
+    local rows, err = binding_store.by_carrier(db, attempt_id, carrier_epoch, live)
     if err or not rows then return nil, fail("STORAGE", "read binding") end
     if #rows == 0 then return nil, fail("NOT_FOUND", "no " .. (live and "live " or "") .. "binding for attempt " .. attempt_id .. " under carrier epoch " .. tostring(carrier_epoch)) end
     local binding, decode_error = binding_of(rows[1] :: Row)
@@ -531,15 +670,27 @@ function M.materialize(value: unknown): Reply
     -- below by the materialization it authorizes.
     local key_hash, key_hash_error = token_hash(key)
     if not key_hash then db:release(); return fail("STORAGE", key_hash_error or "hash key") end
-    local key_rows, key_error = db:query("SELECT materialization_key_hash, materialization_expires_at FROM bee_gateway_bindings WHERE binding_id = ?", {binding.binding_id})
+    local key_rows, key_error = binding_store.materialization_key(db, binding.binding_id)
     if key_error or not key_rows or #key_rows ~= 1 then db:release(); return fail("STORAGE", "read materialization key") end
-    local issued = key_rows[1] :: Row
-    if type(issued.materialization_key_hash) ~= "string" or issued.materialization_key_hash ~= key_hash then
+    local issued = bounds.object(key_rows[1])
+    if not issued then db:release(); return fail("STORAGE", "materialization authorization is corrupt") end
+    if issued.materialization_key_hash == nil and issued.materialization_expires_at == nil then
+        db:release()
+        return fail("DENIED", "materialization authorization has already been consumed")
+    end
+    local issued_hash = bounds.text(issued.materialization_key_hash, 64)
+    local issued_expires_at = bounds.text(issued.materialization_expires_at, 64)
+    if not issued_hash or #issued_hash ~= 64 or not issued_hash:match("^[0-9a-f]+$") or not issued_expires_at then
+        db:release()
+        return fail("STORAGE", "materialization authorization is corrupt")
+    end
+    if issued_hash ~= key_hash then
         db:release()
         return fail("DENIED", "materialization is not authorized by placement for this start")
     end
-    local window = time.parse(FORMAT, tostring(issued.materialization_expires_at))
-    if not window or not time.now():before(window) then db:release(); return fail("DENIED", "the materialization authorization has expired") end
+    local window, window_error = time.parse(FORMAT, issued_expires_at)
+    if window_error or not window then db:release(); return fail("STORAGE", "materialization expiry is corrupt") end
+    if not time.now():before(window) then db:release(); return fail("DENIED", "the materialization authorization has expired") end
     local generation, generation_failure = M.generation(db)
     if not generation then db:release(); return generation_failure :: Reply end
     local ok, reason = M.valid(binding, generation)
@@ -547,10 +698,11 @@ function M.materialize(value: unknown): Reply
     -- The first materialization opens generation 1; a single writer wins.
     local current = binding.credential_generation
     if current == 0 then
-        local opened, open_error = db:execute("UPDATE bee_gateway_bindings SET credential_generation = 1 WHERE binding_id = ? AND credential_generation = 0", {binding.binding_id})
+        local opened, open_error = binding_store.open_credential_generation(db, binding.binding_id)
         if open_error then db:release(); return fail("STORAGE", "open credential generation") end
-        if opened and (integer(opened.rows_affected) or 0) == 1 then current = 1
-        else
+        local affected = opened and bounds.count(opened.rows_affected)
+        if not affected or affected > 1 then db:release(); return fail("STORAGE", "credential generation result is corrupt") end
+        if affected == 1 then current = 1 else
             local again, again_missing = binding_by_id(db, binding.binding_id)
             if not again then db:release(); return again_missing :: Reply end
             current = again.credential_generation
@@ -569,12 +721,11 @@ function M.materialize(value: unknown): Reply
         if not sum then db:release(); return fail("STORAGE", hash_error or "hash token") end
         local credential_id, id_error = uuid.v7()
         if id_error or not credential_id then db:release(); return fail("STORAGE", "credential id") end
-        local _, insert_error = db:execute("INSERT INTO bee_gateway_credentials (credential_id, binding_id, generation, kind, token_hash, runner, materialized_at, revoked_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
-            {credential_id, binding.binding_id, current, kind, sum, runner, stamp(now_ms())})
+        local _, insert_error = credential_store.insert(db, credential_id, binding.binding_id, current, kind, sum, runner, stamp(now_ms()))
         if insert_error then db:release(); return fail("CONFLICT", "credential generation " .. tostring(current) .. " is already materialized; reissue to replace it") end
         minted[kind] = token
     end
-    local _, consume_error = db:execute("UPDATE bee_gateway_bindings SET materialization_key_hash = NULL, materialization_expires_at = NULL WHERE binding_id = ?", {binding.binding_id})
+    local _, consume_error = binding_store.consume_materialization_key(db, binding.binding_id)
     db:release()
     if consume_error then return fail("STORAGE", "consume materialization key") end
     binding.credential_generation = current
@@ -615,7 +766,7 @@ function M.authorize_materialization(value: unknown): Reply
     if not key then db:release(); return fail("STORAGE", key_error or "materialization key") end
     local key_hash, hash_error = token_hash(key)
     if not key_hash then db:release(); return fail("STORAGE", hash_error or "hash key") end
-    local _, write_error = db:execute("UPDATE bee_gateway_bindings SET materialization_key_hash = ?, materialization_expires_at = ? WHERE binding_id = ?", {key_hash, stamp(now_ms() + ttl), binding_id})
+    local _, write_error = binding_store.authorize_materialization(db, binding_id, key_hash, stamp(now_ms() + ttl))
     db:release()
     if write_error then return fail("STORAGE", "record materialization authorization") end
     return succeed({binding = view(binding), materialization_key = key})
@@ -644,13 +795,15 @@ function M.reissue(value: unknown): Reply
     if not generation then db:release(); return generation_failure :: Reply end
     local ok, reason = M.valid(binding, generation)
     if not ok then db:release(); return fail("DENIED", reason) end
-    local advanced, advance_error = db:execute("UPDATE bee_gateway_bindings SET credential_generation = ? WHERE binding_id = ? AND credential_generation = ?", {expected + 1, binding_id, expected})
+    local advanced, advance_error = binding_store.advance_credential_generation(db, binding_id, expected)
     if advance_error then db:release(); return fail("STORAGE", "advance credential generation") end
-    if not advanced or (integer(advanced.rows_affected) or 0) ~= 1 then
+    local affected = advanced and bounds.count(advanced.rows_affected)
+    if affected == nil or affected > 1 then db:release(); return fail("STORAGE", "credential generation result is corrupt") end
+    if affected ~= 1 then
         db:release()
         return fail("CONFLICT", "credential generation is not " .. tostring(expected) .. "; read the binding before reissuing")
     end
-    local _, revoke_error = db:execute("UPDATE bee_gateway_credentials SET revoked_at = COALESCE(revoked_at, ?) WHERE binding_id = ? AND generation <= ?", {stamp(now_ms()), binding_id, expected})
+    local _, revoke_error = credential_store.revoke_through_generation(db, binding_id, expected, stamp(now_ms()))
     db:release()
     if revoke_error then return fail("STORAGE", "revoke previous credentials") end
     binding.credential_generation = expected + 1
@@ -680,9 +833,9 @@ function M.revoke(value: unknown): Reply
     -- A claimed row can be the thread commit whose acknowledgement was lost,
     -- so it remains queued for a current or replacement carrier to reconcile.
     local at = stamp(now_ms())
-    local _, write_error = db:execute("UPDATE bee_gateway_bindings SET revoked_at = COALESCE(revoked_at, ?), sealed_at = COALESCE(sealed_at, ?) WHERE binding_id = ?", {at, at, binding_id})
+    local _, write_error = binding_store.revoke(db, binding_id, at)
     if write_error then db:release(); return fail("STORAGE", "revoke binding") end
-    local _, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding revoked', updated_at = ? WHERE binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {at, binding_id})
+    local _, reject_error = hook_store.reject_revoked_for_binding(db, binding_id, at)
     db:release()
     if reject_error then return fail("STORAGE", "reject queued hooks") end
     local result = view(binding)
@@ -712,7 +865,7 @@ function M.seal(value: unknown): Reply
         db:release()
         return fail("DENIED", "caller may not seal this binding")
     end
-    local _, write_error = db:execute("UPDATE bee_gateway_bindings SET sealed_at = COALESCE(sealed_at, ?) WHERE binding_id = ?", {stamp(now_ms()), binding_id})
+    local _, write_error = binding_store.seal(db, binding_id, stamp(now_ms()))
     db:release()
     if write_error then return fail("STORAGE", "seal binding") end
     binding.sealed = true
@@ -738,13 +891,14 @@ function M.revoke_attempt(value: unknown): Reply
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
     local at = stamp(now_ms())
-    local result, write_error = db:execute("UPDATE bee_gateway_bindings SET revoked_at = ? WHERE attempt_id = ? AND carrier_epoch <= ? AND revoked_at IS NULL", {at, attempt_id, carrier_epoch})
+    local result, write_error = binding_store.revoke_attempt(db, attempt_id, carrier_epoch, at)
     if write_error then db:release(); return fail("STORAGE", "revoke attempt bindings") end
-    local _, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding revoked', updated_at = ? WHERE status = 'queued' AND claimed_epoch = 0 AND binding_id IN (SELECT binding_id FROM bee_gateway_bindings WHERE attempt_id = ? AND revoked_at = ?)", {at, attempt_id, at})
+    local revoked = result and bounds.count(result.rows_affected)
+    if revoked == nil then db:release(); return fail("STORAGE", "revocation result is corrupt") end
+    local _, reject_error = hook_store.reject_revoked_attempt(db, attempt_id, at)
     db:release()
     if reject_error then return fail("STORAGE", "reject queued hooks") end
-    return succeed({attempt_id = attempt_id, carrier_epoch = carrier_epoch,
-        revoked = result and (integer(result.rows_affected) or 0) or 0, revocation = revocation})
+    return succeed({attempt_id = attempt_id, carrier_epoch = carrier_epoch, revoked = revoked, revocation = revocation})
 end
 -- check: a binding as it stands now, named by id or by attempt and carrier
 -- epoch, for placement's recheck of what an attempt still holds. Bindings,
@@ -775,13 +929,18 @@ function M.check(value: unknown): Reply
     if binding.credential_generation > 0 then
         local db_again, again_failure = open()
         if not db_again then return again_failure :: Reply end
-        local presented, presented_error = db_again:query("SELECT presented_count, last_presented_at FROM bee_gateway_credentials WHERE binding_id = ? AND generation = ? AND kind = 'tool'", {binding.binding_id, binding.credential_generation})
+        local presented, presented_error = binding_store.credential_presentation(db_again, binding.binding_id, binding.credential_generation)
         db_again:release()
-        if presented_error or not presented then return fail("STORAGE", "read credential") end
-        if #presented == 1 then
-            result.presented_count = integer((presented[1] :: Row).presented_count) or 0
-            result.last_presented_at = (presented[1] :: Row).last_presented_at
+        if presented_error or not presented or #presented ~= 1 then return fail("STORAGE", "read credential") end
+        local credential_row = bounds.object(presented[1])
+        local presented_count = credential_row and bounds.count(credential_row.presented_count)
+        local last_presented_at, valid_last_presented_at = optional_timestamp(credential_row and credential_row.last_presented_at)
+        if not credential_row or presented_count == nil or not valid_last_presented_at
+            or (presented_count == 0 and last_presented_at ~= nil) or (presented_count > 0 and last_presented_at == nil) then
+            return fail("STORAGE", "credential presentation state is corrupt")
         end
+        result.presented_count = presented_count
+        result.last_presented_at = last_presented_at
     end
     return succeed(result)
 end
@@ -803,7 +962,7 @@ function M.drain(value: unknown): Reply
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
     local deadline_at = stamp(now_ms() + deadline)
-    local _, write_error = db:execute("UPDATE bee_gateway_listener SET drained = 1, drain_deadline_at = ? WHERE singleton = 1", {deadline_at})
+    local _, write_error = listener_store.start_drain(db, deadline_at)
     db:release()
     if write_error then return fail("STORAGE", "record drain") end
     return succeed({drained = true, deadline_at = deadline_at})
@@ -814,13 +973,15 @@ function M.draining(): (Drain?, Reply?)
     local listener, listener_error = listener_of(db)
     db:release()
     if listener_error then return nil, fail("STORAGE", listener_error) end
-    if not listener or integer(listener.drained) ~= 1 then return {draining = false, past_deadline = false}, nil end
-    local past = false
-    local deadline_text = text(listener.drain_deadline_at)
-    if deadline_text then
-        local deadline = time.parse(FORMAT, deadline_text)
-        past = deadline ~= nil and not time.now():before(deadline)
-    end
+    if not listener then return nil, fail("UNAVAILABLE", "the gateway listener has not been opened") end
+    local drained = integer(listener.drained)
+    if drained ~= 0 and drained ~= 1 then return nil, fail("STORAGE", "listener drain state is corrupt") end
+    if drained == 0 then return {draining = false, past_deadline = false}, nil end
+    local deadline_text = bounds.text(listener.drain_deadline_at)
+    if not deadline_text then return nil, fail("STORAGE", "drain deadline is absent or corrupt") end
+    local deadline, parse_error = time.parse(FORMAT, deadline_text)
+    if parse_error or not deadline then return nil, fail("STORAGE", "drain deadline is corrupt") end
+    local past = not time.now():before(deadline)
     return {draining = true, past_deadline = past}, nil
 end
 -- The readiness proof: an HMAC over the generation and the caller's nonce
@@ -871,12 +1032,14 @@ function M.ready(value: unknown): Reply
     db:release()
     local selected, selection_error = configuration.current()
     if not selected then return fail("UNAVAILABLE", selection_error or "gateway endpoint") end
-    if listener.address ~= selected.address or listener.native_key ~= selected.native_key then
+    local address = bounds.text(listener.address, 120)
+    local secret = bounds.text(listener.secret, 128)
+    if not address or not secret then return fail("STORAGE", "listener endpoint or secret is corrupt") end
+    if address ~= selected.address or listener.native_key ~= selected.native_key then
         return fail("UNAVAILABLE", "the stored listener is not the host-selected execution")
     end
     local nonce, nonce_error = random_text()
     if not nonce then return fail("STORAGE", nonce_error or "nonce") end
-    local address = tostring(listener.address)
     local response, request_error = http_client.get("http://" .. address .. "/ready", {timeout = "2s", query = {nonce = nonce}})
     if request_error or not response then return fail("UNAVAILABLE", "the listener did not answer: " .. tostring(request_error)) end
     if response.status_code ~= 200 then
@@ -890,7 +1053,7 @@ function M.ready(value: unknown): Reply
     local answered: unknown, decode_error = json.decode(tostring(response.body))
     if decode_error or type(answered) ~= "table" then return fail("UNAVAILABLE", "the listener answered unreadably") end
     local reported = answered :: Object
-    local verified, verify_failure = M.verify(tostring(listener.secret), generation, nonce, reported)
+    local verified, verify_failure = M.verify(secret, generation, nonce, reported)
     if not verified then return verify_failure :: Reply end
     local result: Object = {generation = generation, address = address, listening = true}
     if binding then
@@ -911,15 +1074,12 @@ function M.ready_report(nonce: string): (Object?, Reply?)
     local generation, generation_failure = M.generation(db)
     db:release()
     if not generation then return nil, generation_failure end
-    local proof, proof_error = M.proof(tostring(listener.secret), generation, nonce)
+    local secret = bounds.text(listener.secret, 128)
+    if not secret then return nil, fail("STORAGE", "listener secret is corrupt") end
+    local proof, proof_error = M.proof(secret, generation, nonce)
     if not proof then return nil, fail("STORAGE", proof_error or "proof") end
     return {epoch = generation.epoch, restarts = generation.restarts, proof = proof}, nil
 end
--- authenticate: a presented token against the action in the URL and the
--- endpoint's credential kind. Its hash must name a live credential of that
--- kind in the binding's current generation, the binding must name that
--- action, and it must be valid now. A hook credential never opens the tool
--- endpoint and a tool credential never opens the hook endpoint.
 function M.surface(binding: Binding): (BoundSurface?, Reply?)
     local db, open_failure = open()
     if not db then return nil, open_failure end
@@ -993,7 +1153,7 @@ function M.select_surface(binding: Binding, expected_revision: integer, active: 
     if not db then return open_failure or fail("STORAGE", "open surface") end
     local tx, tx_error = db:begin()
     if not tx or tx_error then db:release(); return fail("STORAGE", "open surface mutation") end
-    local rows, read_error = tx:query("SELECT credential_generation, revoked_at FROM bee_gateway_bindings WHERE binding_id = ?", {binding.binding_id})
+    local rows, read_error = binding_store.access_authority(tx, binding.binding_id)
     if not rows or read_error or #rows ~= 1 then tx:rollback(); db:release(); return fail("STORAGE", "read binding") end
     local row = bounds.object(rows[1])
     if not row or row.revoked_at ~= nil or integer(row.credential_generation) ~= binding.credential_generation then
@@ -1019,7 +1179,7 @@ function M.access_status(binding: Binding, approval_id: string): Reply
     -- request lifetime. Replaying status must not re-consume or re-activate it.
     local receipt_db, receipt_failure = open()
     if not receipt_db then return receipt_failure or fail("STORAGE", "read access receipt") end
-    local receipts, receipt_error = receipt_db:query("SELECT traits_json FROM bee_gateway_access_grants WHERE binding_id = ? AND approval_id = ?", {binding.binding_id, approval_id})
+    local receipts, receipt_error = surface_store.receipt(receipt_db, binding.binding_id, approval_id)
     receipt_db:release()
     if not receipts or receipt_error then return fail("STORAGE", "read access receipt") end
     if #receipts > 0 then
@@ -1039,7 +1199,7 @@ function M.access_status(binding: Binding, approval_id: string): Reply
     if not db then return open_failure or fail("STORAGE", "open grant store") end
     local tx, tx_error = db:begin()
     if not tx or tx_error then db:release(); return fail("STORAGE", "begin grant") end
-    local rows, read_error = tx:query("SELECT credential_generation, revoked_at, sealed_at, expires_at FROM bee_gateway_bindings WHERE binding_id = ?", {binding.binding_id})
+    local rows, read_error = binding_store.surface_authority(tx, binding.binding_id)
     local row = rows and bounds.object(rows[1])
     local expires = row and bounds.text(row.expires_at)
     if read_error or not row or not expires or row.revoked_at ~= nil or row.sealed_at ~= nil or expires <= stamp(now_ms())
@@ -1088,7 +1248,7 @@ local function elevation_policy(binding: Binding): (string?, Reply?)
 end
 function M.request_capability(value: unknown): Reply
     local binding, refusal = own_binding(value)
-    if not binding then return refusal end
+    if not binding then return refusal or fail("UNAVAILABLE", "binding is unavailable") end
     local policy_name, policy_refusal = elevation_policy(binding)
     if not policy_name then return policy_refusal end
     local object = bounds.object(value) or {}
@@ -1096,7 +1256,7 @@ function M.request_capability(value: unknown): Reply
 end
 function M.capability_status(value: unknown): Reply
     local binding, refusal = own_binding(value)
-    if not binding then return refusal end
+    if not binding then return refusal or fail("UNAVAILABLE", "binding is unavailable") end
     local policy_name, policy_refusal = elevation_policy(binding)
     if not policy_name then return policy_refusal end
     local object = bounds.object(value) or {}
@@ -1127,29 +1287,41 @@ function M.install_status(value: unknown): Reply
     if not binding or not policy_name then return refusal :: Reply end
     return installation.status(installation.port(binding), binding, policy_name, request)
 end
+-- A credential is valid only for its action, kind, current generation and expiry.
 function M.authenticate(token: string, action_id: string, kind: string): (Binding?, Reply?)
     if #token == 0 or #token > 128 then return nil, fail("UNAUTHENTICATED", "token is not presentable") end
     local sum, hash_error = token_hash(token)
     if not sum then return nil, fail("STORAGE", hash_error or "hash token") end
     local db, open_failure = open()
     if not db then return nil, open_failure end
-    local rows, err = db:query("SELECT credential_id, binding_id, generation, kind, revoked_at FROM bee_gateway_credentials WHERE token_hash = ?", {sum})
+    local rows, err = credential_store.by_hash(db, sum)
     if err or not rows then db:release(); return nil, fail("STORAGE", "read credential") end
     if #rows == 0 then db:release(); return nil, fail("UNAUTHENTICATED", "token is not admitted") end
-    local credential = rows[1] :: Row
-    if credential.revoked_at ~= nil then db:release(); return nil, fail("UNAUTHENTICATED", "token was replaced or revoked") end
-    if tostring(credential.kind) ~= kind then db:release(); return nil, fail("UNAUTHENTICATED", "credential is a " .. tostring(credential.kind) .. " credential, not admitted on this endpoint") end
-    local binding, missing = binding_by_id(db, tostring(credential.binding_id))
+    if #rows ~= 1 then db:release(); return nil, fail("STORAGE", "credential hash is not unique") end
+    local credential = bounds.object(rows[1])
+    local credential_id = credential and bounds.id(credential.credential_id)
+    local binding_id = credential and bounds.id(credential.binding_id)
+    local credential_generation = credential and bounds.count(credential.generation)
+    local credential_kind = credential and bounds.text(credential.kind, 16)
+    local revoked_at, valid_revoked_at = optional_timestamp(credential and credential.revoked_at)
+    if not credential or not credential_id or not binding_id or credential_generation == nil or credential_generation == 0
+        or (credential_kind ~= "tool" and credential_kind ~= "hook") or not valid_revoked_at then
+        db:release()
+        return nil, fail("STORAGE", "credential row is corrupt")
+    end
+    if revoked_at then db:release(); return nil, fail("UNAUTHENTICATED", "token was replaced or revoked") end
+    if credential_kind ~= kind then db:release(); return nil, fail("UNAUTHENTICATED", "credential is a " .. credential_kind .. " credential, not admitted on this endpoint") end
+    local binding, missing = binding_by_id(db, binding_id)
     if not binding then db:release(); return nil, missing end
     local generation, generation_failure = M.generation(db)
     if not generation then db:release(); return nil, generation_failure end
-    if (integer(credential.generation) or 0) ~= binding.credential_generation then db:release(); return nil, fail("UNAUTHENTICATED", "token belongs to a superseded credential generation") end
+    if credential_generation ~= binding.credential_generation then db:release(); return nil, fail("UNAUTHENTICATED", "token belongs to a superseded credential generation") end
     if binding.action_id ~= action_id then db:release(); return nil, fail("DENIED", "token is bound to another action") end
     local ok, reason = M.valid(binding, generation)
     if not ok then db:release(); return nil, fail("UNAUTHENTICATED", reason) end
     -- An accepted presentation is counted; the count is what proves a
     -- client authenticated without any bytes in evidence.
-    local _, count_error = db:execute("UPDATE bee_gateway_credentials SET presented_count = presented_count + 1, last_presented_at = ? WHERE credential_id = ?", {stamp(now_ms()), tostring(credential.credential_id)})
+    local _, count_error = credential_store.presented(db, credential_id, stamp(now_ms()))
     db:release()
     if count_error then return nil, fail("STORAGE", "count presentation") end
     return binding, nil
@@ -1172,8 +1344,7 @@ local function running_sessions(workspace_id: string, unopened_is_empty: boolean
     end
     local generation, generation_failure = M.generation(db)
     if not generation then db:release(); return nil, generation_failure end
-    local rows, err = db:query("SELECT * FROM bee_gateway_bindings WHERE workspace_id = ? AND revoked_at IS NULL AND sealed_at IS NULL AND epoch = ? ORDER BY action_id ASC",
-        {workspace_id, generation.epoch})
+    local rows, err = binding_store.workspace_bindings(db, workspace_id, generation.epoch)
     db:release()
     if err or not rows then return nil, fail("STORAGE", "read workspace bindings") end
     local candidates: {sessions.Candidate} = {}
@@ -1266,33 +1437,53 @@ function M.submit_hook(binding: Binding, payload: Object, provenance: string): R
         db:release()
         return reply
     end
-    local state, state_error = tx:query("SELECT sealed_at, revoked_at FROM bee_gateway_bindings WHERE binding_id = ?", {binding.binding_id})
+    local state, state_error = binding_store.intake_state(tx, binding.binding_id)
     if state_error or not state or #state ~= 1 then return done(fail("STORAGE", "read binding")) end
-    local current = state[1] :: Row
+    local current = bounds.object(state[1])
+    local revoked_at, valid_revoked_at = optional_timestamp(current and current.revoked_at)
+    local sealed_at, valid_sealed_at = optional_timestamp(current and current.sealed_at)
+    if not current or not valid_revoked_at or not valid_sealed_at then return done(fail("STORAGE", "binding intake state is corrupt")) end
     if not submission.ambiguous then
-        local existing, existing_error = tx:query("SELECT event_id, digest, status, rejected_reason FROM bee_gateway_hooks WHERE binding_id = ? AND event = ? AND occurrence = ? AND ambiguous = 0", {binding.binding_id, event, submission.occurrence})
+        local existing, existing_error = hook_store.existing_occurrence(tx, binding.binding_id, event, submission.occurrence)
         if existing_error or not existing then return done(fail("STORAGE", "read hooks")) end
+        if #existing > 1 then return done(fail("STORAGE", "hook occurrence is duplicated")) end
         if #existing == 1 then
-            local stored = existing[1] :: Row
-            if tostring(stored.digest) ~= submission.digest then return done(fail("CONFLICT", "occurrence " .. submission.occurrence .. " of " .. event .. " was already submitted with different content")) end
-            return done(succeed({event_id = tostring(stored.event_id), status = tostring(stored.status), replayed = true, ambiguous = false, rejected_reason = stored.rejected_reason}))
+            local stored = bounds.object(existing[1])
+            local stored_digest = stored and bounds.text(stored.digest, 64)
+            local stored_id = stored and bounds.id(stored.event_id)
+            local stored_status = stored and bounds.text(stored.status, 16)
+            local rejected_reason, reason_valid = optional_text(stored and stored.rejected_reason, 120)
+            if not stored or not stored_digest or #stored_digest ~= 64 or not stored_digest:match("^[0-9a-f]+$") or not stored_id
+                or (stored_status ~= "queued" and stored_status ~= "committed" and stored_status ~= "rejected") or not reason_valid then
+                return done(fail("STORAGE", "hook occurrence row is corrupt"))
+            end
+            if stored_digest ~= submission.digest then return done(fail("CONFLICT", "occurrence " .. submission.occurrence .. " of " .. event .. " was already submitted with different content")) end
+            return done(succeed({event_id = stored_id, status = stored_status, replayed = true, ambiguous = false, rejected_reason = rejected_reason}))
         end
     end
-    if current.revoked_at ~= nil then return done(fail("DENIED", "intake is closed: binding revoked")) end
-    if current.sealed_at ~= nil then return done(fail("DENIED", "intake is sealed: the attempt's child has ended")) end
-    local queued, count_error = tx:query("SELECT COUNT(*) AS queued FROM bee_gateway_hooks WHERE binding_id = ? AND status = 'queued'", {binding.binding_id})
+    if revoked_at ~= nil then return done(fail("DENIED", "intake is closed: binding revoked")) end
+    if sealed_at ~= nil then return done(fail("DENIED", "intake is sealed: the attempt's child has ended")) end
+    local queued, count_error = hook_store.queued_count(tx, binding.binding_id)
     if count_error or not queued or #queued ~= 1 then return done(fail("STORAGE", "count hooks")) end
-    if (integer((queued[1] :: Row).queued) or 0) >= hooks.MAX_QUEUE then
+    local queued_row = bounds.object(queued[1])
+    local queued_count = queued_row and bounds.count(queued_row.queued)
+    if queued_count == nil then return done(fail("STORAGE", "queued hook count is corrupt")) end
+    if queued_count >= hooks.MAX_QUEUE then
         return done(fail("OVERLOAD", "the binding holds " .. tostring(hooks.MAX_QUEUE) .. " queued hooks; retry after " .. tostring(hooks.RETRY_AFTER_MS) .. " ms"))
     end
-    local sequence_rows, sequence_error = tx:query("SELECT COALESCE(MAX(sequence), 0) AS last FROM bee_gateway_hooks WHERE binding_id = ?", {binding.binding_id})
+    local sequence_rows, sequence_error = hook_store.last_sequence(tx, binding.binding_id)
     if sequence_error or not sequence_rows or #sequence_rows ~= 1 then return done(fail("STORAGE", "sequence hooks")) end
-    local sequence = (integer((sequence_rows[1] :: Row).last) or 0) + 1
+    local sequence_row = bounds.object(sequence_rows[1])
+    local last_sequence = (sequence_row and bounds.count(sequence_row.last)) or -1
+    if last_sequence < 0 or last_sequence >= 9007199254740991 then return done(fail("STORAGE", "hook sequence is corrupt")) end
+    local sequence = last_sequence + 1
     local event_id, id_error = uuid.v7()
     if id_error or not event_id then return done(fail("STORAGE", "event id")) end
     local at = stamp(now_ms())
-    local _, insert_error = tx:execute("INSERT INTO bee_gateway_hooks (event_id, binding_id, attempt_id, action_id, carrier_epoch, event, occurrence, ambiguous, digest, fields_json, provenance, status, sequence, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)",
-        {event_id, binding.binding_id, binding.attempt_id, binding.action_id, binding.carrier_epoch, event, submission.occurrence, submission.ambiguous and 1 or 0, submission.digest, json.encode(submission.fields), provenance, sequence, at, at})
+    local fields_json, fields_error = json.encode(submission.fields)
+    if fields_error or not fields_json then return done(fail("STORAGE", "encode hook fields")) end
+    local _, insert_error = hook_store.insert(tx, event_id, binding.binding_id, binding.attempt_id, binding.action_id, binding.carrier_epoch,
+        event, submission.occurrence, submission.ambiguous and 1 or 0, submission.digest, fields_json, provenance, sequence, at)
     if insert_error then return done(fail("STORAGE", "queue hook")) end
     local _, commit_error = tx:commit()
     db:release()
@@ -1304,28 +1495,37 @@ end
 function M.hook_status(binding: Binding, event_id: string): Reply
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
-    local rows, err = db:query("SELECT event, occurrence, ambiguous, status, sequence, claimed_epoch, rejected_reason FROM bee_gateway_hooks WHERE event_id = ? AND binding_id = ?", {event_id, binding.binding_id})
+    local rows, err = hook_store.status(db, event_id, binding.binding_id)
     db:release()
     if err or not rows then return fail("STORAGE", "read hook") end
     if #rows == 0 then return succeed({event_id = event_id, status = "unknown"}) end
-    local row = rows[1] :: Row
-    return succeed({event_id = event_id, status = tostring(row.status), event = tostring(row.event), occurrence = tostring(row.occurrence), ambiguous = integer(row.ambiguous) == 1, sequence = integer(row.sequence) or 0,
-        claimed_epoch = integer(row.claimed_epoch) or 0, rejected_reason = row.rejected_reason})
+    local status, decode_error = hook_status(rows[1])
+    if not status then return fail("STORAGE", decode_error or "hook status is corrupt") end
+    return succeed({event_id = event_id, status = status.status, event = status.event, occurrence = status.occurrence,
+        ambiguous = status.ambiguous, sequence = status.sequence, claimed_epoch = status.claimed_epoch, rejected_reason = status.rejected_reason})
 end
 -- hook_queue: the queued and committed submissions of a binding in order,
 -- for the carrier that will commit them and for proofs. Fields only.
 function M.hook_queue(binding: Binding): Reply
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
-    local rows, err = db:query("SELECT event_id, event, occurrence, ambiguous, digest, fields_json, provenance, status, sequence, created_at, claimed_epoch, rejected_reason FROM bee_gateway_hooks WHERE binding_id = ? ORDER BY sequence", {binding.binding_id})
+    local rows, err = hook_store.queue(db, binding.binding_id)
     db:release()
     if err or not rows then return fail("STORAGE", "read hooks") end
-    local list: {Object} = {}
+    local list: {HookQueueItem} = {}
     for index, row in ipairs(rows) do
-        local fields: unknown = json.decode(tostring((row :: Row).fields_json))
-        list[index] = {event_id = tostring((row :: Row).event_id), event = tostring((row :: Row).event), occurrence = tostring((row :: Row).occurrence), ambiguous = integer((row :: Row).ambiguous) == 1,
-            digest = tostring((row :: Row).digest), fields = fields, provenance = tostring((row :: Row).provenance), status = tostring((row :: Row).status), sequence = integer((row :: Row).sequence) or 0, created_at = tostring((row :: Row).created_at),
-            claimed_epoch = integer((row :: Row).claimed_epoch) or 0, rejected_reason = (row :: Row).rejected_reason}
+        local base, base_error = hook_record(row)
+        local stored = bounds.object(row)
+        local status = stored and bounds.text(stored.status, 16)
+        local claimed_epoch = stored and bounds.count(stored.claimed_epoch)
+        local rejected_reason, reason_valid = optional_text(stored and stored.rejected_reason, 120)
+        if not base or not stored or (status ~= "queued" and status ~= "committed" and status ~= "rejected")
+            or claimed_epoch == nil or not reason_valid then
+            return fail("STORAGE", base_error or "hook queue row is corrupt")
+        end
+        list[index] = {event_id = base.event_id, event = base.event, occurrence = base.occurrence, ambiguous = base.ambiguous,
+            digest = base.digest, fields = base.fields, provenance = base.provenance, status = status, sequence = base.sequence,
+            created_at = base.created_at, claimed_epoch = claimed_epoch, rejected_reason = rejected_reason}
     end
     return succeed({hooks = list})
 end
@@ -1334,16 +1534,18 @@ end
 -- record commit; this only prevents a preflight read from letting an old
 -- gateway claim or acknowledgment race a later admission.
 local function intake_epoch(tx: sql.Transaction, attempt_id: string, carrier_epoch: integer): Reply?
-    local rows, err = tx:query("SELECT MAX(carrier_epoch) AS highest FROM bee_gateway_bindings WHERE attempt_id = ?", {attempt_id})
+    local rows, err = binding_store.intake_carrier_epoch(tx, attempt_id)
     if err or not rows or #rows ~= 1 then return fail("STORAGE", "read bindings") end
-    local highest = integer((rows[1] :: Row).highest) or 0
+    local row = bounds.object(rows[1])
+    local highest = row and bounds.count(row.highest)
+    if highest == nil or highest == 0 then return fail("STORAGE", "binding carrier epoch is corrupt") end
     if carrier_epoch < highest then
         return fail("CONFLICT", "carrier epoch " .. tostring(carrier_epoch) .. " is below the highest epoch " .. tostring(highest) .. " admitted for attempt " .. attempt_id)
     end
     return nil
 end
 local function intake_binding(tx: sql.Transaction, binding_id: string): (Binding?, Reply?)
-    local rows, err = tx:query("SELECT * FROM bee_gateway_bindings WHERE binding_id = ?", {binding_id})
+    local rows, err = binding_store.intake_binding(tx, binding_id)
     if err or not rows then return nil, fail("STORAGE", "read binding") end
     if #rows == 0 then return nil, fail("NOT_FOUND", "binding does not exist") end
     local binding, decode_error = binding_of(rows[1] :: Row)
@@ -1351,12 +1553,16 @@ local function intake_binding(tx: sql.Transaction, binding_id: string): (Binding
     return binding, nil
 end
 local function intake_generation(tx: sql.Transaction): (Generation?, Reply?)
-    local rows, err = tx:query("SELECT epoch FROM bee_gateway_listener WHERE singleton = 1")
+    local rows, err = listener_store.epoch(tx)
     if err or not rows then return nil, fail("STORAGE", "read listener") end
     if #rows == 0 then return nil, fail("UNAVAILABLE", "the gateway listener has not been opened") end
+    if #rows ~= 1 then return nil, fail("STORAGE", "listener row is duplicated") end
     local count, count_error = restarts()
     if not count then return nil, fail("UNAVAILABLE", count_error or "listener restarts unknown") end
-    return {epoch = integer((rows[1] :: Row).epoch) or 0, restarts = count}, nil
+    local row = bounds.object(rows[1])
+    local epoch = row and bounds.count(row.epoch)
+    if not epoch or epoch == 0 then return nil, fail("STORAGE", "listener epoch is corrupt") end
+    return {epoch = epoch, restarts = count}, nil
 end
 local function intake_caller(binding: Binding): Reply?
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
@@ -1414,25 +1620,28 @@ function M.hook_claim(value: unknown): Reply
         -- listener-epoch change. This internal operation is independently
         -- authorized and carrier-epoch fenced, so it may recover only rows
         -- whose delivery already began; unclaimed rows are terminally refused.
-        local _, reject_error = tx:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = ?, updated_at = ? WHERE binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {reason, at, current_binding.binding_id})
+        local _, reject_error = hook_store.reject_unclaimed_for_binding(tx, current_binding.binding_id, reason, at)
         if reject_error then tx:rollback(); db:release(); return fail("STORAGE", "reject unclaimed hooks") end
         recovery_only = true
     end
-    local claimed_filter = recovery_only and " AND claimed_epoch > 0" or ""
-    local rows, err = tx:query("SELECT event_id FROM bee_gateway_hooks WHERE binding_id = ? AND status = 'queued' AND claimed_epoch <= ?" .. claimed_filter .. " ORDER BY sequence LIMIT ?", {current_binding.binding_id, carrier_epoch, limit})
+    local rows, err = hook_store.queued_ids(tx, current_binding.binding_id, carrier_epoch, recovery_only, limit)
     if err or not rows then tx:rollback(); db:release(); return fail("STORAGE", "read queued hooks") end
-    local claimed: {Object} = {}
+    local claimed: {HookRecord} = {}
     for _, row in ipairs(rows) do
-        local event_id = tostring((row :: Row).event_id)
-        local result, claim_error = tx:execute("UPDATE bee_gateway_hooks SET claimed_epoch = ?, claimed_at = ?, updated_at = ? WHERE event_id = ? AND status = 'queued' AND claimed_epoch <= ?", {carrier_epoch, at, at, event_id, carrier_epoch})
+        local event_id = bounds.id((row :: Row).event_id)
+        if not event_id then tx:rollback(); db:release(); return fail("STORAGE", "queued hook identity is corrupt") end
+        local result, claim_error = hook_store.claim(tx, event_id, carrier_epoch, at)
         if claim_error then tx:rollback(); db:release(); return fail("STORAGE", "claim hook") end
-        if result and (integer(result.rows_affected) or 0) == 1 then
-            local detail, detail_error = tx:query("SELECT event_id, event, occurrence, ambiguous, digest, fields_json, provenance, sequence, created_at FROM bee_gateway_hooks WHERE event_id = ?", {event_id})
+        local affected = result and bounds.count(result.rows_affected)
+        if affected == nil or affected > 1 then tx:rollback(); db:release(); return fail("STORAGE", "hook claim result is corrupt") end
+        if affected == 1 then
+            local detail, detail_error = hook_store.claimed_row(tx, event_id)
             if detail_error or not detail or #detail ~= 1 then tx:rollback(); db:release(); return fail("STORAGE", "read claimed hook") end
-            local item = detail[1] :: Row
-            local fields: unknown = json.decode(tostring(item.fields_json))
-            claimed[#claimed + 1] = {event_id = event_id, event = tostring(item.event), occurrence = tostring(item.occurrence), ambiguous = integer(item.ambiguous) == 1, digest = tostring(item.digest),
-                fields = fields, provenance = tostring(item.provenance), sequence = integer(item.sequence) or 0, created_at = tostring(item.created_at)}
+            local item, item_error = hook_record(detail[1])
+            if not item or item.event_id ~= event_id then
+                tx:rollback(); db:release(); return fail("STORAGE", item_error or "claimed hook identity is corrupt")
+            end
+            claimed[#claimed + 1] = item
         end
     end
     local _, commit_error = tx:commit()
@@ -1443,15 +1652,20 @@ end
 -- Keeps the retained rows of a binding within the bounds by dropping the
 -- oldest committed or rejected ones; queued rows are never pruned.
 local function prune(db: sql.DB, binding_id: string): string?
-    local rows, err = db:query("SELECT event_id, LENGTH(fields_json) AS bytes FROM bee_gateway_hooks WHERE binding_id = ? AND status IN ('committed', 'rejected') ORDER BY sequence DESC", {binding_id})
+    local rows, err = hook_store.retained(db, binding_id)
     if err or not rows then return "read retained hooks" end
     local kept = 0
     local bytes = 0
     for _, row in ipairs(rows) do
         kept = kept + 1
-        bytes = bytes + (integer((row :: Row).bytes) or 0)
+        local stored = bounds.object(row)
+        local stored_bytes = stored and bounds.count(stored.bytes)
+        if stored_bytes == nil then return "retained hook byte count is corrupt" end
+        bytes = bytes + stored_bytes
         if kept > M.MAX_RETAINED_HOOKS or bytes > M.MAX_RETAINED_HOOK_BYTES then
-            local _, delete_error = db:execute("DELETE FROM bee_gateway_hooks WHERE event_id = ?", {tostring((row :: Row).event_id)})
+            local event_id = stored and bounds.id(stored.event_id)
+            if not event_id then return "retained hook identity is corrupt" end
+            local _, delete_error = hook_store.delete(db, event_id)
             if delete_error then return "prune retained hooks" end
         end
     end
@@ -1474,9 +1688,11 @@ function M.hook_ack(value: unknown): Reply
     for _, event_id in ipairs(event_ids) do
         -- Only the epoch that claimed a row may acknowledge it: a replacement
         -- takes the row over first, then commits it, then acknowledges.
-        local result, ack_error = tx:execute("UPDATE bee_gateway_hooks SET status = 'committed', updated_at = ? WHERE event_id = ? AND binding_id = ? AND status = 'queued' AND claimed_epoch = ?", {at, event_id, binding.binding_id, carrier_epoch})
+        local result, ack_error = hook_store.acknowledge(tx, at, event_id, binding.binding_id, carrier_epoch)
         if ack_error then tx:rollback(); db:release(); return fail("STORAGE", "acknowledge hook") end
-        if result and (integer(result.rows_affected) or 0) == 1 then acknowledged = acknowledged + 1 end
+        local affected = result and bounds.count(result.rows_affected)
+        if affected == nil or affected > 1 then tx:rollback(); db:release(); return fail("STORAGE", "hook acknowledgment result is corrupt") end
+        if affected == 1 then acknowledged = acknowledged + 1 end
     end
     local _, commit_error = tx:commit()
     if commit_error then db:release(); return fail("STORAGE", "commit hook acknowledgment") end
@@ -1497,11 +1713,13 @@ function M.hook_reject(value: unknown): Reply
     if not tx then db:release(); return fail("STORAGE", "begin hook rejection") end
     local epoch_refusal = intake_epoch(tx, binding.attempt_id, carrier_epoch)
     if epoch_refusal then tx:rollback(); db:release(); return epoch_refusal end
-    local result, reject_error = tx:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = ?, updated_at = ? WHERE binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {reason, stamp(now_ms()), binding.binding_id})
+    local result, reject_error = hook_store.reject_binding(tx, stamp(now_ms()), reason, binding.binding_id)
     if reject_error then tx:rollback(); db:release(); return fail("STORAGE", "reject queued hooks") end
+    local rejected = result and bounds.count(result.rows_affected)
+    if rejected == nil then tx:rollback(); db:release(); return fail("STORAGE", "hook rejection result is corrupt") end
     local _, commit_error = tx:commit()
     db:release()
     if commit_error then return fail("STORAGE", "commit hook rejection") end
-    return succeed({binding_id = binding.binding_id, rejected = result and (integer(result.rows_affected) or 0) or 0})
+    return succeed({binding_id = binding.binding_id, rejected = rejected})
 end
 return M

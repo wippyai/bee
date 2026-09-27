@@ -11,6 +11,7 @@ local capability_model = require("capability_model")
 local capability_grants = require("capability_grants")
 local capability_files = require("capability_files")
 local protected_kernel = require("protected_kernel")
+local lists = require("lists")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -22,15 +23,18 @@ type DatabaseBinding = {database_id: string, table_prefix: string?}
 type DatabaseBindings = {[string]: DatabaseBinding}
 type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
-    grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    applied_databases: {[string]: unknown}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
-    auto_start: boolean,
+    grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: preflight.Migration},
+    applied_databases: {[string]: preflight.DatabaseEvidence}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
+    auto_start: boolean?,
     applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?,
     workspace_application: boolean?, base_policy_digest: string?, generated_databases: {Object}?}
 -- folder resolves the destination workspace folder file grants are rooted in;
 -- it is consulted only when the plan requests workspace files.
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
+type Resolver = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
+    policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?,
+    resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -39,38 +43,6 @@ end
 local function sha(value: unknown): string?
     if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
     return value
-end
-
-local function dense(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
-    if type(value) ~= "table" then return nil, label .. " must be a list" end
-    local source = value :: table
-    local count = 0
-    for key in pairs(source) do
-        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, label .. " must be a dense list" end
-        count = count + 1
-    end
-    if count > maximum then return nil, label .. " exceeds its bound" end
-    local result: {unknown} = {}
-    for index = 1, count do
-        if source[index] == nil then return nil, label .. " must be a dense list" end
-        result[index] = source[index]
-    end
-    return result, nil
-end
-
-local function list_strings(raw: unknown, label: string, maximum: integer): ({string}?, string?)
-    if raw == nil then return {}, nil end
-    local rows, rows_error = dense(raw, label, maximum)
-    if not rows then return nil, rows_error end
-    local result: {string} = {}
-    local seen: {[string]: boolean} = {}
-    for _, value in ipairs(rows) do
-        local item = bounds.id(value)
-        if not item or seen[item] then return nil, label .. " contains an invalid or duplicate value" end
-        seen[item], result[#result + 1] = true, item
-    end
-    table.sort(result)
-    return result, nil
 end
 
 local function references(entry: Entry): ({string}?, string?)
@@ -126,7 +98,7 @@ local function references(entry: Entry): ({string}?, string?)
     return result, nil
 end
 
-local function measured_entry(entry: Entry, package: string, registry_default_metadata: boolean?): (Object?, string?)
+local function measured_entry(entry: Entry, package: string, registry_default_metadata: boolean?): (preflight.Entry?, string?)
     local clean: Entry = {}
     -- `registry` is runtime provenance. It is not part of an incoming private
     -- artifact's authority or materialized definition.
@@ -139,6 +111,8 @@ local function measured_entry(entry: Entry, package: string, registry_default_me
         and (clean.meta == nil or (type(clean.meta) == "table" and next(clean.meta :: table) == nil)) then
         clean.meta = table.create(0, 1)
     end
+    local id, kind = bounds.id(clean.id), bounds.id(clean.kind)
+    if not id or not kind then return nil, "private overlay entry identity is invalid" end
     local encoded, encode_error = canonical.encode(clean, artifact.MAX_BYTES)
     if not encoded then return nil, "encode private overlay entry: " .. tostring(encode_error or "unknown error") end
     local digest, digest_error = hash.sha256(encoded)
@@ -147,15 +121,15 @@ local function measured_entry(entry: Entry, package: string, registry_default_me
     if not refs then return nil, refs_error end
     local data = object(clean.data)
     if not data then return nil, "registry entry configuration data is missing" end
-    local modules, modules_error = list_strings(data.modules, "entry modules", 32)
+    local modules, modules_error = lists.strings(data.modules, "entry modules", 32)
     if not modules then return nil, modules_error end
     local config_objects, config_lists, config_empty, shapes_error = artifact.config_shapes(data)
     if not config_objects or not config_lists or not config_empty then return nil, tostring(shapes_error or "measure entry configuration shapes") end
     local security = object(data.security)
-    local grants, grants_error = list_strings(security and security.policies or nil, "entry policies", 32)
+    local grants, grants_error = lists.strings(security and security.policies or nil, "entry policies", 32)
     if not grants then return nil, grants_error end
     local lifecycle = object(data.lifecycle)
-    return {id = clean.id, kind = clean.kind, package = package, digest = digest,
+    return {id = id, kind = kind, package = package, digest = digest,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
         security_actor = security ~= nil and security.actor ~= nil,
         security_groups = security ~= nil and security.groups ~= nil,
@@ -179,13 +153,13 @@ end
 local function requirement(entry: Entry, package: string, final: {[string]: Entry},
     catalog: capability_model.Vocabulary?): (Object?, string?)
     local data = object(entry.data) or entry
-    local targets, targets_error = dense(data.targets, "requirement targets", 64)
+    local targets, targets_error = bounds.dense_list(data.targets, 64, "requirement targets")
     if not targets then return nil, targets_error end
     local result_targets: {string} = {}
     local selected: string? = nil
     local meta = object(entry.meta)
     local capability = meta and meta.capability or nil
-    local capability_request: Object? = nil
+    local capability_request: preflight.CapabilityRequest? = nil
     if capability ~= nil then
         if not meta or meta.value_kind ~= "security.policy" or type(capability) ~= "string"
             or not capability:match("^[a-z][a-z0-9_.-]*$") or #capability > 80
@@ -198,7 +172,11 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         if not normalized then return nil, normalize_error or "capability parameters are invalid" end
         local catalog_revision, template_revision = capability_model.revisions(catalog, capability)
         if not catalog_revision or not template_revision then return nil, "host capability catalog is malformed" end
-        capability_request = {capability = capability, parameters = normalized, reason = meta.reason,
+        local reason = bounds.text(meta.reason, 512)
+        local capability_name = bounds.text(capability, 80)
+        if not reason or not capability_name then return nil, "capability requirement metadata is invalid" end
+        capability_request = {capability = capability_name, parameters = normalized, reason = reason,
+            target = "", path = "",
             catalog_revision = catalog_revision, template_revision = template_revision}
     elseif meta and (meta.parameters ~= nil or meta.reason ~= nil) then
         return nil, "capability requirement metadata is incomplete"
@@ -278,12 +256,15 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
     end
     table.sort(result_targets)
     local expected = meta and bounds.id(meta.value_kind) or nil
-    return {id = entry.id, package = package, value = selected, expected_kind = expected,
+    local id = bounds.id(entry.id)
+    if not id then return nil, "requirement identity is invalid" end
+    return {id = id, package = package, value = selected, expected_kind = expected,
         targets = result_targets, capability_request = capability_request}, nil
 end
 
 local function policy_context(policy: Policy, captured: Captured, base_digest: string,
-    current: {[string]: Object}, installed: {[string]: Object}): (Object?, string?)
+    current: {[string]: preflight.Entry}, installed: {[string]: preflight.Entry},
+    protected: protected_kernel.Manifest, evidence: preflight.HostEvidence): (preflight.Context?, string?)
     if not bounds.id(policy.node_id) or not sha(policy.policy_digest) then return nil, "host policy identity is invalid" end
     for _, field in ipairs({"packages", "namespaces", "kinds", "databases", "grants", "modules", "applied"}) do
         if type((policy :: Object)[field]) ~= "table" then return nil, "host policy is missing " .. field end
@@ -322,36 +303,32 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
             generated[database_id] = target_db
         end
     end
-    return {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
+    local context: preflight.Context = {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
         policy_digest = policy.policy_digest, packages = policy.packages, namespaces = policy.namespaces,
         kinds = policy.kinds, databases = policy.databases, grants = policy.grants, modules = policy.modules,
         database_bindings = bindings, entries = current, installed_entries = installed, applied = policy.applied,
         applied_databases = policy.applied_databases or {}, generated_databases = generated,
         exact_expansion = true,
-        migration_barrier = policy.migration_barrier == true, auto_start = policy.auto_start == true}, nil
+        migration_barrier = policy.migration_barrier == true, auto_start = policy.auto_start == true,
+        protected = protected, host_evidence = evidence}
+    return context, nil
 end
 
-function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?, string?)
-    if type(deps_raw) ~= "table" then return nil, nil, "private overlay resolver dependencies are invalid" end
-    local deps = deps_raw :: Deps
-    if type(deps.capture) ~= "function" or type(deps.root) ~= "function"
-        or type(deps.policy) ~= "function" then return nil, nil, "private overlay resolver dependencies are invalid" end
+function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
     local spec = object(spec_raw)
     local destination = spec and bounds.id(spec.owner_node) or nil
     local source = spec and bounds.id(spec.source_node) or nil
     local source_workspace = spec and bounds.id(spec.source_workspace) or nil
     local version = spec and bounds.id(spec.version) or nil
-    if not spec or not destination or not source or not source_workspace or not version then
+    local artifact_digest = spec and sha(spec.artifact_digest) or nil
+    if not spec or not destination or not source or not source_workspace or not version or not artifact_digest then
         return nil, nil, "selected private artifact identity is invalid"
     end
-    local expected, artifact_error = artifact.decode(spec.artifact_bytes, spec.artifact_digest)
+    local expected, artifact_error = artifact.decode(spec.artifact_bytes, artifact_digest)
     if not expected then return nil, nil, artifact_error end
     local captured, capture_error = deps.capture()
     if not captured then return nil, nil, capture_error end
-    if type(captured.revision) ~= "number" or captured.revision < 0
-        or captured.revision ~= math.floor(captured.revision) or type(captured.entries) ~= "table" then
-        return nil, nil, "captured registry state is invalid"
-    end
+    if captured.revision < 0 then return nil, nil, "captured registry state is invalid" end
     local root, root_error = deps.root(spec)
     local component = root and bounds.text(root.component, 160) or nil
     if not root or not component or component == "" or root.version ~= version then
@@ -385,8 +362,8 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     end
     if namespace_count == 0 or namespace_count > 64 then return nil, nil, "private artifact namespace count exceeds its bound" end
 
-    local current: {[string]: Object} = {}
-    local installed: {[string]: Object} = {}
+    local current: {[string]: preflight.Entry} = {}
+    local installed: {[string]: preflight.Entry} = {}
     local current_raw: {[string]: Entry} = {}
     local current_namespace: {[string]: string} = {}
     for _, raw in ipairs(captured.entries) do
@@ -424,9 +401,9 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     for namespace in pairs(namespace_set) do names[#names + 1] = namespace end
     table.sort(names)
     table.sort(incoming, function(left: Entry, right: Entry): boolean return (left.id :: string) < (right.id :: string) end)
-    local candidate_entries: {Object} = {}
-    local requirements: {Object} = {}
-    local candidate_migrations: {Object} = {}
+    local candidate_entries: {preflight.Entry} = {}
+    local requirements: {preflight.Requirement} = {}
+    local candidate_migrations: {preflight.Migration} = {}
     local final: {[string]: Entry} = {}
     for id, entry in pairs(current_raw) do
         if not (captured.overlay_ids and captured.overlay_ids[id]) then final[id] = entry end
@@ -444,10 +421,11 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         if meta and meta.type == "migration" then
             local target = bounds.id(meta.target_db)
             local ordinal = bounds.count(meta.ordinal)
-            if clean.kind ~= "function.lua" or not target or not ordinal or ordinal < 1 then
+            local id = bounds.id(clean.id)
+            if clean.kind ~= "function.lua" or not target or not id or ordinal == nil or ordinal < 1 then
                 return nil, nil, "migration has no callable definition, target database or append-only ordinal: " .. tostring(clean.id)
             end
-            candidate_migrations[#candidate_migrations + 1] = {id = clean.id, target_db = target,
+            candidate_migrations[#candidate_migrations + 1] = {id = id, target_db = target,
                 ordinal = ordinal, checksum = measured.digest}
         end
     end
@@ -467,9 +445,10 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             requirements[#requirements + 1] = item
         end
     end
-    local capability_proposal: Object? = nil
-    local capability_installed: Object? = nil
-    local capability_review: Object? = nil
+    local capability_proposal: capability_grants.Proposal? = nil
+    local capability_installed: capability_grants.Installed? = nil
+    local capability_review: capability_grants.Review? = nil
+    local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}
     if policy.workspace_application then
         local app_binding = policy.applications and object(policy.applications[1]) or nil
         local app_id = app_binding and bounds.id(app_binding.definition_id) or nil
@@ -508,10 +487,11 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             capability_installed = decoded
         end
         local compared, compare_error = capability_grants.diff(model_vocabulary, capability_installed, proposed)
-        local resolved_lines, render_error = capability_model.render(model_vocabulary, proposed.capabilities)
-        if not compared or not resolved_lines then return nil, nil, compare_error or render_error end
-        capability_review = {resolved = resolved_lines, delta = compared.lines,
-            requires_approval = compared.requires_approval or prior == nil}
+        if not compared then return nil, nil, compare_error end
+        capability_review = {added = compared.added, widened = compared.widened,
+            narrowed = compared.narrowed, removed = compared.removed, changed = compared.changed,
+            requires_approval = compared.requires_approval or prior == nil, revocation = compared.revocation,
+            lines = compared.lines, resolved = compared.resolved, delta = compared.delta}
         local selected_policies: {unknown} = table.create(16, 0)
         for _, raw_id in ipairs(app_binding.policies :: {unknown}) do
             if not capability_grants.reserved(raw_id) then selected_policies[#selected_policies + 1] = raw_id end
@@ -575,38 +555,32 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     if not kernel then return nil, nil, kernel_error end
     relevant_ids[protected_kernel.ID] = true
     if capability_proposal then relevant_ids["bee:capability_catalog"] = true end
-    for _, raw in ipairs(candidate_entries) do
-        local item = raw :: Object
-        for _, reference in ipairs(item.references :: {string}) do relevant_ids[reference] = true end
+    for _, item in ipairs(candidate_entries) do
+        for _, reference in ipairs(item.references) do relevant_ids[reference] = true end
     end
-    for _, raw in ipairs(requirements) do
-        local item = raw :: Object
-        for _, target in ipairs(item.targets :: {string}) do relevant_ids[target] = true end
+    for _, item in ipairs(requirements) do
+        for _, target in ipairs(item.targets) do relevant_ids[target] = true end
         local value = bounds.id(item.value)
         if value then relevant_ids[value] = true end
         if item.capability_request then relevant_ids["bee:capability_catalog"] = true end
     end
-    for _, raw in ipairs(candidate_migrations) do
-        local item = raw :: Object
+    for _, item in ipairs(candidate_migrations) do
         local raw_bindings = policy.database_bindings
         local binding = type(raw_bindings) == "table"
             and object((raw_bindings :: table)[item.target_db :: string]) or nil
         local physical = binding and bounds.id(binding.database_id) or item.target_db
         if physical then relevant_ids[physical] = true end
     end
-    local relevant: {Object} = {}
+    local relevant: {preflight.Entry} = {}
     for id, raw in pairs(current) do
         local namespace = id:match("^([^:]+):")
         if relevant_ids[id] or (namespace and namespace_set[namespace]) then relevant[#relevant + 1] = raw end
     end
-    table.sort(relevant, function(left: any, right: any): boolean return left.id < right.id end)
+    table.sort(relevant, function(left: preflight.Entry, right: preflight.Entry): boolean return left.id < right.id end)
     local base_bytes, base_error = canonical.encode({entries = relevant}, 1048576)
     if not base_bytes then return nil, nil, "measure relevant registry base: " .. tostring(base_error or "unknown error") end
     local base_digest, base_measure_error = hash.sha256(base_bytes)
     if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
-    local context, context_error = policy_context(policy :: Policy, captured, base_digest :: string, current, installed)
-    if not context then return nil, nil, context_error end
-    context.protected = kernel
     if policy.applications then
         if policy.workspace_id ~= spec.workspace_id or policy.source_node ~= source
             or policy.source_workspace ~= source_workspace or not bounds.id(policy.overlay_owner) then
@@ -614,31 +588,40 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         end
         local projection, projection_error = application_admission.project({workspace_id = policy.workspace_id,
             overlay_owner = policy.overlay_owner, source_node = policy.source_node,
-            source_workspace = policy.source_workspace, artifact_digest = spec.artifact_digest,
+            source_workspace = policy.source_workspace, artifact_digest = artifact_digest,
             bindings = policy.applications, artifact_entries = expected,
             registry_entries = captured.entries, overlay_ids = captured.overlay_ids,
             generated_policies = capability_proposal and capability_proposal.policies or nil})
         if not projection then return nil, nil, projection_error or "application admission projection is absent" end
-        context.application_admission = projection
+        evidence.application_admission = {kind = "measured", value = projection}
     end
     if capability_proposal then
-        context.capability_proposal = capability_proposal
-        context.capability_installed = capability_installed
-        context.capability_review = capability_review
+        if not capability_review then return nil, nil, "capability review evidence is absent" end
+        if capability_installed then
+            evidence.capability = {kind = "installed", proposal = capability_proposal,
+                installed = capability_installed, review = capability_review}
+        else
+            evidence.capability = {kind = "new", proposal = capability_proposal,
+                review = capability_review}
+        end
     end
-    return {destination_node = destination, source_node = source,
-        base_revision = captured.revision, base_digest = base_digest,
-        artifacts = {{component = component, version = version, digest = spec.artifact_digest,
-            dependencies = {}, namespaces = names}},
-        entries = candidate_entries, requirements = requirements, migrations = candidate_migrations}, context, nil
+    local context, context_error = policy_context(policy :: Policy, captured, base_digest :: string,
+        current, installed, kernel, evidence)
+    if not context then return nil, nil, context_error end
+    local dependencies: {string} = {}
+    local artifacts: {preflight.Artifact} = {{component = component, version = version, digest = artifact_digest,
+        dependencies = dependencies, namespaces = names}}
+    local candidate: preflight.Candidate = {destination_node = destination, source_node = source,
+        base_revision = captured.revision, base_digest = base_digest, artifacts = artifacts,
+        entries = candidate_entries, requirements = requirements, migrations = candidate_migrations}
+    return candidate, context, nil
 end
 
 type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
 
-function M.new(config: Config): unknown
-    local value = {root = config.root, policy = config.policy, folder = config.folder}
-    function value.capture(): (Captured?, string?)
+function M.new(config: Config): Resolver
+    local function capture(): (Captured?, string?)
         local snapshot, snapshot_error = registry.snapshot()
         if not snapshot then return nil, tostring(snapshot_error or "capture registry snapshot") end
         local state, state_error = snapshot:state()
@@ -670,9 +653,10 @@ function M.new(config: Config): unknown
             end}
         return captured, nil
     end
-    function value:resolve(spec: unknown): (unknown?, unknown?, string?)
-        return M.resolve_with(self :: Deps, spec)
-    end
+    local value: Resolver = {capture = capture, root = config.root, policy = config.policy, folder = config.folder,
+        resolve = function(self: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
+            return M.resolve_with(self, spec)
+        end}
     return value
 end
 

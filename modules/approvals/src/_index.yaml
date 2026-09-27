@@ -59,15 +59,18 @@ entries:
 - name: service
   kind: library.lua
   source: file://service.lua
-  modules: [sql, hash, time, uuid, json, security, system, process, funcs]
+  modules: [sql, hash, uuid, json, security, system, process, funcs]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     values: bee.threads.records:values
+    clock: bee:clock
     persist: bee.persist:database
     transaction: bee.persist:transaction
     migrations: bee.approvals.migrations:migrations
     resources: bee.approvals:resources
+    store: bee.approvals.persist:store
+    outbox: bee.approvals.persist:outbox
 - name: contract
   kind: contract.definition
   meta:
@@ -127,3 +130,5 @@ entries:
   kind: library.lua
   source: file://resources.lua
   modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds

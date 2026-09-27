@@ -4,29 +4,37 @@ local test = require("test")
 local artifact = require("artifact")
 local resolver = require("overlay_resolver")
 local capability_grants = require("capability_grants")
+local application_admission = require("application_admission")
 local preflight = require("preflight")
 local canonical = require("canonical")
 local hash = require("hash")
 
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
-type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
-    namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
-    grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    database_bindings: {[string]: Object}?, migration_barrier: boolean, applications: {Object}?,
-    workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?,
-    workspace_application: boolean?, base_policy_digest: string?}
-type Captured = {revision: integer, entries: {Entry}, overlay_ids: {[string]: boolean}?,
-    owner: (Entry) -> (string?, string?)}
-type Facts = {candidate: Object, context: Object}
+type Policy = resolver.Policy
+type Captured = resolver.Captured
+type Deps = resolver.Deps
+type Facts = {candidate: preflight.Candidate, context: preflight.Context}
 
 local SHA = string.rep("a", 64)
+
+local function proposal(context: preflight.Context): capability_grants.Proposal
+    local evidence = context.host_evidence.capability
+    if evidence.kind == "absent" then error("capability proposal is missing") end
+    return evidence.proposal
+end
+
+local function admission(context: preflight.Context): application_admission.Measurement
+    local evidence = context.host_evidence.application_admission
+    if evidence.kind ~= "measured" then error("application admission was not measured") end
+    return evidence.value
+end
 
 local function entry(id: string, kind: string, value: string): Entry
     return {id = id, kind = kind, data = {source = "return '" .. value .. "'", value = value}}
 end
 
-local function fixture(policy_raw: Policy?): (Object, Object, {captured: Captured, artifact: Object})
+local function fixture(policy_raw: Policy?): (Deps, Object, {captured: Captured, artifact: artifact.Artifact})
     local made = assert(artifact.create({entry("private.app:main", "function.lua", "main")}))
     local captured: Captured = {
         revision = 19,
@@ -47,19 +55,25 @@ local function fixture(policy_raw: Policy?): (Object, Object, {captured: Capture
             return nil, "local registry owner is missing"
         end,
     }
-    local policy = policy_raw or {node_id = "node-destination", policy_digest = SHA,
-        packages = { ["host/private-app"] = true }, namespaces = { ["private.app"] = true },
-        kinds = { ["function.lua"] = true }, databases = { ["bee.host:db"] = true },
-        grants = {}, modules = {}, applied = {}, migration_barrier = false}
-    local deps: Object = {
-        capture = function(): (Captured?, string?) return captured, nil end,
-        root = function(spec: Object): (Object?, string?)
+    local policy: Policy
+    if policy_raw then
+        policy = policy_raw
+    else
+        policy = {node_id = "node-destination", policy_digest = SHA,
+            packages = { ["host/private-app"] = true }, namespaces = { ["private.app"] = true },
+            kinds = { ["function.lua"] = true }, databases = { ["bee.host:db"] = true },
+            grants = {}, modules = {}, applied = {}, migration_barrier = false}
+    end
+    local deps: Deps = {
+        capture = function(): (resolver.Captured?, string?) return captured, nil end,
+        root = function(raw: unknown): (resolver.Root?, string?)
+            local spec = raw :: Object
             if spec.source_node ~= "node-source" or spec.source_workspace ~= "author/app" then
                 return nil, "private artifact does not match host source mapping"
             end
-            return {component = "host/private-app", version = spec.version}, nil
+            return {component = "host/private-app", version = spec.version :: string}, nil
         end,
-        policy = function(_: Object, _: Captured, _: Object): (Policy?, string?) return policy :: Policy, nil end,
+        policy = function(_: unknown, _: resolver.Captured, _: resolver.Root): (Policy?, string?) return policy, nil end,
     }
     local spec: Object = {owner_node = "node-destination", workspace_id = "workspace-destination",
         source_node = "node-source", source_workspace = "author/app", version = "v1",
@@ -67,9 +81,10 @@ local function fixture(policy_raw: Policy?): (Object, Object, {captured: Capture
     return deps, spec, {captured = captured, artifact = made}
 end
 
-local function resolve(deps: Object, spec: Object): Facts
+local function resolve(deps: Deps, spec: Object): Facts
     local candidate, context, err = resolver.resolve_with(deps, spec)
-    if not candidate or not context then error(tostring(err)) end
+    if not candidate then error(tostring(err)) end
+    if not context then error(tostring(err)) end
     return {candidate = candidate, context = context}
 end
 
@@ -277,12 +292,12 @@ local function define_tests()
                 policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
                 registry = {owner = "bee/host"}}
             local first = resolve(deps, spec)
-            local admission = first.context.application_admission :: Object
-            test.eq((admission.record :: Object).artifact_digest, spec.artifact_digest)
+            local first_admission = admission(first.context)
+            test.eq(first_admission.record.artifact_digest, spec.artifact_digest)
             local policy_body = captured.entries[#captured.entries].policy :: Object
             policy_body.comment = "changed"
             local second = resolve(deps, spec)
-            test.is_true((second.context.application_admission :: Object).digest ~= admission.digest)
+            test.is_true(admission(second.context).digest ~= first_admission.digest)
             captured.overlay_ids["bee:ordinary-policy"] = true
             local candidate, context, err = resolver.resolve_with(deps, spec)
             test.is_nil(candidate)
@@ -320,16 +335,16 @@ local function define_tests()
                         parameters = {scope = "owned"}, reason = "Show threads"},
                     data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}})
             local facts = resolve(deps, spec)
-            local proposal = facts.context.capability_proposal :: Object
-            test.eq(#(proposal.policies :: {unknown}), 1)
-            local binding = ((facts.context.application_admission :: Object).record :: Object).bindings :: {Object}
+            local capability_proposal = proposal(facts.context)
+            test.eq(#capability_proposal.policies, 1)
+            local binding = admission(facts.context).record.bindings
             test.is_true(binding[1].appearance_write == true)
             test.eq(binding[1].close_grace_ms, 1000)
             test.is_true(binding[1].application_stop == false)
             test.eq(#(binding[1].policies :: {unknown}), 2)
-            test.eq((binding[1].policies :: {string})[1], (proposal.policies :: {Object})[1].id)
+            test.eq(binding[1].policies[1], capability_proposal.policies[1].id)
             test.eq((binding[1].policies :: {string})[2], "bee:ordinary-policy")
-            test.is_true((facts.context.grants :: Object)[(proposal.policies :: {Object})[1].id :: string] == true)
+            test.is_true(facts.context.grants[capability_proposal.policies[1].id :: string] == true)
             test.is_nil((facts.context.grants :: Object)["bee.gov.grants:policy." .. SHA])
             test.is_true(assert(preflight.check(facts.candidate :: preflight.Candidate,
                 facts.context :: preflight.Context)).ready)
@@ -364,9 +379,9 @@ local function define_tests()
                         parameters = {scope = "owned"}, reason = "Show threads"},
                     data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}})
             local remote = resolve(deps, spec)
-            local review = remote.context.capability_review :: Object
-            test.is_true(review.requires_approval)
-            test.is_nil(remote.context.capability_installed)
+            local capability = remote.context.host_evidence.capability
+            if capability.kind ~= "new" then error("new capability review is missing") end
+            test.is_true(capability.review.requires_approval)
             test.is_true(assert(preflight.check(remote.candidate :: preflight.Candidate,
                 remote.context :: preflight.Context)).ready)
             captured.entries[#captured.entries + 1] = {id = assert(capability_grants.record_id(
@@ -410,8 +425,7 @@ local function define_tests()
                     subpath = "projects/alpha"}, nil
             end
             local facts = resolve(deps, spec)
-            local proposal = facts.context.capability_proposal :: Object
-            local volume = (proposal.volumes :: {Object})[1]
+            local volume = proposal(facts.context).volumes[1]
             test.eq((volume.data :: Object).directory, "projects/alpha/docs")
             test.is_true((volume.data :: Object).readonly)
         end)
@@ -449,14 +463,14 @@ local function define_tests()
                     meta = {type = "migration", target_db = "journal", ordinal = 1},
                     data = {source = "return true"}}})
             local facts = resolve(deps, spec)
-            local proposal = facts.context.capability_proposal :: Object
-            test.eq(#(proposal.databases :: {unknown}), 1)
+            local capability_proposal = proposal(facts.context)
+            test.eq(#capability_proposal.databases, 1)
             local bindings = facts.context.database_bindings :: Object
             local bound = bindings["journal"] :: Object
             test.eq(bound.database_id,
-                (proposal.databases :: {Object})[1].id)
+                capability_proposal.databases[1].id)
             local generated = facts.context.generated_databases :: Object
-            test.eq(generated[(proposal.databases :: {Object})[1].id :: string], "journal")
+            test.eq(generated[capability_proposal.databases[1].id :: string], "journal")
             test.is_true(((facts.context.databases :: {[string]: boolean})["journal"]) == true)
             test.is_true(assert(preflight.check(facts.candidate :: preflight.Candidate,
                 facts.context :: preflight.Context)).ready)

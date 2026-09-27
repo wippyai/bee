@@ -4,6 +4,7 @@
 -- and reconciliation decides the rest. Every transition is a delivery.mark
 -- record committed with the index change.
 local sql = require("sql")
+local time = require("time")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local values = require("values")
@@ -30,12 +31,10 @@ local function storage(err: string): Result
     return transaction.failure("INTERNAL", err)
 end
 local function seconds_later(now: string, seconds: integer): string
-    local year, month, day, hour, minute, second = now:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)")
-    local base = os.time({year = tonumber(year) or 1970, month = tonumber(month) or 1, day = tonumber(day) or 1,
-        hour = tonumber(hour) or 0, min = tonumber(minute) or 0, sec = tonumber(second) or 0})
-    return os.date("!%Y-%m-%dT%H:%M:%S", base + seconds) .. ".000Z"
+    local instant, err = time.parse("2006-01-02T15:04:05.000Z07:00", now)
+    if err or not instant then error("claim timestamp is invalid: " .. tostring(err)) end
+    return instant:add(seconds * time.SECOND):utc():format("2006-01-02T15:04:05.000Z07:00")
 end
-M.seconds_later = seconds_later
 -- Loads the thread, the caller's membership and the owner incarnation that
 -- every claim transition needs.
 local function open_thread(tx: sql.Transaction, actor: string, operation: string, mutation: authority.Mutation): (reader.Head?, reader.Member?, integer?, Result?)
@@ -54,7 +53,7 @@ local function mark(tx: sql.Transaction, head: reader.Head, actor: string, deliv
     evidence_ref: string?, owed: integer): (string?, Result?)
     local body: record_types.DeliveryMark = {delivery_id = delivery.delivery_id, message_id = delivery.message_id, recipient_id = delivery.recipient_id,
         state = state, owner_epoch = delivery.owner_incarnation, channel = delivery.channel, evidence_ref = evidence_ref}
-    local committed, refused = authority.commit_record(tx, head, "delivery.mark", actor, "bee", body, {}, nil, nil, owed)
+    local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "delivery.mark", body = body}, {}, nil, nil, owed)
     if not committed then return nil, refused or failure("INTERNAL", "commit failed") end
     return committed.record_id, nil
 end
@@ -123,12 +122,8 @@ function M.claim(db: sql.DB, actor: string, request: unknown): Result
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local consumer_id = bounds.id(object.consumer_id)
     if not consumer_id then return failure("INVALID_ARGUMENT", "consumer_id is not an identifier") end
-    local limit = bounds.MAX_PAGE_RECORDS
-    if object.limit ~= nil then
-        local number = bounds.integer(object.limit)
-        if not number or number < 1 or number > bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
-        limit = number
-    end
+    local limit = bounds.page_limit(object.limit)
+    if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
     local channel = "wait"
     if object.channel ~= nil then
         local declared = bounds.member(object.channel, M.CHANNELS)

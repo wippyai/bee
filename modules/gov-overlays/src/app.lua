@@ -120,77 +120,72 @@ local function main(value: unknown)
         end
         dirty = true
     end
-    local function review_now(accepted: boolean)
+    local function review_transition(accepted: boolean): boolean
         local item = model.selected(state)
         local refused = accepted and model.refusal(state, item) or nil
-        if refused then state.notice = refused; dirty = true; return end
+        if refused then state.notice = refused; dirty = true; return false end
         if not model.accepts_review(item) or not item then
-            state.notice = "Only a staged version can receive a local review"; dirty = true; return
+            state.notice = "Only a staged version can receive a local review"; dirty = true; return false
         end
-        model.apply_plan(state, invoke(model.review_request(state, item, accepted, new_key())))
+        local applied = model.apply_plan(state, invoke(model.review_request(state, item, accepted, new_key())))
         dirty = true
+        return applied
     end
-    local function select_version_now()
+    local function select_transition(): boolean
         local item = model.selected(state)
         local refused = model.refusal(state, item)
-        if refused then state.notice = refused; dirty = true; return end
+        if refused then state.notice = refused; dirty = true; return false end
         if not model.can_select(item) or not item then
-            state.notice = "Record an accepted local review before selecting this version"; dirty = true; return
+            state.notice = "Record an accepted local review before selecting this version"; dirty = true; return false
         end
-        model.apply_plan(state, invoke(model.select_request(state, item, new_key())))
+        local applied = model.apply_plan(state, invoke(model.select_request(state, item, new_key())))
         dirty = true
+        return applied
     end
-    local function prepare_now()
+    local function prepare_transition(): boolean
         local item = model.selected(state)
         local refused = model.refusal(state, item)
-        if refused then state.notice = refused; dirty = true; return end
+        if refused then state.notice = refused; dirty = true; return false end
         if not model.can_prepare(state, item) or not item then
-            state.notice = "Select an accepted version before preparing activation"; dirty = true; return
+            state.notice = "Select an accepted version before preparing activation"; dirty = true; return false
         end
         local pending = state.pending_prepare
         if pending and pending.plan_key ~= model.key(item) then
-            state.notice = "A previous prepare has no reply; select that version and retry its same request"; dirty = true; return
+            state.notice = "A previous prepare has no reply; select that version and retry its same request"; dirty = true; return false
         end
         if not pending then
             pending = {plan_key = model.key(item), intent_id = new_key(), receipt_key = new_key()}
             model.set_pending_prepare(state, item, pending.intent_id, pending.receipt_key)
         end
+        changed()
         local reply = invoke(model.prepare_request(state, item, pending.intent_id, pending.receipt_key))
         local applied = model.apply_activation(state, reply)
         if reply and (applied or not reply.ok) then state.pending_prepare = nil end
         dirty = true
+        return applied
     end
-    local function install_now()
+    local function prepare_activation_now()
         local item = model.selected(state)
         local refused = model.refusal(state, item)
         if refused then state.notice = refused; dirty = true; return end
         if not item then state.notice = "Choose a staged version first"; dirty = true; return end
         if model.accepts_review(item) then
-            local reply = invoke(model.review_request(state, item, true, new_key()))
-            if not model.apply_plan(state, reply) then dirty = true; return end
+            if not review_transition(true) then return end
             item = model.selected(state)
         end
         if item and model.can_select(item) and not item.selected then
-            local reply = invoke(model.select_request(state, item, new_key()))
-            if not model.apply_plan(state, reply) then dirty = true; return end
+            if not select_transition() then return end
             item = model.selected(state)
         end
         if item and model.can_prepare(state, item) then
-            local pending = state.pending_prepare
-            if pending and pending.plan_key ~= model.key(item) then
-                state.notice = "A previous prepare has no reply; select that version and retry its same request"
-                dirty = true
-                return
-            end
-            if not pending then
-                pending = {plan_key = model.key(item), intent_id = new_key(), receipt_key = new_key()}
-                model.set_pending_prepare(state, item, pending.intent_id, pending.receipt_key)
-            end
-            local reply = invoke(model.prepare_request(state, item, pending.intent_id, pending.receipt_key))
-            local applied = model.apply_activation(state, reply)
-            if reply and (applied or not reply.ok) then state.pending_prepare = nil end
+            prepare_transition()
+        elseif not item or not model.can_prepare(state, item) then
+            state.notice = "Accept and select this version before preparing activation"
         end
         dirty = true
+    end
+    local function prepare_now()
+        prepare_transition()
     end
     local function step_now()
         local intent_id = state.intent and state.intent.intent_id or state.restored_intent_id
@@ -228,10 +223,10 @@ local function main(value: unknown)
     local function take(kind: string)
         if kind == "stage" then perform(stage_available_now)
         elseif kind == "read" then perform(get_selected_now)
-        elseif kind == "install" or kind == "update" then perform(install_now)
-        elseif kind == "accept" then perform(function() review_now(true) end)
-        elseif kind == "reject" then perform(function() review_now(false) end)
-        elseif kind == "select" then perform(select_version_now)
+        elseif kind == "prepare_activation" then perform(prepare_activation_now)
+        elseif kind == "accept" then perform(function() review_transition(true) end)
+        elseif kind == "reject" then perform(function() review_transition(false) end)
+        elseif kind == "select" then perform(select_transition)
         elseif kind == "prepare" then perform(prepare_now)
         elseif kind == "step" then perform(step_now)
         elseif kind == "status" then perform(activation_status_now)

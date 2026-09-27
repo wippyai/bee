@@ -92,7 +92,7 @@ function M.admit_action(db: sql.DB, actor: string, request: unknown): Result
         if not count then return storage(count_err or "count actions") end
         if count >= bounds.MAX_THREAD_ACTIONS then return failure("LIMIT_EXCEEDED", "thread action limit reached") end
         context.action_id = action_id
-        local committed, refused = authority.commit_record(tx, head, "action.admitted", actor, "bee", admitted, context, nil, nil, 1)
+        local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "action.admitted", body = admitted}, context, nil, nil, 1)
         if not committed then return refused or failure("INTERNAL", "commit failed") end
         local index_err = transaction.insert_action(tx, head.thread_id, action_id, committed.record_id)
         if index_err then return storage(index_err) end
@@ -138,7 +138,7 @@ function M.prepare_attempt(db: sql.DB, actor: string, request: unknown): Result
         if count >= bounds.MAX_THREAD_ATTEMPTS then return failure("LIMIT_EXCEEDED", "thread attempt limit reached") end
         context.action_id = action_id
         context.attempt_id = attempt_id
-        local committed, refused = authority.commit_record(tx, head, "attempt.prepared", actor, "bee", plan, context, nil, nil, 2)
+        local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "attempt.prepared", body = plan}, context, nil, nil, 2)
         if not committed then return refused or failure("INTERNAL", "commit failed") end
         local index_err = transaction.insert_attempt(tx, head.thread_id, attempt_id, action_id, committed.record_id)
         if index_err then return storage(index_err) end
@@ -173,7 +173,7 @@ function M.start_attempt(db: sql.DB, actor: string, request: unknown): Result
         if started.owner_epoch <= highest then return failure("INVALID_STATE", "owner_epoch must exceed every earlier attempt of the action") end
         context.action_id = action_id
         context.attempt_id = attempt_id
-        local committed, refused = authority.commit_record(tx, head, "attempt.started", actor, "bee", started, context, nil, nil, 0)
+        local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "attempt.started", body = started}, context, nil, nil, 0)
         if not committed then return refused or failure("INTERNAL", "commit failed") end
         local index_err = transaction.start_attempt(tx, head.thread_id, attempt_id, started.owner_epoch, committed.record_id)
         if index_err then return storage(index_err) end
@@ -220,7 +220,7 @@ function M.request_turn(db: sql.DB, actor: string, request: unknown): Result
         context.action_id = action_id
         context.attempt_id = attempt_id
         context.turn_id = turn_id
-        local committed, refused = authority.commit_record(tx, head, "turn.request", actor, "bee", turn, context, nil, nil, 1)
+        local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "turn.request", body = turn}, context, nil, nil, 1)
         if not committed then return refused or failure("INTERNAL", "commit failed") end
         local index_err = transaction.insert_turn(tx, head.thread_id, turn_id, action_id, attempt_id, committed.record_id)
         if index_err then return storage(index_err) end
@@ -253,7 +253,7 @@ function M.end_turn(db: sql.DB, actor: string, request: unknown): Result
         context.action_id = action_id
         context.attempt_id = attempt_id
         context.turn_id = turn_id
-        local committed, refused = authority.commit_record(tx, head, "turn.end", actor, "bee", turn_end, context, nil, nil, -1)
+        local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "turn.end", body = turn_end}, context, nil, nil, -1)
         if not committed then return refused or failure("INTERNAL", "commit failed") end
         local index_err = transaction.end_turn(tx, head.thread_id, turn_id, committed.record_id)
         if index_err then return storage(index_err) end
@@ -289,7 +289,7 @@ function M.receipt(db: sql.DB, actor: string, request: unknown): Result
             if open_err then return storage(open_err) end
             if open then return failure("INVALID_STATE", "attempt has an open turn") end
             context.attempt_id = attempt_id
-            local committed, refused = authority.commit_record(tx, head, "receipt", actor, "bee", receipt, context, nil, nil, -1)
+            local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "receipt", body = receipt}, context, nil, nil, -1)
             if not committed then return refused or failure("INTERNAL", "commit failed") end
             local settle_err = transaction.insert_settlement(tx, head.thread_id, "attempt", action_id, attempt_id, receipt.outcome, committed.record_id)
             if settle_err then return storage(settle_err) end
@@ -305,7 +305,7 @@ function M.receipt(db: sql.DB, actor: string, request: unknown): Result
         local live, live_err = reader.running_attempt(tx, head.thread_id, action_id)
         if live_err then return storage(live_err) end
         if live then return failure("INVALID_STATE", "action has a running attempt") end
-        local committed, refused = authority.commit_record(tx, head, "receipt", actor, "bee", receipt, context, nil, nil, -1)
+        local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "receipt", body = receipt}, context, nil, nil, -1)
         if not committed then return refused or failure("INTERNAL", "commit failed") end
         local settle_err = transaction.insert_settlement(tx, head.thread_id, "action", action_id, nil, receipt.outcome, committed.record_id)
         if settle_err then return storage(settle_err) end

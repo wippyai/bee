@@ -43,6 +43,26 @@ func copyFile(destination, source string) error {
 }
 
 func setup(root string) error {
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0700); err != nil {
+		return fmt.Errorf("create host source root: %w", err)
+	}
+	if err := copyFile(filepath.Join(root, "src", "clock.lua"), "src/clock.lua"); err != nil {
+		return fmt.Errorf("stage shared clock contract: %w", err)
+	}
+	protocolRoot := filepath.Join(root, "src", "protocol")
+	if err := os.MkdirAll(protocolRoot, 0700); err != nil {
+		return fmt.Errorf("create shared protocol namespace: %w", err)
+	}
+	if err := copyFile(filepath.Join(protocolRoot, "bounds.lua"), "src/protocol/bounds.lua"); err != nil {
+		return fmt.Errorf("stage shared protocol contracts: %w", err)
+	}
+	if err := copyFile(filepath.Join(protocolRoot, "canonical.lua"), "src/protocol/canonical.lua"); err != nil {
+		return fmt.Errorf("stage shared canonical contracts: %w", err)
+	}
+	protocolIndex := "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n  imports: {clock: bee:clock}\n- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n"
+	if err := os.WriteFile(filepath.Join(protocolRoot, "_index.yaml"), []byte(protocolIndex), 0600); err != nil {
+		return fmt.Errorf("write shared protocol contracts: %w", err)
+	}
 	for _, name := range []string{"approvals", "capability", "gov", "hive", "hub", "persist", "sync", "threads"} {
 		if err := copyTree(filepath.Join(root, "modules", name), filepath.Join("modules", name)); err != nil {
 			return fmt.Errorf("stage %s component: %w", name, err)
@@ -70,6 +90,10 @@ entries:
   kind: process.host
   host: {workers: 2, max_processes: 8}
   lifecycle: {auto_start: true}
+- name: clock
+  kind: library.lua
+  source: file://clock.lua
+  modules: [time]
 - name: sync_exports
   kind: registry.entry
   data: {exports: []}

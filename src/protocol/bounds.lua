@@ -1,6 +1,7 @@
 -- Shared primitive decoders for Bee protocol values.
 local clock = require("clock")
 local M = {}
+M.MAX_SAFE_INTEGER = 9007199254740991
 M.MAX_ID_BYTES = 160
 M.MAX_ARRAY_ITEMS = 64
 M.MAX_TEXT_BYTES = 16384
@@ -23,7 +24,7 @@ end
 
 function M.integer(value: unknown): integer?
     if type(value) ~= "number" or value ~= math.floor(value) or value ~= value
-        or value > 9007199254740991 or value < -9007199254740991 then return nil end
+        or value > M.MAX_SAFE_INTEGER or value < -M.MAX_SAFE_INTEGER then return nil end
     return math.floor(value)
 end
 
@@ -38,18 +39,31 @@ function M.timestamp(value: unknown): string?
     return value
 end
 
-function M.array(value: unknown, limit: integer?): ({unknown}?, string?)
-    if type(value) ~= "table" then return nil, "expected a list" end
+function M.array(value: unknown, limit: integer?, label: string?): ({unknown}?, string?)
+    local invalid_list = label and label .. " must be a dense list" or "list keys must be dense"
+    if type(value) ~= "table" then return nil, label and invalid_list or "expected a list" end
     local maximum = limit or M.MAX_ARRAY_ITEMS
     if maximum < 0 then return nil, "list exceeds its bound" end
     local count = 0
     for key in pairs(value) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil, "list keys must be dense" end
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil, invalid_list end
         count = count + 1
-        if count > maximum then return nil, "list exceeds " .. tostring(maximum) .. " items" end
+        if count > maximum then
+            return nil, label and label .. " exceeds " .. tostring(maximum) .. " items"
+                or "list exceeds " .. tostring(maximum) .. " items"
+        end
     end
-    for index = 1, count do if value[index] == nil then return nil, "list keys must be dense" end end
-    return value :: {unknown}, nil
+    local result: {unknown} = {}
+    for index = 1, count do
+        local item = value[index]
+        if item == nil then return nil, invalid_list end
+        result[index] = item
+    end
+    return result, nil
+end
+
+function M.dense_list(value: unknown, maximum: integer, label: string): ({unknown}?, string?)
+    return M.array(value, maximum, label)
 end
 
 function M.ids(value: unknown, distinct: boolean?): ({string}?, string?)
@@ -90,9 +104,9 @@ function M.optional_id(value: {[string]: unknown}, name: string): (string?, bool
     return result, true
 end
 
-function M.subpath(value: unknown): (string?, string?)
+function M.subpath(value: unknown, maximum: integer?): (string?, string?)
     if type(value) ~= "string" then return nil, "subpath must be a string" end
-    if #value > M.MAX_SUBPATH_BYTES then return nil, "subpath is too long" end
+    if #value > (maximum or M.MAX_SUBPATH_BYTES) then return nil, "subpath is too long" end
     if value == "" then return "", nil end
     if value:sub(1, 1) == "/" or value:find("\\", 1, true) or value:find("\0", 1, true) then return nil, "subpath must be relative" end
     for segment in (value .. "/"):gmatch("([^/]*)/") do

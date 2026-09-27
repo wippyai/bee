@@ -8,23 +8,31 @@ local hash = require("hash")
 local bounds = require("bounds")
 local application_admission = require("application_admission")
 local protected_kernel = require("protected_kernel")
+local preflight = require("preflight")
+local lists = require("lists")
 
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
+type RegistryChange = {entry: Entry, op: string}
+type RegistryPlan = {digest: string, changes: {RegistryChange}, resolution: Object?}
+type ResolvedModule = {name: string, version: string, digest: string}
 type Captured = {revision: integer, entries: {Entry}, resolution: Object?,
-    overlay_ids: {[string]: boolean}?, preview: (Entry) -> (Object?, string?)}
+    overlay_ids: {[string]: boolean}?, preview: (Entry) -> (RegistryPlan?, string?)}
 type Root = {component: string, version: string, parameters: {unknown}}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
 type DatabaseBindings = {[string]: DatabaseBinding}
 type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
-    grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    applied_databases: {[string]: unknown}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
-    auto_start: boolean,
+    grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: preflight.Migration},
+    applied_databases: {[string]: preflight.DatabaseEvidence}?, database_bindings: DatabaseBindings?, migration_barrier: boolean,
+    auto_start: boolean?,
     applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?}
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
-    policy: (unknown, Captured, Object) -> (Policy?, string?)}
+    policy: (unknown, unknown, unknown) -> (Policy?, string?)}
+type Resolver = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
+    policy: (unknown, unknown, unknown) -> (Policy?, string?),
+    resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -38,23 +46,6 @@ end
 local function module_sha(value: unknown): string?
     if type(value) == "string" and value:sub(1, 7) == "sha256:" then value = value:sub(8) end
     return sha(value)
-end
-
-local function dense(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
-    if type(value) ~= "table" then return nil, label .. " must be a list" end
-    local source = value :: table
-    local count = 0
-    for key in pairs(source) do
-        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, label .. " must be a dense list" end
-        count = count + 1
-    end
-    if count > maximum then return nil, label .. " exceeds its bound" end
-    local result: {unknown} = {}
-    for index = 1, count do
-        if source[index] == nil then return nil, label .. " must be a dense list" end
-        result[index] = source[index]
-    end
-    return result, nil
 end
 
 local function copy_entry(raw: unknown): (Entry?, string?)
@@ -75,7 +66,7 @@ local function owner(entry: Entry): string?
     return metadata and bounds.text(metadata.owner, 160) or nil
 end
 
-local function apply_preview(base: {Entry}, preview: Object): ({Entry}?, string?)
+local function apply_preview(base: {Entry}, preview: RegistryPlan): ({Entry}?, string?)
     local by_id: {[string]: Entry} = {}
     for _, raw in ipairs(base) do
         local entry, entry_error = copy_entry(raw)
@@ -84,7 +75,7 @@ local function apply_preview(base: {Entry}, preview: Object): ({Entry}?, string?
         if by_id[id] then return nil, "registry state contains duplicate entry " .. id end
         by_id[id] = entry
     end
-    local operations, operations_error = dense(preview.changes, "registry preview changes", 4096)
+    local operations, operations_error = bounds.dense_list(preview.changes, 4096, "registry preview changes")
     if not operations then return nil, operations_error end
     for _, raw in ipairs(operations) do
         local operation = object(raw)
@@ -110,17 +101,18 @@ local function apply_preview(base: {Entry}, preview: Object): ({Entry}?, string?
     return result, nil
 end
 
-local function resolution_modules(raw: unknown): ({[string]: Object}?, string?)
+local function resolution_modules(raw: unknown): ({[string]: ResolvedModule}?, string?)
     local resolution = object(raw)
-    local rows, rows_error = dense(resolution and resolution.modules, "registry resolution modules", 256)
+    local rows, rows_error = bounds.dense_list(resolution and resolution.modules, 256, "registry resolution modules")
     if not rows then return nil, rows_error end
-    local result: {[string]: Object} = {}
+    local result: {[string]: ResolvedModule} = {}
     for _, raw_module in ipairs(rows) do
         local item = object(raw_module)
         local name = item and bounds.text(item.name, 160) or nil
         local version = item and bounds.text(item.version, 128) or nil
-        if not item or not name or not version or result[name] then return nil, "registry resolution module is invalid" end
-        result[name] = item
+        local digest = item and module_sha(item.digest) or nil
+        if not item or not name or not version or not digest or result[name] then return nil, "registry resolution module is invalid" end
+        result[name] = {name = name, version = version, digest = digest}
     end
     return result, nil
 end
@@ -144,7 +136,7 @@ local function dependency_edges(entries: {Entry}): ({[string]: {[string]: boolea
     return result, nil
 end
 
-local function closure(root: string, edges: {[string]: {[string]: boolean}}, modules: {[string]: Object}): ({[string]: boolean}?, string?)
+local function closure(root: string, edges: {[string]: {[string]: boolean}}, modules: {[string]: ResolvedModule}): ({[string]: boolean}?, string?)
     local selected: {[string]: boolean} = {}
     local queue: {string} = {root}
     local index = 1
@@ -163,21 +155,6 @@ local function closure(root: string, edges: {[string]: {[string]: boolean}}, mod
         end
     end
     return selected, nil
-end
-
-local function list_strings(raw: unknown, label: string, maximum: integer): ({string}?, string?)
-    if raw == nil then return {}, nil end
-    local rows, rows_error = dense(raw, label, maximum)
-    if not rows then return nil, rows_error end
-    local result: {string} = {}
-    local seen: {[string]: boolean} = {}
-    for _, value in ipairs(rows) do
-        local item = bounds.id(value)
-        if not item or seen[item] then return nil, label .. " contains an invalid or duplicate value" end
-        seen[item], result[#result + 1] = true, item
-    end
-    table.sort(result)
-    return result, nil
 end
 
 local function references(entry: Entry): ({string}?, string?)
@@ -236,24 +213,26 @@ local function references(entry: Entry): ({string}?, string?)
     return result, nil
 end
 
-local function measured_entry(entry: Entry, package: string): (unknown?, string?)
+local function measured_entry(entry: Entry, package: string): (preflight.Entry?, string?)
     local clean: Entry = {}
     for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
+    local id, kind = bounds.id(clean.id), bounds.id(clean.kind)
+    if not id or not kind then return nil, "resolved entry identity is invalid" end
     local encoded, encode_error = canonical.encode(clean, artifact.MAX_BYTES)
     if not encoded then return nil, "encode resolved entry: " .. tostring(encode_error or "unknown error") end
     local digest, digest_error = hash.sha256(encoded)
     if not digest then return nil, tostring(digest_error or "measure resolved entry") end
     local refs, references_error = references(clean)
     if not refs then return nil, references_error end
-    local modules, modules_error = list_strings(clean.modules, "entry modules", 32)
+    local modules, modules_error = lists.strings(clean.modules, "entry modules", 32)
     if not modules then return nil, modules_error end
     local config_objects, config_lists, config_empty, shapes_error = artifact.config_shapes(clean)
     if not config_objects or not config_lists or not config_empty then return nil, tostring(shapes_error or "measure entry configuration shapes") end
     local security = object(clean.security)
-    local grants, grants_error = list_strings(security and security.policies or nil, "entry policies", 32)
+    local grants, grants_error = lists.strings(security and security.policies or nil, "entry policies", 32)
     if not grants then return nil, grants_error end
     local lifecycle = object(clean.lifecycle)
-    return {id = clean.id, kind = clean.kind, package = package, digest = digest,
+    return {id = id, kind = kind, package = package, digest = digest,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
         grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
         config_empty = config_empty}, nil
@@ -272,9 +251,11 @@ local function path_value(entry: Entry, path: unknown): (unknown?, string?)
     return value, nil
 end
 
-local function requirement(entry: Entry, package: string, final: {[string]: Entry}): (unknown?, string?)
+local function requirement(entry: Entry, package: string, final: {[string]: Entry}): (preflight.Requirement?, string?)
+    local id = bounds.id(entry.id)
+    if not id then return nil, "requirement identity is invalid" end
     local data = object(entry.data) or entry
-    local targets, targets_error = dense(data.targets, "requirement targets", 64)
+    local targets, targets_error = bounds.dense_list(data.targets, 64, "requirement targets")
     if not targets then return nil, targets_error end
     local result_targets: {string} = {}
     local selected: string? = nil
@@ -294,15 +275,19 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
     table.sort(result_targets)
     local meta = object(entry.meta)
     local expected: string? = meta and bounds.id(meta.value_kind) or nil
-    return {id = entry.id, package = package, value = selected,
+    return {id = id, package = package, value = selected,
         expected_kind = expected, targets = result_targets}, nil
 end
 
-local function migration(entry: Entry): (unknown?, string?)
+local function migration(entry: Entry): (preflight.Migration?, string?)
     local meta = object(entry.meta)
     local target = meta and bounds.id(meta.target_db) or nil
+    local id = bounds.id(entry.id)
+    if not target or not id then
+        return nil, "migration has no target database or identity: " .. tostring(entry.id)
+    end
     local ordinal = meta and bounds.count(meta.ordinal) or nil
-    if not target or not ordinal or ordinal < 1 then
+    if ordinal == nil or ordinal < 1 then
         return nil, "migration has no target database or append-only ordinal: " .. tostring(entry.id)
     end
     local clean: Entry = {}
@@ -311,11 +296,12 @@ local function migration(entry: Entry): (unknown?, string?)
     if not encoded then return nil, tostring(encode_error or "encode migration") end
     local checksum, checksum_error = hash.sha256(encoded)
     if not checksum then return nil, tostring(checksum_error or "measure migration") end
-    return {id = entry.id, target_db = target, checksum = checksum, ordinal = ordinal}, nil
+    return {id = id, target_db = target, checksum = checksum, ordinal = ordinal}, nil
 end
 
 local function policy_context(policy: Policy, captured: Captured, base_digest: string,
-    current: {[string]: unknown}): (unknown?, string?)
+    current: {[string]: preflight.Entry}, protected: protected_kernel.Manifest,
+    evidence: preflight.HostEvidence): (preflight.Context?, string?)
     if not bounds.id(policy.node_id) or not sha(policy.policy_digest) then return nil, "host policy identity is invalid" end
     for _, field in ipairs({"packages", "namespaces", "kinds", "databases", "grants", "modules", "applied"}) do
         if type((policy :: Object)[field]) ~= "table" then return nil, "host policy is missing " .. field end
@@ -339,19 +325,17 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
             bindings[target :: string] = {database_id = database_id, table_prefix = prefix}
         end
     end
-    return {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
+    local context: preflight.Context = {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
         policy_digest = policy.policy_digest, packages = policy.packages, namespaces = policy.namespaces,
         kinds = policy.kinds, databases = policy.databases, grants = policy.grants, modules = policy.modules,
         database_bindings = bindings, entries = current, applied = policy.applied,
         applied_databases = policy.applied_databases or {}, exact_expansion = true,
-        migration_barrier = policy.migration_barrier == true, auto_start = policy.auto_start == true}, nil
+        migration_barrier = policy.migration_barrier == true, auto_start = policy.auto_start == true,
+        protected = protected, host_evidence = evidence}
+    return context, nil
 end
 
-function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknown?, string?)
-    if type(deps_raw) ~= "table" then return nil, nil, "Hub resolver dependencies are invalid" end
-    local deps = deps_raw :: Deps
-    if type(deps.capture) ~= "function" or type(deps.root) ~= "function"
-        or type(deps.policy) ~= "function" then return nil, nil, "Hub resolver dependencies are invalid" end
+function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
     local spec = object(spec_raw)
     local destination = spec and bounds.id(spec.owner_node) or nil
     local source = spec and bounds.id(spec.source_node) or nil
@@ -360,15 +344,11 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
     if not expected then return nil, nil, artifact_error end
     local captured, capture_error = deps.capture()
     if not captured then return nil, nil, capture_error end
-    if type(captured.revision) ~= "number" or captured.revision < 0 or captured.revision ~= math.floor(captured.revision)
-        or type(captured.entries) ~= "table" or type(captured.preview) ~= "function" then
-        return nil, nil, "captured registry state is invalid"
-    end
+    if captured.revision < 0 then return nil, nil, "captured registry state is invalid" end
     local root, root_error = deps.root(spec)
     local component = root and bounds.text(root.component, 160) or nil
     local selected_version = root and bounds.text(root.version, 128) or nil
-    if not root or not component or not selected_version
-        or type(root.parameters) ~= "table" then return nil, nil, root_error or "Hub root is invalid" end
+    if not root or not component or not selected_version then return nil, nil, root_error or "Hub root is invalid" end
     local root_digest, root_digest_error = hash.sha256(component)
     if not root_digest then return nil, nil, tostring(root_digest_error or "measure Hub root") end
     local dependency: Object = {component = component, version = selected_version}
@@ -380,7 +360,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
         data = dependency}
     local preview, preview_error = captured.preview(root_entry)
     if not preview then return nil, nil, preview_error or "preview Hub dependency" end
-    if not sha(preview.digest) or type(preview.resolution) ~= "table" then return nil, nil, "registry preview is incomplete" end
+    if not sha(preview.digest) or not preview.resolution then return nil, nil, "registry preview is incomplete" end
     local final, final_error = apply_preview(captured.entries, preview)
     if not final then return nil, nil, final_error end
     local modules, modules_error = resolution_modules(preview.resolution)
@@ -411,10 +391,10 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
     if exact.bytes ~= spec.artifact_bytes or exact.digest ~= spec.artifact_digest then
         return nil, nil, "reviewed artifact does not match the destination Hub expansion"
     end
-    local artifacts: {unknown} = {}
-    local candidate_entries: {unknown} = {}
-    local requirements: {unknown} = {}
-    local migrations: {unknown} = {}
+    local artifacts: {preflight.Artifact} = {}
+    local candidate_entries: {preflight.Entry} = {}
+    local requirements: {preflight.Requirement} = {}
+    local migrations: {preflight.Migration} = {}
     local owned_namespaces: {[string]: boolean} = {}
     local names: {string} = {}
     for package in pairs(selected) do names[#names + 1] = package end
@@ -453,15 +433,15 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
         artifacts[#artifacts + 1] = {component = package, version = module.version, digest = module_digest,
             dependencies = dependencies, namespaces = namespaces}
     end
-    table.sort(candidate_entries, function(left: any, right: any): boolean return left.id < right.id end)
-    table.sort(requirements, function(left: any, right: any): boolean return left.id < right.id end)
-    table.sort(migrations, function(left: any, right: any): boolean
+    table.sort(candidate_entries, function(left: preflight.Entry, right: preflight.Entry): boolean return left.id < right.id end)
+    table.sort(requirements, function(left: preflight.Requirement, right: preflight.Requirement): boolean return left.id < right.id end)
+    table.sort(migrations, function(left: preflight.Migration, right: preflight.Migration): boolean
         if left.target_db ~= right.target_db then return left.target_db < right.target_db end
         if left.ordinal ~= right.ordinal then return left.ordinal < right.ordinal end
         return left.id < right.id
     end)
 
-    local current: {[string]: unknown} = {}
+    local current: {[string]: preflight.Entry} = {}
     for _, entry in ipairs(captured.entries) do
         if not (captured.overlay_ids and captured.overlay_ids[entry.id :: string]) then
             local package = owner(entry)
@@ -488,13 +468,11 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
     local kernel, kernel_error = protected_kernel.decode(kernel_raw)
     if not kernel then return nil, nil, kernel_error end
     relevant_ids[protected_kernel.ID] = true
-    for _, raw in ipairs(candidate_entries) do
-        local item = raw :: Object
-        for _, reference in ipairs(item.references :: {string}) do relevant_ids[reference] = true end
+    for _, item in ipairs(candidate_entries) do
+        for _, reference in ipairs(item.references) do relevant_ids[reference] = true end
     end
-    for _, raw in ipairs(requirements) do
-        local item = raw :: Object
-        for _, target in ipairs(item.targets :: {string}) do relevant_ids[target] = true end
+    for _, item in ipairs(requirements) do
+        for _, target in ipairs(item.targets) do relevant_ids[target] = true end
     end
     if policy.database_bindings ~= nil then
         if type(policy.database_bindings) ~= "table" then return nil, nil, "host policy database bindings are malformed" end
@@ -504,20 +482,18 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
             if database_id then relevant_ids[database_id] = true end
         end
     end
-    local relevant: {unknown} = {}
+    local relevant: {preflight.Entry} = {}
     for id, raw in pairs(current) do
         local namespace = id:match("^([^:]+):")
         if relevant_ids[id] or (namespace and owned_namespaces[namespace]) then relevant[#relevant + 1] = raw end
     end
-    table.sort(relevant, function(left: any, right: any): boolean return left.id < right.id end)
+    table.sort(relevant, function(left: preflight.Entry, right: preflight.Entry): boolean return left.id < right.id end)
     local base_bytes, base_error = canonical.encode({entries = relevant}, 1048576)
     if not base_bytes then return nil, nil, "measure relevant registry base: " .. tostring(base_error or "unknown error") end
     local base_digest, base_measure_error = hash.sha256(base_bytes)
     if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
 
-    local context, context_error = policy_context(policy, captured, base_digest :: string, current)
-    if not context then return nil, nil, context_error end
-    context.protected = kernel
+    local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}
     if policy.applications then
         if policy.workspace_id ~= spec.workspace_id or policy.source_node ~= source
             or policy.source_workspace ~= spec.source_workspace or not bounds.id(policy.overlay_owner) then
@@ -529,18 +505,19 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
             bindings = policy.applications, artifact_entries = expected,
             registry_entries = captured.entries, overlay_ids = captured.overlay_ids})
         if not projection then return nil, nil, projection_error or "application admission projection is absent" end
-        context.application_admission = projection
+        evidence.application_admission = {kind = "measured", value = projection}
     end
+    local context, context_error = policy_context(policy, captured, base_digest :: string, current, kernel, evidence)
+    if not context then return nil, nil, context_error end
     return {destination_node = destination, source_node = source, base_revision = captured.revision,
         base_digest = base_digest, artifacts = artifacts, entries = candidate_entries,
         requirements = requirements, migrations = migrations}, context, nil
 end
 
-type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?), policy: (unknown, Captured, Object) -> (Policy?, string?)}
+type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?), policy: (unknown, unknown, unknown) -> (Policy?, string?)}
 
-function M.new(config: Config): unknown
-    local value = {root = config.root, policy = config.policy}
-    function value.capture(): (Captured?, string?)
+function M.new(config: Config): Resolver
+    local function capture(): (Captured?, string?)
         local snapshot, snapshot_error = registry.snapshot()
         if not snapshot then return nil, tostring(snapshot_error or "capture registry snapshot") end
         local state, state_error = snapshot:state()
@@ -563,7 +540,7 @@ function M.new(config: Config): unknown
             end
         end
         local captured: Captured = {revision = math.floor(revision), entries = state.entries,
-            resolution = state.resolution, overlay_ids = overlay_ids, preview = function(root_entry: Entry): (Object?, string?)
+            resolution = state.resolution, overlay_ids = overlay_ids, preview = function(root_entry: Entry): (RegistryPlan?, string?)
                 local changes = snapshot:changes()
                 local existing = snapshot:get(root_entry.id :: string)
                 local created, create_error
@@ -572,13 +549,33 @@ function M.new(config: Config): unknown
                 if not created then return nil, tostring(create_error or "stage Hub dependency root") end
                 local plan, plan_error = changes:plan()
                 if not plan then return nil, tostring(plan_error or "plan Hub dependency root") end
-                return plan :: Object, nil
+                local value = object(plan)
+                local digest = value and sha(value.digest) or nil
+                local rows, rows_error = bounds.dense_list(value and value.changes, 4096, "registry plan changes")
+                local resolution = value and object(value.resolution) or nil
+                if not value or not digest or not rows or not resolution then
+                    return nil, rows_error or "registry dependency plan is malformed"
+                end
+                local normalized: {RegistryChange} = {}
+                for _, raw_change in ipairs(rows) do
+                    local change = object(raw_change)
+                    local operation = change and bounds.id(change.op) or nil
+                    local entry: Entry? = nil
+                    local entry_error: string? = nil
+                    if change then entry, entry_error = copy_entry(change.entry) end
+                    if not operation or not entry then
+                        return nil, entry_error or "registry dependency plan change is malformed"
+                    end
+                    normalized[#normalized + 1] = {op = operation, entry = entry}
+                end
+                return {digest = digest, changes = normalized, resolution = resolution}, nil
             end}
         return captured, nil
     end
-    function value:resolve(spec: unknown): (unknown?, unknown?, string?)
-        return M.resolve_with(self :: Deps, spec)
-    end
+    local value: Resolver = {capture = capture, root = config.root, policy = config.policy,
+        resolve = function(self: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
+            return M.resolve_with(self, spec)
+        end}
     return value
 end
 

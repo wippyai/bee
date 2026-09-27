@@ -292,8 +292,8 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    context: bee.gateway:context
     gateway: bee.gateway.binding:gateway
+    subject_call: bee.gateway.security:subject_call
 - name: mcp
   kind: library.lua
   source: file://mcp.lua
@@ -305,6 +305,7 @@ entries:
     workspace_protocol: bee.gov:workspace_protocol
     delivery_protocol: bee.gov:delivery_protocol
     docs_protocol: bee.docs:protocol
+    sessions: bee.gateway:sessions
 - name: surface
   kind: library.lua
   source: file://surface.lua

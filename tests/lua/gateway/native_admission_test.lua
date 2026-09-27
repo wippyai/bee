@@ -220,7 +220,7 @@ local function define_tests()
                 if drain_error then error("mark listener drained: " .. tostring(drain_error)) end
                 local still_denied = raw_call(caller(true, false), "bee.gateway.binding:admit", admit_request("same-execution"))
                 test.is_false(still_denied.ok)
-                test.eq((still_denied.error :: Object).code, "UNAVAILABLE")
+                test.eq((still_denied.error :: Object).code, "STORAGE")
                 local preserved = row(db)
                 test.eq(preserved.epoch, before_epoch)
                 test.eq(preserved.secret, before_secret)

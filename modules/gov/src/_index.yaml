@@ -36,10 +36,19 @@ entries:
   kind: library.lua
   source: file://preflight.lua
   modules: [hash, json]
-  imports: {canonical: bee.sync:canonical, protected_kernel: bee.gov:protected_kernel}
+  imports:
+    canonical: bee.sync:canonical
+    protected_kernel: bee.gov:protected_kernel
+    application_admission: bee.gov:governed_application_admission
+    capability_grants: bee.gov:capability_grants
 - name: protected_kernel
   kind: library.lua
   source: file://protected_kernel.lua
+  imports: {bounds: bee.threads.records:bounds}
+- name: lists
+  kind: library.lua
+  source: file://lists.lua
+  imports: {bounds: bee.threads.records:bounds}
 - name: super_edit
   kind: library.lua
   source: file://super_edit.lua
@@ -52,11 +61,13 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
     transaction: bee.persist:transaction
+    activation_store: bee.gov.persist:activation_store
 - name: capability_files
   kind: library.lua
   source: file://capability_files.lua
   modules: [hash]
   imports:
+    bounds: bee.threads.records:bounds
     capability_gateway: bee.gov:capability_gateway
 - name: capability_gateway
   kind: library.lua
@@ -154,6 +165,7 @@ entries:
     preflight: bee.gov:preflight
     migration_work: bee.gov:migration_work
     application_admission: bee.gov:governed_application_admission
+    capability_grants: bee.gov:capability_grants
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
 - name: migration_work
@@ -164,6 +176,7 @@ entries:
     artifact: bee.gov:artifact
     canonical: bee.sync:canonical
     preflight: bee.gov:preflight
+    bounds: bee.threads.records:bounds
 - name: target_publication_profiles
   kind: ns.requirement
   meta: {comment: Host-selected publication profiles; the host supplies bee.env:gov_publication_profiles}
@@ -272,6 +285,8 @@ entries:
     bounds: bee.threads.records:bounds
     application_admission: bee.gov:governed_application_admission
     protected_kernel: bee.gov:protected_kernel
+    preflight: bee.gov:preflight
+    lists: bee.gov:lists
 - name: overlay_resolver
   kind: library.lua
   source: file://overlay_resolver.lua
@@ -285,6 +300,8 @@ entries:
     capability_model: bee.capability:model
     capability_grants: bee.gov:capability_grants
     capability_files: bee.gov:capability_files
+    preflight: bee.gov:preflight
+    lists: bee.gov:lists
 - name: staging_resources
   kind: library.lua
   source: file://staging_resources.lua

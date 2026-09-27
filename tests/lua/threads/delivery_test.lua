@@ -2,6 +2,7 @@
 -- release only before dispatch intent, expiry to uncertain, reconciliation,
 -- stale incarnations refused, and a reply acknowledging its own live claim.
 local test = require("test")
+local time = require("time")
 local harness = require("harness")
 local owner = require("owner")
 local function define_tests()
@@ -40,6 +41,20 @@ local function define_tests()
             test.eq(page.records[1].body.recipient_id, "bob")
             test.eq(page.records[1].body.channel, "wait")
             test.eq(harness.code(alice:call("claim", {thread_id = thread_id, idempotency_key = harness.key(), consumer_id = "x", channel = "carrier"})), "INVALID_ARGUMENT")
+        end)
+        test.it("sets the claim deadline 300 UTC seconds after claim time", function()
+            local thread_id = fanout()
+            local started = time.now():unix_nano()
+            local batch = harness.value(bob:call("claim", {thread_id = thread_id, idempotency_key = harness.key(), consumer_id = "laptop"}))
+            local finished = time.now():unix_nano()
+            local expires_at = batch.expires_at
+            if type(expires_at) ~= "string" then error("claim deadline is not text") end
+            local deadline, parse_error = time.parse("2006-01-02T15:04:05.000Z07:00", expires_at)
+            test.is_nil(parse_error)
+            if not deadline then error("claim deadline is not a timestamp") end
+            local deadline_ns = deadline:unix_nano()
+            test.is_true(deadline_ns >= started + 299 * time.SECOND)
+            test.is_true(deadline_ns <= finished + 301 * time.SECOND)
         end)
         test.it("acknowledges, releases before dispatch, and refuses release after dispatch intent", function()
             local thread_id = fanout()

@@ -5,6 +5,7 @@
 -- projecting onto a thread, and the outbox over its own store surviving a
 -- crash between the thread commit and its acknowledgement.
 local test = require("test")
+local json = require("json")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -13,6 +14,7 @@ local process = require("process")
 local sql = require("sql")
 local uuid = require("uuid")
 local service = require("service")
+local worker = require("worker")
 local resources = require("resources")
 local outbox = require("outbox")
 local migrations = require("migrations")
@@ -219,8 +221,8 @@ local function define_tests()
             test.eq(code(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
                 expected_scope_revision = string.rep("0", 64)})), "RESET_REQUIRED")
             test.eq(code(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
-                expected_scope_revision = {}})), "INVALID")
-            test.eq(code(call(alice, "feed_snapshot", {workspace_id = workspace, expected_scope_revision = 7})), "INVALID")
+                expected_scope_revision = {}})), "INVALID_ARGUMENT")
+            test.eq(code(call(alice, "feed_snapshot", {workspace_id = workspace, expected_scope_revision = 7})), "INVALID_ARGUMENT")
         end)
         test.it("serves no request before the authority establishes its incarnation and advances it per start", function()
             local store = open_test_store()
@@ -234,6 +236,37 @@ local function define_tests()
             store:release()
             local pid = process.registry.lookup(service.AUTHORITY_NAME)
             test.eq(pid ~= nil, true)
+        end)
+        test.it("fails closed on a corrupt authority incarnation for requests and restart", function()
+            local store = open_test_store()
+            local owner_node, node_error = service.node()
+            if not owner_node then error("read native node identity: " .. tostring(node_error)) end
+            local rows, read_error = store:query("SELECT incarnation FROM bee_approval_authority WHERE owner_node = ?", {owner_node})
+            if read_error or not rows or #rows == 0 then error("read authority incarnation: " .. tostring(read_error)) end
+            local previous = rows[1].incarnation
+            local _, corrupt_error = store:execute("UPDATE bee_approval_authority SET incarnation = 'broken' WHERE owner_node = ?", {owner_node})
+            test.eq(corrupt_error, nil)
+            local request = service.execute(store, REQUESTER, "request", request_of("ws-" .. key()), nil, requester)
+            test.eq(request.ok, false)
+            test.eq(request.code, "STORAGE")
+            local established, establish_error = service.establish(store)
+            test.eq(established, nil)
+            test.is_true((establish_error or ""):find("corrupt", 1, true) ~= nil)
+            local _, restore_error = store:execute("UPDATE bee_approval_authority SET incarnation = ? WHERE owner_node = ?", {previous, owner_node})
+            test.eq(restore_error, nil)
+            store:release()
+        end)
+        test.it("rejects corrupt persisted approval effect metadata", function()
+            local store = open_test_store()
+            local created = executed(service.execute(store, REQUESTER, "request", request_of("ws-" .. key()), nil, requester))
+            local _, corrupt_error = store:execute("UPDATE bee_approval_requests SET validated_incarnation = 'broken' WHERE approval_id = ?", {created.approval_id})
+            test.eq(corrupt_error, nil)
+            local result = service.execute(store, REQUESTER, "read", {approval_id = created.approval_id}, nil, nil)
+            test.eq(result.ok, false)
+            test.eq(result.code, "STORAGE")
+            local _, restore_error = store:execute("UPDATE bee_approval_requests SET validated_incarnation = NULL WHERE approval_id = ?", {created.approval_id})
+            test.eq(restore_error, nil)
+            store:release()
         end)
         test.it("fences stale authority: consumption after a restart needs revalidation under the current incarnation", function()
             local store = open_test_store()
@@ -265,7 +298,7 @@ local function define_tests()
             test.eq(code(call(outsider, "request", request_of(workspace))), "DENIED")
             test.eq(code(call(requester, "request", request_of(workspace, {policy = "nope"}))), "NOT_FOUND")
             test.eq(code(call(requester, "request", request_of(workspace, {ttl_ms = 60001}))), "FORBIDDEN")
-            test.eq(code(call(requester, "request", request_of(workspace, {proposal = {kind = "attempt", ref = "x", revision = "r1", payload = {big = string.rep("x", 9000)}}}))), "INVALID")
+            test.eq(code(call(requester, "request", request_of(workspace, {proposal = {kind = "attempt", ref = "x", revision = "r1", payload = {big = string.rep("x", 9000)}}}))), "INVALID_ARGUMENT")
             local first_request = request_of(workspace)
             local created = value(call(requester, "request", first_request))
             test.eq(created.state, "pending")
@@ -343,6 +376,60 @@ local function define_tests()
             test.eq(decode_error, nil)
             test.eq(decoded ~= nil, true)
         end)
+        test.it("rejects malformed policy envelopes, sparse lists, duplicate names and fractional TTLs", function()
+            local entry = assert(registry.get("bee:approver_policies"))
+            local original, encode_error = json.encode(entry.data)
+            if not original then error("encode approver policy fixture: " .. tostring(encode_error)) end
+            local function write(data: {[string]: unknown})
+                local current = assert(registry.get("bee:approver_policies"))
+                current.data = data
+                local changes = registry.snapshot():changes()
+                assert(changes:update(current))
+                local applied, apply_error = changes:apply()
+                if not applied then error("write approver policy fixture: " .. tostring(apply_error)) end
+            end
+            local function mutated(change: ({[string]: unknown}) -> ())
+                local data = json.decode(original) :: {[string]: unknown}
+                change(data)
+                write(data)
+                local policies, decode_error = resources.policies()
+                test.eq(policies, nil)
+                test.eq(type(decode_error), "string")
+            end
+            mutated(function(data)
+                data.unexpected = true
+            end)
+            mutated(function(data)
+                local policies = data.policies :: {{[string]: unknown}}
+                local selected: {[string]: unknown}? = nil
+                for _, policy in ipairs(policies) do
+                    if policy.name == POLICY then selected = policy; break end
+                end
+                assert(selected)
+                selected.approvers = ({[1] = ALICE, [3] = BOB} :: {unknown})
+            end)
+            mutated(function(data)
+                local policies = data.policies :: {{[string]: unknown}}
+                local selected: {[string]: unknown}? = nil
+                for _, policy in ipairs(policies) do
+                    if policy.name == POLICY then selected = policy; break end
+                end
+                assert(selected)
+                local duplicate: {[string]: unknown} = {}
+                for name, value in pairs(selected) do duplicate[name] = value end
+                policies[#policies + 1] = duplicate
+            end)
+            mutated(function(data)
+                local policies = data.policies :: {{[string]: unknown}}
+                for _, policy in ipairs(policies) do
+                    if policy.name == POLICY then policy.max_ttl_ms = 1.5; break end
+                end
+            end)
+            write(json.decode(original) :: {[string]: unknown})
+            local decoded, decode_error = resources.policies()
+            test.eq(decode_error, nil)
+            test.eq(decoded ~= nil, true)
+        end)
         test.it("enforces expiry at the owner, lets only the requester withdraw and binds consumption to one effect", function()
             local workspace = "ws-" .. key()
             local short = value(call(requester, "request", request_of(workspace, {ttl_ms = 1})))
@@ -387,7 +474,7 @@ local function define_tests()
             local workspace = "ws-" .. key()
             local created = value(call(requester, "request", request_of(workspace)))
             test.eq(code(call(outsider, "inbox", {workspace_id = workspace})), "DENIED")
-            test.eq(code(call(alice, "inbox", {workspace_id = workspace, limit = 65})), "INVALID")
+            test.eq(code(call(alice, "inbox", {workspace_id = workspace, limit = 65})), "INVALID_ARGUMENT")
             local page = value(call(alice, "inbox", {workspace_id = workspace, limit = 1}))
             local changes = page.changes :: {{[string]: unknown}}
             test.eq(#changes, 1)
@@ -405,9 +492,9 @@ local function define_tests()
             local thread_id = thread_harness.thread(launcher, "Approvals")
             thread_harness.value(launcher:call("admit_action", {thread_id = thread_id, idempotency_key = key(), action_id = "a1", admitted = thread_harness.admitted()}))
             thread_harness.value(launcher:call("prepare_attempt", {thread_id = thread_id, idempotency_key = key(), action_id = "a1", attempt_id = "t1", prepared = thread_harness.prepared()}))
-            test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal(nil, "t1")}))), "INVALID")
-            test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a1", "t9")}))), "INVALID")
-            test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a9", "t1")}))), "INVALID")
+            test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal(nil, "t1")}))), "INVALID_ARGUMENT")
+            test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a1", "t9")}))), "INVALID_ARGUMENT")
+            test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a9", "t1")}))), "INVALID_ARGUMENT")
             local created = value(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a1", "t1")})))
             local binding = created.binding :: {[string]: unknown}
             test.eq(binding.attempt_id, "t1")
@@ -500,7 +587,7 @@ local function define_tests()
             test.eq(acked.acknowledged_at ~= nil, true)
             local repeated = assert(outbox.drain(db, "holder", honest))
             test.eq(repeated.claimed, 0)
-            test.eq(service.execute(db, REQUESTER, "request", request_of(workspace, {thread_id = "thread-missing"}), nil, requester).code, "DENIED")
+            test.eq(service.execute(db, REQUESTER, "request", request_of(workspace, {thread_id = "thread-missing"}), nil, requester).code, "NOT_FOUND")
             local foreign = thread_harness.thread(stranger, "Foreign")
             test.eq(service.execute(db, REQUESTER, "request", request_of(workspace, {thread_id = foreign}), nil, requester).code, "DENIED")
             local later = executed(service.execute(db, REQUESTER, "request", request_of(workspace, {thread_id = thread_id}), nil, requester))
@@ -516,6 +603,20 @@ local function define_tests()
             test.eq(capabilities.projection, "thread_outbox_at_least_once")
             test.eq(capabilities.expiry, "owner_reconcile")
             test.eq(capabilities.dedupe_horizon, "retention_after_expiry")
+        end)
+        test.it("keeps reconciliation and outbox drain failures diagnosable", function()
+            local reconcile_error = worker.run_pass(function(): service.Reply
+                return {ok = false, error = {code = "STORAGE", message = "authority store is corrupt"}, value = nil, replayed = false}
+            end, function(): string?
+                error("drain must not run after reconciliation fails")
+            end)
+            test.eq(reconcile_error, "STORAGE: authority store is corrupt")
+            local drain_error = worker.run_pass(function(): service.Reply
+                return {ok = true, error = nil, value = nil, replayed = false}
+            end, function(): string?
+                return "database busy"
+            end)
+            test.eq(drain_error, "drain approval outbox: database busy")
         end)
     end)
 end

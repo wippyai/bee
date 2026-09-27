@@ -97,9 +97,10 @@ local function entry_map(entries: unknown): ({[string]: Entry}?, string?)
     return out, nil
 end
 
-local function timestamp(entry: Entry): string
-    if type(entry.meta) == "table" and type(entry.meta.timestamp) == "string" then return entry.meta.timestamp end
-    return ""
+local function timestamp(entry: Entry): string?
+    local value = entry.meta.timestamp
+    if type(value) ~= "string" or value == "" then return nil end
+    return value
 end
 
 local function result_row(part: unknown, id: string): {[string]: unknown}?
@@ -123,7 +124,7 @@ local function partial(operation: string, rows: {Row}, problem: string): (Result
     return {operation = operation, rows = rows}, problem
 end
 
-type Planned = {id: string, target_db: string, module: string, entry: Entry}
+type Planned = {id: string, target_db: string, timestamp: string, module: string, entry: Entry}
 
 local function plan(source: Source, request: Request): ({Planned}?, string?)
     if type(source) ~= "table" or type(source.runner) ~= "table" or type(source.runner.setup) ~= "function"
@@ -136,8 +137,9 @@ local function plan(source: Source, request: Request): ({Planned}?, string?)
     for _, id in ipairs(request.entry_ids) do
         local entry = entries[id]
         if not entry then return nil, "captured registry does not contain migration " .. id end
+        local migration_timestamp = timestamp(entry)
         if type(entry.meta) ~= "table" or entry.meta.type ~= "migration" or type(entry.meta.target_db) ~= "string"
-            or entry.meta.target_db == "" or #entry.meta.target_db > 256 then
+            or entry.meta.target_db == "" or #entry.meta.target_db > 256 or not migration_timestamp then
             return nil, "entry is not a complete migration: " .. id
         end
         -- This is registry ownership, never package-authored metadata.
@@ -145,12 +147,12 @@ local function plan(source: Source, request: Request): ({Planned}?, string?)
         if type(owner) ~= "string" or not admitted[owner] then
             return nil, "migration owner is outside the approved components: " .. id
         end
-        planned[#planned + 1] = {id = id, target_db = entry.meta.target_db, module = owner, entry = entry}
+        planned[#planned + 1] = {id = id, target_db = entry.meta.target_db, timestamp = migration_timestamp,
+            module = owner, entry = entry}
     end
     table.sort(planned, function(a: Planned, b: Planned): boolean
         if a.target_db ~= b.target_db then return a.target_db < b.target_db end
-        local at, bt = timestamp(a.entry), timestamp(b.entry)
-        if at ~= bt then return at < bt end
+        if a.timestamp ~= b.timestamp then return a.timestamp < b.timestamp end
         return a.id < b.id
     end)
     return planned, nil

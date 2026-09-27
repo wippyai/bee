@@ -4,6 +4,8 @@ local gateway = require("gateway")
 local mcp = require("mcp")
 local hooks = require("hooks")
 local hook_inbox = require("hook_inbox")
+local logger = require("logger")
+local transport_admission = require("admission")
 type Object = {[string]: unknown}
 local function answer(response: http.Response, status: number, body: Object)
     response:set_status(status)
@@ -23,22 +25,12 @@ local function handle(): nil
     local request = http.request()
     local response = http.response()
     if not request or not response then return nil end
-    local action_id = request:param("action")
-    if not action_id or action_id == "" then answer(response, http.STATUS.NOT_FOUND, mcp.failure(nil, mcp.INVALID_REQUEST, "no action")); return nil end
-    if request:header("Origin") then answer(response, http.STATUS.FORBIDDEN, mcp.failure(nil, mcp.INVALID_REQUEST, "browser origins are not admitted")); return nil end
-    local authorization = request:header("Authorization") or ""
-    local token = authorization:match("^Bearer%s+(%S+)$")
-    if not token then answer(response, http.STATUS.UNAUTHORIZED, mcp.failure(nil, mcp.INVALID_REQUEST, "bearer token required")); return nil end
-    local host = request:host() or ""
-    if not gateway.accepts_host(host) then answer(response, http.STATUS.FORBIDDEN, mcp.failure(nil, mcp.INVALID_REQUEST, "host is not the selected listener")); return nil end
-    local binding, refusal = gateway.authenticate(token, action_id, "hook")
-    if not binding then
-        local fault = refusal and refusal.error or {code = "UNAUTHENTICATED", message = "refused"}
-        local status = fault.code == "DENIED" and http.STATUS.FORBIDDEN or (fault.code == "STORAGE" and http.STATUS.INTERNAL_ERROR or http.STATUS.UNAUTHORIZED)
-        answer(response, status, mcp.failure(nil, mcp.INVALID_REQUEST, fault.message)); return nil
+    local admitted = transport_admission.check(request, "hook")
+    if not admitted.ok then
+        answer(response, admitted.status, mcp.failure(nil, mcp.INVALID_REQUEST, admitted.message))
+        return nil
     end
-    local drain = gateway.draining()
-    if drain and drain.past_deadline then answer(response, http.STATUS.SERVICE_UNAVAILABLE, mcp.failure(nil, mcp.INVALID_REQUEST, "the gateway is shutting down")); return nil end
+    local binding = admitted.binding
     local raw = request:body() or ""
     if #raw > hooks.MAX_PAYLOAD_BYTES then answer(response, 413, mcp.failure(nil, mcp.INVALID_REQUEST, "hook payload exceeds " .. tostring(hooks.MAX_PAYLOAD_BYTES) .. " bytes")); return nil end
     local body: unknown, body_error = json.decode(raw)
@@ -70,7 +62,9 @@ local function handle(): nil
     if type(arguments.event) == "string" then event = arguments.event
     elseif type(arguments.hook_event_name) == "string" then event = arguments.hook_event_name end
     local content = table.create(1, 0)
-    local carried = hook_inbox.carry_text(event, hook_inbox.context(binding, event))
+    local inbox_context, context_error = hook_inbox.context(binding, event)
+    if context_error then logger:warn("Gateway hook inbox context unavailable", {event = event or "unknown", cause = context_error}) end
+    local carried = hook_inbox.carry_text(event, inbox_context)
     if carried then content = {{type = "text", text = carried}} end
     answer(response, http.STATUS.OK, mcp.result(call.id, {content = content,
         structuredContent = {status = outcome.status, event_id = outcome.event_id}, isError = false}))

@@ -291,9 +291,9 @@
       "topic": "component"
     },
     {
-      "bytes": 5124,
+      "bytes": 5149,
       "id": "component/approvals",
-      "sha256": "59877aa53c7adde1b16e5e24b4ec984cd52643390075501acd31f83199e5f8a6",
+      "sha256": "e83c5fb54aa35b06d6ce62f5622841bedee73960426c41844168fec73d212b72",
       "source": "modules/approvals/src/README.md",
       "title": "Bee approvals",
       "topic": "component"
@@ -443,9 +443,9 @@
       "topic": "component"
     },
     {
-      "bytes": 830,
+      "bytes": 982,
       "id": "component/persist",
-      "sha256": "5642db79b763a445a62a255fe3702426bb6fd457f24d2f0d0c6b91a89b7f45f1",
+      "sha256": "6af2ef4e8a77b2bccb23c295388422ad6186a38c9c50fb90a6e4a2b4f35f4e25",
       "source": "modules/persist/src/README.md",
       "title": "bee.persist",
       "topic": "component"
@@ -483,9 +483,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8625,
+      "bytes": 8655,
       "id": "component/threads",
-      "sha256": "cee0eaf0a33c347a75147f9277f6e7df23129549aaa28338aa6794b611169197",
+      "sha256": "d0eb40dd44da758ccd45055bf8cb1dbfaeb05b2b08291462507bf7163ea89017",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -502,7 +502,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 620282,
+    "bytes": 620489,
     "documents": 62
   }
 }

@@ -55,7 +55,4 @@ function M.hook_command(reference: string?): (string?, string?)
     end
     return value, nil
 end
-function M.url(address: string, action_id: string): string
-    return "http://" .. address .. "/mcp/" .. action_id
-end
 return M

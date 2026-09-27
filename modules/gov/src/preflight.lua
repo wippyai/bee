@@ -4,10 +4,12 @@ local canonical = require("canonical")
 local hash = require("hash")
 local json = require("json")
 local protected_kernel = require("protected_kernel")
+local application_admission = require("application_admission")
+local capability_grants = require("capability_grants")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
-    config_empty: {string}?}
+    config_empty: {string}?, security_actor: boolean?, security_groups: boolean?}
 type Artifact = {component: string, version: string, digest: string, dependencies: {string}, namespaces: {string}}
 type CapabilityRequest = {capability: string, parameters: {[string]: string | {string}}, reason: string,
     target: string, path: string, catalog_revision: integer, template_revision: integer}
@@ -16,6 +18,12 @@ type Requirement = {id: string, package: string, value: string?, expected_kind: 
 type Migration = {id: string, target_db: string, checksum: string, ordinal: integer}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
 type DatabaseEvidence = {database_id: string, table_prefix: string?, kind: string, package: string, digest: string}
+type AdmissionEvidence = {kind: "absent"} | {kind: "measured", value: application_admission.Measurement}
+type CapabilityEvidence = {kind: "absent"} |
+    {kind: "new", proposal: capability_grants.Proposal, review: capability_grants.Review} |
+    {kind: "installed", proposal: capability_grants.Proposal, installed: capability_grants.Installed,
+        review: capability_grants.Review}
+type HostEvidence = {application_admission: AdmissionEvidence, capability: CapabilityEvidence}
 type Candidate = {destination_node: string, source_node: string, base_revision: integer, base_digest: string,
     artifacts: {Artifact}, entries: {Entry}, requirements: {Requirement}, migrations: {Migration}}
 type Context = {node_id: string, registry_revision: integer, registry_digest: string, policy_digest: string,
@@ -23,7 +31,7 @@ type Context = {node_id: string, registry_revision: integer, registry_digest: st
     grants: {[string]: boolean}, modules: {[string]: boolean},
     database_bindings: {[string]: DatabaseBinding}?,
     entries: {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, generated_databases: {[string]: string}?, exact_expansion: boolean,
-    migration_barrier: boolean, auto_start: boolean, protected: protected_kernel.Manifest?}
+    migration_barrier: boolean, auto_start: boolean, protected: protected_kernel.Manifest?, host_evidence: HostEvidence}
 type Diagnostic = {code: string, target: string, message: string, remedy: string}
 type Report = {schema_revision: string, plan_digest: string, destination_node: string,
     base_revision: integer, policy_digest: string, ready: boolean, diagnostics: {Diagnostic}, pending_migrations: {string}}

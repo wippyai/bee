@@ -1,10 +1,19 @@
 version: '1.0'
 namespace: bee.approvals.persist
 entries:
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules: [sql]
+  imports:
+    bounds: bee.threads.records:bounds
 - name: outbox
   kind: library.lua
   source: file://outbox.lua
-  modules: [sql, json, funcs, time]
+  modules: [sql, json, funcs]
   imports:
     transaction: bee.persist:transaction
     resources: bee.approvals:resources
+    clock: bee:clock
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical

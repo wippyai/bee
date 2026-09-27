@@ -20,7 +20,7 @@ local function failure(code: string, message: string): {[string]: unknown}
     return transaction.failure(code, message)
 end
 
-local function entry(snapshot: any, id: string, kind: string, meta_type: string): (Object?, string?)
+local function entry(snapshot: registry.Snapshot, id: string, kind: string, meta_type: string): (Object?, string?)
     local raw, read_error = snapshot:get(id)
     local value = bounds.object(raw)
     local meta = value and bounds.object(value.meta) or nil

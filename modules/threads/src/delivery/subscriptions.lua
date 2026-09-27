@@ -128,12 +128,8 @@ function M.page(db: sql.DB, actor: string, request: unknown): Result
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local thread_id = bounds.id(object.thread_id)
     if not thread_id then return failure("INVALID_ARGUMENT", "thread_id is not an identifier") end
-    local limit = bounds.MAX_PAGE_RECORDS
-    if object.limit ~= nil then
-        local number = bounds.integer(object.limit)
-        if not number or number < 1 or number > bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
-        limit = number
-    end
+    local limit = bounds.page_limit(object.limit)
+    if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
     return transaction.write(db, function(tx: sql.Transaction): Result
         local head, caller, denied = authority.membership(tx, thread_id, actor)
         if not head or not caller then return denied or failure("DENIED", "caller is not a member of the thread") end

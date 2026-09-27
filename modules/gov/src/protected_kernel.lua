@@ -8,31 +8,25 @@
 local M = {}
 M.ID = "bee:protected_kernel"
 M.TYPE = "bee.protected_kernel"
+local bounds = require("bounds")
 type Object = {[string]: unknown}
 type Manifest = {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}}
 
 local function object(raw: unknown): Object?
-    if type(raw) ~= "table" then return nil end
-    for key in pairs(raw :: table) do if type(key) ~= "string" then return nil end end
-    return raw :: Object
+    return bounds.object(raw)
 end
 
 local function names(raw: unknown, pattern: string, maximum: integer): {string}?
-    if type(raw) ~= "table" then return nil end
+    local supplied = bounds.dense_list(raw, maximum, "protected kernel names")
+    if not supplied then return nil end
     local result: {string} = {}
     local seen: {[string]: boolean} = {}
-    local count = 0
-    for key in pairs(raw :: table) do
-        if type(key) ~= "number" then return nil end
-        count = count + 1
-    end
-    if count == 0 or count > maximum then return nil end
-    for index = 1, count do
-        local value = (raw :: table)[index]
+    if #supplied == 0 then return nil end
+    for _, value in ipairs(supplied) do
         if type(value) ~= "string" or #value > 160 or not value:match(pattern) or value:find("..", 1, true)
             or seen[value] then return nil end
         seen[value] = true
-        result[index] = value
+        result[#result + 1] = value
     end
     table.sort(result)
     return result

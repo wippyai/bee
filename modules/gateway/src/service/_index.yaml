@@ -5,6 +5,6 @@ entries:
   kind: process.lua
   source: file://worker.lua
   method: main
-  modules: [process, channel, time]
+  modules: [process, channel, time, logger]
   imports:
     installation: bee.gateway.security:installation

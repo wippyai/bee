@@ -28,6 +28,10 @@ entries:
     sessions: bee.gateway:sessions
     surface: bee.gateway:surface
     surface_store: bee.gateway.persist:surface_store
+    binding_store: bee.gateway.persist:binding_store
+    credential_store: bee.gateway.persist:credential_store
+    hook_store: bee.gateway.persist:hook_store
+    listener_store: bee.gateway.persist:listener_store
     access: bee.gateway.security:access
     elevation: bee.gateway.security:elevation
     installation: bee.gateway.security:installation

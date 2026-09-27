@@ -109,13 +109,12 @@ type ApprovalTransition = {
     reason: string,
 }
 type Body = Observation | Message | Admitted | Prepared | Started | TurnRequest | TurnEnd | Receipt | DeliveryMark | Answered | ApprovalRequest | ApprovalTransition
-type Record = {
+type RecordEnvelope = {
     schema_revision: string,
     record_id: string,
     thread_id: string,
     sequence: integer,
     recorded_at: string,
-    kind: Kind,
     producer_id: string,
     source: Source,
     causation: Ref?,
@@ -123,7 +122,58 @@ type Record = {
     action_id: string?,
     attempt_id: string?,
     turn_id: string?,
-    body: Body,
 }
+type ObservationPayload = {kind: "observation", body: Observation}
+type MessagePayload = {kind: "message", body: Message}
+type AdmittedPayload = {kind: "action.admitted", body: Admitted}
+type PreparedPayload = {kind: "attempt.prepared", body: Prepared}
+type StartedPayload = {kind: "attempt.started", body: Started}
+type TurnRequestPayload = {kind: "turn.request", body: TurnRequest}
+type TurnEndPayload = {kind: "turn.end", body: TurnEnd}
+type ReceiptPayload = {kind: "receipt", body: Receipt}
+type DeliveryMarkPayload = {kind: "delivery.mark", body: DeliveryMark}
+type AnsweredPayload = {kind: "request.answered", body: Answered}
+type ApprovalRequestPayload = {kind: "approval.request", body: ApprovalRequest}
+type ApprovalTransitionPayload = {kind: "approval.transition", body: ApprovalTransition}
+type RecordPayload = ObservationPayload | MessagePayload | AdmittedPayload | PreparedPayload | StartedPayload |
+    TurnRequestPayload | TurnEndPayload | ReceiptPayload | DeliveryMarkPayload | AnsweredPayload | ApprovalRequestPayload | ApprovalTransitionPayload
+type ObservationRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "observation", body: Observation}
+type MessageRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "message", body: Message}
+type AdmittedRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "action.admitted", body: Admitted}
+type PreparedRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "attempt.prepared", body: Prepared}
+type StartedRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "attempt.started", body: Started}
+type TurnRequestRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "turn.request", body: TurnRequest}
+type TurnEndRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "turn.end", body: TurnEnd}
+type ReceiptRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "receipt", body: Receipt}
+type DeliveryMarkRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "delivery.mark", body: DeliveryMark}
+type AnsweredRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "request.answered", body: Answered}
+type ApprovalRequestRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "approval.request", body: ApprovalRequest}
+type ApprovalTransitionRecord = {schema_revision: string, record_id: string, thread_id: string, sequence: integer, recorded_at: string,
+    producer_id: string, source: Source, causation: Ref?, correlation_id: string?, action_id: string?, attempt_id: string?, turn_id: string?,
+    kind: "approval.transition", body: ApprovalTransition}
+type Record = ObservationRecord | MessageRecord | AdmittedRecord | PreparedRecord | StartedRecord | TurnRequestRecord |
+    TurnEndRecord | ReceiptRecord | DeliveryMarkRecord | AnsweredRecord | ApprovalRequestRecord | ApprovalTransitionRecord
 local M = {}
 return M

@@ -8,7 +8,8 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     types: bee.threads.records:types
-    record: bee.threads.records:record
+    approval: bee.threads.records:approval
+    message: bee.threads.records:message
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority

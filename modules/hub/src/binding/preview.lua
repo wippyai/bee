@@ -4,12 +4,66 @@ local hub = require("hub")
 local base64 = require("base64")
 local bounds = require("bounds")
 local inspection = require("inspection")
+local requirements = require("requirements")
 local M = {}
 type Request = {component: string, version: string, resource: string?, path: string, offset: integer, limit: integer, expected_digest: string?,
     entry_offset: integer, entry_limit: integer, include_data: boolean}
 type File = {name: string, type: string}
-type Result = {component: string, version: string, digest: string, metadata: unknown?, entries: {unknown}?, resources: {unknown}?,
-    files: {File}?, next_offset: integer?, content_base64: string?, offset: integer?, size: number?, eof: boolean?}
+type Metadata = {[string]: unknown}
+type Entry = {id: string, kind: string, meta: Metadata, data: unknown}
+type Resource = {id: string, type: string, hash: string, size: integer, file_count: integer, meta: Metadata}
+type StateResult = {operation: "state", component: string, version: string, digest: string,
+    metadata: Metadata, entries: {inspection.Entry}, resources: {Resource}, next_offset: integer?, eof: boolean}
+type FilesResult = {operation: "files", component: string, version: string, digest: string,
+    files: {File}, next_offset: integer?}
+type ContentResult = {operation: "read_file", component: string, version: string, digest: string,
+    content_base64: string, offset: integer, size: integer, eof: boolean, next_offset: integer?}
+type Result = StateResult | FilesResult | ContentResult
+M.MAX_RESOURCES = 512
+
+local function package_metadata(raw: unknown): (Metadata?, string?)
+    local value = bounds.object(raw)
+    if not value then return nil, "invalid package metadata" end
+    return value, nil
+end
+
+local function package_entries(raw: unknown): ({Entry}?, string?)
+    local rows, rows_error = bounds.dense_list(raw, requirements.MAX_PACKAGE_ENTRIES, "package entries")
+    if not rows then return nil, rows_error end
+    local entries: {Entry} = {}
+    for index, raw_entry in ipairs(rows) do
+        local item = bounds.object(raw_entry)
+        local id = item and bounds.id(item.id) or nil
+        local kind = item and bounds.id(item.kind) or nil
+        local meta = item and bounds.object(item.meta) or nil
+        if not item or bounds.fields(item, {"id", "kind", "meta", "data"}) or not id or not kind or not meta then
+            return nil, "package entry " .. tostring(index) .. " is malformed"
+        end
+        entries[index] = {id = id, kind = kind, meta = meta, data = item.data}
+    end
+    return entries, nil
+end
+
+local function package_resources(raw: unknown): ({Resource}?, string?)
+    local rows, rows_error = bounds.dense_list(raw, M.MAX_RESOURCES, "package resources")
+    if not rows then return nil, rows_error end
+    local resources: {Resource} = {}
+    for index, raw_resource in ipairs(rows) do
+        local item = bounds.object(raw_resource)
+        local id = item and bounds.id(item.id) or nil
+        local kind = item and bounds.line(item.type, 80) or nil
+        local hash = item and bounds.text(item.hash, 128) or nil
+        local size = item and bounds.count(item.size) or nil
+        local file_count = item and bounds.count(item.file_count) or nil
+        local meta = item and bounds.object(item.meta) or nil
+        if not item or bounds.fields(item, {"id", "type", "hash", "size", "file_count", "meta"})
+            or not id or not kind or kind == "" or not hash or not size or not file_count or not meta then
+            return nil, "package resource " .. tostring(index) .. " is malformed"
+        end
+        resources[index] = {id = id, type = kind, hash = hash, size = size, file_count = file_count, meta = meta}
+    end
+    return resources, nil
+end
 
 function M.decode(operation: string, raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
@@ -41,10 +95,9 @@ function M.decode(operation: string, raw: unknown): (Request?, string?)
             path = supplied
         end
         if path ~= "." then
-            if path:sub(1, 1) == "/" or path:find("\\", 1, true) or path:find("//", 1, true) then return nil, "package path must be relative" end
-            for part in path:gmatch("[^/]+") do
-                if part == "." or part == ".." then return nil, "package path must be relative" end
-            end
+            local relative = bounds.subpath(path, 1024)
+            if not relative then return nil, "package path must be relative" end
+            path = relative
         end
     end
     local entry_offset: integer = 0
@@ -96,9 +149,14 @@ function M.read(operation: string, raw: unknown): (Result?, string?)
         if not closed then return nil, problem or tostring(close_error) end
         return result, problem
     end
-    local digest = package.digest:gsub("^sha256:", "")
+    local version = bounds.line(package.version, 128)
+    local raw_digest = bounds.line(package.digest, 71)
+    local digest = raw_digest and raw_digest:gsub("^sha256:", "") or nil
+    if not version then return finish(nil, "opened package identity is malformed") end
+    if version ~= request.version then return finish(nil, "opened package identity is malformed") end
+    if not digest then return finish(nil, "opened package identity is malformed") end
+    if #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return finish(nil, "opened package identity is malformed") end
     if request.expected_digest and request.expected_digest ~= digest then return finish(nil, "artifact changed; reopen its state") end
-    local result: Result = {component = request.component, version = package.version, digest = digest}
     if operation == "state" then
         local entries, entries_error = package:entries({include_data = true})
         if not entries then return finish(nil, tostring(entries_error)) end
@@ -106,17 +164,20 @@ function M.read(operation: string, raw: unknown): (Result?, string?)
         if not metadata then return finish(nil, tostring(metadata_error)) end
         local resources, resources_error = package:resources()
         if not resources then return finish(nil, tostring(resources_error)) end
+        local decoded_metadata, metadata_decode_error = package_metadata(metadata)
+        local decoded_entries, entries_decode_error = package_entries(entries)
+        local decoded_resources, resources_decode_error = package_resources(resources)
+        if not decoded_metadata or not decoded_entries or not decoded_resources then
+            return finish(nil, metadata_decode_error or entries_decode_error or resources_decode_error or "package state is malformed")
+        end
         local summarized: {inspection.Entry} = {}
-        for _, raw_entry in ipairs(entries) do
-            local entry = bounds.object(raw_entry)
-            local id = entry and bounds.id(entry.id)
-            local kind = entry and bounds.id(entry.kind)
-            if not entry or not id or not kind then return finish(nil, "invalid package entry identity") end
-            summarized[#summarized + 1] = {id = id, kind = kind, meta = {}, data = entry.data}
+        for _, entry in ipairs(decoded_entries) do
+            summarized[#summarized + 1] = {id = entry.id, kind = entry.kind, meta = entry.meta, data = entry.data}
         end
         local page = inspection.page(summarized, request.entry_offset, request.entry_limit, request.include_data)
-        result.entries, result.metadata, result.resources = page.entries, metadata, resources
-        result.next_offset, result.eof = page.next_offset, page.eof
+        local result: StateResult = {operation = "state", component = request.component, version = version,
+            digest = digest, entries = page.entries, metadata = decoded_metadata, resources = decoded_resources,
+            next_offset = page.next_offset, eof = page.eof}
         return finish(result, nil)
     end
     local resource = request.resource
@@ -133,13 +194,15 @@ function M.read(operation: string, raw: unknown): (Result?, string?)
         for row in iterator, iterator_state do
             index = index + 1
             if index > request.offset then
-                if #files >= request.limit then result.next_offset = request.offset + #files; break end
+                if #files >= request.limit then break end
                 local name, kind = bounds.line(row.name, 1024), bounds.member(row.type, {"file", "directory"})
                 if not name or not kind then return finish(nil, "invalid package directory entry") end
                 files[#files + 1] = {name = name, type = kind}
             end
         end
-        result.files = files
+        local next_offset = index > request.offset + #files and request.offset + #files or nil
+        local result: FilesResult = {operation = "files", component = request.component, version = version,
+            digest = digest, files = files, next_offset = next_offset}
         return finish(result, nil)
     end
     local file, file_error = filesystem:open(request.path, "r")
@@ -150,7 +213,8 @@ function M.read(operation: string, raw: unknown): (Result?, string?)
     if size == nil then file:close(); return finish(nil, "invalid package file size") end
     if request.offset >= size then
         file:close()
-        result.content_base64, result.offset, result.size, result.eof = "", request.offset, size, true
+        local result: ContentResult = {operation = "read_file", component = request.component, version = version,
+            digest = digest, content_base64 = "", offset = request.offset, size = size, eof = true, next_offset = nil}
         return finish(result, nil)
     end
     local position, seek_error = file:seek("set", request.offset)
@@ -159,9 +223,10 @@ function M.read(operation: string, raw: unknown): (Result?, string?)
     local closed, close_error = file:close()
     if type(content) ~= "string" then return finish(nil, tostring(read_error)) end
     if not closed then return finish(nil, tostring(close_error)) end
-    result.content_base64 = base64.encode(content)
-    result.offset, result.size, result.eof = request.offset, size, request.offset + #content >= size
-    if not result.eof then result.next_offset = request.offset + #content end
+    local eof = request.offset + #content >= size
+    local result: ContentResult = {operation = "read_file", component = request.component, version = version,
+        digest = digest, content_base64 = base64.encode(content), offset = request.offset, size = size,
+        eof = eof, next_offset = not eof and request.offset + #content or nil}
     return finish(result, nil)
 end
 return M

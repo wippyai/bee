@@ -348,8 +348,8 @@ function M.context(tx: sql.Transaction, thread_id: string, value: unknown): (Con
 end
 -- Commits one record after the head, reserving capacity for the terminal
 -- records still owed plus any new obligation this record creates.
-function M.commit_record(tx: sql.Transaction, head: reader.Head, kind: record_types.Kind, producer_id: string, source: record_types.Source,
-    body: record_types.Body, context: Context, event_scope: string?, event_key: string?, new_obligations: integer): (types.Committed?, Result?)
+function M.commit_record(tx: sql.Transaction, head: reader.Head, producer_id: string, source: record_types.Source,
+    payload: record_types.RecordPayload, context: Context, event_scope: string?, event_key: string?, new_obligations: integer): (types.Committed?, Result?)
     local obligations, obligations_err = reader.obligations(tx, head.thread_id)
     if not obligations then return nil, storage(obligations_err or "count obligations") end
     local reserved = obligations.open_actions + obligations.running_attempts + obligations.open_turns + obligations.open_requests + obligations.live_claims
@@ -360,12 +360,12 @@ function M.commit_record(tx: sql.Transaction, head: reader.Head, kind: record_ty
     if not record_id then return nil, failure("INTERNAL", id_err or "allocate record identifier") end
     local sequence = head.head_sequence + 1
     local now = transaction.now()
-    local envelope: record_types.Record = {schema_revision = bounds.SCHEMA_REVISION, record_id = record_id, thread_id = head.thread_id,
-        sequence = sequence, recorded_at = now, kind = kind, producer_id = producer_id, source = source, causation = context.causation,
-        correlation_id = context.correlation_id, action_id = context.action_id, attempt_id = context.attempt_id, turn_id = context.turn_id, body = body}
-    local encoded, encode_error = record.encode(envelope)
+    local envelope: record_types.RecordEnvelope = {schema_revision = bounds.SCHEMA_REVISION, record_id = record_id, thread_id = head.thread_id,
+        sequence = sequence, recorded_at = now, producer_id = producer_id, source = source, causation = context.causation,
+        correlation_id = context.correlation_id, action_id = context.action_id, attempt_id = context.attempt_id, turn_id = context.turn_id}
+    local encoded, encode_error = record.encode_parts(envelope, payload)
     if not encoded then return nil, failure("INVALID_ARGUMENT", encode_error or "record is not encodable") end
-    local insert_err = transaction.insert_record(tx, {record_id = record_id, thread_id = head.thread_id, sequence = sequence, kind = kind,
+    local insert_err = transaction.insert_record(tx, {record_id = record_id, thread_id = head.thread_id, sequence = sequence, kind = payload.kind,
         producer_id = producer_id, source = source, event_scope = event_scope, event_key = event_key, action_id = context.action_id,
         attempt_id = context.attempt_id, turn_id = context.turn_id, record_json = encoded, committed_at = now})
     if insert_err then return nil, storage(insert_err) end
@@ -461,7 +461,7 @@ function M.submit_message(tx: sql.Transaction, head: reader.Head, caller: reader
         settled = obligation
     end
     local result = commit_message(tx, head, decoded, decoded.recipient_ids, function(owed: integer): Result
-        local committed, refused = M.commit_record(tx, head, "message", caller.actor, "bee", decoded, context, nil, nil, owed)
+        local committed, refused = M.commit_record(tx, head, caller.actor, "bee", {kind = "message", body = decoded}, context, nil, nil, owed)
         if not committed then return refused or failure("INTERNAL", "commit failed") end
         return transaction.success(committed, false)
     end)
@@ -471,7 +471,7 @@ function M.submit_message(tx: sql.Transaction, head: reader.Head, caller: reader
         local answered: record_types.Answered = {request_message_id = settled.message_id, recipient_id = caller.actor,
             reply_message_id = decoded.message_id, outcome = decoded.outcome or "succeeded"}
         local answer_context: Context = {causation = {thread_id = head.thread_id, record_id = committed.record_id}, correlation_id = context.correlation_id}
-        local mark, mark_refused = M.commit_record(tx, head, "request.answered", caller.actor, "bee", answered, answer_context, nil, nil, -1)
+        local mark, mark_refused = M.commit_record(tx, head, caller.actor, "bee", {kind = "request.answered", body = answered}, answer_context, nil, nil, -1)
         if not mark then return mark_refused or failure("INTERNAL", "commit failed") end
         local answer_err = transaction.answer_obligation(tx, head.thread_id, settled.message_id, caller.actor, committed.record_id, mark.record_id)
         if answer_err then return storage(answer_err) end
@@ -483,7 +483,7 @@ function M.submit_message(tx: sql.Transaction, head: reader.Head, caller: reader
             if delivery and delivery.state == "claimed" and delivery.claimant_actor == caller.actor then
                 local delivered: record_types.DeliveryMark = {delivery_id = delivery.delivery_id, message_id = delivery.message_id, recipient_id = delivery.recipient_id,
                     state = "delivered", owner_epoch = delivery.owner_incarnation, channel = delivery.channel, evidence_ref = committed.record_id}
-                local ack, ack_refused = M.commit_record(tx, head, "delivery.mark", caller.actor, "bee", delivered, answer_context, nil, nil, -1)
+                local ack, ack_refused = M.commit_record(tx, head, caller.actor, "bee", {kind = "delivery.mark", body = delivered}, answer_context, nil, nil, -1)
                 if not ack then return ack_refused or failure("INTERNAL", "commit failed") end
                 local set_err = transaction.set_delivery(tx, head.thread_id, delivery.delivery_id, "delivered", ack.record_id, committed.record_id)
                 if set_err then return storage(set_err) end
@@ -502,30 +502,30 @@ function M.commit_observation(tx: sql.Transaction, head: reader.Head, producer_i
     if existing then
         local stored, stored_error = record.decode_json(existing.record_json)
         if not stored then return failure("INTERNAL", stored_error or "stored record is corrupt") end
-        if record.encode_body("observation", stored.body) ~= record.encode_body("observation", decoded) then
+        if stored.kind ~= "observation" or record.encode_body(record.payload(stored)) ~= record.encode_body({kind = "observation", body = decoded}) then
             return failure("CONFLICT", "event_key was used by a different observation")
         end
         return transaction.success({record_id = existing.record_id, sequence = existing.sequence}, true)
     end
-    local committed, refused = M.commit_record(tx, head, "observation", producer_id, source, decoded, context, scope, decoded.event_key, 0)
+    local committed, refused = M.commit_record(tx, head, producer_id, source, {kind = "observation", body = decoded}, context, scope, decoded.event_key, 0)
     if not committed then return refused or failure("INTERNAL", "commit failed") end
     return transaction.success(committed, false)
 end
 -- Commits one record of any family under a producer scope and key, or
 -- replays the record already committed under them; different content under
 -- a used key is a conflict.
-function M.commit_keyed(tx: sql.Transaction, head: reader.Head, kind: record_types.Kind, producer_id: string, source: record_types.Source, body: record_types.Body, context: Context, scope: string, key: string): Result
+function M.commit_keyed(tx: sql.Transaction, head: reader.Head, producer_id: string, source: record_types.Source, payload: record_types.RecordPayload, context: Context, scope: string, key: string): Result
     local existing, existing_err = reader.producer_event(tx, head.thread_id, producer_id, scope, key)
     if existing_err then return storage(existing_err) end
     if existing then
         local stored, stored_error = record.decode_json(existing.record_json)
         if not stored then return failure("INTERNAL", stored_error or "stored record is corrupt") end
-        if stored.kind ~= kind or record.encode_body(kind, stored.body) ~= record.encode_body(kind, body) then
+        if stored.kind ~= payload.kind or record.encode_body(record.payload(stored)) ~= record.encode_body(payload) then
             return failure("CONFLICT", "event key was used by a different record")
         end
         return transaction.success({record_id = existing.record_id, sequence = existing.sequence}, true)
     end
-    local committed, refused = M.commit_record(tx, head, kind, producer_id, source, body, context, scope, key, 0)
+    local committed, refused = M.commit_record(tx, head, producer_id, source, payload, context, scope, key, 0)
     if not committed then return refused or failure("INTERNAL", "commit failed") end
     return transaction.success(committed, false)
 end
@@ -548,7 +548,7 @@ function M.project_message(tx: sql.Transaction, head: reader.Head, producer_id: 
     -- A projected notice is a notification, which owes no answer and reserves
     -- no record capacity; commit_keyed commits it under the authority's key.
     return commit_message(tx, head, decoded, recipients, function(_owed: integer): Result
-        return M.commit_keyed(tx, head, "message", producer_id, "bee", decoded, context, scope, key)
+        return M.commit_keyed(tx, head, producer_id, "bee", {kind = "message", body = decoded}, context, scope, key)
     end)
 end
 local function submit_observation(tx: sql.Transaction, head: reader.Head, caller: reader.Member, source: record_types.Source, body: unknown, context: Context): Result

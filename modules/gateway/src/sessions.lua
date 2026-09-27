@@ -12,7 +12,7 @@ type Address = {node_id: string, action_id: string}
 type DirectoryCandidate = {session: Candidate, node_id: string, name: string, grant_epoch: integer, discoverable: boolean, sendable: boolean?, attempt_state: string?, delivery_state: string?, last_inbox_sequence: integer?}
 type DirectoryView = {name: string, address: Address, action_id: string, attempt_id: string, grant_epoch: integer, sendable: boolean, self: boolean, attempt_state: string?, delivery_state: string?, last_inbox_sequence: integer?}
 -- One candidate per action, the newest carrier epoch winning, ordered by
--- thread and then action so a listing is stable across calls.
+-- action ID so a listing is stable across calls.
 function M.latest(candidates: {Candidate}): {Candidate}
     local by_action: {[string]: Candidate} = {}
     for _, item in ipairs(candidates) do
@@ -22,7 +22,6 @@ function M.latest(candidates: {Candidate}): {Candidate}
     local result: {Candidate} = {}
     for _, item in pairs(by_action) do result[#result + 1] = item end
     table.sort(result, function(left: Candidate, right: Candidate): boolean
-        if left.thread_id ~= right.thread_id then return left.thread_id < right.thread_id end
         return left.action_id < right.action_id
     end)
     return result
@@ -54,8 +53,8 @@ function M.view(item: Candidate, title: string, self_action_id: string): View
 end
 -- A stable cursor page over an already ordered view list. The cursor is an
 -- offset into that order; the reply names the next cursor or its absence.
-function M.page(views: {unknown}, cursor: integer, limit: integer): {items: {unknown}, next_cursor: integer?, eof: boolean}
-    local items: {unknown} = {}
+function M.page<T>(views: {T}, cursor: integer, limit: integer): {items: {T}, next_cursor: integer?, eof: boolean}
+    local items: {T} = {}
     local start = cursor + 1
     for index = start, math.min(start + limit - 1, #views) do items[#items + 1] = views[index] end
     local consumed = cursor + #items
@@ -64,9 +63,10 @@ end
 -- The MCP paging arguments both session listings share, decoded once here so
 -- the advertised schema and the accepted cursor cannot drift apart.
 M.PAGE_DEFAULT = 32
-function M.page_schema(): {[string]: unknown}
+type Object = {[string]: unknown}
+function M.page_schema(): Object
     return {cursor = {type = "integer", minimum = 0,
-            description = "offset into the stable session order; omit for the first page"},
+            description = "offset into the stable listing order; omit for the first page"},
         limit = {type = "integer", minimum = 1, maximum = M.MAX_SESSIONS,
             description = "page size, at most " .. tostring(M.MAX_SESSIONS)}}
 end

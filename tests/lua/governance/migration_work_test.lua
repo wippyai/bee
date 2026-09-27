@@ -10,6 +10,12 @@ local hash = require("hash")
 
 local SHA = string.rep("a", 64)
 type Object = {[string]: unknown}
+local EMPTY_STRINGS: {string} = {}
+local function candidate_entry(id: string, kind: string, package: string, digest: string): preflight.Entry
+    return {id = id, kind = kind, package = package, digest = digest, references = EMPTY_STRINGS,
+        auto_start = false, grants = EMPTY_STRINGS, modules = EMPTY_STRINGS,
+        config_objects = EMPTY_STRINGS, config_lists = EMPTY_STRINGS, config_empty = EMPTY_STRINGS}
+end
 
 local function measured(value: {[string]: unknown}): string
     local bytes, problem = canonical.encode(value)
@@ -24,11 +30,9 @@ local function fixture(existing_database: boolean?): (artifact.Artifact, preflig
     local migration: {[string]: unknown} = {id = "demo:001", kind = "function.lua",
         meta = {type = "migration", target_db = target_db, ordinal = 1}, data = {up = "create table users"}}
     local definitions: {{[string]: unknown}} = {migration}
-    local candidate_entries: {preflight.Entry} = {{id = migration.id :: string, kind = migration.kind :: string,
-        package = "demo/app", digest = measured(migration), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}
-    local host_database: preflight.Entry = {id = "host:db",
-        kind = "db.sql.sqlite", package = "host/storage", digest = SHA, references = {}, auto_start = false,
-        grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
+    local candidate_entries: {preflight.Entry} = {
+        candidate_entry(migration.id :: string, migration.kind :: string, "demo/app", measured(migration))}
+    local host_database = candidate_entry("host:db", "db.sql.sqlite", "host/storage", SHA)
     local destination_entries: {[string]: preflight.Entry} = {["host:db"] = host_database}
     local exact = assert(artifact.create(definitions))
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b", base_revision = 7,
@@ -44,7 +48,8 @@ local function fixture(existing_database: boolean?): (artifact.Artifact, preflig
         kinds = {["db.sql.sqlite"] = true, ["function.lua"] = true}, databases = {[target_db] = true},
         grants = {}, modules = {}, database_bindings = bindings,
         entries = destination_entries, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL,
-        migration_barrier = false, auto_start = true}
+        migration_barrier = false, auto_start = true,
+        host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
     return exact, candidate, context
 end
 
@@ -92,8 +97,8 @@ local function define_tests()
             local exact = assert(artifact.create({first, later}))
             candidate.entries[1].digest = measured(first)
             candidate.migrations[1].checksum, candidate.migrations[1].ordinal = measured(first), 2
-            candidate.entries[#candidate.entries + 1] = {id = "demo:010", kind = "function.lua", package = "demo/app",
-                digest = measured(later), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
+            candidate.entries[#candidate.entries + 1] = candidate_entry("demo:010", "function.lua", "demo/app",
+                measured(later))
             candidate.migrations[#candidate.migrations + 1] = {id = "demo:010", target_db = "demo:db",
                 checksum = measured(later), ordinal = 10}
             local work = assert(migration_work.capture(candidate, exact, context))
@@ -147,7 +152,8 @@ local function define_tests()
             local digest = assert(hash.sha256(bytes))
             local decoded = assert(migration_work.decode(bytes, digest))
             test.eq(decoded.schema_revision, migration_work.LEGACY_SCHEMA)
-            test.eq((decoded.databases[1] :: Object).id, "host:db")
+            test.eq(decoded.databases[1].target_db, "host:db")
+            test.eq(decoded.databases[1].database_id, "host:db")
             test.eq(decoded.bytes, bytes)
             test.eq(decoded.digest, digest)
         end)

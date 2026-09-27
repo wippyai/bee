@@ -28,7 +28,7 @@ entries:
   kind: process.lua
   source: file://worker.lua
   method: main
-  modules: [process, channel, time]
+  modules: [process, channel, time, logger]
   imports:
     service: bee.approvals:service
     outbox: bee.approvals.persist:outbox

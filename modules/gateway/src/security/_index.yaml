@@ -121,6 +121,7 @@ entries:
   modules: [funcs, security, registry]
   imports:
     bounds: bee.threads.records:bounds
+    context: bee.gateway:context
 - name: access
   kind: library.lua
   source: file://access.lua

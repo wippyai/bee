@@ -11,3 +11,4 @@ entries:
 - name: model
   kind: library.lua
   source: file://model.lua
+  imports: {bounds: bee.threads.records:bounds}

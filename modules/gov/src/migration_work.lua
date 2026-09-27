@@ -7,6 +7,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local json = require("json")
 local preflight = require("preflight")
+local bounds = require("bounds")
 
 local M = {}
 
@@ -16,46 +17,27 @@ M.MAX_MIGRATIONS = 128
 M.MAX_DATABASES = 128
 M.MAX_BYTES = 1048576
 
+type Schema = "bee.governance-migration-work@3" | "bee.governance-migration-work@2"
 type Object = {[string]: unknown}
 type Migration = {id: string, target_db: string, ordinal: integer, checksum: string, package: string, definition: Object}
-type Database = {target_db: string, database_id: string, table_prefix: string?, kind: string,
+type DatabaseKind = "db.sql.sqlite" | "db.sql.postgres" | "db.sql.mysql"
+type Database = {target_db: string, database_id: string, table_prefix: string?, kind: DatabaseKind,
     package: string, digest: string, planned: boolean, definition: Object?}
-type Work = {schema_revision: string, destination_node: string, source_node: string, base_revision: integer,
+type Payload = {schema_revision: Schema, destination_node: string, source_node: string, base_revision: integer,
     base_digest: string, policy_digest: string, candidate_digest: string, artifact_digest: string,
-    plan_digest: string, migrations: {Migration}, databases: {Database}, bytes: string, digest: string}
+    plan_digest: string, migrations: {Migration}, databases: {Database}}
+type Work = Payload & {bytes: string, digest: string}
 
 local function object(value: unknown): Object?
-    if type(value) ~= "table" then return nil end
-    for key in pairs(value) do if type(key) ~= "string" then return nil end end
-    return value :: Object
+    return bounds.object(value)
 end
 
 local function fields(value: Object, allowed: {string}): string?
-    local known: {[string]: boolean} = {}
-    for _, name in ipairs(allowed) do known[name] = true end
-    for name in pairs(value) do
-        if not known[name] then return "unknown field " .. name end
-    end
-    return nil
+    return bounds.fields(value, allowed)
 end
 
 local function dense(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
-    if type(value) ~= "table" then return nil, label .. " must be a dense list" end
-    local source = value :: table
-    local count = 0
-    for key in pairs(source) do
-        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then
-            return nil, label .. " must be a dense list"
-        end
-        count = count + 1
-    end
-    if count > maximum or count ~= #source then return nil, label .. " exceeds its bound or is sparse" end
-    local result: {unknown} = {}
-    for index = 1, count do
-        if source[index] == nil then return nil, label .. " must be a dense list" end
-        result[index] = source[index]
-    end
-    return result, nil
+    return bounds.dense_list(value, maximum, label)
 end
 
 local function identifier(value: unknown): string?
@@ -91,6 +73,13 @@ local function sha(value: unknown): string?
     return value
 end
 
+local function database_kind(value: unknown): DatabaseKind?
+    if value == "db.sql.sqlite" then return "db.sql.sqlite" end
+    if value == "db.sql.postgres" then return "db.sql.postgres" end
+    if value == "db.sql.mysql" then return "db.sql.mysql" end
+    return nil
+end
+
 local function digest(bytes: string): (string?, string?)
     local measured, problem = hash.sha256(bytes)
     if not measured then return nil, tostring(problem or "measure migration work") end
@@ -103,7 +92,7 @@ local function definition_digest(value: Object): (string?, string?)
     return digest(bytes)
 end
 
-local function normalize(raw: unknown): (Object?, string?)
+local function normalize(raw: unknown): (Payload?, string?)
     local value = object(raw)
     if not value then return nil, "migration work must be an object" end
     local extra = fields(value, {"schema_revision", "destination_node", "source_node", "base_revision", "base_digest",
@@ -113,12 +102,19 @@ local function normalize(raw: unknown): (Object?, string?)
     local revision = value.base_revision
     local base_digest, policy_digest = sha(value.base_digest), sha(value.policy_digest)
     local candidate_digest, artifact_digest, plan_digest = sha(value.candidate_digest), sha(value.artifact_digest), sha(value.plan_digest)
-    local schema = value.schema_revision
-    if (schema ~= M.SCHEMA and schema ~= M.LEGACY_SCHEMA) or not destination or not source
-        or type(revision) ~= "number" or revision ~= math.floor(revision) or revision < 0 or revision > 9007199254740991
-        or not base_digest or not policy_digest or not candidate_digest or not artifact_digest or not plan_digest then
-        return nil, "migration work identity or measurement is invalid"
+    local schema: Schema? = nil
+    if value.schema_revision == M.SCHEMA then schema = M.SCHEMA
+    elseif value.schema_revision == M.LEGACY_SCHEMA then schema = M.LEGACY_SCHEMA end
+    if not schema then return nil, "migration work schema is invalid" end
+    if not destination or not source then return nil, "migration work identity is invalid" end
+    if type(revision) ~= "number" or revision ~= math.floor(revision) or revision < 0 or revision > 9007199254740991 then
+        return nil, "migration work base revision is invalid"
     end
+    if not base_digest then return nil, "migration work base digest is invalid" end
+    if not policy_digest then return nil, "migration work policy digest is invalid" end
+    if not candidate_digest then return nil, "migration work candidate digest is invalid" end
+    if not artifact_digest then return nil, "migration work artifact digest is invalid" end
+    if not plan_digest then return nil, "migration work plan digest is invalid" end
 
     local supplied_migrations, migration_error = dense(value.migrations, "migration work migrations", M.MAX_MIGRATIONS)
     if not supplied_migrations then return nil, migration_error end
@@ -168,7 +164,7 @@ local function normalize(raw: unknown): (Object?, string?)
 
     local supplied_databases, database_error = dense(value.databases, "migration work databases", M.MAX_DATABASES)
     if not supplied_databases then return nil, database_error end
-    local databases: {Object} = {}
+    local databases: {Database} = {}
     local seen_targets: {[string]: boolean} = {}
     local physical_evidence: {[string]: string} = {}
     local previous_target = ""
@@ -192,12 +188,10 @@ local function normalize(raw: unknown): (Object?, string?)
                 return nil, "migration work contains an invalid database prefix"
             end
         end
-        local kind, package, measured = identifier(item.kind), owner(item.package), sha(item.digest)
+        local kind, package, measured = database_kind(item.kind), owner(item.package), sha(item.digest)
         if not target_db then return nil, "migration work database has an invalid logical target" end
         if not database_id then return nil, "migration work database has an invalid physical identity" end
-        if kind ~= "db.sql.sqlite" and kind ~= "db.sql.postgres" and kind ~= "db.sql.mysql" then
-            return nil, "migration work database has an invalid SQL kind"
-        end
+        if not kind then return nil, "migration work database has an invalid SQL kind" end
         if not package then return nil, "migration work database has no trusted owner" end
         if not measured then return nil, "migration work database has an invalid definition digest" end
         if type(item.planned) ~= "boolean" then return nil, "migration work database has no planned-state evidence" end
@@ -227,13 +221,12 @@ local function normalize(raw: unknown): (Object?, string?)
         end
         physical_evidence[database_id] = evidence
         if schema == M.LEGACY_SCHEMA then
-            databases[#databases + 1] = {id = target_db, kind = kind, package = package, digest = measured,
-                planned = item.planned :: boolean, definition = definition}
+            databases[#databases + 1] = {target_db = target_db, database_id = database_id, kind = kind,
+                package = package, digest = measured, planned = item.planned, definition = definition}
         else
-            local database: Object = {target_db = target_db, database_id = database_id, kind = kind,
-                package = package, digest = measured, planned = item.planned :: boolean}
+            local database: Database = {target_db = target_db, database_id = database_id, kind = kind,
+                package = package, digest = measured, planned = item.planned, definition = definition}
             if prefix then database.table_prefix = prefix end
-            if definition then database.definition = definition end
             databases[#databases + 1] = database
         end
         seen_targets[target_db], previous_target = true, target_db
@@ -246,21 +239,27 @@ local function normalize(raw: unknown): (Object?, string?)
     for id in pairs(seen_targets) do
         if not required_databases[id] then return nil, "migration work contains an unused database " .. id end
     end
-    return {schema_revision = schema, destination_node = destination, source_node = source,
+    local payload: Payload = {schema_revision = schema, destination_node = destination, source_node = source,
         base_revision = math.floor(revision :: number), base_digest = base_digest, policy_digest = policy_digest,
         candidate_digest = candidate_digest, artifact_digest = artifact_digest, plan_digest = plan_digest,
-        migrations = migrations, databases = databases}, nil
+        migrations = migrations, databases = databases}
+    return payload, nil
 end
 
-local function seal(payload: Object): (Work?, string?)
+local function seal(payload: Payload): (Work?, string?)
     local normalized, normalize_error = normalize(payload)
     if not normalized then return nil, normalize_error end
     local bytes, encode_error = canonical.encode(normalized, M.MAX_BYTES)
     if not bytes or #bytes > M.MAX_BYTES then return nil, encode_error or "migration work exceeds byte bound" end
     local measured, measure_error = digest(bytes)
     if not measured then return nil, measure_error end
-    normalized.bytes, normalized.digest = bytes, measured
-    return normalized :: Work, nil
+    local work: Work = {schema_revision = normalized.schema_revision, destination_node = normalized.destination_node,
+        source_node = normalized.source_node, base_revision = normalized.base_revision,
+        base_digest = normalized.base_digest, policy_digest = normalized.policy_digest,
+        candidate_digest = normalized.candidate_digest, artifact_digest = normalized.artifact_digest,
+        plan_digest = normalized.plan_digest, migrations = normalized.migrations, databases = normalized.databases,
+        bytes = bytes, digest = measured}
+    return work, nil
 end
 
 local function full_artifact(raw: unknown): (artifact.Artifact?, string?)
@@ -394,44 +393,45 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
 end
 
 function M.decode(bytes_raw: unknown, digest_raw: unknown): (Work?, string?)
-    if type(bytes_raw) ~= "string" or #bytes_raw == 0 or #bytes_raw > M.MAX_BYTES then
+    if type(bytes_raw) ~= "string" then
         return nil, "migration work bytes exceed bound"
     end
+    local bytes = bytes_raw
+    if #bytes == 0 or #bytes > M.MAX_BYTES then return nil, "migration work bytes exceed bound" end
     local recorded = sha(digest_raw)
     if not recorded then return nil, "migration work digest is malformed" end
-    local measured, measure_error = digest(bytes_raw)
+    local measured, measure_error = digest(bytes)
     if not measured then return nil, measure_error end
     if measured ~= recorded then return nil, "migration work digest does not match bytes" end
-    local decoded, decode_error = json.decode(bytes_raw)
+    local decoded, decode_error = json.decode(bytes)
     if decode_error then return nil, "migration work bytes are not JSON" end
+    local canonical_input, input_error = canonical.encode(decoded, M.MAX_BYTES)
+    if not canonical_input or canonical_input ~= bytes then
+        return nil, input_error or "migration work bytes are not canonical"
+    end
     local normalized, normalize_error = normalize(decoded)
     if not normalized then return nil, normalize_error end
-    local canonical_bytes, encode_error = canonical.encode(normalized, M.MAX_BYTES)
-    if not canonical_bytes or canonical_bytes ~= bytes_raw then
-        return nil, encode_error or "migration work bytes are not canonical"
-    end
-    normalized.bytes, normalized.digest = bytes_raw, recorded
-    return normalized :: Work, nil
+    local work: Work = {schema_revision = normalized.schema_revision, destination_node = normalized.destination_node,
+        source_node = normalized.source_node, base_revision = normalized.base_revision,
+        base_digest = normalized.base_digest, policy_digest = normalized.policy_digest,
+        candidate_digest = normalized.candidate_digest, artifact_digest = normalized.artifact_digest,
+        plan_digest = normalized.plan_digest, migrations = normalized.migrations, databases = normalized.databases,
+        bytes = bytes, digest = recorded}
+    return work, nil
 end
 
 -- Resolve one logical target from already validated immutable work. Legacy
 -- work used one `id` for both sides and never carried a prefix.
-function M.database(raw_work: unknown, target_raw: unknown): (Object?, string?)
-    local work = object(raw_work)
+function M.database(work: Work, target_raw: unknown): (Database?, string?)
     local target = registry_id(target_raw)
-    if not work or not target or type(work.databases) ~= "table" then
+    if not target then
         return nil, "migration work database lookup is invalid"
     end
-    local found: Object? = nil
-    for _, raw in ipairs(work.databases :: {unknown}) do
-        local item = object(raw)
-        local logical = item and registry_id(item.target_db or item.id) or nil
-        local physical = item and registry_id(item.database_id or item.id) or nil
-        if logical == target then
-            if found or not physical then return nil, "migration work database binding is ambiguous" end
-            found = {target_db = target, database_id = physical, kind = item.kind,
-                package = item.package, digest = item.digest, planned = item.planned}
-            if item.table_prefix ~= nil then found.table_prefix = item.table_prefix end
+    local found: Database? = nil
+    for _, item in ipairs(work.databases) do
+        if item.target_db == target then
+            if found then return nil, "migration work database binding is ambiguous" end
+            found = item
         end
     end
     if not found then return nil, "migration work is missing database " .. target end

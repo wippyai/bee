@@ -5,18 +5,19 @@ local test = require("test")
 local sessions = require("sessions")
 local mcp = require("mcp")
 type Candidate = sessions.Candidate
+type Object = {[string]: unknown}
 local function candidate(action_id: string, attempt_id: string, thread_id: string, epoch: integer): Candidate
     return {binding_id = "binding-" .. attempt_id .. "-" .. tostring(epoch), subject = "subject", action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, carrier_epoch = epoch}
 end
 local function define_tests()
     test.describe("Gateway sessions", function()
-        test.it("keeps one session per action under its newest carrier epoch in a stable order", function()
+        test.it("keeps one session per action under its newest carrier epoch in stable action order", function()
             local latest = sessions.latest({candidate("b", "b-1", "t2", 1), candidate("a", "a-1", "t1", 1), candidate("a", "a-2", "t1", 2), candidate("c", "c-1", "t1", 1)})
             test.eq(#latest, 3)
             test.eq(latest[1].action_id, "a")
             test.eq(latest[1].attempt_id, "a-2")
-            test.eq(latest[2].action_id, "c")
-            test.eq(latest[3].action_id, "b")
+            test.eq(latest[2].action_id, "b")
+            test.eq(latest[3].action_id, "c")
         end)
         test.it("resolves an action, an attempt or a thread that holds one session", function()
             local live = sessions.latest({candidate("a", "a-1", "t1", 1), candidate("c", "c-1", "t1", 1), candidate("b", "b-1", "t2", 1)})
@@ -90,9 +91,14 @@ local function define_tests()
             test.eq(#last.items, 1)
             test.is_nil(last.next_cursor)
             test.eq(last.eof, true)
-            local schema = sessions.page_schema()
-            test.not_nil(schema.cursor)
-            test.not_nil(schema.limit)
+            local listed = mcp.list({"thread_sessions", "session_directory"})
+            test.eq(#listed.tools, 2)
+            for _, tool in ipairs(listed.tools) do
+                local properties = tool.inputSchema.properties :: Object
+                test.eq((properties.cursor :: Object).minimum, 0)
+                test.eq((properties.limit :: Object).minimum, 1)
+                test.eq((properties.limit :: Object).maximum, sessions.MAX_SESSIONS)
+            end
             test.eq(sessions.PAGE_DEFAULT, 32)
         end)
         test.it("uses the newest carrier binding while preserving the owner's grant epoch", function()

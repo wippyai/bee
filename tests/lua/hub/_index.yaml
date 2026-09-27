@@ -58,7 +58,7 @@ entries:
   kind: function.lua
   source: file://governance_migration_effect_test.lua
   method: run
-  modules: [json]
+  modules: [hash, json]
   meta: {type: test, suite: bee}
   security:
     policies:
@@ -69,6 +69,8 @@ entries:
     test: wippy.test:test
     effect: bee.gov.binding:migration_effect
     migration_runner: bee.hub.binding:migration_runner
+    migration_work: bee.gov:migration_work
+    canonical: bee.sync:canonical
 - name: migration_runner_test
   kind: function.lua
   source: file://migration_runner_test.lua

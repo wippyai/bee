@@ -3,17 +3,20 @@ local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local transaction = require("transaction")
+local activation_store = require("activation_store")
 
 local M = {}
 local RECOVERY_ACTOR = "bee.gov.recovery"
 type Result = transaction.Result
 type Object = {[string]: unknown}
+type Store = activation_store.Store
+type Request = activation_store.Request
 type Activations = {
-    applied: (any, string) -> Result,
-    revert_activation: (any, string, Object) -> Result,
+    applied: (Store, string) -> Result,
+    revert_activation: (Store, string, Request) -> Result,
 }
 
-local function has_facts(activations: Activations, store: any, component: string): (boolean?, string?)
+local function has_facts(activations: Activations, store: Store, component: string): (boolean?, string?)
     local result = activations.applied(store, component)
     if not result.ok then return nil, result.message or "read applied migration facts" end
     local value = bounds.object(result.value)
@@ -23,9 +26,8 @@ local function has_facts(activations: Activations, store: any, component: string
     return false, nil
 end
 
-function M.revert(activations_raw: any, store: any, owner_raw: unknown,
+function M.revert(activations: Activations, store: Store, owner_raw: unknown,
     current_raw: unknown, baseline_raw: unknown, key_raw: unknown): Result
-    local activations = activations_raw :: Activations
     local owner = bounds.id(owner_raw)
     local current, baseline = bounds.object(current_raw), bounds.object(baseline_raw)
     local key = bounds.id(key_raw)

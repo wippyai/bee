@@ -83,6 +83,21 @@ local function define_tests()
             test.eq(#calls, 0)
         end)
 
+        test.it("refuses missing and empty migration timestamps before execution", function()
+            local id = "acme.app:untimed"
+            local missing = entry(id, "acme/app", "app:db", "2026-01-01")
+            missing.meta.timestamp = nil
+            local empty = entry(id, "acme/app", "app:db", "")
+            for _, incomplete in ipairs({missing, empty}) do
+                local calls: {Call} = {}
+                local result, problem = migrations.execute(source({incomplete}, {}, calls),
+                    {operation = "up", components = {"acme/app"}, entry_ids = {id}})
+                test.is_nil(result)
+                test.not_nil(problem)
+                test.eq(#calls, 0)
+            end
+        end)
+
         test.it("requires ledger evidence before treating an omitted runner row as already applied", function()
             local calls: {Call} = {}
             local id = "acme.app:01"

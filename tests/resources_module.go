@@ -187,12 +187,47 @@ func resourcesModuleWrite(folder, relative string, document interface{}) error {
 	return nil
 }
 
+func resourcesModuleStageProtocol(root, folder string) error {
+	sources := []struct{ from, to string }{
+		{from: "clock.lua", to: "host/clock.lua"},
+		{from: "protocol/bounds.lua", to: "protocol/bounds.lua"},
+		{from: "protocol/canonical.lua", to: "protocol/canonical.lua"},
+	}
+	for _, source_file := range sources {
+		source := filepath.Join(root, "src", filepath.FromSlash(source_file.from))
+		data, err := os.ReadFile(source)
+		if err != nil {
+			return fmt.Errorf("read shared protocol source %s: %w", source, err)
+		}
+		destination := filepath.Join(folder, "src", filepath.FromSlash(source_file.to))
+		if err := os.MkdirAll(filepath.Dir(destination), 0700); err != nil {
+			return fmt.Errorf("create shared protocol source directory: %w", err)
+		}
+		if err := os.WriteFile(destination, data, 0600); err != nil {
+			return fmt.Errorf("stage shared protocol source %s: %w", source_file.to, err)
+		}
+	}
+	if err := resourcesModuleWrite(folder, filepath.Join("src", "protocol", "_index.yaml"), resourcesModuleIndex{
+		Version: "1.0", Namespace: "bee.protocol", Entries: []map[string]interface{}{
+			{"name": "bounds", "kind": "library.lua", "source": "file://bounds.lua", "imports": map[string]string{"clock": "bee:clock"}},
+			{"name": "canonical", "kind": "library.lua", "source": "file://canonical.lua", "modules": []string{"json"}},
+		},
+	}); err != nil {
+		return fmt.Errorf("stage shared protocol index: %w", err)
+	}
+	return nil
+}
+
+func resourcesModuleClockEntry() map[string]interface{} {
+	return map[string]interface{}{"name": "clock", "kind": "library.lua", "source": "file://clock.lua", "modules": []string{"time"}}
+}
+
 func resourcesModuleBase(folder string, resources bool, credentials bool) error {
 	modules := "    - name: bee/persist\n      version: 0.1.0-dev\n    - name: bee/threads\n      version: 0.1.0-dev\n"
 	replacements := "    bee/persist: ./modules/persist\n    bee/threads: ./modules/threads\n"
 	if resources {
-		modules += "    - name: bee/resources\n      version: 0.1.0-dev\n"
-		replacements += "    bee/resources: ./modules/resources\n"
+		modules += "    - name: bee/resources\n      version: 0.1.0-dev\n    - name: bee/capability\n      version: 0.1.0-dev\n"
+		replacements += "    bee/resources: ./modules/resources\n    bee/capability: ./modules/capability\n"
 	}
 	if credentials {
 		modules += "    - name: bee/credentials\n      version: 0.1.0-dev\n"
@@ -263,7 +298,7 @@ func resourcesModuleThreadsEntries() []map[string]interface{} {
 }
 
 func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
-	for _, name := range []string{"resources", "persist", "threads"} {
+	for _, name := range []string{"resources", "persist", "threads", "capability"} {
 		if err := resourcesModuleCopyDir(filepath.Join(folder, "modules", name), filepath.Join(root, "modules", name)); err != nil {
 			return err
 		}
@@ -272,8 +307,15 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	if err := resourcesModuleBase(folder, true, false); err != nil {
 		return err
 	}
+	if err := resourcesModuleStageProtocol(root, folder); err != nil {
+		return err
+	}
 	hostEntries := resourcesModuleThreadsEntries()
+	hostEntries = append(hostEntries, resourcesModuleClockEntry())
 	hostEntries = append(hostEntries, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
+	hostEntries = append(hostEntries, map[string]interface{}{"name": "protected_kernel", "kind": "registry.entry",
+		"meta": map[string]interface{}{"type": "bee.protected_kernel"},
+		"data": map[string]interface{}{"revision": 2, "namespaces": []string{}}})
 	if !dropRoots {
 		hostEntries = append(hostEntries, map[string]interface{}{"name": "resource_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.resource_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}, {"root_ref": "bee.placement.native:unrelated_env_root", "access": "write"}}}})
 		hostEntries = append(hostEntries, map[string]interface{}{"name": "dependency_resources", "kind": "ns.dependency", "component": "bee/resources", "version": "0.1.0-dev",
@@ -291,6 +333,12 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 		}
 	}
 	if err := resourcesModuleWrite(folder, filepath.Join("src", "host", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee", Entries: hostEntries}); err != nil {
+		return err
+	}
+	if err := resourcesModuleWrite(folder, filepath.Join("src", "workspace", "catalog", "_index.yaml"), resourcesModuleIndex{
+		Version: "1.0", Namespace: "bee.workspace.catalog", Entries: []map[string]interface{}{{"name": "extension", "kind": "contract.definition",
+			"methods": []map[string]interface{}{{"name": "describe"}, {"name": "search"}}}},
+	}); err != nil {
 		return err
 	}
 	if err := resourcesModuleWrite(folder, filepath.Join("src", "probe", "_index.yaml"), resourcesModuleProbeIndex("bee.probe", "res-probe", "bee.test.rmod", []string{"funcs", "security"})); err != nil {
@@ -312,7 +360,11 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 	if err := resourcesModuleBase(folder, false, true); err != nil {
 		return err
 	}
+	if err := resourcesModuleStageProtocol(root, folder); err != nil {
+		return err
+	}
 	hostEntries := resourcesModuleThreadsEntries()
+	hostEntries = append(hostEntries, resourcesModuleClockEntry())
 	// The host selects the placement binding recorded on projection receipts
 	// without admitting placement execution into this closure.
 	hostEntries = append(hostEntries,
@@ -341,6 +393,9 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 		})
 	}
 	hostEntries = append(hostEntries, sources, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
+	hostEntries = append(hostEntries, map[string]interface{}{"name": "protected_kernel", "kind": "registry.entry",
+		"meta": map[string]interface{}{"type": "bee.protected_kernel"},
+		"data": map[string]interface{}{"revision": 2, "namespaces": []string{}}})
 	if err := resourcesModuleWrite(folder, filepath.Join("src", "host", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee", Entries: hostEntries}); err != nil {
 		return err
 	}
@@ -480,8 +535,8 @@ func resourcesModuleMissingResources(root, runtime string) error {
 	if runErr != nil {
 		return fmt.Errorf("resources missing-link probe: %w", runErr)
 	}
-	if !strings.Contains(strings.ToLower(output), "roots") {
-		return fmt.Errorf("resources missing-link failure omitted roots reference\n%s", output)
+	if !strings.Contains(strings.ToLower(output), "root") {
+		return fmt.Errorf("resources missing-link failure omitted root reference\n%s", output)
 	}
 	return nil
 }

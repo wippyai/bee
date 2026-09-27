@@ -209,10 +209,6 @@ local function governance_plans(): plan_store.Store
     if not result then error(tostring(err)) end
     return result
 end
-type HostPolicy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
-    namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
-    grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    migration_barrier: boolean, auto_start: boolean}
 local function stage_resolver(): destination.Resolver
     local policy_digest = assert(hash.sha256("replica-probe-destination-policy"))
     local resolved = overlay_resolver.new({overlay_owner = ACTIVATION_OVERLAY,
@@ -225,13 +221,16 @@ local function stage_resolver(): destination.Resolver
             end
             return {component = PACKAGE, version = spec.version}, nil
         end,
-        policy = function(raw: unknown, _captured: unknown, _preview: unknown): (HostPolicy?, string?)
+        policy = function(raw: unknown, _captured: overlay_resolver.Captured,
+            _preview: overlay_resolver.Root): (overlay_resolver.Policy?, string?)
             local spec = object(raw)
             if spec.owner_node ~= "node-0" then return nil, "destination policy belongs to another node" end
-            return {node_id = "node-0", policy_digest = policy_digest,
+            local applied: {[string]: preflight.Migration} = {}
+            local host_policy: overlay_resolver.Policy = {node_id = "node-0", policy_digest = policy_digest,
                 packages = {[PACKAGE] = true}, namespaces = {["private.bee_demo"] = true},
                 kinds = {["function.lua"] = true}, databases = {}, grants = {}, modules = {},
-                applied = {}, migration_barrier = false, auto_start = false}, nil
+                applied = applied, migration_barrier = false, auto_start = false}
+            return host_policy, nil
         end})
     return resolved :: destination.Resolver
 end
@@ -376,13 +375,16 @@ local function activate_agent_artifact(scenario: AgentScenario): {[string]: unkn
     return settled
 end
 local exact_application_overlay: (({[string]: unknown}) -> boolean)
-local function application_runs(selected_version: string): boolean
+local function application_runs(selected_version: string): (boolean, string?)
     local result, call_error = funcs.new():call("private.bee_demo:main", {})
-    return call_error == nil and result == selected_version
+    if call_error then return false, tostring(call_error) end
+    if result ~= selected_version then return false, "returned " .. tostring(result) end
+    return true, nil
 end
 local function exact_application_runs(selected_version: string): boolean
-    if not application_runs(selected_version) then
-        error("activated private application did not return " .. selected_version)
+    local running, run_error = application_runs(selected_version)
+    if not running then
+        error("activated private application did not return " .. selected_version .. ": " .. tostring(run_error))
     end
     return true
 end
@@ -642,9 +644,16 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             assert(io.print("BEE_HIVE_SUPERVISOR application_applied_v1"))
         elseif command == "application-restored-v1" then
             local deadline = time.now():add("30s")
-            while time.now():before(deadline) and not application_runs(PACKAGE_V1) do time.sleep("100ms") end
-            if not application_runs(PACKAGE_V1) then
-                error("destination runtime relaunch did not automatically restore the v1 overlay")
+            local running, run_error = application_runs(PACKAGE_V1)
+            while time.now():before(deadline) and not running do
+                time.sleep("100ms")
+                running, run_error = application_runs(PACKAGE_V1)
+            end
+            if not running then
+                local intent = destination_call({operation = "status", workspace_id = "workspace-node-0",
+                    intent_id = "activation-v1"}, "read recovered activation status")
+                error("destination runtime relaunch did not automatically restore the v1 overlay: "
+                    .. tostring(run_error) .. "; activation=" .. tostring(intent.phase) .. "/" .. tostring(intent.outcome))
             end
             assert(io.print("BEE_HIVE_SUPERVISOR application_restored_v1"))
         elseif command == "application-current-v1" then

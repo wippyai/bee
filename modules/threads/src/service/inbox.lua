@@ -225,26 +225,27 @@ end
 -- touches a same-named local thread. A resent send replays its row: the
 -- same forwarding identity returns the row's current state, anything else
 -- under the key conflicts, exactly like a local idempotent replay.
-type ForwardSpec = {target_action: string, sender_thread: string, sender_action: string, node_id: string, workspace_id: string?,
+type ForwardSpec = {target_action: string, sender_thread: string, sender_action: string, node_id: string, workspace_id: string,
     grant_epoch: integer, message_id: string, content: unknown, digest: string}
 local function forward_enqueue(tx: sql.Transaction, actor: string, mutation: authority.Mutation, spec: ForwardSpec): Result
-    if not spec.workspace_id then return failure("INVALID_ARGUMENT", "a cross-node send binds the destination workspace") end
     local source, source_err = own_action(tx, actor, spec.sender_thread, spec.sender_action)
     if not source then return source_err or failure("DENIED", "sender action unavailable") end
     local existing, find_err = outbox.find(tx, spec.sender_thread, actor, mutation.idempotency_key)
     if find_err then return find_err end
     if existing then
-        local same = tostring(existing.dest_node_id) == spec.node_id and tostring(existing.dest_thread_id) == mutation.thread_id
-            and tostring(existing.dest_action_id) == spec.target_action and tostring(existing.message_id) == spec.message_id
-            and tostring(existing.payload_digest) == spec.digest and tostring(existing.dest_workspace_id) == spec.workspace_id
-            and math.floor(tonumber(existing.grant_epoch) or 0) == spec.grant_epoch
+        local same = existing.dest_node_id == spec.node_id and existing.dest_thread_id == mutation.thread_id
+            and existing.dest_action_id == spec.target_action and existing.message_id == spec.message_id
+            and existing.payload_digest == spec.digest and existing.dest_workspace_id == spec.workspace_id
+            and existing.grant_epoch == spec.grant_epoch
         if not same then return failure("CONFLICT", "idempotency_key was used by a different request") end
         local retry_err = outbox.retry(tx, existing)
         if retry_err then return retry_err end
         local current, current_err = outbox.find(tx, spec.sender_thread, actor, mutation.idempotency_key)
         if current_err then return current_err end
         if not current then return failure("INTERNAL", "forwarded send is missing") end
-        return transaction.success({queued = true, outbox = outbox.view(current)}, false)
+        local view, view_error = outbox.view(current)
+        if not view then return storage(view_error or "read forwarded send") end
+        return transaction.success({queued = true, outbox = view}, false)
     end
     local encoded, encode_error = json.encode(spec.content)
     if not encoded then return failure("INVALID_ARGUMENT", "forwarded content is not encodable: " .. tostring(encode_error)) end
@@ -254,7 +255,9 @@ local function forward_enqueue(tx: sql.Transaction, actor: string, mutation: aut
         message_id = spec.message_id, content_json = encoded, payload_digest = spec.digest})
     if enqueue_err then return enqueue_err end
     if not queued then return failure("INTERNAL", "forwarded send was not queued") end
-    return transaction.success({queued = true, outbox = outbox.view(queued)}, false)
+    local view, view_error = outbox.view(queued)
+    if not view then return storage(view_error or "read forwarded send") end
+    return transaction.success({queued = true, outbox = view}, false)
 end
 local function send(db: sql.DB, actor: string, request: unknown, is_reply: boolean): Result
     local mutation, invalid = authority.mutation(request)
@@ -301,6 +304,10 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
         -- durable outbox here and never commits to a same-named local
         -- thread, while the destination commits only for its own node.
         if node_id ~= node() then
+            if not claimed_workspace then return failure("INVALID_ARGUMENT", "a cross-node send binds the destination workspace") end
+            if not access.may_send(address(claimed_workspace, node_id, target_action)) then
+                return failure("DENIED", "no host send grant for address")
+            end
             -- A cross-node reply still validates its correlation on the node
             -- that received the request: the request item, the caller's own
             -- action and the reply's destination must all agree here before
@@ -397,7 +404,7 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
         if decoded.outcome then record_body.outcome = decoded.outcome end
         local recorded, recorded_err = message.decode(record_body)
         if not recorded then return failure("INTERNAL", recorded_err or "inbox record invalid") end
-        local committed, commit_err = authority.commit_record(tx, head, "message", actor, "bee", recorded, {}, nil, nil, 0)
+        local committed, commit_err = authority.commit_record(tx, head, actor, "bee", {kind = "message", body = recorded}, {}, nil, nil, 0)
         if not committed then return commit_err or failure("INTERNAL", "commit failed") end
         -- The sender node is the authenticated caller node for a forwarded
         -- send and this node otherwise; the sender action itself is

@@ -76,6 +76,9 @@ function M.grants(tx: sql.Transaction, binding_id: string): ({string}?, Fault?)
     table.sort(result)
     return result, nil
 end
+function M.receipt(db: sql.DB, binding_id: string, approval_id: string)
+    return db:query("SELECT traits_json FROM bee_gateway_access_grants WHERE binding_id = ? AND approval_id = ?", {binding_id, approval_id})
+end
 -- A receipt is durable evidence, not a new authorization mechanism.  When
 -- several approved effects carry one trait, the explicit approval-ID order
 -- makes the provenance selected for a retried runtime call stable.

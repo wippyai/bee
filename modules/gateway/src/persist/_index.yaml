@@ -1,6 +1,22 @@
 version: '1.0'
 namespace: bee.gateway.persist
 entries:
+- name: binding_store
+  kind: library.lua
+  source: file://binding_store.lua
+  modules: [sql]
+- name: credential_store
+  kind: library.lua
+  source: file://credential_store.lua
+  modules: [sql]
+- name: hook_store
+  kind: library.lua
+  source: file://hook_store.lua
+  modules: [sql]
+- name: listener_store
+  kind: library.lua
+  source: file://listener_store.lua
+  modules: [sql]
 - name: surface_store
   kind: library.lua
   source: file://surface_store.lua

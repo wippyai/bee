@@ -144,11 +144,11 @@ function M.holdings_request(value: unknown): ({request_id: string, after: string
     end
     local limit: integer? = nil
     if object.limit ~= nil then
-        local number = object.limit
-        if type(number) ~= "number" or number ~= math.floor(number) or number < 1 or number > M.MAX_HOLDINGS_PAGE then
+        local number = bounds.count(object.limit)
+        if not number or number < 1 or number > M.MAX_HOLDINGS_PAGE then
             return nil, "limit must be between 1 and " .. tostring(M.MAX_HOLDINGS_PAGE)
         end
-        limit = math.floor(number)
+        limit = number
     end
     return {request_id = request_id, after = after, limit = limit}, nil
 end

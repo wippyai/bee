@@ -4,8 +4,13 @@
 local test = require("test")
 local feeds = require("feeds")
 local source_config = require("source_config")
+local model = require("model")
 type Object = {[string]: unknown}
 type Source = {node_id: string, feed: string}
+local function reply_code(reply: model.Reply?): string?
+    if not reply or reply.kind == "success" then return nil end
+    return reply.code
+end
 local function view(revision: integer): Object
     local state = revision == 1 and "pending" or "decided"
     return {approval_id = "approval-a", owner_node = "node-a", owner_incarnation = 1, workspace_id = "ws", requester_id = "requester",
@@ -53,22 +58,26 @@ local function define_tests()
                 return nil, "unexpected target"
             end)
             local first = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
-            test.is_true(first and first.ok)
-            local first_page = (first :: Object).value :: Object
+            test.is_true(first and first.kind == "success")
+            if not first or first.kind ~= "success" then error("first inbox page failed") end
+            local first_page = first.value :: Object
             local first_item = (first_page.changes :: {unknown})[1] :: Object
             test.eq((first_item.request :: Object).revision, 1)
             local second = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
-            test.is_true(second and second.ok)
-            local second_page = (second :: Object).value :: Object
+            test.is_true(second and second.kind == "success")
+            if not second or second.kind ~= "success" then error("second inbox page failed") end
+            local second_page = second.value :: Object
             local second_item = (second_page.changes :: {unknown})[1] :: Object
             test.eq((second_item.request :: Object).revision, 2)
             local third = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
-            test.is_true(third and third.ok)
-            local third_page = (third :: Object).value :: Object
+            test.is_true(third and third.kind == "success")
+            if not third or third.kind ~= "success" then error("third inbox page failed") end
+            local third_page = third.value :: Object
             test.is_true(third_page.replace_source :: boolean)
             test.eq(#(third_page.changes :: {unknown}), 0)
             local stale = client:invoke("bee.approvals.binding:read", {approval_id = "approval-a"})
-            test.is_false(stale and stale.ok)
+            test.eq(stale and stale.kind, "failure")
+            test.eq(reply_code(stale), "DENIED")
             test.eq(snapshots, 2)
             test.eq(reads, 2)
         end)
@@ -80,8 +89,8 @@ local function define_tests()
                 return snapshot(source, {projection(source, malformed, 1)}), nil
             end)
             local bad_snapshot = invalid_view:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
-            test.is_false(bad_snapshot and bad_snapshot.ok)
-            test.eq(bad_snapshot and bad_snapshot.error and bad_snapshot.error.code, "RESET_REQUIRED")
+            test.eq(bad_snapshot and bad_snapshot.kind, "failure")
+            test.eq(reply_code(bad_snapshot), "RESET_REQUIRED")
 
             local snapshot_count = 0
             local malformed_page = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)
@@ -93,9 +102,10 @@ local function define_tests()
                     scope_revision = "scope-1", events = "malformed", next_cursor = 2, more = false,
                     head_cursor = 2, earliest_cursor = 0, reset_required = false}, replayed = false}, nil
             end)
-            test.is_true((malformed_page:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"}) :: Object).ok)
-            local reset = malformed_page:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"}) :: Object
-            test.is_true(reset.ok)
+            local initial = malformed_page:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
+            test.is_true(initial and initial.kind == "success")
+            local reset = malformed_page:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
+            if not reset or reset.kind ~= "success" then error("reset snapshot failed") end
             local page = reset.value :: Object
             test.is_true(page.replace_source :: boolean)
             test.eq(#(page.changes :: {unknown}), 0)
@@ -120,8 +130,8 @@ local function define_tests()
                         head_cursor = 2, earliest_cursor = 0, reset_required = false}, replayed = false}, nil
                 end)
                 client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
-                local reset = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"}) :: Object
-                test.is_true(reset.ok)
+                local reset = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
+                if not reset or reset.kind ~= "success" then error("replacement snapshot failed") end
                 test.is_true(((reset.value :: Object).replace_source) :: boolean)
             end
 
@@ -147,9 +157,34 @@ local function define_tests()
                 return result, nil
             end)
             local too_many = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
-            test.is_false(too_many and too_many.ok)
-            test.eq(too_many and too_many.error and too_many.error.code, "CAPACITY_EXHAUSTED")
+            test.eq(too_many and too_many.kind, "failure")
+            test.eq(reply_code(too_many), "CAPACITY_EXHAUSTED")
             test.eq(key, 257)
+        end)
+        test.it("qualifies a committed conflict view while retaining its structured owner fault", function()
+            local configured = assert(source_config.configure("node-a", {"ws"}))
+            local client = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)
+                if target == "bee.approvals.binding:feed_snapshot" then
+                    return snapshot(source, {projection(source, view(1), 1)}), nil
+                end
+                if target == "bee.approvals.binding:decide" then
+                    return {ok = false, error = {code = "CONFLICT", message = "request changed"},
+                        value = view(2), replayed = false}, nil
+                end
+                return nil, "unexpected target"
+            end)
+            local loaded = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
+            test.is_true(loaded and loaded.kind == "success")
+            local conflict = client:invoke("bee.approvals.binding:decide", {approval_id = "approval-a"})
+            test.not_nil(conflict)
+            if not conflict then error("missing decision reply") end
+            test.eq(conflict.kind, "conflict")
+            if conflict.kind == "conflict" then
+                test.eq(conflict.code, "CONFLICT")
+                test.eq(conflict.message, "request changed")
+                test.eq(conflict.request.approval_id, "approval-a")
+                test.eq(conflict.request.workspace_id, "ws")
+            end
         end)
     end)
 end

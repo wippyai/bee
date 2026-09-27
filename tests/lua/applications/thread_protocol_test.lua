@@ -43,14 +43,43 @@ local function define_tests()
 
         test.it("decodes replies under the execution fence", function()
             local success = protocol.reply({version = 1, request_id = "request-1", instance_id = "instance-1",
-                execution_generation = 2, ok = true, value = {records = {}}})
+                execution_generation = 2, operation = "read", ok = true,
+                value = {records = {}, scanned_through = 0, has_more = false}}, "read")
             if not success or not success.ok then error("success refused") end
             local failure = protocol.reply({version = 1, request_id = "request-1", instance_id = "instance-1",
-                execution_generation = 2, ok = false, error = {code = "DENIED", message = "revoked"}})
+                execution_generation = 2, operation = "read", ok = false, value = nil,
+                error = {code = "DENIED", message = "revoked"}}, "read")
             if not failure or failure.ok or not failure.error then error("failure refused") end
             test.eq(failure.error.code, "DENIED")
             test.is_nil(protocol.reply({version = 1, request_id = "request-1", instance_id = "instance-1",
-                execution_generation = 2, ok = true, error = {code = "DENIED", message = "mixed"}}))
+                execution_generation = 2, operation = "read", ok = true, value = {records = {}, scanned_through = 0,
+                    has_more = false}, error = {code = "DENIED", message = "mixed"}}, "read"))
+        end)
+
+        test.it("binds success values and faults to the requested operation", function()
+            local identity = {version = 1, request_id = "request-1", instance_id = "instance-1", execution_generation = 2}
+            local read = {version = identity.version, request_id = identity.request_id, instance_id = identity.instance_id,
+                execution_generation = identity.execution_generation, operation = "read", ok = true,
+                value = {records = {}, scanned_through = 0, has_more = false}}
+            test.not_nil(protocol.reply(read, "read"))
+            test.is_nil(protocol.reply(read, "post"))
+
+            local post = {version = 1, request_id = "request-1", instance_id = "instance-1", execution_generation = 2,
+                operation = "post", ok = true, value = {record_id = "record-1", sequence = 1}}
+            test.not_nil(protocol.reply(post, "post"))
+            post.value = {record_id = "record-1", sequence = 1, ignored = true}
+            test.is_nil(protocol.reply(post, "post"))
+
+            local fault = {version = 1, request_id = "request-1", instance_id = "instance-1", execution_generation = 2,
+                operation = "page", ok = false, value = nil, error = {code = "DENIED", message = "revoked"}}
+            test.not_nil(protocol.reply(fault, "page"))
+            fault.error = {code = "DENIED", message = "revoked", detail = "unexpected"}
+            test.is_nil(protocol.reply(fault, "page"))
+            fault.error = {code = "", message = "revoked"}
+            test.is_nil(protocol.reply(fault, "page"))
+            fault.error = {code = "DENIED", message = "revoked"}
+            fault.extra = true
+            test.is_nil(protocol.reply(fault, "page"))
         end)
     end)
 end

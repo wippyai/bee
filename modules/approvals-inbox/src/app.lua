@@ -17,7 +17,6 @@ local frame = require("frame")
 local model = require("model")
 local view = require("view")
 local inbox = require("inbox")
-local caller = require("caller")
 local feeds = require("feeds")
 local source_config = require("source_config")
 local hive = require("hive")
@@ -26,7 +25,7 @@ local WORKSPACES = "bee.approvals.inbox:workspaces"
 local POLL = "2s"
 type FeedSource = {id: string, node_id: string, workspace_id: string, local_owner: boolean, feed: string}
 local function unknown_answer(): model.Reply
-    return caller.unknown()
+    return model.unknown_reply()
 end
 local function admitted_workspaces(): unknown
     local entry = registry.get(WORKSPACES)
@@ -70,12 +69,7 @@ local function main(value: unknown)
             end
             return answer.value, nil
         end)
-    -- feeds owns source-address routing.  Wrap its reply-shaped result in the
-    -- standard caller boundary so the application itself never trusts a
-    -- transport value without the shared decoder.
-    local owner = caller.new(function(target: string, request: unknown): (unknown, string?)
-        return routed:invoke(target, request), nil
-    end)
+    local owner = routed
     local state: model.State = model.new(configured.workspaces)
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid inbox checkpoint") end
     local rows: {model.Row} = {}

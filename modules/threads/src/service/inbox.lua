@@ -225,10 +225,9 @@ end
 -- touches a same-named local thread. A resent send replays its row: the
 -- same forwarding identity returns the row's current state, anything else
 -- under the key conflicts, exactly like a local idempotent replay.
-type ForwardSpec = {target_action: string, sender_thread: string, sender_action: string, node_id: string, workspace_id: string?,
+type ForwardSpec = {target_action: string, sender_thread: string, sender_action: string, node_id: string, workspace_id: string,
     grant_epoch: integer, message_id: string, content: unknown, digest: string}
 local function forward_enqueue(tx: sql.Transaction, actor: string, mutation: authority.Mutation, spec: ForwardSpec): Result
-    if not spec.workspace_id then return failure("INVALID_ARGUMENT", "a cross-node send binds the destination workspace") end
     local source, source_err = own_action(tx, actor, spec.sender_thread, spec.sender_action)
     if not source then return source_err or failure("DENIED", "sender action unavailable") end
     local existing, find_err = outbox.find(tx, spec.sender_thread, actor, mutation.idempotency_key)
@@ -301,6 +300,10 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
         -- durable outbox here and never commits to a same-named local
         -- thread, while the destination commits only for its own node.
         if node_id ~= node() then
+            if not claimed_workspace then return failure("INVALID_ARGUMENT", "a cross-node send binds the destination workspace") end
+            if not access.may_send(address(claimed_workspace, node_id, target_action)) then
+                return failure("DENIED", "no host send grant for address")
+            end
             -- A cross-node reply still validates its correlation on the node
             -- that received the request: the request item, the caller's own
             -- action and the reply's destination must all agree here before

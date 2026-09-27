@@ -32,7 +32,6 @@ HOST_ENTRIES = {
         "gateway_admit_policy", "gateway_materialize_policy", "gateway_supervision_policy",
         "gateway_manage_policy", "gateway_tool_read_policy", "gateway_tool_message_policy",
         "gateway_tool_inbox_policy", "gateway_session_discover_policy",
-        "gateway_session_send_denied_policy",
         "gateway_tool_launch_policy", "gateway_tool_run_policy", "gateway_tool_overlay_policy", "gateway_tool_docs_policy",
         "gateway_tool_components_policy", "gateway_tool_delivery_policy",
         "gateway_tool_publish_policy", "gateway_tool_application_open_policy",
@@ -45,7 +44,7 @@ HOST_ENTRIES = {
     "src/security/threads/_index.yaml": {
         "thread_storage_policy", "thread_resource_policy", "thread_authority_client_policy",
         "thread_lifecycle_client_policy", "thread_create_policy", "thread_observe_policy",
-        "thread_lifecycle_policy", "thread_carrier_policy", "thread_approval_policy",
+        "thread_lifecycle_policy", "thread_carrier_policy", "thread_node_policy", "thread_approval_policy",
         "thread_approval_client_policy", "thread_waiter_policy",
     },
     "src/_index.yaml": {"approver_policies", "module_installation", "docs_corpus", "clock"},
@@ -96,7 +95,8 @@ def gateway_parameters(listener):
         ("target_tool_message_policy", "bee.security.gateway:gateway_tool_message_policy"),
         ("target_tool_inbox_policy", "bee.security.gateway:gateway_tool_inbox_policy"),
         ("target_tool_discover_policy", "bee.security.gateway:gateway_session_discover_policy"),
-        ("target_tool_send_grant_policy", "bee.security.gateway:gateway_session_send_denied_policy"),
+        ("target_tool_send_grant_policy", "bee.gateway.probe:remote_send_grant_policy"),
+        ("target_remote_resolver", "bee.gateway.probe:remote_sessions"),
         ("target_tool_launch_policy", "bee.security.gateway:gateway_tool_launch_policy"),
         ("target_tool_run_policy", "bee.security.gateway:gateway_tool_run_policy"),
         ("target_tool_overlay_policy", "bee.security.gateway:gateway_tool_overlay_policy"),
@@ -241,6 +241,25 @@ def add_custom_tool_policies(folder):
     security.write_text(yaml.safe_dump(security_document, sort_keys=False))
 
 
+def stage_protocol_libraries(folder):
+    """Stage shared protocol libraries used by the selected components."""
+    source = ROOT / "src" / "protocol"
+    document = yaml.safe_load((source / "_index.yaml").read_text())
+    selected = {"bounds", "canonical", "application"}
+    entries = [deepcopy(entry) for entry in document["entries"] if entry["name"] in selected]
+    assert {entry["name"] for entry in entries} == selected
+    destination = folder / "src" / "protocol"
+    destination.mkdir(parents=True, exist_ok=True)
+    for entry in entries:
+        filename = entry["source"].removeprefix("file://")
+        shutil.copy2(source / filename, destination / filename)
+    (destination / "_index.yaml").write_text(yaml.safe_dump({
+        "version": document["version"],
+        "namespace": document["namespace"],
+        "entries": entries,
+    }, sort_keys=False))
+
+
 @contextmanager
 def gateway_workspace():
     with tempfile.TemporaryDirectory(prefix="bee-gateway-") as directory:
@@ -248,10 +267,13 @@ def gateway_workspace():
         native = os.environ.get("BEE_GATEWAY_NATIVE") == "1"
         for module in MODULES:
             shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
+        (folder / "src").mkdir()
+        shutil.copy2(ROOT / "src" / "clock.lua", folder / "src" / "clock.lua")
         shutil.copytree(ROOT / "tests/fixtures/modules/gateway/src/probe", folder / "src" / "probe")
         if not native:
             shutil.copytree(ROOT / "tests/fixtures/modules/gateway/src/managed", folder / "src" / "managed")
         shutil.copytree(ROOT / "src/corpus", folder / "src" / "corpus")
+        stage_protocol_libraries(folder)
         write_gateway_host(folder, native)
         write_workspace_config(folder)
         add_custom_tool_policies(folder)
@@ -289,7 +311,7 @@ def main():
                     except subprocess.TimeoutExpired:
                         run.kill()
                         run.wait()
-    print("Gateway slices 1, 2 and hook endpoints: agent-requested access through the durable approval inbox, consumed-effect handoff recovery, binding-isolated grants, request/status replay, denied decisions and preserved deselection; configurable traits with stable dispatch, fixed/dynamic native context, binding isolation, concurrent selection CAS and revocation; authenticated caller-owned workspace create/edit/freeze with idempotent replay and cross-actor denial; explicitly admitted thread_message append with bound context, idempotent replay and conflict, default read-tool profile preservation; thread_sessions paging only the workspace's running sessions the subject reads over a complete stable scan, thread_message to a session by action, attempt or thread addressed to its action and naming the sender's, unreachable sessions refused as not found, and thread_notify registering once and telling the caller on its own thread when the session's turn ends; the MCP contract of listChanged with re-list after select, tools/list input/output schemas and annotations, schema-valid calls, cursor paging, structured results with the normalized error shape, and the authoring path of guide index, section, example, bounded docs windows, non-staging delivery preflight and the capability report; hook credentials separate from tool credentials, empty-body answers, occurrence identity with replay and conflict, "
+    print("Gateway slices 1, 2 and hook endpoints: agent-requested access through the durable approval inbox, consumed-effect handoff recovery, binding-isolated grants, request/status replay, denied decisions and preserved deselection; configurable traits with stable dispatch, fixed/dynamic native context, binding isolation, concurrent selection CAS and revocation; authenticated caller-owned workspace create/edit/freeze with idempotent replay and cross-actor denial; explicitly admitted thread_message append with bound context, idempotent replay and conflict, default read-tool profile preservation; thread_sessions paging only the workspace's running sessions the subject reads over a complete stable scan, a host-resolved remote session_send carrying the destination's current grant epoch under the selected send grant, session_directory item schemas, thread_message to a session by action, attempt or thread addressed to its action and naming the sender's, unreachable sessions refused as not found, and thread_notify registering once and telling the caller on its own thread when the session's turn ends; the MCP contract of listChanged with re-list after select, tools/list input/output schemas and annotations, schema-valid calls, cursor paging, structured results with the normalized error shape, and the authoring path of guide index, section, example, bounded docs windows, non-staging delivery preflight and the capability report; hook credentials separate from tool credentials, empty-body answers, occurrence identity with replay and conflict, "
           "ambiguity per delivery, allowlisted queue fields, Codex metadata classification, payload and queue bounds; authenticated loopback readiness with epoch and restart generation, admission without bytes, materialize once per credential generation, "
           "reissue as compare-and-set, supersession and revoke_attempt fenced by carrier epoch, cross-attempt and expiry and revocation refused, thread_read as the bound subject, "
           "bounded read-only thread_wait with no delivery mark, drain releasing an in-flight wait with an explicit outcome and refusing admissions, a new epoch fencing earlier bindings, and a real funcs.new():with_scope configuration renderer whose callee is denied placement store, executor, policy lookup and scope creation; ambient actor/context inheritance remains outside that separate renderer scope-only proof")

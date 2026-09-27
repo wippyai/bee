@@ -28,6 +28,8 @@ local configuration_protocol = require("configuration")
 local preferences = require("preferences")
 local driver_types = require("driver_types")
 local materialization = require("materialization")
+local gateway_protocol = require("gateway_protocol")
+local service_reply = require("service_reply")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
 M.RECONCILE_TIMEOUT_MS = 5000
@@ -35,11 +37,17 @@ M.SWEEP_BOUND = 64
 M.SWEEPER_NAME = "bee.placement.sweeper"
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
+type DecodedReply = service_reply.Reply
+type Access = "read" | "write"
+type Purpose = "project" | "output" | "cache" | "session"
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
 end
 local function succeed(value: unknown): Reply
     return {ok = true, error = nil, value = value}
+end
+local function decode_reply(value: unknown): (DecodedReply?, string?)
+    return service_reply.decode(value)
 end
 local function actor(): string?
     local current = security.actor()
@@ -90,35 +98,68 @@ local function recorded_identity(attempt_id: string): (identity.Identity?, strin
     local row, row_error = store.row(db, attempt_id)
     db:release()
     if not row then return nil, row_error or "attempt is not recorded", nil end
-    local pid = row.pid
-    if type(pid) ~= "number" then return nil, nil, row end
+    if row.pid == nil then return nil, nil, row end
+    local pid = bounds.integer(row.pid)
     local ticks: integer? = nil
-    if type(row.start_ticks) == "number" then ticks = math.floor(row.start_ticks :: number) end
+    if row.start_ticks ~= nil then ticks = bounds.integer(row.start_ticks) end
     local pgid: integer? = nil
-    if type(row.pgid) == "number" then pgid = math.floor(row.pgid :: number) end
+    if row.pgid ~= nil then pgid = bounds.integer(row.pgid) end
     local boot: string? = nil
-    if type(row.boot_id) == "string" then boot = row.boot_id :: string end
-    return {pid = math.floor(pid), pgid = pgid, start_ticks = ticks, boot_id = boot}, nil, row
+    if row.boot_id ~= nil then boot = bounds.id(row.boot_id) end
+    if not pid or pid < 1 or (row.start_ticks ~= nil and (not ticks or ticks < 0))
+        or (row.pgid ~= nil and (not pgid or pgid < 1)) or (row.boot_id ~= nil and not boot) then
+        return nil, "recorded process identity is corrupt", row
+    end
+    return {pid = pid, pgid = pgid, start_ticks = ticks, boot_id = boot}, nil, row
 end
-type Resolved = {grant_id: string, root_ref: string, root_digest: string, subpath: string, access: string, association_revision: integer, expires_at: string}
+type Resolved = {grant_id: string, root_ref: string, root_digest: string, subpath: string, access: Access, association_revision: integer, expires_at: string}
+type ResourceResolution = {grant_id: string, root_ref: string, root_digest: string, subpath: string, access: Access, association_revision: integer, expires_at: string}
+local function decode_resource_resolution(value: unknown): (ResourceResolution?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "resource resolution must be an object" end
+    local unknown_field = bounds.fields(object, {"grant_id", "workspace_id", "name", "root_ref", "root_digest", "directory", "subpath", "access", "purpose", "association_id", "association_revision", "expires_at", "authorization_epoch"})
+    if unknown_field then return nil, "resource resolution: " .. unknown_field end
+    local grant_id, workspace_id, name = bounds.id(object.grant_id), bounds.id(object.workspace_id), bounds.id(object.name)
+    local root_ref, association_id = bounds.id(object.root_ref), bounds.id(object.association_id)
+    local root_digest = bounds.text(object.root_digest, 64)
+    local directory = bounds.text(object.directory, bounds.MAX_TEXT_BYTES)
+    local subpath = bounds.subpath(object.subpath)
+    local access = bounds.member(object.access, {"read", "write"})
+    local purpose = bounds.member(object.purpose, types.PURPOSES)
+    local revision, epoch = bounds.integer(object.association_revision), bounds.integer(object.authorization_epoch)
+    local expires_at = bounds.timestamp(object.expires_at)
+    if grant_id == nil or workspace_id == nil or name == nil or root_ref == nil or association_id == nil
+        or root_digest == nil or directory == nil or subpath == nil or access == nil or purpose == nil
+        or revision == nil or epoch == nil or expires_at == nil then return nil, "resource resolution has invalid or missing fields" end
+    if #root_digest ~= 64 or not root_digest:match("^[0-9a-f]+$") then return nil, "resource resolution root_digest is invalid" end
+    if directory == "" or not directory:match("^/") then return nil, "resource resolution directory is invalid" end
+    if revision < 1 or epoch < 0 then return nil, "resource resolution revisions are invalid" end
+    local decoded_access: Access
+    if access == "read" then decoded_access = "read" else decoded_access = "write" end
+    return {grant_id = grant_id, root_ref = root_ref, root_digest = root_digest, subpath = subpath,
+        access = decoded_access, association_revision = revision, expires_at = expires_at}, nil
+end
 -- Resolves one grant through the resource authority for the owner this
 -- placement admitted; the reply's own code is the refusal.
 local function resolve_grant(request: types.LaunchRequest, grant: types.ResourceGrant): (Resolved?, Reply?)
     local raw, call_error = funcs.call(resources.RESOLVE, {grant_id = grant.grant_ref, subject = request.owner_id, audience = request.owner_id, attempt_id = request.attempt_id})
-    if call_error or type(raw) ~= "table" then return nil, fail("UNAVAILABLE", "resource authority did not answer for grant " .. grant.grant_ref) end
-    local reply = raw :: Reply
-    if not reply.ok then return nil, fail(reply.error and reply.error.code or "DENIED", "grant " .. grant.grant_ref .. ": " .. tostring(reply.error and reply.error.message)) end
-    local resolved = reply.value :: {[string]: unknown}
-    local access = tostring(resolved.access)
-    if grant.access == "write" and access ~= "write" then return nil, fail("FORBIDDEN", "grant " .. grant.grant_ref .. " allows " .. access .. " only") end
-    return {grant_id = grant.grant_ref, root_ref = tostring(resolved.root_ref), root_digest = tostring(resolved.root_digest), subpath = tostring(resolved.subpath),
-        access = grant.access, association_revision = math.floor(resolved.association_revision :: number), expires_at = tostring(resolved.expires_at)}, nil
+    if call_error then return nil, fail("UNAVAILABLE", "resource authority did not answer for grant " .. grant.grant_ref .. ": " .. tostring(call_error)) end
+    local reply, reply_error = decode_reply(raw)
+    if not reply then return nil, fail("UNAVAILABLE", "resource authority returned an invalid reply for grant " .. grant.grant_ref .. ": " .. tostring(reply_error)) end
+    if reply.ok == false then return nil, fail(reply.error.code, "grant " .. grant.grant_ref .. ": " .. reply.error.message) end
+    local resolved, decode_error = decode_resource_resolution(reply.value)
+    if not resolved then return nil, fail("UNAVAILABLE", "resource authority returned an invalid grant " .. grant.grant_ref .. ": " .. tostring(decode_error)) end
+    if resolved.grant_id ~= grant.grant_ref then return nil, fail("UNAVAILABLE", "resource authority returned another grant for " .. grant.grant_ref) end
+    if grant.access == "write" and resolved.access ~= "write" then return nil, fail("FORBIDDEN", "grant " .. grant.grant_ref .. " allows " .. resolved.access .. " only") end
+    return {grant_id = resolved.grant_id, root_ref = resolved.root_ref, root_digest = resolved.root_digest, subpath = resolved.subpath,
+        access = grant.access, association_revision = resolved.association_revision, expires_at = resolved.expires_at}, nil
 end
 -- In granted mode every grant is resolved and the caller's concrete root
 -- is replaced by the authority's; in host_configured mode the caller's root
 -- is checked against the host list. The host selects the mode.
 local function admit_resources(request: types.LaunchRequest): ({Resolved}?, Reply?)
-    local mode = resources.resource_mode()
+    local mode, mode_error, mode_code = resources.resource_mode()
+    if not mode then return nil, fail(mode_code or "UNAVAILABLE", "resource mode is unavailable: " .. tostring(mode_error)) end
     local resolved_list: {Resolved} = {}
     if mode == "granted" then
         for _, grant in ipairs(request.resources) do
@@ -146,11 +187,23 @@ end
 -- discard them on cleanup.
 local function check_projection(request: types.LaunchRequest, projection_id: string): (Reply?, string?, boolean?, string?, string?)
     local raw, call_error = funcs.call(resources.CREDENTIAL_CHECK, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id, attempt_id = request.attempt_id})
-    if call_error or type(raw) ~= "table" then return fail("UNAVAILABLE", "credential broker did not answer for projection " .. projection_id), nil end
-    local reply = raw :: Reply
-    if not reply.ok then return fail(reply.error and reply.error.code or "DENIED", "projection " .. projection_id .. ": " .. tostring(reply.error and reply.error.code)), nil end
+    if call_error then return fail("UNAVAILABLE", "credential broker did not answer for projection " .. projection_id .. ": " .. tostring(call_error)), nil end
+    local reply, reply_error = decode_reply(raw)
+    if not reply then return fail("UNAVAILABLE", "credential broker returned an invalid reply for projection " .. projection_id .. ": " .. tostring(reply_error)), nil end
+    if reply.ok == false then return fail(reply.error.code, "projection " .. projection_id .. ": " .. reply.error.code), nil end
     local projection = bounds.object(reply.value)
     if not projection then return fail("DENIED", "projection " .. projection_id .. " has invalid metadata"), nil end
+    local projection_fields = bounds.fields(projection, {"projection_id", "workspace_id", "name", "definition_id", "definition_revision", "issuer_owner", "issuer_incarnation", "subject", "audience", "attempt_id", "profile_id", "profile_digest", "binding_digest", "launch_policy_digest", "provider", "projection_kind", "destination", "materializer", "materialization_generation", "expires_at", "authorization_epoch", "format", "revoked_at", "created_at", "source_present"})
+    if projection_fields then return fail("DENIED", "projection " .. projection_id .. " has invalid metadata: " .. projection_fields), nil end
+    local returned_id, provider = bounds.id(projection.projection_id), bounds.id(projection.provider)
+    local definition_id = bounds.id(projection.definition_id)
+    local revision = bounds.integer(projection.definition_revision)
+    local projection_kind = bounds.member(projection.projection_kind, {"environment", "file"})
+    local format_object = bounds.object(projection.format)
+    if returned_id ~= projection_id or not provider or not definition_id or not revision or revision < 1 or not projection_kind or not format_object
+        or (projection.source_present ~= nil and type(projection.source_present) ~= "boolean") then
+        return fail("DENIED", "projection " .. projection_id .. " has invalid metadata"), nil
+    end
     if projection.projection_kind == "environment" then return nil, "environment" end
     if projection.projection_kind ~= "file" then return fail("DENIED", "projection " .. projection_id .. " has unsupported kind"), nil end
     local provider_home = request.launch.provider_home
@@ -158,7 +211,7 @@ local function check_projection(request: types.LaunchRequest, projection_id: str
     if (not request.session_ref or not request.launch.home_ref) and not private_home then
         return fail("DENIED", "file credential projections require a selected retained or declared private provider home"), nil
     end
-    local source, source_error = homes.decode_login_source({provider = projection.provider,
+    local source, source_error = homes.decode_login_source({provider = provider,
         definition_id = projection.definition_id, definition_revision = projection.definition_revision, format = projection.format})
     if not source or projection.destination ~= (source.path:match("[^/]+$") :: string) then
         return fail("DENIED", "projection " .. projection_id .. " has invalid file login metadata"), nil
@@ -171,19 +224,17 @@ end
 -- Checks the gateway binding an attempt holds under its attached carrier
 -- epoch; bindings, never bytes.
 local function check_gateway(row: store.Row, request: types.LaunchRequest): Reply?
-    local carrier_epoch = type(row.attachment_generation) == "number" and math.floor(row.attachment_generation :: number) or 0
+    local carrier_epoch = bounds.count(row.attachment_generation)
+    if not carrier_epoch then return fail("STORAGE", "attempt attachment generation is corrupt") end
     if carrier_epoch < 1 then return fail("DENIED", "gateway binding: the attempt is not attached to a carrier") end
     local raw, call_error = funcs.call(resources.GATEWAY_CHECK, {attempt_id = request.attempt_id, carrier_epoch = carrier_epoch})
-    if call_error or type(raw) ~= "table" then return fail("UNAVAILABLE", "the gateway did not answer for attempt " .. request.attempt_id) end
-    local reply = raw :: {[string]: unknown}
-    if reply.ok ~= true then
-        local reply_error = bounds.object(reply.error)
-        local reply_code = reply_error and type(reply_error.code) == "string" and reply_error.code or "DENIED"
-        local reply_message = reply_error and type(reply_error.message) == "string" and reply_error.message or "gateway refused"
-        return fail(reply_code, "gateway binding: " .. reply_message)
-    end
-    local checked = bounds.object(reply.value) or {}
-    if checked.valid ~= true then return fail("DENIED", "gateway binding: " .. tostring(checked.reason)) end
+    if call_error then return fail("UNAVAILABLE", "the gateway did not answer for attempt " .. request.attempt_id .. ": " .. tostring(call_error)) end
+    local reply, reply_error = decode_reply(raw)
+    if not reply then return fail("UNAVAILABLE", "the gateway returned an invalid reply for attempt " .. request.attempt_id .. ": " .. tostring(reply_error)) end
+    if reply.ok == false then return fail(reply.error.code, "gateway binding: " .. reply.error.message) end
+    local checked, checked_error = gateway_protocol.checked_binding(reply.value)
+    if not checked then return fail("UNAVAILABLE", "gateway returned invalid binding metadata: " .. tostring(checked_error)) end
+    if not checked.valid then return fail("DENIED", "gateway binding: " .. tostring(checked.reason or "binding is invalid")) end
     return nil
 end
 -- Retires the gateway bindings an attempt holds at or below its attached
@@ -197,12 +248,11 @@ local function retire_gateway(attempt: types.Attempt, why: string)
     db:release()
     if not request or not request.gateway or attempt.attachment_generation < 1 then return end
     local raw, call_error = funcs.call(resources.GATEWAY_REVOKE_ATTEMPT, {attempt_id = attempt.attempt_id, carrier_epoch = attempt.attachment_generation})
-    local reply = type(raw) == "table" and raw :: {[string]: unknown} or nil
     local detail = why .. "; bindings through carrier epoch " .. tostring(attempt.attachment_generation)
-    if call_error or not reply or reply.ok ~= true then
-        local reply_error = reply and bounds.object(reply.error)
-        local reply_code = reply_error and type(reply_error.code) == "string" and reply_error.code or nil
-        detail = detail .. " not revoked: " .. tostring(call_error or reply_code or "no answer")
+    local reply = not call_error and decode_reply(raw) or nil
+    if call_error or not reply or not reply.ok then
+        local refused = reply and not reply.ok and reply.error.code or nil
+        detail = detail .. " not revoked: " .. tostring(call_error or refused or "invalid reply")
         transition(attempt.attempt_id, {evidence = {kind = "gateway.revoke_failed", detail = detail}})
         return
     end
@@ -211,7 +261,9 @@ end
 -- Rechecks every recorded grant, projection and gateway binding of an
 -- attempt; nil means all still hold. The second value names what failed.
 local function recheck_grants(row: store.Row, request: types.LaunchRequest): (Reply?, string?)
-    if resources.resource_mode() == "granted" then
+    local mode, mode_error, mode_code = resources.resource_mode()
+    if not mode then return fail(mode_code or "UNAVAILABLE", "resource mode is unavailable: " .. tostring(mode_error)), "grant" end
+    if mode == "granted" then
         for _, grant in ipairs(request.resources) do
             local _, refused = resolve_grant(request, grant)
             if refused then return refused, "grant" end
@@ -475,9 +527,13 @@ function M.prepare(value: unknown): Reply
         return fail("STORAGE", existing_error)
     end
     if existing then
-        local attempt = store.attempt(db, existing.attempt_id :: string)
+        if existing.request_digest ~= digest then
+            db:release()
+            return fail("CONFLICT", "idempotency key reused with a different request")
+        end
+        local attempt, attempt_error = store.attempt(db, tostring(existing.attempt_id))
         db:release()
-        if existing.request_digest ~= digest then return fail("CONFLICT", "idempotency key reused with a different request") end
+        if attempt_error or not attempt then return fail("STORAGE", attempt_error or "attempt row is corrupt") end
         if attempt then attempt.notice = login_notice end
         return succeed(attempt)
     end
@@ -786,8 +842,17 @@ function M.sweep(): Reply
     end
     local live: {types.Attempt} = {}
     for _, row in ipairs(rows) do
-        local attempt = store.attempt(db, tostring(row.attempt_id))
-        if attempt then live[#live + 1] = attempt end
+        local attempt_id = bounds.id(row.attempt_id)
+        if not attempt_id then
+            db:release()
+            return fail("STORAGE", "live attempt identifier is corrupt")
+        end
+        local attempt, attempt_error = store.attempt(db, attempt_id)
+        if attempt_error or not attempt then
+            db:release()
+            return fail("STORAGE", attempt_error or "live attempt row is corrupt")
+        end
+        live[#live + 1] = attempt
     end
     db:release()
     local outcomes: {{attempt_id: string, ok: boolean, code: string?}} = {}
@@ -971,7 +1036,8 @@ end
 -- data, and no credential broker exists yet.
 function M.capabilities(): Reply
     local measured = capability.measure()
-    local mode = resources.resource_mode()
+    local mode, mode_error, mode_code = resources.resource_mode()
+    if not mode then return fail(mode_code or "UNAVAILABLE", "resource mode is unavailable: " .. tostring(mode_error)) end
     local measurement = executable.capabilities()
     return succeed({capability = measured.capability, exit_observation = measured.exit_observation, stdin_close = measured.stdin_close, detail = measured.detail,
         executable_measurement = {streaming = measurement.streaming, read_only_volume = measurement.read_only_volume, detail = measurement.detail},

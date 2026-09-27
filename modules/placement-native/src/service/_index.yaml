@@ -6,6 +6,7 @@ entries:
   source: file://executable.lua
   modules: [fs, hash]
   imports:
+    bounds: bee.threads.records:bounds
     resources: bee.placement.native:resources
     types: bee.placement:types
 - name: capability
@@ -60,6 +61,8 @@ entries:
     identity: bee.placement.native.service:identity
     protocol: bee.placement.native:protocol
     materialization: bee.placement.native.service:materialization
+    gateway_protocol: bee.gateway:protocol
+    service_reply: bee.protocol:reply
 - name: materialization
   kind: library.lua
   source: file://materialization.lua
@@ -72,6 +75,10 @@ entries:
     bounds: bee.threads.records:bounds
     configuration: bee.placement.native:configuration
     types: bee.placement:types
+    gateway_protocol: bee.gateway:protocol
+    credential_protocol: bee.credentials:protocol
+    service_reply: bee.protocol:reply
+    formats: bee.credentials:formats
 - name: runner
   kind: process.lua
   source: file://runner.lua

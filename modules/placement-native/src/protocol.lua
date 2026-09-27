@@ -2,6 +2,7 @@
 -- Output and input carry separate sequence spaces; acknowledgments name
 -- what they consumed or accepted; EOF and exit are separate from chunks.
 local M = {}
+local bounds = require("bounds")
 M.TOPIC_CONTROL = "bee.placement.control"
 M.TOPIC_INPUT = "bee.placement.input"
 M.TOPIC_ACK = "bee.placement.ack"
@@ -25,7 +26,8 @@ M.MAX_REMEMBERED_WRITES = 256
 type Control = {command: "stop", mode: "cooperative" | "forced", grace_ms: integer} | {command: "attach", recipient: string, generation: integer} | {command: "detach", generation: integer} | {command: "write_status", write_id: string} | {command: "status", attempt_id: string, probe: string} | {command: "close_stdin", attempt_id: string, probe: string}
 -- What the runner itself observes: supervision evidence, never exit or
 -- cleanup proof. The reply echoes the probe that asked.
-type RunnerStatus = {attempt_id: string, generation: integer, probe: string, execution: "starting" | "running" | "stopping" | "exited", exit_code: integer?, eof_seen: integer, pending_outputs: integer, remembered_writes: integer, truncated: boolean}
+type Execution = "starting" | "running" | "stopping" | "exited"
+type RunnerStatus = {attempt_id: string, generation: integer, probe: string, execution: Execution, exit_code: integer?, eof_seen: integer, pending_outputs: integer, remembered_writes: integer, truncated: boolean}
 type StatusProbe = {runner: string, attempt_id: string, generation: integer, probe: string}
 -- The runner's answer to the owner's stdin closure after settlement:
 -- closed, or why not; evidence carries the same fact.
@@ -46,22 +48,57 @@ type Exit = {attempt_id: string, generation: integer, code: integer?, signal: in
 -- probe it sent; anything else is unauthenticated traffic.
 function M.stdin_reply_accepted(sender: string, reply: unknown, expected: StatusProbe): (StdinReply?, string?)
     if sender ~= expected.runner then return nil, "reply from " .. sender .. ", not the recorded runner" end
-    if type(reply) ~= "table" then return nil, "reply is not an object" end
-    local answer = reply :: StdinReply
-    if answer.attempt_id ~= expected.attempt_id then return nil, "reply names another attempt" end
-    if answer.generation ~= expected.generation then return nil, "reply names generation " .. tostring(answer.generation) .. ", not " .. tostring(expected.generation) end
-    if answer.probe ~= expected.probe then return nil, "reply answers another probe" end
-    if type(answer.closed) ~= "boolean" then return nil, "reply does not say whether stdin closed" end
-    return answer, nil
+    local object = bounds.object(reply)
+    if not object then return nil, "reply is not an object" end
+    local unknown_field = bounds.fields(object, {"attempt_id", "generation", "probe", "closed", "reason"})
+    if unknown_field then return nil, "reply: " .. unknown_field end
+    local attempt_id, generation, probe = bounds.id(object.attempt_id), bounds.integer(object.generation), bounds.id(object.probe)
+    if attempt_id == nil or generation == nil or probe == nil then return nil, "reply identity is invalid" end
+    if attempt_id ~= expected.attempt_id then return nil, "reply names another attempt" end
+    if generation ~= expected.generation then return nil, "reply names another generation" end
+    if probe ~= expected.probe then return nil, "reply answers another probe" end
+    local closed = object.closed
+    if type(closed) ~= "boolean" then return nil, "reply does not say whether stdin closed" end
+    local reason: string? = nil
+    if object.reason ~= nil then
+        reason = bounds.text(object.reason, 4096)
+        if not reason then return nil, "reply reason is invalid" end
+    end
+    if closed == true and reason ~= nil then return nil, "closed reply carries a reason" end
+    if closed == false and (not reason or reason == "") then return nil, "refused reply has no reason" end
+    return {attempt_id = attempt_id, generation = generation, probe = probe, closed = closed, reason = reason}, nil
 end
 function M.status_reply_accepted(sender: string, reply: unknown, expected: StatusProbe): (RunnerStatus?, string?)
     if sender ~= expected.runner then return nil, "reply from " .. sender .. ", not the recorded runner" end
-    if type(reply) ~= "table" then return nil, "reply is not an object" end
-    local status = reply :: RunnerStatus
-    if status.attempt_id ~= expected.attempt_id then return nil, "reply names another attempt" end
-    if status.generation ~= expected.generation then return nil, "reply names generation " .. tostring(status.generation) .. ", not " .. tostring(expected.generation) end
-    if status.probe ~= expected.probe then return nil, "reply answers another probe" end
-    if status.execution ~= "starting" and status.execution ~= "running" and status.execution ~= "stopping" and status.execution ~= "exited" then return nil, "reply reports an unknown execution" end
-    return status, nil
+    local object = bounds.object(reply)
+    if not object then return nil, "reply is not an object" end
+    local unknown_field = bounds.fields(object, {"attempt_id", "generation", "probe", "execution", "exit_code", "eof_seen", "pending_outputs", "remembered_writes", "truncated"})
+    if unknown_field then return nil, "reply: " .. unknown_field end
+    local attempt_id, generation, probe = bounds.id(object.attempt_id), bounds.integer(object.generation), bounds.id(object.probe)
+    if attempt_id == nil or generation == nil or probe == nil then return nil, "reply identity is invalid" end
+    if attempt_id ~= expected.attempt_id then return nil, "reply names another attempt" end
+    if generation ~= expected.generation then return nil, "reply names another generation" end
+    if probe ~= expected.probe then return nil, "reply answers another probe" end
+    local execution: Execution? = nil
+    if object.execution == "starting" then execution = "starting"
+    elseif object.execution == "running" then execution = "running"
+    elseif object.execution == "stopping" then execution = "stopping"
+    elseif object.execution == "exited" then execution = "exited" end
+    if execution == nil then return nil, "reply reports an unknown execution" end
+    local exit_code: integer? = nil
+    if object.exit_code ~= nil then
+        exit_code = bounds.integer(object.exit_code)
+        if exit_code == nil then return nil, "reply exit_code is invalid" end
+    end
+    local eof_seen = bounds.count(object.eof_seen)
+    local pending_outputs = bounds.count(object.pending_outputs)
+    local remembered_writes = bounds.count(object.remembered_writes)
+    if eof_seen == nil or pending_outputs == nil or remembered_writes == nil then return nil, "reply counters are outside their bounds" end
+    if eof_seen > 2 or pending_outputs > M.MAX_OUTSTANDING_CHUNKS or remembered_writes > M.MAX_REMEMBERED_WRITES then
+        return nil, "reply counters are outside their bounds"
+    end
+    if type(object.truncated) ~= "boolean" then return nil, "reply truncated flag is invalid" end
+    return {attempt_id = attempt_id, generation = generation, probe = probe, execution = execution, exit_code = exit_code,
+        eof_seen = eof_seen, pending_outputs = pending_outputs, remembered_writes = remembered_writes, truncated = object.truncated}, nil
 end
 return M

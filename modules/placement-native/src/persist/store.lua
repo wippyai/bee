@@ -12,6 +12,7 @@ local types = require("types")
 local transitions = require("transitions")
 local request_protocol = require("request_protocol")
 local configuration = require("configuration")
+local bounds = require("bounds")
 local M = {}
 M.LEDGER = {table = "bee_placement_schema_migrations", label = "placement"}
 M.MAX_EVIDENCE_PAGE = 64
@@ -35,37 +36,75 @@ function M.open(): (sql.DB?, string?)
     if not resource then return nil, resource_error end
     return persist.open({resource = resource, ledger = M.LEDGER, migrations = migrations.all()})
 end
-local function integer(value: unknown): integer?
-    if type(value) ~= "number" then return nil end
-    return math.floor(value)
-end
+local integer = bounds.integer
 local function text(value: unknown): string?
     if type(value) ~= "string" then return nil end
     return value
 end
-local function state_of(value: unknown, fallback: string): string
-    return text(value) or fallback
-end
-local function project(row: Row): types.Attempt
-    local execution = state_of(row.execution_state, "uncertain") :: types.ExecutionState
-    local cleanup = state_of(row.cleanup_state, "uncertain") :: types.CleanupState
-    local capability = state_of(row.capability, "direct_process") :: types.Capability
-    local required = state_of(row.required_cleanup, "direct_process") :: types.Capability
-    local observation = state_of(row.exit_observation, "eof_gated") :: types.ExitObservation
-    local exit: types.Exit? = nil
+local function project(row: Row): (types.Attempt?, string?)
+    local attempt_id, action_id, owner_id = bounds.id(row.attempt_id), bounds.id(row.action_id), bounds.id(row.owner_id)
+    local request_digest = bounds.text(row.request_digest, 64)
+    local execution_text = bounds.member(row.execution_state, {"intended", "starting", "running", "stopping", "exited", "uncertain"})
+    local cleanup_text = bounds.member(row.cleanup_state, {"pending", "complete", "uncertain"})
+    local capability_text = bounds.member(row.capability, {"direct_process", "process_group", "contained_tree"})
+    local required_text = bounds.member(row.required_cleanup, {"direct_process", "process_group", "contained_tree"})
+    local observation_text = bounds.member(row.exit_observation, {"independent", "eof_gated"})
+    local execution: types.ExecutionState? = nil
+    if execution_text == "intended" then execution = "intended"
+    elseif execution_text == "starting" then execution = "starting"
+    elseif execution_text == "running" then execution = "running"
+    elseif execution_text == "stopping" then execution = "stopping"
+    elseif execution_text == "exited" then execution = "exited"
+    elseif execution_text == "uncertain" then execution = "uncertain" end
+    local cleanup: types.CleanupState? = nil
+    if cleanup_text == "pending" then cleanup = "pending"
+    elseif cleanup_text == "complete" then cleanup = "complete"
+    elseif cleanup_text == "uncertain" then cleanup = "uncertain" end
+    local capability: types.Capability? = nil
+    if capability_text == "direct_process" then capability = "direct_process"
+    elseif capability_text == "process_group" then capability = "process_group"
+    elseif capability_text == "contained_tree" then capability = "contained_tree" end
+    local required: types.Capability? = nil
+    if required_text == "direct_process" then required = "direct_process"
+    elseif required_text == "process_group" then required = "process_group"
+    elseif required_text == "contained_tree" then required = "contained_tree" end
+    local observation: types.ExitObservation? = nil
+    if observation_text == "independent" then observation = "independent"
+    elseif observation_text == "eof_gated" then observation = "eof_gated" end
     local code, signal = integer(row.exit_code), integer(row.exit_signal)
+    local owner_incarnation, attachment_generation, evidence_count =
+        integer(row.owner_incarnation), integer(row.attachment_generation), integer(row.evidence_count)
+    local request_digest_valid = request_digest ~= nil and #request_digest == 64 and request_digest:match("^[0-9a-f]+$") ~= nil
+    local created_at, updated_at = bounds.timestamp(row.created_at), bounds.timestamp(row.updated_at)
+    local exit_source: string? = nil
+    if row.exit_source ~= nil then exit_source = bounds.id(row.exit_source) end
+    local session_ref: string? = nil
+    if row.session_ref ~= nil then session_ref = bounds.id(row.session_ref) end
+    local runner: string? = nil
+    if row.runner_pid ~= nil then runner = bounds.id(row.runner_pid) end
+    local home_key: string? = nil
+    if row.home_key ~= nil then home_key = bounds.id(row.home_key) end
+    if not attempt_id or not action_id or not owner_id or not request_digest_valid or not execution or not cleanup or not capability or not required
+        or not observation or not created_at or not updated_at or (row.exit_source ~= nil and not exit_source)
+        or (row.session_ref ~= nil and not session_ref) or (row.runner_pid ~= nil and not runner) or (row.home_key ~= nil and not home_key) then
+        return nil, "attempt identity, state or timestamp fields are corrupt"
+    end
+    if not owner_incarnation or owner_incarnation < 1 or not attachment_generation or attachment_generation < 0
+        or not evidence_count or evidence_count < 0 then return nil, "attempt integer fields are corrupt" end
+    if (row.exit_code ~= nil and code == nil) or (row.exit_signal ~= nil and signal == nil) then return nil, "attempt exit status is corrupt" end
+    local exit: types.Exit? = nil
     if code ~= nil or signal ~= nil then exit = {code = code, signal = signal} end
     local home: string? = nil
-    if text(row.home_key) then home = "home:" .. (text(row.home_key) :: string) end
+    if home_key then home = "home:" .. home_key end
     return {
-        attempt_id = text(row.attempt_id) or "", action_id = text(row.action_id) or "", owner_id = text(row.owner_id) or "",
-        owner_incarnation = integer(row.owner_incarnation) or 0, request_digest = text(row.request_digest) or "",
+        attempt_id = attempt_id, action_id = action_id, owner_id = owner_id,
+        owner_incarnation = owner_incarnation, request_digest = text(row.request_digest) or "",
         execution_state = execution, cleanup_state = cleanup, capability = capability, required_cleanup = required,
-        exit_observation = observation, exit_source = text(row.exit_source),
-        attachment_generation = integer(row.attachment_generation) or 0, exit = exit, session_ref = text(row.session_ref),
-        home_ref = home, runner = text(row.runner_pid), evidence_count = integer(row.evidence_count) or 0,
-        created_at = text(row.created_at) or "", updated_at = text(row.updated_at) or "",
-    }
+        exit_observation = observation, exit_source = exit_source,
+        attachment_generation = attachment_generation, exit = exit, session_ref = text(row.session_ref),
+        home_ref = home, runner = runner, evidence_count = evidence_count,
+        created_at = created_at, updated_at = updated_at,
+    }, nil
 end
 -- The full row, for the runner and the service; never returned to callers.
 function M.row(db: sql.DB, attempt_id: string): (Row?, string?)
@@ -78,7 +117,7 @@ function M.attempt(db: sql.DB, attempt_id: string): (types.Attempt?, string?)
     local row, err = M.row(db, attempt_id)
     if err then return nil, err end
     if not row then return nil, nil end
-    return project(row), nil
+    return project(row)
 end
 function M.by_key(db: sql.DB, owner_id: string, key: string): (Row?, string?)
     local rows, err = db:query("SELECT * FROM bee_placement_attempts WHERE owner_id = ? AND idempotency_key = ?", {owner_id, key})
@@ -255,7 +294,11 @@ function M.transition(db: sql.DB, attempt_id: string, update: Update): Result
     local row = rows[1] :: Row
     local execution = state_of(row.execution_state, "uncertain") :: types.ExecutionState
     local cleanup = state_of(row.cleanup_state, "uncertain") :: types.CleanupState
-    local count = integer(row.evidence_count) or 0
+    local count = integer(row.evidence_count)
+    if not count or count < 0 then
+        rollback(tx)
+        return {ok = false, code = "STORAGE", message = "attempt evidence count is corrupt"}
+    end
     if update.expected_execution and execution ~= update.expected_execution then
         rollback(tx)
         return {ok = false, code = "CONFLICT", message = "execution " .. execution .. " is not the expected " .. update.expected_execution}
@@ -301,7 +344,10 @@ function M.transition(db: sql.DB, attempt_id: string, update: Update): Result
         rollback(tx)
         return {ok = false, code = "STORAGE", message = "commit transition"}
     end
-    local attempt = M.attempt(db, attempt_id)
+    local attempt, attempt_error = M.attempt(db, attempt_id)
+    if attempt_error or not attempt then
+        return {ok = false, code = "STORAGE", message = attempt_error or "read transitioned attempt"}
+    end
     return {ok = true, attempt = attempt}
 end
 function M.evidence(db: sql.DB, attempt_id: string, after: integer, limit: integer): (types.EvidencePage?, string?)
@@ -317,7 +363,9 @@ function M.evidence(db: sql.DB, attempt_id: string, after: integer, limit: integ
             next_after = list[#list].sequence
             break
         end
-        list[index] = {sequence = integer(row.sequence) or 0, at = text(row.at) or "", kind = text(row.kind) or "", detail = text(row.detail) or ""}
+        local sequence, at, kind, detail = integer(row.sequence), text(row.at), text(row.kind), text(row.detail)
+        if not sequence or sequence < 1 or not at or not kind or not detail then return nil, "evidence row is corrupt" end
+        list[index] = {sequence = sequence, at = at, kind = kind, detail = detail}
     end
     return {attempt_id = attempt_id, evidence = list, next_after = next_after}, nil
 end

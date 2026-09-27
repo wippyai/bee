@@ -45,6 +45,12 @@ entries:
   source: file://transitions.lua
   imports:
     types: bee.placement:types
+- name: decode
+  kind: library.lua
+  source: file://decode.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.placement:types
 - name: placement
   kind: contract.definition
   meta:

@@ -6,6 +6,11 @@ entries:
   source: file://bounds.lua
   imports:
     clock: bee:clock
+- name: reply
+  kind: library.lua
+  source: file://reply.lua
+  imports:
+    bounds: bee.protocol:bounds
 - name: canonical
   kind: library.lua
   source: file://canonical.lua

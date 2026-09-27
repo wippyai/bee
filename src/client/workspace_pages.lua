@@ -84,7 +84,7 @@ function M.complete(reader: Reader, pending: Pending): (Page?, string?)
     if not page then return nil, "the workspace catalog answered a malformed page" end
     return page, nil
 end
-function M.close(reader: Reader)
+function M.close(reader: Reader): ()
     local pending = reader.pending
     reader.pending = nil
     if pending then pending.future:cancel() end

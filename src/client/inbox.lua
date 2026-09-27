@@ -3,6 +3,8 @@ local layout = require("layout")
 local questions = require("questions")
 local interaction = require("interaction")
 type Pending = {tab_id: string, id: string, instance_id: string}
+type Selection = {version: integer, workspace_id: string, connection_id: string, revision: integer, targets: {questions.Target}}
+type Answer = {version: integer, workspace_id: string, connection_id: string, selection_revision: integer} & interaction.Response
 type State = {workspace_id: string, connection_id: string, selection_revision: integer,
     question_revision: integer, signature: string?, targets: {layout.Target},
     items: {interaction.Wire}, pending: {[string]: Pending}}
@@ -30,7 +32,7 @@ function M.select(state: State, targets: {layout.Target}): boolean
     state.items, state.pending = {}, {}
     return true
 end
-function M.selection(state: State)
+function M.selection(state: State): Selection
     local targets: {questions.Target} = {}
     for _, target in ipairs(state.targets) do targets[#targets + 1] = {id = target.view_id, instance_id = target.instance_id} end
     return {version = 1, workspace_id = state.workspace_id, connection_id = state.connection_id,
@@ -56,7 +58,7 @@ function M.observe(state: State, data: unknown): boolean
     state.question_revision, state.items, state.pending = snapshot.revision, items, retained
     return true
 end
-function M.answer(state: State, data: unknown)
+function M.answer(state: State, data: unknown): Answer?
     local response = interaction.response(data)
     if not response or state.pending[response.request_id] then return nil end
     local found = false

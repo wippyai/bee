@@ -118,7 +118,7 @@ function M.panel(width: integer, height: integer): Panel
     return {x = x, y = 2, width = w, height = h, capacity = math.floor(math.max(0, h - 6))}
 end
 function M.available(width: integer, height: integer): boolean return width >= 24 and height >= 8 end
-function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, menu: Menu)
+function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, menu: Menu): ()
     if not M.available(width, height) then return end
     local theme = appearance.theme(preferences.theme)
     local normal = appearance.style(theme.text, theme.surface)

@@ -58,7 +58,7 @@ function M.select(state: State, connection_id: string, data: unknown): boolean
     state.selections[connection_id] = selection
     return true
 end
-function M.forget(state: State, connection_id: string)
+function M.forget(state: State, connection_id: string): ()
     state.selections[connection_id] = nil
 end
 function M.update(state: State, data: unknown): boolean
@@ -102,7 +102,7 @@ function M.answer(state: State, connection_id: string, data: unknown): (interact
 end
 -- A successful send only dispatches an answer. Broker publication establishes
 -- retirement; disconnecting or replacing a renderer cannot answer a question.
-function M.dispatched(state: State, response: interaction.Response)
+function M.dispatched(state: State, response: interaction.Response): ()
     state.dispatched[response.request_id] = true
 end
 return M

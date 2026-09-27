@@ -99,11 +99,11 @@ function M.request_replace(state: State, sender: string, data: unknown): boolean
     end
     return false
 end
-function M.host_replacing(state: State)
+function M.host_replacing(state: State): ()
     state.host_replacing, state.replacement_ready = true, false
     for _, child in pairs(state.children) do child.host_replacing = true end
 end
-function M.host_replaced(state: State, host: string, route: string)
+function M.host_replaced(state: State, host: string, route: string): ()
     state.host, state.route, state.replacement_ready = host, route, true
     for _, child in pairs(state.children) do
         desktops.rehost(child.resource, host)
@@ -112,7 +112,7 @@ function M.host_replaced(state: State, host: string, route: string)
     end
     state.host_replacing = false
 end
-function M.host_upgraded(state: State)
+function M.host_upgraded(state: State): ()
     state.host_replacing, state.replacement_ready = false, false
     for _, child in pairs(state.children) do
         child.host_replacing = false
@@ -158,7 +158,7 @@ function M.new(owner: string, host: string, route: string, workspace_id: string,
 end
 -- The initial display discovers the default store identity during bootstrap.
 -- After readiness it follows the same lifetime as every other retained display.
-function M.adopt(state: State, id: string, resource: desktops.Desktop, connection: string)
+function M.adopt(state: State, id: string, resource: desktops.Desktop, connection: string): ()
     if id ~= state.default_id or state.children[id] or connection == "" then
         error("Invalid initial retained display adoption")
     end
@@ -167,7 +167,7 @@ function M.adopt(state: State, id: string, resource: desktops.Desktop, connectio
 end
 -- The caller authenticates state.owner before this decoder. The record must
 -- already exist: the child opens that exact identity and never allocates a new one.
-function M.activate(state: State, value: unknown)
+function M.activate(state: State, value: unknown): ()
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= state.workspace_id then return end
     for key in pairs(value) do
         if key ~= "version" and key ~= "workspace_id" and key ~= "desktop_id" and key ~= "request_id" then return end
@@ -334,7 +334,7 @@ function M.switch(state: State, sender: string, value: unknown): boolean
     return false
 end
 -- The bridge's answer reaches the display that asked.
-function M.switched(state: State, value: unknown)
+function M.switched(state: State, value: unknown): ()
     local result = retained_protocol.switch_result(value, state.workspace_id)
     if not result then return end
     local child = state.children[result.desktop_id]
@@ -342,7 +342,7 @@ function M.switched(state: State, value: unknown)
     send(child.resource.pid, retained_protocol.TOPIC_SWITCHED, {version = 1, workspace_id = state.workspace_id, desktop_id = result.desktop_id,
         request_id = result.request_id, error_code = result.error_code, error = result.error})
 end
-function M.event(state: State, event: process.Event)
+function M.event(state: State, event: process.Event): ()
     if event.kind ~= process.event.EXIT and event.kind ~= process.event.LINK_DOWN then return end
     local sender = tostring(event.from)
     local revoked = false
@@ -373,7 +373,7 @@ function M.event(state: State, event: process.Event)
         if not held then process.unmonitor(sender) end
     end
 end
-function M.close(state: State)
+function M.close(state: State): ()
     for _, child in pairs(state.children) do process.terminate(child.resource.pid) end
 end
 return M

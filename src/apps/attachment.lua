@@ -11,8 +11,7 @@ end
 
 -- Native mounts bind authority to an exact execution PID. A failed revocation
 -- retains the old record; successful revocation precedes issuing any new grant.
-function M.replace(value: unknown, previous: Record?, recipient: string): Result
-    local view: tty.Viewport = value :: tty.Viewport
+function M.replace(view: tty.Viewport, previous: Record?, recipient: string): Result
     if previous then
         local _, err = view:revoke(previous.mount)
         if err then return {attachment = previous, error_code = "revoke_failed", error = tostring(err)} end
@@ -23,8 +22,7 @@ function M.replace(value: unknown, previous: Record?, recipient: string): Result
     return {attachment = {recipient = recipient, mount = mount}, error_code = "", error = ""}
 end
 
-function M.remove_recipient(value: unknown, previous: Record?, recipient: string): Result
-    local view: tty.Viewport = value :: tty.Viewport
+function M.remove_recipient(view: tty.Viewport, previous: Record?, recipient: string): Result
     if not previous or previous.recipient ~= recipient then
         return {attachment = previous, error_code = "", error = ""}
     end
@@ -32,8 +30,7 @@ function M.remove_recipient(value: unknown, previous: Record?, recipient: string
 end
 
 -- Keep failed revocations owned so detach can retry; never revoke the controller.
-function M.observe(value: unknown, observers: {[string]: string}, recipient: string): ObserverResult
-    local view: tty.Viewport = value :: tty.Viewport
+function M.observe(view: tty.Viewport, observers: {[string]: string}, recipient: string): ObserverResult
     if recipient == "" then return {mount = "", error_code = "invalid_argument", error = "Observer recipient required"} end
     local previous = observers[recipient]
     if previous then
@@ -51,8 +48,7 @@ function M.observe(value: unknown, observers: {[string]: string}, recipient: str
     return {mount = mount, error_code = "", error = ""}
 end
 
-function M.remove_observer(value: unknown, observers: {[string]: string}, recipient: string): (boolean, string?)
-    local view: tty.Viewport = value :: tty.Viewport
+function M.remove_observer(view: tty.Viewport, observers: {[string]: string}, recipient: string): (boolean, string?)
     local mount = observers[recipient]
     if not mount then return true, nil end
     local _, err = view:revoke(mount)

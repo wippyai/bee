@@ -78,7 +78,7 @@ local function start(state: State, executor: funcs.Executor, sender: string, cal
         page = page, page_response = page and page:response() :: Channel<unknown> or nil}
     return true
 end
-function M.list(state: State, executor: funcs.Executor, sender: string, call: types.Call, query: Query, due: integer)
+function M.list(state: State, executor: funcs.Executor, sender: string, call: types.Call, query: Query, due: integer): ()
     local current = state.pending
     if current then
         if not current.desktop_id and current.key == query_key(query) and #current.listeners < MAX_LISTENERS then
@@ -89,7 +89,7 @@ function M.list(state: State, executor: funcs.Executor, sender: string, call: ty
     end
     start(state, executor, sender, call, nil, query, due)
 end
-function M.allocate(state: State, executor: funcs.Executor, sender: string, call: types.Call, desktop_id: string, due: integer)
+function M.allocate(state: State, executor: funcs.Executor, sender: string, call: types.Call, desktop_id: string, due: integer): ()
     if state.pending then busy(sender, call); return end
     start(state, executor, sender, call, desktop_id, nil, due)
 end
@@ -201,7 +201,7 @@ local function settle(state: State, listing: Listing, now: integer)
     for _, listener in ipairs(pending.listeners) do reply_to(listener.recipient, listener.call, listener.due) end
 end
 -- One future of the pending operation completed.
-function M.result(state: State, selected: unknown, listing: Listing, now: integer)
+function M.result(state: State, selected: unknown, listing: Listing, now: integer): ()
     local pending = state.pending
     if not pending then return end
     if selected == pending.identities_response then
@@ -235,7 +235,7 @@ function M.handles(state: State, selected: unknown): boolean
 end
 -- A stopping owner revokes the pending read or allocation.
 -- Clear before replying so a late result cannot expose data.
-function M.revoke(state: State, message: string)
+function M.revoke(state: State, message: string): ()
     local pending = state.pending
     if not pending then return end
     state.pending = nil
@@ -246,7 +246,7 @@ function M.revoke(state: State, message: string)
         answer(listener.recipient, types.reply_error(listener.call.request_id, types.fault("DENIED", message)))
     end
 end
-function M.tick(state: State, now: integer)
+function M.tick(state: State, now: integer): ()
     local pending = state.pending
     if not pending then return end
     if now >= pending.due then

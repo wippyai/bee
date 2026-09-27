@@ -79,14 +79,14 @@ function M.acquire(state: State, workspace_id: string, lease: string, holder: st
     return {kind = "start", evict = nil}
 end
 
-function M.started(state: State, workspace_id: string, pid: string)
+function M.started(state: State, workspace_id: string, pid: string): ()
     local host = state.hosts[workspace_id]
     if host then host.pid = pid end
 end
 -- Keep live leases and attached holders while a failed code handoff replaces
 -- the host. Old client routes belonged to the departed host and cannot be
 -- forwarded to the new one until each holder admits its desktop again.
-function M.replacing(state: State, workspace_id: string)
+function M.replacing(state: State, workspace_id: string): ()
     local host = state.hosts[workspace_id]
     if not host then return end
     host.phase, host.pid, host.idle_at = "starting", "", nil
@@ -95,7 +95,7 @@ end
 
 -- The host announced readiness. A host whose every lease ended while it
 -- started begins its idle period now.
-function M.ready(state: State, workspace_id: string, now: number)
+function M.ready(state: State, workspace_id: string, now: number): ()
     local host = state.hosts[workspace_id]
     if not host or host.phase ~= "starting" then return end
     host.phase = "ready"
@@ -141,7 +141,7 @@ function M.release(state: State, lease: string, now: number): string?
 end
 
 -- Every lease a holder held ends when the holder exits.
-function M.holder_exited(state: State, holder: string, now: number)
+function M.holder_exited(state: State, holder: string, now: number): ()
     local ended: {string} = {}
     for _, host in pairs(state.hosts) do
         for lease, owner in pairs(host.leases) do
@@ -184,7 +184,7 @@ function M.next_deadline(state: State): number?
 end
 
 -- The host is gone: stopped, failed to start or exited. Its leases end.
-function M.gone(state: State, workspace_id: string)
+function M.gone(state: State, workspace_id: string): ()
     local host = state.hosts[workspace_id]
     if not host then return end
     for lease in pairs(host.leases) do state.leases[lease] = nil end
@@ -195,7 +195,7 @@ end
 -- A stop the host refused leaves it serving. It is neither stopped when idle
 -- nor evicted until a new lease on it ends, so a refused stop is never
 -- retried blindly.
-function M.stop_refused(state: State, workspace_id: string)
+function M.stop_refused(state: State, workspace_id: string): ()
     local host = state.hosts[workspace_id]
     if host and host.phase == "stopping" then
         host.phase = "ready"

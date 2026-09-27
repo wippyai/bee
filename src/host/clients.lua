@@ -45,7 +45,7 @@ function M.new(owner: string, broker: string, workspace_id: string, assignments:
         appearance_routes = {}, assignment_revision = 0}
 end
 function M.resume(state: State, admitted: {[string]: clients.Client}, count: integer,
-    assignment_revision: integer, current: inventory.State, question_state: questions.State)
+    assignment_revision: integer, current: inventory.State, question_state: questions.State): ()
     state.admitted, state.count = admitted, count
     state.assignment_revision, state.inventory = assignment_revision, current
     state.questions = question_state
@@ -61,7 +61,7 @@ function M.assignment_access(
         claim = function(_: Assignments, value: unknown): (Assignment?, string?) return claim(value) end,
     }
 end
-function M.assignments(state: State)
+function M.assignments(state: State): ()
     local entries, read_error = state.assignments:reconcile()
     if read_error or not entries then error("Reconcile display assignments: " .. tostring(read_error)) end
     state.assignment_revision = state.assignment_revision + 1
@@ -133,16 +133,16 @@ local function send_questions(state: State, client: clients.Client)
     local snapshot = questions.snapshot(state.questions, client.connection_id)
     if snapshot and not process.send(client.recipient, "bee.host.questions", snapshot) then detach(state, client, "") end
 end
-function M.questions(state: State, data: unknown)
+function M.questions(state: State, data: unknown): ()
     if not questions.update(state.questions, data) then error("Invalid broker question snapshot") end
     for _, client in pairs(state.admitted) do send_questions(state, client) end
 end
-function M.selection(state: State, caller: string, data: unknown)
+function M.selection(state: State, caller: string, data: unknown): ()
     local client = state.admitted[caller]
     if not client or client.detaching or not client.permissions.control then return end
     if questions.select(state.questions, client.connection_id, data) then send_questions(state, client) end
 end
-function M.answer(state: State, caller: string, data: unknown)
+function M.answer(state: State, caller: string, data: unknown): ()
     local client = state.admitted[caller]
     if not client or client.detaching then return end
     local response = interaction.response(data)
@@ -274,7 +274,7 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
     result(state, control.request_id, control.op, control.recipient, client and client.connection_id or "", code, failure)
     return joined_recipient
 end
-function M.publish(state: State, value: inventory.State, kind: "catalog" | "views", recipient: string?)
+function M.publish(state: State, value: inventory.State, kind: "catalog" | "views", recipient: string?): ()
     if value.workspace_id ~= state.workspace_id then error("Foreign workspace inventory") end
     state.inventory = value
     for _, client in pairs(state.admitted) do
@@ -289,7 +289,7 @@ function M.publish(state: State, value: inventory.State, kind: "catalog" | "view
         end
     end
 end
-function M.broker_replaced(state: State, broker: string)
+function M.broker_replaced(state: State, broker: string): ()
     for _, client in pairs(state.admitted) do
         if not client.detaching then
             process.send(client.recipient, "bee.host.broker_replaced", {version = 1, schema = 1,
@@ -634,7 +634,7 @@ function M.reply(state: State, reply: contract.Reply, current: inventory.State):
     end
     return true
 end
-function M.exited(state: State, pid: string)
+function M.exited(state: State, pid: string): ()
     local client = state.admitted[pid]
     if client then detach(state, client, ""); return end
     for _, item in pairs(state.admitted) do

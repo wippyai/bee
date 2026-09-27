@@ -312,7 +312,7 @@ local function present(handle: Handle)
     if failure then error(failure) end
 end
 
-function M.command(node_id: unknown, execution: unknown, workspace_id: unknown, desktop_id: unknown)
+function M.command(node_id: unknown, execution: unknown, workspace_id: unknown, desktop_id: unknown): ()
     local target, target_error = M.target(node_id, execution, workspace_id, desktop_id, nil)
     if not target then error(target_error or "Invalid bee-display arguments") end
     local handle, open_error = M.open(target)

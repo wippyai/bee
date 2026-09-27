@@ -507,7 +507,6 @@ function M.visible(scene: Scene): {Window}
     if fullscreen_index ~= nil then
         result[#result + 1] = copy_window(scene.windows[fullscreen_index])
         -- Ordinary floating apps cannot obscure a focused fullscreen app.
-        -- Dialog/modal layering will be explicit when that capability is added.
         if scene.windows[fullscreen_index].id == scene.focus then return result end
     end
 

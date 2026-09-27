@@ -33,7 +33,7 @@ function M.observe(info: Info, value: unknown): boolean
     return true
 end
 function M.switchable(info: Info): boolean return info.switchable end
-function M.toggle_details(info: Info)
+function M.toggle_details(info: Info): ()
     info.details = not info.details
 end
 type Geometry = {left: integer, size: integer, rows: integer}
@@ -55,7 +55,7 @@ function M.details_hit(width: integer, height: integer, info: Info, x: integer, 
     return details_available(height) and M.contains(width, height, info, x, y)
         and y == rows and x >= left + 2 and x < left + 15
 end
-function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, info: Info, ready: boolean)
+function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, info: Info, ready: boolean): ()
     if not M.available(width, height) then return end
     local theme = appearance.theme(preferences.theme)
     local rect = geometry(width, height, info.details)

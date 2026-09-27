@@ -45,7 +45,7 @@ end
 -- terminated. EXIT events alone decide completion; stop returns once every
 -- pid has one. Missing authority to cancel or terminate is a defect of the
 -- caller's policy and raises.
-function M.stop(pids: {string}, events: Channel<process.Event>, grace: string)
+function M.stop(pids: {string}, events: Channel<process.Event>, grace: string): ()
     local live: {[string]: boolean} = {}
     local remaining = 0
     for _, pid in ipairs(pids) do

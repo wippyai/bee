@@ -200,7 +200,7 @@ function M.respond(state: State, panel: Panel, items: {Item}, event: unknown): R
     end
     return {state = next_state, action = action, close = close}
 end
-function M.draw(canvas: tty.Canvas, panel: Panel, state: State, items: {Item}, preferences: appearance.Preferences)
+function M.draw(canvas: tty.Canvas, panel: Panel, state: State, items: {Item}, preferences: appearance.Preferences): ()
     local theme = appearance.theme(preferences.theme)
     local normal = appearance.style(theme.text, theme.surface)
     local border = appearance.style(theme.border, theme.surface)

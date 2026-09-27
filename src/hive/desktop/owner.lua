@@ -275,7 +275,7 @@ function M.serves(state: State, workspace_id: string): boolean
     local served = state.workspaces[workspace_id]
     return served ~= nil and served.ready
 end
-function M.ready(state: State, message: process.Message, now: integer)
+function M.ready(state: State, message: process.Message, now: integer): ()
     local served = state.served[tostring(message:from())]
     if not served or state.stopped then return end
     local value = retained.ready(message:payload():data())
@@ -314,7 +314,7 @@ function M.ready(state: State, message: process.Message, now: integer)
     end
 end
 -- observe answers an owner route that registered after readiness arrived.
-function M.observe(state: State, message: process.Message)
+function M.observe(state: State, message: process.Message): ()
     announce(state, tostring(message:from()))
 end
 -- Only a native sender from an explicitly admitted client node enters this
@@ -338,7 +338,7 @@ function M.handles(state: State, message: process.Message): boolean
 end
 -- enroll installs the host's current local-client and Hive-peer enrollments
 -- and revokes attachments whose node lost its selected grant.
-function M.enroll(state: State, nodes: {[string]: boolean}, peers: {[string]: boolean}, now: integer)
+function M.enroll(state: State, nodes: {[string]: boolean}, peers: {[string]: boolean}, now: integer): ()
     local enrolled: {[string]: boolean} = {}
     for node, present in pairs(nodes) do
         if present then enrolled[node] = true end
@@ -380,7 +380,7 @@ local function serve(state: State, workspace_id: string): (Served?, string?, str
     state.served_count = state.served_count + 1
     return started, nil, nil
 end
-function M.request(state: State, message: process.Message, now: integer)
+function M.request(state: State, message: process.Message, now: integer): ()
     local sender = tostring(message:from())
     if not M.admits(state, sender) then return end
     local call = types.decode_call(message:payload():data())
@@ -509,7 +509,7 @@ local function source(state: State, message: process.Message): Served?
     if not served or not served.ready or state.stopped then return nil end
     return served
 end
-function M.launched(state: State, message: process.Message, now: integer)
+function M.launched(state: State, message: process.Message, now: integer): ()
     local served = source(state, message)
     if not served then return end
     for _, client in pairs(state.clients) do
@@ -539,7 +539,7 @@ function M.launched(state: State, message: process.Message, now: integer)
         end
     end
 end
-function M.copied(state: State, message: process.Message, now: integer)
+function M.copied(state: State, message: process.Message, now: integer): ()
     local served = source(state, message)
     if not served then return end
     local result = retained.copy_result(message:payload():data())
@@ -560,7 +560,7 @@ function M.copied(state: State, message: process.Message, now: integer)
         end
     end
 end
-function M.result(state: State, message: process.Message, now: integer)
+function M.result(state: State, message: process.Message, now: integer): ()
     local served = source(state, message)
     if not served then return end
     local data: unknown = message:payload():data()
@@ -649,7 +649,7 @@ function M.result(state: State, message: process.Message, now: integer)
         end
     end
 end
-function M.activated(state: State, message: process.Message, now: integer)
+function M.activated(state: State, message: process.Message, now: integer): ()
     local served = source(state, message)
     if not served then return end
     local value = message:payload():data()
@@ -697,7 +697,7 @@ function M.activated(state: State, message: process.Message, now: integer)
         end
     end
 end
-function M.tick(state: State, now: integer)
+function M.tick(state: State, now: integer): ()
     catalog.tick(state.catalog, now)
     if not time.now():before(state.expires_at) then error("Desktop owner execution expired") end
     for key, receipt in pairs(state.receipts) do
@@ -770,7 +770,7 @@ local function served_exited(state: State, served: Served, cause: string, now: i
         end
     end
 end
-function M.event(state: State, event: process.Event, now: integer)
+function M.event(state: State, event: process.Event, now: integer): ()
     if event.kind ~= process.event.EXIT and event.kind ~= process.event.LINK_DOWN then return end
     local sender = tostring(event.from)
     local served = state.served[sender]
@@ -791,7 +791,7 @@ function M.event(state: State, event: process.Event, now: integer)
 end
 -- Only the authenticated peer supervisor reports a source-node actor EXIT.
 -- The caller of this library verifies that peer before invoking this method.
-function M.revoke_recipient(state: State, recipient: string, now: integer)
+function M.revoke_recipient(state: State, recipient: string, now: integer): ()
     local client = state.clients[recipient]
     if client then revoke(state, client, now) end
 end
@@ -804,7 +804,7 @@ end
 -- workspace's host, and only then releases the client's grant on the
 -- workspace it leaves. The native client learns its new session from
 -- bee.desktop:current once its old mount ends. Observers stay where they are.
-function M.switch(state: State, message: process.Message, now: integer)
+function M.switch(state: State, message: process.Message, now: integer): ()
     local served = source(state, message)
     if not served then return end
     local value = retained.switch(message:payload():data(), served.workspace_id)
@@ -830,7 +830,7 @@ function M.switch(state: State, message: process.Message, now: integer)
         revert_switch(state, client, request, "UNAVAILABLE", "The workspace's supervisor did not accept the request", false, now)
     end
 end
-function M.close(state: State)
+function M.close(state: State): ()
     state.stopped = true
     process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
     process.unlisten(state.activations); process.unlisten(state.switches); process.unlisten(state.observers)

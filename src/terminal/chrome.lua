@@ -1,7 +1,7 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local M = {}
-function M.background(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences)
+function M.background(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences): ()
     local theme = appearance.theme(preferences.theme)
     local base = appearance.style(theme.text, theme.ground)
     local pattern = appearance.style(theme.pattern, theme.ground)
@@ -11,7 +11,7 @@ function M.background(canvas: tty.Canvas, width: integer, height: integer, prefe
         canvas:put(1, y, pattern .. appearance.background_row(preferences.background, width, y - 1, height - 1) .. "\27[0m", width)
     end
 end
-function M.welcome(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, starting: boolean)
+function M.welcome(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, starting: boolean): ()
     local theme = appearance.theme(preferences.theme)
     -- A cell-native bee: folded wings and striped body.
     -- No timed splash or terminal-dependent emoji width.

@@ -44,7 +44,7 @@ function M.record(state: State, id: string, title: string, message: string, forc
     return true
 end
 
-function M.remove(state: State, id: string)
+function M.remove(state: State, id: string): ()
     state.pending[id] = nil
     state.decisions[id] = nil
 end

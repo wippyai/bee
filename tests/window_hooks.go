@@ -116,7 +116,7 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 	patches := []struct{ path, from, to string }{
 		{"src/_index.yaml", "address: 127.0.0.1:0", "address: " + endpointAddress},
 		{"modules/gateway/src/security/_index.yaml", `resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$"`, `resource == "http://` + endpointAddress + `/ready"`},
-		{"src/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window.hooks.fixture:binding\n"},
+		{"modules/harness/src/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window.hooks.fixture:binding\n"},
 		{"src/_index.yaml", "hide_logs: true", "hide_logs: false"},
 	}
 	for _, patch := range patches {

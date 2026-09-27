@@ -8,6 +8,14 @@ entries:
   meta:
     title: Bee placement
     comment: Placement contract and launch and attempt values; implementations own executors, homes and receipts
+- name: protected_namespace
+  kind: ns.requirement
+  meta:
+    comment: Add the placement namespace to the host trust map
+  default: bee.placement
+  targets:
+  - entry: bee:protected_kernel
+    path: .data.namespaces +=
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver

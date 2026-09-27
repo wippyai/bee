@@ -43,7 +43,7 @@ entries:
       security:
         actor: {id: bee.test.gateway}
   security:
-    policies: [bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.gateway.probe:replacement_admin, bee.gateway.probe:policy, bee.gateway.probe:configuration_caller_policy, bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.security.gateway:gateway_materialize_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_carrier_policy]
+    policies: [bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.gateway.probe:replacement_admin, bee.gateway.probe:policy, bee.gateway.probe:configuration_caller_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.security.gateway:gateway_materialize_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_carrier_policy]
 - name: policy
   kind: security.policy
   policy:

@@ -2,68 +2,69 @@ directories:
   modules: .wippy
   src: ./src
 modules:
-  - name: bee/persist
-    version: 0.1.0-dev
-  - name: bee/sync
-    version: 0.1.0-dev
-  - name: bee/threads
-    version: 0.1.0-dev
-  - name: bee/hub
-    version: 0.1.0-dev
-  - name: bee/gov
-    version: 0.1.0-dev
-  - name: bee/gateway
-    version: 0.1.0-dev
-  - name: bee/docs
-    version: 0.1.0-dev
-  - name: bee/hive
-    version: 0.1.0-dev
-  - name: bee/hive-telemetry
-    version: 0.1.0-dev
-  - name: bee/hive-manager
-    version: 0.1.0-dev
-  - name: bee/threads-timeline
-    version: 0.1.0-dev
-  - name: bee/workspace-manager
-    version: 0.1.0-dev
-  - name: bee/host-processes
-    version: 0.1.0-dev
-  - name: bee/hub-modules
-    version: 0.1.0-dev
-  - name: bee/gov-overlays
-    version: 0.1.0-dev
-  - name: bee/approvals
-    version: 0.1.0-dev
-  - name: bee/approvals-inbox
-    version: 0.1.0-dev
-  - name: bee/application
-    version: 0.1.0-dev
-  - name: bee/node
-    version: 0.1.0-dev
-  - name: bee/resources
-    version: 0.1.0-dev
-  - name: bee/placement
-    version: 0.1.0-dev
-  - name: bee/placement-native
-    version: 0.1.0-dev
-  - name: bee/harness
-    version: 0.1.0-dev
-  - name: bee/credentials
-    version: 0.1.0-dev
-  - name: bee/driver
-    version: 0.1.0-dev
-  - name: bee/driver-agy
-    version: 0.1.0-dev
-  - name: bee/driver-claude
-    version: 0.1.0-dev
-  - name: bee/driver-codex
-    version: 0.1.0-dev
-  - name: bee/driver-grok
-    version: 0.1.0-dev
-  - name: bee/driver-muse
-    version: 0.1.0-dev
-  - name: bee/driver-opencode
-    version: 0.1.0-dev
-  - name: bee/driver-wippy
-    version: 0.1.0-dev
-
+- name: bee/persist
+  version: 0.1.0-dev
+- name: bee/sync
+  version: 0.1.0-dev
+- name: bee/threads
+  version: 0.1.0-dev
+- name: bee/hub
+  version: 0.1.0-dev
+- name: bee/gov
+  version: 0.1.0-dev
+- name: bee/gateway
+  version: 0.1.0-dev
+- name: bee/docs
+  version: 0.1.0-dev
+- name: bee/hive
+  version: 0.1.0-dev
+- name: bee/hive-telemetry
+  version: 0.1.0-dev
+- name: bee/hive-manager
+  version: 0.1.0-dev
+- name: bee/threads-timeline
+  version: 0.1.0-dev
+- name: bee/workspace-manager
+  version: 0.1.0-dev
+- name: bee/host-processes
+  version: 0.1.0-dev
+- name: bee/hub-modules
+  version: 0.1.0-dev
+- name: bee/gov-overlays
+  version: 0.1.0-dev
+- name: bee/approvals
+  version: 0.1.0-dev
+- name: bee/approvals-inbox
+  version: 0.1.0-dev
+- name: bee/application
+  version: 0.1.0-dev
+- name: bee/node
+  version: 0.1.0-dev
+- name: bee/resources
+  version: 0.1.0-dev
+- name: bee/placement
+  version: 0.1.0-dev
+- name: bee/placement-native
+  version: 0.1.0-dev
+- name: bee/harness
+  version: 0.1.0-dev
+- name: bee/credentials
+  version: 0.1.0-dev
+- name: bee/driver
+  version: 0.1.0-dev
+- name: bee/driver-agy
+  version: 0.1.0-dev
+- name: bee/driver-claude
+  version: 0.1.0-dev
+- name: bee/driver-codex
+  version: 0.1.0-dev
+- name: bee/driver-grok
+  version: 0.1.0-dev
+- name: bee/driver-muse
+  version: 0.1.0-dev
+- name: bee/driver-opencode
+  version: 0.1.0-dev
+- name: bee/driver-wippy
+  version: 0.1.0-dev
+- name: bee/agents
+  version: 0.1.0-dev

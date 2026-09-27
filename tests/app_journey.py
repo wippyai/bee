@@ -388,7 +388,7 @@ def configure_open_agent(project):
     policy["data"]["environment"]["BEE_FIXTURE_STREAM"] = \
         str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
     policy["data"]["environment"]["BEE_FIXTURE_WINDOW_DEFINITION"] = "bee.harness.window:app"
-    harness = project / "src/_index.yaml"
+    harness = project / "modules/harness/src/_index.yaml"
     harness_document = yaml.safe_load(harness.read_text())
     activation = next(entry for entry in harness_document["entries"] if entry["name"] == "harness_activation")
     activation["data"]["bindings"].append("bee.window.hooks.fixture:binding")

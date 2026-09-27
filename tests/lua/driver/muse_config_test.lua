@@ -20,7 +20,7 @@ end
 local function define_tests()
     test.describe("Muse configuration", function()
         test.it("binds the command hook executable on both shipped routes", function()
-            for _, ref in ipairs({"bee:launch_policy_muse_window", "bee:launch_policy_muse_batch"}) do
+            for _, ref in ipairs({"bee.driver.muse:launch_policy_muse_window", "bee.driver.muse:launch_policy_muse_batch"}) do
                 local entry, entry_error = registry.get(ref)
                 if not entry then error(tostring(entry_error or (ref .. " is missing"))) end
                 local data = entry.data :: {[string]: unknown}

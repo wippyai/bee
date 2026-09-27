@@ -78,17 +78,17 @@ entries:
   security:
     policies:
     - bee.agent.app.probe:operator_policy
-    - bee.security.harness:carrier_policy
-    - bee.security.harness:carrier_environment_policy
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:carrier_environment_policy
     - bee.security.threads:thread_create_policy
-    - bee.security.harness:harness_setup_policy
-    - bee.security.placement:placement_store_policy
-    - bee.security.placement:placement_exec_policy
-    - bee.security.placement:placement_runner_policy
-    - bee.security.resources:resource_grant_policy
-    - bee.security.resources:resource_resolve_policy
-    - bee.security.credentials:credential_issue_policy
-    - bee.security.credentials:credential_materialize_workspace_policy
+    - bee.harness.security:harness_setup_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.resources.security:resource_grant_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_issue_policy
+    - bee.credentials.security:credential_materialize_workspace_policy
     - bee.security.gateway:gateway_materialize_policy
     - bee.security.gateway:gateway_supervision_policy
   meta:
@@ -98,17 +98,17 @@ entries:
         actor: {id: bee.agent_app.operator}
         policies:
         - bee.agent.app.probe:operator_policy
-        - bee.security.harness:carrier_policy
-        - bee.security.harness:carrier_environment_policy
+        - bee.harness.security:carrier_policy
+        - bee.harness.security:carrier_environment_policy
         - bee.security.threads:thread_create_policy
-        - bee.security.harness:harness_setup_policy
-        - bee.security.placement:placement_store_policy
-        - bee.security.placement:placement_exec_policy
-        - bee.security.placement:placement_runner_policy
-        - bee.security.resources:resource_grant_policy
-        - bee.security.resources:resource_resolve_policy
-        - bee.security.credentials:credential_issue_policy
-        - bee.security.credentials:credential_materialize_workspace_policy
+        - bee.harness.security:harness_setup_policy
+        - bee.placement.native.security:placement_store_policy
+        - bee.placement.native.security:placement_exec_policy
+        - bee.placement.native.security:placement_runner_policy
+        - bee.resources.security:resource_grant_policy
+        - bee.resources.security:resource_resolve_policy
+        - bee.credentials.security:credential_issue_policy
+        - bee.credentials.security:credential_materialize_workspace_policy
         - bee.security.gateway:gateway_materialize_policy
         - bee.security.gateway:gateway_supervision_policy
 - name: stage_policy

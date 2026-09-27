@@ -25,8 +25,8 @@ local scope_names = {"bee.harness.catalog:elevation_client_policy", "bee.securit
     "bee.security.gateway:gateway_admit_policy", "bee.security.threads:thread_create_policy",
     "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_observe_policy",
     "bee.harness.catalog:approver_client_policy",
-    "bee.security.resources:resource_manage_policy", "bee.security.resources:resource_grant_policy",
-    "bee.security.resources:resource_resolve_policy", "bee.security.approvals:approval_decide_policy"}
+    "bee.resources.security:resource_manage_policy", "bee.resources.security:resource_grant_policy",
+    "bee.resources.security:resource_resolve_policy", "bee.security.approvals:approval_decide_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -76,7 +76,7 @@ local function ensure_approver_policy()
     apply(policies_entry)
 end
 local function admit_root()
-    local entry = registry.get("bee:resource_roots")
+    local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("resource roots entry") end
     local data = entry.data :: Object
     local roots = data.roots :: {{[string]: unknown}}

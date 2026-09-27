@@ -31,7 +31,7 @@ last_used_at}`. `live` says whether a host serves the workspace now. The
 folder workspace's row has an empty label; readers name it by identity.
 
 **Create.** A label is one nonempty line of at most 240 bytes. `root_ref` must
-be listed in the host's admitted roots (`bee:resource_roots`, the same ceiling
+be listed in the host's admitted roots (`bee.resources:resource_roots`, the same ceiling
 resource associations use); a caller never supplies a path outside it.
 `subpath` is relative, without empty, `.` or `..` segments. Without
 `create_directory` the folder must already exist as a directory. With it, the
@@ -49,12 +49,12 @@ case-folded over ASCII letters. Path search takes `root_ref` and an optional
 `path` and walks `(state, root_ref, subpath)`: it returns the folder named by
 `path` first, then every folder below `path/`, never a sibling such as
 `path-old`. A `path` without `root_ref` runs that search under every root the
-host admits (`bee:resource_roots`), one root after another in name order; its
+host admits (`bee.resources:resource_roots`), one root after another in name order; its
 cursor names the root of the page's last row. No operation reads rows it does
 not return.
 
 **Roots and folders.** `roots` lists the roots the host admits
-(`bee:resource_roots`) in name order as `{root_ref, access}`, `access` being
+(`bee.resources:resource_roots`) in name order as `{root_ref, access}`, `access` being
 `read` or `write`. `folders` pages the folders inside `path` (a subpath, default
 the root itself) under an admitted root: names in byte order after the folder
 name `after`, `limit` 1-100 (default 50), each `{name, workspace_id?}` naming the
@@ -88,7 +88,7 @@ order), calls each under its execution scope after it has authorized the
 caller, checks every answer against those bounds and reports a failing
 binding as that entry's `error` while the others stay intact. The host binds
 the resources component's `describe` and `search`
-(`bee:resources_workspace_extension`), so a workspace shows its resource
+(`bee.resources:resources_workspace_extension`), so a workspace shows its resource
 associations. Semantic search such as embeddings is a future binding of the
 same contract.
 

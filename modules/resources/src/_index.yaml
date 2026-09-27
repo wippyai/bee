@@ -16,6 +16,14 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: '*'
+- name: protected_namespace
+  kind: ns.requirement
+  meta:
+    comment: Add the resource owner's namespace to the host trust map
+  default: bee.resources
+  targets:
+  - entry: bee:protected_kernel
+    path: .data.namespaces +=
 - name: target_db
   kind: ns.requirement
   meta:
@@ -28,6 +36,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: The host's admitted root list, the ceiling every association stays under
+  default: bee.resources:resource_roots
   targets:
   - entry: bee.resources:roots_ref
     path: .resource_ref
@@ -94,3 +103,25 @@ entries:
   kind: library.lua
   source: file://resources.lua
   modules: [registry, env, system]
+- name: resource_roots
+  kind: registry.entry
+  meta:
+    type: bee.resource_roots
+    comment: Host-selected roots available to first-use harness setup; driver declarations select only resource
+      names
+  data:
+    roots:
+    - root_ref: bee.env:workspace_root
+      access: write
+    - root_ref: bee.placement.native:root
+      access: write
+- name: resources_workspace_extension
+  kind: contract.binding
+  meta:
+    title: Resources
+    comment: The host attaches each workspace's resource associations to the workspace catalog and its viewer
+  contracts:
+  - contract: bee.workspace.catalog:extension
+    methods:
+      describe: bee.resources.binding:describe
+      search: bee.resources.binding:search

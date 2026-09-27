@@ -12,7 +12,7 @@ execution composes placement with the thread contracts.
 | `bee.harness.carrier` | `provenance`, `checkpoint`, `settle`: pure carrier rules; `policy`: the host-selected launch policy with executable bindings and required capabilities; `machine`: one attempt from plan to receipt over an injected IO; `process`: the production carrier process; `capabilities`: bounds and the takeover rule |
 | `bee.harness.launch` | `definitions`: exact decoding and digest of `bee.launch_definition` entries, including the optional `agent_ref` framework agent reference; `agent_resolver`: one `agent.gen1` reference with its `agent.trait` list, function tools and contracts resolved from a single pinned snapshot into a hashed closure (composed prompt and context, selected trait and tool schemas, admitted delegates, host-mapped model, declined tuning hints); `selection`: picker discovery plus component-owned CLI command lookup; `admission`: `resolve` (a measured plan pinning definition, binding, profile, policy and catalog generation, no effects; an agent route additionally pins the closure digest, the exact gateway tool aliases, the mapped model and the declined hints), `admit` (for the authenticated requester: thread by policy, an attempt-bound resource grant and credential projections obtained in the requester's own authority, all keyed on the request id so a retry replays; an agent run carries the closure's exact tools, composed instructions and mapped model in its carrier preferences), `start` (spawns the carrier as the requester, resumes when a checkpoint exists, refuses a settled request); the plan carries the effective overrides (the definition's `allowed_overrides`, with `workdir`, `thread` and `placement` kept only where the launch policy's `allowed_overrides` names them too) and the placement kind, and admission refuses a request override outside them (`FORBIDDEN`) or a placement kind the host does not provide (`PLACEMENT_UNAVAILABLE`); `setup` associates a chosen folder under an admitted root as a named resource under a workdir override; `caller_launch`: resolve, setup and start for a caller on its own authority, shared by `agent_launch_call` (the gateway's `thread_launch`, allow-listed by the caller's launch policy; unless the child definition sets `allow_wider_tools`, its own policy's gateway tools must be a subset of the launching policy's or the admission refuses with `LAUNCH_TOOLS_EXCEED_PARENT`) and `agent_call` (applications, granted `bee.harness.launch` on the definition; `launch`, `run`, `status`, `wait` and `cancel` through the child's thread and the placement that started it); `managed_run`: shared claim, checkpoint, terminal receipt, status, wait and durable cancel-intent lifecycle, also used by in-process driver adapters |
 | `bee.harness.permission` | `adapter`: the pure permission exchange rules (request identity, proposal, qualified keys, response encoding, pending ambiguity, transcript consistency); `acceptance`: the host acceptance record binding driver, profile, adapter and executable measurements. A profile is eligible with `permission_exchange: {mode: adapter, adapter_ref, adapter_digest}` pinning a `harness.permission_adapter` entry the catalog measures from the same snapshot; enabling needs a matching acceptance record. Request fields and response fields are dotted paths, a request may name a separate acknowledgment id (Claude echoes `tool_use_id`, not `request_id`), and a terminal denial may be correlated. Both Claude profiles pin `bee.driver.claude:permission_adapter`; the acceptance record (`bee.permission-acceptance@2`) also carries placement's `executable_digest`, compared at plan time; shipped launch policies enable no exchange, so a terminal permission-denied result remains terminal |
-| `bee.harness.catalog` | `classify`: pure classification of a driver binding with its resolved profiles and methods; `catalog`: one immutable registry snapshot (`registry.snapshot()`), every `harness.driver` binding, declaration, method target and the host's `bee:harness_activation` entry read from that same snapshot, classified and marked activated |
+| `bee.harness.catalog` | `classify`: pure classification of a driver binding with its resolved profiles and methods; `catalog`: one immutable registry snapshot (`registry.snapshot()`), every `harness.driver` binding, declaration, method target and the host's `bee.harness:harness_activation` entry read from that same snapshot, classified and marked activated |
 | `bee.harness.window` | Broker-launched Agent application and public `agent` command. The reusable `runtime` library owns the managed-window lifecycle; each process entry supplies its fixed placement binding and a constructor returning a process-local window handle. The runtime rejects a different planned placement before action admission or placement preparation; request data cannot select a constructor. An empty launch opens the host-defined profile picker; a bounded measured envelope selects one directly. Both admit the broker-authenticated application actor, share planning and preparation with the carrier, and consume the broker's sole terminal grant for one native PTY. PTY exit records `uncertain` completion; explicit application close records `cancelled`. Neither proves a successful agent turn. |
 
 ## Rules
@@ -41,7 +41,7 @@ at least one profile (the default among them) uses a supported protocol. Two
 compatible bindings with one `driver_id` are both marked ambiguous. Digests
 measure the entry and the declaration only and say so; executable closures
 are measured at admission. Compatible is not activated, and activated is not
-admitted: the host lists activated bindings in `bee:harness_activation`, and
+admitted: the host lists activated bindings in `bee.harness:harness_activation`, and
 launch admission decides per request. That entry is a strict
 `bee.harness-activation@1` declaration containing only distinct `bindings`.
 A missing or malformed declaration activates nothing and adds a catalog
@@ -114,16 +114,14 @@ grant path, which verifies the root digest before issuing a grant.
 
 ## Host binding
 
-The `process_host` requirement links `bee.harness:carrier_host_ref.host_ref`.
+The `process_host` requirement links `bee.harness:carrier_host_ref.host_ref` and
+defaults to `bee:workers`. An assembly may override it with its selected host.
 Launch start resolves that process host before admission and refuses an unlinked
-or missing host. The requirement carries no default; the bundled host supplies
-`bee:workers` through its `bee.deps:harness` parameters and another assembly
-supplies its own host the same way. This reference grants no permission: the host-selected
-spawn policy must independently allow the carrier and selected host.
+or missing host. This reference grants no permission: the host-selected spawn
+policy must independently allow the carrier and selected host.
 
-The entry policies still bind `bee.security.harness:carrier_policy` and
-`bee.security.harness:launch_spawn_policy`. Independent installation must supply those reviewed
-policies; host binding alone does not install or authorize Hub or Hive access.
+The module supplies the reviewed carrier and launch policies. Host binding
+alone does not authorize Hub or Hive access.
 
 ## Agent profile picker
 
@@ -242,7 +240,7 @@ settlement worker or automatic retry. The failure view makes that pending state
 explicit and continues to accept resize and close input.
 
 First-use setup also prepares definition-declared credential names from the host's
-`bee:harness_setup.data.credentials` map. Each value selects a provider and a
+`bee.harness:harness_setup.data.credentials` map. Each value selects a provider and a
 `source: {kind, ref}` accepted independently by the credential broker. Setup uses
 `define(expected_revision = 0)` and accepts an existing matching definition;
 it never replaces a differing definition or reads secret bytes. The fixed setup

@@ -31,7 +31,7 @@ local manager = funcs.new():with_actor(security.new_actor("bee.test.desktop_cata
 
 -- The host admits the projects fixture root for catalog rows.
 local function admit()
-    local entry = registry.get("bee:resource_roots")
+    local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
     local data = entry.data :: Object
     local roots = data.roots :: {Object}

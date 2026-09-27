@@ -15,7 +15,7 @@ end
 local function define_tests()
     test.describe("OpenCode configuration", function()
         test.it("declares no hook transport on either shipped route", function()
-            for _, ref in ipairs({"bee:launch_policy_opencode_window", "bee:launch_policy_opencode_batch"}) do
+            for _, ref in ipairs({"bee.driver.opencode:launch_policy_opencode_window", "bee.driver.opencode:launch_policy_opencode_batch"}) do
                 local entry, entry_error = registry.get(ref)
                 if not entry then error(tostring(entry_error or (ref .. " is missing"))) end
                 local data = entry.data :: {[string]: unknown}

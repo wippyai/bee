@@ -540,7 +540,7 @@ check: app-admission-check
 app-admission-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_admission.py
 .PHONY: kernel-bare-check
-# The bare-kernel composition boots with the six management-app packages absent.
+# The bare-kernel composition boots without installable management or agent packages.
 kernel-bare-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/kernel_bare.py
 .PHONY: package-drop-check

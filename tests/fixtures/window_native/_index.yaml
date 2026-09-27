@@ -66,7 +66,7 @@ entries:
     placement_store: bee.placement.native.persist:store
     window: bee.placement.native.service:window
   security:
-    policies: [bee.window.native:activation_policy, bee.window.native:caller_policy, bee.security.placement:placement_store_policy, bee.security.placement:placement_exec_policy, bee.security.resources:resource_resolve_policy]
+    policies: [bee.window.native:activation_policy, bee.window.native:caller_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.resources.security:resource_resolve_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: child
   kind: process.lua
@@ -97,7 +97,7 @@ entries:
     test: wippy.test:test
     store: bee.placement.native.persist:store
   security:
-    policies: [bee.security.placement:placement_store_policy]
+    policies: [bee.placement.native.security:placement_store_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: activation_policy
   kind: security.policy

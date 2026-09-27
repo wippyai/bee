@@ -22,7 +22,7 @@ end
 local manager = funcs.new():with_actor(security.new_actor("bee.test.run_lease_manager")):with_scope(scope({
     "bee.workspace.catalog:call_test_policy", "bee.security.storage:workspace_catalog_read_policy", "bee.security.storage:workspace_catalog_manage_policy"}))
 local function admit()
-    local entry = registry.get("bee:resource_roots")
+    local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
     local roots = (entry.data :: Object).roots :: {Object}
     for _, root in ipairs(roots) do if root.root_ref == PROJECTS then return end end

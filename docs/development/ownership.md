@@ -39,6 +39,7 @@ and caches are projections that owners can rebuild.
 | Threads and delivery | Durable records, memberships, actions, attempts, subscriptions, obligations, waits, projections and carriers | Local owner implemented; cross-node forwarding remains a proposal |
 | Resources and credentials | Named roots, containment, audience-bound grants and credential materialization | Owner contracts implemented; portable authority transfer remains a proposal |
 | Placement and harnesses | Launch plans, attempts, native placement, carrier, hooks, permissions and cleanup | Local managed launch path implemented; managed Docker/headless launch is a proposal |
+| Managed-agent package | Agent application, gateway hook endpoints, host-selected launch policies, credential sources, placement/resource roots and built-in driver composition | Implemented in installable components composed by `bee/agents`; the default Bee lock includes the bundle, while a bare kernel can omit it |
 | Hive | Authenticated operation contracts, configured policy routing and invite-based joining | Generic policy route and invite joins between nodes of one host implemented; cross-host addressing, discovery and remote workspace composition are proposals |
 | Operation/interface catalog | Filtered descriptions shared by contracts, tools, traits, UI and remote adapters | Visibility is descriptive; each invocation is authorized at its owner |
 

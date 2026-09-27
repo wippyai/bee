@@ -30,6 +30,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host policy for the component-owned Claude window route
+  default: bee.driver.claude:launch_policy_claude_window
   targets:
   - entry: bee.driver.claude:default_window
     path: .data.policy_ref
@@ -37,6 +38,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host policy for the component-owned Claude batch route
+  default: bee.driver.claude:launch_policy_claude_batch
   targets:
   - entry: bee.driver.claude:research_batch
     path: .data.policy_ref
@@ -275,3 +277,98 @@ entries:
     - bee.driver.claude:default_window
     fullscreen: true
 
+- name: launch_policy_claude_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected one-turn Claude batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {claude: bee.driver.claude:executable}
+    environment: {}
+    environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
+    allow_host_home: false
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    profile_options: {effort: [low, medium, high]}
+    profile_instructions: true
+    prepare_options: {permission_mode: default, max_turns: 1}
+- name: launch_policy_claude_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: 'Host-selected executable binding for the component-owned Claude Code window; missing host executable
+      leaves the declaration unavailable. It is the shipped orchestrator policy - a Claude window may launch the
+      allow-listed worker definitions below, reach a child it started on a new thread through the thread tools, and
+      follow a run with the managed-run tools. A person selects it as a saved profile in the Agent window (press N
+      for a new profile, name it, and choose Claude Code).'
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      claude: bee.driver.claude:executable
+    environment: {}
+    environment_refs:
+      CLAUDE_CONFIG_DIR: bee.driver.claude:config_home
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - thread_sessions
+    - thread_notify
+    - session_directory
+    - session_send
+    - session_inbox
+    - session_ack
+    - session_reply
+    - overlay
+    - delivery
+    - docs
+    - components
+    - install_request
+    - uninstall_request
+    - install_status
+    - thread_launch
+    - launch_definitions
+    - capabilities
+    - run_status
+    - run_wait
+    - run_cancel
+    agent_launch:
+    - bee.driver.codex:research_batch
+    - bee.driver.codex:named_batch
+    - bee.driver.claude:research_batch
+    - bee.driver.muse:research_batch
+    - bee.driver.agy:research_batch
+    - bee.driver.grok:research_batch
+    agent_launch_unconfined:
+    - bee.driver.grok:research_batch
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true
+    prepare_options: {}

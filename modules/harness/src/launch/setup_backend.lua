@@ -7,7 +7,7 @@ local registry = require("registry")
 local security = require("security")
 local bounds = require("bounds")
 local definition = require("definition")
-local SETUP = "bee:harness_setup"
+local SETUP = "bee.harness:harness_setup"
 local function fail(message: string): {[string]: unknown} return {ok = false, error = message} end
 local function same(value: unknown, root: string, access: string): boolean
     local object = bounds.object(value)

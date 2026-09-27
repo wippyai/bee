@@ -17,10 +17,10 @@ from workspace import ROOT, RUNTIME, configure_managed_gateway, database_environ
 
 
 # Gateway's direct imports bring the first five modules in; governance brings
-# Sync, Approvals and Hub.  Codex is retained only for the configuration-scope
-# proof in the probe.
+# Sync, Approvals and Hub, and Threads brings the Hive identity contract.
+# Codex is retained only for the configuration-scope proof in the probe.
 MODULES = (
-    "persist", "threads", "application", "sync", "approvals", "hub", "gov",
+    "persist", "hive", "threads", "application", "sync", "approvals", "hub", "gov",
     "docs", "driver", "driver-codex", "gateway",
 )
 
@@ -48,11 +48,10 @@ HOST_ENTRIES = {
         "thread_lifecycle_policy", "thread_carrier_policy", "thread_approval_policy",
         "thread_approval_client_policy", "thread_waiter_policy",
     },
-    "src/_index.yaml": {"approver_policies", "module_installation", "docs_corpus", "placement_path", "placement_host_files",
-                         "placement_executor", "placement_admitted_roots", "placement_resource_mode"},
+    "src/_index.yaml": {"approver_policies", "module_installation", "docs_corpus"},
     "src/env/_index.yaml": {"gov_publication_profiles", "gov_activation_profiles"},
     "src/security/_index.yaml": {"ordinary_app_subsystem_boundary"},
-    "src/security/placement/_index.yaml": {"placement_store_policy", "placement_exec_policy"},
+    "modules/placement-native/src/security/_index.yaml": {"placement_store_policy", "placement_exec_policy"},
     "src/security/docs/_index.yaml": {"docs_policy"},
     "src/security/gov/_index.yaml": {"workspace_folder_read_policy"},
 }
@@ -63,7 +62,9 @@ def selected_host_entries():
     selected = {}
     for relative, names in HOST_ENTRIES.items():
         document = yaml.safe_load((ROOT / relative).read_text())
-        assert document["namespace"] == "bee" or document["namespace"] == "bee.env" or document["namespace"].startswith("bee.security"), relative
+        assert (document["namespace"] in {"bee", "bee.env"}
+                or document["namespace"].startswith("bee.security")
+                or document["namespace"] == "bee.placement.native.security"), relative
         available = {entry["name"]: entry for entry in document["entries"]}
         assert names <= available.keys(), f"missing host entries in {relative}: {sorted(names - available.keys())}"
         selected[relative] = {
@@ -173,7 +174,10 @@ def write_gateway_host(folder, native):
     for relative, document in host_entries.items():
         if relative == "src/_index.yaml":
             continue
-        target = folder / relative
+        destination = relative
+        if relative == "modules/placement-native/src/security/_index.yaml":
+            destination = "src/placement_native_security/_index.yaml"
+        target = folder / destination
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(yaml.safe_dump(document, sort_keys=False))
     (folder / "src" / "placement").mkdir()
@@ -182,7 +186,7 @@ def write_gateway_host(folder, native):
             {"name": "environment", "kind": "env.storage.os", "lifecycle": {"auto_start": True}},
             {"name": "db_path", "kind": "env.variable", "storage": "bee.placement.native:environment", "variable": "BEE_PLACEMENT_DB", "default": ".wippy/placement.db", "readonly": True},
             {"name": "db", "kind": "db.sql.sqlite", "file": "${env:bee.placement.native:db_path}", "lifecycle": {"auto_start": True}},
-            {"name": "executor", "kind": "exec.native"},
+            {"name": "placement_executor", "kind": "exec.native"},
         ],
     }, sort_keys=False))
 

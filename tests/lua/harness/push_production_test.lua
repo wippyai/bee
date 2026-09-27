@@ -38,8 +38,8 @@ local function fresh(prefix: string): string
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
 local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy",
-    "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.gateway:gateway_manage_policy", "bee.security.gateway:gateway_admit_policy",
-    "bee.harness.catalog:codex_credential_client_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy",
+    "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.gateway:gateway_manage_policy", "bee.security.gateway:gateway_admit_policy",
+    "bee.harness.catalog:codex_credential_client_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy",
     "bee.harness.catalog:workspace_catalog_call_policy", "bee.security.storage:workspace_catalog_manage_policy",
     "bee.security.gateway:gateway_session_send_workspace_policy"}
 local function scope(): security.Scope
@@ -74,7 +74,7 @@ local function setting(id: string, what: string): string
     return value
 end
 local function admit_root()
-    local catalog_roots = assert(registry.get("bee:resource_roots"))
+    local catalog_roots = assert(registry.get("bee.resources:resource_roots"))
     local available = (catalog_roots.data :: Object).roots :: {Object}
     local admitted = false
     for _, root in ipairs(available) do if root.root_ref == ROOT then admitted = true end end
@@ -82,10 +82,10 @@ local function admit_root()
         available[#available + 1] = {root_ref = ROOT, access = "write"}
         apply(catalog_roots)
     end
-    local mode = assert(registry.get("bee:placement_resource_mode"))
+    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
     mode.data = {mode = "host_configured"}
     apply(mode)
-    local entry = assert(registry.get("bee:placement_admitted_roots"))
+    local entry = assert(registry.get("bee.placement.native:placement_admitted_roots"))
     local roots = (entry.data :: Object).roots :: {Object}
     for _, root in ipairs(roots) do
         if root.root_ref == ROOT then return end
@@ -94,7 +94,7 @@ local function admit_root()
     apply(entry)
 end
 local function file_digest(path: string): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc = assert(executor:exec("cat " .. path))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -202,7 +202,7 @@ local function action_admitted(thread_id: string, action_id: string, actor_id: s
     return false
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()

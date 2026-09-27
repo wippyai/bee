@@ -32,7 +32,7 @@ local function fresh(prefix: string): string
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
 local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy",
-    "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.gateway:gateway_manage_policy", "bee.security.gateway:gateway_admit_policy"}
+    "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.gateway:gateway_manage_policy", "bee.security.gateway:gateway_admit_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -83,13 +83,13 @@ local function install_policy(name: string)
 end
 local function admit_root()
     -- These runner fixtures exercise host-configured roots with literal grant labels.
-    local mode = assert(registry.get("bee:placement_resource_mode"))
+    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
     mode.data = {mode = "host_configured"}
     local selected = registry.snapshot():changes()
     selected:update(mode)
     local configured, mode_error = selected:apply()
     if not configured then error("fixture resource mode: " .. tostring(mode_error)) end
-    local entry = registry.get("bee:placement_admitted_roots")
+    local entry = registry.get("bee.placement.native:placement_admitted_roots")
     if not entry then error("admitted roots entry") end
     local data = entry.data :: Object
     local roots = data.roots :: {Object}

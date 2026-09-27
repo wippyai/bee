@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.security.placement
+namespace: bee.placement.native.security
 entries:
 - name: placement_store_policy
   kind: security.policy
@@ -25,10 +25,10 @@ entries:
     - bee.placement.native:resource_mode_ref
     - custom
     - security
-    - bee:placement_admitted_roots
+    - bee.placement.native:placement_admitted_roots
     - bee.placement.native:root
-    - bee:placement_host_files
-    - bee:placement_executor
+    - bee.placement.native:placement_host_files
+    - bee.placement.native:placement_executor
     - cwd
     effect: allow
 - name: placement_exec_policy

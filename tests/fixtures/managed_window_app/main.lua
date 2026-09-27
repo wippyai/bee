@@ -676,8 +676,8 @@ end
 -- Read the actual child's files after broker close. These checks never create
 -- a directory and never run another shell to manufacture the marker.
 M.retained = function()
-    local roots = assert(registry.get("bee:resource_roots"))
-    local mode = assert(registry.get("bee:placement_resource_mode"))
+    local roots = assert(registry.get("bee.resources:resource_roots"))
+    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
     local ok, failure = pcall(function()
         local admitted = changed(roots)
         admitted.data = {roots = {{root_ref = "bee.managed.window.fixture:session_root", access = "write"}}}

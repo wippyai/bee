@@ -86,7 +86,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(opened_gateway.value ~= nil, "failed to open gateway listener")
 
     -- The host explicitly admits a session root in this disposable fixture.
-    local roots = assert(registry.get("bee:resource_roots"))
+    local roots = assert(registry.get("bee.resources:resource_roots"))
     roots.data = {roots = {{root_ref = "bee.window.hooks.fixture:session_root", access = "write"}}}
     local changes = registry.snapshot():changes()
     changes:update(roots)

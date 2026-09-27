@@ -9,7 +9,7 @@ local appearance = require("appearance")
 
 local CLAUDE = "bee.driver.claude:binding"
 local POLICY = "bee.harness.catalog:selection_policy"
-local ACTIVATION = "bee:harness_activation"
+local ACTIVATION = "bee.harness:harness_activation"
 local PREFIX = "bee.harness.catalog:selection_"
 
 type Entry = {[string]: unknown}

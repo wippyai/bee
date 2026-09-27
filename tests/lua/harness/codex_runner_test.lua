@@ -38,7 +38,7 @@ local function fresh(prefix: string): string
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
 local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy",
-    "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.harness.catalog:codex_credential_client_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy"}
+    "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.harness.catalog:codex_credential_client_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -66,7 +66,7 @@ local function read_all(stream): string
     return content
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -109,7 +109,7 @@ local endpoint_executor: any = nil
 -- The endpoint holds each answer for the given seconds after recording
 -- the request, so the suite can act while the child is provably waiting.
 local function start_endpoint(record: string, hold_seconds: integer, text: string?): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local environment: {[string]: string}? = nil
     if text then environment = {PATH = "/usr/bin:/bin", BEE_ENDPOINT_TEXT = text} end
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record .. " " .. tostring(hold_seconds), {env = environment})
@@ -164,8 +164,8 @@ local function prepare_host(port: string, codex: string)
         policy_data.executables = {codex = codex}
         apply(entry)
     end
-    admit("bee:placement_admitted_roots", "roots", {root_ref = ROOT, access = "write"}, function(item: Object): boolean return item.root_ref == ROOT end)
-    admit("bee:credential_sources", "sources", {ref = SOURCE, workspace_id = "*", audience = ACTOR, provider = "codex", projection_kinds = {"environment"}}, function(item: Object): boolean return item.ref == SOURCE end)
+    admit("bee.placement.native:placement_admitted_roots", "roots", {root_ref = ROOT, access = "write"}, function(item: Object): boolean return item.root_ref == ROOT end)
+    admit("bee.credentials:credential_sources", "sources", {ref = SOURCE, workspace_id = "*", audience = ACTOR, provider = "codex", projection_kinds = {"environment"}}, function(item: Object): boolean return item.ref == SOURCE end)
 end
 local function thread(): string
     local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Codex path"})

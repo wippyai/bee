@@ -167,7 +167,8 @@ local function prove_configuration_scope(address: string)
     local executor, executor_error = funcs.new():with_scope(selected)
     assert(executor and not executor_error, "configuration caller scope: " .. tostring(executor_error))
     local privileged_result, privileged_call_error = funcs.call("bee.gateway.probe:render_configuration", {address = address, action_id = "scope-render", privileged = true})
-    assert(not privileged_call_error and type(privileged_result) == "table", "privileged configuration control call failed")
+    assert(not privileged_call_error and type(privileged_result) == "table",
+        "privileged configuration control call failed: " .. tostring(privileged_call_error))
     local privileged = privileged_result :: Object
     assert(privileged.placement_db_acquired == true, "privileged callee could not acquire placement database")
     assert(privileged.placement_executor_acquired == true, "privileged callee could not acquire placement executor")

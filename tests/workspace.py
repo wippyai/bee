@@ -328,9 +328,8 @@ def deployment_copy(deployment, directory):
     return Path(directory)
 
 
-# The management apps the default bundle installs. A bare-kernel composition
-# drops them from the lock, the replacements and the dependency entries while
-# the kernel, Settings, Console and Inbox stay installed.
+# The default bundle's optional management and agent packages. A bare-kernel
+# composition drops them from the lock, replacements and dependency entries.
 AGENT_PACKAGES = (
     "bee/agents", "bee/harness", "bee/credentials", "bee/placement",
     "bee/placement-native", "bee/resources", "bee/driver", "bee/driver-agy",

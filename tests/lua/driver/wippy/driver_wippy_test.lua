@@ -21,7 +21,7 @@ local THREAD_POLICIES = {
     "bee.security.threads:thread_observe_policy",
     "bee.security.threads:thread_lifecycle_policy",
     "bee.security.threads:thread_carrier_policy",
-    "bee.security.harness:carrier_policy",
+    "bee.harness.security:carrier_policy",
     "bee.driver.wippy.test:test_http_policy",
 }
 

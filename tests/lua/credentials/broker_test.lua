@@ -61,10 +61,10 @@ end
 local function executor(client: Principal, value: unknown): funcs.Executor
     return bound(client, principals.workspace(value))
 end
-local manager = caller(MANAGER, {"bee.security.credentials:credential_manage_policy"})
-local user = caller(USER, {"bee.security.credentials:credential_issue_policy"})
-local other = caller(OTHER, {"bee.security.credentials:credential_issue_policy"})
-local runner = caller(RUNNER, {"bee.security.credentials:credential_materialize_policy"})
+local manager = caller(MANAGER, {"bee.credentials.security:credential_manage_policy"})
+local user = caller(USER, {"bee.credentials.security:credential_issue_policy"})
+local other = caller(OTHER, {"bee.credentials.security:credential_issue_policy"})
+local runner = caller(RUNNER, {"bee.credentials.security:credential_materialize_policy"})
 local outsider = caller("bee.test.cred.outsider", {})
 local function call(client: Principal, method: string, value: unknown): broker.Reply
     local reply, err = executor(client, value):call("bee.credentials.binding:" .. method, value)
@@ -105,7 +105,7 @@ local function write_file(ref: string, path: string, content: string)
     if not ok then error("writefile " .. path .. ": " .. tostring(werr)) end
 end
 local function admit_sources(workspace: string)
-    local entry = registry.get("bee:credential_sources")
+    local entry = registry.get("bee.credentials:credential_sources")
     if not entry then error("credential sources entry") end
     local data = entry.data :: {[string]: unknown}
     data.sources = {{ref = SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"environment"}},
@@ -122,7 +122,7 @@ local function admit_sources(workspace: string)
             path = ".grok/auth.json", setup_path = GROK_CONFIG, setup_destination = GROK_PRIVATE_BASE, setup_content_format = "opaque"}}
     local changes = registry.snapshot():changes()
     changes:update(entry)
-    local file_policy = registry.get("bee.security.credentials:credential_file_policy")
+    local file_policy = registry.get("bee.credentials.security:credential_file_policy")
     if not file_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {CODEX_LOGIN_SOURCE, CLAUDE_LOGIN_SOURCE, INVALID_LOGIN_SOURCE, MISSING_LOGIN_SOURCE}
     changes:update(file_policy)
@@ -198,7 +198,7 @@ local function define_tests()
                 test.eq(code(reply :: broker.Reply), "DENIED")
             end
             local projection = issue(user, workspace, "anthropic", attempt)
-            local app_runner = caller("bee.test.cred.app_runner", {"bee.security.credentials:credential_materialize_workspace_policy"})
+            local app_runner = caller("bee.test.cred.app_runner", {"bee.credentials.security:credential_materialize_workspace_policy"})
             local use = {projection_id = projection.projection_id, subject = USER, audience = USER, attempt_id = attempt}
             local foreign, foreign_error = bound(app_runner, elsewhere):call("bee.credentials.binding:check", use)
             if foreign_error then error(tostring(foreign_error)) end
@@ -274,7 +274,7 @@ local function define_tests()
             test.eq(foreign_audience, "FORBIDDEN")
             local live = issue(user, workspace, "anthropic", attempt)
             value(call(runner, "check", {projection_id = live.projection_id, subject = USER, audience = USER, attempt_id = attempt}))
-            local entry = registry.get("bee:credential_sources")
+            local entry = registry.get("bee.credentials:credential_sources")
             if not entry then error("sources entry") end
             local data = entry.data :: {[string]: unknown}
             data.sources = {{ref = OTHER_SOURCE, workspace_id = workspace, audience = "*", provider = "codex", projection_kinds = {"environment"}}}
@@ -357,7 +357,7 @@ local function define_tests()
             test.eq(env_def.projection_kind, "environment")
             test.eq(code(call(manager, "availability", {workspace_id = ws, name = "environment"})), "INVALID")
 
-            local source_entry = registry.get("bee:credential_sources")
+            local source_entry = registry.get("bee.credentials:credential_sources")
             if not source_entry then error("sources entry") end
             local source_data = source_entry.data :: {[string]: unknown}
             local saved_sources = source_data.sources
@@ -377,7 +377,7 @@ local function define_tests()
             local ws = fresh("nested-login")
             admit_sources(ws)
             local function select_path(path: string)
-                local entry = registry.get("bee:credential_sources")
+                local entry = registry.get("bee.credentials:credential_sources")
                 if not entry then error("sources") end
                 for _, source in ipairs(entry.data.sources :: {{[string]: unknown}}) do
                     if source.ref == CODEX_LOGIN_SOURCE then source.path = path end
@@ -554,7 +554,7 @@ local function define_tests()
             write_file(CODEX_LOGIN_SOURCE, AGY_ONBOARDING, string.rep("x", 4097))
             test.eq(code(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
                 attempt_id = attempt, generation_key = "agy-setup-oversized"})), "INVALID")
-            local entry = registry.get("bee:credential_sources")
+            local entry = registry.get("bee.credentials:credential_sources")
             if not entry then error("credential sources entry") end
             for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
                 if item.provider == "agy" then item.setup_path = nil end
@@ -639,7 +639,7 @@ local function define_tests()
                 local attempt = fresh("attempt")
                 local projection = issue(user, ws, "grok_login", attempt)
 
-                local entry = registry.get("bee:credential_sources")
+                local entry = registry.get("bee.credentials:credential_sources")
                 if not entry then error("credential sources entry") end
                 local changed = false
                 for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
@@ -711,8 +711,8 @@ local function define_tests()
             write_file(UNPRIVILEGED_LOGIN_SOURCE, "auth.json", CODEX_FILE_SENTINEL)
             local attempt = fresh("attempt")
 
-            -- UNPRIVILEGED_LOGIN_SOURCE is present in bee:credential_sources allowlist metadata,
-            -- but absent from bee.security.credentials:credential_file_policy resources.
+            -- UNPRIVILEGED_LOGIN_SOURCE is present in bee.credentials:credential_sources allowlist metadata,
+            -- but absent from bee.credentials.security:credential_file_policy resources.
             local defined = value(call(manager, "define", {workspace_id = ws, name = "unprivileged", provider = "codex", source = {kind = "fs_directory", ref = UNPRIVILEGED_LOGIN_SOURCE}}))
             test.eq(defined.destination, "auth.json")
             test.eq(defined.projection_kind, "file")

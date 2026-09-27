@@ -34,9 +34,9 @@ end
 type Object = {[string]: unknown}
 local scope_names = {FACADE_POLICY, "bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy",
     "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
-    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy",
+    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy",
     "bee.harness.catalog:carrier_spawn_policy", "bee.security.gateway:gateway_manage_policy", "bee.security.gateway:gateway_admit_policy",
-    "bee.security.resources:resource_manage_policy", "bee.security.credentials:credential_manage_policy"}
+    "bee.resources.security:resource_manage_policy", "bee.credentials.security:credential_manage_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -94,13 +94,13 @@ local function restore_host()
     end
 end
 local function prepare_host()
-    for _, ref in ipairs({"bee:resource_roots", "bee:placement_resource_mode", "bee:placement_admitted_roots", "bee:harness_setup", "bee:credential_sources", WORKER_POLICY}) do
+    for _, ref in ipairs({"bee.resources:resource_roots", "bee.placement.native:placement_resource_mode", "bee.placement.native:placement_admitted_roots", "bee.harness:harness_setup", "bee.credentials:credential_sources", WORKER_POLICY}) do
         remember(ref)
     end
-    local mode = assert(registry.get("bee:placement_resource_mode"))
+    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
     mode.data = {mode = "host_configured"}
     apply(mode)
-    local roots = assert(registry.get("bee:resource_roots"))
+    local roots = assert(registry.get("bee.resources:resource_roots"))
     local roots_data = roots.data :: Object
     local available = roots_data.roots :: {Object}
     local listed = false
@@ -109,7 +109,7 @@ local function prepare_host()
         available[#available + 1] = {root_ref = ROOT, access = "write"}
         apply(roots)
     end
-    local admitted_roots = assert(registry.get("bee:placement_admitted_roots"))
+    local admitted_roots = assert(registry.get("bee.placement.native:placement_admitted_roots"))
     local admitted_data = admitted_roots.data :: Object
     local admitted = admitted_data.roots :: {Object}
     local present = false
@@ -118,12 +118,12 @@ local function prepare_host()
         admitted[#admitted + 1] = {root_ref = ROOT, access = "write"}
         apply(admitted_roots)
     end
-    local setup = assert(registry.get("bee:harness_setup"))
+    local setup = assert(registry.get("bee.harness:harness_setup"))
     local setup_data = setup.data :: Object
     setup_data.roots = {project = ROOT, session = ROOT}
     setup_data.credentials = {anthropic = {provider = "claude", source = {kind = "env_variable", ref = SOURCE}}}
     apply(setup)
-    local sources = assert(registry.get("bee:credential_sources"))
+    local sources = assert(registry.get("bee.credentials:credential_sources"))
     local sources_data = sources.data :: Object
     local list = sources_data.sources :: {Object}
     list[#list + 1] = {ref = SOURCE, workspace_id = "*", audience = ACTOR, provider = "claude", projection_kinds = {"environment"}}

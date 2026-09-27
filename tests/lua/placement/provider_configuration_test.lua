@@ -21,9 +21,9 @@ local ROOT = "bee.placement.native:project_fixture"
 local POLICY = "bee.placement.native:fixture_agent_policy"
 local PROVIDER = "bee.placement.native:fixture_agent_provider"
 local BINDING = "bee.placement.native:fixture_agent_binding"
-local ACTIVATION = "bee:harness_activation"
-local MODE = "bee:placement_resource_mode"
-local ROOTS = "bee:placement_admitted_roots"
+local ACTIVATION = "bee.harness:harness_activation"
+local MODE = "bee.placement.native:placement_resource_mode"
+local ROOTS = "bee.placement.native:placement_admitted_roots"
 local counter = 0
 type RegistryState = {activation: {[string]: unknown}, roots: {[string]: unknown}, mode: {[string]: unknown}}
 
@@ -35,7 +35,7 @@ end
 -- A caller is bound to the workspace it acts in, as host-issued principals are.
 local function caller(actor: string, workspace_id: unknown)
     local policies: {security.Policy} = {}
-    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.security.resources:resource_manage_policy", "bee.security.resources:resource_grant_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy"}) do
+    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.resources.security:resource_manage_policy", "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
@@ -169,7 +169,7 @@ local function denied_without_intent(request: {[string]: unknown}, expected: str
 end
 
 local function shell(command: string): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc = assert(executor:exec(command))
     local stdout = proc:stdout_stream()
     assert(proc:start())

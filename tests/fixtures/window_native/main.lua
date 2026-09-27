@@ -25,9 +25,9 @@ local function request(attempt_id: string, required_cleanup: string?): {[string]
 end
 local function caller()
     local policy = assert(security.policy("bee.window.native:caller_policy"))
-    local store_policy = assert(security.policy("bee.security.placement:placement_store_policy"))
-    local exec_policy = assert(security.policy("bee.security.placement:placement_exec_policy"))
-    local resource_policy = assert(security.policy("bee.security.resources:resource_resolve_policy"))
+    local store_policy = assert(security.policy("bee.placement.native.security:placement_store_policy"))
+    local exec_policy = assert(security.policy("bee.placement.native.security:placement_exec_policy"))
+    local resource_policy = assert(security.policy("bee.resources.security:resource_resolve_policy"))
     return funcs.new():with_actor(security.new_actor(OWNER)):with_scope(security.new_scope({policy, store_policy, exec_policy, resource_policy}))
 end
 local function prepare(attempt_id: string, required_cleanup: string?): string
@@ -58,7 +58,7 @@ local function process_group_recorded(attempt_id: string): boolean
         and captured_identity(attempt_id)
 end
 local function child_scope(extra: string?): security.Scope
-    local names = {"bee.security.placement:placement_store_policy", "bee.security.placement:placement_exec_policy", "bee.security.placement:placement_runner_policy", "bee.security.resources:resource_resolve_policy", "bee.window.native:child_policy"}
+    local names = {"bee.placement.native.security:placement_store_policy", "bee.placement.native.security:placement_exec_policy", "bee.placement.native.security:placement_runner_policy", "bee.resources.security:resource_resolve_policy", "bee.window.native:child_policy"}
     if extra then names[#names + 1] = extra end
     local policies: {security.Policy} = {}
     for index, name in ipairs(names) do policies[index] = assert(security.policy(name)) end
@@ -79,7 +79,7 @@ local function wait_for(view: tty.Viewport, text: string, timeout_ms: integer): 
     return contains(snapshot)
 end
 local function run()
-    local activation = assert(registry.get("bee:harness_activation"))
+    local activation = assert(registry.get("bee.harness:harness_activation"))
     local data = activation.data :: {[string]: unknown}
     local bindings = data.bindings :: {string}
     bindings[#bindings + 1] = "bee.window.native:binding"

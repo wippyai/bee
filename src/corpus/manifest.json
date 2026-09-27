@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 4136,
+      "bytes": 4214,
       "id": "docs/readme",
-      "sha256": "6541c66ea99c8c737a2d84e065b418b0ebee0ab7b7e968bd11fc10240e234050",
+      "sha256": "3b33fc3d8f50f9124b9aae891965ee09e554cb68d04ef78923347e0f1dfaa7d6",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -131,17 +131,17 @@
       "topic": "platform"
     },
     {
-      "bytes": 7903,
+      "bytes": 8222,
       "id": "docs/system_map",
-      "sha256": "afd0149f3bfbc263612a17561dd6e2fb5ff9cf17d90bbd1529fd82efc6deed1a",
+      "sha256": "e84ae26e600d54a3e7f362469467417ce9896493d691b76c44d1ce3137524577",
       "source": "docs/development/ownership.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
     },
     {
-      "bytes": 4748,
+      "bytes": 6255,
       "id": "docs/package_boundaries",
-      "sha256": "972229cef12c99ad97de37800e00db4bc25b4eac13865549f8080e6771bec54b",
+      "sha256": "cc8defe1971f909a4255ae1a84fb42ac22ccd35e8a0f152185a03ddef3d880cc",
       "source": "docs/development/package-boundaries.md",
       "title": "Package boundaries",
       "topic": "platform"
@@ -149,7 +149,7 @@
     {
       "bytes": 19101,
       "id": "docs/mcp_configuration",
-      "sha256": "f166983ee42b9135f6408a7ab4a444bb10917ba293385c1a51297ab5eeb74ef8",
+      "sha256": "2d0e31b095e1974f6f8b4d4f718c7956a46e7bbeb2ae49c5a882e23c5d9249c4",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -259,9 +259,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 20877,
+      "bytes": 20917,
       "id": "docs/workspace_catalog",
-      "sha256": "817a9d79f0381f9952ce5a286c16f753b9cf0823a7b18091eb53505aed5cd35a",
+      "sha256": "a0a6f5ead640353ea736cf0d2605372d8f390fe327fe8a9fe1dede4c3ba170a8",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -273,6 +273,14 @@
       "source": "docs/reference/workspace-state.md",
       "title": "Workspace state and application restoration",
       "topic": "storage"
+    },
+    {
+      "bytes": 655,
+      "id": "component/agents",
+      "sha256": "b40d5b227f179d18c9b8847e9c7e20b350147749a051916a66a082b99b26a31e",
+      "source": "modules/agents/src/README.md",
+      "title": "Bee agents",
+      "topic": "component"
     },
     {
       "bytes": 2839,
@@ -291,9 +299,9 @@
       "topic": "component"
     },
     {
-      "bytes": 11506,
+      "bytes": 11530,
       "id": "component/credentials",
-      "sha256": "627b63e11c09e04310898f037334d7551b35a072ff183b67fae534ca72f3cb53",
+      "sha256": "d70bb6a5e705fb23844e4608c568840bec50fd50eff6064fe6da7d708eecba45",
       "source": "modules/credentials/src/README.md",
       "title": "bee.credentials",
       "topic": "component"
@@ -387,9 +395,9 @@
       "topic": "component"
     },
     {
-      "bytes": 21893,
+      "bytes": 21697,
       "id": "component/harness",
-      "sha256": "730109fafd8a73efa2aa70c7861e824851382f715380b1c0fc82a1f41e1f8237",
+      "sha256": "7a49b2a6e8dcbbe405bb59c5b175884bd41a3fe319a824b4b26e0ac43b16b887",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -443,17 +451,17 @@
       "topic": "component"
     },
     {
-      "bytes": 18640,
+      "bytes": 18665,
       "id": "component/placement:native",
-      "sha256": "3494be52df624d969853ceb89a62f0cced8e37fb1a6dba43e4e8eb0678491a3e",
+      "sha256": "b614f15d71eda47a8438a9be4d5af68e6b5b398fe7221c02b3f06b30e5078cde",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
     },
     {
-      "bytes": 3062,
+      "bytes": 3072,
       "id": "component/resources",
-      "sha256": "ad27efa6075c29f90115ac2d682f39de918cc1110f80c0469db222385ace4e6f",
+      "sha256": "aaab681e16c88f96685c11b35f3e76488b9453297e662905affaee871e0ccf88",
       "source": "modules/resources/src/README.md",
       "title": "bee.resources",
       "topic": "component"
@@ -486,7 +494,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 602581,
-    "documents": 60
+    "bytes": 605043,
+    "documents": 61
   }
 }

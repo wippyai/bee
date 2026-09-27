@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.security.harness
+namespace: bee.harness.security
 entries:
 - name: launch_spawn_policy
   kind: security.policy

@@ -55,13 +55,6 @@ entries:
     path: .resource_ref
   - entry: bee.gateway.security:address_policy
     path: .policy.resources +=
-- name: target_hook_storage
-  kind: ns.requirement
-  meta: {comment: Host-selected native environment storage holding the executable path in variable self}
-  default: bee.harness.host:environment
-  targets:
-  - entry: bee.gateway:hook_executable
-    path: .storage
 - name: target_approval_request_policy
   kind: ns.requirement
   meta: {comment: Host-selected approval request policy for exact per-binding MCP access proposals; an absent link fails closed}
@@ -261,7 +254,7 @@ entries:
   lifecycle: {auto_start: true}
 - name: hook_executable
   kind: env.variable
-  storage: bee.harness.host:environment
+  storage: bee.gateway:environment
   variable: self
   default: ''
   readonly: true

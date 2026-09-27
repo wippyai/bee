@@ -218,7 +218,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
-    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.resources:resource_manage_policy, bee.managed.window.fixture:selection_policy, bee.managed.window.fixture:retained_read_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.resources.security:resource_manage_policy, bee.managed.window.fixture:selection_policy, bee.managed.window.fixture:retained_read_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: retained_read_policy
   kind: security.policy

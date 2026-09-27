@@ -1,7 +1,7 @@
 # bee.credentials
 
 The owner-local credential broker. A definition names a credential in a
-workspace from a source the host admits (`bee:credential_sources`: an
+workspace from a source the host admits (`bee.credentials:credential_sources`: an
 `env.variable` entry, the workspace or `*`, the audience or `*`, a provider,
 the projection kinds allowed); its digest covers configuration and source
 identity, never bytes, and redefining it moves to the next revision so
@@ -53,13 +53,13 @@ Materialization reads that optional path from the same source. JSON setup is
 bounded to 4 KiB; opaque setup is bounded to 64 KiB. It appends the bytes to the
 transient returned format as an initializer that may be installed even when an
 optional login is absent. The setup declaration and its contents are never
-stored in a definition or projection, and a missing setup file is allowed. The host's `bee.security.credentials:credential_file_policy`
+stored in a definition or projection, and a missing setup file is allowed. The host's `bee.credentials.security:credential_file_policy`
 grants filesystem access separately from source metadata and is attached to
 availability and materializer check for stat-only checks, and to
 materialization for bounded reads.
-Registry source metadata in `bee:credential_sources` alone cannot grant filesystem
+Registry source metadata in `bee.credentials:credential_sources` alone cannot grant filesystem
 read: if a source ref is admitted by metadata but absent from
-`bee.security.credentials:credential_file_policy`, availability and materialization fail closed
+`bee.credentials.security:credential_file_policy`, availability and materialization fail closed
 (`UNAVAILABLE`). Adding another source requires an explicit host policy grant
 naming the login root.
 
@@ -71,7 +71,7 @@ and status views; they never echo secret bytes. Secret file contents are strictl
 absent from persisted database state: definitions, projections, generations,
 epochs, and the schema migration ledger (`bee_credential_schema_migrations`) never
 hold secret bytes. Only the admitted placement materializer holding
-`bee.security.credentials:credential_materialize_policy` receives bytes once per generation key in a
+`bee.credentials.security:credential_materialize_policy` receives bytes once per generation key in a
 transient RPC reply that nothing persists.
 
 Login file reads stop after 64 KiB plus one byte; supplemental JSON and opaque
@@ -160,11 +160,11 @@ child cannot be scrubbed.
 | `bee.credentials` | `persist/broker`: the seven operations and the store opened through `bee.persist`; root `sources`: host allowlist, provider destinations, linked references; contract `contract` with binding `local` |
 
 Actions: `bee.credentials.manage` (define, list, revoke any, revoke_all;
-`bee.security.credentials:credential_manage_policy`), `bee.credentials.issue` (issue for oneself;
-`bee.security.credentials:credential_issue_policy`, only in the workspace the caller's host-issued
+`bee.credentials.security:credential_manage_policy`), `bee.credentials.issue` (issue for oneself;
+`bee.credentials.security:credential_issue_policy`, only in the workspace the caller's host-issued
 identity is bound to through `actor.meta.workspace_id`),
 `bee.credentials.materialize` (check and materialize;
-`bee.security.credentials:credential_materialize_policy`, attached to node-level placement service
+`bee.credentials.security:credential_materialize_policy`, attached to node-level placement service
 and runner entries, which serve every workspace; an application that runs its
-own placement holds `bee.security.credentials:credential_materialize_workspace_policy`, limited to
+own placement holds `bee.credentials.security:credential_materialize_workspace_policy`, limited to
 its bound workspace).

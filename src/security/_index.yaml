@@ -17,26 +17,6 @@ entries:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.security.approvals:approval_decide_policy
     - bee.approvals.inbox:client_policy
-  - definition_id: bee.harness.window:app
-    scope_management: true
-    close_grace_ms: 60000
-    policies:
-    - bee.security.harness:carrier_policy
-    - bee.security.harness:carrier_environment_policy
-    - bee.security.harness:profile_workspace_policy
-    - bee.security.harness:profile_context_boundary
-    - bee.security.threads:thread_create_policy
-    - bee.security.harness:harness_setup_policy
-    - bee.security.placement:placement_store_policy
-    - bee.security.placement:placement_exec_policy
-    - bee.security.placement:placement_runner_policy
-    - bee.security.resources:resource_grant_policy
-    - bee.security.resources:resource_resolve_policy
-    - bee.security.credentials:credential_issue_policy
-    - bee.security.credentials:credential_materialize_workspace_policy
-    - bee.security.gateway:gateway_materialize_policy
-    - bee.security.gateway:gateway_supervision_policy
-    - bee.security.storage:workspace_folder_browse_policy
 - name: base_app_policy
   kind: security.policy
   policy:

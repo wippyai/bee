@@ -155,7 +155,7 @@ entries:
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
+    policies: [bee.placement.native.security:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
   meta:
     command:
       name: window-hooks-acceptance
@@ -172,7 +172,7 @@ entries:
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
+    policies: [bee.placement.native.security:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
   meta:
     command:
       name: window-hooks-crash-acceptance
@@ -189,7 +189,7 @@ entries:
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
+    policies: [bee.placement.native.security:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
   meta:
     command:
       name: window-hooks-pending-acceptance
@@ -206,7 +206,7 @@ entries:
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
+    policies: [bee.placement.native.security:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
   meta:
     command:
       name: window-hooks-cancel-recovery-acceptance
@@ -223,7 +223,7 @@ entries:
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
+    policies: [bee.placement.native.security:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
   meta:
     command:
       name: window-hooks-command-acceptance
@@ -240,7 +240,7 @@ entries:
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
-    policies: [bee.security.placement:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
+    policies: [bee.placement.native.security:placement_store_policy, bee.security.desktop:desktop_policy, bee.window.hooks.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_carrier_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.window.hooks.fixture:fixture_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: core_spawn_policy
   kind: security.policy

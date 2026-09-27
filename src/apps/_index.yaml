@@ -18,6 +18,7 @@ entries:
     shutdown: bee.apps:shutdown
     interaction: bee.application:interaction
     interactions: bee.apps:interactions
+    clock: bee:clock
     appearance: bee.application:appearance
     open_protocol: bee.apps:open_protocol
     binding_protocol: bee.host:binding_protocol
@@ -76,8 +77,15 @@ entries:
 - name: thread_binding
   kind: library.lua
   source: file://thread_binding.lua
+  modules: [security]
   imports:
     bounds: bee.threads.records:bounds
+    principal: bee.apps:principal
+    binding_protocol: bee.host:binding_protocol
+    reducer: bee.apps:thread_binding_reducer
+    contract: bee.protocol:application
+    open_protocol: bee.apps:open_protocol
+    lifecycle: bee.apps:lifecycle
 - name: thread_binding_reducer
   kind: library.lua
   source: file://thread_binding_reducer.lua

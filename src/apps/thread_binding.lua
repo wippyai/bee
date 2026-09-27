@@ -1,9 +1,15 @@
--- MIT. Pure application broker-to-Threads binding values.
+-- MIT. Application broker-to-Threads binding protocol and effect orchestration.
 --
--- This is deliberately below the broker lifecycle: it knows how to prove the
--- two memberships and build the three authority requests, but owns no call,
--- retry, persistence, or authorization decision.
+-- The broker retains application lifecycle ownership. This module owns the
+-- thread binding reducer's effects and the values sent across its boundaries.
 local bounds = require("bounds")
+local principal = require("principal")
+local binding_protocol = require("binding_protocol")
+local reducer = require("reducer")
+local contract = require("contract")
+local open_protocol = require("open_protocol")
+local lifecycle = require("lifecycle")
+local security = require("security")
 
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, value?: unknown, replayed: boolean,
@@ -12,9 +18,33 @@ type Binding = {instance_id: string, thread_id: string, actor_id: string,
     role: "participant", initiating_owner_id: string}
 type Membership = {head_revision: integer, membership_revision: integer}
 type MembershipStatus = {state: "active" | "absent" | "unknown", head_revision: integer?, membership_revision: integer?}
+type Open = {request: contract.Request, provenance: open_protocol.Provenance,
+    descriptor: contract.Descriptor, binding: contract.Binding, scope: security.Scope,
+    view_id: string, instance_id: string, existing: boolean}
+type Coordinator = {instance_id: string, state: reducer.State, open: Open?, retry_at: number,
+    failure_code: string?, failure_message: string?, stop_event: lifecycle.Event?, settle_after_revoke: boolean?,
+    effect: reducer.Effect?}
+type Engine = {coordinators: {[string]: Coordinator}, requests: {[string]: string}}
+type Context = {workspace_id: string, now: () -> number, new_id: () -> string,
+    send_host: (string, string, binding_protocol.Request) -> boolean,
+    thread_call: (string, string, unknown) -> (unknown?, string?), emit: (contract.Reply, boolean?) -> (),
+    stop_after_revoke: (string, lifecycle.Event, boolean) -> (), launch: (Coordinator) -> ()}
+type Outcome = "success" | "conflict" | "unknown"
 
 local M = {}
 local MAX_WORKSPACE_ID = 32
+
+function M.new(): Engine
+    return {coordinators = {}, requests = {}}
+end
+
+function M.new_coordinator(instance_id: string): Coordinator
+    return {instance_id = instance_id, state = reducer.new(), open = nil, retry_at = 0}
+end
+
+function M.reset(coordinator: Coordinator): ()
+    coordinator.state = reducer.new()
+end
 
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
@@ -41,10 +71,7 @@ local function workspace(value: unknown): string?
 end
 
 function M.actor(workspace_id: unknown, instance_id: unknown): string?
-    local checked_workspace = workspace(workspace_id)
-    local checked_instance = bounds.id(instance_id)
-    if not checked_workspace or not checked_instance then return nil end
-    return "bee.application:" .. checked_workspace .. ":" .. checked_instance
+    return principal.actor_id(workspace_id, instance_id)
 end
 
 local function binding(value: unknown, workspace_id: unknown): Binding?
@@ -175,6 +202,121 @@ function M.leave_request(value: unknown, workspace_id: unknown, idempotency_key:
     local request = mutation(value, workspace_id, idempotency_key, expected_revision, true)
     if request then request.role = nil end
     return request
+end
+
+local function outcome(reply: Reply?): Outcome
+    if reply and reply.ok then return "success" end
+    if reply and reply.error and reply.error.code == "CONFLICT" then return "conflict" end
+    return "unknown"
+end
+
+local function finish(engine: Engine, context: Context, coordinator: Coordinator, terminal: reducer.Terminal)
+    if terminal == "active" then
+        if coordinator.open then context.launch(coordinator) end
+    elseif terminal == "retry" then
+        coordinator.retry_at = context.now() + 0.2
+    elseif terminal == "cleanup_pending" then
+        coordinator.retry_at = context.now() + 1
+    else
+        local binding = coordinator.state.binding
+        if terminal == "failed" and binding then
+            coordinator.retry_at = context.now() + 0.2
+            return
+        end
+        if coordinator.open then
+            context.emit(contract.reply(coordinator.open.request.request_id, "open",
+                coordinator.failure_code or "permission_denied",
+                coordinator.failure_message or "Application thread access was revoked"), true)
+        end
+        for request_id, instance_id in pairs(engine.requests) do
+            if instance_id == coordinator.instance_id then engine.requests[request_id] = nil end
+        end
+        engine.coordinators[coordinator.instance_id] = nil
+    end
+end
+
+local function run_effect(engine: Engine, context: Context, coordinator: Coordinator, effect: reducer.Effect?)
+    if not effect then return end
+    coordinator.effect = effect
+    if type(effect) == "string" then finish(engine, context, coordinator, effect); return end
+    if type(effect) ~= "table" then error("Reducer produced an invalid application binding effect") end
+
+    local binding = coordinator.state.binding
+    if effect.kind == "host" then
+        local request_id = context.new_id()
+        local request = binding_protocol.request({version = 1, workspace_id = context.workspace_id,
+            request_id = request_id, op = effect.op, value = effect.value}, context.workspace_id)
+        if not request then error("Reducer produced an invalid application binding request") end
+        local instance_id = binding and binding.instance_id or coordinator.open and coordinator.open.instance_id or ""
+        engine.requests[request_id] = instance_id
+        if not context.send_host(request_id, instance_id, request) then
+            engine.requests[request_id] = nil
+            coordinator.retry_at = context.now() + 0.2
+        else
+            coordinator.effect = nil
+        end
+    elseif not binding then
+        finish(engine, context, coordinator, "failed")
+    elseif effect.kind == "membership" then
+        local request = M.get_request(binding, context.workspace_id)
+        if effect.principal == "application" then
+            local reply = request and context.thread_call(binding.actor_id, "bee.threads.service:get", request) or nil
+            local status = M.application_status(reply, binding, context.workspace_id)
+            M.drive(engine, context, coordinator, {kind = "membership", principal = "application", purpose = effect.purpose,
+                state = status.state, head_revision = status.head_revision, membership_revision = status.membership_revision})
+        else
+            local reply = request and context.thread_call(binding.initiating_owner_id, "bee.threads.service:get", request) or nil
+            local raw_purpose = effect.purpose
+            if not raw_purpose then error("Reducer membership effect has no purpose") end
+            local purpose: reducer.Purpose = raw_purpose
+            local revision = purpose == "cleanup_refresh" and M.owner_head(reply, binding, context.workspace_id)
+                or M.owner_get(reply, binding, context.workspace_id)
+            local state: "active" | "unknown" = revision and "active" or "unknown"
+            local event: reducer.Event = {kind = "membership", principal = "owner", purpose = purpose,
+                state = state, head_revision = revision}
+            M.drive(engine, context, coordinator, event)
+        end
+    elseif effect.kind == "join" then
+        local request = M.join_request(binding, context.workspace_id, binding.idempotency_key, effect.expected_revision)
+        local reply, err = nil, nil
+        if request then reply, err = context.thread_call(binding.initiating_owner_id, "bee.threads.service:join", request) end
+        local status = outcome(M.reply(reply))
+        if err then status = "unknown" end
+        M.drive(engine, context, coordinator, {kind = "join", outcome = status})
+    else
+        local request = M.leave_request(binding, context.workspace_id, binding.idempotency_key .. "-leave", effect.expected_revision)
+        local reply = request and context.thread_call(binding.initiating_owner_id, "bee.threads.service:leave", request) or nil
+        M.drive(engine, context, coordinator, {kind = "leave", outcome = outcome(M.reply(reply))})
+    end
+end
+
+function M.run_effect(engine: Engine, context: Context, coordinator: Coordinator, effect: reducer.Effect?): ()
+    run_effect(engine, context, coordinator, effect)
+end
+
+function M.drive(engine: Engine, context: Context, coordinator: Coordinator, event: reducer.Event): ()
+    local was_revoke = event.kind == "host" and event.op == "begin_revoke" and event.outcome == "success"
+    local state, effect = reducer.reduce(coordinator.state, event)
+    coordinator.state = state
+    if was_revoke and coordinator.open and coordinator.failure_code then
+        context.emit(contract.reply(coordinator.open.request.request_id, "open", coordinator.failure_code,
+            coordinator.failure_message or "Application thread access was revoked"), true)
+        coordinator.open = nil
+    end
+    if was_revoke and coordinator.stop_event then
+        local binding = coordinator.state.binding
+        if binding then
+            context.stop_after_revoke(binding.instance_id, coordinator.stop_event, coordinator.settle_after_revoke == true)
+        end
+        coordinator.stop_event = nil
+        coordinator.settle_after_revoke = nil
+    end
+    run_effect(engine, context, coordinator, effect)
+end
+
+function M.fail(engine: Engine, context: Context, coordinator: Coordinator, code: string, message: string): ()
+    coordinator.failure_code, coordinator.failure_message = code, message
+    M.drive(engine, context, coordinator, {kind = "revoke"})
 end
 
 return M

@@ -30,6 +30,7 @@ local configuration_protocol = require("configuration")
 local hook_records = require("hook_records")
 local M = {}
 M.PLACEMENT_BINDING = placement_resolver.DEFAULT
+M.CARRIER_REGISTRY_PREFIX = "bee.harness.carrier/"
 M.THREADS = "bee.threads.service"
 M.CARRIER_OPS = "bee.threads.carrier"
 M.GATEWAY = "bee.gateway.binding"
@@ -784,49 +785,125 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     step(io, "placement_intent")
     return {epoch = epoch, gateway_binding = gateway_binding, notice = notice}, nil, nil
 end
+local function settle_prestart_failure(io: IO, plan: Plan, epoch: integer, gateway_binding: string?, reason: string,
+    session: Session?, turn_id: string?, outcome: string?)
+    local request = plan.request
+    local settled_outcome = bounds.member(outcome or "failed", {"failed", "uncertain"}) or "failed"
+    local message = reason
+    local status_target = M.placement_target(plan, "status")
+    if status_target then
+        local status_value, status_error = must(io, status_target, {attempt_id = request.attempt_id})
+        if status_error then
+            if not status_error:find("NOT_FOUND", 1, true) then
+                settled_outcome = "uncertain"
+                message = message .. "; placement status failed: " .. status_error
+            end
+        else
+            local status = bounds.object(status_value)
+            local attempt = status and bounds.object(status.attempt)
+            local execution_state = attempt and bounds.member(attempt.execution_state, placement_types.EXECUTION_STATES)
+            if execution_state and execution_state ~= "intended" then settled_outcome = "uncertain" end
+            local stop_target = M.placement_target(plan, "stop")
+            if stop_target then
+                local _, stop_error = must(io, stop_target, {attempt_id = request.attempt_id, mode = "cooperative"})
+                if stop_error then message = message .. "; placement stop failed: " .. stop_error end
+            end
+        end
+    end
+    gateway_revoke(io, gateway_binding)
+    local code = settled_outcome == "uncertain" and "launch_uncertain" or "launch_failed"
+    local failure = {code = code, message = message, retryable = false}
+    if turn_id then
+        thread_call(io, request, "end_turn", {action_id = request.action_id, attempt_id = request.attempt_id,
+            turn_id = turn_id, carrier_epoch = epoch, turn_end = {outcome = settled_outcome, answer_message_ids = {},
+                evidence_refs = {}, error = failure}}, "failed:end_turn")
+    end
+    local point = session and session.checkpoint or checkpoint.new({binding_ref = plan.binding.binding_id,
+        binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id,
+        profile_digest = plan.binding.profile_digest.entry, plan_digest = plan.plan_digest,
+        gateway_binding = gateway_binding}, epoch)
+    point.terminal = {outcome = settled_outcome, answer = nil, error = failure}
+    local stored, stored_error = must(io, M.CARRIER_OPS .. ":checkpoint", {thread_id = request.thread_id, attempt_id = request.attempt_id})
+    local stored_object = bounds.object(stored)
+    local revision = stored_object and bounds.integer(stored_object.checkpoint_revision)
+    if not stored_error and revision and stored_object and stored_object.carrier_epoch == epoch then
+        must(io, M.CARRIER_OPS .. ":commit", {thread_id = request.thread_id,
+            attempt_id = request.attempt_id, idempotency_key = "launch:" .. request.attempt_id .. ":failure:checkpoint",
+            carrier_epoch = epoch, expected_revision = revision, checkpoint = point, records = {}})
+    end
+    thread_call(io, request, "receipt", {action_id = request.action_id, attempt_id = request.attempt_id,
+        carrier_epoch = epoch, receipt = {scope = "attempt", outcome = settled_outcome, evidence_refs = {}, error = failure}}, "failed:receipt")
+end
 -- Structured execution requests a turn and starts the pipe runner only after
 -- shared preparation. Failures before execution retire the admitted gateway.
 function M.open(io: IO, plan: Plan): (Session?, string?)
     if plan.profile.mode == "window" or plan.profile.protocol ~= "stream-json" then
         return nil, "structured carrier requires a stream-json session or batch profile"
     end
-    local prepared, preparation_error = M.prepare_attempt(io, plan)
-    if not prepared then return nil, preparation_error end
+    local prepared, preparation_error, failed_preparation = M.prepare_attempt(io, plan)
+    if not prepared then
+        if failed_preparation and failed_preparation.attempt and failed_preparation.epoch then
+            settle_prestart_failure(io, plan, failed_preparation.epoch, failed_preparation.gateway_binding,
+                "launch preparation failed: " .. tostring(preparation_error))
+        end
+        return nil, preparation_error
+    end
     local request = plan.request
     local epoch, gateway_binding = prepared.epoch, prepared.gateway_binding
-    local function abandon(err: string): (Session?, string?)
-        gateway_revoke(io, gateway_binding)
-        return nil, err
-    end
     local turn_id = "turn:" .. request.attempt_id .. ":1"
     local _, turn_error = thread_call(io, request, "request_turn", {action_id = request.action_id, attempt_id = request.attempt_id, turn_id = turn_id, carrier_epoch = epoch,
         turn = {input_message_ids = {}, input = {text = request.brief}, resume_ref = plan.resume_ref, delivery_ids = {}}}, "turn")
-    if turn_error then return abandon(turn_error) end
+    if turn_error then
+        settle_prestart_failure(io, plan, epoch, gateway_binding, "request turn failed: " .. turn_error, nil, turn_id)
+        return nil, turn_error
+    end
     step(io, "turn_requested")
     local point = checkpoint.new({binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry, plan_digest = plan.plan_digest, gateway_binding = gateway_binding}, epoch)
     point.retained_session_ref = request.session_ref
     local session = new_session(plan, turn_id, epoch, 0, point)
     local committed, commit_error = M.commit(io, session, {})
-    if not committed then return abandon(commit_error or "commit") end
+    if not committed then
+        local reason = "initial checkpoint failed: " .. tostring(commit_error or "commit")
+        settle_prestart_failure(io, plan, epoch, gateway_binding, reason, session, turn_id)
+        return nil, commit_error or "commit"
+    end
     local attach_target = M.placement_target(plan, "attach")
-    if not attach_target then return abandon("selected placement binds no attach") end
+    if not attach_target then
+        settle_prestart_failure(io, plan, epoch, gateway_binding, "selected placement binds no attach", session, turn_id)
+        return nil, "selected placement binds no attach"
+    end
     local _, attach_error = must(io, attach_target, {attempt_id = request.attempt_id, recipient = io.self_pid(), generation = epoch})
-    if attach_error then return abandon(attach_error) end
+    if attach_error then
+        settle_prestart_failure(io, plan, epoch, gateway_binding, "placement attach failed: " .. attach_error, session, turn_id)
+        return nil, attach_error
+    end
     step(io, "attached")
     if gateway_binding then
         local readiness_error = gateway_ready(io, gateway_binding)
-        if readiness_error then return abandon(readiness_error) end
+        if readiness_error then
+            settle_prestart_failure(io, plan, epoch, gateway_binding, readiness_error, session, turn_id)
+            return nil, readiness_error
+        end
     end
     local start_target = M.placement_target(plan, "start")
-    if not start_target then return abandon("selected placement binds no start") end
+    if not start_target then
+        settle_prestart_failure(io, plan, epoch, gateway_binding, "selected placement binds no start", session, turn_id)
+        return nil, "selected placement binds no start"
+    end
     local started_value, start_error = must(io, start_target, {attempt_id = request.attempt_id, gateway_binding = gateway_binding})
-    if start_error then return abandon(start_error) end
+    if start_error then
+        settle_prestart_failure(io, plan, epoch, gateway_binding, "placement start failed: " .. start_error, session, turn_id)
+        return nil, start_error
+    end
     step(io, "placement_started")
     local attempt = started_value :: placement_types.Attempt
     session.runner = attempt.runner
     local _, started_error = thread_call(io, request, "start_attempt", {action_id = request.action_id, attempt_id = request.attempt_id,
         started = {execution_kind = "process", execution_ref = attempt.attempt_id, owner_epoch = io.now_ms()}})
-    if started_error then return nil, started_error end
+    if started_error then
+        settle_prestart_failure(io, plan, epoch, gateway_binding, "recording placement start failed: " .. started_error, session, turn_id)
+        return nil, started_error
+    end
     step(io, "attempt_started")
     local observed, observe_error = placement_observation(io, session, attempt)
     if not observed then return nil, observe_error end

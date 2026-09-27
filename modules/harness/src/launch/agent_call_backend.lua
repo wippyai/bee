@@ -55,7 +55,7 @@ local function run(body: {[string]: unknown}): Reply
     if not child_thread or not child_action or not child_attempt then
         return fail("INTERNAL", "launch returned incomplete identities")
     end
-    local current = managed_run.status({thread_id = child_thread, attempt_id = child_attempt})
+    local current = managed_run.status({thread_id = child_thread, attempt_id = child_attempt}, {reconcile_prestart = true})
     local state = current and current.state or "starting"
     local idempotency_key = bounds.id(body.idempotency_key) or bounds.text(body.idempotency_key, 128)
     local receipt = {scope = "attempt", thread_id = child_thread, action_id = child_action,
@@ -64,7 +64,7 @@ local function run(body: {[string]: unknown}): Reply
         thread_id = child_thread, action_id = child_action, attempt_id = child_attempt,
         definition_ref = admitted.definition_ref, title = admitted.title, brief = admitted.brief,
         state = state, status = state, outcome = current and current.outcome or nil,
-        answer = current and current.answer or nil, idempotency_key = idempotency_key,
+        answer = current and current.answer or nil, error = current and current.error or nil, idempotency_key = idempotency_key,
         saved_profile_revision = admitted.saved_profile_revision,
         owner_component_revision = admitted.owner_component_revision, receipt = receipt,
     }}
@@ -103,7 +103,7 @@ local function handle(raw: unknown): Reply
     local run_ref, invalid = agent_launch.decode_run(body, allowed)
     if not run_ref then return fail("INVALID", invalid or "invalid run") end
     if operation == "status" then
-        local current, refused = managed_run.status(run_ref)
+        local current, refused = managed_run.status(run_ref, {reconcile_prestart = true})
         if not current then return refused or fail("UNAVAILABLE", "the attempt did not answer") end
         return {ok = true, error = nil, value = current}
     elseif operation == "wait" then
@@ -111,7 +111,7 @@ local function handle(raw: unknown): Reply
         if not wait_ms or wait_ms < 0 or wait_ms > agent_launch.MAX_WAIT_MS then
             return fail("INVALID", "wait_ms must be between 0 and " .. tostring(agent_launch.MAX_WAIT_MS))
         end
-        return managed_run.wait(run_ref, wait_ms)
+        return managed_run.wait(run_ref, wait_ms, {reconcile_prestart = true})
     end
     local wait_ms = body.wait_ms ~= nil and bounds.integer(body.wait_ms) or nil
     if body.wait_ms ~= nil and (not wait_ms or wait_ms < 0 or wait_ms > agent_launch.MAX_WAIT_MS) then

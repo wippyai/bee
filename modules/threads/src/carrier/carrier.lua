@@ -350,6 +350,16 @@ function M.checkpoint(db: sql.DB, actor: string, request: unknown): Result
             if outcome_err then return storage(outcome_err) end
             if not outcome then return storage("ended attempt has no receipt") end
             value.attempt_outcome = outcome
+            local settled, settled_err = reader.settled(tx, head.thread_id, "attempt", attempt.action_id, attempt_id)
+            if settled_err then return storage(settled_err) end
+            if not settled then return storage("ended attempt has no settlement record") end
+            local receipt, receipt_error = record.decode_json(settled.record_json)
+            if not receipt or receipt_error or receipt.kind ~= "receipt" or receipt.thread_id ~= head.thread_id
+                or receipt.action_id ~= attempt.action_id or receipt.attempt_id ~= attempt_id then
+                return storage("attempt receipt record is corrupt")
+            end
+            local receipt_body = bounds.object(receipt.body)
+            if receipt_body and receipt_body.error ~= nil then value.attempt_error = receipt_body.error end
         end
         local prepared, prepared_error = reader.attempt_prepared(tx, head.thread_id, attempt_id)
         if prepared_error then return storage(prepared_error) end

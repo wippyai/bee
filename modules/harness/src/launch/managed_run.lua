@@ -1,8 +1,11 @@
 -- MIT. Shared managed-run state transitions for placed and in-process drivers.
 local funcs = require("funcs")
 local time = require("time")
+local process = require("process")
+local registry = require("registry")
 local bounds = require("bounds")
 local agent_launch = require("agent_launch")
+local placement_resolver = require("placement_resolver")
 
 local M = {}
 local CARRIER = "bee.threads.carrier"
@@ -14,13 +17,14 @@ local CANCEL_STATUS = CARRIER .. ":cancel_status"
 local RECEIPT = THREADS .. ":receipt"
 local THREAD = THREADS .. ":get"
 local WATCH = DELIVERY .. ":watch"
+local CARRIER_REGISTRY_PREFIX = "bee.harness.carrier/"
 
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
 type Run = {thread_id: string, attempt_id: string}
-type Status = {thread_id: string, attempt_id: string, state: string, outcome: string?, answer: string?}
+type Status = {thread_id: string, attempt_id: string, state: string, outcome: string?, answer: string?, error: {[string]: unknown}?}
 type Stop = ({[string]: unknown}) -> (boolean, Reply?)
 type StatusOptions = {carrier_epoch_starts: boolean?, cancel_status_first: boolean?,
-    cancel_status_pending: boolean?, tolerate_checkpoint_failure: boolean?}
+    cancel_status_pending: boolean?, tolerate_checkpoint_failure: boolean?, reconcile_prestart: boolean?}
 type CancelOptions = {prestart: string?, stop: Stop?}
 type Context = {thread_id: string, action_id: string, attempt_id: string, carrier_epoch: integer,
     checkpoint_revision: integer, checkpoint: unknown, cancelled: () -> boolean,
@@ -59,6 +63,92 @@ local function checkpoint_intent(stored: {[string]: unknown}): (string?, string?
     return state, bounds.member(intent.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
 end
 
+local function carrier_active(attempt_id: string): (boolean?, string?)
+    local pid, lookup_error = process.registry.lookup(CARRIER_REGISTRY_PREFIX .. attempt_id)
+    if lookup_error and errors.is(lookup_error, errors.NOT_FOUND) then return false, nil end
+    if lookup_error then return nil, tostring(lookup_error) end
+    return pid ~= nil, nil
+end
+
+local function reconcile_orphan_prestart(run: Run, stored: {[string]: unknown}): Reply?
+    if stored.attempt_state ~= "prepared" or (bounds.count(stored.carrier_epoch) or 0) < 1 then return nil end
+    local active, active_error = carrier_active(run.attempt_id)
+    if active_error then return fail("UNAVAILABLE", "carrier liveness could not be checked: " .. active_error) end
+    if active then return nil end
+
+    local outcome = "failed"
+    local reason = "carrier exited during launch preparation"
+    local placement_binding = bounds.id(stored.placement_binding)
+    local placement_attempt = bounds.id(stored.placement_attempt_id)
+    if placement_binding and placement_attempt then
+        local pinned, pin_error = registry.snapshot()
+        if not pinned then
+            outcome = "uncertain"
+            reason = reason .. "; placement could not be inspected: " .. tostring(pin_error or "registry snapshot")
+        else
+            local placement, placement_error = placement_resolver.resolve(pinned, placement_binding)
+            if not placement then
+                outcome = "uncertain"
+                reason = reason .. "; placement could not be inspected: " .. tostring(placement_error or "placement binding")
+            else
+                local status_target = placement.methods.status
+                local current: {[string]: unknown}?
+                local status_refused: Reply?
+                if status_target then current, status_refused = call(status_target, {attempt_id = placement_attempt}) end
+                if not status_target then
+                    outcome = "uncertain"
+                    reason = reason .. "; placement binds no status operation"
+                elseif status_refused then
+                    local message = status_refused.error and status_refused.error.message or "status refused"
+                    if status_refused.error and status_refused.error.code ~= "NOT_FOUND" then
+                        outcome = "uncertain"
+                        reason = reason .. "; placement status failed: " .. message
+                    else
+                        reason = reason .. "; placement did not record an attempt"
+                    end
+                elseif current then
+                    local attempt = bounds.object(current.attempt)
+                    local execution = attempt and bounds.member(attempt.execution_state,
+                        {"intended", "starting", "running", "stopping", "exited", "uncertain"})
+                    if execution and execution ~= "intended" then
+                        outcome = "uncertain"
+                        reason = reason .. "; placement had reached " .. execution
+                    else
+                        reason = reason .. "; placement had not started a child"
+                    end
+                    local stop_target = placement.methods.stop
+                    if stop_target then
+                        local _, stop_refused = call(stop_target, {attempt_id = placement_attempt, mode = "cooperative"})
+                        if stop_refused then
+                            reason = reason .. "; placement stop failed: " .. tostring(stop_refused.error and stop_refused.error.message or "stop refused")
+                        end
+                    end
+                end
+            end
+        end
+    else
+        reason = reason .. "; no placement attempt identity was recorded"
+    end
+
+    local epoch = bounds.count(stored.carrier_epoch)
+    local action_id = bounds.id(stored.action_id)
+    if not epoch or not action_id then return fail("INTERNAL", "the prepared attempt has no carrier epoch or action") end
+    local code = outcome == "failed" and "carrier_lost" or "carrier_lost_uncertain"
+    local failure = {code = code, message = reason, retryable = false}
+    local turn_id = bounds.id(stored.open_turn_id)
+    if turn_id then
+        local _, end_refused = call(THREADS .. ":end_turn", {thread_id = run.thread_id, action_id = action_id,
+            attempt_id = run.attempt_id, turn_id = turn_id, carrier_epoch = epoch,
+            idempotency_key = "reconcile:" .. run.attempt_id .. ":end_turn",
+            turn_end = {outcome = outcome, answer_message_ids = {}, evidence_refs = {}, error = failure}})
+        if end_refused then return end_refused end
+    end
+    local _, receipt_refused = call(RECEIPT, {thread_id = run.thread_id, action_id = action_id, attempt_id = run.attempt_id,
+        carrier_epoch = epoch, idempotency_key = "reconcile:" .. run.attempt_id .. ":receipt",
+        receipt = {scope = "attempt", outcome = outcome, evidence_refs = {}, error = failure}})
+    return receipt_refused
+end
+
 function M.status(run: Run, options: StatusOptions?): (Status?, Reply?, {[string]: unknown}?)
     local opts = options or {}
     if opts.cancel_status_first then
@@ -94,6 +184,16 @@ function M.status(run: Run, options: StatusOptions?): (Status?, Reply?, {[string
         return nil, refused, nil
     end
 
+    if opts.reconcile_prestart then
+        local reconcile_refused = reconcile_orphan_prestart(run, stored)
+        if reconcile_refused then return nil, reconcile_refused, stored end
+        if stored.attempt_state == "prepared" then
+            local refreshed, refresh_refused = call(CHECKPOINT, {thread_id = run.thread_id, attempt_id = run.attempt_id})
+            if refreshed then stored = refreshed
+            elseif refresh_refused then return nil, refresh_refused, stored end
+        end
+    end
+
     local ended = stored.attempt_state == "ended"
     local state = "starting"
     if ended then
@@ -104,6 +204,7 @@ function M.status(run: Run, options: StatusOptions?): (Status?, Reply?, {[string
     local answer: string? = nil
     local checkpoint = bounds.object(stored.checkpoint)
     local terminal = checkpoint and bounds.object(checkpoint.terminal)
+    local failure = ended and (bounds.object(stored.attempt_error) or (terminal and bounds.object(terminal.error))) or nil
     if ended and terminal then answer = bounds.text(terminal.answer, agent_launch.MAX_ANSWER_BYTES) end
     if not ended then
         local intent_state = checkpoint_intent(stored)
@@ -118,7 +219,7 @@ function M.status(run: Run, options: StatusOptions?): (Status?, Reply?, {[string
         outcome = bounds.member(terminal.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
     end
     return {thread_id = run.thread_id, attempt_id = run.attempt_id, state = state,
-        outcome = outcome, answer = answer}, nil, stored
+        outcome = outcome, answer = answer, error = failure}, nil, stored
 end
 
 function M.wait(run: Run, wait_ms: integer, options: StatusOptions?): Reply

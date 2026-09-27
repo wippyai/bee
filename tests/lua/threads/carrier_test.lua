@@ -119,6 +119,8 @@ local function define_tests()
                 test.eq(ended.attempt_state, "ended")
                 test.eq(ended.attempt_outcome, outcome)
                 test.eq(ended.checkpoint.terminal.outcome, "succeeded")
+                if outcome == "succeeded" then test.is_nil(ended.attempt_error)
+                else test.eq((ended.attempt_error :: {[string]: unknown}).message, outcome) end
             end
         end)
         test.it("records a durable cancel intent per attempt and surfaces it on the checkpoint", function()

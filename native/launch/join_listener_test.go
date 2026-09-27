@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -109,12 +108,20 @@ func TestJoinListenerRefusesWithoutPinning(t *testing.T) {
 	redeem := &fakeRedeemer{refusal: &invite.Refused{Code: "CONFLICT", Message: "invite was already used"}}
 	a, state := joinAdmitter(t, redeem)
 	request, _ := redeemRequest(t)
+	request.Observed = "203.0.113.7"
+	assigned, err := assignedInterfaceAddresses()
+	if err == nil && len(assigned) > 0 {
+		request.Local = assigned[0].address.String()
+	}
 	_, refused := a.admit(context.Background(), ed25519.PublicKey(make([]byte, ed25519.PublicKeySize)), request)
 	if refused == nil || refused.Code != "CONFLICT" {
 		t.Fatalf("refusal = %v", refused)
 	}
 	if _, err := os.Stat(filepath.Join(ownerPeersDirectory(state), "bee-owner-joiner.pub")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("a refused joiner was pinned: %v", err)
+	}
+	if _, ok := a.reachedAddress(); ok {
+		t.Fatal("a refused join changed the reached route")
 	}
 	for _, bad := range []invite.Request{
 		func() invite.Request { r := request; r.Node = a.node; return r }(),
@@ -210,9 +217,9 @@ func TestRepublishAddressOnlyOnChange(t *testing.T) {
 	}
 }
 
-// The listener reports the local address of an accepted join connection, so
+// An admitted join reports its authenticated connection's local address, so
 // the node can advertise a path the peer proved it can reach.
-func TestListenerObservesTheLocalAddressOfAJoin(t *testing.T) {
+func TestAdmissionObservesTheLocalAddressOfAJoin(t *testing.T) {
 	a, _ := joinAdmitter(t, &fakeRedeemer{})
 	if _, ok := a.reachedAddress(); ok {
 		t.Fatal("a fresh admitter already reported a reached address")
@@ -222,10 +229,10 @@ func TestListenerObservesTheLocalAddressOfAJoin(t *testing.T) {
 		t.Skip("no non-loopback interface to test a reached path with")
 	}
 	local := assigned[0].address
-	remote := &net.TCPAddr{IP: net.IPv4(203, 0, 113, 7), Port: 5000}
+	remote := "203.0.113.7"
 	// A peer on another machine that reached a local address teaches the path
 	// this node must advertise.
-	a.observeReached(remote, &net.TCPAddr{IP: net.ParseIP(local.String()), Port: 4100})
+	a.observeReached(remote, local.String())
 	reached, ok := a.reachedAddress()
 	if !ok || reached != local {
 		t.Fatalf("reached = %v, %v; want %v", reached, ok, local)
@@ -233,17 +240,54 @@ func TestListenerObservesTheLocalAddressOfAJoin(t *testing.T) {
 	// A peer on this host teaches nothing: its local address may be one no
 	// other machine can route.
 	a.reached.Store(nil)
-	a.observeReached(&net.TCPAddr{IP: net.ParseIP(local.String())}, &net.TCPAddr{IP: net.ParseIP(local.String()), Port: 4100})
+	a.observeReached(local.String(), local.String())
 	if _, ok := a.reachedAddress(); ok {
 		t.Fatal("a same-host peer was recorded as a reached path")
 	}
 	// A loopback or unspecified local address teaches nothing either.
-	for _, address := range []net.Addr{&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}, &net.TCPAddr{IP: net.IPv4zero}} {
+	for _, address := range []string{"127.0.0.1", "0.0.0.0"} {
 		a.reached.Store(nil)
 		a.observeReached(remote, address)
 		if _, ok := a.reachedAddress(); ok {
 			t.Fatalf("local address %v was recorded", address)
 		}
+	}
+}
+
+// A same-host join can traverse a container hairpin whose socket source is an
+// alias on a loopback interface and therefore excluded from advertise picks.
+// Listener-owned socket evidence still identifies the shared host, so that
+// path must not replace the stable address either node advertises on restart.
+func TestSameHostJoinDoesNotRecordAHairpinPath(t *testing.T) {
+	a, state := joinAdmitter(t, &fakeRedeemer{})
+	assigned, err := assignedInterfaceAddresses()
+	if err != nil || len(assigned) == 0 {
+		t.Skip("no non-loopback interface to test a same-host path with")
+	}
+	local := assigned[0].address
+	request, _ := redeemRequest(t)
+	request.Observed = local.String()
+	request.Local = local.String()
+	identity := ed25519.PublicKey(make([]byte, ed25519.PublicKeySize))
+	if _, refused := a.admit(context.Background(), identity, request); refused != nil {
+		t.Fatal(refused)
+	}
+	if _, ok := a.reachedAddress(); ok {
+		t.Fatal("a same-host hairpin was recorded as a remotely reached path")
+	}
+	if _, err := os.Stat(filepath.Join(ownerDirectory(state), reachedFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("same-host hairpin persisted a reached path: %v", err)
+	}
+}
+
+func TestSameHostJoinRecognizesLoopbackInterfaceAliases(t *testing.T) {
+	alias := netip.MustParseAddr("10.255.255.254")
+	assigned := []interfaceAddress{{name: "lo", address: alias}}
+	if !sameHostJoin(alias.String(), assigned, nil) {
+		t.Fatal("a loopback-interface alias was not recognized as same-host")
+	}
+	if sameHostJoin("203.0.113.7", assigned, nil) || sameHostJoin("invalid", assigned, nil) {
+		t.Fatal("a foreign or invalid source was recognized as same-host")
 	}
 }
 
@@ -268,7 +312,7 @@ func TestAdmissionSeedsAJoinerAtAReachableAddress(t *testing.T) {
 		t.Skip("no non-loopback interface to seed a remote joiner with")
 	}
 	local := assigned[0].address
-	a.observeReached(&net.TCPAddr{IP: net.IPv4(203, 0, 113, 7)}, &net.TCPAddr{IP: net.ParseIP(local.String()), Port: 5000})
+	a.observeReached("203.0.113.7", local.String())
 	admission, refused := a.admit(context.Background(), identity, request)
 	if refused != nil {
 		t.Fatal(refused)

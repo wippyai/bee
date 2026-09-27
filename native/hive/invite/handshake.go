@@ -52,6 +52,9 @@ type Request struct {
 	// handler runs; a value arriving on the wire is overwritten and is never
 	// trusted.
 	Observed string `json:"observed,omitempty"`
+	// Local is the accepted socket's local IP. It is listener-owned evidence
+	// for the handler and never travels on the wire.
+	Local string `json:"-"`
 }
 
 // Admission is what the hive node returns to an admitted joiner: its node, the
@@ -335,6 +338,10 @@ func serve(ctx context.Context, connection *tls.Conn, handler Handler) {
 	request.Observed = ""
 	if host, _, err := net.SplitHostPort(connection.RemoteAddr().String()); err == nil {
 		request.Observed = host
+	}
+	request.Local = ""
+	if host, _, err := net.SplitHostPort(connection.LocalAddr().String()); err == nil {
+		request.Local = host
 	}
 	if request.Version != Version {
 		_ = writeMessage(connection, response{Refused: &Refused{Code: "UNSUPPORTED_SCHEMA", Message: "unsupported invite handshake version"}})

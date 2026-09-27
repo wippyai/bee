@@ -183,14 +183,21 @@ func redeemInvite(ctx context.Context, state string, line invite.Invite) (result
 		return err
 	}
 	tailnet, _ := tailscaleIdentity()
-	if _, _, err := applyObservedAddress(directory, admission.Observed, assigned, tailnet); err != nil {
+	sameHost := localJoinPath(path.Endpoint, assigned, tailnet)
+	observed := admission.Observed
+	if sameHost {
+		observed = address.String()
+	}
+	if _, _, err := applyObservedAddress(directory, observed, assigned, tailnet); err != nil {
 		return err
 	}
 	gossip, err := netip.ParseAddrPort(admission.Gossip)
 	if err != nil {
 		return errors.New("the hive node sent an invalid gossip address")
 	}
-	gossip = gossipSeedForPath(gossip, path.Endpoint)
+	if !sameHost {
+		gossip = gossipSeedForPath(gossip, path.Endpoint)
+	}
 	secret, err := base64.StdEncoding.DecodeString(admission.Secret)
 	if err != nil || len(secret) != 32 {
 		return errors.New("the hive node sent an invalid mesh secret")
@@ -225,6 +232,14 @@ func redeemInvite(ctx context.Context, state string, line invite.Invite) (result
 		}
 	}
 	return nil
+}
+
+// localJoinPath identifies an authenticated route that terminates on this
+// host. Its translated source can look NATed to the inviter, but it must not
+// make either same-host node change its stable mesh address across restarts.
+func localJoinPath(endpoint string, assigned []interfaceAddress, tailnet []netip.Addr) bool {
+	path, err := netip.ParseAddrPort(endpoint)
+	return err == nil && isAssignedLocally(path.Addr(), assigned, tailnet)
 }
 
 // leaveHive retires the Hive peer node of state: its pin leaves the peers

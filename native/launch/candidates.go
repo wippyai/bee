@@ -23,13 +23,24 @@ type interfaceAddress struct {
 }
 
 func assignedInterfaceAddresses() ([]interfaceAddress, error) {
+	return interfaceAddresses(false)
+}
+
+// hostInterfaceAddresses includes addresses assigned to a loopback interface.
+// A same-host container or VM hairpin can be translated to such an alias even
+// though that alias must never become a mesh advertise candidate.
+func hostInterfaceAddresses() ([]interfaceAddress, error) {
+	return interfaceAddresses(true)
+}
+
+func interfaceAddresses(includeLoopback bool) ([]interfaceAddress, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
 	var result []interfaceAddress
 	for _, iface := range interfaces {
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+		if iface.Flags&net.FlagUp == 0 || (!includeLoopback && iface.Flags&net.FlagLoopback != 0) {
 			continue
 		}
 		addresses, err := iface.Addrs()

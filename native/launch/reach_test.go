@@ -23,3 +23,19 @@ func TestGossipSeedUsesVerifiedJoinPath(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalJoinPathRecognizesLANAndTailnetAddresses(t *testing.T) {
+	lan := netip.MustParseAddr("192.168.1.5")
+	tailnet := netip.MustParseAddr("100.70.10.28")
+	assigned := []interfaceAddress{{name: "eth0", address: lan}}
+	for endpoint, want := range map[string]bool{
+		"192.168.1.5:5000":  true,
+		"100.70.10.28:5000": true,
+		"203.0.113.7:5000":  false,
+		"invalid":           false,
+	} {
+		if got := localJoinPath(endpoint, assigned, []netip.Addr{tailnet}); got != want {
+			t.Errorf("localJoinPath(%q) = %v, want %v", endpoint, got, want)
+		}
+	}
+}

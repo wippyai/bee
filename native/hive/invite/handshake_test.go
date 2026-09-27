@@ -43,13 +43,14 @@ func TestDialReceivesALargeAdmissionAfterASlowRedemption(t *testing.T) {
 // claimed is discarded.
 func TestListenerReportsTheObservedJoinAddress(t *testing.T) {
 	hive := identity(t)
-	var observed string
+	var observed, local string
 	address := listen(t, hive, func(_ context.Context, _ ed25519.PublicKey, request Request) (Admission, *Refused) {
 		observed = request.Observed
+		local = request.Local
 		return Admission{Node: "bee-owner-0123456789abcdef"}, nil
 	})
 	admission, _, err := Dial(context.Background(), sample(address, hive), identity(t),
-		Request{Node: "bee-owner-joiner", Observed: "203.0.113.9"})
+		Request{Node: "bee-owner-joiner", Observed: "203.0.113.9", Local: "203.0.113.10"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +59,9 @@ func TestListenerReportsTheObservedJoinAddress(t *testing.T) {
 	}
 	if admission.Observed != "127.0.0.1" {
 		t.Fatalf("admission observed %q, want 127.0.0.1", admission.Observed)
+	}
+	if local != "127.0.0.1" {
+		t.Fatalf("listener local address = %q, want the accepted socket's 127.0.0.1", local)
 	}
 }
 

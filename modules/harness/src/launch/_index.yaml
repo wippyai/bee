@@ -150,6 +150,7 @@ entries:
     bounds: bee.threads.records:bounds
     agent_launch: bee.harness.launch:agent_launch
     placement_resolver: bee.placement:resolver
+    prestart: bee.harness.carrier:prestart
 - name: agent_launch_backend
   kind: function.lua
   source: file://agent_launch_method.lua

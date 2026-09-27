@@ -18,6 +18,7 @@ local classify = require("classify")
 local policy = require("policy")
 local provenance = require("provenance")
 local checkpoint = require("checkpoint")
+local prestart = require("prestart")
 local continuation = require("continuation")
 local settle = require("settle")
 local stream_json = require("stream_json")
@@ -25,12 +26,19 @@ local driver_types = require("driver_types")
 local placement_types = require("placement_types")
 local placement_resolver = require("placement_resolver")
 local placement_protocol = require("placement_protocol")
+local placement_decode = require("placement_decode")
+local record_types = require("record_types")
+local thread_record = require("thread_record")
+local record_values = require("record_values")
+local observation_decode = require("observation_decode")
 local launch_request = require("launch_request")
 local configuration_protocol = require("configuration")
+local gateway_protocol = require("gateway_protocol")
+local service_reply = require("service_reply")
 local hook_records = require("hook_records")
 local M = {}
 M.PLACEMENT_BINDING = placement_resolver.DEFAULT
-M.CARRIER_REGISTRY_PREFIX = "bee.harness.carrier/"
+M.CARRIER_REGISTRY_PREFIX = prestart.CARRIER_REGISTRY_PREFIX
 M.THREADS = "bee.threads.service"
 M.CARRIER_OPS = "bee.threads.carrier"
 M.GATEWAY = "bee.gateway.binding"
@@ -44,7 +52,7 @@ M.WAITER_NAME = "bee.threads.waiter"
 M.HINT_REGISTRATION_MS = 60000
 M.MAX_CONSUME_ATTEMPTS = 3
 type Object = {[string]: unknown}
-type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown, replayed: boolean?}
+type Reply = service_reply.Reply
 type IO = {
     call: (string, unknown) -> (unknown, string?),
     send: (string, string, unknown) -> (),
@@ -148,9 +156,10 @@ type Session = {
     dropping_stdout: boolean,
 }
 type Offer = {thread_id: string, action_id: string, record_id: string, inbox_sequence: integer, payload_digest: string, message_id: string,
-    message_kind: string, sender_action_id: string, sender_thread_id: string, sender_node_id: string, content: unknown, in_reply_to: unknown?, state: string, dispatch: boolean, offer_count: integer}
+    message_kind: "request" | "progress" | "reply" | "notification", sender_action_id: string, sender_thread_id: string, sender_node_id: string,
+    content: record_types.Content, in_reply_to: record_types.Ref?, state: "offered" | "transport_accepted", dispatch: boolean, offer_count: integer}
 local function step(io: IO, name: string)
-    if io.after then (io.after :: (string) -> ())(name) end
+    if io.after then io.after(name) end
 end
 -- The durable states travel in the checkpoint so a replacement keeps what
 -- was observed; unobserved and incomplete are conclusions, never stored
@@ -161,14 +170,213 @@ local function mark_output(session: Session, state: OutputState)
 end
 local function reply_of(value: unknown, err: string?): (Reply?, string?)
     if err then return nil, err end
-    if type(value) ~= "table" then return nil, "reply is not an object" end
-    return value :: Reply, nil
+    return service_reply.decode(value)
+end
+type ExecutableCapability = {streaming: boolean, read_only_volume: boolean, detail: string}
+local function executable_capability(value: unknown): (ExecutableCapability?, string?)
+    local capabilities = bounds.object(value)
+    if not capabilities then return nil, "capabilities must be an object" end
+    local capability_fields = bounds.fields(capabilities, {"capability", "exit_observation", "stdin_close", "detail", "executable_measurement", "resource_authority",
+        "delegated_resource_grants", "revocation_enforcement", "credential_broker", "credential_projections", "max_chunk_bytes", "gateway", "max_write_bytes",
+        "max_outstanding_chunks", "max_spool_bytes", "max_evidence_page", "canonical"})
+    if capability_fields then return nil, "capabilities: " .. capability_fields end
+    local report = bounds.object(capabilities.executable_measurement)
+    if not report then return nil, "executable_measurement must be an object" end
+    local report_fields = bounds.fields(report, {"streaming", "read_only_volume", "detail"})
+    local detail = bounds.text(report.detail, 4096)
+    if report_fields or type(report.streaming) ~= "boolean" or type(report.read_only_volume) ~= "boolean" or detail == nil then
+        return nil, "executable_measurement is malformed"
+    end
+    return {streaming = report.streaming, read_only_volume = report.read_only_volume, detail = detail}, nil
+end
+local function executable_measurement(value: unknown, expected_path: string): (placement_types.ExecutableMeasurement?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "measurement must be an object" end
+    local unknown_field = bounds.fields(object, {"revision", "path", "kind", "interpreter", "size", "digest"})
+    local revision, path = bounds.id(object.revision), bounds.text(object.path, bounds.MAX_TEXT_BYTES)
+    local kind = bounds.member(object.kind, {"elf", "script", "other"})
+    local size, digest = bounds.count(object.size), bounds.text(object.digest, 64)
+    local interpreter: string? = nil
+    if object.interpreter ~= nil then interpreter = bounds.text(object.interpreter, 4096) end
+    if unknown_field then return nil, "measurement: " .. unknown_field end
+    if not revision then return nil, "measurement revision is invalid" end
+    if path ~= expected_path then return nil, "measurement names another path" end
+    if not kind then return nil, "measurement kind is invalid" end
+    if size == nil then return nil, "measurement size is invalid" end
+    if not digest then return nil, "measurement digest is invalid" end
+    if #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "measurement digest is invalid" end
+    if object.interpreter ~= nil and not interpreter then return nil, "measurement interpreter is invalid" end
+    if (kind == "script") ~= (interpreter ~= nil) then return nil, "measurement interpreter does not match its kind" end
+    local decoded_kind: string
+    if kind == "elf" then decoded_kind = "elf"
+    elseif kind == "script" then decoded_kind = "script"
+    else decoded_kind = "other" end
+    local decoded: placement_types.ExecutableMeasurement = {revision = revision, kind = decoded_kind, digest = digest}
+    return decoded, nil
+end
+type ThreadPage = {records: {record_types.Record}, scanned_through: integer, has_more: boolean}
+local function thread_page(value: unknown, cursor: integer, limit: integer): (ThreadPage?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "page must be an object" end
+    local unknown_field = bounds.fields(object, {"records", "scanned_through", "has_more"})
+    local rows, rows_error = bounds.array(object.records, limit)
+    local scanned_through = bounds.integer(object.scanned_through)
+    if unknown_field then return nil, "page: " .. unknown_field end
+    if not rows then return nil, "page records: " .. tostring(rows_error) end
+    if scanned_through == nil then return nil, "page cursor is invalid" end
+    if scanned_through < cursor or scanned_through > bounds.MAX_THREAD_RECORDS then return nil, "page cursor is invalid" end
+    if type(object.has_more) ~= "boolean" then return nil, "page has_more flag is invalid" end
+    local page_cursor: integer = scanned_through
+    local has_more: boolean = object.has_more
+    local records: {record_types.Record} = {}
+    local previous_sequence = cursor
+    for index, raw in ipairs(rows) do
+        local decoded, decode_error = thread_record.decode(raw)
+        if not decoded then return nil, "page records[" .. tostring(index) .. "]: " .. tostring(decode_error) end
+        if decoded.sequence <= previous_sequence or decoded.sequence > page_cursor then return nil, "page records are not in sequence" end
+        previous_sequence = decoded.sequence
+        records[index] = decoded
+    end
+    if #records > 0 and page_cursor < previous_sequence then return nil, "page cursor precedes its final record" end
+    return {records = records, scanned_through = page_cursor, has_more = has_more}, nil
+end
+type InboxState = "committed" | "offered" | "transport_accepted" | "acknowledged" | "replied"
+type InboxItem = {thread_id: string, inbox_sequence: integer, record_id: string, thread_sequence: integer, payload_digest: string, state: InboxState,
+    delivery_status: string, sender_action_id: string, sender_node_id: string, sender_thread_id: string, message_id: string,
+    content: record_types.Content, message_kind: "request" | "progress" | "reply" | "notification", in_reply_to: record_types.Ref?}
+type InboxPage = {items: {InboxItem}, has_more: boolean, scanned_through: integer}
+local function decode_inbox_offer(value: unknown, expected_thread: string, expected_action: string): (Offer?, string?)
+    local item = bounds.object(value)
+    if not item then return nil, "inbox offer must be an object" end
+    local unknown_field = bounds.fields(item, {"empty", "thread_id", "action_id", "record_id", "inbox_sequence", "payload_digest", "message_id", "message_kind",
+        "sender_action_id", "sender_thread_id", "sender_node_id", "content", "in_reply_to", "state", "dispatch", "offer_count"})
+    if unknown_field then return nil, "inbox offer: " .. unknown_field end
+    if item.empty ~= nil then
+        if item.empty ~= true then return nil, "inbox offer empty flag is invalid" end
+        if bounds.fields(item, {"empty"}) ~= nil then return nil, "empty inbox offer carries an item" end
+        return nil, nil
+    end
+    local thread_id, action_id = bounds.id(item.thread_id), bounds.id(item.action_id)
+    local record_id, digest, message_id = bounds.id(item.record_id), bounds.text(item.payload_digest, 64), bounds.id(item.message_id)
+    local sequence, offer_count = bounds.count(item.inbox_sequence), bounds.count(item.offer_count)
+    local sender_action, sender_thread, sender_node = bounds.id(item.sender_action_id), bounds.id(item.sender_thread_id), bounds.id(item.sender_node_id)
+    local content, content_error = record_values.content(item.content)
+    local message_kind = bounds.member(item.message_kind, {"request", "progress", "reply", "notification"})
+    local state = bounds.member(item.state, {"offered", "transport_accepted"})
+    local in_reply_to: record_types.Ref? = nil
+    if item.in_reply_to ~= nil then
+        local reference, reference_error = record_values.ref(item.in_reply_to)
+        if not reference then return nil, "inbox offer reply reference is malformed: " .. tostring(reference_error) end
+        in_reply_to = {thread_id = reference.thread_id, record_id = reference.record_id}
+    end
+    if not thread_id or thread_id ~= expected_thread then return nil, "inbox offer thread is invalid" end
+    if not action_id or action_id ~= expected_action then return nil, "inbox offer action is invalid" end
+    if not record_id then return nil, "inbox offer record id is invalid" end
+    if digest == nil then return nil, "inbox offer digest is invalid" end
+    if #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "inbox offer digest is invalid" end
+    if not message_id then return nil, "inbox offer message id is invalid" end
+    if sequence == nil or sequence < 1 or offer_count == nil or offer_count < 1 then return nil, "inbox offer sequence is invalid" end
+    if not sender_action or not sender_thread or not sender_node then return nil, "inbox offer sender is invalid" end
+    if not content then return nil, "inbox offer content is invalid: " .. tostring(content_error) end
+    if not message_kind or not state then return nil, "inbox offer kind or state is invalid" end
+    if type(item.dispatch) ~= "boolean" then return nil, "inbox offer dispatch flag is invalid" end
+    local valid_kind: "request" | "progress" | "reply" | "notification"
+    if message_kind == "request" then valid_kind = "request"
+    elseif message_kind == "progress" then valid_kind = "progress"
+    elseif message_kind == "reply" then valid_kind = "reply"
+    else valid_kind = "notification" end
+    local valid_state: "offered" | "transport_accepted"
+    if state == "offered" then valid_state = "offered" else valid_state = "transport_accepted" end
+    local offer: Offer = {thread_id = thread_id, action_id = action_id, record_id = record_id, inbox_sequence = sequence, payload_digest = digest,
+        message_id = message_id, message_kind = valid_kind, sender_action_id = sender_action, sender_thread_id = sender_thread,
+        sender_node_id = sender_node, content = content, in_reply_to = in_reply_to, state = valid_state, dispatch = item.dispatch, offer_count = offer_count}
+    return offer, nil
+end
+local function inbox_list_page(value: unknown, limit: integer): (InboxPage?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "inbox page must be an object" end
+    local unknown_field = bounds.fields(object, {"items", "has_more", "scanned_through"})
+    local raw_items, array_error = bounds.array(object.items, limit)
+    local scanned = bounds.count(object.scanned_through)
+    if unknown_field or not raw_items or type(object.has_more) ~= "boolean" or scanned == nil then
+        return nil, "inbox page fields are malformed: " .. tostring(array_error)
+    end
+    local items: {InboxItem} = {}
+    local previous = 0
+    for index, raw in ipairs(raw_items) do
+        local item = bounds.object(raw)
+        if not item then return nil, "inbox page items[" .. tostring(index) .. "] must be an object" end
+        local item_field = bounds.fields(item, {"thread_id", "inbox_sequence", "record_id", "thread_sequence", "payload_digest", "state", "delivery_status",
+            "sender_action_id", "sender_node_id", "sender_thread_id", "message_id", "content", "message_kind", "in_reply_to"})
+        local thread_id, record_id = bounds.id(item.thread_id), bounds.id(item.record_id)
+        local sequence, thread_sequence = bounds.count(item.inbox_sequence), bounds.count(item.thread_sequence)
+        local digest = bounds.text(item.payload_digest, 64)
+        local state = bounds.member(item.state, {"committed", "offered", "transport_accepted", "acknowledged", "replied"})
+        local delivery_status = bounds.member(item.delivery_status, {"committed", "offered", "transport_accepted", "acknowledged", "replied", "undeliverable", "waiting_for_restart"})
+        local sender_action, sender_node, sender_thread = bounds.id(item.sender_action_id), bounds.id(item.sender_node_id), bounds.id(item.sender_thread_id)
+        local message_id = bounds.id(item.message_id)
+        local content, content_error = record_values.content(item.content)
+        local message_kind = bounds.member(item.message_kind, {"request", "progress", "reply", "notification"})
+        local in_reply_to: record_types.Ref? = nil
+        if item.in_reply_to ~= nil then
+            local reference = bounds.object(item.in_reply_to)
+            if not reference then return nil, "inbox page items[" .. tostring(index) .. "] has an invalid reply reference" end
+            local reference_fields = bounds.fields(reference, {"thread_id", "record_id"})
+            local reference_thread, reference_record = bounds.id(reference.thread_id), bounds.id(reference.record_id)
+            if reference_fields or not reference_thread or not reference_record then
+                return nil, "inbox page items[" .. tostring(index) .. "] has an invalid reply reference"
+            end
+            in_reply_to = {thread_id = reference_thread, record_id = reference_record}
+        end
+        if item_field or not thread_id or not record_id or sequence == nil or sequence < 1 or thread_sequence == nil or thread_sequence < 1
+            or not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") or not state or not delivery_status or not sender_action or not sender_node
+            or not sender_thread or not message_id or not content or not message_kind then
+            return nil, "inbox page items[" .. tostring(index) .. "] is malformed: " .. tostring(content_error)
+        end
+        if sequence <= previous or sequence > scanned then return nil, "inbox page items are out of sequence" end
+        previous = sequence
+        items[index] = {thread_id = thread_id, inbox_sequence = sequence, record_id = record_id, thread_sequence = thread_sequence,
+            payload_digest = digest, state = state, delivery_status = delivery_status, sender_action_id = sender_action,
+            sender_node_id = sender_node, sender_thread_id = sender_thread, message_id = message_id, content = content,
+            message_kind = message_kind, in_reply_to = in_reply_to}
+    end
+    if #items > 0 and items[#items].inbox_sequence ~= scanned then return nil, "inbox page cursor does not match its final item" end
+    return {items = items, has_more = object.has_more, scanned_through = scanned}, nil
+end
+local function inbox_transport(value: unknown, record_id: string, sequence: integer): (boolean, string?)
+    local object = bounds.object(value)
+    if not object then return false, "inbox transport result must be an object" end
+    local unknown_field = bounds.fields(object, {"record_id", "inbox_sequence", "state"})
+    local returned_record, returned_sequence = bounds.id(object.record_id), bounds.count(object.inbox_sequence)
+    local state = bounds.member(object.state, {"transport_accepted", "acknowledged", "replied"})
+    if unknown_field or returned_record ~= record_id or returned_sequence ~= sequence or not state then
+        return false, "inbox transport result is malformed or names another item"
+    end
+    return true, nil
+end
+type StdinClosure = {closed: boolean, reason: string?}
+local function stdin_closure(value: unknown, attempt_id: string): (StdinClosure?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "close_stdin result must be an object" end
+    local unknown_field = bounds.fields(object, {"attempt", "closed", "reason"})
+    if unknown_field then return nil, "close_stdin: " .. unknown_field end
+    local attempt, attempt_error = placement_decode.attempt(object.attempt)
+    if not attempt then return nil, "close_stdin attempt: " .. tostring(attempt_error) end
+    if attempt.attempt_id ~= attempt_id then return nil, "close_stdin returned another attempt" end
+    if type(object.closed) ~= "boolean" then return nil, "close_stdin closed flag is invalid" end
+    local reason: string? = nil
+    if object.reason ~= nil then
+        reason = bounds.text(object.reason, 4096)
+        if not reason or reason == "" then return nil, "close_stdin refusal reason is invalid" end
+    end
+    if (object.closed == true and reason ~= nil) or (object.closed == false and reason == nil) then return nil, "close_stdin result and reason disagree" end
+    return {closed = object.closed, reason = reason}, nil
 end
 local function must(io: IO, target: string, request: unknown): (unknown, string?)
     local raw, call_error = io.call(target, request)
     local reply, reply_error = reply_of(raw, call_error)
     if not reply then return nil, target .. ": " .. tostring(reply_error) end
-    if not reply.ok then return nil, target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message) end
+    if reply.ok == false then return nil, target .. ": " .. reply.error.code .. ": " .. reply.error.message end
     return reply.value, nil
 end
 local function digest_of(value: unknown): (string?, string?)
@@ -192,16 +400,20 @@ local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAc
     end
     local adapter_entry = catalog.entry(pinned, declared.adapter_ref)
     if not adapter_entry then return nil, "permission adapter " .. declared.adapter_ref .. " is not in the registry" end
-    local adapter_meta = bounds.object(adapter_entry.meta) or {}
+    local adapter_meta = bounds.object(adapter_entry.meta)
+    if not adapter_meta then return nil, "permission adapter " .. declared.adapter_ref .. " has invalid metadata" end
     if adapter_meta.type ~= "harness.permission_adapter" then return nil, declared.adapter_ref .. " is not a harness.permission_adapter" end
-    local adapter_data = bounds.object(adapter_entry.data) or {}
+    local adapter_data = bounds.object(adapter_entry.data)
+    if not adapter_data then return nil, "permission adapter " .. declared.adapter_ref .. " has invalid data" end
     local adapter, adapter_error = permission.decode(declared.adapter_ref, adapter_data.adapter)
     if not adapter then return nil, "permission adapter " .. declared.adapter_ref .. ": " .. tostring(adapter_error) end
     local record_entry = catalog.entry(pinned, declared.acceptance_ref)
     if not record_entry then return nil, "acceptance record " .. declared.acceptance_ref .. " is not in the registry" end
-    local record_meta = bounds.object(record_entry.meta) or {}
+    local record_meta = bounds.object(record_entry.meta)
+    if not record_meta then return nil, "acceptance record " .. declared.acceptance_ref .. " has invalid metadata" end
     if record_meta.type ~= acceptance.ENTRY_TYPE then return nil, declared.acceptance_ref .. " is not a " .. acceptance.ENTRY_TYPE end
-    local record_data = bounds.object(record_entry.data) or {}
+    local record_data = bounds.object(record_entry.data)
+    if not record_data then return nil, "acceptance record " .. declared.acceptance_ref .. " has invalid data" end
     local record, record_error = acceptance.decode(declared.acceptance_ref, record_data.acceptance)
     if not record then return nil, "acceptance record " .. declared.acceptance_ref .. ": " .. tostring(record_error) end
     local mismatch = acceptance.matches(record, {binding_id = binding.binding_id, profile_id = profile.id, binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry,
@@ -294,7 +506,8 @@ end
 -- provider-specific configuration format.
 function M.required_file_refusal(launch: driver_types.Launch, private_home: boolean): string?
     if not private_home or not launch.required_files or #launch.required_files == 0 then return nil end
-    local file = launch.required_files[1] :: driver_types.RequiredFile
+    local file = launch.required_files[1]
+    if not file then return nil end
     return "the required host file " .. file.path ..
         " is only available where Bee inherits the user's home; a private home does not carry it"
 end
@@ -420,9 +633,10 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         end
         local capabilities_value, capabilities_error = must(io, capabilities_target, {})
         if capabilities_error then return nil, capabilities_error end
-        local reported = bounds.object((bounds.object(capabilities_value) or {}).executable_measurement) or {}
-        if reported.streaming ~= true then return label .. ": this runtime cannot measure an executable as a stream", nil end
-        if reported.read_only_volume ~= true then return label .. ": the measurement volume is not proven read-only on this runtime: " .. tostring(reported.detail), nil end
+        local reported, report_error = executable_capability(capabilities_value)
+        if not reported then return nil, "placement returned malformed executable capabilities: " .. tostring(report_error) end
+        if not reported.streaming then return label .. ": this runtime cannot measure an executable as a stream", nil end
+        if not reported.read_only_volume then return label .. ": the measurement volume is not proven read-only on this runtime: " .. reported.detail, nil end
         return nil, nil
     end
     if exchange and not launch_policy.fixture then
@@ -442,8 +656,9 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
             local reply, reply_error = reply_of(raw, measure_call_error)
             if not reply then return nil, "measure executable: " .. tostring(reply_error) end
             if reply.ok then
-                local measured = bounds.object(reply.value) or {}
-                measurement = {revision = tostring(measured.revision), kind = tostring(measured.kind), digest = tostring(measured.digest)}
+                local measured, measured_error = executable_measurement(reply.value, launch.executable)
+                if not measured then return nil, "measure executable returned an invalid measurement: " .. tostring(measured_error) end
+                measurement = measured
             elseif (exchange or push) and not launch_policy.fixture then
                 local fault = reply.error or {code = "UNAVAILABLE", message = "measurement failed"}
                 if exchange then refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message) end
@@ -527,16 +742,16 @@ function M.commit(io: IO, session: Session, records: {{[string]: unknown}}): (bo
     local value, err = must(io, M.CARRIER_OPS .. ":commit", {thread_id = session.plan.request.thread_id, idempotency_key = io.key(), attempt_id = session.plan.request.attempt_id,
         carrier_epoch = session.epoch, expected_revision = session.revision, checkpoint = session.checkpoint, records = records})
     if err then return false, err end
-    local committed = value :: {checkpoint_revision: integer}
-    session.revision = committed.checkpoint_revision
+    local revision, decode_error = checkpoint.decode_commit(value, session.plan.request.attempt_id, session.epoch)
+    if not revision then return false, "carrier commit returned an invalid revision: " .. tostring(decode_error) end
+    session.revision = revision
     return true, nil
 end
 local function new_session(plan: Plan, turn_id: string, epoch: integer, revision: integer, point: checkpoint.Checkpoint): Session
     local decoder = stream_json.new(M.MAX_FRAME_BYTES)
     decoder.framer.carry = point.carry.stdout
     decoder.index = point.envelope_index
-    local terminal: driver_types.Terminal? = nil
-    if point.terminal then terminal = point.terminal :: driver_types.Terminal end
+    local terminal = point.terminal
     local output: OutputState = "open"
     if point.output == "complete" then output = "complete" elseif point.output == "truncated" then output = "truncated" end
     return {plan = plan, turn_id = turn_id, turn_open = true, epoch = epoch, revision = revision, checkpoint = point, decoder = decoder, normalizer = point.normalizer_state,
@@ -601,9 +816,9 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
         owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = surface_value,
         policy_ref = plan.policy.ref, workspace_id = request.workspace_id, origin_view = request.origin_view})
     if admit_error then return nil, "gateway admit: " .. admit_error end
-    local binding = bounds.object((bounds.object(admitted) or {}).binding) or {}
-    local binding_id = bounds.id(binding.binding_id)
-    if not binding_id then return nil, "gateway admit: no binding id" end
+    local binding, binding_error = gateway_protocol.admitted_binding(admitted)
+    if not binding then return nil, "gateway admit returned an invalid binding: " .. tostring(binding_error) end
+    local binding_id = binding.binding_id
     step(io, "gateway_admitted")
     return binding_id, nil
 end
@@ -612,8 +827,9 @@ end
 local function gateway_ready(io: IO, binding_id: string): string?
     local ready, ready_error = must(io, M.GATEWAY .. ":ready", {binding_id = binding_id})
     if ready_error then return "gateway readiness: " .. ready_error end
-    local report = bounds.object(ready) or {}
-    if report.listening ~= true then return "gateway readiness: the listener is not ready" end
+    local report, report_error = gateway_protocol.readiness(ready, binding_id)
+    if not report then return "gateway readiness returned malformed data: " .. tostring(report_error) end
+    if not report.listening then return "gateway readiness: the listener is not ready" end
     if report.binding_valid ~= true then return "gateway readiness: " .. tostring(report.binding_reason) end
     step(io, "gateway_ready")
     return nil
@@ -630,7 +846,9 @@ end
 function M.drain_hooks(io: IO, session: Session): (integer, string?)
     local binding_id = session.checkpoint.gateway_binding
     local gateway = session.plan.gateway
-    if not binding_id or not gateway or #gateway.hooks == 0 or session.settled then return 0, nil end
+    if not binding_id then return 0, nil end
+    if not gateway then return 0, nil end
+    if #gateway.hooks == 0 or session.settled then return 0, nil end
     local drained = 0
     for _ = 1, 8 do
         local raw, call_error = io.call(M.GATEWAY .. ":hook_claim", {binding_id = binding_id, carrier_epoch = session.epoch, limit = 16})
@@ -644,15 +862,15 @@ function M.drain_hooks(io: IO, session: Session): (integer, string?)
             if fault.code == "DENIED" or fault.code == "CONFLICT" then return drained, nil end
             return drained, "hook claim: " .. fault.code .. ": " .. fault.message
         end
-        local claimed = bounds.object(reply.value) or {}
-        local items = claimed.hooks
+        local items, claim_error = gateway_protocol.hook_claim(reply.value)
+        if not items then return drained, "hook claim returned malformed data: " .. tostring(claim_error) end
         local turn_id = session.turn_open and session.turn_id or nil
-        local batch, batch_error = hook_records.batch(binding_id :: string, turn_id, items)
+        local batch, batch_error = hook_records.batch(binding_id, turn_id, items)
         if not batch then return drained, "hook batch: " .. tostring(batch_error) end
         if #batch.event_ids == 0 then return drained, nil end
         step(io, "hooks_claimed")
-        local records = batch.records :: {{[string]: unknown}}
-        local event_ids = batch.event_ids :: {string}
+        local records = batch.records
+        local event_ids = batch.event_ids
         local committed, commit_error = M.commit(io, session, records)
         if not committed then return drained, commit_error end
         step(io, "hooks_committed")
@@ -670,16 +888,9 @@ end
 type PreparedAttempt = {epoch: integer, gateway_binding: string?, notice: placement_types.LoginNotice?}
 type FailedPreparation = {epoch: integer?, gateway_binding: string?, attempt: boolean}
 local function prepare_notice(value: unknown): (placement_types.LoginNotice?, string?)
-    local attempt = bounds.object(value)
-    if not attempt or attempt.notice == nil then return nil, nil end
-    local notice = bounds.object(attempt.notice)
-    if not notice or bounds.fields(notice, {"code", "provider", "command"}) then return nil, "placement prepare returned an invalid notice" end
-    local provider = bounds.id(notice.provider)
-    local command = bounds.line(notice.command, 128)
-    if notice.code ~= "LOGIN_REQUIRED" or not provider or not command or command == "" then
-        return nil, "placement prepare returned an invalid notice"
-    end
-    return {code = "LOGIN_REQUIRED", provider = provider, command = command}, nil
+    local attempt, attempt_error = placement_decode.attempt(value)
+    if not attempt then return nil, "placement prepare returned an invalid attempt: " .. tostring(attempt_error) end
+    return attempt.notice, nil
 end
 -- Every placement operation is selected once in the measured plan. Persisted
 -- and admitted plans always carry the concrete binding and its targets.
@@ -702,30 +913,24 @@ function M.attach_action(io: IO, request: Request): (string?, boolean, string?)
     for _ = 1, M.ATTACH_SCAN_PAGES do
         local page, read_error = must(io, M.THREADS .. ":read_after", {thread_id = request.thread_id, cursor = cursor, limit = M.ATTACH_PAGE_RECORDS})
         if read_error then return nil, false, read_error end
-        local body = bounds.object(page)
-        if not body then return nil, false, "read_after answered without an object" end
-        local records = body.records
-        if type(records) ~= "table" then return nil, false, "read_after answered without records" end
-        for _, raw in ipairs(records :: {unknown}) do
-            local record = bounds.object(raw)
-            if record and record.action_id == request.action_id then
+        local decoded_page, page_error = thread_page(page, cursor, M.ATTACH_PAGE_RECORDS)
+        if not decoded_page then return nil, false, "read_after answered with an invalid page: " .. tostring(page_error) end
+        for _, record in ipairs(decoded_page.records) do
+            if record.action_id == request.action_id then
                 if record.kind == "action.admitted" then
                     local admitted = bounds.object(record.body)
                     if admitted and admitted.principal_id == request.owner_id then owned = true end
                 elseif record.kind == "receipt" then
                     local receipt = bounds.object(record.body)
-                    local attempt = bounds.id(record.attempt_id)
-                    local sequence = bounds.integer(record.sequence)
-                    if receipt and receipt.scope == "attempt" and attempt and sequence and sequence > previous_sequence then
-                        previous, previous_sequence = attempt, sequence
+                    if receipt and receipt.scope == "attempt" and record.attempt_id and record.sequence > previous_sequence then
+                        previous, previous_sequence = record.attempt_id, record.sequence
                     end
                 end
             end
         end
-        if body.has_more ~= true then break end
-        local scanned = bounds.integer(body.scanned_through)
-        if not scanned then return nil, false, "read_after answered without a cursor" end
-        cursor = scanned
+        if not decoded_page.has_more then break end
+        if decoded_page.scanned_through <= cursor then return nil, false, "read_after did not advance its cursor" end
+        cursor = decoded_page.scanned_through
     end
     if not owned then return nil, false, nil end
     return previous, true, nil
@@ -774,7 +979,9 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     step(io, "prepared")
     local claimed, claim_error = must(io, M.CARRIER_OPS .. ":claim", {thread_id = request.thread_id, idempotency_key = "launch:" .. request.attempt_id .. ":claim", attempt_id = request.attempt_id})
     if claim_error then return nil, claim_error, {epoch = nil, gateway_binding = nil, attempt = attempt_prepared} end
-    epoch = (claimed :: {carrier_epoch: integer}).carrier_epoch
+    local claimed_epoch, claim_decode_error = checkpoint.decode_claim(claimed)
+    if not claimed_epoch then return nil, "carrier claim returned an invalid epoch: " .. tostring(claim_decode_error) end
+    epoch = claimed_epoch
     local gateway_error: string?
     gateway_binding, gateway_error = gateway_admit(io, plan, epoch)
     if gateway_error then return nil, gateway_error, {epoch = epoch, gateway_binding = nil, attempt = attempt_prepared} end
@@ -792,30 +999,11 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     return {epoch = epoch, gateway_binding = gateway_binding, notice = notice}, nil, nil
 end
 local function settle_prestart_failure(io: IO, plan: Plan, epoch: integer, gateway_binding: string?, reason: string,
-    session: Session?, turn_id: string?, outcome: string?)
+    session: Session?, turn_id: string?, outcome: prestart.Outcome?)
     local request = plan.request
-    local settled_outcome = bounds.member(outcome or "failed", {"failed", "uncertain"}) or "failed"
-    local message = reason
-    local status_target = M.placement_target(plan, "status")
-    if status_target then
-        local status_value, status_error = must(io, status_target, {attempt_id = request.attempt_id})
-        if status_error then
-            if not status_error:find("NOT_FOUND", 1, true) then
-                settled_outcome = "uncertain"
-                message = message .. "; placement status failed: " .. status_error
-            end
-        else
-            local status = bounds.object(status_value)
-            local attempt = status and bounds.object(status.attempt)
-            local execution_state = attempt and bounds.member(attempt.execution_state, placement_types.EXECUTION_STATES)
-            if execution_state and execution_state ~= "intended" then settled_outcome = "uncertain" end
-            local stop_target = M.placement_target(plan, "stop")
-            if stop_target then
-                local _, stop_error = must(io, stop_target, {attempt_id = request.attempt_id, mode = "cooperative"})
-                if stop_error then message = message .. "; placement stop failed: " .. stop_error end
-            end
-        end
-    end
+    local inspection = prestart.inspect(io.call, M.placement_target(plan, "status"), M.placement_target(plan, "stop"),
+        request.attempt_id, outcome or "failed", reason)
+    local settled_outcome, message = inspection.outcome, inspection.reason
     gateway_revoke(io, gateway_binding)
     local code = settled_outcome == "uncertain" and "launch_uncertain" or "launch_failed"
     local failure = {code = code, message = message, retryable = false}
@@ -902,7 +1090,12 @@ function M.open(io: IO, plan: Plan): (Session?, string?)
         return nil, start_error
     end
     step(io, "placement_started")
-    local attempt = started_value :: placement_types.Attempt
+    local attempt, attempt_error = placement_decode.attempt(started_value)
+    if not attempt then
+        local reason = "placement start returned an invalid attempt: " .. tostring(attempt_error)
+        settle_prestart_failure(io, plan, epoch, gateway_binding, reason, session, turn_id)
+        return nil, reason
+    end
     session.runner = attempt.runner
     local _, started_error = thread_call(io, request, "start_attempt", {action_id = request.action_id, attempt_id = request.attempt_id,
         started = {execution_kind = "process", execution_ref = attempt.attempt_id, owner_epoch = io.now_ms()}})
@@ -924,7 +1117,8 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     local request = plan.request
     local stored, stored_error = must(io, M.CARRIER_OPS .. ":checkpoint", {thread_id = request.thread_id, attempt_id = request.attempt_id})
     if stored_error then return nil, stored_error end
-    local view = stored :: {carrier_epoch: integer, checkpoint_revision: integer, checkpoint: unknown, attempt_state: string, open_turn_id: string?, placement_binding: string?, placement_binding_digest: string?}
+    local view, view_error = checkpoint.decode_checkpoint_view(stored)
+    if not view then return nil, "stored checkpoint view: " .. tostring(view_error) end
     if view.attempt_state == "ended" then return nil, "attempt has ended" end
     if view.checkpoint == nil then return nil, "no checkpoint to resume from" end
     local point, point_error = checkpoint.decode(view.checkpoint)
@@ -935,12 +1129,15 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     step(io, "checkpoint_read")
     local claimed, claim_error = must(io, M.CARRIER_OPS .. ":claim", {thread_id = request.thread_id, idempotency_key = io.key(), attempt_id = request.attempt_id})
     if claim_error then return nil, claim_error end
-    local epoch = (claimed :: {carrier_epoch: integer}).carrier_epoch
+    local epoch, claim_decode_error = checkpoint.decode_claim(claimed)
+    if not epoch then return nil, "carrier claim returned an invalid epoch: " .. tostring(claim_decode_error) end
     -- A live carrier commits until the claim fences it, so the replacement
     -- continues from the checkpoint as the claim left it, not as first read.
     local fenced, fenced_error = must(io, M.CARRIER_OPS .. ":checkpoint", {thread_id = request.thread_id, attempt_id = request.attempt_id})
     if fenced_error then return nil, fenced_error end
-    view = fenced :: {carrier_epoch: integer, checkpoint_revision: integer, checkpoint: unknown, attempt_state: string, open_turn_id: string?, placement_binding: string?, placement_binding_digest: string?}
+    local fenced_view, fenced_view_error = checkpoint.decode_checkpoint_view(fenced)
+    if not fenced_view then return nil, "fenced checkpoint view: " .. tostring(fenced_view_error) end
+    view = fenced_view
     if view.carrier_epoch ~= epoch then return nil, "carrier epoch " .. tostring(epoch) .. " was superseded by " .. tostring(view.carrier_epoch) end
     if view.attempt_state == "ended" then return nil, "attempt has ended" end
     local fenced_point, fenced_point_error = checkpoint.decode(view.checkpoint)
@@ -954,7 +1151,8 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     if not status_target then return nil, "selected placement binds no status" end
     local status_value, status_error = must(io, status_target, {attempt_id = request.attempt_id})
     if status_error then return nil, status_error end
-    local status = status_value :: placement_types.Status
+    local status, status_decode_error = placement_decode.status(status_value)
+    if not status then return nil, "placement status is malformed: " .. tostring(status_decode_error) end
     local attempt = status.attempt
     -- Before placement starts, a plan that no longer digests as recorded
     -- refuses: nothing was materialized under it. A started attempt is
@@ -991,7 +1189,9 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
         if not start_target then return abandon("selected placement binds no start") end
         local started_value, placement_error = must(io, start_target, {attempt_id = request.attempt_id, gateway_binding = gateway_binding})
         if placement_error then return abandon(placement_error) end
-        attempt = started_value :: placement_types.Attempt
+        local started_attempt, started_decode_error = placement_decode.attempt(started_value)
+        if not started_attempt then return abandon("placement start returned an invalid attempt: " .. tostring(started_decode_error)) end
+        attempt = started_attempt
         session.runner = attempt.runner
         step(io, "placement_started")
         local _, started_error = thread_call(io, request, "start_attempt", {action_id = request.action_id, attempt_id = request.attempt_id,
@@ -1001,7 +1201,7 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
         local observed, observe_error = placement_observation(io, session, attempt)
         if not observed then return nil, observe_error end
         session.turn_open = view.open_turn_id ~= nil
-        if view.open_turn_id then session.turn_id = view.open_turn_id :: string end
+        if view.open_turn_id then session.turn_id = view.open_turn_id end
         step(io, "reattached")
         return session, nil
     end
@@ -1012,7 +1212,7 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
         step(io, "attempt_started")
     end
     session.turn_open = view.open_turn_id ~= nil
-    if view.open_turn_id then session.turn_id = view.open_turn_id :: string end
+    if view.open_turn_id then session.turn_id = view.open_turn_id end
     if attempt.execution_state == "exited" then
         local exit = attempt.exit
         session.exit = {code = exit and exit.code or nil, signal = exit and exit.signal or nil, uncertain = attempt.exit_source == nil}
@@ -1038,24 +1238,75 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
         step(io, "reattached")
         return session, nil
     end
-    session.runner = (attached_value :: placement_types.Attempt).runner
+    local attached_attempt, attached_decode_error = placement_decode.attempt(attached_value)
+    if not attached_attempt then return nil, "placement attach returned an invalid attempt: " .. tostring(attached_decode_error) end
+    session.runner = attached_attempt.runner
     step(io, "reattached")
     return session, nil
 end
-local function snapshot_state(value: unknown): unknown
-    if value == nil then return nil end
-    local encoded = json.encode(value)
-    if not encoded then return nil end
-    local decoded = json.decode(encoded)
-    return decoded
+local function snapshot_object(value: unknown, label: string, maximum: integer): (Object?, string?)
+    if value == nil then return nil, nil end
+    local object = bounds.object(value)
+    if not object then return nil, label .. " must be an object" end
+    local encoded, encode_error = canonical.encode(object)
+    if not encoded then return nil, label .. " is not valid JSON: " .. tostring(encode_error) end
+    if #encoded > maximum then return nil, label .. " exceeds " .. tostring(maximum) .. " bytes" end
+    local decoded, decode_error = json.decode(encoded)
+    if decode_error then return nil, label .. " could not be copied: " .. tostring(decode_error) end
+    local copied = bounds.object(decoded)
+    if not copied then return nil, label .. " did not decode as an object" end
+    return copied, nil
 end
-local function normalize(io: IO, session: Session, index: integer, envelope: {[string]: unknown}?, eof: boolean): ({{[string]: unknown}}?, driver_types.Terminal?, string?)
+local function snapshot_state(value: unknown): (Object?, string?)
+    if value == nil then return nil, nil end
+    local state, state_error = checkpoint.normalizer_state(value)
+    if not state then return nil, state_error end
+    return snapshot_object(state, "normalizer_state", checkpoint.MAX_NORMALIZER_STATE_BYTES)
+end
+local function snapshot_terminal(value: driver_types.Terminal?): (driver_types.Terminal?, string?)
+    if value == nil then return nil, nil end
+    local copied, copy_error = snapshot_object(value, "terminal", checkpoint.MAX_TERMINAL_BYTES)
+    if not copied then return nil, copy_error end
+    return checkpoint.decode_terminal(copied)
+end
+type Normalized = {state: Object, observations: {record_types.Observation}, terminal: driver_types.Terminal?}
+local function decode_normalized(value: unknown): (Normalized?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "reply must be an object" end
+    local unknown_field = bounds.fields(object, {"ok", "error", "state", "observations", "terminal"})
+    if unknown_field then return nil, "reply: " .. unknown_field end
+    if object.ok == false then
+        if object.state ~= nil or object.observations ~= nil or object.terminal ~= nil then return nil, "failed reply carries successful result fields" end
+        local message = bounds.text(object.error, 4096)
+        if not message or message == "" then return nil, "failure has no bounded error" end
+        return nil, message
+    end
+    if object.ok ~= true or object.error ~= nil then return nil, "reply status is invalid" end
+    if object.state == nil then return nil, "successful reply has no normalizer state" end
+    local state, state_error = checkpoint.normalizer_state(object.state)
+    if not state then return nil, "normalizer state: " .. tostring(state_error) end
+    local raw_observations, array_error = bounds.array(object.observations, bounds.MAX_ARRAY_ITEMS)
+    if not raw_observations then return nil, "normalizer observations must be a bounded dense list: " .. tostring(array_error) end
+    local observations: {record_types.Observation} = {}
+    for index, raw in ipairs(raw_observations) do
+        local item, observation_error = observation_decode.decode(raw)
+        if not item then return nil, "normalizer observations[" .. tostring(index) .. "]: " .. tostring(observation_error) end
+        observations[index] = item
+    end
+    local terminal: driver_types.Terminal? = nil
+    if object.terminal ~= nil then
+        terminal, state_error = checkpoint.decode_terminal(object.terminal)
+        if not terminal then return nil, "normalizer terminal: " .. tostring(state_error) end
+    end
+    return {state = state, observations = observations, terminal = terminal}, nil
+end
+local function normalize(io: IO, session: Session, index: integer, envelope: {[string]: unknown}?, eof: boolean): ({record_types.Observation}?, driver_types.Terminal?, string?)
     local reply, err = io.call(session.plan.normalize_target, {state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false})
-    if err or type(reply) ~= "table" then return nil, nil, "driver normalize: " .. tostring(err) end
-    local result = reply :: {ok: boolean, error: string?, state: unknown, observations: {{[string]: unknown}}?, terminal: driver_types.Terminal?}
-    if not result.ok then return nil, nil, "driver normalize: " .. tostring(result.error) end
+    if err then return nil, nil, "driver normalize: " .. err end
+    local result, decode_error = decode_normalized(reply)
+    if not result then return nil, nil, "driver normalize: " .. tostring(decode_error) end
     session.normalizer = result.state
-    return result.observations or {}, result.terminal, nil
+    return result.observations, result.terminal, nil
 end
 -- One output chunk: frame, normalize, commit in bounded batches, then
 -- acknowledge. A chunk the carrier cannot checkpoint is never acknowledged.
@@ -1175,9 +1426,30 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
         return true, nil
     end
+    local before_state, before_state_error = snapshot_state(session.normalizer)
+    if session.normalizer ~= nil and before_state == nil then return false, "normalizer state cannot be checkpointed: " .. tostring(before_state_error) end
+    local before_terminal, before_terminal_error = snapshot_terminal(session.terminal)
+    if session.terminal ~= nil and before_terminal == nil then return false, "terminal cannot be checkpointed: " .. tostring(before_terminal_error) end
     local was_held = session.held_from ~= nil
-    local before = {carry = session.decoder.framer.carry, index = session.decoder.index,
-        state = snapshot_state(session.normalizer), dropping_stdout = session.dropping_stdout}
+    local before = {carry = session.decoder.framer.carry, index = session.decoder.index, state = before_state,
+        terminal = before_terminal, stream_ended = session.stream_ended, dropping_stdout = session.dropping_stdout,
+        output = session.output, checkpoint_output = session.checkpoint.output, eof_stdout = session.eof.stdout,
+        eof_stderr = session.eof.stderr, held_from = session.held_from, stderr_sequence = session.stderr_sequence}
+    local function refuse(reason: string): (boolean, string?)
+        session.decoder.framer.carry = before.carry
+        session.decoder.index = before.index
+        session.normalizer = before.state
+        session.terminal = before.terminal
+        session.stream_ended = before.stream_ended
+        session.dropping_stdout = before.dropping_stdout
+        session.output = before.output
+        session.checkpoint.output = before.checkpoint_output
+        session.eof.stdout = before.eof_stdout
+        session.eof.stderr = before.eof_stderr
+        session.held_from = before.held_from
+        session.stderr_sequence = before.stderr_sequence
+        return false, reason
+    end
     local records: {{[string]: unknown}} = {}
     if message.eof then
         session.eof[message.stream] = true
@@ -1191,7 +1463,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         end
         if message.stream == "stdout" then
             local observations, terminal, err = normalize(io, session, session.decoder.index + 1, nil, true)
-            if not observations then return false, err end
+            if not observations then return refuse(err or "driver normalize failed") end
             for event_index, item in ipairs(observations) do
                 records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence,
                     source_last_sequence = message.sequence, envelope_index = session.decoder.index + 1, event_index = event_index - 1}, body = item}
@@ -1221,7 +1493,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
             end
             for _, envelope in ipairs(envelopes) do
                 local observations, terminal, err = normalize(io, session, envelope.index, envelope.value, false)
-                if not observations then return false, err end
+                if not observations then return refuse(err or "driver normalize failed") end
                 for event_index, item in ipairs(observations) do
                     records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence,
                         source_last_sequence = message.sequence, envelope_index = envelope.index, event_index = event_index - 1}, body = item}
@@ -1249,7 +1521,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     -- the chunks the runner still holds.
     local at_boundary = session.held_from == nil
     local detected, detect_error = detect_permissions(session, records)
-    if detect_error then return false, detect_error end
+    if detect_error then return refuse(detect_error) end
     acknowledge_permissions(session, records)
     local total = #records
     local offset = 0
@@ -1258,13 +1530,17 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         for index = offset + 1, math.min(offset + M.MAX_RECORDS_PER_COMMIT, total) do batch[#batch + 1] = records[index] end
         local final = offset + #batch >= total
         if final and at_boundary then
+            local state, state_error = snapshot_state(session.normalizer)
+            if session.normalizer ~= nil and state == nil then return refuse("normalizer state cannot be checkpointed: " .. tostring(state_error)) end
+            local terminal, terminal_error = snapshot_terminal(session.terminal)
+            if session.terminal ~= nil and terminal == nil then return refuse("terminal cannot be checkpointed: " .. tostring(terminal_error)) end
             session.checkpoint.consumed[message.stream] = message.sequence
             session.checkpoint.carry.stdout = session.decoder.framer.carry
             session.checkpoint.dropping_stdout = session.dropping_stdout
             session.checkpoint.envelope_index = session.decoder.index
-            session.checkpoint.normalizer_state = snapshot_state(session.normalizer) :: {[string]: unknown}?
+            session.checkpoint.normalizer_state = state
             session.checkpoint.event_cursor = nil
-            session.checkpoint.terminal = snapshot_state(session.terminal) :: {[string]: unknown}?
+            session.checkpoint.terminal = terminal
             session.checkpoint.stream_ended = session.stream_ended
         elseif final and message.stream == "stderr" then
             session.checkpoint.consumed.stderr = message.sequence
@@ -1272,7 +1548,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
             session.checkpoint.carry.stdout = before.carry
             session.checkpoint.dropping_stdout = before.dropping_stdout
             session.checkpoint.envelope_index = before.index
-            session.checkpoint.normalizer_state = before.state :: {[string]: unknown}?
+            session.checkpoint.normalizer_state = before.state
             session.checkpoint.event_cursor = {envelope_index = before.index + 1, events_committed = offset + #batch}
         end
         local committed, commit_error = M.commit(io, session, batch)
@@ -1288,8 +1564,58 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     step(io, "acknowledged")
     return true, nil
 end
-local function approval_view(value: unknown): {[string]: unknown}
-    return bounds.object(value) or {}
+type ApprovalState = "pending" | "decided" | "expired" | "withdrawn"
+type ApprovalDecision = "approved" | "denied"
+type ApprovalView =
+    {approval_id: string, workspace_id: string, proposal_digest: string, owner_incarnation: integer, state: "decided", decision: ApprovalDecision}
+    | {approval_id: string, workspace_id: string, proposal_digest: string, owner_incarnation: integer,
+        state: "pending" | "expired" | "withdrawn", decision: nil}
+local function approval_view(value: unknown): (ApprovalView?, string?)
+    local view = bounds.object(value)
+    if not view then return nil, "approval must be an object" end
+    local unknown_field = bounds.fields(view, {"approval_id", "owner_node", "owner_incarnation", "workspace_id", "requester_id", "request_kind", "policy",
+        "proposal", "proposal_digest", "prompt", "response_schema", "thread_id", "binding", "revision", "state", "decision", "decider_id",
+        "decided_at", "response", "validated_incarnation", "validated_by", "validated_at", "consumer_id", "consumed_effect", "consumed_at",
+        "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at"})
+    if unknown_field then return nil, "approval: " .. unknown_field end
+    local approval_id, workspace_id = bounds.id(view.approval_id), bounds.id(view.workspace_id)
+    local proposal_digest = bounds.text(view.proposal_digest, 64)
+    local incarnation, state = bounds.count(view.owner_incarnation), bounds.member(view.state, {"pending", "decided", "expired", "withdrawn"})
+    local decision: ApprovalDecision? = nil
+    if view.decision ~= nil then
+        local selected = bounds.member(view.decision, {"approved", "denied"})
+        if selected == "approved" then decision = "approved"
+        elseif selected == "denied" then decision = "denied"
+        else return nil, "approval decision is invalid" end
+    end
+    if unknown_field then return nil, "approval: " .. unknown_field end
+    if not approval_id then return nil, "approval identifier is malformed" end
+    if not workspace_id then return nil, "approval workspace is malformed" end
+    if proposal_digest == nil then return nil, "approval proposal digest is malformed" end
+    if #proposal_digest ~= 64 or not proposal_digest:match("^[0-9a-f]+$") then return nil, "approval proposal digest is malformed" end
+    if incarnation == nil or incarnation < 1 then return nil, "approval owner incarnation is malformed" end
+    if not state then return nil, "approval state is malformed" end
+    if (state == "decided") ~= (decision ~= nil) then return nil, "approval decision disagrees with its state" end
+    if state == "decided" then
+        if decision == "approved" then
+            return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
+                owner_incarnation = incarnation, state = "decided", decision = "approved"}, nil
+        elseif decision == "denied" then
+            return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
+                owner_incarnation = incarnation, state = "decided", decision = "denied"}, nil
+        end
+        return nil, "decided approval has no decision"
+    end
+    if decision ~= nil then return nil, "undecided approval carries a decision" end
+    if state == "pending" then
+        return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
+            owner_incarnation = incarnation, state = "pending", decision = nil}, nil
+    elseif state == "expired" then
+        return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
+            owner_incarnation = incarnation, state = "expired", decision = nil}, nil
+    end
+    return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
+        owner_incarnation = incarnation, state = "withdrawn", decision = nil}, nil
 end
 -- request_approval: the durable intent is asked under its idempotency key,
 -- so a crash between the owner creating the approval and the checkpoint
@@ -1300,10 +1626,13 @@ local function request_approval(io: IO, session: Session, exchange: Exchange, st
         proposal = proposal_of(session, exchange, state), prompt = {text = state.prompt}, thread_id = request.thread_id, ttl_ms = exchange.ttl_ms})
     if err then return false, err end
     step(io, "approval_created")
-    local view = approval_view(value)
-    if view.proposal_digest ~= state.proposal_digest then return false, "approval owner recorded a different proposal digest" end
-    state.approval_id = bounds.id(view.approval_id)
-    state.incarnation = bounds.integer(view.owner_incarnation)
+    local view, view_error = approval_view(value)
+    if not view then return false, "approval owner returned malformed data: " .. tostring(view_error) end
+    if view.workspace_id ~= request.workspace_id or view.proposal_digest ~= state.proposal_digest then
+        return false, "approval owner recorded a different workspace or proposal digest"
+    end
+    state.approval_id = view.approval_id
+    state.incarnation = view.owner_incarnation
     state.phase = "requested"
     local committed, commit_error = M.commit(io, session, {permission_record(session, state, "requested", {approval_id = state.approval_id})})
     if not committed then return false, commit_error end
@@ -1311,13 +1640,22 @@ local function request_approval(io: IO, session: Session, exchange: Exchange, st
     return true, nil
 end
 local function poll_decision(io: IO, session: Session, state: checkpoint.Permission): (boolean, string?)
+    if not state.approval_id then return false, "approval id is missing" end
     local value, err = must(io, M.APPROVALS .. ":read", {approval_id = state.approval_id})
     if err then return false, err end
-    local view = approval_view(value)
-    local approval_state = tostring(view.state)
-    if approval_state == "pending" then return true, nil end
-    local decision = approval_state
-    if approval_state == "decided" then decision = tostring(view.decision) end
+    local view, view_error = approval_view(value)
+    if not view then return false, "approval owner returned malformed data: " .. tostring(view_error) end
+    if view.approval_id ~= state.approval_id or view.proposal_digest ~= state.proposal_digest then
+        return false, "approval owner returned another approval or proposal"
+    end
+    if view.state == "pending" then return true, nil end
+    local decision: string
+    if view.state == "decided" then
+        if not view.decision then return false, "decided approval has no decision" end
+        decision = view.decision
+    else
+        decision = view.state
+    end
     state.decision = decision
     state.phase = "decided"
     local committed, commit_error = M.commit(io, session, {permission_record(session, state, "decided", {decision = decision})})
@@ -1353,7 +1691,8 @@ local function revalidate_context(io: IO, session: Session, exchange: Exchange, 
     if not reconcile_target then return "selected placement binds no reconcile" end
     local reconciled, reconcile_error = must(io, reconcile_target, {attempt_id = session.plan.request.attempt_id})
     if reconcile_error then return "placement reconcile: " .. reconcile_error end
-    local attempt = reconciled :: placement_types.Attempt
+    local attempt, attempt_decode_error = placement_decode.attempt(reconciled)
+    if not attempt then return "placement reconcile returned an invalid attempt: " .. tostring(attempt_decode_error) end
     if attempt.execution_state ~= "running" then return "placement is " .. tostring(attempt.execution_state) .. " under its grants and projections" end
     return nil
 end
@@ -1363,6 +1702,7 @@ end
 -- and asks again. Replays are safe, so a resumed carrier repeats this
 -- before creating its write intent.
 local function consume_effect(io: IO, session: Session, state: checkpoint.Permission): (boolean, string?)
+    if not state.approval_id or not state.incarnation then return false, "approval identity or incarnation is missing" end
     for _ = 1, M.MAX_CONSUME_ATTEMPTS do
         local raw, call_error = io.call(M.APPROVALS .. ":consume", {approval_id = state.approval_id, proposal_digest = state.proposal_digest, effect_key = state.effect_key, owner_incarnation = state.incarnation})
         local reply, reply_error = reply_of(raw, call_error)
@@ -1370,8 +1710,16 @@ local function consume_effect(io: IO, session: Session, state: checkpoint.Permis
         if reply.ok then return true, nil end
         local fault = reply.error or {code = "INTERNAL", message = "consume failed"}
         if fault.code ~= "REVALIDATE" then return false, "consume: " .. fault.code .. ": " .. fault.message end
-        local current = bounds.integer(approval_view(reply.value).current_incarnation)
-        if not current then return false, "consume: revalidation names no incarnation" end
+        local validation = bounds.object(reply.value)
+        if not validation then return false, "consume: revalidation details must be an object" end
+        local validation_field = bounds.fields(validation, {"request", "current_incarnation"})
+        local current = bounds.count(validation.current_incarnation)
+        if validation_field or not current or current < 1 then return false, "consume: revalidation names no valid incarnation" end
+        local observed, observed_error = approval_view(validation.request)
+        if not observed then return false, "consume: revalidation approval is malformed: " .. tostring(observed_error) end
+        if observed.approval_id ~= state.approval_id or observed.proposal_digest ~= state.proposal_digest then
+            return false, "consume: revalidation names another approval or proposal"
+        end
         local exchange = session.plan.exchange
         if not exchange then return false, "consume: no permission exchange" end
         local refused = revalidate_context(io, session, exchange, state)
@@ -1402,6 +1750,61 @@ end
 -- polling stays the fallback through every failure here, and a page is
 -- acknowledged only after its hints were processed, which certifies
 -- nothing about consumption or child input.
+type SubscriptionView = {subscription_id: string, after_sequence: integer}
+local function subscription_view(value: unknown, expected_id: string?): (SubscriptionView?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "subscription must be an object" end
+    local unknown_field = bounds.fields(object, {"subscription_id", "consumer_id", "after_sequence", "lease_generation", "owner_incarnation", "owner_authority",
+        "durability", "filter_digest", "closed"})
+    local subscription_id, consumer_id = bounds.id(object.subscription_id), bounds.id(object.consumer_id)
+    local after_sequence, lease_generation = bounds.count(object.after_sequence), bounds.count(object.lease_generation)
+    local owner_incarnation, owner_authority = bounds.count(object.owner_incarnation), bounds.id(object.owner_authority)
+    local durability = bounds.member(object.durability, {"durable", "reconstructible"})
+    local filter_digest = bounds.text(object.filter_digest, 64)
+    if unknown_field then return nil, "subscription: " .. unknown_field end
+    if not subscription_id or (expected_id ~= nil and subscription_id ~= expected_id) then return nil, "subscription identifier is malformed" end
+    if not consumer_id then return nil, "subscription consumer is malformed" end
+    if after_sequence == nil then return nil, "subscription cursor is malformed" end
+    if lease_generation == nil or lease_generation < 1 then return nil, "subscription lease generation is malformed" end
+    if owner_incarnation == nil or owner_incarnation < 1 then return nil, "subscription owner incarnation is malformed" end
+    if not owner_authority then return nil, "subscription owner authority is malformed" end
+    if not durability then return nil, "subscription durability is malformed" end
+    if not filter_digest or #filter_digest ~= 64 or not filter_digest:match("^[0-9a-f]+$") then return nil, "subscription filter digest is malformed" end
+    if type(object.closed) ~= "boolean" then return nil, "subscription closed flag is malformed" end
+    return {subscription_id = subscription_id, after_sequence = after_sequence}, nil
+end
+type DeliveryPage = {subscription_id: string, page_id: string?, scanned_through: integer, has_records: boolean}
+local function delivery_page(value: unknown, expected_subscription: string): (DeliveryPage?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "delivery page must be an object" end
+    local unknown_field = bounds.fields(object, {"subscription_id", "page_id", "lease_generation", "records", "from_sequence", "scanned_through", "has_more"})
+    local subscription_id = bounds.id(object.subscription_id)
+    local from_sequence, scanned = bounds.count(object.from_sequence), bounds.count(object.scanned_through)
+    local lease_generation = object.lease_generation == nil and nil or bounds.count(object.lease_generation)
+    local page_id: string? = nil
+    if object.page_id ~= nil then page_id = bounds.id(object.page_id) end
+    local records, records_error = bounds.array(object.records, M.ATTACH_PAGE_RECORDS)
+    if unknown_field then return nil, "delivery page: " .. unknown_field end
+    if subscription_id ~= expected_subscription then return nil, "delivery page subscription is invalid" end
+    if from_sequence == nil then return nil, "delivery page start cursor is invalid" end
+    if scanned == nil or scanned < from_sequence then return nil, "delivery page scanned cursor is invalid" end
+    if object.lease_generation ~= nil and (lease_generation == nil or lease_generation < 1) then return nil, "delivery page lease generation is invalid" end
+    if object.page_id ~= nil and page_id == nil then return nil, "delivery page identifier is invalid" end
+    if not records then return nil, "delivery page records are malformed: " .. tostring(records_error) end
+    if type(object.has_more) ~= "boolean" then return nil, "delivery page has_more flag is invalid" end
+    local previous = from_sequence
+    for index, raw in ipairs(records) do
+        local record, record_error = thread_record.decode(raw)
+        if not record then return nil, "delivery page records[" .. tostring(index) .. "]: " .. tostring(record_error) end
+        if record.sequence <= previous or record.sequence > scanned then return nil, "delivery page records are out of sequence" end
+        previous = record.sequence
+    end
+    if page_id == nil and (#records > 0 or scanned ~= from_sequence) then return nil, "delivery page identity and extent disagree" end
+    if page_id ~= nil and scanned == from_sequence then return nil, "delivery page has no scanned extent" end
+    if not subscription_id then return nil, "delivery page subscription is invalid" end
+    local scanned_through: integer = scanned
+    return {subscription_id = subscription_id, page_id = page_id, scanned_through = scanned_through, has_records = #records > 0}, nil
+end
 local function hints_call(io: IO, target: string, request: unknown): ({[string]: unknown}?, string?, string?)
     local raw, call_error = io.call(target, request)
     local reply, reply_error = reply_of(raw, call_error)
@@ -1410,7 +1813,9 @@ local function hints_call(io: IO, target: string, request: unknown): ({[string]:
         local fault = reply.error or {code = "INTERNAL", message = "hint operation failed"}
         return nil, fault.code, fault.message
     end
-    return bounds.object(reply.value) or {}, nil, nil
+    local value = bounds.object(reply.value)
+    if not value then return nil, "INTERNAL", "hint operation returned a non-object value" end
+    return value, nil, nil
 end
 -- open_hints: resume the checkpointed subscription under this carrier's
 -- lease, or subscribe afresh; returns the cursor to register wakeups from.
@@ -1420,11 +1825,21 @@ function M.open_hints(io: IO, session: Session): (integer?, string?)
     local key = "launch:" .. request.attempt_id .. ":hints:" .. tostring(session.epoch)
     local existing = session.checkpoint.hint_subscription
     if existing then
-        local resumed = hints_call(io, M.DELIVERY .. ":resume", {thread_id = request.thread_id, idempotency_key = key, subscription_id = existing})
-        if resumed then return bounds.integer(resumed.after_sequence) or 0, nil end
+        local resumed, resume_code, resume_error = hints_call(io, M.DELIVERY .. ":resume", {thread_id = request.thread_id, idempotency_key = key, subscription_id = existing})
+        if resumed then
+            local view, view_error = subscription_view(resumed, existing)
+            if not view then return nil, "delivery resume returned malformed data: " .. tostring(view_error) end
+            return view.after_sequence, nil
+        end
         -- A subscription that cannot be resumed is closed before another is
         -- opened, so superseded rows never accumulate.
-        hints_call(io, M.DELIVERY .. ":unsubscribe", {thread_id = request.thread_id, idempotency_key = key .. ":close", subscription_id = existing})
+        local closed, close_code, close_error = hints_call(io, M.DELIVERY .. ":unsubscribe", {thread_id = request.thread_id, idempotency_key = key .. ":close", subscription_id = existing})
+        if closed then
+            local view, view_error = subscription_view(closed, existing)
+            if not view then return nil, "delivery unsubscribe returned malformed data: " .. tostring(view_error) end
+        elseif close_code ~= "NOT_FOUND" and close_code ~= "INVALID_STATE" and close_code ~= "CONFLICT" then
+            return nil, "delivery unsubscribe: " .. tostring(close_code) .. ": " .. tostring(close_error or resume_code or resume_error)
+        end
         session.checkpoint.hint_subscription = nil
     end
     -- One consumer identity per attempt: a second open subscription under it
@@ -1438,48 +1853,60 @@ function M.open_hints(io: IO, session: Session): (integer?, string?)
         if code == "CONFLICT" then return nil, nil end
         return nil, tostring(code) .. ": " .. tostring(message)
     end
-    session.checkpoint.hint_subscription = bounds.id(created.subscription_id)
+    local view, view_error = subscription_view(created, nil)
+    if not view then return nil, "delivery subscribe returned malformed data: " .. tostring(view_error) end
+    session.checkpoint.hint_subscription = view.subscription_id
     local committed, commit_error = M.commit(io, session, {})
     if not committed then return nil, commit_error end
     step(io, "hints_opened")
-    return bounds.integer(created.after_sequence) or 0, nil
+    return view.after_sequence, nil
 end
 -- take_hints: the outstanding or next page; true when it carries any
 -- transition, which is the one reason to read the owner now. A lost
 -- subscription leaves polling as the only source until the next tick
 -- reopens it.
-function M.take_hints(io: IO, session: Session): (boolean, integer?)
+function M.take_hints(io: IO, session: Session): (boolean, integer?, string?)
     local subscription = session.checkpoint.hint_subscription
-    if not subscription then return false, nil end
+    if not subscription then return false, nil, nil end
     local request = session.plan.request
     local page, code = hints_call(io, M.DELIVERY .. ":page", {thread_id = request.thread_id, subscription_id = subscription, limit = 64})
     if not page then
         if code == "NOT_FOUND" or code == "INVALID_STATE" or code == "DENIED" then session.checkpoint.hint_subscription = nil end
-        return false, nil
+        if code == "INTERNAL" then return false, nil, "delivery page returned malformed data" end
+        return false, nil, nil
     end
-    local scanned = bounds.integer(page.scanned_through)
-    local page_id = bounds.id(page.page_id)
-    if not page_id or not scanned then return false, scanned end
-    session.pending_hint = {page_id = page_id, scanned_through = scanned}
-    local records = page.records
-    return type(records) == "table" and #(records :: {unknown}) > 0, scanned
+    local decoded, page_error = delivery_page(page, subscription)
+    if not decoded then return false, nil, "delivery page is malformed: " .. tostring(page_error) end
+    if decoded.page_id then session.pending_hint = {page_id = decoded.page_id, scanned_through = decoded.scanned_through} end
+    return decoded.has_records, decoded.scanned_through, nil
 end
 -- acknowledge_hints: after the hints were processed; an acknowledgment the
 -- owner refuses for an earlier incarnation is answered by resuming the
 -- subscription under a new lease.
-function M.acknowledge_hints(io: IO, session: Session)
+function M.acknowledge_hints(io: IO, session: Session): (boolean, string?)
     local pending = session.pending_hint
     local subscription = session.checkpoint.hint_subscription
     session.pending_hint = nil
-    if not pending or not subscription then return end
+    if not pending or not subscription then return true, nil end
     local request = session.plan.request
     local acknowledged, code = hints_call(io, M.DELIVERY .. ":ack_page", {thread_id = request.thread_id, idempotency_key = io.key(), subscription_id = subscription, page_id = pending.page_id, scanned_through = pending.scanned_through})
-    if acknowledged then return end
+    if acknowledged then
+        local view, view_error = subscription_view(acknowledged, subscription)
+        if not view then return false, "delivery acknowledgment returned malformed data: " .. tostring(view_error) end
+        if view.after_sequence ~= pending.scanned_through then return false, "delivery acknowledgment advanced to another cursor" end
+        return true, nil
+    end
     if code == "CONFLICT" then
-        local resumed = hints_call(io, M.DELIVERY .. ":resume", {thread_id = request.thread_id, idempotency_key = io.key(), subscription_id = subscription})
-        if resumed then return end
+        local resumed, _, resume_error = hints_call(io, M.DELIVERY .. ":resume", {thread_id = request.thread_id, idempotency_key = io.key(), subscription_id = subscription})
+        if resumed then
+            local view, view_error = subscription_view(resumed, subscription)
+            if not view then return false, "delivery resume returned malformed data: " .. tostring(view_error) end
+            return true, nil
+        end
+        if resume_error then return false, resume_error end
     end
     session.checkpoint.hint_subscription = nil
+    return true, nil
 end
 function M.close_hints(io: IO, session: Session)
     local subscription = session.checkpoint.hint_subscription
@@ -1496,34 +1923,14 @@ function M.offer_inbox(io: IO, session: Session): (Offer?, string?)
     local value, err = must(io, M.THREADS .. ":inbox_offer", {thread_id = request.thread_id, action_id = request.action_id,
         attempt_id = request.attempt_id, carrier_epoch = session.epoch})
     if err then return nil, err end
-    local item = bounds.object(value)
-    if not item then return nil, "inbox offer is not an object" end
-    if item.empty == true then return nil, nil end
-    local record_id, digest, message_id = bounds.id(item.record_id), bounds.id(item.payload_digest), bounds.id(item.message_id)
-    local sequence = bounds.integer(item.inbox_sequence)
-    local offer_count = bounds.integer(item.offer_count)
-    local sender_action, sender_thread, sender_node = bounds.id(item.sender_action_id), bounds.id(item.sender_thread_id), bounds.id(item.sender_node_id)
-    local content = bounds.object(item.content)
-    local message_kind = bounds.member(item.message_kind, {"request", "reply"})
-    local state = bounds.member(item.state, {"offered", "transport_accepted"})
-    local in_reply_to: Object? = nil
-    if item.in_reply_to ~= nil then
-        local reference = bounds.object(item.in_reply_to)
-        if not reference or not bounds.id(reference.thread_id) or not bounds.id(reference.record_id) then return nil, "inbox reply reference is malformed" end
-        in_reply_to = {thread_id = reference.thread_id, record_id = reference.record_id}
-    end
-    if not record_id or not digest or #digest ~= 64 or not digest:match("^%x+$") or not message_id or not sequence or sequence < 1 or not offer_count or offer_count < 1 or not sender_action or not sender_thread or not sender_node or not content or not message_kind or not state
-        or type(item.dispatch) ~= "boolean" then return nil, "inbox offer is malformed" end
-    return {thread_id = request.thread_id, action_id = request.action_id, record_id = record_id :: string, inbox_sequence = sequence :: integer,
-        payload_digest = digest :: string, message_id = message_id :: string, message_kind = message_kind :: string, sender_action_id = sender_action :: string,
-        sender_thread_id = sender_thread :: string, sender_node_id = sender_node :: string, content = content, in_reply_to = in_reply_to, state = state :: string, dispatch = item.dispatch :: boolean, offer_count = offer_count :: integer}, nil
+    return decode_inbox_offer(value, request.thread_id, request.action_id)
 end
 -- inbox_prompt: the identified prompt naming one inbox item, shared by the
 -- Claude controller push line and the bounded-driver attempt brief. The
 -- offer count travels only where an offer was made.
 type InboxPromptItem = {thread_id: string, action_id: string, record_id: string, inbox_sequence: integer, offer_count: integer?,
     payload_digest: string, message_id: string, message_kind: string, sender_action_id: string, sender_thread_id: string,
-    sender_node_id: string, content: unknown, in_reply_to: unknown?}
+    sender_node_id: string, content: record_types.Content, in_reply_to: record_types.Ref?}
 function M.inbox_prompt(item: InboxPromptItem): (string?, string?)
     local context: Object = {thread_id = item.thread_id, action_id = item.action_id, record_id = item.record_id, inbox_sequence = item.inbox_sequence,
         payload_digest = item.payload_digest,
@@ -1561,7 +1968,7 @@ M.BRIEF_BYTES = 16384
 local function carry_text(content: unknown): string
     local object = bounds.object(content)
     if object then
-        local text = bounds.text((object :: Object).text)
+        local text = bounds.text(object.text)
         if text then return text end
     end
     local encoded = canonical.encode(content)
@@ -1575,33 +1982,19 @@ function M.carry_brief(io: IO, request: Request, driver_id: string, mode: string
     local page, list_error = must(io, M.THREADS .. ":inbox_list", {thread_id = request.thread_id, action_id = request.action_id,
         after_sequence = 0, limit = M.INBOX_CARRY_LIST_LIMIT})
     if list_error then return brief end
-    local items = (bounds.object(page) or {}).items
-    if type(items) ~= "table" then return brief end
-    local oldest: Object? = nil
-    for _, raw in ipairs(items :: {unknown}) do
-        local item = bounds.object(raw)
-        if item then
-            local state = bounds.member(item.state, {"committed", "offered", "transport_accepted", "acknowledged", "replied"})
-            if state and state ~= "acknowledged" and state ~= "replied" then
-                oldest = item
-                break
-            end
-        end
+    local inbox = inbox_list_page(page, M.INBOX_CARRY_LIST_LIMIT)
+    if not inbox then return brief end
+    local oldest: InboxItem? = nil
+    for _, item in ipairs(inbox.items) do
+        if item.thread_id ~= request.thread_id then return brief end
+        if item.state ~= "acknowledged" and item.state ~= "replied" then oldest = item; break end
     end
     if not oldest then return brief end
-    local record_id, message_id = bounds.id(oldest.record_id), bounds.id(oldest.message_id)
-    local sequence = bounds.integer(oldest.inbox_sequence)
-    local sender_action, sender_thread, sender_node = bounds.id(oldest.sender_action_id), bounds.id(oldest.sender_thread_id), bounds.id(oldest.sender_node_id)
-    local digest = bounds.id(oldest.payload_digest)
-    local kind = bounds.member(oldest.message_kind, {"request", "reply"})
-    local content = bounds.object(oldest.content)
-    if not record_id or not message_id or not sequence or sequence < 1 or not sender_action or not sender_thread or not sender_node
-        or not digest or not kind or not content then return brief end
-    if brief:find(record_id, 1, true) then return brief end
-    local excerpt = carry_text(content)
+    if brief:find(oldest.record_id, 1, true) then return brief end
+    local excerpt = carry_text(oldest.content)
     local room = M.BRIEF_BYTES - #brief - 1 - 700
     local capped = math.min(room, M.INBOX_CARRY_EXCERPT_BYTES)
-    local carried: unknown = content
+    local carried: record_types.Content = oldest.content
     if capped < #excerpt then
         if capped > 128 then
             carried = {text = excerpt:sub(1, capped - 128) .. "...[truncated; read the full item with session_inbox]"}
@@ -1609,9 +2002,10 @@ function M.carry_brief(io: IO, request: Request, driver_id: string, mode: string
             carried = {text = "[content omitted: exceeds the brief bound; read the full item with session_inbox]"}
         end
     end
-    local prompt, prompt_error = M.inbox_prompt({thread_id = request.thread_id, action_id = request.action_id, record_id = record_id,
-        inbox_sequence = sequence, payload_digest = digest, message_id = message_id, message_kind = kind, sender_action_id = sender_action,
-        sender_thread_id = sender_thread, sender_node_id = sender_node, content = carried, in_reply_to = oldest.in_reply_to})
+    local prompt, prompt_error = M.inbox_prompt({thread_id = request.thread_id, action_id = request.action_id, record_id = oldest.record_id,
+        inbox_sequence = oldest.inbox_sequence, payload_digest = oldest.payload_digest, message_id = oldest.message_id, message_kind = oldest.message_kind,
+        sender_action_id = oldest.sender_action_id, sender_thread_id = oldest.sender_thread_id, sender_node_id = oldest.sender_node_id,
+        content = carried, in_reply_to = oldest.in_reply_to})
     if not prompt then return brief end
     if #prompt + 1 + #brief > M.BRIEF_BYTES then return brief end
     return prompt .. "\n" .. brief
@@ -1772,9 +2166,10 @@ function M.end_session(io: IO, session: Session, record: boolean): (string, stri
         local closed = false
         local reason = "stdin could not be closed"
         if reply.ok then
-            local answer = bounds.object(reply.value) or {}
-            closed = answer.closed == true
-            if type(answer.reason) == "string" then reason = answer.reason :: string end
+            local answer, answer_error = stdin_closure(reply.value, session.plan.request.attempt_id)
+            if not answer then return "none", "placement returned malformed close_stdin data: " .. tostring(answer_error) end
+            closed = answer.closed
+            if answer.reason then reason = answer.reason end
         else
             local fault = reply.error or {code = "INTERNAL", message = "close_stdin failed"}
             reason = fault.code .. ": " .. fault.message
@@ -1817,13 +2212,22 @@ function M.close(io: IO, session: Session): (placement_types.Attempt?, string?)
     if not status_target then return nil, "selected placement binds no status" end
     local status_value, status_error = must(io, status_target, {attempt_id = request.attempt_id})
     if status_error then return nil, status_error end
-    local attempt = (status_value :: placement_types.Status).attempt
+    local status, status_decode_error = placement_decode.status(status_value)
+    if not status then return nil, "placement status is malformed: " .. tostring(status_decode_error) end
+    local attempt = status.attempt
     if attempt.execution_state == "exited" and attempt.cleanup_state == "pending" then
         local cleanup_target = M.placement_target(session.plan, "cleanup")
         if not cleanup_target then return nil, "selected placement binds no cleanup" end
         local cleaned, cleanup_error = io.call(cleanup_target, {attempt_id = request.attempt_id})
-        local reply = reply_of(cleaned, cleanup_error)
-        if reply and reply.ok then attempt = reply.value :: placement_types.Attempt end
+        local reply, reply_error = reply_of(cleaned, cleanup_error)
+        if not reply then return nil, "placement cleanup reply is malformed: " .. tostring(reply_error) end
+        if reply.ok == true then
+            local cleaned_attempt, cleaned_error = placement_decode.attempt(reply.value)
+            if not cleaned_attempt then return nil, "placement cleanup returned an invalid attempt: " .. tostring(cleaned_error) end
+            attempt = cleaned_attempt
+        else
+            return nil, "placement cleanup refused: " .. reply.error.code .. ": " .. reply.error.message
+        end
     end
     return attempt, nil
 end
@@ -1867,7 +2271,9 @@ function M.write(io: IO, session: Session, write_id: string, data: string): (boo
         return false, intended_error
     end
     step(io, "write_intended")
-    io.send(session.runner :: string, placement_protocol.TOPIC_INPUT, {write_id = write_id, generation = session.epoch, data = data})
+    local runner = session.runner
+    if not runner then return false, "no runner is bound" end
+    io.send(runner, placement_protocol.TOPIC_INPUT, {write_id = write_id, generation = session.epoch, data = data})
     pending.dispatched = true
     step(io, "write_dispatched")
     return true, nil
@@ -1892,21 +2298,27 @@ end
 local function accept_push_write(io: IO, session: Session, write_id: string): (boolean, string?)
     if write_id:sub(1, 6) ~= "inbox:" then return true, nil end
     local record_id, sequence_text = write_id:match("^inbox:(.+):(%d+):%d+$")
-    local sequence = bounds.integer(sequence_text and tonumber(sequence_text))
-    if not record_id or not sequence or sequence < 1 then return false, "malformed inbox write id" end
+    local raw_sequence: number? = nil
+    if sequence_text ~= nil then raw_sequence = tonumber(sequence_text) end
+    local sequence = bounds.integer(raw_sequence)
+    if not record_id then return false, "malformed inbox write id" end
+    if sequence == nil or sequence < 1 then return false, "malformed inbox write id" end
+    local inbox_sequence: integer = sequence
     local request = session.plan.request
     local page, read_error = must(io, M.THREADS .. ":inbox_list", {thread_id = request.thread_id, action_id = request.action_id,
-        after_sequence = (sequence :: integer) - 1, limit = 1})
+        after_sequence = inbox_sequence - 1, limit = 1})
     if read_error then return false, read_error end
-    local view = bounds.object(page)
-    local items = view and view.items
-    local item: Object? = nil
-    if type(items) == "table" then item = bounds.object((items :: {unknown})[1]) end
-    if not item or item.record_id ~= record_id or item.inbox_sequence ~= sequence then return false, "inbox write no longer names its record" end
+    local inbox, page_error = inbox_list_page(page, 1)
+    if not inbox then return false, "inbox list returned malformed data: " .. tostring(page_error) end
+    local item = inbox.items[1]
+    if not item or item.thread_id ~= request.thread_id or item.record_id ~= record_id or item.inbox_sequence ~= inbox_sequence then
+        return false, "inbox write no longer names its record"
+    end
     if item.state == "acknowledged" or item.state == "replied" then return true, nil end
-    local _, err = must(io, M.THREADS .. ":inbox_transport", {thread_id = request.thread_id, action_id = request.action_id,
-        attempt_id = request.attempt_id, carrier_epoch = session.epoch, inbox_sequence = sequence, record_id = record_id})
-    return err == nil, err
+    local transported, transport_error = must(io, M.THREADS .. ":inbox_transport", {thread_id = request.thread_id, action_id = request.action_id,
+        attempt_id = request.attempt_id, carrier_epoch = session.epoch, inbox_sequence = inbox_sequence, record_id = record_id})
+    if transport_error then return false, transport_error end
+    return inbox_transport(transported, record_id, inbox_sequence)
 end
 function M.on_write_ack(io: IO, session: Session, sender: string, message: placement_protocol.InputAck): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end
@@ -1923,7 +2335,8 @@ end
 -- time, and no answer at all leaves it uncertain.
 function M.reconcile_writes(io: IO, session: Session): (boolean, string?)
     if #session.checkpoint.pending_writes == 0 then return true, nil end
-    if not session.runner then
+    local runner = session.runner
+    if not runner then
         for _, pending in ipairs(session.checkpoint.pending_writes) do
             local settled, err = settle_write(io, session, pending.write_id, "uncertain", "no runner survived to answer")
             if not settled then return false, err end
@@ -1931,7 +2344,7 @@ function M.reconcile_writes(io: IO, session: Session): (boolean, string?)
         return true, nil
     end
     for _, pending in ipairs(session.checkpoint.pending_writes) do
-        io.send(session.runner :: string, placement_protocol.TOPIC_CONTROL, {command = "write_status", write_id = pending.write_id})
+        io.send(runner, placement_protocol.TOPIC_CONTROL, {command = "write_status", write_id = pending.write_id})
     end
     return true, nil
 end
@@ -1945,7 +2358,9 @@ function M.on_write_status(io: IO, session: Session, sender: string, message: pl
         return settle_write(io, session, message.write_id, "accepted", nil)
     end
     if found.dispatched then return true, nil end
-    io.send(session.runner :: string, placement_protocol.TOPIC_INPUT, {write_id = found.write_id, generation = session.epoch, data = found.data})
+    local runner = session.runner
+    if not runner then return false, "no runner is bound" end
+    io.send(runner, placement_protocol.TOPIC_INPUT, {write_id = found.write_id, generation = session.epoch, data = found.data})
     found.dispatched = true
     return true, nil
 end

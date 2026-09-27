@@ -9,8 +9,17 @@ entries:
 - name: checkpoint
   kind: library.lua
   source: file://checkpoint.lua
+  modules: [json]
   imports:
     bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    driver_types: bee.driver:types
+- name: prestart
+  kind: library.lua
+  source: file://prestart.lua
+  imports:
+    placement_decode: bee.placement:decode
+    service_reply: bee.protocol:reply
 - name: settle
   kind: library.lua
   source: file://settle.lua
@@ -65,9 +74,17 @@ entries:
     configuration: bee.driver:configuration
     driver_types: bee.driver:types
     placement_types: bee.placement:types
+    prestart: bee.harness.carrier:prestart
+    placement_decode: bee.placement:decode
+    record_types: bee.threads.records:types
+    observation_decode: bee.threads.records:observation
     placement_resolver: bee.placement:resolver
     placement_protocol: bee.placement.native:protocol
     launch_request: bee.placement:request
+    thread_record: bee.threads.records:record
+    record_values: bee.threads.records:values
+    gateway_protocol: bee.gateway:protocol
+    service_reply: bee.protocol:reply
     hook_records: bee.harness.carrier:hook_records
 - name: lease
   kind: library.lua

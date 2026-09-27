@@ -87,7 +87,8 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     -- One coalesced refresh: page the hints, read the owner when a hint or
     -- the tick asks for it, then acknowledge the page.
     local function refresh(poll: boolean)
-        local hinted, after = machine.take_hints(io, session)
+        local hinted, after, hints_error = machine.take_hints(io, session)
+        if hints_error then error("hints: " .. hints_error) end
         if hinted or poll then advance(true) end
         if push_enabled then
             local offered, offer_error = machine.offer_inbox(io, session)
@@ -97,7 +98,8 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             end
             pending_offer = offered
         end
-        machine.acknowledge_hints(io, session)
+        local _, acknowledgment_error = machine.acknowledge_hints(io, session)
+        if acknowledgment_error then error("hints: " .. acknowledgment_error) end
         if after then hint_after = after end
         if poll and not session.checkpoint.hint_subscription and (plan.exchange or push_enabled) then
             local opened = machine.open_hints(io, session)

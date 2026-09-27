@@ -6,6 +6,7 @@ local ctx = require("ctx")
 local uuid = require("uuid")
 local hash = require("hash")
 local time = require("time")
+local clock = require("clock")
 local persistence = require("persistence")
 local recovery = require("recovery")
 local contract = require("contract")
@@ -388,7 +389,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                 deliver("bee.host.upgrade_failed", {version = 1, schema = 1,
                     workspace_id = workspace_id, reason = "drain_timeout"})
             elseif expired then
-                local now = time.now():unix_nano() / 1000000000
+                local now = clock.epoch_seconds(time.now())
                 for request_id, pending in pairs(pending_opens) do
                     if pending.expires and now >= pending.expires then
                         -- Keep the bounded in-flight record until the broker
@@ -585,7 +586,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                             else
                                 pending_opens[request.request_id] = {callers = {caller}, definition_id = request.definition_id,
                                     arguments_fingerprint = contract.argument_fingerprint(request.arguments),
-                                    expires = time.now():unix_nano() / 1000000000 + 30, display_id = display_id}
+                                    expires = clock.epoch_seconds(time.now()) + 30, display_id = display_id}
                                 local sent, send_error = process.send(broker, "bee.app.request", {version = 1, request_id = request.request_id, op = "open",
                                     workspace_id = workspace_id, id = "", instance_id = "", definition_id = request.definition_id,
                                     thread_id = request.provenance.thread_id, runtime_provenance = request.provenance,

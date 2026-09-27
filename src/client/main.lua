@@ -1095,7 +1095,7 @@ local function local_entry(database_resource: string, initial_application: strin
     if not ok then error(err) end
 end
 -- Private command entry used to prove normal handler semantics before promotion.
-local function local_command(database_resource: string, name: string?, ...)
+local function local_command(database_resource: string, name: string?, ...: string)
     local tail = arguments.decode({...})
     if not tail then error("Invalid application arguments") end
     if not name or name == "" then return local_entry(database_resource, nil, nil) end
@@ -1108,16 +1108,16 @@ local function local_command(database_resource: string, name: string?, ...)
     return local_entry(database_resource, selected.definition_id,
         {version = 1, arguments = selected.arguments, fullscreen = selected.fullscreen})
 end
-local function local_application(database_resource: string, application: string, ...)
+local function local_application(database_resource: string, application: string, ...: string)
     local values = arguments.decode({...})
     if not values then error("Invalid application arguments") end
     return local_entry(database_resource, application, {version = 1, arguments = values})
 end
 -- Public argv never selects a database resource. Composition owns that binding.
-local function desktop(name: string?, ...)
+local function desktop(name: string?, ...: string)
     return local_command("bee.env:client_db", name, ...)
 end
-local function application(application_id: string, ...)
+local function application(application_id: string, ...: string)
     return local_application("bee.env:client_db", application_id, ...)
 end
 return {main = main, local_entry = local_entry, local_command = local_command, local_application = local_application,

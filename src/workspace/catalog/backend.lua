@@ -239,50 +239,44 @@ local function handle(value: unknown): protocol.Reply
     if type(value) ~= "table" then return protocol.fail("INVALID", "backend request must be an object") end
     local request, decode_error = protocol.decode(value.operation, value.request)
     if not request then return protocol.fail("INVALID", decode_error or "invalid catalog request") end
-    local operation = request.operation
-    if operation == "create" then
-        local definition = request.create
-        if not definition then return protocol.fail("INVALID", "create request is missing") end
-        return create(definition)
-    elseif operation == "roots" then
+    if request.operation == "create" then
+        return create(request.create)
+    elseif request.operation == "roots" then
         return roots()
-    elseif operation == "folders" then
-        local definition = request.folders
-        if not definition then return protocol.fail("INVALID", "folders request is missing") end
-        return folders(definition)
-    elseif operation == "read" then
-        return read(request.workspace_id or "")
-    elseif operation == "inspect" then
-        return inspect(request.workspace_id or "")
-    elseif operation == "search_within" then
-        return search_within(request.workspace_id or "", request.text or "", request.limit or 10)
-    elseif operation == "archive" then
-        return archive(request.workspace_id or "")
-    elseif operation == "restore" then
-        local id = request.workspace_id or ""
+    elseif request.operation == "folders" then
+        return folders(request.folders)
+    elseif request.operation == "read" then
+        return read(request.workspace_id)
+    elseif request.operation == "inspect" then
+        return inspect(request.workspace_id)
+    elseif request.operation == "search_within" then
+        return search_within(request.workspace_id, request.text, request.limit)
+    elseif request.operation == "archive" then
+        return archive(request.workspace_id)
+    elseif request.operation == "restore" then
         return transact(function(tx: sql.Transaction): (unknown, catalog.Fault?)
-            return catalog.transition(tx, id, "archived", "active")
+            return catalog.transition(tx, request.workspace_id, "archived", "active")
         end)
-    elseif operation == "rename" then
-        local id, label = request.workspace_id or "", request.label or ""
+    elseif request.operation == "rename" then
         return transact(function(tx: sql.Transaction): (unknown, catalog.Fault?)
-            return catalog.rename(tx, id, label)
+            return catalog.rename(tx, request.workspace_id, request.label)
+        end)
+    elseif request.operation == "list" or request.operation == "search" then
+        local query = request.query
+        if query.order == "roots" then
+            -- A search across roots walks every root the host admits, in name order.
+            local admitted, roots_error = host_roots()
+            if not admitted then return protocol.fail("UNAVAILABLE", roots_error or "host roots are unavailable") end
+            local roots: {string} = {}
+            for root_ref in pairs(admitted) do roots[#roots + 1] = root_ref end
+            table.sort(roots)
+            query.roots = roots
+        end
+        return transact(function(tx: sql.Transaction): (unknown, catalog.Fault?)
+            return catalog.page(tx, query)
         end)
     end
-    local query = request.query
-    if not query then return protocol.fail("INVALID", "listing request is missing") end
-    if query.order == "roots" then
-        -- A search across roots walks every root the host admits, in name order.
-        local admitted, roots_error = host_roots()
-        if not admitted then return protocol.fail("UNAVAILABLE", roots_error or "host roots are unavailable") end
-        local roots: {string} = {}
-        for root_ref in pairs(admitted) do roots[#roots + 1] = root_ref end
-        table.sort(roots)
-        query.roots = roots
-    end
-    return transact(function(tx: sql.Transaction): (unknown, catalog.Fault?)
-        return catalog.page(tx, query)
-    end)
+    return protocol.fail("INVALID", "unsupported catalog operation")
 end
 
 return {handle = handle}

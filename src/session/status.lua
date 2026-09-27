@@ -20,7 +20,7 @@ local function cancel(state: State)
     state.pending = nil
     if pending then pending.future:cancel() end
 end
-function M.bind(state: State, thread_id: string?, now: integer)
+function M.bind(state: State, thread_id: string?, now: integer): ()
     if state.closed then return end
     cancel(state)
     if thread_id then reader.bind(state.reader, thread_id) else reader.unbind(state.reader) end
@@ -82,7 +82,7 @@ function M.complete(state: State, pending: Pending, now: integer): boolean
     end
     return true
 end
-function M.close(state: State)
+function M.close(state: State): ()
     state.closed = true
     cancel(state)
     reader.unbind(state.reader)

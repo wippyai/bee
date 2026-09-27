@@ -12,6 +12,14 @@ local function positive_generation(value: unknown): integer?
     return math.floor(value)
 end
 
+function M.actor_id(workspace_id: unknown, instance_id: unknown): string?
+    local workspace = text(workspace_id, 32)
+    if not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil end
+    local instance = text(instance_id, 160)
+    if not instance then return nil end
+    return "bee.application:" .. workspace .. ":" .. instance
+end
+
 -- This is deliberately derived only from broker-owned launch values. The
 -- execution generation changes when the producer is replaced; the logical
 -- actor ID remains stable for the workspace and application instance.
@@ -23,8 +31,9 @@ function M.value(workspace_id: unknown, instance_id: unknown, definition_id: unk
     local definition = text(definition_id, 160)
     local revision = text(definition_revision, 80)
     local generation = positive_generation(execution_generation)
-    if not instance or not definition or not revision or not generation then return nil end
-    return {id = "bee.application:" .. workspace .. ":" .. instance,
+    local actor_id = M.actor_id(workspace, instance)
+    if not instance or not definition or not revision or not generation or not actor_id then return nil end
+    return {id = actor_id,
         metadata = {workspace_id = workspace, definition_id = definition,
             definition_revision = revision, execution_generation = generation}}
 end

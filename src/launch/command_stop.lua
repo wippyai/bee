@@ -33,7 +33,7 @@ function M.accept(message: process.Message): boolean
     return true
 end
 
-function M.close(listener: Listener)
+function M.close(listener: Listener): ()
     process.registry.unregister(owner_stop.COMMAND)
     process.unlisten(listener.channel)
 end

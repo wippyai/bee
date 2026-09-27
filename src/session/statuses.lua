@@ -35,7 +35,7 @@ function M.apply(state: State, snapshot: bindings.Snapshot, scene: model.Scene, 
     reconcile(state, now)
     return true
 end
-function M.layout(state: State, scene: model.Scene, workspace: string, now: integer)
+function M.layout(state: State, scene: model.Scene, workspace: string, now: integer): ()
     if state.closed then return end
     state.bindings.items = bindings.prune(state.bindings.items, scene, workspace)
     reconcile(state, now)
@@ -51,7 +51,7 @@ function M.values(state: State): {TabValue}
     end
     return values
 end
-function M.close(state: State)
+function M.close(state: State): ()
     if state.closed then return end
     state.closed = true
     for _, current in pairs(state.readers) do driver.close(current) end

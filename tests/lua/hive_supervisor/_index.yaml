@@ -139,6 +139,7 @@ entries:
     types: bee.hive:types
     store: bee.storage:store
     binding: bee.storage:binding
+    workspace_page: bee.hive.api:workspaces_page
 - name: workspace_commands_test
   kind: function.lua
   source: file://workspace_commands_test.lua

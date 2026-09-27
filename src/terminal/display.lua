@@ -25,7 +25,7 @@ function M.open(): Display
     if not result then output:close(); tty.stop(); error("Display initialization returned no resources") end
     return result
 end
-function M.replace(value: Display)
+function M.replace(value: Display): ()
     value.view:close()
     value.view = viewport(value.width, value.height)
 end
@@ -35,7 +35,7 @@ function M.stage(value: Display): tty.Viewport
     value.view = viewport(value.width, value.height)
     return previous
 end
-function M.resize(value: Display, width: integer, height: integer)
+function M.resize(value: Display, width: integer, height: integer): ()
     value.width, value.height = width, height
     value.view:resize(width, height)
 end
@@ -55,7 +55,7 @@ function M.clipboard(value: Display, text: string): (boolean, string?)
     if not ok then return false, tostring(err or "Clipboard output unavailable") end
     return true, nil
 end
-function M.paused(value: Display, emergency: boolean?)
+function M.paused(value: Display, emergency: boolean?): ()
     local canvas = tty.canvas(value.width, value.height)
     canvas:clear(" ")
     for y = 1, value.height do canvas:put(1, y, value.last_rows[y] or "", value.width) end
@@ -64,7 +64,7 @@ function M.paused(value: Display, emergency: boolean?)
         .. string.rep(" ", value.width) .. "\27[0m", value.width)
     value.output:present(canvas:rows(), {cursor = {x = 1, y = 1, visible = false}})
 end
-function M.close(value: Display)
+function M.close(value: Display): ()
     value.view:close()
     value.output:close()
     tty.stop()

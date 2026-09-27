@@ -53,7 +53,7 @@ function M.complete(reader: Reader, pending: Pending): Snapshot?
     if err or not result then return nil end
     return M.decode(result:data())
 end
-function M.close(reader: Reader)
+function M.close(reader: Reader): ()
     reader.closed = true
     local pending = reader.pending
     reader.pending = nil

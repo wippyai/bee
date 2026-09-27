@@ -26,7 +26,7 @@ local function badge_style(theme: appearance.Theme, badge: surface.Badge?): stri
     if badge.tone == "success" then return appearance.style(theme.text, theme.surface) end
     return nil
 end
-function M.draw(canvas: tty.Canvas, win: model.Window, rect: model.Rect, active: boolean, theme: appearance.Theme, badge: surface.Badge?)
+function M.draw(canvas: tty.Canvas, win: model.Window, rect: model.Rect, active: boolean, theme: appearance.Theme, badge: surface.Badge?): ()
     local accent = appearance.instance_accent(theme, win.accent)
     local edge = appearance.style(active and accent or theme.border, theme.surface)
     local title_style = appearance.style(active and theme.text or theme.muted, theme.surface)

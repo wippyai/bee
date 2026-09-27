@@ -7,6 +7,7 @@ entries:
   method: main
   modules: [process, channel, security, ctx, uuid, hash, time]
   imports:
+    clock: bee:clock
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
     contract: bee.protocol:application

@@ -537,14 +537,14 @@ function M.requested_height(id: string): integer
     return (entry and entry.requested_height) or 0
 end
 
-function M.close(id: string)
+function M.close(id: string): ()
     local entry: Entry? = entries[id]
     if not entry then return end
     entries[id] = nil
     retire_entry(entry)
 end
 
-function M.shutdown()
+function M.shutdown(): ()
     is_shutdown = true
     local ids: {string} = {}
     for id in pairs(entries) do

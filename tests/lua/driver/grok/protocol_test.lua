@@ -308,7 +308,7 @@ local function define_tests()
                 eof = true,
             })
             test.is_false(bad_usage.ok)
-            test.eq(bad_usage.error, "state.usage.output_tokens is not a nonnegative integer")
+            test.eq(bad_usage.error, "state.usage.output_tokens must be a nonnegative integer")
         end)
 
         test.it("requires boolean eof and resumed request flags", function()

@@ -186,11 +186,10 @@ local function add_directory_arguments(roots: {string}): ({string}?, string?)
 end
 
 type AdapterHandler = {enabled: ({string}) -> boolean, arguments: ({string}) -> ({string}?, string?)}
-local ADAPTERS: {[Adapter]: AdapterHandler} = {
-    codex_workspace_write = {enabled = codex_enabled, arguments = codex_arguments},
-    claude_add_dir = {enabled = claude_enabled, arguments = add_directory_arguments},
-    agy_add_dir = {enabled = agy_enabled, arguments = add_directory_arguments},
-}
+local ADAPTERS: {[Adapter]: AdapterHandler} = {}
+ADAPTERS[driver_types.GIT_WRITABLE_ROOTS_ADAPTERS.CODEX_WORKSPACE_WRITE] = {enabled = codex_enabled, arguments = codex_arguments}
+ADAPTERS[driver_types.GIT_WRITABLE_ROOTS_ADAPTERS.CLAUDE_ADD_DIR] = {enabled = claude_enabled, arguments = add_directory_arguments}
+ADAPTERS[driver_types.GIT_WRITABLE_ROOTS_ADAPTERS.AGY_ADD_DIR] = {enabled = agy_enabled, arguments = add_directory_arguments}
 
 function M.enabled(adapter: Adapter, argv: {string}): boolean
     local handler = ADAPTERS[adapter]

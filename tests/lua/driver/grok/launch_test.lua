@@ -133,7 +133,7 @@ local function define_tests()
             test.is_true(table.concat(canonical_spec.argv, " "):find("--reasoning-effort max", 1, true) ~= nil)
             local alias, alias_error = launch.decode({profile_id = "session", brief = "test effort", reasoning_effort = "max"})
             test.is_nil(alias)
-            test.eq(alias_error, "unknown field reasoning_effort")
+            test.eq(alias_error, "launch request: unknown field reasoning_effort")
         end)
 
         test.it("rejects invalid options and out-of-bounds parameters", function()

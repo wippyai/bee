@@ -238,6 +238,31 @@ local function define_tests()
             local done = funcs.call("bee.driver.codex.binding:normalize", {state = reply.state, index = 2, eof = true})
             test.eq(done.terminal.outcome, "uncertain")
         end)
+        test.it("decodes exact Claude and Codex saved state before normalization and EOF", function()
+            local claude_unknown = funcs.call("bee.driver.claude.binding:normalize", {index = 1, eof = true,
+                state = {started = false, resumed = false, foreign = true}})
+            test.is_false(claude_unknown.ok)
+            local claude_bad_terminal = funcs.call("bee.driver.claude.binding:normalize", {index = 1, eof = true,
+                state = {started = false, resumed = false, terminal = {outcome = "succeeded", answer = "ok", extra = true}}})
+            test.is_false(claude_bad_terminal.ok)
+            local claude_resumed = funcs.call("bee.driver.claude.binding:normalize", {index = 1, eof = true,
+                state = {started = false, resumed = true}})
+            test.is_true(claude_resumed.ok)
+            test.is_true(claude_resumed.state.resumed)
+            test.eq(claude_resumed.terminal.outcome, "uncertain")
+
+            local codex_unknown = funcs.call("bee.driver.codex.binding:normalize", {index = 1, eof = true,
+                state = {resumed = false, thread_id = "thread-1", foreign = true}})
+            test.is_false(codex_unknown.ok)
+            local codex_oversized = funcs.call("bee.driver.codex.binding:normalize", {index = 1, eof = true,
+                state = {resumed = false, answer = string.rep("x", codex.MAX_ANSWER_BYTES + 1)}})
+            test.is_false(codex_oversized.ok)
+            local codex_resumed = funcs.call("bee.driver.codex.binding:normalize", {index = 1, eof = true,
+                resumed = true})
+            test.is_true(codex_resumed.ok)
+            test.is_true(codex_resumed.state.resumed)
+            test.eq(codex_resumed.terminal.outcome, "uncertain")
+        end)
     end)
     test.describe("Muse msp-exec normalization", function()
         test.it("accumulates answer deltas and reports the terminal run only", function()

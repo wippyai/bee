@@ -39,7 +39,7 @@ end
 local function decode_usage(value: unknown): (events.Usage?, string?)
     if value == nil then return nil, nil end
     local usage, usage_error = values.usage(value)
-    if usage_error then return nil, usage_error end
+    if usage_error then return nil, usage_error:gsub("^usage ", "usage.") end
     if usage and usage.input_tokens == nil and usage.output_tokens == nil and usage.cached_tokens == nil then
         return nil, "usage must contain a counter"
     end

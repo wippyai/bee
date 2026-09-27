@@ -29,14 +29,9 @@ M.MAX_RETAIN_MS = 600000
 M.DEFAULT_DRAIN_MS = 5000
 M.MAX_DRAIN_MS = 600000
 local ENVIRONMENT_NAME = "^[A-Z_][A-Z0-9_]*$"
--- A required-file path is relative, has no empty, dot or dot-dot segment,
--- no backslash, no control byte and no NUL, so it cannot escape its directory.
 local function safe_relative(value: string): boolean
-    if value == "" or value:sub(1, 1) == "/" or value:find("[%c\\]") then return false end
-    for segment in (value .. "/"):gmatch("(.-)/") do
-        if segment == "" or segment == "." or segment == ".." then return false end
-    end
-    return true
+    local path = bounds.subpath(value, {nonempty = true, no_control = true})
+    return path ~= nil
 end
 local function digest_hex(value: unknown): string?
     if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
@@ -65,8 +60,11 @@ local function decode_grant(value: unknown, index: integer): (types.ResourceGran
     return {name = name, grant_ref = grant_ref, root_ref = root_ref, subpath = subpath, access = access :: types.Access, purpose = purpose :: types.Purpose}, nil
 end
 local function decode_files(value: unknown, field: string, nonempty: boolean): ({driver_types.RequiredFile}?, string?)
-    if type(value) ~= "table" then return nil, field .. " must be a list" end
-    local raw = value :: {unknown}
+    local raw, array_error = bounds.array(value, M.MAX_REQUIRED_FILES)
+    if not raw then
+        if type(value) ~= "table" then return nil, field .. " must be a list" end
+        return nil, field .. " must be a dense list: " .. tostring(array_error)
+    end
     if #raw > M.MAX_REQUIRED_FILES or (nonempty and #raw == 0) then
         if nonempty then return nil, field .. " must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " paths" end
         return nil, field .. " exceeds " .. tostring(M.MAX_REQUIRED_FILES) .. " entries"
@@ -124,9 +122,8 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     if (variable == nil) ~= (directory == nil) then return nil, "launch.provider_home.variable and directory must be supplied together" end
     local extra_variables: {driver_types.ProviderHomeEnvironment} = {}
     if object.extra_variables ~= nil then
-        local raw_variables, list_error = bounds.array(object.extra_variables, bounds.MAX_ARRAY_ITEMS)
-        if not raw_variables then return nil, "launch.provider_home.extra_variables must be a dense list: " .. tostring(list_error) end
-        if #raw_variables > 4 then return nil, "launch.provider_home.extra_variables exceeds 4 entries" end
+        local raw_variables, variables_error = bounds.array(object.extra_variables, 4)
+        if not raw_variables then return nil, "launch.provider_home.extra_variables must be a dense list: " .. tostring(variables_error) end
         local seen_variables: {[string]: boolean} = {}
         if variable then seen_variables[variable] = true end
         for index, raw in ipairs(raw_variables) do
@@ -146,10 +143,10 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
             extra_variables[index] = {variable = item_variable, directory = item_directory}
         end
     end
-    local raw_files, files_error = bounds.array(object.files, bounds.MAX_ARRAY_ITEMS)
+    local raw_files, files_error = bounds.array(object.files, M.MAX_REQUIRED_FILES)
     if not raw_files then return nil, "launch.provider_home.files must be a dense list: " .. tostring(files_error) end
     local file_count = #raw_files
-    if file_count < 1 or file_count > M.MAX_REQUIRED_FILES then return nil, "launch.provider_home.files must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
+    if file_count < 1 then return nil, "launch.provider_home.files must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
     local files: {driver_types.ProviderHomeFile} = {}
     local seen: {[string]: boolean} = {}
     for index, raw in ipairs(raw_files) do
@@ -205,9 +202,12 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     if unknown_field then return nil, "launch: " .. unknown_field end
     local executable = bounds.text(object.executable, M.MAX_ARGUMENT_BYTES)
     if not executable or executable == "" or executable:find("\0", 1, true) then return nil, "launch.executable must be nonempty text" end
-    if type(object.argv) ~= "table" then return nil, "launch.argv must be a list" end
+    local raw_argv, argv_error = bounds.array(object.argv, M.MAX_ARGV)
+    if not raw_argv then
+        if type(object.argv) ~= "table" then return nil, "launch.argv must be a list" end
+        return nil, "launch.argv must be a dense list: " .. tostring(argv_error)
+    end
     local argv: {string} = {}
-    local raw_argv = object.argv :: {unknown}
     if #raw_argv > M.MAX_ARGV then return nil, "launch.argv exceeds " .. tostring(M.MAX_ARGV) .. " items" end
     for index, item in ipairs(raw_argv) do
         local argument = bounds.text(item, M.MAX_ARGUMENT_BYTES)
@@ -371,8 +371,11 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not profile_digest then return nil, "profile_digest must be a sha256 hex digest" end
     local launch, launch_error = M.launch(object.launch)
     if not launch then return nil, launch_error end
-    if type(object.resources) ~= "table" then return nil, "resources must be a list" end
-    local raw_resources = object.resources :: {unknown}
+    local raw_resources, resources_error = bounds.array(object.resources, M.MAX_RESOURCES)
+    if not raw_resources then
+        if type(object.resources) ~= "table" then return nil, "resources must be a list" end
+        return nil, "resources must be a dense list: " .. tostring(resources_error)
+    end
     if #raw_resources > M.MAX_RESOURCES then return nil, "resources exceeds " .. tostring(M.MAX_RESOURCES) .. " items" end
     local resources: {types.ResourceGrant} = {}
     local by_name: {[string]: types.ResourceGrant} = {}

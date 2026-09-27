@@ -115,13 +115,15 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     local request, request_error = store.request(row)
     if not request then return fail(db, request_error or "attempt request is unreadable", nil) end
     if request.owner_id ~= owner or request.attempt_id ~= attempt_id then return fail(db, "attempt owner does not match its request", nil) end
+    local generation = bounds.count(row.attachment_generation)
+    if not generation then return fail(db, "attempt attachment generation is corrupt", nil) end
     if chosen.expected_placement_binding and request.placement_binding_ref ~= chosen.expected_placement_binding then
         return fail(db, "attempt uses another placement binding", nil)
     end
     if request.placement_binding_ref and request.placement_binding_ref ~= "bee.placement.native.binding:binding" then
         return fail(db, "native window cannot use a non-native placement binding", nil)
     end
-    if chosen.generation and (row.attachment_generation ~= chosen.generation or row.recipient ~= process.pid()) then
+    if chosen.generation and (generation ~= chosen.generation or row.recipient ~= process.pid()) then
         return fail(db, "window attachment generation is not admitted", nil)
     end
     if row.execution_state ~= "intended" then return fail(db, "attempt is already in use or has settled", nil) end
@@ -129,7 +131,8 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "window.started", detail = "managed window owner " .. process.pid()}})
     if not starting.ok then return fail(db, starting.message or "attempt is no longer intended", nil) end
 
-    local attempt = store.attempt(db, attempt_id)
+    local attempt, attempt_error = store.attempt(db, attempt_id)
+    if attempt_error then return fail(db, "attempt is corrupt: " .. attempt_error, nil) end
     if not attempt then return fail(db, "attempt is not recorded", nil) end
     local authorized_key, authorization_error = service.authorize_materialization(attempt, row, request, chosen.expected_binding)
     if authorization_error then
@@ -137,7 +140,6 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         return fail(db, authorization_error.error and authorization_error.error.message or "launch authorization failed", nil)
     end
 
-    local generation = type(row.attachment_generation) == "number" and math.floor(row.attachment_generation :: number) or 0
     local prepared, preparation_error, gateway_binding = materialization.prepare(db, request, attempt_id, generation, chosen.expected_binding, authorized_key)
     if not prepared then
         -- Materialization records its own terminal evidence. Keep the gateway

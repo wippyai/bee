@@ -107,6 +107,8 @@ entries:
   kind: library.lua
   source: file://resources.lua
   modules: [registry, env, system]
+  imports:
+    bounds: bee.threads.records:bounds
 - name: resource_roots
   kind: registry.entry
   meta:

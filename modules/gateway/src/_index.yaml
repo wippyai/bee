@@ -284,6 +284,7 @@ entries:
   modules: [hash]
   imports:
     bounds: bee.threads.records:bounds
+    service_reply: bee.protocol:reply
     canonical: bee.threads.records:canonical
 - name: hook_inbox
   kind: library.lua
@@ -374,6 +375,12 @@ entries:
   source: file://configuration.lua
   modules: [registry, funcs, env]
   imports: {address_value: bee.gateway:address_value}
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    service_reply: bee.protocol:reply
 - name: address
   kind: function.lua
   source: file://address_method.lua

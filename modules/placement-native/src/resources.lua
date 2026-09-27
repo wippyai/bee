@@ -2,8 +2,8 @@
 -- root, the executor and the runner host. The host fills the references
 -- through requirements; nothing here names a resource directly.
 local registry = require("registry")
-local env = require("env")
-local system = require("system")
+local bounds = require("bounds")
+local resource_authority = require("resource_authority")
 local M = {}
 M.DATABASE_REF = "bee.placement.native:database_ref"
 M.ROOT_REF = "bee.placement.native:root_ref"
@@ -55,57 +55,32 @@ function M.admitted_roots(): ({[string]: string}?, string?)
     if not root_ref then return nil, root_error end
     local entry, err = registry.get(root_ref)
     if err or not entry then return nil, "admitted roots unavailable" end
-    local data = entry.data
-    local roots: {[string]: string} = {}
-    local list = type(data) == "table" and data.roots or nil
-    if type(list) ~= "table" then return roots, nil end
-    for _, item in ipairs(list :: {unknown}) do
-        if type(item) == "table" then
-            local declared = item :: {[string]: unknown}
-            if type(declared.root_ref) == "string" and (declared.access == "read" or declared.access == "write") then
-                roots[declared.root_ref :: string] = declared.access :: string
-            end
-        end
-    end
-    return roots, nil
+    local data = bounds.object(entry.data)
+    if not data then return nil, "admitted roots declaration is not an object" end
+    local unknown_field = bounds.fields(data, {"roots"})
+    if unknown_field then return nil, "admitted roots: " .. unknown_field end
+    if data.roots == nil then return {}, nil end
+    return resource_authority.decode_roots(data.roots)
 end
 -- The host's resource mode: host_configured roots, or grants resolved by
 -- the resource authority. The host selects it; a request cannot.
-function M.resource_mode(): string
-    local mode_ref = reference(M.RESOURCE_MODE_REF, "resource_ref", "resource mode")
-    if not mode_ref then return "host_configured" end
+type ResourceMode = "granted" | "host_configured"
+type ResourceModeErrorCode = "UNAVAILABLE" | "INVALID"
+function M.resource_mode(): (ResourceMode?, string?, ResourceModeErrorCode?)
+    local mode_ref, reference_error = reference(M.RESOURCE_MODE_REF, "resource_ref", "resource mode")
+    if not mode_ref then return nil, reference_error or "resource mode is not linked", "UNAVAILABLE" end
     local entry, err = registry.get(mode_ref)
-    if err or not entry then return "host_configured" end
-    local data = entry.data
-    local mode = type(data) == "table" and data.mode or nil
-    if mode == "granted" then return "granted" end
-    return "host_configured"
+    if err or not entry then return nil, "resource mode is unavailable", "UNAVAILABLE" end
+    local data = bounds.object(entry.data)
+    if not data then return nil, "resource mode declaration is not an object", "INVALID" end
+    local unknown_field = bounds.fields(data, {"mode"})
+    if unknown_field then return nil, "resource mode: " .. unknown_field, "INVALID" end
+    if data.mode == "granted" then return "granted", nil, nil end
+    if data.mode == "host_configured" then return "host_configured", nil, nil end
+    return nil, "resource mode must be granted or host_configured", "INVALID"
 end
 -- The OS directory behind an admitted fs.directory root.
 function M.directory(root_ref: string): (string?, string?)
-    local entry, err = registry.get(root_ref)
-    if err or not entry then return nil, "resource root " .. root_ref .. " is not in the registry" end
-    if entry.kind ~= "fs.directory" then return nil, "resource root " .. root_ref .. " is not a directory" end
-    local data = entry.data
-    local directory = type(data) == "table" and data.directory or nil
-    if type(directory) ~= "string" or directory == "" then return nil, "resource root " .. root_ref .. " has no directory" end
-    -- The registry hands back the declared text; an ${env:entry} placeholder
-    -- is resolved through the declared variable it names, as the runtime
-    -- does when it mounts the directory.
-    local variable, rest = directory:match("^%${env:([^}]+)}(.*)$")
-    if variable then
-        local value, env_error = env.get(variable)
-        if env_error or type(value) ~= "string" or value == "" then return nil, "resource root " .. root_ref .. " names an unset variable " .. variable end
-        directory = value .. rest
-    end
-    if directory:find("%${") then return nil, "resource root " .. root_ref .. " has an unresolved placeholder" end
-    -- Children receive this path as their home or working directory, so it
-    -- is made absolute against the runtime's own working directory.
-    if not directory:find("^/") then
-        local cwd, cwd_error = system.process.cwd()
-        if cwd_error or type(cwd) ~= "string" or cwd == "" then return nil, "resource root " .. root_ref .. " is relative and the working directory is unavailable" end
-        directory = cwd .. "/" .. directory:gsub("^%./", "")
-    end
-    return directory, nil
+    return resource_authority.directory(root_ref)
 end
 return M

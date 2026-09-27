@@ -8,6 +8,7 @@
 -- a change, which bounds the window to that call.
 local fs = require("fs")
 local hash = require("hash")
+local bounds = require("bounds")
 local resources = require("resources")
 local types = require("types")
 local M = {}
@@ -16,8 +17,8 @@ M.CHUNK_BYTES = 262144
 -- Without a streaming hasher a file is digested from one string, which is
 -- bounded so a runtime without the capability measures scripts and small
 -- images and refuses the rest rather than exhausting memory.
-M.ONE_SHOT_MAX_BYTES = 8388608
 type Measurement = {revision: string, path: string, kind: string, interpreter: string?, size: integer, digest: string}
+type StreamingHasher = hash.Hasher
 local function kind_of(head: string): (string, string?)
     if head:sub(1, 4) == "\127ELF" then return "elf", nil end
     if head:sub(1, 2) == "#!" then
@@ -25,9 +26,6 @@ local function kind_of(head: string): (string, string?)
         return "script", (line:gsub("^%s+", ""):gsub("%s+$", ""))
     end
     return "other", nil
-end
-local function streaming(): boolean
-    return type((hash :: {[string]: unknown}).new) == "function"
 end
 function M.measure(path: unknown): (Measurement?, string?)
     if type(path) ~= "string" or path == "" or path:find("\0", 1, true) then return nil, "path must be nonempty text" end
@@ -39,43 +37,55 @@ function M.measure(path: unknown): (Measurement?, string?)
     local info, stat_error = vol:stat(path)
     if not info then return nil, "executable is not readable: " .. tostring(stat_error) end
     if info.is_dir then return nil, "executable is a directory" end
-    local size = math.floor(tonumber(info.size) or 0)
+    local size = bounds.integer(info.size)
+    if not size or size < 0 then return nil, "executable has an invalid reported size" end
     local file, open_error = vol:open(path, "r")
     if not file then return nil, "executable cannot be opened: " .. tostring(open_error) end
     local head = ""
     local digest: string? = nil
-    if streaming() then
-        local constructor = (hash :: {[string]: unknown}).new :: (string) -> (any, unknown)
-        local hasher, hasher_error = constructor("sha256")
-        if not hasher then
-            file:close()
-            return nil, "hasher unavailable: " .. tostring(hasher_error)
-        end
-        local total = 0
-        while true do
-            local chunk: unknown = file:read(M.CHUNK_BYTES)
-            if type(chunk) ~= "string" or chunk == "" then break end
-            local data = chunk :: string
-            if head == "" then head = data:sub(1, 256) end
-            hasher:update(data)
-            total = total + #data
-        end
+    local hasher: StreamingHasher, hasher_error = hash.new("sha256")
+    if hasher_error then
         file:close()
-        size = total
-        digest = tostring(hasher:sum())
-    else
-        file:close()
-        if size > M.ONE_SHOT_MAX_BYTES then return nil, "this runtime cannot hash a stream and the executable exceeds " .. tostring(M.ONE_SHOT_MAX_BYTES) .. " bytes" end
-        local content, read_error = vol:readfile(path)
-        if type(content) ~= "string" then return nil, "executable cannot be read: " .. tostring(read_error) end
-        head = content:sub(1, 256)
-        size = #content
-        local sum, hash_error = hash.sha256(content)
-        if not sum then return nil, "digest failed: " .. tostring(hash_error) end
-        digest = sum
+        return nil, "hasher unavailable: " .. tostring(hasher_error)
     end
+    local total = 0
+    while true do
+        local chunk, read_error = file:read(M.CHUNK_BYTES)
+        local eof = read_error ~= nil and tostring(read_error) == "EOF"
+        if read_error ~= nil and not eof then
+            local _, close_error = file:close()
+            return nil, "executable could not be read: " .. tostring(read_error) .. (close_error and "; close failed: " .. tostring(close_error) or "")
+        end
+        if chunk ~= nil and type(chunk) ~= "string" then
+            file:close()
+            return nil, "executable read returned an invalid chunk"
+        end
+        if chunk == "" and not eof then
+            file:close()
+            return nil, "executable read returned an empty chunk before EOF"
+        end
+        if type(chunk) == "string" and #chunk > 0 then
+            total = total + #chunk
+            if total > size then
+                file:close()
+                return nil, "executable changed size while being measured"
+            end
+            if head == "" then head = chunk:sub(1, 256) end
+            hasher:update(chunk)
+        end
+        if eof then break end
+        if chunk == nil then
+            file:close()
+            return nil, "executable read ended without an EOF result"
+        end
+    end
+    local closed, close_error = file:close()
+    if close_error or closed == false then return nil, "executable could not be closed after measurement: " .. tostring(close_error or "close refused") end
+    if total ~= size then return nil, "executable read was incomplete: measured " .. tostring(total) .. " of " .. tostring(size) .. " bytes" end
+    digest = hasher:sum()
+    if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "executable digest is invalid" end
     local kind, interpreter = kind_of(head)
-    return {revision = M.REVISION, path = path, kind = kind, interpreter = interpreter, size = size, digest = digest :: string}, nil
+    return {revision = M.REVISION, path = path, kind = kind, interpreter = interpreter, size = size, digest = digest}, nil
 end
 -- capabilities: what this runtime proves about measurement, measured
 -- rather than declared. Streaming is the hasher's presence; read-only
@@ -86,7 +96,7 @@ end
 -- reports false, never an affirmative capability.
 type Capabilities = {streaming: boolean, read_only_volume: boolean, detail: string}
 function M.capabilities(): Capabilities
-    local report: Capabilities = {streaming = streaming(), read_only_volume = false, detail = ""}
+    local report: Capabilities = {streaming = true, read_only_volume = false, detail = ""}
     local host_files, host_files_error = resources.host_files()
     if not host_files then
         report.detail = "host files unavailable: " .. tostring(host_files_error)

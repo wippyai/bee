@@ -12,8 +12,12 @@ M.SOURCES_REF = "bee.credentials:sources_ref"
 M.MATERIALIZER_REF = "bee.credentials:materializer_ref"
 type Setup = {path: string, destination: string, content_format: string, initialize_empty: boolean}
 type AuxiliaryFile = {source_prefix: string, destination_prefix: string, suffix: string, content_format: string}
-type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}, path: string?, setup: Setup?, auxiliary_files: {AuxiliaryFile}, write_back: boolean}
+type ProjectionKind = "environment" | "file"
+type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {ProjectionKind}, path: string?, setup: Setup?, auxiliary_files: {AuxiliaryFile}, write_back: boolean}
 type SourceSet = {sources: {Source}, formats: {[string]: string}}
+M.MAX_SOURCES = 64
+M.MAX_FORMATS = 64
+M.MAX_AUXILIARY_FILES = 8
 local function reference(id: string, field: string, label: string): (string?, string?)
     local entry, err = registry.get(id)
     if err or not entry then return nil, label .. " reference unavailable" end
@@ -32,134 +36,142 @@ end
 -- from, with the provider, the projection kinds and the audience (the
 -- placement owner a projection may name) each admits. "*" admits every
 -- workspace or every audience.
+local function decode_source(value: unknown, index: integer): (Source?, string?)
+    local label = "host credential sources[" .. tostring(index) .. "]"
+    local declared = bounds.object(value)
+    if not declared then return nil, label .. " must be an object" end
+    local unknown_field = bounds.fields(declared, {"ref", "workspace_id", "audience", "provider", "projection_kinds", "path", "setup_path", "setup_destination", "setup_content_format", "setup_initialize_empty", "auxiliary_files", "write_back"})
+    if unknown_field then return nil, label .. ": " .. unknown_field end
+    local ref, workspace_id = bounds.id(declared.ref), bounds.id(declared.workspace_id)
+    local audience, provider = bounds.id(declared.audience), bounds.id(declared.provider)
+    if not ref or not workspace_id or not audience or not provider then return nil, label .. " has an invalid identity" end
+    local raw_kinds, kinds_error = bounds.array(declared.projection_kinds, 2)
+    if not raw_kinds or #raw_kinds == 0 then return nil, label .. " projection_kinds must contain one or two values: " .. tostring(kinds_error) end
+    local kinds: {ProjectionKind} = {}
+    local seen_kinds: {[string]: boolean} = {}
+    for kind_index, raw in ipairs(raw_kinds) do
+        local kind: ProjectionKind?
+        if raw == "environment" then kind = "environment" elseif raw == "file" then kind = "file" end
+        if not kind or seen_kinds[kind] then return nil, label .. " projection_kinds[" .. tostring(kind_index) .. "] is invalid or duplicated" end
+        seen_kinds[kind] = true
+        kinds[kind_index] = kind
+    end
+    local path: string? = nil
+    if declared.path ~= nil then
+        path = formats.path(declared.path)
+        if not path then return nil, label .. " path is invalid" end
+    end
+    local setup: Setup? = nil
+    if declared.setup_path ~= nil then
+        local setup_path = formats.path(declared.setup_path)
+        local setup_destination = declared.setup_destination == nil and setup_path or formats.path(declared.setup_destination)
+        local setup_format: string? = "json"
+        if declared.setup_content_format ~= nil then setup_format = bounds.member(declared.setup_content_format, {"json", "opaque"}) end
+        if not setup_path or not setup_destination then return nil, label .. " setup path or destination is invalid" end
+        if not setup_format then return nil, label .. " setup content format is invalid" end
+        local initialize_empty = false
+        if declared.setup_initialize_empty ~= nil then
+            if type(declared.setup_initialize_empty) ~= "boolean" then return nil, label .. " setup empty-base flag is invalid" end
+            initialize_empty = declared.setup_initialize_empty
+        end
+        setup = {path = setup_path, destination = setup_destination, content_format = setup_format, initialize_empty = initialize_empty}
+    elseif declared.setup_destination ~= nil or declared.setup_content_format ~= nil or declared.setup_initialize_empty ~= nil then
+        return nil, label .. " setup metadata requires setup_path"
+    end
+    local auxiliary_files: {AuxiliaryFile} = {}
+    if declared.auxiliary_files ~= nil then
+        local items, array_error = bounds.array(declared.auxiliary_files, M.MAX_AUXILIARY_FILES)
+        if not items then return nil, label .. " auxiliary_files must be a bounded dense array: " .. tostring(array_error) end
+        for file_index, raw in ipairs(items) do
+            local item = bounds.object(raw)
+            if not item then return nil, label .. " auxiliary_files[" .. tostring(file_index) .. "] must be an object" end
+            local item_field = bounds.fields(item, {"source_prefix", "destination_prefix", "suffix", "content_format"})
+            if item_field then return nil, label .. " auxiliary_files[" .. tostring(file_index) .. "]: " .. item_field end
+            local source_prefix = bounds.text(item.source_prefix, 256)
+            local destination_prefix = bounds.text(item.destination_prefix, 256)
+            local suffix = bounds.text(item.suffix, 64)
+            local content_format = bounds.member(item.content_format, {"json", "opaque"})
+            if not source_prefix or source_prefix:sub(-1) ~= "/" or not formats.path(source_prefix .. "bee-file")
+                or not destination_prefix or destination_prefix:sub(-1) ~= "/" or not formats.path(destination_prefix .. "bee-file")
+                or not suffix or not suffix:match("^%.[A-Za-z0-9._-]+$") or suffix:find("..", 1, true) ~= nil
+                or not content_format then return nil, label .. " auxiliary_files[" .. tostring(file_index) .. "] is invalid" end
+            auxiliary_files[file_index] = {source_prefix = source_prefix, destination_prefix = destination_prefix,
+                suffix = suffix, content_format = content_format}
+        end
+    end
+    local write_back = false
+    if declared.write_back ~= nil then
+        if type(declared.write_back) ~= "boolean" then return nil, label .. " write_back must be a boolean" end
+        write_back = declared.write_back
+    end
+    local file_allowed = seen_kinds.file == true
+    if write_back and not file_allowed then return nil, label .. " write_back requires a file projection" end
+    if not file_allowed and (path ~= nil or setup ~= nil or #auxiliary_files > 0) then return nil, label .. " file metadata requires a file projection" end
+    return {ref = ref, workspace_id = workspace_id, audience = audience, provider = provider,
+        projection_kinds = kinds, path = path, setup = setup, auxiliary_files = auxiliary_files, write_back = write_back}, nil
+end
 function M.host_sources(): (SourceSet?, string?)
     local sources_entry, sources_error = reference(M.SOURCES_REF, "resource_ref", "host sources")
     if not sources_entry then return nil, sources_error end
     local entry, err = registry.get(sources_entry)
     if err or not entry then return nil, "host sources unavailable" end
-    local data = entry.data
+    local data = bounds.object(entry.data)
+    if not data then return nil, "host credential declaration must be an object" end
+    local unknown_field = bounds.fields(data, {"sources", "formats"})
+    if unknown_field then return nil, "host credential declaration: " .. unknown_field end
+    local source_rows, source_error = bounds.array(data.sources, M.MAX_SOURCES)
+    if not source_rows then return nil, "host credential sources must be a bounded dense array: " .. tostring(source_error) end
+    local format_declarations = bounds.object(data.formats)
+    if not format_declarations then return nil, "host credential formats must be an object" end
     local sources: SourceSet = {sources = {}, formats = {}}
-    local list = type(data) == "table" and data.sources or nil
-    local declared_formats = type(data) == "table" and data.formats or nil
-    if declared_formats ~= nil then
-        if type(declared_formats) ~= "table" then return nil, "host credential formats are invalid" end
-        local format_count = 0
-        for provider, ref in pairs(declared_formats :: {[unknown]: unknown}) do
-            if type(provider) ~= "string" or not bounds.id(provider) or type(ref) ~= "string" or not bounds.id(ref) then
-                return nil, "host credential formats are invalid"
-            end
-            format_count = format_count + 1
-            if format_count > 64 then return nil, "host credential formats exceed the limit" end
-            sources.formats[provider] = ref
-        end
+    local format_count = 0
+    for provider, raw_ref in pairs(format_declarations) do
+        local selected_provider, ref = bounds.id(provider), bounds.id(raw_ref)
+        if not selected_provider or not ref then return nil, "host credential format entries must be identifiers" end
+        format_count = format_count + 1
+        if format_count > M.MAX_FORMATS then return nil, "host credential formats exceed " .. tostring(M.MAX_FORMATS) .. " entries" end
+        sources.formats[selected_provider] = ref
     end
-    if type(list) ~= "table" then return sources, nil end
-    for _, item in ipairs(list :: {unknown}) do
-        if type(item) == "table" then
-            local declared = item :: {[string]: unknown}
-            local path: string? = nil
-            if declared.path ~= nil then
-                path = formats.path(declared.path)
-                if not path then return nil, "host credential path is invalid" end
-            end
-            local setup: Setup? = nil
-            if declared.setup_path ~= nil then
-                local setup_path = formats.path(declared.setup_path)
-                local setup_destination = declared.setup_destination == nil and setup_path or formats.path(declared.setup_destination)
-                local setup_format = declared.setup_content_format == nil and "json" or bounds.member(declared.setup_content_format, {"json", "opaque"})
-                if not setup_path or not setup_destination then return nil, "host credential setup path or destination is invalid" end
-                if not setup_format then return nil, "host credential setup content format is invalid" end
-                local initialize_empty = declared.setup_initialize_empty == true
-                if declared.setup_initialize_empty ~= nil and type(declared.setup_initialize_empty) ~= "boolean" then
-                    return nil, "host credential setup empty-base flag is invalid"
-                end
-                setup = {path = setup_path, destination = setup_destination, content_format = setup_format, initialize_empty = initialize_empty}
-            elseif declared.setup_destination ~= nil or declared.setup_content_format ~= nil or declared.setup_initialize_empty ~= nil then
-                return nil, "host credential setup destination and format require setup_path"
-            end
-            local auxiliary_files: {AuxiliaryFile} = {}
-            if declared.auxiliary_files ~= nil then
-                if type(declared.auxiliary_files) ~= "table" then return nil, "host auxiliary credential files are invalid" end
-                local items = declared.auxiliary_files :: {unknown}
-                if #items > 8 then return nil, "host auxiliary credential files exceed the limit" end
-                local count = 0
-                for key in pairs(items) do
-                    if type(key) ~= "number" or key < 1 or key > #items or math.floor(key) ~= key then
-                        return nil, "host auxiliary credential files must be a dense array"
-                    end
-                    count = count + 1
-                end
-                if count ~= #items then return nil, "host auxiliary credential files must be a dense array" end
-                for _, raw in ipairs(items) do
-                    local item = bounds.object(raw)
-                    if not item or bounds.fields(item, {"source_prefix", "destination_prefix", "suffix", "content_format"}) then
-                        return nil, "host auxiliary credential file is invalid"
-                    end
-                    local source_prefix = bounds.text(item.source_prefix, 256)
-                    local destination_prefix = bounds.text(item.destination_prefix, 256)
-                    local suffix = bounds.text(item.suffix, 64)
-                    local content_format = bounds.member(item.content_format, {"json", "opaque"})
-                    if not source_prefix or source_prefix:sub(-1) ~= "/" or not formats.path(source_prefix .. "bee-file")
-                        or not destination_prefix or destination_prefix:sub(-1) ~= "/" or not formats.path(destination_prefix .. "bee-file")
-                        or not suffix or not suffix:match("^%.[A-Za-z0-9._-]+$") or suffix:find("..", 1, true) ~= nil
-                        or not content_format then
-                        return nil, "host auxiliary credential file is invalid"
-                    end
-                    auxiliary_files[#auxiliary_files + 1] = {source_prefix = source_prefix, destination_prefix = destination_prefix,
-                        suffix = suffix, content_format = content_format}
-                end
-            end
-            local kinds: {string} = {}
-            if type(declared.projection_kinds) == "table" then
-                for _, kind in ipairs(declared.projection_kinds :: {unknown}) do
-                    if kind == "environment" or kind == "file" then kinds[#kinds + 1] = kind end
-                end
-            end
-            local provider = bounds.id(declared.provider)
-            local ref = bounds.id(declared.ref)
-            local workspace_id = bounds.id(declared.workspace_id)
-            local audience = bounds.id(declared.audience)
-            local write_back = false
-            if declared.write_back ~= nil then
-                if type(declared.write_back) ~= "boolean" then return nil, "host credential write-back flag is invalid" end
-                write_back = declared.write_back :: boolean
-            end
-            local file_allowed = false
-            for _, kind in ipairs(kinds) do if kind == "file" then file_allowed = true end end
-            if write_back and not file_allowed then return nil, "host token write-back requires a file source" end
-            if ref and workspace_id and audience and provider then
-                sources.sources[#sources.sources + 1] = {ref = ref, workspace_id = workspace_id, audience = audience,
-                    provider = provider, projection_kinds = kinds, path = path, setup = setup, auxiliary_files = auxiliary_files, write_back = write_back}
-            end
-        end
+    for index, raw in ipairs(source_rows) do
+        local source, source_error = decode_source(raw, index)
+        if not source then return nil, source_error end
+        sources.sources[index] = source
     end
     return sources, nil
+end
+local function matching_sources(sources: SourceSet, ref: string, workspace_id: string, provider: string,
+    audience: string?, kind: string?): {Source}
+    local matches: {Source} = {}
+    for _, source in ipairs(sources.sources) do
+        if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
+            and (audience == nil or source.audience == "*" or source.audience == audience) then
+            local admits_kind = kind == nil
+            for _, admitted in ipairs(source.projection_kinds) do
+                if admitted == kind then admits_kind = true end
+            end
+            if admits_kind then matches[#matches + 1] = source end
+        end
+    end
+    return matches
 end
 -- An auxiliary config file is read only when its exact safe path is requested
 -- by a driver and the host admits its prefix and suffix for this source.
 function M.auxiliary_rules(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?): ({AuxiliaryFile}?, string?)
     local selected: {AuxiliaryFile}? = nil
-    for _, source in ipairs(sources.sources) do
-        if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
-            and (audience == nil or source.audience == "*" or source.audience == audience) then
-            for _, kind in ipairs(source.projection_kinds) do
-                if kind == "file" then
-                    local same = selected == nil or #selected == #source.auxiliary_files
-                    if same and selected ~= nil then
-                        for index, rule in ipairs(source.auxiliary_files) do
-                            local prior = selected[index]
-                            if not prior or prior.source_prefix ~= rule.source_prefix or prior.destination_prefix ~= rule.destination_prefix
-                                or prior.suffix ~= rule.suffix or prior.content_format ~= rule.content_format then
-                                same = false
-                                break
-                            end
-                        end
-                    end
-                    if not same then return nil, "host auxiliary credential file declarations are ambiguous" end
-                    if selected == nil then selected = source.auxiliary_files end
+    for _, source in ipairs(matching_sources(sources, ref, workspace_id, provider, audience, "file")) do
+        local same = selected == nil or #selected == #source.auxiliary_files
+        if same and selected ~= nil then
+            for index, rule in ipairs(source.auxiliary_files) do
+                local prior = selected[index]
+                if not prior or prior.source_prefix ~= rule.source_prefix or prior.destination_prefix ~= rule.destination_prefix
+                    or prior.suffix ~= rule.suffix or prior.content_format ~= rule.content_format then
+                    same = false
+                    break
                 end
             end
         end
+        if not same then return nil, "host auxiliary credential file declarations are ambiguous" end
+        if selected == nil then selected = source.auxiliary_files end
     end
     if selected == nil then return nil, "host file source is not admitted" end
     return selected, nil
@@ -193,45 +205,30 @@ end
 -- Ambiguous declarations refuse rather than choosing one path.
 function M.setup(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?): (Setup?, string?)
     local selected: Setup? = nil
-    local matched = false
     local selected_set = false
-    for _, source in ipairs(sources.sources) do
-        if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
-            and (audience == nil or source.audience == "*" or source.audience == audience) then
-            for _, kind in ipairs(source.projection_kinds) do
-                if kind == "file" then
-                    matched = true
-                    if not selected_set then
-                        selected = source.setup
-                        selected_set = true
-                    else
-                        local candidate = source.setup
-                        local same = (selected == nil and candidate == nil) or (selected ~= nil and candidate ~= nil
-                            and selected.path == candidate.path and selected.destination == candidate.destination
-                            and selected.content_format == candidate.content_format and selected.initialize_empty == candidate.initialize_empty)
-                        if not same then return nil, "host credential setup files are ambiguous" end
-                    end
-                end
-            end
+    local matches = matching_sources(sources, ref, workspace_id, provider, audience, "file")
+    for _, source in ipairs(matches) do
+        if not selected_set then
+            selected = source.setup
+            selected_set = true
+        else
+            local candidate = source.setup
+            local same = (selected == nil and candidate == nil) or (selected ~= nil and candidate ~= nil
+                and selected.path == candidate.path and selected.destination == candidate.destination
+                and selected.content_format == candidate.content_format and selected.initialize_empty == candidate.initialize_empty)
+            if not same then return nil, "host credential setup files are ambiguous" end
         end
     end
-    if not matched then return nil, "host file source is not admitted" end
+    if #matches == 0 then return nil, "host file source is not admitted" end
     return selected, nil
 end
 -- Token write-back is a separate host admission bit; file readability alone
 -- never permits returning child changes to the machine login source.
 function M.token_write_back(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?): (boolean?, string?)
     local selected: boolean? = nil
-    for _, source in ipairs(sources.sources) do
-        if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
-            and (audience == nil or source.audience == "*" or source.audience == audience) then
-            for _, kind in ipairs(source.projection_kinds) do
-                if kind == "file" then
-                    if selected ~= nil and selected ~= source.write_back then return nil, "host token write-back declarations are ambiguous" end
-                    selected = source.write_back
-                end
-            end
-        end
+    for _, source in ipairs(matching_sources(sources, ref, workspace_id, provider, audience, "file")) do
+        if selected ~= nil and selected ~= source.write_back then return nil, "host token write-back declarations are ambiguous" end
+        selected = source.write_back
     end
     if selected == nil then return nil, "host file source is not admitted" end
     return selected, nil
@@ -239,15 +236,7 @@ end
 -- Whether the host admits a source for a workspace, provider and kind, and
 -- when an audience is named, for that audience too.
 function M.admits(sources: SourceSet, ref: string, workspace_id: string, provider: string, kind: string, audience: string?): boolean
-    for _, source in ipairs(sources.sources) do
-        if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
-            and (audience == nil or source.audience == "*" or source.audience == audience) then
-            for _, admitted in ipairs(source.projection_kinds) do
-                if admitted == kind then return true end
-            end
-        end
-    end
-    return false
+    return #matching_sources(sources, ref, workspace_id, provider, audience, kind) > 0
 end
 -- Paths belong to host admission, never to a definition request. Ambiguous
 -- host rows refuse rather than selecting whichever happens to come first.
@@ -274,27 +263,20 @@ function M.destination(format: formats.Format, kind: string): string?
 end
 function M.file_path(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?, format: formats.Format?): (string?, string?)
     local selected: string? = nil
-    for _, source in ipairs(sources.sources) do
-        if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
-            and (audience == nil or source.audience == "*" or source.audience == audience) then
-            for _, kind in ipairs(source.projection_kinds) do
-                if kind == "file" then
-                    local path = source.path
-                    if not path then
-                        local selected_format = format
-                        if not selected_format then
-                            local format_error
-                            selected_format, format_error = M.format(sources, provider)
-                            if not selected_format then return nil, format_error or "credential format unavailable" end
-                        end
-                        path = M.destination(selected_format, "file")
-                    end
-                    if not path then return nil, "credential format has no file destination" end
-                    if selected ~= nil and selected ~= path then return nil, "host credential paths are ambiguous" end
-                    selected = path
-                end
+    for _, source in ipairs(matching_sources(sources, ref, workspace_id, provider, audience, "file")) do
+        local path = source.path
+        if not path then
+            local selected_format = format
+            if not selected_format then
+                local format_error
+                selected_format, format_error = M.format(sources, provider)
+                if not selected_format then return nil, format_error or "credential format unavailable" end
             end
+            path = M.destination(selected_format, "file")
         end
+        if not path then return nil, "credential format has no file destination" end
+        if selected ~= nil and selected ~= path then return nil, "host credential paths are ambiguous" end
+        selected = path
     end
     if not selected then return nil, "host file source is not admitted" end
     return selected, nil

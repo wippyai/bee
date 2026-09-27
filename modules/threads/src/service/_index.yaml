@@ -296,14 +296,15 @@ entries:
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
     sends: bee.threads.service:sends
-    outbox: bee.threads.service:outbox
+    outbox: bee.threads.persist:outbox
 - name: outbox
   kind: library.lua
   source: file://outbox.lua
-  modules: [sql, uuid, time, json]
+  modules: [sql, json]
   imports:
     bounds: bee.threads.records:bounds
     transaction: bee.threads.persist:transaction
+    repository: bee.threads.persist:outbox
 - name: inbox_accept
   kind: function.lua
   source: file://inbox_method.lua
@@ -378,6 +379,7 @@ entries:
     resources: bee.threads:resources
     outbox: bee.threads.service:outbox
     pump: bee.threads.service:pump
+    bounds: bee.threads.records:bounds
 - name: inbox_outbox_claim
   kind: function.lua
   source: file://outbox_method.lua

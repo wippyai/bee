@@ -126,6 +126,7 @@ entries:
   source: file://delivery_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [time]
   imports:
     test: wippy.test:test
     harness: bee.threads:harness

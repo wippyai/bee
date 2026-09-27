@@ -27,6 +27,14 @@ function M.deadline(duration: string): string
     return M.utc(time.now():add(duration))
 end
 
+function M.milliseconds(): integer
+    return math.floor(time.now():unix_nano() / 1000000)
+end
+
+function M.stamp(milliseconds: integer): string
+    return M.utc(time.unix(math.floor(milliseconds / 1000), (milliseconds % 1000) * 1000000))
+end
+
 function M.elapsed_ms(started: time.Time, current: time.Time?): integer
     local instant = current or time.now()
     return math.floor(instant:sub(started):milliseconds())

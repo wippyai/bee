@@ -33,7 +33,7 @@ end
 
 function M.describe(request: unknown): Result
     local invalid = protocol.empty(request)
-    if invalid then return transaction.failure("INVALID", invalid) end
+    if invalid then return transaction.failure("INVALID_ARGUMENT", invalid) end
     local node, actor, denied = authority("bee.node.read")
     if not node then return denied or transaction.failure("DENIED", "node read refused") end
     local store, err = open(node)
@@ -58,7 +58,7 @@ end
 
 function M.update_metadata(request: unknown): Result
     local input, invalid = protocol.update(request)
-    if not input then return transaction.failure("INVALID", invalid or "invalid metadata update") end
+    if not input then return transaction.failure("INVALID_ARGUMENT", invalid or "invalid metadata update") end
     local node, actor, denied = authority("bee.node.update")
     if not node or not actor then return denied or transaction.failure("DENIED", "node update refused") end
     local encoded, encode_error = canonical.encode({node = node, actor = actor, key = input.idempotency_key})
@@ -78,7 +78,7 @@ end
 
 function M.get_appearance(request: unknown): Result
     local invalid = protocol.empty(request)
-    if invalid then return transaction.failure("INVALID", invalid) end
+    if invalid then return transaction.failure("INVALID_ARGUMENT", invalid) end
     local node, actor, denied = authority("bee.node.read")
     if not node then return denied or transaction.failure("DENIED", "node read refused") end
     local store, err = open(node)
@@ -104,7 +104,7 @@ end
 
 function M.update_appearance(request: unknown): Result
     local input, invalid = protocol.appearance_update(request)
-    if not input then return transaction.failure("INVALID", invalid or "invalid appearance update") end
+    if not input then return transaction.failure("INVALID_ARGUMENT", invalid or "invalid appearance update") end
     local node, actor, denied = authority("bee.node.appearance.update")
     if not node or not actor then return denied or transaction.failure("DENIED", "node appearance update refused") end
     local encoded, encode_error = canonical.encode({node = node, actor = actor,
@@ -125,7 +125,7 @@ end
 
 function M.snapshot(request: unknown): Result
     local invalid = protocol.empty(request)
-    if invalid then return transaction.failure("INVALID", invalid) end
+    if invalid then return transaction.failure("INVALID_ARGUMENT", invalid) end
     local node, actor, denied = authority("bee.node.read")
     if not node then return denied or transaction.failure("DENIED", "node read refused") end
     local store, err = open(node)
@@ -137,7 +137,7 @@ end
 
 function M.read_after(request: unknown): Result
     local cursor, limit, invalid = protocol.page(request)
-    if not cursor or not limit then return transaction.failure("INVALID", invalid or "invalid page") end
+    if not cursor or not limit then return transaction.failure("INVALID_ARGUMENT", invalid or "invalid page") end
     local node, actor, denied = authority("bee.node.read")
     if not node then return denied or transaction.failure("DENIED", "node read refused") end
     local store, err = open(node)

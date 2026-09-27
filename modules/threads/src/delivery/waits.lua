@@ -202,12 +202,8 @@ function M.wait(db: sql.DB, actor: string, request: unknown): Result
     if not consumer_id then return failure("INVALID_ARGUMENT", "consumer_id is not an identifier") end
     local after = bounds.cursor(object.after_sequence)
     if not after then return failure("INVALID_ARGUMENT", "after_sequence must be between 0 and " .. tostring(bounds.MAX_THREAD_RECORDS)) end
-    local limit = bounds.MAX_PAGE_RECORDS
-    if object.limit ~= nil then
-        local number = bounds.integer(object.limit)
-        if not number or number < 1 or number > bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
-        limit = number
-    end
+    local limit = bounds.page_limit(object.limit)
+    if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
     local wait_ms = bounds.integer(object.wait_ms)
     if not wait_ms or wait_ms < 0 then return failure("INVALID_ARGUMENT", "wait_ms must be a nonnegative integer") end
     local budget: integer? = nil

@@ -11,7 +11,7 @@ end
 local function handle(request: unknown): service.Reply
     local object = bounds.object(request) or {}
     local unknown_field = bounds.fields(object, {"approval_id", "redeliver"})
-    if unknown_field then return fail("INVALID", unknown_field) end
+    if unknown_field then return fail("INVALID_ARGUMENT", unknown_field) end
     local read = service.read({approval_id = object.approval_id})
     if not read.ok then return read end
     local view = read.value :: {[string]: unknown}
@@ -22,7 +22,7 @@ local function handle(request: unknown): service.Reply
         local event_id = bounds.id(object.redeliver)
         if not event_id then
             db:release()
-            return fail("INVALID", "redeliver is not an event identifier")
+            return fail("INVALID_ARGUMENT", "redeliver is not an event identifier")
         end
         if not security.can(service.MANAGE, tostring(view.workspace_id)) then
             db:release()
@@ -30,7 +30,7 @@ local function handle(request: unknown): service.Reply
         end
         if event_id:sub(1, #approval_id + 1) ~= approval_id .. ":" then
             db:release()
-            return fail("INVALID", "event does not belong to this request")
+            return fail("INVALID_ARGUMENT", "event does not belong to this request")
         end
         local _, redeliver_error = outbox.redeliver(db, event_id)
         if redeliver_error then

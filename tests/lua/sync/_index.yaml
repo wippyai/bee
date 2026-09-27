@@ -33,6 +33,7 @@ entries:
   imports:
     test: wippy.test:test
     canonical: bee.sync:canonical
+    bounds: bee.sync:bounds
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua

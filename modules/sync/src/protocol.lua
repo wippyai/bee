@@ -35,10 +35,6 @@ local function boolean(value: unknown): boolean?
     if type(value) ~= "boolean" then return nil end
     return value
 end
-local function line(value: unknown): string?
-    if type(value) ~= "string" or value == "" or #value > bounds.MAX_ID_BYTES or value:find("%c") then return nil end
-    return value
-end
 local function envelope(value: Object, schema: string, owner: string, feed: string): string?
     if value.schema ~= schema then return "sync schema is unsupported" end
     if value.owner_id ~= owner then return "sync owner does not match" end
@@ -53,7 +49,7 @@ function M.event(value: unknown, owner: string, feed: string, decode_payload: Pa
     local common = envelope(item, M.EVENT_SCHEMA, owner, feed)
     if common then return nil, common end
     local sequence, revision = bounds.count(item.sequence, 9007199254740991), bounds.count(item.revision, 9007199254740991)
-    local event_id, event_type, projection_key, committed_at = bounds.id(item.event_id), bounds.id(item.event_type), bounds.id(item.projection_key), line(item.committed_at)
+    local event_id, event_type, projection_key, committed_at = bounds.id(item.event_id), bounds.id(item.event_type), bounds.id(item.projection_key), bounds.id(item.committed_at)
     local tombstone = boolean(item.tombstone)
     if not sequence or sequence < 1 or not revision or revision < 1 or not event_id or not event_type or not projection_key or not committed_at or tombstone == nil or item.payload == nil then
         return nil, "sync event has invalid fields"
@@ -74,7 +70,7 @@ function M.projection(value: unknown, owner: string, feed: string, decode_value:
     if unexpected then return nil, unexpected end
     local common = envelope(item, M.PROJECTION_SCHEMA, owner, feed)
     if common then return nil, common end
-    local key, updated_at = bounds.id(item.key), line(item.updated_at)
+    local key, updated_at = bounds.id(item.key), bounds.id(item.updated_at)
     local revision, sequence = bounds.count(item.revision, 9007199254740991), bounds.count(item.sequence, 9007199254740991)
     local tombstone = boolean(item.tombstone)
     if not key or not updated_at or not revision or revision < 1 or not sequence or sequence < 1 or tombstone == nil then return nil, "sync projection has invalid fields" end

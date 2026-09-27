@@ -21,7 +21,8 @@ local function handle(raw: unknown): string
             if not subject or types.pid_parts(subject) ~= remote then error("bad approval subject") end
             approvers[1] = principals.actor_of(remote, subject)
         end
-        entry.data = {policies = {{name = "feed-approval", approvers = approvers, max_ttl_ms = 60000}}}
+        entry.data = command == "approval-revoke" and {policies = {}}
+            or {policies = {{name = "feed-approval", approvers = approvers, max_ttl_ms = 60000}}}
         local changes = registry.snapshot():changes()
         changes:update(entry)
         local applied, apply_error = changes:apply()
@@ -57,7 +58,11 @@ local function handle(raw: unknown): string
         local snapshot = mesh:call(owner, {operation_ref = "bee.approvals.binding:feed_snapshot"}, {workspace_id = "feed-workspace"}, {timeout = "5s"})
         if not snapshot.ok then error("approval snapshot transport refused") end
         local domain = object(snapshot.value)
-        if domain.ok ~= true then error("approval snapshot owner refused") end
+        if domain.ok ~= true then
+            local fault: {[string]: unknown} = {}
+            if type(domain.error) == "table" then fault = object(domain.error) end
+            error("approval snapshot owner refused: " .. tostring(fault.code) .. ": " .. tostring(fault.message))
+        end
         local page = object(domain.value)
         local items = page.items
         if type(items) ~= "table" then error("missing approval items") end

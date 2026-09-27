@@ -4,7 +4,7 @@ entries:
 - name: claims
   kind: library.lua
   source: file://claims.lua
-  modules: [sql]
+  modules: [sql, time]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical

@@ -22,3 +22,11 @@ entries:
   kind: library.lua
   source: file://owner.lua
   modules: [sql, uuid]
+- name: outbox
+  kind: library.lua
+  source: file://outbox.lua
+  modules: [sql, uuid, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    clock: bee:clock
+    transaction: bee.threads.persist:transaction

@@ -97,6 +97,35 @@ local function define_tests()
             local ended_item = harness.value(b:call("inbox_list", {thread_id = b_thread, action_id = "action-b", after_sequence = 1}))
             test.eq(ended_item.items[1].delivery_status, "undeliverable")
         end)
+        test.it("refuses to lease a forwarding row with corrupt durable content", function()
+            local sender_id = "corrupt-sender-" .. harness.key()
+            local sender = harness.principal(sender_id,
+                {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.threads:inbox_send_test_policy"}, WORKSPACE)
+            local sender_thread = harness.thread(sender, "corrupt forwarding source")
+            harness.value(sender:call("admit_action", {thread_id = sender_thread, idempotency_key = harness.key(),
+                action_id = "sender-action", admitted = admitted(sender_id)}))
+            local content = {text = "durable content"}
+            local queued = harness.value(sender:call("inbox_send", {thread_id = "remote-thread-" .. harness.key(), target_action_id = "remote-action",
+                sender_thread_id = sender_thread, sender_action_id = "sender-action", node_id = "remote-node", workspace_id = WORKSPACE,
+                grant_epoch = 1, idempotency_key = harness.key(), message_id = "corrupt-content", content = content,
+                payload_digest = assert(sends.payload_digest({message_id = "corrupt-content", content = content}))}))
+            local outbox = queued.outbox :: {[string]: unknown}
+            local outbox_id = outbox.outbox_id :: string
+            local db = harness.open()
+            harness.execute(db, "UPDATE bee_thread_inbox_outbox SET content_json = '{' WHERE outbox_id = ?", {outbox_id})
+            db:release()
+
+            local refused = sender:call("inbox_outbox_claim", {holder = "corrupt-content-test", limit = 16})
+            test.eq(harness.code(refused), "STORAGE")
+            test.is_true((refused.error and refused.error.message or ""):find("corrupt", 1, true) ~= nil)
+
+            local cleanup = harness.open()
+            local row = harness.query(cleanup, "SELECT state, lease_owner FROM bee_thread_inbox_outbox WHERE outbox_id = ?", {outbox_id})[1]
+            test.eq(row.state, "queued")
+            test.eq(row.lease_owner, nil)
+            harness.execute(cleanup, "DELETE FROM bee_thread_inbox_outbox WHERE outbox_id = ?", {outbox_id})
+            cleanup:release()
+        end)
         test.it("offers one ordered item under a carrier epoch and redelivers its identity after a crash", function()
             local grants = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.threads:inbox_send_test_policy"}
             local sender = harness.principal("push-sender", grants, WORKSPACE)

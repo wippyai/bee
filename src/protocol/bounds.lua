@@ -1,6 +1,7 @@
 -- Shared primitive decoders for Bee protocol values.
 local clock = require("clock")
 local M = {}
+M.MAX_SAFE_INTEGER = 9007199254740991
 M.MAX_ID_BYTES = 160
 M.MAX_ARRAY_ITEMS = 64
 M.MAX_TEXT_BYTES = 16384
@@ -23,7 +24,7 @@ end
 
 function M.integer(value: unknown): integer?
     if type(value) ~= "number" or value ~= math.floor(value) or value ~= value
-        or value > 9007199254740991 or value < -9007199254740991 then return nil end
+        or value > M.MAX_SAFE_INTEGER or value < -M.MAX_SAFE_INTEGER then return nil end
     return math.floor(value)
 end
 

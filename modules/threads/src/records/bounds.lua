@@ -1,7 +1,8 @@
--- Thread-specific limits and sequence validators on shared protocol bounds.
+-- Thread-specific capacities and sequence validators on shared protocol bounds.
 local shared = require("shared")
 local M = {}
 M.SCHEMA_REVISION = "bee.thread-record@1"
+M.MAX_SAFE_INTEGER = shared.MAX_SAFE_INTEGER
 M.MAX_ID_BYTES = shared.MAX_ID_BYTES
 M.MAX_RECORD_BYTES = 16384
 M.MAX_PAGE_RECORDS = 64
@@ -22,7 +23,9 @@ M.OUTCOMES = {"succeeded", "failed", "cancelled", "uncertain"}
 M.id = shared.id
 M.text = shared.text
 M.line = shared.line
-M.integer = shared.integer
+function M.integer(value: unknown): integer?
+    return shared.integer(value)
+end
 M.count = shared.count
 M.timestamp = shared.timestamp
 M.array = shared.array
@@ -43,6 +46,13 @@ end
 function M.cursor(value: unknown): integer?
     local number = shared.integer(value)
     if not number or number < 0 or number > M.MAX_THREAD_RECORDS then return nil end
+    return number
+end
+
+function M.page_limit(value: unknown): integer?
+    if value == nil then return M.MAX_PAGE_RECORDS end
+    local number = shared.integer(value)
+    if not number or number < 1 or number > M.MAX_PAGE_RECORDS then return nil end
     return number
 end
 

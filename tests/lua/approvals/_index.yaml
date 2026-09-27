@@ -33,12 +33,13 @@ entries:
   source: file://service_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [funcs, security, registry, time, sql, process, uuid]
+  modules: [funcs, security, registry, time, sql, process, uuid, json]
   security:
     policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   imports:
     test: wippy.test:test
     service: bee.approvals:service
+    worker: bee.approvals.service:worker
     resources: bee.approvals:resources
     outbox: bee.approvals.persist:outbox
     migrations: bee.approvals.migrations:migrations

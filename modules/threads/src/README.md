@@ -15,7 +15,7 @@ authenticated actor owns its data and no payload can select another actor.
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (17 migrations), owner incarnation, connection settings, typed readers and write transactions |
+| `bee.threads.persist` | The owned store: checked migration ledger (18 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
 
 ## Dependency interface
 

@@ -70,9 +70,8 @@ ceiling names only the feed, read and replica operations.
 
 | Slice | Responsibility |
 |---|---|
-| root `bee.approvals` | Contract, stable local binding, linked host references, default database and the owner domain library |
+| root `bee.approvals` | Contract, stable local binding, linked host references, default database, linked database and host-policy readers, and the owner domain library |
 | `binding/` | Callable approval operations, including the host-authorized installation effect queue and completion, and the Hive policy operations |
-| `persist/` | Durable thread-projection outbox |
-| root `bee.approvals` | Linked database and host-policy readers |
+| `persist/` | Approval request, history, inbox, incarnation and thread-projection outbox storage |
 | `migrations/` | Immutable approval schema ledger |
 | `service/` | Authority and outbox worker processes |

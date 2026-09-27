@@ -63,6 +63,7 @@ entries:
   modules: [json]
   imports:
     text: bee.application:text
+    bounds: bee.threads.records:bounds
 - name: client
   kind: library.lua
   source: file://client.lua
@@ -76,6 +77,7 @@ entries:
     sync: bee.sync:protocol
     caller: bee.application:caller
     source_config: bee.approvals.inbox:source_config
+    model: bee.approvals.inbox:model
 - name: source_config
   kind: library.lua
   source: file://sources.lua

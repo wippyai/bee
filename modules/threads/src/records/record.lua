@@ -221,36 +221,35 @@ local function encode_receipt(body: types.Receipt): string
     field(fields, "error", encode_fault(body.error))
     return encode_object(fields)
 end
--- Decodes a body of the named family; each family has exactly one decoder.
-function M.decode_body(kind: types.Kind, value: unknown): (types.Body?, string?)
-    if kind == "observation" then return observation.decode(value) end
-    if kind == "message" then return message.decode(value) end
-    if kind == "action.admitted" then return lifecycle.admitted(value) end
-    if kind == "attempt.prepared" then return lifecycle.prepared(value) end
-    if kind == "attempt.started" then return lifecycle.started(value) end
-    if kind == "turn.request" then return lifecycle.turn_request(value) end
-    if kind == "turn.end" then return lifecycle.turn_end(value) end
-    if kind == "delivery.mark" then return delivery.mark(value) end
-    if kind == "request.answered" then return delivery.answered(value) end
-    if kind == "approval.request" then return approval.request(value) end
-    if kind == "approval.transition" then return approval.transition(value) end
-    return lifecycle.receipt(value)
+function M.encode_body(record: types.RecordPayload): string
+    if record.kind == "observation" then return encode_observation(record.body) end
+    if record.kind == "message" then return encode_message(record.body) end
+    if record.kind == "action.admitted" then return encode_admitted(record.body) end
+    if record.kind == "attempt.prepared" then return encode_prepared(record.body) end
+    if record.kind == "attempt.started" then return encode_started(record.body) end
+    if record.kind == "turn.request" then return encode_turn_request(record.body) end
+    if record.kind == "turn.end" then return encode_turn_end(record.body) end
+    if record.kind == "receipt" then return encode_receipt(record.body) end
+    if record.kind == "delivery.mark" then return encode_mark(record.body) end
+    if record.kind == "request.answered" then return encode_answered(record.body) end
+    if record.kind == "approval.request" then return encode_approval_request(record.body) end
+    return encode_approval_transition(record.body)
 end
-function M.encode_body(kind: types.Kind, body: types.Body): string
-    if kind == "observation" then return encode_observation(body :: types.Observation) end
-    if kind == "message" then return encode_message(body :: types.Message) end
-    if kind == "action.admitted" then return encode_admitted(body :: types.Admitted) end
-    if kind == "attempt.prepared" then return encode_prepared(body :: types.Prepared) end
-    if kind == "attempt.started" then return encode_started(body :: types.Started) end
-    if kind == "turn.request" then return encode_turn_request(body :: types.TurnRequest) end
-    if kind == "turn.end" then return encode_turn_end(body :: types.TurnEnd) end
-    if kind == "delivery.mark" then return encode_mark(body :: types.DeliveryMark) end
-    if kind == "request.answered" then return encode_answered(body :: types.Answered) end
-    if kind == "approval.request" then return encode_approval_request(body :: types.ApprovalRequest) end
-    if kind == "approval.transition" then return encode_approval_transition(body :: types.ApprovalTransition) end
-    return encode_receipt(body :: types.Receipt)
+function M.payload(record: types.Record): types.RecordPayload
+    if record.kind == "observation" then return {kind = "observation", body = record.body}
+    elseif record.kind == "message" then return {kind = "message", body = record.body}
+    elseif record.kind == "action.admitted" then return {kind = "action.admitted", body = record.body}
+    elseif record.kind == "attempt.prepared" then return {kind = "attempt.prepared", body = record.body}
+    elseif record.kind == "attempt.started" then return {kind = "attempt.started", body = record.body}
+    elseif record.kind == "turn.request" then return {kind = "turn.request", body = record.body}
+    elseif record.kind == "turn.end" then return {kind = "turn.end", body = record.body}
+    elseif record.kind == "receipt" then return {kind = "receipt", body = record.body}
+    elseif record.kind == "delivery.mark" then return {kind = "delivery.mark", body = record.body}
+    elseif record.kind == "request.answered" then return {kind = "request.answered", body = record.body}
+    elseif record.kind == "approval.request" then return {kind = "approval.request", body = record.body}
+    else return {kind = "approval.transition", body = record.body} end
 end
-local function context_rule(kind: types.Kind, record: types.Record): string?
+local function context_rule(kind: types.Kind, record: types.RecordEnvelope): string?
     if kind == "action.admitted" or kind == "receipt" then
         if not record.action_id then return kind .. " names its action_id" end
     end
@@ -266,6 +265,7 @@ local function context_rule(kind: types.Kind, record: types.Record): string?
     if (kind == "approval.request" or kind == "approval.transition") and record.turn_id then return kind .. " carries no turn" end
     return nil
 end
+
 function M.decode(value: unknown): (types.Record?, string?)
     local object = bounds.object(value)
     if not object then return nil, "record must be an object" end
@@ -283,26 +283,109 @@ function M.decode(value: unknown): (types.Record?, string?)
     if not kind then return nil, "kind is not a supported record family" end
     if not producer_id then return nil, "producer_id is not an identifier" end
     if not source then return nil, "source is not supported" end
-    local body, body_error = M.decode_body(kind, object.body)
-    if not body then return nil, kind .. ": " .. tostring(body_error) end
-    local record: types.Record = {schema_revision = bounds.SCHEMA_REVISION, record_id = record_id, thread_id = thread_id,
-        sequence = sequence, recorded_at = recorded_at, kind = kind, producer_id = producer_id, source = source, body = body}
+    local common: types.RecordEnvelope = {schema_revision = bounds.SCHEMA_REVISION, record_id = record_id, thread_id = thread_id,
+        sequence = sequence, recorded_at = recorded_at, producer_id = producer_id, source = source}
     if object.causation ~= nil then
         local ref, ref_error = values.ref(object.causation)
         if not ref then return nil, "causation: " .. tostring(ref_error) end
-        record.causation = ref
+        common.causation = ref
     end
     for _, name in ipairs({"correlation_id", "action_id", "attempt_id", "turn_id"}) do
         local id, valid = values.optional_id(object, name)
         if not valid then return nil, name .. " is not an identifier" end
-        if name == "correlation_id" then record.correlation_id = id
-        elseif name == "action_id" then record.action_id = id
-        elseif name == "attempt_id" then record.attempt_id = id
-        else record.turn_id = id end
+        if name == "correlation_id" then common.correlation_id = id
+        elseif name == "action_id" then common.action_id = id
+        elseif name == "attempt_id" then common.attempt_id = id
+        else common.turn_id = id end
     end
-    local rule = context_rule(kind, record)
+    local rule = context_rule(kind, common)
     if rule then return nil, rule end
-    return record, nil
+
+    if kind == "observation" then
+        local body, body_error = observation.decode(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "observation", body = body}, nil
+    elseif kind == "message" then
+        local body, body_error = message.decode(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "message", body = body}, nil
+    elseif kind == "action.admitted" then
+        local body, body_error = lifecycle.admitted(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "action.admitted", body = body}, nil
+    elseif kind == "attempt.prepared" then
+        local body, body_error = lifecycle.prepared(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "attempt.prepared", body = body}, nil
+    elseif kind == "attempt.started" then
+        local body, body_error = lifecycle.started(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "attempt.started", body = body}, nil
+    elseif kind == "turn.request" then
+        local body, body_error = lifecycle.turn_request(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "turn.request", body = body}, nil
+    elseif kind == "turn.end" then
+        local body, body_error = lifecycle.turn_end(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "turn.end", body = body}, nil
+    elseif kind == "receipt" then
+        local body, body_error = lifecycle.receipt(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "receipt", body = body}, nil
+    elseif kind == "delivery.mark" then
+        local body, body_error = delivery.mark(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "delivery.mark", body = body}, nil
+    elseif kind == "request.answered" then
+        local body, body_error = delivery.answered(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "request.answered", body = body}, nil
+    elseif kind == "approval.request" then
+        local body, body_error = approval.request(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "approval.request", body = body}, nil
+    else
+        local body, body_error = approval.transition(object.body)
+        if not body then return nil, kind .. ": " .. tostring(body_error) end
+        return {schema_revision = common.schema_revision, record_id = common.record_id, thread_id = common.thread_id,
+            sequence = common.sequence, recorded_at = common.recorded_at, producer_id = common.producer_id, source = common.source,
+            causation = common.causation, correlation_id = common.correlation_id, action_id = common.action_id,
+            attempt_id = common.attempt_id, turn_id = common.turn_id, kind = "approval.transition", body = body}, nil
+    end
 end
 function M.decode_json(text: string): (types.Record?, string?)
     if #text > bounds.MAX_RECORD_BYTES then return nil, "record exceeds " .. tostring(bounds.MAX_RECORD_BYTES) .. " bytes" end
@@ -313,23 +396,39 @@ end
 -- Revalidates, then emits sorted keys without whitespace so equal records
 -- always produce equal bytes.
 function M.encode(value: types.Record): (string?, string?)
-    local record, record_error = M.decode(value)
-    if not record then return nil, record_error end
+    local decoded, decode_error = M.decode(value)
+    if not decoded then return nil, decode_error end
+    local envelope: types.RecordEnvelope = {schema_revision = decoded.schema_revision, record_id = decoded.record_id, thread_id = decoded.thread_id,
+        sequence = decoded.sequence, recorded_at = decoded.recorded_at, producer_id = decoded.producer_id, source = decoded.source,
+        causation = decoded.causation, correlation_id = decoded.correlation_id, action_id = decoded.action_id,
+        attempt_id = decoded.attempt_id, turn_id = decoded.turn_id}
+    return M.encode_parts(envelope, M.payload(decoded))
+end
+function M.encode_parts(envelope: types.RecordEnvelope, payload: types.RecordPayload): (string?, string?)
+    if envelope.schema_revision ~= bounds.SCHEMA_REVISION then return nil, "schema_revision is not " .. bounds.SCHEMA_REVISION end
+    if not bounds.id(envelope.record_id) or not bounds.id(envelope.thread_id) or not bounds.id(envelope.producer_id) then
+        return nil, "record identity is not valid"
+    end
+    if not bounds.sequence(envelope.sequence) then return nil, "sequence is out of range" end
+    if not bounds.timestamp(envelope.recorded_at) then return nil, "recorded_at is not a canonical UTC timestamp" end
+    if not values.source(envelope.source) then return nil, "source is not supported" end
+    local rule = context_rule(payload.kind, envelope)
+    if rule then return nil, rule end
     local fields: {Field} = {}
-    field(fields, "schema_revision", encode_string(record.schema_revision))
-    field(fields, "record_id", encode_string(record.record_id))
-    field(fields, "thread_id", encode_string(record.thread_id))
-    field(fields, "sequence", string.format("%d", record.sequence))
-    field(fields, "recorded_at", encode_string(record.recorded_at))
-    field(fields, "kind", encode_string(record.kind))
-    field(fields, "producer_id", encode_string(record.producer_id))
-    field(fields, "source", encode_string(record.source))
-    field(fields, "causation", encode_ref(record.causation))
-    field(fields, "correlation_id", optional_string(record.correlation_id))
-    field(fields, "action_id", optional_string(record.action_id))
-    field(fields, "attempt_id", optional_string(record.attempt_id))
-    field(fields, "turn_id", optional_string(record.turn_id))
-    field(fields, "body", M.encode_body(record.kind, record.body))
+    field(fields, "schema_revision", encode_string(envelope.schema_revision))
+    field(fields, "record_id", encode_string(envelope.record_id))
+    field(fields, "thread_id", encode_string(envelope.thread_id))
+    field(fields, "sequence", string.format("%d", envelope.sequence))
+    field(fields, "recorded_at", encode_string(envelope.recorded_at))
+    field(fields, "kind", encode_string(payload.kind))
+    field(fields, "producer_id", encode_string(envelope.producer_id))
+    field(fields, "source", encode_string(envelope.source))
+    field(fields, "causation", encode_ref(envelope.causation))
+    field(fields, "correlation_id", optional_string(envelope.correlation_id))
+    field(fields, "action_id", optional_string(envelope.action_id))
+    field(fields, "attempt_id", optional_string(envelope.attempt_id))
+    field(fields, "turn_id", optional_string(envelope.turn_id))
+    field(fields, "body", M.encode_body(payload))
     local encoded = encode_object(fields)
     if #encoded > bounds.MAX_RECORD_BYTES then return nil, "record exceeds " .. tostring(bounds.MAX_RECORD_BYTES) .. " bytes" end
     return encoded, nil

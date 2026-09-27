@@ -11,8 +11,30 @@ local activation_store = require("activation_store")
 local owner = require("activation_owner")
 local preflight = require("preflight")
 local application_admission = require("application_admission")
+local capability_grants = require("capability_grants")
+local capability_model = require("capability_model")
+local migration_work = require("migration_work")
 
 local SHA = string.rep("a", 64)
+local SHA_B = string.rep("b", 64)
+local EMPTY_STRINGS: {string} = {}
+type Object = {[string]: unknown}
+
+type ResolverWorld = {revision: integer, digest: string,
+    application_admission: application_admission.Measurement?,
+    capability: preflight.CapabilityEvidence?}
+type MigrationEffects = {
+    matches: (string, migration_work.Work) -> (boolean?, string?),
+    prepare: (string, migration_work.Work) -> ({[string]: unknown}?, string?),
+    clear: (string) -> ({[string]: unknown}?, string?),
+    cleared: (string) -> (boolean?, string?),
+    execute: (migration_work.Work) -> ({bytes: string, digest: string}?, boolean, string?)}
+
+local function candidate_entry(id: string, kind: string, package: string, digest: string): preflight.Entry
+    return {id = id, kind = kind, package = package, digest = digest, references = EMPTY_STRINGS,
+        auto_start = false, grants = EMPTY_STRINGS, modules = EMPTY_STRINGS,
+        config_objects = EMPTY_STRINGS, config_lists = EMPTY_STRINGS, config_empty = EMPTY_STRINGS}
+end
 
 local function blob(bytes: string): {[string]: string}
     local digest, err = hash.sha256(bytes)
@@ -28,13 +50,13 @@ local function ok(result: {[string]: unknown}): {[string]: unknown}
     end
     return result.value :: {[string]: unknown}
 end
-local function migration_effect(): {[string]: unknown}
+local function migration_effect(): MigrationEffects
     return {
-        matches = function(_owner: string, _work: any): (boolean?, string?) return false, nil end,
-        prepare = function(_owner: string, _work: any): ({[string]: unknown}?, string?) return {changed = false}, nil end,
+        matches = function(_owner: string, _work: migration_work.Work): (boolean?, string?) return false, nil end,
+        prepare = function(_owner: string, _work: migration_work.Work): ({[string]: unknown}?, string?) return {changed = false}, nil end,
         clear = function(_owner: string): ({[string]: unknown}?, string?) return {changed = false}, nil end,
         cleared = function(_owner: string): (boolean?, string?) return true, nil end,
-        execute = function(_work: any): ({bytes: string, digest: string}?, boolean, string?)
+        execute = function(_work: migration_work.Work): ({bytes: string, digest: string}?, boolean, string?)
             return nil, false, "unexpected migration execution"
         end,
     }
@@ -57,18 +79,32 @@ local function selected_plan(store: plan_store.Store, version: string, entry_blo
         version = version}))
 end
 
-local SHA_B = string.rep("b", 64)
-
-local function admission(artifact_digest: string, policy_digest: string, overlay_owner: string?, workspace_id: string?): {[string]: unknown}
+local function admission(artifact_digest: string, policy_digest: string, overlay_owner: string?, workspace_id: string?): application_admission.Measurement
     local measured, measure_error = application_admission.measure({schema_revision = application_admission.SCHEMA,
         workspace_id = workspace_id or "workspace-owner", overlay_owner = overlay_owner or "bee.gov:test-overlay",
         source_node = "source-a", source_workspace = "app-a", artifact_digest = artifact_digest,
         policy_digest = policy_digest, bindings = {}})
     if not measured then error(tostring(measure_error)) end
-    return measured :: {[string]: unknown}
+    return measured
 end
 
-local function shifting_resolver(entry: {[string]: unknown}, world: {[string]: unknown}): owner.Resolver
+local function installed_capability(review: capability_grants.Review?): preflight.CapabilityEvidence
+    local vocabulary: capability_model.Vocabulary = {revision = 1, never = {}, capabilities = {}}
+    local proposal, proposal_error = capability_grants.propose(vocabulary, "bee.gov:test-overlay",
+        "demo:run", {}, nil)
+    if not proposal then error(tostring(proposal_error)) end
+    local raw, record_error = capability_grants.record("bee.gov:test-overlay", "workspace-owner",
+        "demo:run", proposal, "prior-approval", 1, SHA, "v1")
+    if not raw then error(tostring(record_error)) end
+    local installed, decode_error = capability_grants.decode(raw, "bee.gov:test-overlay",
+        "workspace-owner", "demo:run", vocabulary)
+    if not installed then error(tostring(decode_error)) end
+    local measured_review, review_error = capability_grants.diff(vocabulary, installed, proposal)
+    if not measured_review then error(tostring(review_error)) end
+    return {kind = "installed", proposal = proposal, installed = installed, review = review or measured_review}
+end
+
+local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorld): owner.Resolver
     local entry_bytes, encode_error = canonical.encode(entry)
     if not entry_bytes then error(tostring(encode_error)) end
     local selected_digest, digest_error = hash.sha256(entry_bytes)
@@ -78,24 +114,26 @@ local function shifting_resolver(entry: {[string]: unknown}, world: {[string]: u
         local selected = plan :: {[string]: unknown}
         local version = selected.version :: string
         local entry_id, entry_kind = entry.id :: string, entry.kind :: string
+        local candidate_entries: {preflight.Entry} = {
+            candidate_entry(entry_id, entry_kind, "demo/app", selected_digest)}
         local candidate: preflight.Candidate = {destination_node = "node-owner", source_node = "source-a",
-            base_revision = world.revision :: integer, base_digest = world.digest :: string,
+            base_revision = world.revision, base_digest = world.digest,
             artifacts = {{component = "demo/app", version = version,
                 digest = SHA, dependencies = {}, namespaces = {"demo"}}},
-            entries = {{id = entry_id, kind = entry_kind, package = "demo/app",
-                digest = selected_digest, references = {}, auto_start = false,
-                grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {}, migrations = {}}
-        local context: preflight.Context = {node_id = "node-owner", registry_revision = world.revision :: integer,
-                registry_digest = world.digest :: string,
+            entries = candidate_entries, requirements = {}, migrations = {}}
+        local application_evidence: preflight.AdmissionEvidence = {kind = "absent"}
+        if world.application_admission then
+            application_evidence = {kind = "measured", value = world.application_admission}
+        end
+        local host_evidence: preflight.HostEvidence = {
+            application_admission = application_evidence,
+            capability = world.capability or {kind = "absent"}}
+        local context: preflight.Context = {node_id = "node-owner", registry_revision = world.revision,
+                registry_digest = world.digest,
                 policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
                 kinds = {[entry_kind] = true}, databases = {}, grants = {}, modules = {},
-                entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL, migration_barrier = false, auto_start = true}
-        if world.application_admission ~= nil then
-            (context :: any).application_admission = world.application_admission
-        end
-        for _, field in ipairs({"capability_proposal", "capability_installed", "capability_review"}) do
-            if world[field] ~= nil then (context :: any)[field] = world[field] end
-        end
+                entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL,
+                migration_barrier = false, auto_start = true, host_evidence = host_evidence}
         return candidate, context, nil
     end
     return value :: owner.Resolver
@@ -114,14 +152,12 @@ local function migration_resolver(entry: {[string]: unknown}, state: {[string]: 
         if state.executed == true then
             applied["host:db\ndemo:001"] = {id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}
         end
-        local database: preflight.Entry = {id = "host:db", kind = "db.sql.sqlite", package = "host/base",
-            digest = SHA, references = {}, auto_start = false, grants = {}, modules = {},
-            config_objects = {}, config_lists = {}, config_empty = {}}
+        local database = candidate_entry("host:db", "db.sql.sqlite", "host/base", SHA)
+        local migration_entry = candidate_entry("demo:001", "function.lua", "demo/app", checksum)
+        local candidate_entries: {preflight.Entry} = {migration_entry}
         local candidate: preflight.Candidate = {destination_node = "node-owner", source_node = "source-a", base_revision = 4, base_digest = SHA,
             artifacts = {{component = "demo/app", version = selected.version :: string, digest = SHA,
-                dependencies = {}, namespaces = {"demo"}}}, entries = {{id = "demo:001", kind = "function.lua",
-                package = "demo/app", digest = checksum, references = {}, auto_start = false, grants = {}, modules = {},
-                config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {},
+                dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries, requirements = {},
             migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}}
         local context: preflight.Context = {node_id = "node-owner", registry_revision = 4, registry_digest = SHA,
             policy_digest = type(state.policy_digest) == "string" and state.policy_digest :: string or SHA,
@@ -129,7 +165,8 @@ local function migration_resolver(entry: {[string]: unknown}, state: {[string]: 
             databases = {["host:db"] = true}, grants = {}, modules = {}, entries = {["host:db"] = database},
             installed_entries = nil,
             database_bindings = nil, applied = applied, applied_databases = nil,
-            exact_expansion = true, protected = KERNEL, migration_barrier = true, auto_start = true}
+            exact_expansion = true, protected = KERNEL, migration_barrier = true, auto_start = true,
+            host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
         return candidate, context, nil
     end
     return value :: owner.Resolver
@@ -183,9 +220,10 @@ local function define_tests()
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
-            local world: {[string]: unknown} = {revision = 4, digest = SHA,
-                capability_installed = {approval_id = "prior-approval", record_digest = SHA_B},
-                capability_review = {requires_approval = false, resolved = {"Read owned threads"}, delta = {}}}
+            local evidence = installed_capability(nil)
+            if evidence.kind ~= "installed" then error("installed capability evidence is missing") end
+            local world: ResolverWorld = {revision = 4, digest = SHA,
+                capability = evidence}
             local requests = 0
             local executor = {}
             function executor:call(_method: string, _request: unknown): (unknown?, unknown?)
@@ -209,8 +247,8 @@ local function define_tests()
                 version = "v1", intent_id = "intent-contained", receipt_key = "contained"}))
             test.eq(prepared.phase, "authorized")
             test.eq(prepared.approval_id, "prior-approval")
-            test.eq(prepared.grant_predecessor_digest, SHA_B)
-            test.eq(prepared.grant_reuse_digest, SHA_B)
+            test.eq(prepared.grant_predecessor_digest, evidence.installed.record_digest)
+            test.eq(prepared.grant_reuse_digest, evidence.installed.record_digest)
             test.eq(requests, 0)
             test.eq(ok(owner.step(config, "intent-contained", "contained")).phase, "applying")
             test.eq(ok(owner.step(config, "intent-contained", "contained")).outcome, "applied")
@@ -225,10 +263,11 @@ local function define_tests()
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
-            local world: {[string]: unknown} = {revision = 4, digest = SHA,
-                capability_installed = {approval_id = "prior-approval", record_digest = SHA_B},
-                capability_review = {requires_approval = true, resolved = {"Read owned threads"},
-                    delta = {"widened: Read owned threads"}}}
+            local review: capability_grants.Review = {added = {}, widened = {}, narrowed = {}, removed = {}, changed = {},
+                requires_approval = true, revocation = {grants = {}, fenced_attempts = {}},
+                lines = {"widened: Read owned threads"}, resolved = {"Read owned threads"},
+                delta = {"widened: Read owned threads"}}
+            local world: ResolverWorld = {revision = 4, digest = SHA, capability = installed_capability(review)}
             local seen: {[string]: unknown}? = nil
             local executor = {}
             function executor:call(method: string, request: unknown): (unknown?, unknown?)
@@ -309,7 +348,7 @@ local function define_tests()
             local entry = {id = "demo:admission-drift", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
-            local world: {[string]: unknown} = {revision = 4, digest = SHA,
+            local world: ResolverWorld = {revision = 4, digest = SHA,
                 application_admission = admission(exact.digest, SHA, nil, workspace)}
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world), approvals = approvals(), actor_id = "host-a",
@@ -379,7 +418,7 @@ local function define_tests()
             local entry = {id = "demo:admission-owner", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
-            local world: {[string]: unknown} = {revision = 4, digest = SHA,
+            local world: ResolverWorld = {revision = 4, digest = SHA,
                 application_admission = admission(exact.digest, SHA, "bee.gov:other-overlay", workspace)}
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world), approvals = approvals(), actor_id = "host-a",
@@ -638,15 +677,15 @@ local function define_tests()
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
             local state: {[string]: unknown} = {staged = false, executed = false, applied = false}
             local effect = {
-                matches = function(_owner: string, _work: any): (boolean?, string?) return state.staged == true, nil end,
-                prepare = function(_owner: string, _work: any): ({[string]: unknown}?, string?)
+                matches = function(_owner: string, _work: migration_work.Work): (boolean?, string?) return state.staged == true, nil end,
+                prepare = function(_owner: string, _work: migration_work.Work): ({[string]: unknown}?, string?)
                     state.staged = true; return {changed = true}, nil
                 end,
                 clear = function(_owner: string): ({[string]: unknown}?, string?)
                     state.staged = false; return {changed = true}, nil
                 end,
                 cleared = function(_owner: string): (boolean?, string?) return state.staged ~= true, nil end,
-                execute = function(_work: any): ({bytes: string, digest: string}?, boolean, string?)
+                execute = function(_work: migration_work.Work): ({bytes: string, digest: string}?, boolean, string?)
                     state.executed = true
                     local bytes = assert(canonical.encode({schema_revision = "bee.governance-migration-receipt@1",
                         rows = {{id = "demo:001", target_db = "host:db", module = "demo/app", status = "applied"}}}))

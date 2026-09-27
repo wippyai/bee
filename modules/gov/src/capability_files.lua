@@ -3,6 +3,7 @@
 -- module derives the host-created volume, database and policy entries that
 -- activation installs. It authorizes nothing on its own.
 local hash = require("hash")
+local bounds = require("bounds")
 local gateway = require("capability_gateway")
 
 local M = {}
@@ -17,17 +18,15 @@ local PRIVATE_PREFIX = ".wippy/"
 M.DATABASE_DIR = ".wippy/app-db"
 
 local function segments(value: string): ({string}?, string?)
-    if type(value) ~= "string" or #value == 0 or #value > 160 or value:find("%c")
-        or value:find("\\", 1, true) or value:find("//", 1, true) then
+    if type(value) ~= "string" or #value == 0 or #value > 160 or value:find("%c") then
         return nil, "workspace subpath is malformed"
     end
     if value == "." then return nil, "workspace subpath exposes private state" end
-    if value:sub(1, 1) == "/" or (#value > 1 and value:sub(-1) == "/") then
-        return nil, "workspace subpath is malformed"
-    end
+    local normalized = bounds.subpath(value, 160)
+    if not normalized or normalized == "" then return nil, "workspace subpath is malformed" end
     local result: {string} = {}
-    for segment in value:gmatch("[^/]+") do
-        if segment == "." or segment == ".." or not segment:match("^[A-Za-z0-9_.-]+$") then
+    for segment in normalized:gmatch("[^/]+") do
+        if not segment:match("^[A-Za-z0-9_.-]+$") then
             return nil, "workspace subpath is malformed"
         end
         result[#result + 1] = segment
@@ -69,8 +68,8 @@ end
 type Folder = {root_ref: string, directory: string, base: string?, subpath: string}
 
 local function folder(raw: unknown): (Folder?, string?)
-    if type(raw) ~= "table" then return nil, "workspace folder is unavailable" end
-    local value = raw :: {[string]: unknown}
+    local value = bounds.object(raw)
+    if not value then return nil, "workspace folder is unavailable" end
     local root_ref, directory, base, subpath = value.root_ref, value.directory, value.base, value.subpath
     if type(root_ref) ~= "string" or type(directory) ~= "string" then return nil, "workspace folder is malformed" end
     if not root_ref:match("^[a-z][a-z0-9_.]*:[A-Za-z0-9_.-]+$") or #root_ref > 160
@@ -106,9 +105,8 @@ end
 -- grants root in the destination workspace's folder.
 function M.rooted(requirements: {unknown}): boolean
     for _, raw in ipairs(requirements) do
-        local item = type(raw) == "table" and raw :: {[string]: unknown} or nil
-        local request = item and type(item.capability_request) == "table"
-            and item.capability_request :: {[string]: unknown} or nil
+        local item = bounds.object(raw)
+        local request = item and bounds.object(item.capability_request) or nil
         local capability = request and request.capability or nil
         if type(capability) == "string" and capability:sub(1, 16) == "workspace.files." then return true end
     end
@@ -133,8 +131,14 @@ end
 -- It carries no auto-init for reads and refuses every mutation for read
 -- grants at the filesystem boundary; the pinned runtime confines traversal
 -- and symlinks below it.
+type VolumeConfig = {directory: string, base: string?, auto_init: boolean, readonly: boolean, mode: "0700" | "0500"}
+type Volume = {id: string, kind: "fs.directory", meta: {comment: string}, data: VolumeConfig}
+type Database = {id: string, kind: "db.sql.sqlite", meta: {comment: string}, data: {file: string}}
+type Policy = {id: string, kind: "security.policy", meta: {comment: string},
+    data: {policy: {actions: {string}, resources: {string}, effect: "allow"}}}
+
 function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
-    writable_raw: unknown): (unknown?, string?)
+    writable_raw: unknown): (Volume?, string?)
     local id, id_error = M.volume_id(owner_raw, folder_raw, subpath_raw)
     if not id then return nil, id_error end
     local root = assert(folder(folder_raw))
@@ -142,9 +146,9 @@ function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
     if writable_raw ~= nil and type(writable_raw) ~= "boolean" then
         return nil, "file grant mode is invalid"
     end
-    local config: {[string]: unknown} = {directory = located(root, subpath), base = root.base,
-        auto_init = writable_raw == true, readonly = writable_raw ~= true}
-    if writable_raw == true then config.mode = "0700" else config.mode = "0500" end
+    local mode: "0700" | "0500" = writable_raw == true and "0700" or "0500"
+    local config: VolumeConfig = {directory = located(root, subpath), base = root.base,
+        auto_init = writable_raw == true, readonly = writable_raw ~= true, mode = mode}
     return {id = id, kind = "fs.directory", meta = {comment = "Host-created workspace file grant volume"},
         data = config}, nil
 end
@@ -163,7 +167,7 @@ end
 -- The host-provisioned dedicated database. Its file sits under Bee state,
 -- outside every approved readable tree, and the runtime creates it on first
 -- open before any migration or query runs.
-function M.database(owner_raw: unknown, name_raw: unknown): (unknown?, string?)
+function M.database(owner_raw: unknown, name_raw: unknown): (Database?, string?)
     local id, id_error = M.database_id(owner_raw, name_raw)
     local valid, valid_error = name(name_raw)
     if not id or not valid then return nil, id_error or valid_error end
@@ -173,7 +177,7 @@ function M.database(owner_raw: unknown, name_raw: unknown): (unknown?, string?)
         data = {file = M.DATABASE_DIR .. "/" .. suffix .. ".db"}}, nil
 end
 
-local function policy(id: string, actions: {string}, resources: {string}, comment: string): Object?
+local function policy(id: string, actions: {string}, resources: {string}, comment: string): Policy
     return {id = id, kind = "security.policy", meta = {comment = comment},
         data = {policy = {actions = actions, resources = resources, effect = "allow"}}}
 end
@@ -182,27 +186,25 @@ end
 -- enforces the read-only mode below it. The same grant lets the application
 -- read its own granted identities from the gateway.
 function M.file_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown, writable_raw: unknown,
-    policy_id_raw: unknown): (Object?, string?)
+    policy_id_raw: unknown): (Policy?, string?)
     local volume, volume_error = M.volume(owner_raw, folder_raw, subpath_raw, writable_raw)
-    if not volume or type(policy_id_raw) ~= "string" then
+    local id = bounds.id(policy_id_raw)
+    if not volume or not id then
         return nil, volume_error or "file grant policy identity is invalid"
     end
-    local id: string = policy_id_raw :: string
-    if #id == 0 or #id > 160 then return nil, "file grant policy identity is invalid" end
-    return policy(id, {"fs.get", "funcs.call"}, {(volume :: {[string]: unknown}).id :: string, gateway.GRANTED_RESOURCES},
+    return policy(id, {"fs.get", "funcs.call"}, {volume.id, gateway.GRANTED_RESOURCES},
         "Host-generated workspace file grant"), nil
 end
 
 -- The application reaches only its own database through this policy; every
 -- other store stays denied by the application boundary.
-function M.database_policy(owner_raw: unknown, name_raw: unknown, policy_id_raw: unknown): (Object?, string?)
+function M.database_policy(owner_raw: unknown, name_raw: unknown, policy_id_raw: unknown): (Policy?, string?)
     local database, database_error = M.database(owner_raw, name_raw)
-    if not database or type(policy_id_raw) ~= "string" then
+    local id = bounds.id(policy_id_raw)
+    if not database or not id then
         return nil, database_error or "database grant policy identity is invalid"
     end
-    local id: string = policy_id_raw :: string
-    if #id == 0 or #id > 160 then return nil, "database grant policy identity is invalid" end
-    return policy(id, {"db.get", "funcs.call"}, {(database :: {[string]: unknown}).id :: string, gateway.GRANTED_RESOURCES},
+    return policy(id, {"db.get", "funcs.call"}, {database.id, gateway.GRANTED_RESOURCES},
         "Host-generated isolated application database grant"), nil
 end
 

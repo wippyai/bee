@@ -14,6 +14,7 @@ activation outcome and receipt read back in the same review surface.
 import json
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -24,7 +25,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tui_smoke import DESKTOP_HANG_SECONDS, Desktop  # noqa: E402
-from workspace import ROOT, RUNTIME, classic_workspace, database_environment  # noqa: E402
+from workspace import ROOT, RUNTIME, classic_workspace, database_environment, workspace_checkpoint  # noqa: E402
 
 # The cold first boot of a full composition, the budget the sibling desktop
 # acceptances (tests/inbox_decide.py, tests/app_journey.py) already use.
@@ -61,12 +62,61 @@ def delay_destination(project, operation, duration="2s"):
     if 'local time = require("time")' not in source:
         source = source.replace('local funcs = require("funcs")',
                                 'local funcs = require("funcs")\nlocal time = require("time")')
-    source = source.replace(
-        '    local result, call_error = executor:call(service.BACKEND, request)',
-        f'    if request.operation == "{operation}" then time.sleep("{duration}") end\n'
-        '    local result, call_error = executor:call(service.BACKEND, request)',
-    )
+    anchor = '    local result, call_error = executor:call(service.BACKEND, request)'
+    replacement = (f'    if request.operation == "{operation}" then time.sleep("{duration}") end\n' + anchor)
+    assert source.count(anchor) == 1, "destination delay injection point changed"
+    source = source.replace(anchor, replacement, 1)
     method.write_text(source)
+
+
+def delay_prepare_reply_after_commit(project, duration="30s"):
+    """Withhold a successful prepare reply after the destination commits it."""
+    manifest = project / "modules/gov/src/binding/_index.yaml"
+    document = yaml.safe_load(manifest.read_text())
+    entry = next(item for item in document["entries"] if item["name"] == "destination_call")
+    if "time" not in entry["modules"]:
+        entry["modules"].append("time")
+    manifest.write_text(yaml.safe_dump(document, sort_keys=False))
+    method = project / "modules/gov/src/binding/destination_method.lua"
+    source = method.read_text()
+    if 'local time = require("time")' not in source:
+        anchor = 'local funcs = require("funcs")\n'
+        assert source.count(anchor) == 1, "destination time import point changed"
+        source = source.replace(anchor, anchor + 'local time = require("time")\n', 1)
+    anchor = '    local decoded = decode_reply(result)\n'
+    assert source.count(anchor) == 1, "destination reply injection point changed"
+    replacement = anchor + (f'    if request.operation == "prepare" and decoded and not decoded.replayed '
+                           f'then time.sleep("{duration}") end\n')
+    method.write_text(source.replace(anchor, replacement, 1))
+
+
+def prepared_receipts(folder, prepare_key):
+    with sqlite3.connect(folder / "governance.db") as database:
+        return database.execute(
+            "SELECT intent_id, result_revision FROM bee_governance_activation_receipts "
+            "WHERE idempotency_key = ? AND operation = 'prepare_activation'",
+            (prepare_key,),
+        ).fetchall()
+
+
+def wait_for_uncertain_prepare(ui, folder, timeout=45):
+    deadline = time.monotonic() + timeout
+    while True:
+        applications = workspace_checkpoint(folder / "workspace.db")["applications"]
+        overlays = [item for item in applications if item["definition_id"] == "bee.gov.overlays:app"]
+        assert len(overlays) == 1, overlays
+        saved_state = json.loads(overlays[0]["resume_state"])
+        pending = saved_state.get("pending_prepare")
+        if pending:
+            key = pending["receipt_key"] + ":prepare"
+            receipts = prepared_receipts(folder, key)
+            if receipts:
+                assert len(receipts) == 1, receipts
+                assert receipts[0][0] == pending["intent_id"], (pending, receipts)
+                assert "Working" in ui.text(), ui.text()
+                return pending, receipts[0]
+        assert time.monotonic() < deadline, (overlays, ui.text())
+        ui.pump(.05)
 
 
 def seed(project, folder):
@@ -196,6 +246,7 @@ def exercise():
         workspace_id = classic_workspace(folder / "workspace.db")
         bind_destination(project, workspace_id)
         delay_destination(project, "get")
+        delay_prepare_reply_after_commit(project)
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True, timeout=300)
         evidence = seed(project, folder)
         assert evidence["workspace_id"] == workspace_id, evidence
@@ -242,20 +293,39 @@ def exercise():
             assert "Verdict ready" not in ui.text(), ui.text()
 
             # The accepted plan names its verdict and the entry set it changes
-            # against the composed base, and can be reviewed and selected.
+            # against the composed base. Its primary action prepares activation.
             back_to_plans(ui)
             open_review(ui, READY_WORKSPACE, 1)
             ui.wait("Verdict ready", timeout=20)
             ui.wait("No diagnostics and no pending migrations", timeout=20)
             ui.wait("added  " + READY_ENTRY + "  function.lua", timeout=20)
             ui.wait("unbound", timeout=20)
-            ui.key(b"a")
-            ui.wait("Plan details refreshed", timeout=20)
-            ui.key(b"s")
-            ui.wait("Plan details refreshed", timeout=20)
-            ui.key(b"p")
+            ui.wait("Prepare activation", timeout=20)
+            ui.key(b"\r")
+            ui.wait("Working", timeout=20)
+            pending, first_receipt = wait_for_uncertain_prepare(ui, folder)
+            # The backend committed its prepare receipt while the reply is held.
+            # A process restart must retry exactly these saved identity keys.
+            ui.process.kill()
+            ui.process.wait()
+            ui.close()
+
+            ui = Desktop(folder, project=project)
+            ui.wait("No applications open", timeout=COLD_BOOT)
+            ui.open_start()
+            ui.choose("Overlays")
+            ui.wait("OVERLAYS", timeout=COLD_BOOT)
+            ui.wait(READY_WORKSPACE, timeout=20)
+            ui.key(b"\r")  # Restore the current plan's report before retrying.
+            ui.wait("Verdict ready", timeout=20)
+            ui.key(b"\r")
             ui.wait("Activation approval_bound", timeout=COLD_BOOT)
             ui.wait("proposed  proposal", timeout=20)
+            replayed = prepared_receipts(folder, pending["receipt_key"] + ":prepare")
+            assert replayed == [first_receipt], (first_receipt, replayed)
+            restored = next(item for item in workspace_checkpoint(folder / "workspace.db")["applications"]
+                            if item["definition_id"] == "bee.gov.overlays:app")
+            assert "pending_prepare" not in json.loads(restored["resume_state"]), restored
 
             # The decision itself is made by a person in the Approvals window.
             ui.open_start()

@@ -8,11 +8,12 @@ local hash = require("hash")
 local bounds = require("bounds")
 local migration_work = require("migration_work")
 local application_admission = require("application_admission")
+local capability_grants = require("capability_grants")
 
 local M = {}
 type Object = {[string]: unknown}
 type Blob = {bytes: string, digest: string}
-type Admission = {bytes: string, digest: string, record: {[string]: unknown}}
+type Admission = {bytes: string, digest: string, record: application_admission.Record}
 
 local function digest(bytes: string): (string?, string?)
     local measured, err = hash.sha256(bytes)
@@ -24,11 +25,8 @@ end
 -- activation boundary retains only its canonical measured bytes.  Decode and
 -- remeasure it here so neither a loose digest nor a noncanonical projection
 -- can become durable approval evidence.
-local function admission_blob(raw: unknown): (Admission?, string?)
-    if raw == nil then return nil, nil end
-    local value = bounds.object(raw)
-    if not value or type(value.bytes) ~= "string" or #value.bytes < 1
-        or #value.bytes > application_admission.MAX_BYTES or type(value.digest) ~= "string"
+local function admission_blob(value: application_admission.Measurement): (Admission?, string?)
+    if #value.bytes < 1 or #value.bytes > application_admission.MAX_BYTES
         or #value.digest ~= 64 or not value.digest:match("^[0-9a-f]+$") then
         return nil, "application admission measurement is invalid"
     end
@@ -99,14 +97,20 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     -- composed state. The live preflight above checks the actual revision.
     -- Durable approval evidence normalizes that transient fence to zero while
     -- retaining the complete semantic base digest, package closure and policy.
-    local durable_candidate: any = {}
-    for field, value in pairs(candidate) do durable_candidate[field] = value end
-    durable_candidate.base_revision = 0
-    local durable_context: any = {}
-    for field, value in pairs(context) do durable_context[field] = value end
-    durable_context.registry_revision = 0
-    local durable_report, durable_error = preflight.check(durable_candidate :: preflight.Candidate,
-        durable_context :: preflight.Context)
+    local durable_candidate: preflight.Candidate = {destination_node = candidate.destination_node,
+        source_node = candidate.source_node, base_revision = 0, base_digest = candidate.base_digest,
+        artifacts = candidate.artifacts, entries = candidate.entries, requirements = candidate.requirements,
+        migrations = candidate.migrations}
+    local durable_context: preflight.Context = {node_id = context.node_id, registry_revision = 0,
+        registry_digest = context.registry_digest, policy_digest = context.policy_digest,
+        packages = context.packages, namespaces = context.namespaces, kinds = context.kinds,
+        databases = context.databases, grants = context.grants, modules = context.modules,
+        database_bindings = context.database_bindings, entries = context.entries,
+        installed_entries = context.installed_entries, applied = context.applied,
+        applied_databases = context.applied_databases, generated_databases = context.generated_databases,
+        exact_expansion = context.exact_expansion, migration_barrier = context.migration_barrier,
+        auto_start = context.auto_start, protected = context.protected, host_evidence = context.host_evidence}
+    local durable_report, durable_error = preflight.check(durable_candidate, durable_context)
     if not durable_report or not durable_report.ready then
         return nil, durable_error or "cannot normalize destination preflight"
     end
@@ -117,9 +121,9 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     local resolution_digest, measure_error = digest(resolution_bytes)
     if not resolution_digest then return nil, measure_error end
     local artifact_blob: Blob = {bytes = plan.artifact_bytes :: string, digest = plan.artifact_digest :: string}
-    local work, work_error = migration_work.capture(durable_candidate :: preflight.Candidate,
+    local work, work_error = migration_work.capture(durable_candidate,
         {schema_revision = artifact.SCHEMA, entries = entries, bytes = artifact_blob.bytes,
-            digest = artifact_blob.digest}, durable_context :: preflight.Context)
+            digest = artifact_blob.digest}, durable_context)
     if not work then return nil, work_error or "capture exact migration work" end
     for _, database_binding in ipairs(work.databases) do
         if database_binding.planned then
@@ -140,26 +144,46 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     end
     local resolution_blob: Blob = {bytes = resolution_bytes, digest = resolution_digest}
     local preflight_blob: Blob = {bytes = report_bytes, digest = report_digest}
-    local admission, admission_error = admission_blob((context :: any).application_admission)
-    if admission_error then return nil, admission_error end
+    local admission_evidence = context.host_evidence.application_admission
+    local admission: Admission? = nil
+    if admission_evidence.kind == "measured" then
+        local measured_admission, admission_error = admission_blob(admission_evidence.value)
+        if not measured_admission then return nil, admission_error end
+        admission = measured_admission
+    end
     if admission and (admission.record.workspace_id ~= workspace or admission.record.source_node ~= source
         or admission.record.source_workspace ~= source_workspace or admission.record.artifact_digest ~= artifact_blob.digest) then
         return nil, "application admission does not match the accepted plan"
     end
-    return {owner_node = owner, workspace_id = workspace, source_node = source,
+    local capability_proposal: capability_grants.Proposal? = nil
+    local capability_installed: capability_grants.Installed? = nil
+    local capability_review: capability_grants.Review? = nil
+    local capability_evidence = context.host_evidence.capability
+    if capability_evidence.kind == "new" then
+        capability_proposal, capability_review = capability_evidence.proposal, capability_evidence.review
+    elseif capability_evidence.kind == "installed" then
+        capability_proposal, capability_installed, capability_review = capability_evidence.proposal,
+            capability_evidence.installed, capability_evidence.review
+    end
+    local result: Object = {owner_node = owner, workspace_id = workspace, source_node = source,
         source_workspace = source_workspace, version = version, plan_digest = plan_digest,
         plan_revision = revision, selection_revision = selection_revision,
         artifact_digest = artifact_blob.digest, resolution_digest = resolution_blob.digest,
         preflight_digest = preflight_blob.digest, migration_work_digest = work.digest,
         entries = entries, candidate = durable_candidate, artifact = artifact_blob, resolution = resolution_blob,
         migration_work = {bytes = work.bytes, digest = work.digest},
-        preflight = preflight_blob, application_admission = admission,
-        application_admission_digest = admission and admission.digest or nil, report = durable_report,
-        capability_proposal = (context :: any).capability_proposal,
-        capability_installed = (context :: any).capability_installed,
-        capability_review = (context :: any).capability_review,
-        grant_predecessor_digest = (context :: any).capability_installed
-            and (context :: any).capability_installed.record_digest or nil}, nil
+        preflight = preflight_blob, report = durable_report}
+    if admission then
+        result.application_admission = admission
+        result.application_admission_digest = admission.digest
+    end
+    if capability_proposal then result.capability_proposal = capability_proposal end
+    if capability_installed then
+        result.capability_installed = capability_installed
+        result.grant_predecessor_digest = capability_installed.record_digest
+    end
+    if capability_review then result.capability_review = capability_review end
+    return result, nil
 end
 
 return M

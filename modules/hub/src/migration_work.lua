@@ -16,25 +16,6 @@ type Definition = {id: string, component: string, target_db: string, timestamp: 
 type Database = {id: string, owner: string, kind: string, digest: string, new: boolean}
 type Work = {entries: {Definition}, rows: {migrations.Row}, databases: {Database}?, ledger_checked: boolean?}
 
-local function dense(raw: unknown, label: string, maximum: integer): ({unknown}?, string?)
-    if type(raw) ~= "table" then return nil, label .. " must be a dense list" end
-    local value = raw :: {[number]: unknown}
-    local count = 0
-    for key in pairs(value) do
-        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then
-            return nil, label .. " must be a dense list"
-        end
-        count = count + 1
-    end
-    if count > maximum or count ~= #value then return nil, label .. " exceeds its bound or is sparse" end
-    local result: {unknown} = {}
-    for index = 1, count do
-        if value[index] == nil then return nil, label .. " must be a dense list" end
-        result[index] = value[index]
-    end
-    return result, nil
-end
-
 local function component(raw: unknown): string?
     local value = bounds.line(raw, bounds.MAX_ID_BYTES)
     if not value or not value:match("^[%w_%-%.]+/[%w_%-%.]+$") then return nil end
@@ -89,7 +70,7 @@ local function definition(raw: unknown, label: string): (Definition?, string?)
 end
 
 local function decode_rows(raw: unknown, definitions: {[string]: Definition}): ({migrations.Row}?, string?)
-    local supplied, list_error = dense(raw, "migration work rows", MAX_WORK)
+    local supplied, list_error = bounds.dense_list(raw, MAX_WORK, "migration work rows")
     if not supplied then return nil, list_error end
     local rows: {migrations.Row} = {}
     local seen: {[string]: boolean} = {}
@@ -123,7 +104,7 @@ function M.decode(raw: unknown): (Work?, string?)
     if not value then return nil, "migration work must be an object" end
     local extra = bounds.fields(value, {"entries", "rows", "databases", "ledger_checked"})
     if extra then return nil, extra end
-    local supplied, list_error = dense(value.entries, "migration work entries", MAX_WORK)
+    local supplied, list_error = bounds.dense_list(value.entries, MAX_WORK, "migration work entries")
     if not supplied then return nil, list_error end
     if #supplied == 0 then return nil, "migration work entries must not be empty" end
     local entries: {Definition} = {}
@@ -139,7 +120,7 @@ function M.decode(raw: unknown): (Work?, string?)
     if not rows then return nil, rows_error end
     local databases: {Database}? = nil
     if value.databases ~= nil then
-        local raw_databases, database_error = dense(value.databases, "migration databases", MAX_WORK)
+        local raw_databases, database_error = bounds.dense_list(value.databases, MAX_WORK, "migration databases")
         if not raw_databases or #raw_databases == 0 then return nil, database_error or "migration databases must not be empty" end
         if type(value.ledger_checked) ~= "boolean" then return nil, "migration databases need a ledger checkpoint" end
         if not value.ledger_checked and #rows > 0 then return nil, "migration results precede the ledger checkpoint" end
@@ -168,10 +149,10 @@ function M.capture(prepared: plan.Prepared): (Work?, string?)
     if type(prepared) ~= "table" or type(prepared.plan) ~= "table" or type(prepared.resolved) ~= "table" then
         return nil, "migration plan is incomplete"
     end
-    local planned, planned_error = dense(prepared.plan.migrations, "displayed migrations", MAX_WORK)
+    local planned, planned_error = bounds.dense_list(prepared.plan.migrations, MAX_WORK, "displayed migrations")
     if not planned then return nil, planned_error end
     if #planned == 0 then return nil, "displayed migration work is empty" end
-    local packages, package_error = dense(prepared.resolved.packages, "resolved packages", MAX_WORK)
+    local packages, package_error = bounds.dense_list(prepared.resolved.packages, MAX_WORK, "resolved packages")
     if not packages then return nil, package_error end
     local found: {[string]: {component: string, kind: string, meta: {[string]: unknown}, data: unknown}} = {}
     for package_index, raw_package in ipairs(packages) do
@@ -179,7 +160,7 @@ function M.capture(prepared: plan.Prepared): (Work?, string?)
         if not package then return nil, "resolved package " .. tostring(package_index) .. " is invalid" end
         local owner = component(package.component)
         if not owner then return nil, "resolved package " .. tostring(package_index) .. " has an invalid component" end
-        local package_entries, entries_error = dense(package.entries, "resolved package entries", MAX_PACKAGE_ENTRIES)
+        local package_entries, entries_error = bounds.dense_list(package.entries, MAX_PACKAGE_ENTRIES, "resolved package entries")
         if not package_entries then return nil, entries_error end
         for entry_index, raw_entry in ipairs(package_entries) do
             local entry = bounds.object(raw_entry)
@@ -233,7 +214,7 @@ end
 function M.capture_databases(work: Work, prepared: plan.Prepared?, state: unknown): (Work?, string?)
     local snapshot = bounds.object(state)
     if not snapshot then return nil, "invalid database baseline" end
-    local resident, state_error = dense(snapshot.entries, "database baseline entries", MAX_STATE_ENTRIES)
+    local resident, state_error = bounds.dense_list(snapshot.entries, MAX_STATE_ENTRIES, "database baseline entries")
     if not resident then return nil, state_error end
     local candidates: {[string]: Database} = {}
     local present: {[string]: boolean}, wanted: {[string]: boolean} = {}, {}
@@ -290,7 +271,7 @@ end
 function M.capture_removed(state: unknown, components: {[string]: boolean}): (Work?, string?)
     local snapshot = bounds.object(state)
     if not snapshot then return nil, "registry snapshot is invalid" end
-    local supplied, problem = dense(snapshot.entries, "registry snapshot entries", MAX_STATE_ENTRIES)
+    local supplied, problem = bounds.dense_list(snapshot.entries, MAX_STATE_ENTRIES, "registry snapshot entries")
     if not supplied then return nil, problem end
     local entries: {Definition} = {}
     for _, raw in ipairs(supplied) do
@@ -329,7 +310,7 @@ function M.verify(work: Work, state: unknown): (boolean, string?)
     if not checked then return false, work_error end
     local snapshot = bounds.object(state)
     if not snapshot then return false, "registry snapshot is invalid" end
-    local raw_entries, entries_error = dense(snapshot.entries, "registry snapshot entries", MAX_STATE_ENTRIES)
+    local raw_entries, entries_error = bounds.dense_list(snapshot.entries, MAX_STATE_ENTRIES, "registry snapshot entries")
     if not raw_entries then return false, entries_error end
     local wanted: {[string]: Definition} = {}
     for _, definition in ipairs(checked.entries) do wanted[definition.id] = definition end

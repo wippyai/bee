@@ -74,10 +74,12 @@ entries:
   source: file://headless_revert_test.lua
   method: run
   meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
   imports:
     test: wippy.test:test
     transaction: bee.persist:transaction
     headless_revert: bee.gov:headless_revert
+    activation_store: bee.gov.persist:activation_store
 - name: publication_profiles_test
   kind: function.lua
   source: file://publication_profiles_test.lua
@@ -202,6 +204,9 @@ entries:
     activation_owner: bee.gov.binding:activation_owner
     preflight: bee.gov:preflight
     application_admission: bee.gov:governed_application_admission
+    capability_grants: bee.gov:capability_grants
+    capability_model: bee.capability:model
+    migration_work: bee.gov:migration_work
 - name: artifact_test
   kind: function.lua
   source: file://artifact_test.lua
@@ -409,6 +414,7 @@ entries:
     test: wippy.test:test
     artifact: bee.gov:artifact
     hub_resolver: bee.gov:hub_resolver
+    preflight: bee.gov:preflight
 - name: overlay_resolver_test
   kind: function.lua
   source: file://overlay_resolver_test.lua
@@ -421,4 +427,5 @@ entries:
     artifact: bee.gov:artifact
     overlay_resolver: bee.gov:overlay_resolver
     capability_grants: bee.gov:capability_grants
+    application_admission: bee.gov:governed_application_admission
     preflight: bee.gov:preflight

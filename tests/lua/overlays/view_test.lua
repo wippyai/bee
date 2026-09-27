@@ -142,11 +142,11 @@ local function define_tests()
             detail.preflight_bytes = report
             model.apply_plan(state, {ok = true, error = nil, replayed = false, value = detail})
             model.show_pane(state, "review")
-            local kind, _, enabled = view.primary(state)
-            test.eq(kind, "update"); test.is_true(enabled)
+            local kind, label, enabled = view.primary(state)
+            test.eq(kind, "prepare_activation"); test.eq(label, " Prepare activation "); test.is_true(enabled)
             state.plans[1].selected = true
-            kind, _, enabled = view.primary(state)
-            test.eq(kind, "update"); test.is_true(enabled)
+            kind, label, enabled = view.primary(state)
+            test.eq(kind, "prepare_activation"); test.eq(label, " Prepare activation "); test.is_true(enabled)
             test.is_true(model.apply_activation(state, {ok = true, error = nil, replayed = false, value = {
                 owner_node = "node-destination", workspace_id = "workspace-destination", intent_id = "intent-1",
                 overlay_owner = "overlay-owner", source_node = "node-source", source_workspace = "example-app",
@@ -166,7 +166,7 @@ local function define_tests()
             test.is_true(detailed_kinds.step and detailed_kinds.recover and detailed_kinds.status)
         end)
 
-        test.it("does not offer install for a locally rejected plan with a ready preflight", function()
+        test.it("does not offer activation preparation for a locally rejected plan with a ready preflight", function()
             local state = model.new("workspace-destination")
             local digest = string.rep("b", 64)
             local report, report_digest = preflight.encode_report({schema_revision = "bee.governance-preflight@1",
@@ -189,7 +189,7 @@ local function define_tests()
             test.is_true(enabled)
             local drawn = view.draw(80, 18, appearance.defaults(), state, 0)
             for _, hit in ipairs(drawn.hits) do
-                test.is_false(hit.kind == "install" or hit.kind == "update")
+                test.is_false(hit.kind == "prepare_activation")
             end
         end)
     end)

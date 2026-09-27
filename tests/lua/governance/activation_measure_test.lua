@@ -10,13 +10,19 @@ local hash = require("hash")
 local admission = require("application_admission")
 
 local SHA = string.rep("a", 64)
-local function application_admission(artifact_digest: string, policy_digest: string): {[string]: unknown}
+local EMPTY_STRINGS: {string} = {}
+local function candidate_entry(id: string, kind: string, package: string, digest: string): preflight.Entry
+    return {id = id, kind = kind, package = package, digest = digest, references = EMPTY_STRINGS,
+        auto_start = false, grants = EMPTY_STRINGS, modules = EMPTY_STRINGS,
+        config_objects = EMPTY_STRINGS, config_lists = EMPTY_STRINGS, config_empty = EMPTY_STRINGS}
+end
+local function application_admission(artifact_digest: string, policy_digest: string): admission.Measurement
     local measured, measure_error = admission.measure({schema_revision = admission.SCHEMA,
         workspace_id = "workspace-a", overlay_owner = "bee.gov:overlay",
         source_node = "node-b", source_workspace = "source-app", artifact_digest = artifact_digest,
         policy_digest = policy_digest, bindings = {}})
     if not measured then error(tostring(measure_error)) end
-    return measured :: {[string]: unknown}
+    return measured
 end
 local function facts(): ({[string]: unknown}, preflight.Candidate, preflight.Context)
     local exact = assert(artifact.create({{id = "demo:run", kind = "function.lua", data = {source = "return true"}}}))
@@ -28,15 +34,17 @@ local function facts(): ({[string]: unknown}, preflight.Candidate, preflight.Con
         source_workspace = "source-app", version = "v1", plan_digest = SHA, revision = 3,
         selection_revision = 2, selected = true, review_status = "accepted",
         artifact_bytes = exact.bytes, artifact_digest = exact.digest}
+    local candidate_entries: {preflight.Entry} = {candidate_entry("demo:run", "function.lua", "demo/app", entry_digest)}
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b",
         base_revision = 4, base_digest = SHA, artifacts = {{component = "demo/app", version = "v1",
-            digest = SHA, dependencies = {}, namespaces = {"demo"}}}, entries = {{id = "demo:run",
-            kind = "function.lua", package = "demo/app", digest = entry_digest, references = {}, auto_start = false,
-            grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {}, migrations = {}}
+            digest = SHA, dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries,
+        requirements = {}, migrations = {}}
     local context: preflight.Context = {node_id = "node-a", registry_revision = 4,
         registry_digest = SHA, policy_digest = SHA, packages = {["demo/app"] = true},
         namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {}, grants = {},
-        modules = {}, entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL, migration_barrier = false, auto_start = true}
+        modules = {}, entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL,
+        migration_barrier = false, auto_start = true,
+        host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
     return plan, candidate, context
 end
 
@@ -53,15 +61,15 @@ local function define_tests()
         end)
         test.it("retains only a canonical measured application admission projection", function()
             local plan, candidate, context = facts()
-            context.application_admission = application_admission(plan.artifact_digest :: string, SHA)
+            local measured_admission = application_admission(plan.artifact_digest :: string, SHA)
+            context.host_evidence.application_admission = {kind = "measured", value = measured_admission}
             local result, err = measure.measure(plan, candidate, context)
             if not result then error(tostring(err)) end
             test.eq((result.application_admission :: {[string]: unknown}).digest,
-                (context.application_admission :: {[string]: unknown}).digest)
+                measured_admission.digest)
             test.eq(result.application_admission_digest,
-                (context.application_admission :: {[string]: unknown}).digest)
-            local altered = context.application_admission :: {[string]: unknown}
-            altered.digest = string.rep("b", 64)
+                measured_admission.digest)
+            measured_admission.digest = string.rep("b", 64)
             test.is_nil(measure.measure(plan, candidate, context))
         end)
         test.it("rejects remote readiness, pending migrations and overlay directives", function()
@@ -71,8 +79,7 @@ local function define_tests()
             context.registry_revision = 4
             candidate.migrations = {{id = "demo:001", target_db = "demo:db", checksum = SHA, ordinal = 1}}
             context.databases["demo:db"] = true
-            context.entries["demo:db"] = {id = "demo:db", kind = "db.sql.sqlite", package = "base",
-                digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
+            context.entries["demo:db"] = candidate_entry("demo:db", "db.sql.sqlite", "base", SHA)
             test.is_nil(measure.measure(plan, candidate, context))
             local directive = assert(artifact.create({{id = "demo:root", kind = "ns.dependency", data = {}}}))
             plan.artifact_bytes, plan.artifact_digest = directive.bytes, directive.digest
@@ -100,20 +107,20 @@ local function define_tests()
                 source_workspace = "source-app", version = "v1", plan_digest = SHA, revision = 3,
                 selection_revision = 2, selected = true, review_status = "accepted",
                 artifact_bytes = exact.bytes, artifact_digest = exact.digest}
+            local candidate_entries: {preflight.Entry} = {
+                candidate_entry("demo:001", "function.lua", "demo/app", checksum)}
             local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b",
                 base_revision = 4, base_digest = SHA, artifacts = {{component = "demo/app", version = "v1",
-                    digest = exact.digest, dependencies = {}, namespaces = {"demo"}}}, entries = {{id = "demo:001",
-                    kind = "function.lua", package = "demo/app", digest = checksum, references = {}, auto_start = false,
-                    grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {},
+                    digest = exact.digest, dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries,
+                requirements = {},
                 migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}}
-            local database: preflight.Entry = {id = "host:db", kind = "db.sql.sqlite", package = "host/base",
-                digest = SHA, references = {}, auto_start = false, grants = {}, modules = {},
-                config_objects = {}, config_lists = {}, config_empty = {}}
+            local database = candidate_entry("host:db", "db.sql.sqlite", "host/base", SHA)
             local context: preflight.Context = {node_id = "node-a", registry_revision = 4,
                 registry_digest = SHA, policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
                 kinds = {["function.lua"] = true}, databases = {["host:db"] = true}, grants = {}, modules = {},
                 entries = {["host:db"] = database}, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL,
-                migration_barrier = true, auto_start = true}
+                migration_barrier = true, auto_start = true,
+                host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
             local result, problem = measure.measure(plan, candidate, context)
             if not result then error(tostring(problem)) end
             test.eq(#((result.report :: preflight.Report).pending_migrations), 1)

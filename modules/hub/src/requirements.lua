@@ -21,26 +21,6 @@ type Requirement = {
 }
 type Result = {requirements: {Requirement}, missing: {string}}
 
-local function dense(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
-    if type(value) ~= "table" then return nil, label .. " must be a list" end
-    local count = 0
-    local highest = 0
-    for key in pairs(value) do
-        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, label .. " must be a dense list" end
-        count = count + 1
-        if key > highest then highest = key end
-    end
-    if count ~= highest then return nil, label .. " must be a dense list" end
-    if count > maximum then return nil, label .. " exceeds " .. tostring(maximum) .. " items" end
-    local result: {unknown} = {}
-    for index = 1, count do
-        local item = value[index]
-        if item == nil then return nil, label .. " must be a dense list" end
-        result[index] = item
-    end
-    return result, nil
-end
-
 local function qualified_name(value: unknown, label: string): (string?, string?)
     local name = bounds.id(value)
     if not name or not name:match("^[^:%s]+:[^:%s]+$") then return nil, label .. " must be a qualified identifier" end
@@ -68,7 +48,7 @@ local function target_path(value: unknown): (string?, string?)
 end
 
 function M.parameters(value: unknown): ({Parameter}?, string?)
-    local raw, raw_error = dense(value, "parameters", M.MAX_PARAMETERS)
+    local raw, raw_error = bounds.dense_list(value, M.MAX_PARAMETERS, "parameters")
     if not raw then return nil, raw_error end
     local result: {Parameter} = {}
     local names: {[string]: boolean} = {}
@@ -93,7 +73,7 @@ function M.parameters(value: unknown): ({Parameter}?, string?)
 end
 
 local function decode_targets(value: unknown, label: string): ({Target}?, string?)
-    local raw, raw_error = dense(value, label, M.MAX_TARGETS)
+    local raw, raw_error = bounds.dense_list(value, M.MAX_TARGETS, label)
     if not raw then return nil, raw_error end
     if #raw == 0 then return nil, label .. " must not be empty" end
     local targets: {Target} = {}
@@ -112,7 +92,7 @@ local function decode_targets(value: unknown, label: string): ({Target}?, string
 end
 
 function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
-    local raw_entries, entries_error = dense(entries, "package entries", M.MAX_PACKAGE_ENTRIES)
+    local raw_entries, entries_error = bounds.dense_list(entries, M.MAX_PACKAGE_ENTRIES, "package entries")
     if not raw_entries then return nil, entries_error end
     local requirements: {Requirement} = {}
     local by_id: {[string]: integer} = {}
@@ -173,7 +153,7 @@ end
 -- Native linking still owns general paths and is verified after publication.
 type Entry = {id: string, kind: string, meta: {[string]: unknown}, data: unknown}
 function M.migration_targets(raw: unknown, selected: Result): ({Entry}?, string?)
-    local supplied, supplied_error = dense(raw, "migration package entries", M.MAX_PACKAGE_ENTRIES)
+    local supplied, supplied_error = bounds.dense_list(raw, M.MAX_PACKAGE_ENTRIES, "migration package entries")
     if not supplied then return nil, supplied_error end
     local entries: {Entry} = {}
     for _, item in ipairs(supplied) do

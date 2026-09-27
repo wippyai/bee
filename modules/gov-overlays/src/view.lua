@@ -29,9 +29,8 @@ function M.pane_of(kind: string): model.Pane?
     return nil
 end
 
--- The primary action is one reviewed install or update decision for the person.
--- Local acceptance, selection, and activation preparation are combined, while
--- recovery and technical step actions remain in details.
+-- The primary action prepares activation after the local review and selection
+-- transitions; approval and activation application remain separate actions.
 function M.primary(state: model.State): (string, string, boolean)
     if state.pane == "available" then return "stage", " Stage ", model.selected_available(state) ~= nil end
     local item = model.selected(state)
@@ -45,9 +44,7 @@ function M.primary(state: model.State): (string, string, boolean)
         return "status", " Check status ", true
     end
     if verdict == "ready" and (model.accepts_review(item) or model.can_select(item)) then
-        local is_update = (state.changes and state.changes.base_revision > 0) or (state.report and state.report.base_revision > 0)
-        if is_update then return "update", " Update ", true end
-        return "install", " Install ", true
+        return "prepare_activation", " Prepare activation ", true
     end
     return "read", " Read details ", true
 end

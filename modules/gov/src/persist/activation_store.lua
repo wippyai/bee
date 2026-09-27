@@ -390,7 +390,7 @@ function M.begin_apply(store: Store, actor: string, input: Request): Result
     end)
 end
 
-local function migration_receipt(input: Request, work: any): ({[string]: Object}?, string?)
+local function migration_receipt(input: Request, work: migration_work.Work): ({[string]: Object}?, string?)
     local decoded, decode_error = json.decode((input.receipt :: Blob).bytes)
     local value = bounds.object(decoded)
     if decode_error or not value or value.schema_revision ~= "bee.governance-migration-receipt@1"
@@ -399,7 +399,7 @@ local function migration_receipt(input: Request, work: any): ({[string]: Object}
     if not encoded or encoded ~= (input.receipt :: Blob).bytes then
         return nil, tostring(encode_error or "migration receipt is not canonical")
     end
-    local expected: {[string]: any} = {}
+    local expected: {[string]: migration_work.Migration} = {}
     for _, item in ipairs(work.migrations) do expected[item.target_db .. "\n" .. item.id] = item end
     local rows: {[string]: Object} = {}
     local count_rows = 0
@@ -555,7 +555,7 @@ function M.applied(store: Store, component_raw: unknown): Result
         if not rows then return storage(err, "read applied migrations") end
         local migrations: Object = {}
         local databases: Object = {}
-        local work_by_intent: Object = {}
+        local work_by_intent: {[string]: migration_work.Work} = {}
         for _, row in ipairs(rows) do
             local work = work_by_intent[row.intent_id :: string]
             if not work then
@@ -563,10 +563,9 @@ function M.applied(store: Store, component_raw: unknown): Result
                 if not decoded then return failure("INTERNAL", tostring(decode_error or "decode applied migration intent")) end
                 work, work_by_intent[row.intent_id :: string] = decoded, decoded
             end
-            local captured: Object? = nil
-            for _, raw_item in ipairs((work :: any).migrations) do
-                local item = bounds.object(raw_item)
-                if item and item.target_db == row.target_db and item.id == row.migration_id then captured = item; break end
+            local captured: migration_work.Migration? = nil
+            for _, item in ipairs(work.migrations) do
+                if item.target_db == row.target_db and item.id == row.migration_id then captured = item; break end
             end
             if not captured or captured.ordinal ~= row.ordinal or captured.checksum ~= row.checksum
                 or captured.package ~= row.component then

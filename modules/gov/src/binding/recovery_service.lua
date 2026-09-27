@@ -6,9 +6,23 @@ local resources = require("resources")
 local activations = require("activation_store")
 local headless_revert = require("headless_revert")
 local destination = require("destination_service")
+local transaction = require("transaction")
 
 local M = {}
 type Object = {[string]: unknown}
+type RecoveryMethods = {
+    applied: (activations.Store, string) -> transaction.Result,
+    revert_activation: (activations.Store, string, activations.Request) -> transaction.Result,
+}
+local recovery_methods: RecoveryMethods = {
+    applied = function(store: activations.Store, component: string): transaction.Result
+        return activations.applied(store, component)
+    end,
+    revert_activation = function(store: activations.Store, actor: string,
+        request: activations.Request): transaction.Result
+        return activations.revert_activation(store, actor, request)
+    end,
+}
 
 function M.revert(owner_raw: unknown): (string?, string?)
     local overlay_owner = bounds.id(owner_raw)
@@ -53,7 +67,7 @@ function M.revert(owner_raw: unknown): (string?, string?)
         activations.close(store)
         return nil, "allocate recovery receipt identity"
     end
-    local reverted = headless_revert.revert(activations, store, overlay_owner, current, baseline, key)
+    local reverted = headless_revert.revert(recovery_methods, store, overlay_owner, current, baseline, key)
     local closed, close_error = activations.close(store)
     if not reverted.ok then return nil, reverted.message or reverted.code or "activation revert failed" end
     if not closed or close_error then return nil, "revert was recorded but the activation store did not close" end

@@ -5,12 +5,14 @@ local json = require("json")
 local canonical = require("canonical")
 local hash = require("hash")
 local text = require("text")
+local bounds = require("bounds")
 local M = {}
 
 M.MAX_TEXT = 512
 M.MAX_PARAMETERS = 128
 M.MAX_ITEMS = 100
 M.MAX_ROOTS = 16384
+M.MAX_PLAN_ITEMS = 4096
 M.HUB = "bee.hub.binding:call"
 M.PUBLICATION = "bee.gov.binding:publication_call"
 
@@ -54,9 +56,8 @@ local function readme(value: unknown): string
     return table.concat(lines, "\n")
 end
 
-local function object(value: unknown): Object
-    if type(value) == "table" then return value :: Object end
-    return {}
+local function object(value: unknown): Object?
+    return bounds.object(value)
 end
 
 -- Replies are owned by the transport. Keep an immutable recovery request in
@@ -69,10 +70,8 @@ local function clone(value: unknown): unknown
     return result
 end
 
-local function integer(value: unknown): integer
-    local number = tonumber(value)
-    if not number or number ~= number then return 0 end
-    return math.floor(number)
+local function integer(value: unknown): integer?
+    return bounds.count(value)
 end
 
 local function component(value: unknown): string?
@@ -90,9 +89,33 @@ local function digest(value: unknown): string?
     return value
 end
 
+local function object_list(raw: unknown, label: string, maximum: integer): ({Object}?, string?)
+    local rows, rows_error = bounds.dense_list(raw, maximum, label)
+    if not rows then return nil, rows_error end
+    local result: {Object} = {}
+    for index, item in ipairs(rows) do
+        local value = object(item)
+        if not value then return nil, label .. " item " .. tostring(index) .. " must be an object" end
+        result[index] = value
+    end
+    return result, nil
+end
+
+local function string_list(raw: unknown, label: string, maximum: integer): ({string}?, string?)
+    local rows, rows_error = bounds.dense_list(raw, maximum, label)
+    if not rows then return nil, rows_error end
+    local result: {string} = {}
+    for index, item in ipairs(rows) do
+        local value = bounds.line(item, 160)
+        if not value then return nil, label .. " item " .. tostring(index) .. " is invalid" end
+        result[index] = value
+    end
+    return result, nil
+end
+
 local function operation_request(raw: unknown, action: string, owner: string): Object?
-    if type(raw) ~= "table" then return nil end
-    local value = raw :: Object
+    local value = object(raw)
+    if not value then return nil end
     if value.action ~= action or value.component ~= owner then return nil end
     local policy = type(value.migration_policy) == "string" and value.migration_policy or ""
     local valid_policy = (action == "uninstall" and (policy == "block" or policy == "leave" or policy == "down"))
@@ -109,6 +132,7 @@ local function operation_request(raw: unknown, action: string, owner: string): O
     for index, raw_parameter in ipairs(value.parameters :: {unknown}) do
         if index > M.MAX_PARAMETERS then return nil end
         local parameter = object(raw_parameter)
+        if not parameter then return nil end
         local name = type(parameter.name) == "string" and parameter.name or ""
         if name == "" or #name > 256 or not name:match("^[^:%s]+:[^:%s]+$") or parameter.value == nil then return nil end
         parameters[index] = {name = name, value = clone(parameter.value)}
@@ -118,17 +142,13 @@ local function operation_request(raw: unknown, action: string, owner: string): O
 end
 
 local function parameter_rows(raw: unknown): ({Parameter}?, string?)
-    if type(raw) ~= "table" then return nil, "installed root parameters must be a list" end
-    local count = 0
-    for key in pairs(raw) do
-        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then return nil, "installed root parameters must be a dense list" end
-        count = math.max(count, key)
-    end
-    if count > M.MAX_PARAMETERS then return nil, "installed root has too many parameters" end
+    local rows, rows_error = bounds.dense_list(raw, M.MAX_PARAMETERS, "installed root parameters")
+    if not rows then return nil, rows_error end
     local parameters: {Parameter} = {}
     local seen: {[string]: boolean} = {}
-    for index = 1, count do
-        local parameter = object((raw :: {[number]: unknown})[index])
+    for index, raw_parameter in ipairs(rows) do
+        local parameter = object(raw_parameter)
+        if not parameter then return nil, "installed root has an invalid parameter" end
         local name = parameter.name
         -- Installed roots address requirements the way the native linker does:
         -- a qualified ns:name or a bare name the dependency owns.
@@ -147,17 +167,13 @@ end
 
 local function root_rows(raw: unknown): ({Root}?, string?)
     if raw == nil then return nil, "installed inventory did not include roots" end
-    if type(raw) ~= "table" then return nil, "installed inventory roots must be a list" end
-    local count = 0
-    for key in pairs(raw) do
-        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then return nil, "installed inventory roots must be a dense list" end
-        count = math.max(count, key)
-    end
-    if count > M.MAX_ROOTS then return nil, "installed inventory has too many roots" end
+    local rows, rows_error = bounds.dense_list(raw, M.MAX_ROOTS, "installed inventory roots")
+    if not rows then return nil, rows_error end
     local roots: {Root} = {}
     local seen: {[string]: boolean} = {}
-    for index = 1, count do
-        local item = object((raw :: {[number]: unknown})[index])
+    for index, raw_item in ipairs(rows) do
+        local item = object(raw_item)
+        if not item then return nil, "installed inventory contains an invalid root" end
         local id = item.id
         local name = component(item.component)
         local selected = version(item.version)
@@ -189,13 +205,16 @@ local function managed_root(root: Root): boolean
     return measured ~= nil and root.id == "bee.hub.deps:" .. measured
 end
 
-local function migration_rows(raw: unknown): {Object}
+local function migration_rows(raw: unknown): ({Object}?, string?)
+    if raw == nil then return {}, nil end
     local work = object(raw)
+    if not work then return nil, "migration work must be an object" end
     local rows: {Object} = {}
-    if type(work.rows) ~= "table" then return rows end
-    for index, raw_row in ipairs(work.rows :: {unknown}) do
-        if index > M.MAX_ITEMS then break end
+    local supplied, supplied_error = bounds.dense_list(work.rows, M.MAX_ITEMS, "migration work rows")
+    if not supplied then return nil, supplied_error end
+    for index, raw_row in ipairs(supplied) do
         local row = object(raw_row)
+        if not row then return nil, "migration work row is malformed" end
         local id, target, module, status = M.text(row.id, 256), M.text(row.target_db, 256), M.text(row.module, 160), M.text(row.status, 32)
         if id ~= "" and target ~= "" and module ~= "" and (status == "applied" or status == "reverted" or status == "skipped") then
             local decoded: Object = {id = id, target_db = target, module = module, status = status}
@@ -293,7 +312,17 @@ function M.apply_publication_prepare(state: State, reply: Reply)
         return
     end
     local value = object(reply.value)
+    if not value then
+        state.publication_prepared = nil
+        state.notice = "UNCERTAIN: preparation receipt is malformed"
+        return
+    end
     local descriptor = object(value.descriptor)
+    if not descriptor then
+        state.publication_prepared = nil
+        state.notice = "UNCERTAIN: preparation receipt has no measured descriptor"
+        return
+    end
     local name, selected_version = component(value.component), version(value.version)
     local descriptor_digest = digest(descriptor.digest)
     if name ~= state.publication_component or selected_version ~= state.publication_version or not descriptor_digest then
@@ -327,6 +356,7 @@ function M.apply_publication_publish(state: State, reply: Reply)
         return
     end
     local value = object(reply.value)
+    if not value then state.notice = "UNCERTAIN: publication receipt is malformed"; return end
     local name, selected_version = component(value.component), version(value.version)
     if name ~= state.publication_component or selected_version ~= state.publication_version or not M.publication_ready(state) then
         state.notice = "UNCERTAIN: publication receipt did not match the prepared authored version"
@@ -341,28 +371,40 @@ function M.operation_history_intent(state: State): Intent
 end
 
 function M.apply_history(state: State, reply: Reply)
-    if not reply.ok or type(reply.value) ~= "table" then
+    if not reply.ok then
         state.notice = M.text((reply.code or "UNAVAILABLE") .. ": " .. (reply.message or "operation history unavailable"))
         return
     end
     local value = object(reply.value)
-    if type(value.operations) ~= "table" then
-        state.notice = "status reply did not include operation history"
+    local supplied: {unknown}? = nil
+    local supplied_error: string? = nil
+    if value then supplied, supplied_error = bounds.dense_list(value.operations, M.MAX_ITEMS, "operation history") end
+    local page = value and integer(value.page) or nil
+    local total = value and integer(value.total) or nil
+    local page_size = value and integer(value.page_size) or nil
+    if not value or not supplied or not page or page < 1 or page > 10000 or not total
+        or not page_size or page_size < 1 or page_size > 100 then
+        state.notice = supplied_error or "status reply has malformed history or pagination"
         return
     end
     local operations: {Operation} = {}
-    for index, raw in ipairs(value.operations :: {unknown}) do
-        if index > M.MAX_ITEMS then break end
+    for index, raw in ipairs(supplied) do
         local item = object(raw)
+        if not item then state.notice = "status reply contains a malformed operation"; return end
         local measured = digest(item.digest)
         local owner = component(item.component)
         local action = (item.action == "install" and "install") or (item.action == "update" and "update")
             or (item.action == "uninstall" and "uninstall") or nil
-        local baseline = integer(item.baseline_revision)
-        if measured and owner and action and baseline >= 0 then
+        local baseline = item.baseline_revision == nil and 0 or integer(item.baseline_revision)
+        if item.baseline_revision ~= nil and baseline == nil then
+            state.notice = "status reply contains a malformed baseline revision"; return
+        end
+        local migration_work, migration_error = migration_rows(item.migration_work)
+        if not migration_work then state.notice = migration_error or "status reply contains malformed migration work"; return end
+        if measured and owner and action and baseline ~= nil then
             local op: Operation = {digest = measured, component = owner, action = action, state = M.text(item.state, 80),
                 message = M.text(item.message, 512), baseline_revision = baseline, request = operation_request(item.request, action, owner),
-                migration_work = migration_rows(item.migration_work)}
+                migration_work = migration_work}
             operations[#operations + 1] = op
         end
     end
@@ -370,11 +412,8 @@ function M.apply_history(state: State, reply: Reply)
         if a.baseline_revision ~= b.baseline_revision then return a.baseline_revision > b.baseline_revision end
         return a.digest > b.digest
     end)
-    local page = integer(value.page)
-    local total = integer(value.total)
-    local page_size = integer(value.page_size)
-    state.operations, state.operation_page = operations, math.max(1, page)
-    state.operation_total, state.operation_page_size = math.max(0, total), page_size > 0 and math.min(100, page_size) or 25
+    state.operations, state.operation_page = operations, page
+    state.operation_total, state.operation_page_size = total, page_size
     if state.selected_operation then
         local selected = state.selected_operation.digest
         state.selected_operation = nil
@@ -593,29 +632,26 @@ end
 
 -- Reject incomplete or stale declarations; never manufacture defaults or types.
 local function requirement_list(raw: unknown, maximum: integer): {unknown}?
-    if type(raw) ~= "table" then return nil end
-    local count = 0
-    for key in pairs(raw) do
-        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 or key > maximum then return nil end
-        count = count + 1
-    end
-    if count ~= #raw then return nil end
-    return raw :: {unknown}
+    local rows = bounds.dense_list(raw, maximum, "package declaration")
+    return rows
 end
 
 function M.apply_inspect(state: State, reply: Reply)
     state.requirements, state.requirements_digest = {}, nil
     if not reply.ok then state.notice = M.text(reply.message or "Requirements unavailable"); return end
     local value = object(reply.value)
+    if not value then state.notice = "Invalid package requirements"; return end
     local measured = digest(value.digest)
     if value.component ~= state.selected or value.version ~= state.selected_version or not measured then
         state.notice = "Requirements did not match the selected package version"; return
     end
-    local rows = requirement_list(object(value.requirements).requirements, M.MAX_PARAMETERS)
+    local requirements = object(value.requirements)
+    local rows = requirements and requirement_list(requirements.requirements, M.MAX_PARAMETERS) or nil
     if not rows then state.notice = "Invalid package requirements"; return end
     local decoded: {Requirement}, seen: {[string]: boolean} = {}, {}
     for _, raw in ipairs(rows) do
         local row = object(raw)
+        if not row then state.notice = "Invalid package requirement"; return end
         local id = row.id
         local targets = requirement_list(row.targets, 128)
         if type(id) ~= "string" or #id > 256 or not id:match("^[^:%s]+:[^:%s]+$") or seen[id]
@@ -634,6 +670,7 @@ function M.apply_inspect(state: State, reply: Reply)
         local paths: {string} = {}
         for _, raw_target in ipairs(targets) do
             local target = object(raw_target)
+            if not target then state.notice = "Invalid requirement target"; return end
             if type(target.entry) ~= "string" or type(target.path) ~= "string" or #target.entry > 256 or #target.path > 512 then
                 state.notice = "Invalid requirement target"; return
             end
@@ -657,16 +694,20 @@ end
 function M.apply_catalog(state: State, reply: Reply)
     if not reply.ok or type(reply.value) ~= "table" then state.notice = M.text((reply.code or "UNAVAILABLE") .. ": " .. (reply.message or "catalog unavailable")); return end
     local value = object(reply.value)
+    local total = value and integer(value.total) or nil
+    local supplied: {unknown}? = nil
+    local supplied_error: string? = nil
+    if value then supplied, supplied_error = bounds.dense_list(value.items, M.MAX_ITEMS, "Hub catalog items") end
+    if not value or not total or not supplied then state.notice = supplied_error or "Invalid catalog reply"; return end
     local rows: {Item} = {}
-    if type(value.items) == "table" then
-        for _, raw in ipairs(value.items :: {unknown}) do
-            local item = object(raw)
-            local name = component(item.component)
-            if name and #rows < M.MAX_ITEMS then rows[#rows + 1] = {component = name, title = M.text(item.title, 160),
-                description = M.text(item.description, 512), latest_version = M.text(item.latest_version, 128)} end
-        end
+    for _, raw in ipairs(supplied) do
+        local item = object(raw)
+        if not item then state.notice = "Invalid catalog item"; return end
+        local name = component(item.component)
+        if name then rows[#rows + 1] = {component = name, title = M.text(item.title, 160),
+            description = M.text(item.description, 512), latest_version = M.text(item.latest_version, 128)} end
     end
-    state.catalog, state.total, state.phase, state.notice = rows, integer(value.total), "catalog", ""
+    state.catalog, state.total, state.phase, state.notice = rows, total, "catalog", ""
 end
 
 function M.apply_installed(state: State, reply: Reply)
@@ -674,21 +715,46 @@ function M.apply_installed(state: State, reply: Reply)
         state.installed_read = "error"
         state.notice = M.text((reply.code or "UNAVAILABLE") .. ": " .. (reply.message or "installed modules unavailable")); return
     end
-    local value, rows = object(reply.value), {}
+    local value = object(reply.value)
+    if not value then
+        state.installed_read = "error"
+        state.notice = "Invalid installed inventory: reply must be an object"; return
+    end
+    local rows: {Module} = {}
     local roots, root_error = root_rows(value.roots)
     if not roots then
         state.installed_read = "error"
         state.notice = "Invalid installed inventory: " .. (root_error or "invalid roots"); return
     end
-    if type(value.modules) == "table" then
-        for _, raw in ipairs(value.modules :: {unknown}) do
-            local item = object(raw)
-            local name = component(item.component)
-            if name and #rows < M.MAX_ITEMS then
-                local used: {string} = {}
-                if type(item.used_by) == "table" then for _, owner in ipairs(item.used_by :: {unknown}) do used[#used + 1] = M.text(owner, 160) end end
-                rows[#rows + 1] = {component = name, version = M.text(item.version, 128), source = M.text(item.source, 80), direct = item.direct == true, used_by = used}
+    local supplied, supplied_error = bounds.dense_list(value.modules, M.MAX_ITEMS, "installed modules")
+    if not supplied then
+        state.installed_read = "error"
+        state.notice = "Invalid installed inventory: " .. (supplied_error or "invalid modules"); return
+    end
+    for _, raw in ipairs(supplied) do
+        local item = object(raw)
+        if not item then
+            state.installed_read = "error"
+            state.notice = "Invalid installed inventory: malformed module"; return
+        end
+        local name = component(item.component)
+        if name then
+            local used: {string} = {}
+            if item.used_by ~= nil then
+                local owners = bounds.dense_list(item.used_by, M.MAX_ITEMS, "module owners")
+                if not owners then
+                    state.installed_read = "error"
+                    state.notice = "Invalid installed inventory: malformed module owners"; return
+                end
+                for _, owner in ipairs(owners) do
+                    if type(owner) ~= "string" then
+                        state.installed_read = "error"
+                        state.notice = "Invalid installed inventory: malformed module owner"; return
+                    end
+                    used[#used + 1] = M.text(owner, 160)
+                end
             end
+            rows[#rows + 1] = {component = name, version = M.text(item.version, 128), source = M.text(item.source, 80), direct = item.direct == true, used_by = used}
         end
     end
     state.installed, state.installed_roots = rows, roots
@@ -700,18 +766,22 @@ end
 
 function M.apply_details(state: State, reply: Reply)
     if not reply.ok or type(reply.value) ~= "table" then state.notice = M.text((reply.code or "UNAVAILABLE") .. ": " .. (reply.message or "package details unavailable")); return end
-    local value, name = object(reply.value), component(object(reply.value).component)
+    local value = object(reply.value)
+    if not value then state.notice = "Invalid package details"; return end
+    local name = component(value.component)
     if not name or name ~= state.selected then state.notice = "details did not match the selected package"; return end
+    local page, total_versions = integer(value.page), integer(value.total_versions)
+    local supplied = bounds.dense_list(value.versions, M.MAX_ITEMS, "Hub versions")
+    if not page or page < 1 or not total_versions or not supplied then state.notice = "Invalid package details pagination"; return end
     local versions: {Version} = {}
-    if type(value.versions) == "table" then
-        for _, raw in ipairs(value.versions :: {unknown}) do
-            local item = object(raw)
-            local selected = version(item.version)
-            if selected then versions[#versions + 1] = {version = selected, yanked = item.yanked == true} end
-        end
+    for _, raw in ipairs(supplied) do
+        local item = object(raw)
+        if not item or type(item.yanked) ~= "boolean" then state.notice = "Invalid package version"; return end
+        local selected = version(item.version)
+        if selected then versions[#versions + 1] = {version = selected, yanked = item.yanked} end
     end
     state.detail = {component = name, title = M.text(value.title, 160), description = M.text(value.description, 512),
-        readme = readme(value.readme), versions = versions, page = math.max(1, integer(value.page)), total_versions = integer(value.total_versions)}
+        readme = readme(value.readme), versions = versions, page = page, total_versions = total_versions}
     if not state.selected_version then for _, item in ipairs(versions) do if not item.yanked then state.selected_version = item.version; break end end end
     state.phase, state.notice = "details", ""
 end
@@ -720,6 +790,7 @@ local function matches_request(state: State, raw: unknown): boolean
     local intent = M.plan_intent(state)
     if not intent or not intent.request then return false end
     local expected, actual = intent.request, object(raw)
+    if not actual then return false end
     if expected.action ~= actual.action or expected.component ~= actual.component
         or expected.migration_policy ~= actual.migration_policy then return false end
     -- The public uninstall request omits version/parameters. The measured
@@ -728,12 +799,12 @@ local function matches_request(state: State, raw: unknown): boolean
         return actual.version == "" and type(actual.parameters) == "table" and next(actual.parameters) == nil
     end
     if expected.version ~= actual.version then return false end
-    local expected_parameters = expected.parameters
-    local actual_parameters = actual.parameters
-    if type(expected_parameters) ~= "table" and type(actual_parameters) ~= "table" then return true end
-    if type(expected_parameters) ~= "table" or type(actual_parameters) ~= "table" or #expected_parameters ~= #actual_parameters then return false end
-    for index, expected_parameter in ipairs(expected_parameters :: {unknown}) do
-        local left, right = object(expected_parameter), object((actual_parameters :: {unknown})[index])
+    local expected_parameters = bounds.dense_list(expected.parameters, M.MAX_PARAMETERS, "plan parameters")
+    local actual_parameters = bounds.dense_list(actual.parameters, M.MAX_PARAMETERS, "returned plan parameters")
+    if not expected_parameters or not actual_parameters or #expected_parameters ~= #actual_parameters then return false end
+    for index, expected_parameter in ipairs(expected_parameters) do
+        local left, right = object(expected_parameter), object(actual_parameters[index])
+        if not left or not right then return false end
         local left_value, right_value = canonical.encode(left.value), canonical.encode(right.value)
         if left.name ~= right.name or not left_value or not right_value or left_value ~= right_value then return false end
     end
@@ -742,16 +813,25 @@ end
 
 function M.apply_plan(state: State, reply: Reply)
     if not reply.ok or type(reply.value) ~= "table" then state.plan = nil; state.phase = "plan"; state.notice = M.text((reply.code or "INVALID") .. ": " .. (reply.message or "cannot prepare plan")); return end
-    local value, digest = object(reply.value), object(reply.value).digest
-    if type(digest) ~= "string" or #digest ~= 64 then state.notice = "Hub returned an unmeasured plan"; return end
+    local value = object(reply.value)
+    if not value then state.notice = "Hub returned a malformed plan"; return end
+    local measured_digest = digest(value.digest)
+    if not measured_digest then state.notice = "Hub returned an unmeasured plan"; return end
+    local base_revision = integer(value.base_revision)
+    if base_revision == nil then state.notice = "Hub returned a plan with an invalid base revision"; return end
+    if type(value.ready) ~= "boolean" then state.notice = "Hub returned a plan with an invalid readiness value"; return end
     if not matches_request(state, value.request) then state.notice = "plan belongs to an earlier package selection; ignored"; return end
-    local missing: {string}, modules: {Object}, migrations: {Object}, starts: {string}, capabilities: {string} = {}, {}, {}, {}, {}
-    if type(value.missing) == "table" then for _, item in ipairs(value.missing :: {unknown}) do missing[#missing + 1] = M.text(item, 160) end end
-    if type(value.modules) == "table" then for _, item in ipairs(value.modules :: {unknown}) do modules[#modules + 1] = object(item) end end
-    if type(value.migrations) == "table" then for _, item in ipairs(value.migrations :: {unknown}) do migrations[#migrations + 1] = object(item) end end
-    if type(value.starts) == "table" then for _, item in ipairs(value.starts :: {unknown}) do starts[#starts + 1] = M.text(item, 160) end end
-    if type(value.capabilities) == "table" then for _, item in ipairs(value.capabilities :: {unknown}) do capabilities[#capabilities + 1] = M.text(item, 160) end end
-    state.plan = {digest = digest, ready = value.ready == true, base_revision = integer(value.base_revision), modules = modules,
+    local modules, modules_error = object_list(value.modules, "plan modules", M.MAX_PLAN_ITEMS)
+    local migrations, migrations_error = object_list(value.migrations, "plan migrations", M.MAX_PLAN_ITEMS)
+    local missing, missing_error = string_list(value.missing, "plan missing requirements", M.MAX_PLAN_ITEMS)
+    local starts, starts_error = string_list(value.starts, "plan starts", M.MAX_PLAN_ITEMS)
+    local capabilities, capabilities_error = string_list(value.capabilities, "plan capabilities", M.MAX_PLAN_ITEMS)
+    if not modules or not migrations or not missing or not starts or not capabilities then
+        state.notice = modules_error or migrations_error or missing_error or starts_error or capabilities_error
+            or "Hub returned malformed plan details"
+        return
+    end
+    state.plan = {digest = measured_digest, ready = value.ready, base_revision = base_revision, modules = modules,
         missing = missing, migrations = migrations, starts = starts, capabilities = capabilities}
     state.selected_operation, state.recovery = nil, nil
     state.phase, state.notice = "plan", ""
@@ -767,8 +847,8 @@ end
 function M.apply_result(state: State, reply: Reply)
     local receipt = object(reply.value)
     local code = M.text(reply.code or (reply.ok and "OK" or "FAILED"), 80)
-    local message = M.text(reply.message or receipt.message or "Hub operation finished", 512)
-    local status = M.text(receipt.state or (reply.ok and "unknown" or "failed"), 80)
+    local message = M.text(reply.message or (receipt and receipt.message) or "Hub operation finished", 512)
+    local status = M.text((receipt and receipt.state) or (reply.ok and "unknown" or "failed"), 80)
     local complete = reply.ok and status == "complete"
     state.result = {ok = complete, code = code, message = message, replayed = reply.replayed, state = status}
     state.recovery = nil

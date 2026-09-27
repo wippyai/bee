@@ -2,6 +2,7 @@
 -- grants. The model compares authority; each owner keeps its own storage.
 local M = {}
 M.REVISION = "bee.capability-model@1"
+local bounds = require("bounds")
 type Value = {[string]: unknown}
 type Parameter = string | {string}
 type Parameters = {[string]: Parameter}
@@ -13,30 +14,14 @@ type Grant = {capability: string, template_revision: integer, operation: string,
 type Revocation = {grants: {Grant}, fenced_attempts: {string}}
 
 local function object(raw: unknown): Value?
-    if type(raw) ~= "table" then return nil end
-    for key in pairs(raw :: table) do if type(key) ~= "string" then return nil end end
-    return raw :: Value
+    return bounds.object(raw)
 end
 local function fields(value: Value, allowed: {[string]: boolean}): boolean
     for key in pairs(value) do if not allowed[key] then return false end end
     return true
 end
 local function list(raw: unknown, maximum: integer): ({unknown}?, string?)
-    if type(raw) ~= "table" then return nil, "expected a list" end
-    local count = 0
-    for key in pairs(raw :: table) do
-        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "expected a dense list" end
-        count = count + 1
-    end
-    if count > maximum then return nil, "list exceeds bound" end
-    local capacity: integer = count > 0 and count or 1
-    local result: {unknown} = table.create(capacity, 0)
-    for index = 1, count do
-        local value = (raw :: table)[index]
-        if value == nil then return nil, "expected a dense list" end
-        result[index] = value
-    end
-    return result, nil
+    return bounds.dense_list(raw, maximum, "capability values")
 end
 local function word(raw: unknown, maximum: integer): string?
     if type(raw) ~= "string" or #raw == 0 or #raw > maximum or raw:find("%c") then return nil end

@@ -16,26 +16,22 @@ local PRIOR_PREFIX = "bee.governance.grants:"
 type Object = {[string]: unknown}
 type Proposal = {capabilities: {capability_model.Grant}, policies: {Object}, bindings: {Object},
     volumes: {Object}, databases: {Object}, folder: Object?, thread_access: string, digest: string}
+type Installed = {schema_revision: string, overlay_owner: string, workspace_id: string, application: string,
+    capabilities: {capability_model.Grant}, bindings: {Object}, policies: {Object}, thread_access: string, digest: string,
+    approval_id: string, revision: integer, artifact_digest: string?, version: string?, volumes: {Object}?,
+    databases: {Object}?, folder: Object?, record_digest: string}
+type Change = {before: capability_model.Grant?, after: capability_model.Grant?}
+type Review = {added: {Change}, widened: {Change}, narrowed: {Change}, removed: {Change}, changed: {Change},
+    requires_approval: boolean, revocation: capability_model.Revocation,
+    lines: {string}, resolved: {string}, delta: {string}}
 
 local function sha(raw: unknown): string?
     if type(raw) ~= "string" or #raw ~= 64 or not raw:match("^[0-9a-f]+$") then return nil end
     return raw
 end
 local function list(raw: unknown, limit: integer): {unknown}?
-    if type(raw) ~= "table" then return nil end
-    local count = 0
-    for key in pairs(raw :: table) do
-        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil end
-        count = count + 1
-    end
-    if count > limit then return nil end
-    local capacity: integer = count > 0 and count or 1
-    local result: {unknown} = table.create(capacity, 0)
-    for index = 1, count do
-        if (raw :: table)[index] == nil then return nil end
-        result[index] = (raw :: table)[index]
-    end
-    return result
+    local rows = bounds.dense_list(raw, limit, "capability grant values")
+    return rows
 end
 local function digest(value: unknown): string?
     local bytes = canonical.encode(value)
@@ -350,19 +346,30 @@ function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
 end
 
 function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
-    app_raw: unknown, vocabulary: capability_model.Vocabulary): (Object?, string?)
-    local item, owner = bounds.object(raw), bounds.id(owner_raw)
+    app_raw: unknown, vocabulary: capability_model.Vocabulary): (Installed?, string?)
+    local item = bounds.object(raw)
+    local owner, workspace, app = bounds.id(owner_raw), bounds.id(workspace_raw), bounds.id(app_raw)
+    if not owner or not workspace or not app then return nil, "installed capability grant identity is invalid" end
     local data = item and bounds.object(item.data) or nil
     local expected = M.record_id(owner)
     local prior_id = M.prior_record_id(owner)
     local meta = item and bounds.object(item.meta) or nil
-    if not item or not data or not meta or meta.type ~= M.SCHEMA
-        or (item.id ~= expected and item.id ~= prior_id) or item.kind ~= "registry.entry"
-        or data.schema_revision ~= M.SCHEMA or data.overlay_owner ~= owner
-        or data.workspace_id ~= workspace_raw or data.application ~= app_raw
-        or not bounds.id(data.approval_id) or not bounds.count(data.revision)
-        or data.revision < 1
-        or not sha(data.digest) or data.thread_access ~= "none" then
+    local approval_id = data and bounds.id(data.approval_id) or nil
+    local revision = data and bounds.count(data.revision) or nil
+    local stored_application = data and bounds.id(data.application) or nil
+    local stored_digest = data and sha(data.digest) or nil
+    if not item or not data or not meta then
+        return nil, "installed capability grant record is malformed"
+    end
+    if meta.type ~= M.SCHEMA or (item.id ~= expected and item.id ~= prior_id)
+        or item.kind ~= "registry.entry" or data.schema_revision ~= M.SCHEMA
+        or data.overlay_owner ~= owner or data.workspace_id ~= workspace or data.thread_access ~= "none" then
+        return nil, "installed capability grant record is malformed"
+    end
+    if not stored_application or stored_application ~= app then
+        return nil, "installed capability grant application is malformed"
+    end
+    if not approval_id or revision == nil or revision < 1 or not stored_digest then
         return nil, "installed capability grant record is malformed"
     end
     local capabilities, bindings, policies = list(data.capabilities, 128), list(data.bindings, 128), list(data.policies, 128)
@@ -390,7 +397,7 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
     end
     local actual = digest(digest_shape(capabilities :: {Object}, bindings :: {Object},
         policies :: {Object}, volumes :: {Object}, databases :: {Object}, data.folder))
-    if actual ~= data.digest then return nil, "installed capability digest differs from the stored set" end
+    if actual ~= stored_digest then return nil, "installed capability digest differs from the stored set" end
     local capacity: integer = #bindings > 0 and #bindings or 1
     local reproduced: {Object} = table.create(capacity, 0)
     for index, raw_binding in ipairs(bindings) do
@@ -405,28 +412,35 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
                 catalog_revision = capability_model.revisions(vocabulary, grant.capability),
                 target = app_raw, path = ".security.policies +="}}
     end
-    local resolved, resolve_error = M.propose(vocabulary, owner, app_raw, reproduced, item.id == prior_id,
+    local resolved, resolve_error = M.propose(vocabulary, owner, app, reproduced, item.id == prior_id,
         data.folder)
-    if not resolved or resolved.digest ~= data.digest then
+    if not resolved or resolved.digest ~= stored_digest then
         return nil, resolve_error or "installed capability digest differs from host templates"
     end
-    if data.artifact_digest ~= nil and not sha(data.artifact_digest) then
+    local artifact_digest = data.artifact_digest == nil and nil or sha(data.artifact_digest)
+    if data.artifact_digest ~= nil and not artifact_digest then
         return nil, "installed grant artifact digest is invalid"
     end
-    if data.version ~= nil and not bounds.id(data.version) then
+    local version = data.version == nil and nil or bounds.id(data.version)
+    if data.version ~= nil and not version then
         return nil, "installed grant version is invalid"
     end
     local measured_record = digest(data)
     if not measured_record then return nil, "measure installed grant record" end
-    local copy: Object = {}
-    for field, value in pairs(data) do copy[field] = value end
-    copy.record_digest = measured_record
-    return copy, nil
+    local installed: Installed = {schema_revision = M.SCHEMA, overlay_owner = owner, workspace_id = workspace,
+        application = stored_application, capabilities = resolved.capabilities, bindings = resolved.bindings,
+        policies = resolved.policies, thread_access = "none", digest = stored_digest,
+        approval_id = approval_id, revision = revision,
+        artifact_digest = artifact_digest, version = version, record_digest = measured_record}
+    if data.volumes ~= nil then installed.volumes = resolved.volumes end
+    if data.databases ~= nil then installed.databases = resolved.databases end
+    if data.folder ~= nil then installed.folder = resolved.folder end
+    return installed, nil
 end
 
 -- The generated host entries a live installed record stands for, in the
 -- shape activation composes into the application's overlay.
-function M.installed(record_raw: unknown, record: Object): Object
+function M.installed(record_raw: unknown, record: Installed): Object
     local entry: Object = {}
     for key, value in pairs((record_raw :: Object)) do if key ~= "registry" then entry[key] = value end end
     return {policies = record.policies, bindings = record.bindings, volumes = record.volumes,
@@ -471,7 +485,7 @@ function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
     return true, nil
 end
 
-function M.diff(vocabulary: capability_model.Vocabulary, installed: Object?, proposal: Proposal): (Object?, string?)
+function M.diff(vocabulary: capability_model.Vocabulary, installed: Installed?, proposal: Proposal): (Review?, string?)
     local old = installed and installed.capabilities or table.create(1, 0)
     local compared, compare_error = capability_model.compare(old, proposal.capabilities)
     if not compared then return nil, compare_error end
@@ -496,8 +510,11 @@ function M.diff(vocabulary: capability_model.Vocabulary, installed: Object?, pro
     for _, line in ipairs(flows) do
         if line:find(" may be sent to ", 1, true) then lines[#lines + 1] = line end
     end
-    compared.lines = lines
-    return compared, nil
+    local review: Review = {added = compared.added, widened = compared.widened,
+        narrowed = compared.narrowed, removed = compared.removed, changed = compared.changed,
+        requires_approval = compared.requires_approval, revocation = compared.revocation,
+        lines = lines, resolved = flows, delta = lines}
+    return review, nil
 end
 
 return M

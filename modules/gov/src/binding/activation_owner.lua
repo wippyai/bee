@@ -20,9 +20,15 @@ type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, prefligh
 type Executor = approval.Executor
 type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?)
 type Observe = (string, unknown, unknown?, unknown) -> (boolean?, string?)
+type MigrationEffects = {
+    matches: (string, migration_work.Work) -> (boolean?, string?),
+    prepare: (string, migration_work.Work) -> ({[string]: unknown}?, string?),
+    clear: (string) -> ({[string]: unknown}?, string?),
+    cleared: (string) -> (boolean?, string?),
+    execute: (migration_work.Work) -> ({bytes: string, digest: string}?, boolean, string?)}
 type Config = {plans: plans.Store, activations: activations.Store, resolver: Resolver,
     approvals: Executor, actor_id: string, consumer_id: string, overlay_owner: string,
-    approval_policy: string, apply: Apply, matches: Observe, migrations: any}
+    approval_policy: string, apply: Apply, matches: Observe, migrations: MigrationEffects}
 
 local function failure(code: string, message: string, value: unknown?): Result
     return transaction.failure(code, message, value)

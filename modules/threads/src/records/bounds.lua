@@ -31,6 +31,7 @@ M.fields = shared.fields
 M.object = shared.object
 M.optional_id = shared.optional_id
 M.subpath = shared.subpath
+M.dense_list = shared.dense_list
 M.MAX_SUBPATH_BYTES = shared.MAX_SUBPATH_BYTES
 
 function M.sequence(value: unknown): integer?
@@ -50,5 +51,4 @@ function M.member(value: unknown, variants: {string}): string?
     for _, variant in ipairs(variants) do if variant == value then return value end end
     return nil
 end
-
 return M

@@ -432,10 +432,7 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 				t.Fatal(err)
 			}
 		}
-		lintArgs := []string{"lint", "--json"}
-		if agent != nil {
-			lintArgs = append(lintArgs, "--set", "registry.history_path="+filepath.Join(state, "registry.db"))
-		}
+		lintArgs := []string{"lint", "--json", "--set", "registry.history_path=" + filepath.Join(state, "registry.db")}
 		lint := exec.CommandContext(ctx, binary, lintArgs...)
 		lint.Dir = project
 		lint.Env = nodeEnvironment(state)
@@ -445,10 +442,8 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 		return stagedNode{project: project, state: state}
 	}
 	start := func(i int, node stagedNode) *procRunner {
-		args := []string{"run", "--silent", "--override", "bee.hive.service:supervisor_service:lifecycle.auto_start=false", "hive-replica-probe"}
-		if agent != nil {
-			args = append(args, "--set", "registry.history_path="+filepath.Join(node.state, "registry.db"))
-		}
+		args := []string{"run", "--silent", "--override", "bee.hive.service:supervisor_service:lifecycle.auto_start=false",
+			"hive-replica-probe", "--set", "registry.history_path=" + filepath.Join(node.state, "registry.db")}
 		args = append(args, "--", fmt.Sprintf("node-%d", 1-i))
 		if agent != nil && i == 1 && agent.sourceProject != "" {
 			args = append(args, agent.workspaceID, agent.artifactDigest, agent.sourceWorkspaceID, agent.sourceVersion,

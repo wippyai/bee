@@ -24,19 +24,19 @@ local function staging_owner(overlay_owner: string): (string?, string?)
     return value, nil
 end
 
-local function definitions(work: any): {unknown}
+local function definitions(work: migration_work.Work): {unknown}
     local entries: {unknown} = {}
     for _, item in ipairs(work.migrations) do entries[#entries + 1] = item.definition end
     return entries
 end
 
-function M.matches(overlay_owner: string, work: any): (boolean?, string?)
+function M.matches(overlay_owner: string, work: migration_work.Work): (boolean?, string?)
     local owner, owner_error = staging_owner(overlay_owner)
     if not owner then return nil, owner_error end
     return materializer.matches(owner, definitions(work))
 end
 
-function M.prepare(overlay_owner: string, work: any): ({[string]: unknown}?, string?)
+function M.prepare(overlay_owner: string, work: migration_work.Work): ({[string]: unknown}?, string?)
     local owner, owner_error = staging_owner(overlay_owner)
     if not owner then return nil, owner_error end
     return materializer.reconcile(owner, definitions(work))
@@ -54,23 +54,22 @@ function M.cleared(overlay_owner: string): (boolean?, string?)
     return materializer.matches(owner, {})
 end
 
-local function frozen_bindings(work: any): (Bindings?, string?)
+local function frozen_bindings(work: migration_work.Work): (Bindings?, string?)
     local result: Bindings = {}
     local targets: {[string]: boolean} = {}
     for _, item in ipairs(work.migrations) do targets[item.target_db] = true end
     for target in pairs(targets) do
         local item, item_error = migration_work.database(work, target)
         if not item then return nil, item_error end
-        result[target] = {database_id = item.database_id :: string,
-            table_prefix = item.table_prefix :: string?}
+        result[target] = {database_id = item.database_id, table_prefix = item.table_prefix}
     end
     return result, nil
 end
 
-function M.execute(work: any, execution_policies: PolicyIds?): ({bytes: string, digest: string}?, boolean, string?)
+function M.execute(work: migration_work.Work, execution_policies: PolicyIds?): ({bytes: string, digest: string}?, boolean, string?)
     local bindings, binding_error = frozen_bindings(work)
     if not bindings then return nil, false, binding_error end
-    local entries: {any} = {}
+    local entries: {hub_migrations.Entry} = {}
     local ids: {string} = {}
     local components: {string} = {}
     local seen_components: {[string]: boolean} = {}

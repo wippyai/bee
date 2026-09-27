@@ -15,7 +15,7 @@ entries:
   kind: library.lua
   source: file://preview.lua
   modules: [hub, fs, base64]
-  imports: {bounds: bee.threads.records:bounds, inspection: bee.hub:inspection}
+  imports: {bounds: bee.threads.records:bounds, inspection: bee.hub:inspection, requirements: bee.hub:requirements}
 - name: migration_runner
   kind: library.lua
   source: file://migration_runner.lua

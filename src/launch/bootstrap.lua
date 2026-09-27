@@ -24,7 +24,6 @@ function M.open(): Started?
     if not input then process.unlisten(boot); error(tostring(input_error)) end
     local supervisor = ""
     local display: physical.Display? = nil
-    local started: Started? = nil
 
     local function readiness(): (Started?, string?, boolean)
         display = display or physical.open()
@@ -75,27 +74,28 @@ function M.open(): Started?
                     end
                     local workspace_id = contract.workspace_id(data.workspace_id)
                     local host_value: string? = contract.text(data.host, 160)
+                    local host_name = ""
+                    if host_value ~= nil then host_name = host_value end
+                    local checked_workspace_id = ""
+                    if workspace_id ~= nil then checked_workspace_id = workspace_id end
                     local desktop = decode.desktop(data.desktop)
-                    if not workspace_id or not host_value or host_value == "" or not desktop then
+                    if checked_workspace_id == "" or host_name == "" or not desktop then
                         process.terminate(supervisor); supervisor = ""
                         return nil, "Invalid local host bootstrap", true
                     end
-                    if not display then error("Local terminal ownership lost") end
-                    started = {supervisor = supervisor, host = host_value :: string, workspace_id = workspace_id,
-                        desktop = desktop, terminal = {display = display :: physical.Display, input = input}}
+                    local terminal_display: physical.Display = assert(display, "Local terminal ownership lost")
+                    local ready: Started = {supervisor = supervisor, host = host_name, workspace_id = checked_workspace_id,
+                        desktop = desktop, terminal = {display = terminal_display, input = input}}
                     display = nil
-                    return started :: Started, nil, false
+                    return ready, nil, false
                 end
             end
         end
         return nil, "Local host readiness ended", false
     end
 
-    local function checked_readiness(): (Started?, string?, boolean)
-        local ok, result, failure, retryable = pcall(readiness)
-        if ok then return result, failure, retryable == true end
+    local function cleanup_readiness_failure()
         if supervisor ~= "" then process.terminate(supervisor); supervisor = "" end
-        return nil, tostring(result), true
     end
 
     local function disable_super_edit(): (boolean?, string?)
@@ -113,13 +113,13 @@ function M.open(): Started?
         return value.changed :: boolean, nil
     end
 
-    local result, startup_error = boot_fallback.run(checked_readiness, disable_super_edit)
+    local result, startup_error = boot_fallback.run(readiness, disable_super_edit, cleanup_readiness_failure)
     process.unlisten(boot)
-    if result then return result :: Started end
+    if result then return result end
     if supervisor ~= "" then process.terminate(supervisor) end
     if display then physical.close(display) end
     if startup_error then error(startup_error) end
-    return started
+    return nil
 end
 
 return M

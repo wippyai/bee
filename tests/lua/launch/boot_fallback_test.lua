@@ -12,7 +12,7 @@ local function define_tests()
             end, function()
                 disabled = disabled + 1
                 return true, nil
-            end)
+            end, function() end)
             test.eq(starts, 2)
             test.eq(disabled, 1)
             test.eq((ready :: {[string]: unknown}).workspace_id, "workspace")
@@ -27,7 +27,7 @@ local function define_tests()
             end, function()
                 disabled = disabled + 1
                 return false, nil
-            end)
+            end, function() end)
             test.is_nil(ready)
             test.eq(err, "supervisor exited")
             test.eq(starts, 1)
@@ -42,7 +42,7 @@ local function define_tests()
             end, function()
                 disabled = disabled + 1
                 return true, nil
-            end)
+            end, function() end)
             test.is_nil(ready)
             test.eq(err, "local host startup failed after disabling super-edit overlays: still unavailable")
             test.eq(starts, 2)
@@ -57,10 +57,26 @@ local function define_tests()
             end, function()
                 disabled = disabled + 1
                 return true, nil
-            end)
+            end, function() end)
             test.is_nil(ready)
             test.eq(err, "cancelled")
             test.eq(starts, 1)
+            test.eq(disabled, 0)
+        end)
+
+        test.it("propagates readiness exceptions without disabling super-edit", function()
+            local disabled = 0
+            local function readiness(): ({workspace_id: string}?, string?, boolean)
+                error("startup policy lookup failed")
+            end
+            local ready, err = fallback.run(readiness, function()
+                disabled = disabled + 1
+                return true, nil
+            end, function() end)
+            test.is_nil(ready)
+            if type(err) ~= "string" or not err:find("startup policy lookup failed", 1, true) then
+                error("readiness exception was not returned")
+            end
             test.eq(disabled, 0)
         end)
     end)

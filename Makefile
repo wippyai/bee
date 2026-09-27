@@ -112,6 +112,9 @@ governance-workspace-check:
 
 run:
 	BEE_RUNTIME="$(abspath $(WIPPY))" bash ./run.sh
+.PHONY: idle-cpu-check
+idle-cpu-check:
+	BEE_BINARY="$(abspath $(or $(BEE_BINARY),dist/bee))" python3 tests/idle_cpu_check.py
 lint:
 	$(WIPPY) lint $(LINT_FLAGS) --set lua.type_system.enabled=true --set lua.type_system.strict=true
 .PHONY: codex-native-hooks-check
@@ -434,7 +437,7 @@ managed-launch-check: fixture-gateway-client
 managed-launch-fixture-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_launch_fixture.py
 
-.PHONY: thread-launch-check thread-launch-live-check
+.PHONY: thread-launch-check thread-launch-live-check thread-launch-live-long-check
 thread-launch-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py
 
@@ -442,6 +445,10 @@ thread-launch-check: fixture-gateway-client
 # variables; it uses the local CLI login file when both file and CLI exist.
 thread-launch-live-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py --live
+
+# Multi-minute Claude batch research leg; captures raw child stdout in its scratch fixture.
+thread-launch-live-long-check: fixture-gateway-client
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py --live-long
 
 .PHONY: cross-session-check
 cross-session-check: fixture-gateway-client

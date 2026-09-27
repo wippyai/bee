@@ -25,6 +25,47 @@ local ROOT = "bee.harness.catalog:project_fixture"
 local BINDING = "bee.driver.claude:binding"
 local CARRIER = "bee.harness.catalog:carrier_faulted"
 local MARKER = "agent-launch-worker-answer"
+local LIVE_LONG_MARKER = "bee-long-batch-result-envelope-recorded"
+local LONG_DOC_QUERIES = {
+    "process lifecycle and independent exit observation",
+    "channel selection and backpressure",
+    "stdout stream framing and bounded chunks",
+    "stderr stream ordering and EOF handling",
+    "registry entries and component metadata",
+    "SQL transactions and durable records",
+    "filesystem roots and workspace grants",
+    "HTTP clients and MCP tool requests",
+    "event subscriptions and delivery cursors",
+    "application manifests and launch contracts",
+    "thread membership and owner policy",
+    "thread turns and terminal receipts",
+    "cross-node subscriptions and hive delivery",
+    "placement runner output retention",
+    "gateway admission and credential materialization",
+    "storage migrations and schema revisions",
+    "terminal toolkit layout and measurement",
+    "terminal canvas drawing and styles",
+    "terminal event input and key decoding",
+    "agent launch profiles and allowed tools",
+    "carrier checkpoint recovery and replay",
+    "process cleanup capabilities and process groups",
+    "stream JSON framing and malformed records",
+    "provider launch configuration and environment",
+    "application approval and activation records",
+    "workspace overlays and source inspection",
+    "thread wait and child answer delivery",
+    "tool result provenance and event envelopes",
+    "bounded reads and pagination cursors",
+    "runner exit observation and remaining output",
+    "carrier settlement and incomplete output",
+    "agent corpus topics and stable document identifiers",
+}
+local LONG_DOC_SEARCHES: {string} = {}
+for _, prefix in ipairs({"", "failure modes and recovery for ", "tests and operational limits for "}) do
+    for _, query in ipairs(LONG_DOC_QUERIES) do
+        LONG_DOC_SEARCHES[#LONG_DOC_SEARCHES + 1] = prefix .. query
+    end
+end
 type Object = {[string]: unknown}
 local counter = 0
 local function fresh(prefix: string): string
@@ -280,10 +321,22 @@ local function await_carrier(pid: string, label: string, timeout_ms: integer?): 
     end
     return {}
 end
-local function run_live_provider(provider: string)
+local function long_research_brief(): string
+    local lines: {string} = {
+        "This is a managed Claude stream transport soak. Do not edit files or use any tool besides the offline Bee docs tool.",
+        "Complete all " .. tostring(#LONG_DOC_SEARCHES) .. " numbered items in order. For each item, make exactly one separate Bee docs call with operation=search, offset=0 and limit=4. Wait for its result before moving on. Do not combine searches, skip an item, call another tool, or answer early.",
+    }
+    for index, query in ipairs(LONG_DOC_SEARCHES) do
+        lines[#lines + 1] = tostring(index) .. ". Search documentation about: " .. query
+    end
+    lines[#lines + 1] = "After all " .. tostring(#LONG_DOC_SEARCHES) .. " separate docs calls, provide no summary. Your final answer must be exactly: " .. LIVE_LONG_MARKER
+    return table.concat(lines, "\n")
+end
+local function run_live_provider(provider: string, long_run: boolean?)
     if provider ~= "claude" and provider ~= "codex" then error("live provider must be claude or codex") end
+    local is_long = long_run == true
     local stage = "host setup"
-    local ok = pcall(function()
+    local ok, failure = pcall(function()
         prepare_host()
         open_gateway()
         local target = "bee.driver." .. provider .. ":research_batch"
@@ -302,22 +355,25 @@ local function run_live_provider(provider: string)
         setup_data.credentials = copy_of(shipped_credentials)
         apply(setup)
 
-        local thread_id = fresh("ambient-provider-thread")
+        local thread_id = fresh(is_long and "ambient-provider-long-thread" or "ambient-provider-thread")
         local workspace = fresh("ambient-provider-workspace")
-        call("bee.threads.service:create", {thread_id = thread_id, idempotency_key = thread_id .. "-create", title = "Ambient provider login smoke"})
+        call("bee.threads.service:create", {thread_id = thread_id, idempotency_key = thread_id .. "-create", title = is_long and "Claude batch envelope soak" or "Ambient provider login smoke"})
         call("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"})
         call("bee.resources.binding:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"})
 
-        local marker = "bee-ambient-provider-login-smoke-ok"
+        local marker = is_long and LIVE_LONG_MARKER or "bee-ambient-provider-login-smoke-ok"
         local orchestrator = admission(ORCHESTRATOR_POLICY, thread_id, fresh("ambient-orchestrator-attempt"), workspace)
         orchestrator.origin_view = {view_id = "view-ambient-login-origin", instance_id = "instance-ambient-login-origin"}
-        orchestrator.environment = {
+        local orchestrator_environment: Object = {
             BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_REPORT_STREAM = "1", BEE_FIXTURE_GATEWAY_LAUNCH = target,
-            BEE_FIXTURE_GATEWAY_BRIEF = "Reply with exactly " .. marker .. " and nothing else.",
+            BEE_FIXTURE_GATEWAY_BRIEF = is_long and long_research_brief() or ("Reply with exactly " .. marker .. " and nothing else."),
             BEE_FIXTURE_WORKER_MARKER = marker, BEE_FIXTURE_STREAM = stream("plain.jsonl"),
         }
+        if is_long then orchestrator_environment.BEE_FIXTURE_GATEWAY_LONG_WAIT = "1" end
+        orchestrator.environment = orchestrator_environment
         stage = "orchestrator completion"
-        local outcome = await_carrier(spawn_carrier(orchestrator), "live " .. provider .. " orchestrator", 540000)
+        local label = is_long and "live Claude long batch" or ("live " .. provider .. " orchestrator")
+        local outcome = await_carrier(spawn_carrier(orchestrator), label, is_long and 840000 or 540000)
         stage = "orchestrator settlement"
         if (outcome.settlement :: Object).outcome ~= "succeeded" then error("orchestrator turn did not succeed") end
         stage = "child launch report"
@@ -327,10 +383,16 @@ local function run_live_provider(provider: string)
         if seen.child_definition ~= target then error("worker definition did not match") end
         stage = "child completion"
         if seen.final_receipt ~= true then error("worker receipt was not observed") end
-        if seen.child_outcome ~= "succeeded" then error("worker receipt did not report success") end
+        if seen.child_outcome ~= "succeeded" then error("worker receipt outcome " .. tostring(seen.child_outcome)) end
+        if is_long and seen.final_marker ~= true then error("the terminal result answer was not recorded on the child thread") end
     end)
     restore_host()
-    if not ok then error("live " .. provider .. " smoke failed during " .. stage) end
+    if not ok then
+        local label = is_long and "live Claude long batch" or ("live " .. provider .. " smoke")
+        local outcome = type(failure) == "string" and failure:match("worker receipt outcome ([%a]+)") or nil
+        local suffix = outcome and (" (worker receipt outcome " .. outcome .. ")") or ""
+        error(label .. " failed during " .. stage .. suffix)
+    end
 end
 local function define_tests()
     test.describe("Agent launch acceptance", function()
@@ -339,6 +401,10 @@ local function define_tests()
         test.it("starts an allow-listed child, delivers the brief, and waits for its answer and settlement", function()
             local live_provider, live_provider_error = env.get("bee.harness.catalog:ambient_live_provider")
             if live_provider_error then error("read live provider test selector: " .. tostring(live_provider_error)) end
+            if live_provider == "claude-long" then
+                run_live_provider("claude", true)
+                return
+            end
             if live_provider == "claude" or live_provider == "codex" then
                 run_live_provider(live_provider :: string)
                 return

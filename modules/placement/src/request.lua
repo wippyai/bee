@@ -30,7 +30,7 @@ M.DEFAULT_DRAIN_MS = 5000
 M.MAX_DRAIN_MS = 600000
 local ENVIRONMENT_NAME = "^[A-Z_][A-Z0-9_]*$"
 local function safe_relative(value: string): boolean
-    local path = bounds.subpath(value, {nonempty = true, no_control = true})
+    local path = bounds.subpath(value, nil, {nonempty = true, no_control = true})
     return path ~= nil
 end
 local function digest_hex(value: unknown): string?

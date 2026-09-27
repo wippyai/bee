@@ -69,6 +69,25 @@ and keeps execution uncertain; a successor cannot take that retained session.
 The predecessor checkpoint remains unchanged. This outcome requires inspection;
 there is no automatic retry or replay of the user's prompt.
 
+## Git metadata for confined CLI workdirs
+
+For an edit-capable CLI profile and a write-granted working directory, placement
+looks for the nearest `.git` entry without starting Git. It reads a repository's
+`.git` directory directly, or resolves a worktree's `.git` pointer file and its
+`commondir` file. The resulting Git directory and common directory are the only
+additional paths passed to the selected CLI sandbox. A regular repository uses
+one path when both directories are the same. Codex receives
+`sandbox_workspace_write.writable_roots`; Claude Code and Agy receive `--add-dir`
+for each path.
+
+Both paths must remain inside a host-admitted write root for the granted
+working-directory resource. Placement refuses materialization when Git metadata
+escapes those roots. A read-only workdir, a profile without the matching
+edit-capable CLI mode, or a directory without Git metadata receives no extra
+paths. The adapter comes from the activated driver's pinned profile and is kept
+in placement's stored delivery; the launch caller and provider configure reply
+cannot choose it.
+
 Native placement owns `HOME`, selected from its attempt or retained session home.
 An admitted gateway owns its tool and hook token destinations. `prepare` refuses
 literal or referenced environment values that collide with those names, and

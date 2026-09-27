@@ -26,6 +26,7 @@ local resolver = require("resolver")
 local placement_resolver = require("placement_resolver")
 local configuration_protocol = require("configuration")
 local preferences = require("preferences")
+local driver_types = require("driver_types")
 local materialization = require("materialization")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
@@ -284,7 +285,7 @@ end
 -- Configuration inputs come from one host snapshot, not caller-authored
 -- files. The renderer receives the final owner-derived HOME only when a new
 -- intent is recorded; replay uses that intent's frozen delivery.
-local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest): (configuration_protocol.Request?, string?, string?)
+local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest): (configuration_protocol.Request?, string?, string?, driver_types.GitWritableRootsAdapter?)
     local policy_entry = resolver.entry(pinned, request.policy_ref)
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
     local data = policy_entry and bounds.object(policy_entry.data) or nil
@@ -309,6 +310,8 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if data.provider_ref ~= nil and not provider_ref then return nil, nil, "launch policy provider_ref is not an identifier" end
     local target, target_error = resolver.configure(pinned, request.binding_ref)
     if not target then return nil, nil, target_error or "binding is not activated" end
+    local selected_profile, profile_error = resolver.profile(pinned, request.binding_ref, request.profile_id)
+    if profile_error then return nil, nil, profile_error end
     local provider: {[string]: unknown}? = nil
     if provider_ref then
         provider = resolver.entry(pinned, provider_ref)
@@ -331,7 +334,8 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
             token_environment = gateway_configuration.DESTINATION,
             hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
     end
-    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil
+    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
+        selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)
     local path: string? = nil
@@ -394,7 +398,7 @@ function M.prepare(value: unknown): Reply
     if request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest then
         return fail("CONFLICT", "native placement binding changed since admission")
     end
-    local configuration, configure_target, configuration_error = configuration_input(prepare_pinned, request)
+    local configuration, configure_target, configuration_error, git_writable_roots_adapter = configuration_input(prepare_pinned, request)
     if not configuration or not configure_target then return fail("DENIED", configuration_error or "configuration inputs unavailable") end
     local home_authorization_error = host_home_authorization(prepare_pinned, request)
     if home_authorization_error then return fail("DENIED", home_authorization_error) end
@@ -479,6 +483,7 @@ function M.prepare(value: unknown): Reply
     configuration.attempt_id = request.attempt_id
     local delivery, delivery_error = configuration_protocol.call(configure_target, configuration)
     if not delivery then db:release(); return fail("DENIED", delivery_error or "configuration rendering failed") end
+    delivery.git_writable_roots_adapter = git_writable_roots_adapter
     -- Keep the admitted request unchanged: its digest excludes this private
     -- delivery, while the durable payload includes the validated driver output.
     local stored: {[string]: unknown} = {}

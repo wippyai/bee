@@ -4,6 +4,28 @@
 # lives outside bin/ so no bare `codex` lookup in the test composition
 # resolves it.
 stream="${BEE_FIXTURE_STREAM:?BEE_FIXTURE_STREAM names the captured stream}"
+if [ -n "${BEE_FIXTURE_GIT_COMMIT:-}" ]; then
+  [ "$BEE_FIXTURE_GIT_COMMIT" = "1" ] || exit 64
+  writable_roots=""
+  for argument in "$@"; do
+    case "$argument" in
+      sandbox_workspace_write.writable_roots=*) writable_roots="$argument" ;;
+    esac
+  done
+  [ -n "$writable_roots" ] || { printf '%s\n' 'Codex writable roots were not passed' >&2; exit 65; }
+  while IFS= read -r path; do
+    case "$writable_roots" in
+      *"\"$path\""*) ;;
+      *) printf 'Codex writable roots omitted %s\n' "$path" >&2; exit 66 ;;
+    esac
+  done < <(git -C "$PWD" rev-parse --path-format=absolute --git-dir --git-common-dir)
+  if ! git log --all --format=%s | grep -Fxq 'bee fixture commit'; then
+    marker=".bee-fixture-commit-$$"
+    printf '%s\n' 'committed from a confined Codex fixture' > "$marker"
+    git add -- "$marker"
+    git commit --quiet -m "bee fixture commit"
+  fi
+fi
 if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   # Codex reads its gateway from config.toml in its private CODEX_HOME and the
   # bearer credential from the environment variable that file names; the

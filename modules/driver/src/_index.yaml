@@ -27,6 +27,8 @@ entries:
   modules: [registry]
   imports:
     bounds: bee.threads.records:bounds
+    profile: bee.driver:profile
+    types: bee.driver:types
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -34,6 +36,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    types: bee.driver:types
 - name: preferences
   kind: library.lua
   source: file://preferences.lua

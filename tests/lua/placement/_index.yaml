@@ -66,6 +66,14 @@ entries:
     transitions: bee.placement:transitions
     protocol: bee.placement.native:protocol
     types: bee.placement:types
+- name: git_roots_test
+  kind: function.lua
+  source: file://git_roots_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    git_roots: bee.placement.native.service:git_roots
 - name: codex_test_provider
   kind: registry.entry
   meta:

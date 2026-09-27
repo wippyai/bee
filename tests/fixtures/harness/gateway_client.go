@@ -633,9 +633,17 @@ func reportOrchestratorRun(client *httpClient, url, authorization string, report
 		}
 	}
 	marker := os.Getenv("BEE_FIXTURE_WORKER_MARKER")
+	launchArgs := func(key, title string) object {
+		args := object{"definition_ref": definition, "brief": brief, "idempotency_key": key,
+			"thread": object{"title": title}}
+		if root := os.Getenv("BEE_FIXTURE_GATEWAY_WORKDIR_ROOT"); root != "" {
+			path := os.Getenv("BEE_FIXTURE_GATEWAY_WORKDIR_PATH")
+			args["workdir"] = object{"root_ref": root, "path": path}
+		}
+		return args
+	}
 	// Worker one: a new thread, a completion observed through notify and wait.
-	first := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "run-first",
-		"thread": object{"title": os.Getenv("BEE_FIXTURE_ORCHESTRATOR_THREAD_TITLE")}}, 30)
+	first := call("thread_launch", launchArgs("run-first", os.Getenv("BEE_FIXTURE_ORCHESTRATOR_THREAD_TITLE")), 30)
 	report["first_launch_ok"] = first != nil && first["ok"] == true
 	firstValue := mustObject(first["value"])
 	if firstValue == nil {
@@ -768,8 +776,7 @@ func reportOrchestratorRun(client *httpClient, url, authorization string, report
 	report["foreign_refused"] = foreign == nil || foreign["ok"] != true
 	// Worker two: a second new thread, cancelled through run_cancel, and the
 	// cancel replays instead of acting twice.
-	second := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "run-second",
-		"thread": object{"title": os.Getenv("BEE_FIXTURE_ORCHESTRATOR_CANCEL_TITLE")}}, 70)
+	second := call("thread_launch", launchArgs("run-second", os.Getenv("BEE_FIXTURE_ORCHESTRATOR_CANCEL_TITLE")), 70)
 	report["second_launch_ok"] = second != nil && second["ok"] == true
 	secondValue := mustObject(second["value"])
 	if secondValue == nil {

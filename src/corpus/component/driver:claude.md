@@ -12,6 +12,11 @@ When Bee gateway tools are selected, the launch allows Claude Code's reserved
 still checks session operations against the admitted binding. Gateway-only
 authoring does not enable Claude's local `Edit` or `Write` filesystem tools.
 
+Edit-capable Claude profiles declare the Git writable-roots adapter. For a
+writable workdir inside a repository or worktree, placement adds the exact Git
+directory and common directory with `--add-dir`, after checking both against
+the host-admitted write roots.
+
 For a fixture-enabled structured controller, `control_enabled` starts Claude
 with stream-json input and keeps stdin open after the initial brief. The
 carrier may then send an identified inbox item as a new user turn. The shipped

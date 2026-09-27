@@ -26,3 +26,9 @@ instructions, scoped MCP connection, and hook configuration; credentials stay
 with the host credential path. Codex reads batch briefs from stdin, so those
 launches declare end-of-file input and placement closes stdin after writing the
 brief.
+
+The confined `workspace-write` profiles declare Codex's Git writable-roots
+adapter. When the granted workdir is a repository or worktree, native placement
+adds the exact `.git` directory and, for a worktree, its shared Git common
+directory through `sandbox_workspace_write.writable_roots`. Placement adds
+these roots only when both are inside a host-admitted write root.

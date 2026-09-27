@@ -14,6 +14,7 @@ local resources = require("resources")
 local homes = require("homes")
 local types = require("types")
 local configuration = require("configuration")
+local git_roots = require("git_roots")
 local M = {}
 type Prepared = {environment: {[string]: string}, working_directory: string, arguments: {string}}
 local function evidence(db, attempt_id: string, kind: string, detail: string, update: {[string]: unknown}?): (boolean, string?)
@@ -156,6 +157,42 @@ local function resolve_work_dir(request: types.LaunchRequest, home: string): (st
         end
     end
     return nil, "working directory grant is missing"
+end
+local function git_sandbox_arguments(request: types.LaunchRequest, work_dir: string): ({string}?, string?)
+    local delivery = request.delivery
+    local adapter = delivery and delivery.git_writable_roots_adapter or nil
+    local workdir_ref = request.launch.working_directory_ref
+    if not adapter or not workdir_ref or not git_roots.enabled(adapter, request.launch.argv) then return {}, nil end
+    local workdir_grant: types.ResourceGrant? = nil
+    for _, grant in ipairs(request.resources) do
+        if grant.name == workdir_ref then workdir_grant = grant; break end
+    end
+    if not workdir_grant or workdir_grant.access ~= "write" then return {}, nil end
+    local root, root_error = resources.directory(workdir_grant.root_ref)
+    if not root then return nil, root_error or "working-directory resource root is unavailable" end
+    local host_files, host_files_error = resources.host_files()
+    if not host_files then return nil, host_files_error or "host files are unavailable for Git metadata" end
+    local volume, volume_error = fs.get(host_files)
+    if not volume then return nil, "host files are unavailable for Git metadata: " .. tostring(volume_error) end
+    local function exists(path: string): (boolean?, string?)
+        return volume:exists(path)
+    end
+    local function is_directory(path: string): (boolean?, string?)
+        return volume:isdir(path)
+    end
+    local function read_file(path: string): (string?, string?)
+        local info, stat_error = volume:stat(path)
+        if not info then return nil, tostring(stat_error or "unavailable") end
+        if info.type ~= "file" or info.is_dir == true then return nil, "metadata path is not a file" end
+        local size = math.floor(tonumber(info.size) or (git_roots.MAX_METADATA_BYTES + 1))
+        if size < 0 or size > git_roots.MAX_METADATA_BYTES then return nil, "metadata file is too large" end
+        return volume:readfile(path)
+    end
+    local detected, detect_error = git_roots.detect(work_dir, exists, is_directory, read_file)
+    if not detected then return nil, detect_error or "Git metadata resolution failed" end
+    local admitted, admit_error = git_roots.writable_roots(detected, {root})
+    if not admitted then return nil, admit_error or "Git metadata is outside write-granted roots" end
+    return git_roots.arguments(adapter, admitted)
 end
 function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?): (Prepared?, string?, string?)
     local gateway_binding: string? = nil
@@ -345,7 +382,6 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     end
     local arguments: {string} = {}
     for _, argument in ipairs(delivery.arguments) do arguments[#arguments + 1] = argument end
-    for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end
     -- The gateway token is minted at delivery for the binding this attempt
     -- holds under the attached carrier epoch. Bytes fill only the admitted
     -- environment and declared private configuration fields. The stored template
@@ -423,6 +459,13 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         evidence(db, attempt_id, "workdir.failed", work_dir_error or "working directory", {execution = "exited"})
         return refused(work_dir_error or "working directory")
     end
+    local sandbox_arguments, sandbox_error = git_sandbox_arguments(request, work_dir)
+    if not sandbox_arguments then
+        evidence(db, attempt_id, "sandbox.roots_refused", sandbox_error or "Git metadata is not admitted", {execution = "exited"})
+        return refused(sandbox_error or "Git metadata is not admitted")
+    end
+    for _, argument in ipairs(sandbox_arguments) do arguments[#arguments + 1] = argument end
+    for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end
     return {environment = environment, working_directory = work_dir, arguments = arguments}, nil, gateway_binding
 end
 return M

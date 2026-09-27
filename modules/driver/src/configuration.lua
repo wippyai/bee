@@ -4,6 +4,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local funcs = require("funcs")
 local security = require("security")
+local driver_types = require("types")
 local M = {}
 M.MAX_CONFIGURATION_BYTES = 8192
 M.MAX_INSTRUCTIONS_BYTES = 4096
@@ -23,7 +24,7 @@ type Composition = {kind: "toml_insert", base_path: string, path: {string}} | {k
 type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
-type Delivery = {arguments: {string}, files: {Configuration}}
+type Delivery = {arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
 type Request = {instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, attempt_id: string?, fixture: boolean}
 
 -- Profile guidance is separate from a turn brief and grants no authority.
@@ -291,6 +292,24 @@ function M.decode_delivery(value: unknown): (Delivery?, string?)
         files[index] = file
     end
     return {arguments = arguments, files = files}, nil
+end
+-- Native placement appends this private field after validating the selected
+-- driver profile. Provider configure replies cannot choose the adapter.
+function M.decode_stored_delivery(value: unknown): (Delivery?, string?)
+    local item = bounds.object(value)
+    if not item then return nil, "delivery must be an object" end
+    local unexpected = bounds.fields(item, {"arguments", "files", "git_writable_roots_adapter"})
+    if unexpected then return nil, "delivery: " .. unexpected end
+    local adapter: driver_types.GitWritableRootsAdapter? = nil
+    if item.git_writable_roots_adapter ~= nil then
+        local selected_adapter = bounds.member(item.git_writable_roots_adapter, {"codex_workspace_write", "claude_add_dir", "agy_add_dir"})
+        if not selected_adapter then return nil, "delivery.git_writable_roots_adapter is not supported" end
+        adapter = selected_adapter :: driver_types.GitWritableRootsAdapter
+    end
+    local decoded, decode_error = M.decode_delivery({arguments = item.arguments, files = item.files})
+    if not decoded then return nil, decode_error end
+    local retained: Delivery = {arguments = decoded.arguments, files = decoded.files, git_writable_roots_adapter = adapter}
+    return retained, nil
 end
 function M.decode_reply(value: unknown, selected_provider: string?, gateway: GatewayInput?, instructions: string?): (Delivery?, string?)
     local reply = bounds.object(value)

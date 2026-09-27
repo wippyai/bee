@@ -198,6 +198,20 @@ local function open_gateway()
     local entry = registry.get("bee:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
     call("bee.gateway.binding:open", {address = tostring((entry.data :: Object).address)})
+    local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 5000
+    while true do
+        local ready, readiness_error = pcall(function()
+            return call("bee.gateway.binding:ready", {})
+        end)
+        if ready then return end
+        local detail = tostring(readiness_error)
+        if not detail:find("listener answered 404", 1, true) then error(detail) end
+        if math.floor(time.now():unix_nano() / 1000000) >= deadline_ms then
+            error("gateway /ready route did not become available: " .. detail)
+        end
+        local retry = time.after("50ms")
+        channel.select({retry = retry:case_receive()})
+    end
 end
 local function admission(policy_ref: string, thread_id: string, attempt_id: string, workspace_id: string): Object
     local placement = placement_fixture.resolve()

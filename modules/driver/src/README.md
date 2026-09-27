@@ -55,3 +55,11 @@ resulting delivery before starting the process.
 Provider-specific command syntax, profile options, authentication, hook wire
 formats, and MCP configuration belong in that provider's component guide and
 Lua package.
+
+An activated driver profile may declare a typed Git writable-roots adapter.
+Native placement reads that choice from the pinned profile, then uses it only
+when the granted workdir is writable and the launch arguments select the
+adapter's edit-capable CLI mode. Configure replies and launch callers cannot
+select the adapter or its paths. Placement discovers Git metadata and checks
+the exact directories against host-admitted write roots before asking the CLI
+to use its provider-specific option.

@@ -6,3 +6,8 @@ for the shared driver contract.
 
 The host supplies the executable environment and each route's policy. The
 component declares no process authority, credential access, or MCP permissions.
+
+Edit-capable Agy profiles declare the Git writable-roots adapter. For a
+writable workdir inside a repository or worktree, placement adds the exact Git
+directory and common directory with `--add-dir`, after checking both against
+the host-admitted write roots.

@@ -102,7 +102,7 @@ local function define_tests()
                     [3] = {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config"}}
                 (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,
                     variable = "CODEX_HOME", directory = ".codex", files = sparse}
-            end, "launch.provider_home.files must be a dense list")
+            end, "launch.provider_home.files must be a dense list: list keys must be dense")
             rejects(function(item)
                 local keyed: {[string]: unknown} = {primary = {source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login"}}
                 (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,

@@ -55,7 +55,9 @@ function M.stdin_reply_accepted(sender: string, reply: unknown, expected: Status
     local attempt_id, generation, probe = bounds.id(object.attempt_id), bounds.integer(object.generation), bounds.id(object.probe)
     if attempt_id == nil or generation == nil or probe == nil then return nil, "reply identity is invalid" end
     if attempt_id ~= expected.attempt_id then return nil, "reply names another attempt" end
-    if generation ~= expected.generation then return nil, "reply names another generation" end
+    if generation ~= expected.generation then
+        return nil, "reply names generation " .. tostring(generation) .. ", not " .. tostring(expected.generation)
+    end
     if probe ~= expected.probe then return nil, "reply answers another probe" end
     local closed = object.closed
     if type(closed) ~= "boolean" then return nil, "reply does not say whether stdin closed" end
@@ -77,7 +79,9 @@ function M.status_reply_accepted(sender: string, reply: unknown, expected: Statu
     local attempt_id, generation, probe = bounds.id(object.attempt_id), bounds.integer(object.generation), bounds.id(object.probe)
     if attempt_id == nil or generation == nil or probe == nil then return nil, "reply identity is invalid" end
     if attempt_id ~= expected.attempt_id then return nil, "reply names another attempt" end
-    if generation ~= expected.generation then return nil, "reply names another generation" end
+    if generation ~= expected.generation then
+        return nil, "reply names generation " .. tostring(generation) .. ", not " .. tostring(expected.generation)
+    end
     if probe ~= expected.probe then return nil, "reply answers another probe" end
     local execution: Execution? = nil
     if object.execution == "starting" then execution = "starting"

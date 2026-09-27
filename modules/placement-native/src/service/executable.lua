@@ -11,14 +11,13 @@ local hash = require("hash")
 local bounds = require("bounds")
 local resources = require("resources")
 local types = require("types")
+local executable_stream = require("executable_stream")
 local M = {}
 M.REVISION = "bee.executable-measurement@1"
-M.CHUNK_BYTES = 262144
 -- Without a streaming hasher a file is digested from one string, which is
 -- bounded so a runtime without the capability measures scripts and small
 -- images and refuses the rest rather than exhausting memory.
 type Measurement = {revision: string, path: string, kind: string, interpreter: string?, size: integer, digest: string}
-type StreamingHasher = hash.Hasher
 local function kind_of(head: string): (string, string?)
     if head:sub(1, 4) == "\127ELF" then return "elf", nil end
     if head:sub(1, 2) == "#!" then
@@ -41,51 +40,13 @@ function M.measure(path: unknown): (Measurement?, string?)
     if not size or size < 0 then return nil, "executable has an invalid reported size" end
     local file, open_error = vol:open(path, "r")
     if not file then return nil, "executable cannot be opened: " .. tostring(open_error) end
-    local head = ""
-    local digest: string? = nil
-    local hasher: StreamingHasher, hasher_error = hash.new("sha256")
-    if hasher_error then
-        file:close()
-        return nil, "hasher unavailable: " .. tostring(hasher_error)
-    end
-    local total = 0
-    while true do
-        local chunk, read_error = file:read(M.CHUNK_BYTES)
-        local eof = read_error ~= nil and tostring(read_error) == "EOF"
-        if read_error ~= nil and not eof then
-            local _, close_error = file:close()
-            return nil, "executable could not be read: " .. tostring(read_error) .. (close_error and "; close failed: " .. tostring(close_error) or "")
-        end
-        if chunk ~= nil and type(chunk) ~= "string" then
-            file:close()
-            return nil, "executable read returned an invalid chunk"
-        end
-        if chunk == "" and not eof then
-            file:close()
-            return nil, "executable read returned an empty chunk before EOF"
-        end
-        if type(chunk) == "string" and #chunk > 0 then
-            total = total + #chunk
-            if total > size then
-                file:close()
-                return nil, "executable changed size while being measured"
-            end
-            if head == "" then head = chunk:sub(1, 256) end
-            hasher:update(chunk)
-        end
-        if eof then break end
-        if chunk == nil then
-            file:close()
-            return nil, "executable read ended without an EOF result"
-        end
-    end
-    local closed, close_error = file:close()
-    if close_error or closed == false then return nil, "executable could not be closed after measurement: " .. tostring(close_error or "close refused") end
-    if total ~= size then return nil, "executable read was incomplete: measured " .. tostring(total) .. " of " .. tostring(size) .. " bytes" end
-    digest = hasher:sum()
-    if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "executable digest is invalid" end
-    local kind, interpreter = kind_of(head)
-    return {revision = M.REVISION, path = path, kind = kind, interpreter = interpreter, size = size, digest = digest}, nil
+    local streamed, stream_error = executable_stream.digest(
+        function(chunk_size: integer): (string?, string?) return file:read(chunk_size) end,
+        function(): (boolean?, string?) return file:close() end,
+        size)
+    if not streamed then return nil, stream_error end
+    local kind, interpreter = kind_of(streamed.head)
+    return {revision = M.REVISION, path = path, kind = kind, interpreter = interpreter, size = streamed.size, digest = streamed.digest}, nil
 end
 -- capabilities: what this runtime proves about measurement, measured
 -- rather than declared. Streaming is the hasher's presence; read-only

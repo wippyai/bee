@@ -30,6 +30,8 @@ local driver_types = require("driver_types")
 local materialization = require("materialization")
 local gateway_protocol = require("gateway_protocol")
 local service_reply = require("service_reply")
+local credential_protocol = require("credential_protocol")
+local resource_resolution = require("resource_resolution")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
 M.RECONCILE_TIMEOUT_MS = 5000
@@ -113,32 +115,6 @@ local function recorded_identity(attempt_id: string): (identity.Identity?, strin
     return {pid = pid, pgid = pgid, start_ticks = ticks, boot_id = boot}, nil, row
 end
 type Resolved = {grant_id: string, root_ref: string, root_digest: string, subpath: string, access: Access, association_revision: integer, expires_at: string}
-type ResourceResolution = {grant_id: string, root_ref: string, root_digest: string, subpath: string, access: Access, association_revision: integer, expires_at: string}
-local function decode_resource_resolution(value: unknown): (ResourceResolution?, string?)
-    local object = bounds.object(value)
-    if not object then return nil, "resource resolution must be an object" end
-    local unknown_field = bounds.fields(object, {"grant_id", "workspace_id", "name", "root_ref", "root_digest", "directory", "subpath", "access", "purpose", "association_id", "association_revision", "expires_at", "authorization_epoch"})
-    if unknown_field then return nil, "resource resolution: " .. unknown_field end
-    local grant_id, workspace_id, name = bounds.id(object.grant_id), bounds.id(object.workspace_id), bounds.id(object.name)
-    local root_ref, association_id = bounds.id(object.root_ref), bounds.id(object.association_id)
-    local root_digest = bounds.text(object.root_digest, 64)
-    local directory = bounds.text(object.directory, bounds.MAX_TEXT_BYTES)
-    local subpath = bounds.subpath(object.subpath)
-    local access = bounds.member(object.access, {"read", "write"})
-    local purpose = bounds.member(object.purpose, types.PURPOSES)
-    local revision, epoch = bounds.integer(object.association_revision), bounds.integer(object.authorization_epoch)
-    local expires_at = bounds.timestamp(object.expires_at)
-    if grant_id == nil or workspace_id == nil or name == nil or root_ref == nil or association_id == nil
-        or root_digest == nil or directory == nil or subpath == nil or access == nil or purpose == nil
-        or revision == nil or epoch == nil or expires_at == nil then return nil, "resource resolution has invalid or missing fields" end
-    if #root_digest ~= 64 or not root_digest:match("^[0-9a-f]+$") then return nil, "resource resolution root_digest is invalid" end
-    if directory == "" or not directory:match("^/") then return nil, "resource resolution directory is invalid" end
-    if revision < 1 or epoch < 0 then return nil, "resource resolution revisions are invalid" end
-    local decoded_access: Access
-    if access == "read" then decoded_access = "read" else decoded_access = "write" end
-    return {grant_id = grant_id, root_ref = root_ref, root_digest = root_digest, subpath = subpath,
-        access = decoded_access, association_revision = revision, expires_at = expires_at}, nil
-end
 -- Resolves one grant through the resource authority for the owner this
 -- placement admitted; the reply's own code is the refusal.
 local function resolve_grant(request: types.LaunchRequest, grant: types.ResourceGrant): (Resolved?, Reply?)
@@ -147,7 +123,7 @@ local function resolve_grant(request: types.LaunchRequest, grant: types.Resource
     local reply, reply_error = decode_reply(raw)
     if not reply then return nil, fail("UNAVAILABLE", "resource authority returned an invalid reply for grant " .. grant.grant_ref .. ": " .. tostring(reply_error)) end
     if reply.ok == false then return nil, fail(reply.error.code, "grant " .. grant.grant_ref .. ": " .. reply.error.message) end
-    local resolved, decode_error = decode_resource_resolution(reply.value)
+    local resolved, decode_error = resource_resolution.decode(reply.value)
     if not resolved then return nil, fail("UNAVAILABLE", "resource authority returned an invalid grant " .. grant.grant_ref .. ": " .. tostring(decode_error)) end
     if resolved.grant_id ~= grant.grant_ref then return nil, fail("UNAVAILABLE", "resource authority returned another grant for " .. grant.grant_ref) end
     if grant.access == "write" and resolved.access ~= "write" then return nil, fail("FORBIDDEN", "grant " .. grant.grant_ref .. " allows " .. resolved.access .. " only") end
@@ -191,29 +167,25 @@ local function check_projection(request: types.LaunchRequest, projection_id: str
     local reply, reply_error = decode_reply(raw)
     if not reply then return fail("UNAVAILABLE", "credential broker returned an invalid reply for projection " .. projection_id .. ": " .. tostring(reply_error)), nil end
     if reply.ok == false then return fail(reply.error.code, "projection " .. projection_id .. ": " .. reply.error.code), nil end
-    local projection = bounds.object(reply.value)
-    if not projection then return fail("DENIED", "projection " .. projection_id .. " has invalid metadata"), nil end
-    local projection_fields = bounds.fields(projection, {"projection_id", "workspace_id", "name", "definition_id", "definition_revision", "issuer_owner", "issuer_incarnation", "subject", "audience", "attempt_id", "profile_id", "profile_digest", "binding_digest", "launch_policy_digest", "provider", "projection_kind", "destination", "materializer", "materialization_generation", "expires_at", "authorization_epoch", "format", "revoked_at", "created_at", "source_present"})
-    if projection_fields then return fail("DENIED", "projection " .. projection_id .. " has invalid metadata: " .. projection_fields), nil end
-    local returned_id, provider = bounds.id(projection.projection_id), bounds.id(projection.provider)
-    local definition_id = bounds.id(projection.definition_id)
-    local revision = bounds.integer(projection.definition_revision)
-    local projection_kind = bounds.member(projection.projection_kind, {"environment", "file"})
-    local format_object = bounds.object(projection.format)
-    if returned_id ~= projection_id or not provider or not definition_id or not revision or revision < 1 or not projection_kind or not format_object
-        or (projection.source_present ~= nil and type(projection.source_present) ~= "boolean") then
-        return fail("DENIED", "projection " .. projection_id .. " has invalid metadata"), nil
+    local projection, projection_error = credential_protocol.checked_projection(reply.value, projection_id)
+    if not projection then
+        return fail("DENIED", "projection " .. projection_id .. " has invalid metadata: " .. tostring(projection_error)), nil
+    end
+    if projection.subject ~= request.owner_id or projection.audience ~= request.owner_id or projection.attempt_id ~= request.attempt_id
+        or projection.profile_id ~= request.profile_id or projection.profile_digest ~= request.profile_digest
+        or projection.binding_digest ~= request.binding_digest then
+        return fail("DENIED", "projection " .. projection_id .. " belongs to another launch"), nil
     end
     if projection.projection_kind == "environment" then return nil, "environment" end
-    if projection.projection_kind ~= "file" then return fail("DENIED", "projection " .. projection_id .. " has unsupported kind"), nil end
     local provider_home = request.launch.provider_home
     local private_home = provider_home ~= nil and provider_home.private == true
     if (not request.session_ref or not request.launch.home_ref) and not private_home then
         return fail("DENIED", "file credential projections require a selected retained or declared private provider home"), nil
     end
-    local source, source_error = homes.decode_login_source({provider = provider,
+    local source, source_error = homes.decode_login_source({provider = projection.provider,
         definition_id = projection.definition_id, definition_revision = projection.definition_revision, format = projection.format})
-    if not source or projection.destination ~= (source.path:match("[^/]+$") :: string) then
+    local destination_name = source and source.path:match("[^/]+$") or nil
+    if not source or not destination_name or projection.destination ~= destination_name then
         return fail("DENIED", "projection " .. projection_id .. " has invalid file login metadata"), nil
     end
     if provider_home and provider_home.provider ~= source.source.provider then

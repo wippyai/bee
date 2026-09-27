@@ -9,6 +9,7 @@ local persist = require("persist")
 local migrations = require("migrations")
 local resources = require("resources")
 local types = require("types")
+local placement_decode = require("placement_decode")
 local transitions = require("transitions")
 local request_protocol = require("request_protocol")
 local configuration = require("configuration")
@@ -44,36 +45,15 @@ end
 local function project(row: Row): (types.Attempt?, string?)
     local attempt_id, action_id, owner_id = bounds.id(row.attempt_id), bounds.id(row.action_id), bounds.id(row.owner_id)
     local request_digest = bounds.text(row.request_digest, 64)
-    local execution_text = bounds.member(row.execution_state, {"intended", "starting", "running", "stopping", "exited", "uncertain"})
-    local cleanup_text = bounds.member(row.cleanup_state, {"pending", "complete", "uncertain"})
-    local capability_text = bounds.member(row.capability, {"direct_process", "process_group", "contained_tree"})
-    local required_text = bounds.member(row.required_cleanup, {"direct_process", "process_group", "contained_tree"})
-    local observation_text = bounds.member(row.exit_observation, {"independent", "eof_gated"})
-    local execution: types.ExecutionState? = nil
-    if execution_text == "intended" then execution = "intended"
-    elseif execution_text == "starting" then execution = "starting"
-    elseif execution_text == "running" then execution = "running"
-    elseif execution_text == "stopping" then execution = "stopping"
-    elseif execution_text == "exited" then execution = "exited"
-    elseif execution_text == "uncertain" then execution = "uncertain" end
-    local cleanup: types.CleanupState? = nil
-    if cleanup_text == "pending" then cleanup = "pending"
-    elseif cleanup_text == "complete" then cleanup = "complete"
-    elseif cleanup_text == "uncertain" then cleanup = "uncertain" end
-    local capability: types.Capability? = nil
-    if capability_text == "direct_process" then capability = "direct_process"
-    elseif capability_text == "process_group" then capability = "process_group"
-    elseif capability_text == "contained_tree" then capability = "contained_tree" end
-    local required: types.Capability? = nil
-    if required_text == "direct_process" then required = "direct_process"
-    elseif required_text == "process_group" then required = "process_group"
-    elseif required_text == "contained_tree" then required = "contained_tree" end
-    local observation: types.ExitObservation? = nil
-    if observation_text == "independent" then observation = "independent"
-    elseif observation_text == "eof_gated" then observation = "eof_gated" end
+    local execution = placement_decode.execution(row.execution_state)
+    local cleanup = placement_decode.cleanup(row.cleanup_state)
+    local capability = placement_decode.capability(row.capability)
+    local required = placement_decode.capability(row.required_cleanup)
+    local observation = placement_decode.exit_observation(row.exit_observation)
     local code, signal = integer(row.exit_code), integer(row.exit_signal)
-    local owner_incarnation, attachment_generation, evidence_count =
-        integer(row.owner_incarnation), integer(row.attachment_generation), integer(row.evidence_count)
+    local owner_incarnation = bounds.count(row.owner_incarnation)
+    local attachment_generation = bounds.count(row.attachment_generation)
+    local evidence_count = bounds.count(row.evidence_count)
     local request_digest_valid = request_digest ~= nil and #request_digest == 64 and request_digest:match("^[0-9a-f]+$") ~= nil
     local created_at, updated_at = bounds.timestamp(row.created_at), bounds.timestamp(row.updated_at)
     local exit_source: string? = nil
@@ -89,8 +69,10 @@ local function project(row: Row): (types.Attempt?, string?)
         or (row.session_ref ~= nil and not session_ref) or (row.runner_pid ~= nil and not runner) or (row.home_key ~= nil and not home_key) then
         return nil, "attempt identity, state or timestamp fields are corrupt"
     end
-    if not owner_incarnation or owner_incarnation < 1 or not attachment_generation or attachment_generation < 0
-        or not evidence_count or evidence_count < 0 then return nil, "attempt integer fields are corrupt" end
+    if owner_incarnation == nil then return nil, "attempt owner incarnation is corrupt" end
+    if owner_incarnation < 1 then return nil, "attempt owner incarnation is corrupt" end
+    if attachment_generation == nil then return nil, "attempt attachment generation is corrupt" end
+    if evidence_count == nil then return nil, "attempt evidence count is corrupt" end
     if (row.exit_code ~= nil and code == nil) or (row.exit_signal ~= nil and signal == nil) then return nil, "attempt exit status is corrupt" end
     local exit: types.Exit? = nil
     if code ~= nil or signal ~= nil then exit = {code = code, signal = signal} end
@@ -103,7 +85,7 @@ local function project(row: Row): (types.Attempt?, string?)
         exit_observation = observation, exit_source = exit_source,
         attachment_generation = attachment_generation, exit = exit, session_ref = text(row.session_ref),
         home_ref = home, runner = runner, evidence_count = evidence_count,
-        created_at = created_at, updated_at = updated_at,
+        created_at = created_at, updated_at = updated_at, notice = nil,
     }, nil
 end
 -- The full row, for the runner and the service; never returned to callers.
@@ -292,8 +274,12 @@ function M.transition(db: sql.DB, attempt_id: string, update: Update): Result
         return {ok = false, code = "NOT_FOUND", message = "attempt is not recorded"}
     end
     local row = rows[1] :: Row
-    local execution = state_of(row.execution_state, "uncertain") :: types.ExecutionState
-    local cleanup = state_of(row.cleanup_state, "uncertain") :: types.CleanupState
+    local execution = placement_decode.execution(row.execution_state)
+    local cleanup = placement_decode.cleanup(row.cleanup_state)
+    if not execution or not cleanup then
+        rollback(tx)
+        return {ok = false, code = "STORAGE", message = "attempt state is corrupt"}
+    end
     local count = integer(row.evidence_count)
     if not count or count < 0 then
         rollback(tx)

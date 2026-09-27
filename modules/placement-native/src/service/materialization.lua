@@ -284,7 +284,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         local current = store.row(db, attempt_id)
         if not current or current.execution_state ~= "stopping" or current.runner_pid ~= process.pid() then return false end
         local finished = store.transition(db, attempt_id, {expected_execution = "stopping", execution = "exited",
-            fields = {runner_pid = "", exit_source = "runner"},
+            fields = {runner_pid = sql.NULL, exit_source = "runner"},
             evidence = {kind = "child.not_started", detail = "stopped during materialization before child creation"}})
         return finished.ok
     end
@@ -538,7 +538,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                     evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. conflict, {execution = "exited"})
                     return refused(conflict)
                 end
-                environment[projected.destination] = secret :: string
+                environment[projected.destination] = secret
                 evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " into " .. projected.destination)
             end
         end

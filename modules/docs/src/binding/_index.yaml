@@ -11,7 +11,7 @@ entries:
     corpus: bee.docs:corpus
     resources: bee.docs:resources
     transaction: bee.persist:transaction
-    bounds: bee.threads.records:bounds
+    bounds: bee.protocol:bounds
   security:
     policies: [bee.security.docs:docs_policy]
   meta:

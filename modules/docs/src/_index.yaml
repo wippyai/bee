@@ -12,10 +12,6 @@ entries:
   kind: ns.dependency
   component: bee/persist
   version: '*'
-- name: dependency_threads
-  kind: ns.dependency
-  component: bee/threads
-  version: '*'
 - name: target_corpus
   kind: ns.requirement
   meta:
@@ -31,12 +27,14 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.protocol:bounds}
 - name: corpus
   kind: library.lua
   source: file://corpus.lua
-  modules: [fs, json]
-  imports: {bounds: bee.threads.records:bounds}
+  modules: [fs, json, hash]
+  imports:
+    bounds: bee.protocol:bounds
+    protocol: bee.docs:protocol
 - name: resources
   kind: library.lua
   source: file://resources.lua

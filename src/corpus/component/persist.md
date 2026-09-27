@@ -11,6 +11,8 @@ transaction, and is checked before commit.
 |---|---|
 | `bee.persist` | `ledger`: checksums, ledger replay, apply; `database`: SQLite open with WAL, full sync, foreign keys, busy timeout, then ledger apply |
 
-Consumers: `bee.threads.persist` (ledger `bee_thread_schema_migrations`,
-label `thread`) and `bee.placement.native`. `bee.storage:store` still carries
-its own workspace ledger and moves here in its own unit.
+Owned-store consumers include `bee.approvals`, `bee.credentials.persist`,
+`bee.gateway`, `bee.gov.persist`, `bee.placement.native`, `bee.resources.persist`,
+`bee.sync.persist`, and `bee.threads.persist` (ledger
+`bee_thread_schema_migrations`, label `thread`). `bee.storage:store` still
+carries its workspace ledger. Moving that ledger here remains a proposal.

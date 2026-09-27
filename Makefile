@@ -112,6 +112,9 @@ governance-workspace-check:
 
 run:
 	BEE_RUNTIME="$(abspath $(WIPPY))" bash ./run.sh
+.PHONY: idle-cpu-check
+idle-cpu-check:
+	BEE_BINARY="$(abspath $(or $(BEE_BINARY),dist/bee))" python3 tests/idle_cpu_check.py
 lint:
 	$(WIPPY) lint $(LINT_FLAGS) --set lua.type_system.enabled=true --set lua.type_system.strict=true
 .PHONY: codex-native-hooks-check

@@ -53,7 +53,7 @@ HOST_ENTRIES = {
     "modules/placement-native/src/security/_index.yaml": {"placement_store_policy", "placement_exec_policy"},
     "src/security/docs/_index.yaml": {"docs_policy"},
     "src/security/gov/_index.yaml": {"workspace_folder_read_policy"},
-    "src/protocol/_index.yaml": {"bounds", "canonical", "application"},
+    "src/protocol/_index.yaml": {"bounds", "canonical", "application", "reply"},
 }
 
 
@@ -245,7 +245,7 @@ def stage_protocol_libraries(folder):
     """Stage shared protocol libraries used by the selected components."""
     source = ROOT / "src" / "protocol"
     document = yaml.safe_load((source / "_index.yaml").read_text())
-    selected = {"bounds", "canonical", "application"}
+    selected = {"bounds", "canonical", "application", "reply"}
     entries = [deepcopy(entry) for entry in document["entries"] if entry["name"] in selected]
     assert {entry["name"] for entry in entries} == selected
     destination = folder / "src" / "protocol"

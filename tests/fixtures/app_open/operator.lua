@@ -61,13 +61,17 @@ local function exact_request(request: Object, workspace_id: string, thread_id: s
     end
     local proposal = object(request.proposal)
     local payload = proposal and object(proposal.payload)
-    local traits = payload and bounds.ids(payload.traits, true)
-    if not proposal or not payload or proposal.kind ~= "attempt" or proposal.revision ~= "bee.mcp-access@1"
+    local capability = payload and object(payload.capability)
+    local capability_scope = capability and object(capability.scope)
+    local traits = capability_scope and bounds.ids(capability_scope.traits, true)
+    if not proposal or not payload or proposal.kind ~= "attempt" or proposal.revision ~= "bee.capability-model@1"
         or proposal.action_id ~= action_id or proposal.ref ~= attempt_id or not traits or #traits ~= 1
         or traits[1] ~= "bee.application:runtime" then
         return "proposal differs"
     end
-    if bounds.fields(payload, {"binding_id", "subject", "thread_id", "configuration_digest", "traits", "fixed_context"})
+    if not capability or capability.capability ~= "mcp.access" or capability.operation ~= "mcp.traits"
+        or capability.resource ~= payload.binding_id
+        or bounds.fields(payload, {"binding_id", "subject", "thread_id", "configuration_digest", "capability", "fixed_context"})
         or payload.subject ~= actor_id or payload.thread_id ~= thread_id or not bounds.id(payload.binding_id)
         or type(payload.configuration_digest) ~= "string" or #(payload.configuration_digest :: string) ~= 64
         or not (payload.configuration_digest :: string):match("^[0-9a-f]+$")

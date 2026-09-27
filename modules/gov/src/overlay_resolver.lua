@@ -7,7 +7,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
 local application_admission = require("application_admission")
-local capability_catalog = require("capability_catalog")
+local capability_model = require("capability_model")
 local capability_grants = require("capability_grants")
 local capability_files = require("capability_files")
 local protected_kernel = require("protected_kernel")
@@ -176,7 +176,8 @@ local function path_value(entry: Entry, path: unknown): (unknown?, string?)
     return value, nil
 end
 
-local function requirement(entry: Entry, package: string, final: {[string]: Entry}, catalog: unknown): (Object?, string?)
+local function requirement(entry: Entry, package: string, final: {[string]: Entry},
+    catalog: unknown): (Object?, string?)
     local data = object(entry.data) or entry
     local targets, targets_error = dense(data.targets, "requirement targets", 64)
     if not targets then return nil, targets_error end
@@ -192,11 +193,12 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
             or meta.reason:find("%c") or #targets ~= 1 or data.default ~= nil then
             return nil, "capability requirement metadata is invalid"
         end
-        local normalized, normalize_error = capability_catalog.normalize(catalog, capability, meta.parameters)
+        local normalized, normalize_error = capability_model.normalize(catalog, capability, meta.parameters)
         if not normalized then return nil, normalize_error or "capability parameters are invalid" end
-        local template = catalog.capabilities[capability]
+        local catalog_revision, template_revision = capability_model.revisions(catalog, capability)
+        if not catalog_revision or not template_revision then return nil, "host capability catalog is malformed" end
         capability_request = {capability = capability, parameters = normalized, reason = meta.reason,
-            catalog_revision = catalog.revision, template_revision = template.revision}
+            catalog_revision = catalog_revision, template_revision = template_revision}
     elseif meta and (meta.parameters ~= nil or meta.reason ~= nil) then
         return nil, "capability requirement metadata is incomplete"
     end
@@ -455,7 +457,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             if meta and meta.capability ~= nil then
                 catalog = current_raw["bee:capability_catalog"]
                 if not catalog then return nil, nil, "host capability catalog is absent" end
-                local decoded, catalog_error = capability_catalog.decode(catalog)
+                local decoded, catalog_error = capability_model.decode(catalog)
                 if not decoded then return nil, nil, catalog_error end
                 catalog = decoded
             end
@@ -472,10 +474,11 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         local app_id = app_binding and bounds.id(app_binding.definition_id) or nil
         local owner = bounds.id(policy.overlay_owner)
         local catalog_entry = current_raw["bee:capability_catalog"]
-        local vocabulary, catalog_error = capability_catalog.decode(catalog_entry)
+        local vocabulary, catalog_error = capability_model.decode(catalog_entry)
         if not app_id or not owner or not vocabulary or not sha(policy.base_policy_digest) then
             return nil, nil, catalog_error or "workspace application capability profile is invalid"
         end
+        local model_vocabulary = vocabulary
         local requested: {Object} = {}
         for _, item in ipairs(requirements) do
             if item.capability_request then requested[#requested + 1] = item end
@@ -488,7 +491,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             if not resolved_folder then return nil, nil, folder_error or "workspace folder is unavailable" end
             folder = resolved_folder
         end
-        local proposed, proposed_error = capability_grants.propose(vocabulary, owner, app_id, requested, nil, folder)
+        local proposed, proposed_error = capability_grants.propose(model_vocabulary, owner, app_id, requested, nil, folder)
         if not proposed then return nil, nil, proposed_error end
         capability_proposal = proposed
         local record_id = capability_grants.record_id(owner)
@@ -499,12 +502,12 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         end
         if prior then
             local decoded, decoded_error = capability_grants.decode(prior, owner, spec.workspace_id,
-                app_id, vocabulary)
+                app_id, model_vocabulary)
             if not decoded then return nil, nil, decoded_error end
             capability_installed = decoded
         end
-        local compared, compare_error = capability_grants.diff(vocabulary, capability_installed, proposed)
-        local resolved_lines, render_error = capability_catalog.render(vocabulary, proposed.capabilities)
+        local compared, compare_error = capability_grants.diff(model_vocabulary, capability_installed, proposed)
+        local resolved_lines, render_error = capability_model.render(model_vocabulary, proposed.capabilities)
         if not compared or not resolved_lines then return nil, nil, compare_error or render_error end
         capability_review = {resolved = resolved_lines, delta = compared.lines,
             requires_approval = compared.requires_approval or prior == nil}
@@ -656,7 +659,8 @@ function M.new(config: Config): unknown
                 overlay_ids[id] = true
             end
         end
-        local captured: Captured = {revision = math.floor(revision), entries = state.entries,
+        local entries: {Entry} = state.entries
+        local captured: Captured = {revision = math.floor(revision), entries = entries,
             overlay_ids = overlay_ids, owner = function(entry: Entry): (string?, string?)
                 local metadata = object(entry.registry)
                 local owner = metadata and bounds.text(metadata.owner, 160) or nil

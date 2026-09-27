@@ -183,13 +183,19 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
     if profile.sandbox ~= nil then
         local declared, declared_error = object(profile.sandbox, what .. ".sandbox")
         if not declared then return nil, declared_error end
-        local unknown_sandbox = bounds.fields(declared, {"providers", "required_placement_features"})
+        local unknown_sandbox = bounds.fields(declared, {"providers", "required_placement_features", "git_writable_roots_adapter"})
         if unknown_sandbox then return nil, what .. ".sandbox: " .. unknown_sandbox end
         local providers, providers_error = bounds.ids(declared.providers or {}, true)
         if not providers then return nil, what .. ".sandbox.providers: " .. tostring(providers_error) end
         local features, features_error = bounds.ids(declared.required_placement_features or {}, true)
         if not features then return nil, what .. ".sandbox.required_placement_features: " .. tostring(features_error) end
-        sandbox = {providers = providers, required_placement_features = features}
+        local roots_adapter: types.GitWritableRootsAdapter? = nil
+        if declared.git_writable_roots_adapter ~= nil then
+            local selected_adapter = bounds.member(declared.git_writable_roots_adapter, {"codex_workspace_write", "claude_add_dir", "agy_add_dir"})
+            if not selected_adapter then return nil, what .. ".sandbox.git_writable_roots_adapter is not supported" end
+            roots_adapter = selected_adapter :: types.GitWritableRootsAdapter
+        end
+        sandbox = {providers = providers, required_placement_features = features, git_writable_roots_adapter = roots_adapter}
     end
     local exchange: types.PermissionExchange = {mode = "none"}
     if profile.permission_exchange ~= nil then

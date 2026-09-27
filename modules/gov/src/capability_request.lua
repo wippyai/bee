@@ -9,7 +9,8 @@
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
-local catalog_lib = require("capability_catalog")
+local capability_model = require("capability_model")
+local capability_grants = require("capability_grants")
 local M = {}
 M.REVISION = "bee.capability-request@1"
 M.MAX_TTL_MS = 86400000
@@ -20,7 +21,7 @@ type Context = {thread_id: string, attempt_id: string, action_id: string}
 type Decoded = {capability: string, parameters: Object, ttl_ms: integer, idempotency_key: string?}
 type Request = {capability: string, template_revision: integer, parameters: Object, parameters_digest: string,
     ttl_ms: integer, idempotency_key: string?, operations: {Object}, wording: string,
-    thread_id: string, attempt_id: string, action_id: string, grant_source: string?, grant_access: string?}
+    thread_id: string, attempt_id: string, action_id: string, grant_source: string, grant_access: string}
 local function digest_of(value: unknown): (string?, string?)
     local encoded, encode_error = canonical.encode(value)
     if not encoded then return nil, encode_error end
@@ -28,12 +29,7 @@ local function digest_of(value: unknown): (string?, string?)
     if hash_error or not sum then return nil, "digest failed" end
     return sum, nil
 end
-local function identifier(value: unknown): string?
-    if type(value) ~= "string" then return nil end
-    local text = value :: string
-    if #text == 0 or #text > 160 or not text:match("^[a-z][a-z0-9_.-]*$") then return nil end
-    return text
-end
+local identifier = capability_model.identity
 -- decode: the wire shape only; the catalog decides whether the capability
 -- exists and what its parameters mean.
 function M.decode(raw: unknown): (Decoded?, string?)
@@ -72,9 +68,9 @@ local function context_of(raw: unknown): (Context?, string?)
     if not thread_id or not attempt_id or not action_id then return nil, "capability context needs thread_id, attempt_id and action_id" end
     return {thread_id = thread_id, attempt_id = attempt_id, action_id = action_id}, nil
 end
--- grant_mapping: the one workspace association the resolved template grants,
--- named by a $parameter source. A dedicated resource is exclusively writable.
--- Anything else is policy-only and writes no ledger row.
+-- Runtime elevation writes one resource-owner row. The catalog and install
+-- paths share capability_model.resolve; fixed host resolvers create package
+-- resources and cannot be redirected into a workspace association.
 local function grant_mapping(template: Object, parameters: Object): (string?, string?, string?)
     local raw_resources = template.resources
     if type(raw_resources) ~= "table" then return nil, nil, "capability names no workspace resource grant" end
@@ -83,12 +79,11 @@ local function grant_mapping(template: Object, parameters: Object): (string?, st
     local resource = bounds.object(resources[1])
     if not resource then return nil, nil, "capability names no workspace resource grant" end
     local name: string? = nil
-    if type(resource.source) == "string" then
-        local parameter = (resource.source :: string):match("^%$([a-z_]+)$")
-        local value = parameter and parameters[parameter] or nil
-        name = type(value) == "string" and bounds.id(value) or nil
-    end
-    if not name then return nil, nil, "capability names no workspace resource grant" end
+    if type(resource.source) ~= "string" then return nil, nil, "capability has no runtime resource source" end
+    local parameter = (resource.source :: string):match("^%$([a-z_]+)$")
+    local value = parameter and parameters[parameter] or nil
+    name = type(value) == "string" and bounds.id(value) or nil
+    if not name then return nil, nil, "capability resource is fixed by its host resolver and cannot be elevated as a workspace association" end
     local access: string? = nil
     if resource.mode == "readonly" then access = "read"
     elseif resource.mode == "readwrite" or resource.mode == "write" or resource.mode == "dedicated" then access = "write" end
@@ -103,29 +98,32 @@ function M.request(entry_raw: unknown, context_raw: unknown, raw: unknown): (Req
     if not decoded then return nil, decode_error end
     local context, context_error = context_of(context_raw)
     if not context then return nil, context_error end
-    local catalog_value, catalog_error = catalog_lib.decode(entry_raw)
+    local catalog_value, catalog_error = capability_model.decode(entry_raw)
     if not catalog_value then return nil, catalog_error end
-    local measured = catalog_value :: {[string]: unknown}
-    local templates = bounds.object(measured.capabilities)
-    local template = templates and bounds.object(templates[decoded.capability]) or nil
+    local template_value, template_error = capability_model.template(catalog_value, decoded.capability)
+    local template = bounds.object(template_value)
     if not template then return nil, "unknown capability or malformed parameters" end
-    local parameters, _ = catalog_lib.normalize(catalog_value, decoded.capability, decoded.parameters)
+    local parameters, _ = capability_model.normalize(catalog_value, decoded.capability, decoded.parameters)
     if not parameters then return nil, "unknown capability or malformed parameters" end
-    local operations, resolve_error = catalog_lib.resolve(catalog_value, decoded.capability, parameters)
+    local operations, resolve_error = capability_model.resolve(catalog_value, decoded.capability, parameters)
     if not operations then return nil, resolve_error end
-    local lines, render_error = catalog_lib.render(catalog_value, operations)
+    local _, realization_error = capability_grants.installable(operations)
+    if realization_error then return nil, realization_error end
+    local lines, render_error = capability_model.render(catalog_value, operations)
     if not lines then return nil, render_error end
+    local measured_parameters = parameters :: Object
+    local source, access, mapping_error = grant_mapping(template, measured_parameters)
+    if not source or not access then return nil, mapping_error or "capability cannot be realized as a workspace resource grant" end
     local parameters_digest, digest_error = digest_of(parameters)
     if not parameters_digest then return nil, "capability parameters are not measurable: " .. tostring(digest_error) end
-    local revision = template.revision
-    if type(revision) ~= "number" then return nil, "capability template revision is invalid" end
+    local _, revision = capability_model.revisions(catalog_value, decoded.capability)
+    if not revision then return nil, template_error or "capability template revision is invalid" end
     local wording = table.concat(lines, "\n")
         .. "\nFor attempt " .. context.attempt_id .. " in thread " .. context.thread_id
         .. " for " .. tostring(decoded.ttl_ms) .. "ms"
-    local source, access, _ = grant_mapping(template, parameters)
-    return {capability = decoded.capability, template_revision = math.floor(revision :: number), parameters = parameters,
+    return {capability = decoded.capability, template_revision = revision, parameters = measured_parameters,
         parameters_digest = parameters_digest, ttl_ms = decoded.ttl_ms, idempotency_key = decoded.idempotency_key,
-        operations = operations, wording = wording, thread_id = context.thread_id, attempt_id = context.attempt_id,
+        operations = operations :: {Object}, wording = wording, thread_id = context.thread_id, attempt_id = context.attempt_id,
         action_id = context.action_id, grant_source = source, grant_access = access}, nil
 end
 function M.wording(request: Request): string

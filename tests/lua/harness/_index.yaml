@@ -466,7 +466,7 @@ entries:
   source: file://hook_inbox_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "240s"}
-  modules: [funcs, security, registry, env, json, system, exec, base64]
+  modules: [funcs, security, registry, env, time, channel, json, system, exec, base64]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.security.gateway:gateway_materialize_policy, bee.harness.catalog:workspace_catalog_call_policy, bee.security.storage:workspace_catalog_manage_policy, bee.security.gateway:gateway_session_send_workspace_policy, bee.placement.native.security:placement_exec_policy, bee.gateway.security:node_policy]
   imports:
@@ -585,11 +585,23 @@ entries:
   meta: {type: test_support}
   directory: .wippy/carrier-project
   auto_init: true
+- name: git_project_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy
+  auto_init: true
 - name: fixture_bin
   kind: env.variable
   meta: {type: test_support}
   storage: bee.placement.native:environment
   variable: BEE_FIXTURE_BIN
+  readonly: true
+- name: git_commit_enabled
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_FIXTURE_GIT_COMMIT
+  default: ""
   readonly: true
 - name: codex_bin
   kind: env.variable
@@ -1272,7 +1284,7 @@ entries:
     allowed_overrides: [thread, workdir]
     executables: {}
     environment: {}
-    prepare_options: {sandbox: read-only}
+    prepare_options: {sandbox: workspace-write}
     provider_ref: bee.harness.catalog:codex_fixture_provider
     gateway_tools: [thread_read, thread_message]
     agent_launch: []
@@ -1430,7 +1442,7 @@ entries:
     hook_records: bee.harness.carrier:hook_records
     placement_store: bee.placement.native.persist:store
     capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
+    capability_catalog: bee.capability:model
     sends: bee.threads.service:sends
 - name: codex_profile_test
   kind: function.lua

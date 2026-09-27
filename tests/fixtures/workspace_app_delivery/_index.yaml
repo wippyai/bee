@@ -169,7 +169,7 @@ entries:
     catalog: bee.apps:catalog
     workspace_applications: bee.gov:workspace_applications
     capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
+    capability_catalog: bee.capability:model
   security:
     policies: [bee.workspace.app.probe:operator_policy, bee.workspace.app.probe:grant_evidence_policy]
 - name: inspect_grants_service

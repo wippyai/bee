@@ -24,6 +24,10 @@ entries:
   kind: ns.dependency
   component: bee/gov
   version: '*'
+- name: dependency_capability
+  kind: ns.dependency
+  component: bee/capability
+  version: '*'
 - name: dependency_docs
   kind: ns.dependency
   component: bee/docs
@@ -307,6 +311,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     catalog: bee.gateway:catalog
+    capability_model: bee.capability:model
     context: bee.gateway:context
     mcp: bee.gateway:mcp
 - name: endpoint_ref

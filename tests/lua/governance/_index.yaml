@@ -97,7 +97,7 @@ entries:
     activation_profiles: bee.gov:activation_profile_decoder
     workspace_applications: bee.gov:workspace_applications
     capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
+    capability_model: bee.capability:model
 - name: publication_service_test
   kind: function.lua
   source: file://publication_service_test.lua
@@ -342,7 +342,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    capability_catalog: bee.gov:capability_catalog
+    capability_catalog: bee.capability:model
 - name: capability_containment_test
   kind: function.lua
   source: file://capability_containment_test.lua
@@ -350,7 +350,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    capability_containment: bee.gov:capability_containment
+    capability_containment: bee.capability:model
 - name: capability_grants_test
   kind: function.lua
   source: file://capability_grants_test.lua
@@ -359,7 +359,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    capability_catalog: bee.gov:capability_catalog
+    capability_catalog: bee.capability:model
     capability_grants: bee.gov:capability_grants
 - name: capability_files_test
   kind: function.lua
@@ -378,7 +378,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    capability_catalog: bee.gov:capability_catalog
+    capability_catalog: bee.capability:model
     capability_grants: bee.gov:capability_grants
     capability_gateway: bee.gov:capability_gateway
 - name: workspace_test

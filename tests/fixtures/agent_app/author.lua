@@ -270,10 +270,15 @@ local function await_carrier(started: Object): boolean
                 local request = change and bounds.object(change.request)
                 local proposed = request and bounds.object(request.proposal)
                 local payload = proposed and bounds.object(proposed.payload)
-                local traits = payload and bounds.ids(payload.traits, true)
+                local capability = payload and bounds.object(payload.capability)
+                local capability_scope = capability and bounds.object(capability.scope)
+                local traits = capability_scope and bounds.ids(capability_scope.traits, true)
                 if request and request.state == "pending" then
                     if approved or request.requester_id ~= ACTOR or request.thread_id ~= THREAD or not proposed
+                        or proposed.revision ~= "bee.capability-model@1"
                         or proposed.action_id ~= started.action_id or proposed.ref ~= started.attempt_id
+                        or not capability or capability.capability ~= "mcp.access" or capability.operation ~= "mcp.traits"
+                        or capability.resource ~= payload.binding_id
                         or not traits or #traits ~= 1 or traits[1] ~= "app:author" then error("unexpected access request") end
                     call("bee.approvals.binding:decide", {approval_id = request.approval_id, expected_revision = request.revision,
                         proposal_digest = request.proposal_digest, decision = "approved"})

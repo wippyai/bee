@@ -16,6 +16,7 @@ entries:
     store: bee.placement.native.persist:store
     resources: bee.placement.native:resources
     homes: bee.placement.publication.test:homes
+    git_roots: bee.placement.native.service:git_roots
     configuration: bee.placement.native:configuration
     types: bee.placement:types
 - name: required_file_test

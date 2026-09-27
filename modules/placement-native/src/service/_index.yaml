@@ -30,6 +30,11 @@ entries:
   modules: [exec]
   imports:
     resources: bee.placement.native:resources
+- name: git_roots
+  kind: library.lua
+  source: file://git_roots.lua
+  imports:
+    canonical: bee.threads.records:canonical
 - name: service
   kind: library.lua
   source: file://service.lua
@@ -39,6 +44,7 @@ entries:
     configuration: bee.driver:configuration
     preferences: bee.driver:preferences
     resolver: bee.driver:resolver
+    driver_types: bee.driver:types
     placement_resolver: bee.placement:resolver
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -61,6 +67,7 @@ entries:
     store: bee.placement.native.persist:store
     resources: bee.placement.native:resources
     homes: bee.placement.native.service:homes
+    git_roots: bee.placement.native.service:git_roots
     configuration: bee.placement.native:configuration
     types: bee.placement:types
 - name: runner

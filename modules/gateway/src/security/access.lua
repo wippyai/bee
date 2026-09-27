@@ -4,6 +4,7 @@
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
+local capability_model = require("capability_model")
 local surface = require("surface")
 local subject_call = require("subject_call")
 local M = {}
@@ -14,10 +15,11 @@ type Reply = {ok: boolean, value: unknown, error: {code: string, message: string
 type Grant = {approval_id: string, proposal_digest: string, traits: {string}}
 local NO_WORKSPACE = "this binding names no workspace to request MCP access in"
 local fail = subject_call.fail
-local function proposal(binding: Binding, configuration: surface.Surface, digest: string, traits: {string}): Object
-    return {kind = "attempt", ref = binding.attempt_id, action_id = binding.action_id, revision = "bee.mcp-access@1",
+local function proposal(binding: Binding, configuration: surface.Surface, digest: string,
+    capability: Object): Object
+    return {kind = "attempt", ref = binding.attempt_id, action_id = binding.action_id, revision = capability_model.REVISION,
         payload = {binding_id = binding.binding_id, subject = binding.subject, thread_id = binding.thread_id,
-            configuration_digest = digest, traits = traits, fixed_context = configuration.fixed_context}}
+            configuration_digest = digest, capability = capability, fixed_context = configuration.fixed_context}}
 end
 function M.request(binding: Binding, configuration: surface.Surface, digest: string, raw: unknown): Reply
     local request = bounds.object(raw)
@@ -32,10 +34,12 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
     table.sort(traits)
     local granted, grant_error = surface.grant(configuration, traits)
     if not granted then return fail("DENIED", grant_error or "traits are not requestable") end
+    local capability, capability_error = capability_model.traits(binding.binding_id, traits)
+    if not capability then return fail("INVALID", capability_error or "invalid MCP capability") end
     local request_key, key_error = hash.sha256(binding.binding_id .. ":" .. key)
     if not request_key then return fail("INVALID", tostring(key_error)) end
     return subject_call.approvals(binding, M.ACCESS_CALL_POLICY)("request", {workspace_id = workspace_id, idempotency_key = "mcp:" .. request_key,
-        request_kind = "permission", policy = access.policy, proposal = proposal(binding, configuration, digest, traits),
+        request_kind = "permission", policy = access.policy, proposal = proposal(binding, configuration, digest, capability),
         prompt = {text = "Agent " .. binding.action_id .. " requests MCP access in " .. workspace_id .. ": " .. table.concat(traits, ", ") .. "\n" .. reason}, thread_id = binding.thread_id})
 end
 -- Re-read the authoritative decision; the agent never supplies a proposal or digest.
@@ -50,7 +54,9 @@ function M.approved(binding: Binding, configuration: surface.Surface, digest: st
     local view = bounds.object(reply.value)
     local approved_proposal = view and bounds.object(view.proposal)
     local payload = approved_proposal and bounds.object(approved_proposal.payload)
-    local traits = payload and bounds.ids(payload.traits, true)
+    local declared_capability = payload and bounds.object(payload.capability)
+    local capability_scope = declared_capability and bounds.object(declared_capability.scope)
+    local traits = capability_scope and bounds.ids(capability_scope.traits, true)
     if not view or not traits or not payload or payload.binding_id ~= binding.binding_id or payload.subject ~= binding.subject
         or payload.configuration_digest ~= digest or view.requester_id ~= binding.subject or view.thread_id ~= binding.thread_id
         or view.workspace_id ~= workspace_id or view.policy ~= access.policy or view.approval_id ~= approval_id then
@@ -59,7 +65,12 @@ function M.approved(binding: Binding, configuration: surface.Surface, digest: st
     table.sort(traits)
     local permitted, permission_error = surface.grant(configuration, traits)
     if not permitted then return nil, fail("DENIED", permission_error or "traits are not requestable") end
-    local expected_json, encode_error = canonical.encode(proposal(binding, configuration, digest, traits))
+    local expected_capability, capability_error = capability_model.traits(binding.binding_id, traits)
+    if not expected_capability or not capability_model.contains(declared_capability, expected_capability)
+        or not capability_model.contains(expected_capability, declared_capability) then
+        return nil, fail("DENIED", capability_error or "approval capability differs from the requested MCP access")
+    end
+    local expected_json, encode_error = canonical.encode(proposal(binding, configuration, digest, expected_capability))
     if not expected_json then return nil, fail("INVALID", tostring(encode_error)) end
     local expected_digest, digest_error = hash.sha256(expected_json)
     if not expected_digest then return nil, fail("INVALID", tostring(digest_error)) end

@@ -6,3 +6,5 @@ modules:
     version: 0.1.0-dev
   - name: bee/threads
     version: 0.1.0-dev
+  - name: bee/capability
+    version: 0.1.0-dev

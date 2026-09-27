@@ -19,6 +19,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    capability_model: bee.capability:model
     persist: bee.persist:database
     migrations: bee.gateway.migrations:migrations
     configuration: bee.gateway:configuration

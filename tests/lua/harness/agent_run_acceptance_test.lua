@@ -26,6 +26,8 @@ local WORKER_DEFINITION = "bee.harness.catalog:agent_run_codex_worker"
 local PROVIDER = "bee.harness.catalog:codex_fixture_provider"
 local SOURCE = "bee.harness.catalog:codex_sentinel_key"
 local ROOT = "bee.harness.catalog:project_fixture"
+local GIT_ROOT = "bee.harness.catalog:git_project_fixture"
+local WORKTREE_SUBPATH = "carrier-worktree"
 local ORCHESTRATOR_BINDING = "bee.driver.claude:binding"
 local WORKER_BINDING = "bee.driver.codex:binding"
 local CARRIER = "bee.harness.catalog:carrier_faulted"
@@ -75,6 +77,10 @@ end
 local function stream(name: string): string
     return setting("bee.harness.catalog:fixture_streams", "BEE_FIXTURE_STREAMS") .. "/" .. name
 end
+local function git_commit_enabled(): boolean
+    local enabled = env.get("bee.harness.catalog:git_commit_enabled")
+    return enabled == "1"
+end
 -- The host entries this acceptance temporarily widens, copied by value so a
 -- mutation made in place is really undone for every later suite.
 local saved: {[string]: unknown} = {}
@@ -108,20 +114,24 @@ local function prepare_host()
     local roots = assert(registry.get("bee.resources:resource_roots"))
     local roots_data = roots.data :: Object
     local available = roots_data.roots :: {Object}
-    local listed = false
-    for _, root in ipairs(available) do if root.root_ref == ROOT then listed = true end end
-    if not listed then
-        available[#available + 1] = {root_ref = ROOT, access = "write"}
-        apply(roots)
+    for _, root_ref in ipairs({ROOT, GIT_ROOT}) do
+        local listed = false
+        for _, root in ipairs(available) do if root.root_ref == root_ref then listed = true end end
+        if not listed then
+            available[#available + 1] = {root_ref = root_ref, access = "write"}
+            apply(roots)
+        end
     end
     local admitted_roots = assert(registry.get("bee.placement.native:placement_admitted_roots"))
     local admitted_data = admitted_roots.data :: Object
     local admitted = admitted_data.roots :: {Object}
-    local present = false
-    for _, root in ipairs(admitted) do if root.root_ref == ROOT then present = true end end
-    if not present then
-        admitted[#admitted + 1] = {root_ref = ROOT, access = "write"}
-        apply(admitted_roots)
+    for _, root_ref in ipairs({ROOT, GIT_ROOT}) do
+        local present = false
+        for _, root in ipairs(admitted) do if root.root_ref == root_ref then present = true end end
+        if not present then
+            admitted[#admitted + 1] = {root_ref = root_ref, access = "write"}
+            apply(admitted_roots)
+        end
     end
     local setup = assert(registry.get("bee.harness:harness_setup"))
     local setup_data = setup.data :: Object
@@ -153,6 +163,7 @@ local function bind_policies()
     worker_data.executables = {codex = harness_dir .. "/codex/codex"}
     worker_data.environment = {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_GATEWAY_WORKER = MARKER, BEE_FIXTURE_WORKER_MARKER = MARKER,
         BEE_FIXTURE_STREAM = stream("codex/exec-json-1/plain.jsonl"), BEE_FIXTURE_LINGER = "8"}
+    if git_commit_enabled() then worker_data.environment.BEE_FIXTURE_GIT_COMMIT = "1" end
     apply(worker)
     local provider = assert(registry.get(PROVIDER))
     local provider_data = provider.data :: Object
@@ -209,6 +220,20 @@ local function open_gateway()
     local entry = registry.get("bee:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
     call("bee.gateway.binding:open", {address = tostring((entry.data :: Object).address)})
+    local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 5000
+    while true do
+        local ready, readiness_error = pcall(function()
+            return call("bee.gateway.binding:ready", {})
+        end)
+        if ready then return end
+        local detail = tostring(readiness_error)
+        if not detail:find("listener answered 404", 1, true) then error(detail) end
+        if math.floor(time.now():unix_nano() / 1000000) >= deadline_ms then
+            error("gateway /ready route did not become available: " .. detail)
+        end
+        local retry = time.after("50ms")
+        channel.select({retry = retry:case_receive()})
+    end
 end
 local function admission(policy_ref: string, thread_id: string, attempt_id: string, workspace_id: string): Object
     local placement = placement_fixture.resolve()
@@ -257,6 +282,10 @@ local function define_tests()
                 BEE_FIXTURE_GATEWAY_RUN_BRIEF = "answer the orchestrator", BEE_FIXTURE_WORKER_MARKER = MARKER,
                 BEE_FIXTURE_ORCHESTRATOR_THREAD_TITLE = first_title, BEE_FIXTURE_ORCHESTRATOR_CANCEL_TITLE = second_title,
                 BEE_FIXTURE_STREAM = stream("claude/stream-json-2/plain.jsonl")}
+            if git_commit_enabled() then
+                orchestrator.environment.BEE_FIXTURE_GATEWAY_WORKDIR_ROOT = GIT_ROOT
+                orchestrator.environment.BEE_FIXTURE_GATEWAY_WORKDIR_PATH = WORKTREE_SUBPATH
+            end
             local outcome = await_carrier(spawn_carrier(orchestrator), "orchestrator carrier")
             test.eq((outcome.settlement :: Object).outcome, "succeeded")
             local seen = report_with(thread_id, "first_launch_ok")

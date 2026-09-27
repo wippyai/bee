@@ -76,7 +76,7 @@ entries:
     bounds: bee.threads.records:bounds
     capability_gateway: bee.gov:capability_gateway
     capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
+    capability_model: bee.capability:model
     workspace_applications: bee.gov:workspace_applications
     capability_files: bee.gov:capability_files
   security: {policies: [bee.gov.security:gateway_policy]}
@@ -151,7 +151,7 @@ entries:
     publication_profiles: bee.gov:publication_profile_decoder
     workspace_applications: bee.gov:workspace_applications
     capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
+    capability_model: bee.capability:model
     publisher: bee.gov.binding:publisher
     staging: bee.gov.persist:staging
     activation_store: bee.gov.persist:activation_store
@@ -206,7 +206,7 @@ entries:
     migration_runner: bee.hub.binding:migration_runner
     activation_profiles: bee.gov:activation_profile_decoder
     capability_grants: bee.gov:capability_grants
-    capability_catalog: bee.gov:capability_catalog
+    capability_model: bee.capability:model
     capability_files: bee.gov:capability_files
     workspace_applications: bee.gov:workspace_applications
     preflight: bee.gov:preflight

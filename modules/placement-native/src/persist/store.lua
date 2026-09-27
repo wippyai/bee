@@ -137,7 +137,7 @@ function M.request(row: Row): (types.LaunchRequest?, string?)
     if request.attempt_id ~= row.attempt_id or request.owner_id ~= row.owner_id or request.action_id ~= row.action_id then
         return nil, "attempt request identity differs from its row"
     end
-    local delivery, delivery_error = configuration.decode_delivery(stored.delivery)
+    local delivery, delivery_error = configuration.decode_stored_delivery(stored.delivery)
     if not delivery then return nil, "attempt delivery: " .. tostring(delivery_error) end
     local retained: types.LaunchRequest = request
     retained.delivery = delivery

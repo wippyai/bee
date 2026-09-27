@@ -4,6 +4,8 @@
 -- permission adapters remain owned by the harness catalog.
 local registry = require("registry")
 local bounds = require("bounds")
+local profile_codec = require("profile")
+local driver_types = require("types")
 local M = {}
 M.ACTIVATION = "bee.harness:harness_activation"
 M.ACTIVATION_TYPE = "bee.harness_activation"
@@ -99,5 +101,33 @@ function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, 
     end
     if not target then return nil, "binding " .. binding_ref .. " binds no configure", nil end
     return target, nil, driver_id
+end
+
+-- The selected immutable driver profile may name a typed CLI adapter for
+-- Git's additional metadata roots. The caller cannot supply this choice;
+-- placement reads it from the activated binding's profile record.
+function M.profile(pinned: registry.Snapshot, binding_ref: string, profile_id: string): (driver_types.Profile?, string?)
+    local active, active_error = M.active(pinned)
+    if not active or not active[binding_ref] then return nil, active_error or "binding " .. binding_ref .. " is not activated" end
+    local binding = M.entry(pinned, binding_ref)
+    local meta = binding and bounds.object(binding.meta) or nil
+    if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" then
+        return nil, "binding " .. binding_ref .. " is not an activated driver"
+    end
+    local profiles_ref = bounds.id(meta.profiles_ref)
+    -- Legacy and fixture drivers without declarative profiles cannot opt into
+    -- additional sandbox roots; they retain their existing configure path.
+    if not profiles_ref then return nil, nil end
+    local profiles_entry = M.entry(pinned, profiles_ref)
+    local profiles_meta = profiles_entry and bounds.object(profiles_entry.meta) or nil
+    local profiles_data = profiles_entry and bounds.object(profiles_entry.data) or nil
+    if not profiles_entry or not profiles_meta or profiles_meta.type ~= "harness.profile" or profiles_meta.driver_ref ~= binding_ref or not profiles_data then
+        return nil, "binding " .. binding_ref .. " profile entry is invalid"
+    end
+    local decoded, decode_error = profile_codec.decode(profiles_data.driver)
+    if not decoded then return nil, "binding " .. binding_ref .. " profile entry: " .. tostring(decode_error) end
+    local selected = profile_codec.find(decoded, profile_id)
+    if not selected then return nil, "binding " .. binding_ref .. " has no profile " .. profile_id end
+    return selected, nil
 end
 return M

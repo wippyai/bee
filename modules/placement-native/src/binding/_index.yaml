@@ -52,6 +52,14 @@ entries:
     service: bee.placement.native.service:service
   security:
     policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy]
+- name: stop_revoked
+  kind: function.lua
+  source: file://stop_revoked_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy, bee.security.gateway:gateway_supervision_policy, bee.resources.security:resource_revoke_stop_policy]
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua

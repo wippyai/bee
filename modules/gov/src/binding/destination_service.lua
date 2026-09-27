@@ -26,7 +26,7 @@ local migration_effect = require("migration_effect")
 local migration_runner = require("migration_runner")
 local activation_profiles = require("activation_profiles")
 local capability_grants = require("capability_grants")
-local capability_catalog = require("capability_catalog")
+local capability_model = require("capability_model")
 local capability_files = require("capability_files")
 local workspace_applications = require("workspace_applications")
 
@@ -127,7 +127,7 @@ end
 local function selected(config: Configuration, workspace_id: string, source_node: string,
     source_workspace: string, activation_store: activations.Store?): (Profile?, string?)
     local installed: unknown = nil
-    local vocabulary: capability_catalog.Catalog? = nil
+    local vocabulary: unknown = nil
     local owner_hint: string? = nil
     local slot_source: string? = nil
     local workspace_identity = workspace_applications.identity(workspace_id, source_workspace)
@@ -156,7 +156,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
         installed = registry.get(id)
         if installed then
             local raw_catalog = registry.get("bee:capability_catalog")
-            local decoded, catalog_error = capability_catalog.decode(raw_catalog)
+            local decoded, catalog_error = capability_model.decode(raw_catalog)
             if not decoded then return nil, catalog_error end
             vocabulary = decoded
             local record, record_error = capability_grants.decode(installed, owner,
@@ -174,7 +174,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
                 local package_installed = package_id and registry.get(package_id) or nil
                 if package_installed then
                     local raw_catalog = registry.get("bee:capability_catalog")
-                    local decoded, catalog_error = capability_catalog.decode(raw_catalog)
+                    local decoded, catalog_error = capability_model.decode(raw_catalog)
                     if not decoded then return nil, catalog_error end
                     vocabulary = decoded
                     local record, record_error = capability_grants.decode(package_installed,
@@ -327,7 +327,9 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     local candidate, candidate_error = preflight.decode_candidate(intent.resolution_bytes,
         intent.resolution_digest)
     if not candidate then return nil, candidate_error end
-    local vocabulary, catalog_error = capability_catalog.decode(registry.get("bee:capability_catalog"))
+    local catalog_entry, catalog_lookup_error = registry.get("bee:capability_catalog")
+    if not catalog_entry then return nil, "host capability catalog lookup failed: " .. tostring(catalog_lookup_error) end
+    local vocabulary, catalog_error = capability_model.decode(catalog_entry)
     if not vocabulary then return nil, catalog_error end
     local requested: {Object} = {}
     for _, requirement in ipairs(candidate.requirements) do

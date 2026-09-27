@@ -3,6 +3,7 @@ local bounds = require("bounds")
 local catalog = require("catalog")
 local context = require("context")
 local mcp = require("mcp")
+local capability_model = require("capability_model")
 local M = {}
 M.APPLICATION_RUNTIME_TRAIT = mcp.APPLICATION_RUNTIME_TRAIT
 -- The approval workspace is the binding's; a declaration names only policy and traits.
@@ -117,8 +118,11 @@ function M.grant(surface: Surface, trait_ids: unknown): (Surface?, string?)
     local requested, request_error = bounds.ids(trait_ids, true)
     if not requested then return nil, request_error end
     if not surface.access then return nil, "surface has no requestable traits" end
-    local requestable: {[string]: boolean} = {}
-    for _, id in ipairs(surface.access.traits) do requestable[id] = true end
+    local admitted = capability_model.traits("mcp.surface", surface.access.traits)
+    local requested_scope = capability_model.traits("mcp.surface", requested)
+    if not admitted or not requested_scope or not capability_model.contains(admitted, requested_scope) then
+        return nil, "trait is not requestable"
+    end
     local allowed: {string} = {}
     local selectable: {[string]: boolean} = {}
     for _, id in ipairs(surface.allowed_traits) do
@@ -126,7 +130,6 @@ function M.grant(surface: Surface, trait_ids: unknown): (Surface?, string?)
         selectable[id] = true
     end
     for _, id in ipairs(requested) do
-        if not requestable[id] then return nil, "trait is not requestable" end
         if not selectable[id] then
             allowed[#allowed + 1] = id
             selectable[id] = true

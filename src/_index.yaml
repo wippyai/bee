@@ -275,7 +275,7 @@ entries:
     comment: Host trust map no overlay profile can open; preflight refuses edits to these definitions, their transitive code dependencies and requirement selectors aimed at them
   data:
     revision: 2
-    namespaces: [bee.application, bee.approvals, bee.apps, bee.client, bee.console, bee.deps,
+    namespaces: [bee.application, bee.approvals, bee.apps, bee.capability, bee.client, bee.console, bee.deps,
       bee.desktop, bee.docs, bee.env, bee.gateway, bee.governance, bee.gov, bee.hive,
       bee.host, bee.hub, bee.interaction, bee.launch, bee.node, bee.persist, bee.protocol,
       bee.security, bee.session, bee.settings, bee.storage, bee.sync, bee.terminal, bee.threads,

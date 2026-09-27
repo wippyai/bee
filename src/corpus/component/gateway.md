@@ -33,8 +33,14 @@ elevation request asks the person for one host catalog capability with bounded
 parameters and a TTL; the approval shows the catalog's own wording bound to the
 authenticated thread and attempt. Consuming it writes one resources grant for
 that thread actor, which that attempt's placement resolves and no child attempt
-inherits. A replay returns the same grant; the binding's own surface policy
-selects the approver. Filing the request grants nothing.
+inherits. A request is measured and checked for a realizable resource grant
+before an approval is filed. A replay returns the same grant; the binding's own
+surface policy selects the approver. Filing the request grants nothing.
+
+MCP `request_access` records the approved traits as the shared `mcp.access`
+capability scoped to that binding. The gateway keeps the approval and trait
+receipt in its own store; the shared capability model checks the scope and
+formats the revocation report.
 
 `install_request`, `uninstall_request` and `install_status` file and poll Hub
 installation requests the same way. The gateway resolves the exact Hub plan as

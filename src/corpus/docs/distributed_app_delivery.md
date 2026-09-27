@@ -187,9 +187,14 @@ The catalog currently describes `workspace.files.read`, `app.database`,
 `hub.manage`, `gov.delivery.manage` and `gov.delivery.activate`. Its decoder bounds relative subpaths, lists, identities and
 HTTPS origins; it also carries a never-list for execution, environment and
 credential access, registry and scope management, approval decisions, core
-databases, and auto start. Pure helpers expand templates into proposed
-operation/resource/scope values, compare two resolved grant sets semantically,
-and render host-authored permission text with combined read-to-egress lines.
+databases, and auto start. `bee.capability:model` expands templates into
+proposed operation/resource/scope values, compares grant scopes semantically,
+renders host-authored permission text with combined read-to-egress lines, and
+builds revocation reports for Governance registry grants, Resources SQL grants
+and Gateway MCP trait grants. Each component keeps its own grant store.
+Runtime elevation uses the same resolution before filing approval and refuses a
+capability whose resource source is a fixed host resolver, since it cannot be
+written as a workspace association grant.
 For workspace application delivery, the host resolves these values before
 approval and shows the full set, changes from the installed grant, and any
 combined data flows in Approvals. `threads.read` with `scope: owned`,
@@ -310,6 +315,9 @@ authenticated thread and attempt consumes once and writes one thread-actor
 resources grant the attempt's placement resolves. Active revocation fencing is
 implemented: an epoch advance reports its fenced attempts, and an owner fence
 withdraws the fenced instance's thread delegation before stopping it.
+Resources `revoke_all` also passes its fenced attempt IDs to Placement, which
+rechecks each recorded grant and requests a cooperative stop when that attempt
+lost access.
 
 Destination migration execution requires a captured immutable registry view and
 is not supplied by ordinary overlay activation. Automatic Hive enrollment and

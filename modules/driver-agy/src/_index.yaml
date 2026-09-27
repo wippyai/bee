@@ -126,6 +126,10 @@ entries:
           call_timeout_ceiling_ms: 120000
         inbound:
         - next_turn
+        sandbox:
+          providers: []
+          required_placement_features: []
+          git_writable_roots_adapter: agy_add_dir
         permission_exchange:
           mode: none
       - id: batch
@@ -144,6 +148,10 @@ entries:
           client_transports: [streamable_http]
           initialize_timeout_ms: 30000
           call_timeout_ceiling_ms: 120000
+        sandbox:
+          providers: []
+          required_placement_features: []
+          git_writable_roots_adapter: agy_add_dir
         permission_exchange:
           mode: none
       - id: window

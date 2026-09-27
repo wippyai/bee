@@ -42,6 +42,8 @@ modules:
   version: 0.1.0-dev
 - name: bee/resources
   version: 0.1.0-dev
+- name: bee/capability
+  version: 0.1.0-dev
 - name: bee/placement
   version: 0.1.0-dev
 - name: bee/placement-native

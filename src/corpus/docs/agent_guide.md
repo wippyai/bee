@@ -112,6 +112,12 @@ batch routes as `unconfined`: the orchestrator launches them only where
 its own launch policy names them in `agent_launch_unconfined`, and
 `launch_definitions` reports the mark.
 
+For an edit-capable profile with a write-granted workdir, placement also
+resolves the repository's Git directory and shared common directory from Git's
+metadata files. It passes those exact paths to the CLI sandbox only when both
+remain within a host-admitted write root; this lets a worktree commit while
+keeping the host's admitted roots as the outer boundary.
+
 These controls are CLI permissions, not operating system confinement. A
 managed CLI can still read any file the OS user can read outside its
 workdir; only full OS confinement, a separate Wippy runtime feature,

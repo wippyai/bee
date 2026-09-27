@@ -126,6 +126,61 @@ local function define_tests()
             test.eq(refused.code, "INVALID")
             assert(store.close(partial_store))
         end)
+        test.it("looks up the exact applied admission slot source", function()
+            local function settle(workspace: string, owner_node: string, source_node: string,
+                overlay_owner: string, intent_id: string, admission_bytes: string): string
+                local state = assert(store.open("bee.gov:activation_test_db", owner_node, workspace))
+                local input = prepare()
+                input.intent_id, input.idempotency_key = intent_id, intent_id .. "-prepare"
+                input.overlay_owner, input.source_node, input.source_workspace = overlay_owner, source_node, "autoresearch"
+                local admission = blob(admission_bytes)
+                local admission_digest = assert(admission.digest)
+                input.application_admission = admission
+                input.migration_work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@2",
+                    destination_node = owner_node, source_node = source_node, base_revision = 0,
+                    base_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
+                    candidate_digest = string.rep("c", 64), artifact_digest = string.rep("d", 64),
+                    plan_digest = string.rep("e", 64), migrations = {}, databases = {}})))
+                local prepared = ok(store.call(state, "actor-a", input))
+                local bound = ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = intent_id,
+                    expected_revision = prepared.revision, idempotency_key = intent_id .. "-bind",
+                    approval_id = intent_id .. "-approval", approval_proposal_digest = string.rep("d", 64),
+                    approval_owner_incarnation = 8}))
+                local consuming = ok(store.call(state, "actor-a", {operation = "begin_consume", intent_id = intent_id,
+                    expected_revision = bound.revision, idempotency_key = intent_id .. "-consume"}))
+                local consumed = ok(store.call(state, "actor-a", {operation = "record_consumption", intent_id = intent_id,
+                    expected_revision = consuming.revision, idempotency_key = intent_id .. "-receipt",
+                    consumer_id = "governance-host", proposal_digest = string.rep("d", 64), effect_key = prepared.effect_key}))
+                local applying = ok(store.call(state, "actor-a", {operation = "begin_apply", intent_id = intent_id,
+                    expected_revision = consumed.revision, idempotency_key = intent_id .. "-apply"}))
+                local outcome = ok(store.call(state, "actor-a", {operation = "record_outcome", intent_id = intent_id,
+                    expected_revision = applying.revision, idempotency_key = intent_id .. "-outcome",
+                    outcome = "applied", diagnostics = "definitions observed"}))
+                test.eq(outcome.observed_outcome, "applied")
+                assert(store.close(state))
+                return admission_digest
+            end
+
+            local local_workspace = "workspace-applied-local"
+            local local_owner = "node-before-restart"
+            local local_overlay = "bee.gov.apps:" .. local_workspace .. ".autoresearch"
+            local local_digest = settle(local_workspace, local_owner, local_owner, local_overlay,
+                "intent-applied-local", "local application admission")
+            local local_source = store.applied_admission_source("bee.gov:activation_test_db", local_workspace,
+                local_overlay, local_digest)
+            local local_value = ok(local_source)
+            test.eq(local_value.source_node, local_owner)
+            test.eq(store.applied_admission_source("bee.gov:activation_test_db", local_workspace,
+                local_overlay, string.rep("f", 64)).code, "NOT_FOUND")
+
+            local remote_workspace = "workspace-applied-remote"
+            local remote_overlay = "bee.gov.apps:" .. remote_workspace .. ".autoresearch"
+            local remote_digest = settle(remote_workspace, "node-destination", "node-remote", remote_overlay,
+                "intent-applied-remote", "remote application admission")
+            local remote_value = ok(store.applied_admission_source("bee.gov:activation_test_db", remote_workspace,
+                remote_overlay, remote_digest))
+            test.eq(remote_value.source_node, "node-remote")
+        end)
         test.it("persists the exact predecessor digest for grant reuse", function()
             local state = assert(store.open("bee.gov:activation_test_db", "node-a", "workspace-reuse"))
             local input = prepare()

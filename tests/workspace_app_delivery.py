@@ -56,9 +56,9 @@ APPROVAL_POLICY = "workspace-application-delivery"
 SHIPPED = ["modules/gov/src/_index.yaml", "src/_index.yaml", "src/deps/_index.yaml", "src/env/_index.yaml"]
 PROVIDER = os.environ.get("BEE_WORKSPACE_APP_PROVIDER", "scripted")
 HIVE_SOURCE = os.environ.get("BEE_WORKSPACE_APP_HIVE_SOURCE_NODE")
-NATIVE_OWNER = os.environ.get("BEE_WORKSPACE_APP_NATIVE_OWNER") == "1"
 DESKTOP_RUNTIME = Path(os.environ.get("BEE_WORKSPACE_APP_DESKTOP_RUNTIME", RUNTIME)).resolve()
 NATIVE_DESKTOP = os.environ.get("BEE_WORKSPACE_APP_NATIVE_DESKTOP") == "1"
+NATIVE_OWNER = os.environ.get("BEE_WORKSPACE_APP_NATIVE_OWNER") == "1" or NATIVE_DESKTOP
 # A live agent is told only how to use its tools; the spec is the person's.
 LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another agent. Read the overlay tool's "
               "guide operation first and follow it. Author the application below in your own overlay, freeze it, "
@@ -287,6 +287,39 @@ def occupy_gossip_port(state_dir):
     return port, listener
 
 
+def assert_catalog_lists(ui, title, timeout):
+    deadline = time.monotonic() + timeout
+    while True:
+        ui.open_start()
+        if title in ui.text():
+            ui.key(b"\x1b")
+            return
+        ui.key(b"\x1b")
+        assert time.monotonic() < deadline, ui.text()
+        ui.pump(.1)
+
+
+def stop_native_owner(folder, project):
+    stopped = subprocess.run([str(DESKTOP_RUNTIME), "--state", str(folder / "native-state"), "stop"],
+                             cwd=project, env=database_environment(folder), capture_output=True,
+                             text=True, timeout=90)
+    output = stopped.stdout + stopped.stderr
+    assert stopped.returncode == 0 and "Bee stopped" in output, output
+
+
+def assert_native_owner_started_cleanly(folder):
+    if not NATIVE_DESKTOP:
+        return
+    logs = sorted((folder / "native-state").glob("owner-*.log"))
+    assert logs, "native Bee did not record a retained owner start"
+    failures = []
+    for path in logs:
+        content = path.read_text(errors="replace")
+        if "Retained workspace startup timed out" in content:
+            failures.append(content)
+    assert not failures, "native retained owner timed out during startup:\n" + "\n".join(failures)
+
+
 def exercise():
     folder = evidence_root()
     print("Evidence:", folder)
@@ -303,9 +336,14 @@ def exercise():
                     state_dir=folder / "native-state" if NATIVE_DESKTOP else None)
     try:
         first.wait("No applications open", timeout=COLD_BOOT)
+        assert_native_owner_started_cleanly(folder)
         first.quit()
     finally:
         first.close()
+    if NATIVE_DESKTOP:
+        # The author command is a standalone source-runtime process. End the
+        # retained owner first so two compositions never open the same stores.
+        stop_native_owner(folder, project)
 
     report = author(project, folder)
     if PROVIDER == "scripted":
@@ -318,6 +356,7 @@ def exercise():
                  state_dir=folder / "native-state" if NATIVE_DESKTOP else None)
     try:
         ui.wait("No applications open", timeout=COLD_BOOT)
+        assert_native_owner_started_cleanly(folder)
         ui.pump(.5)
         version = staged_version(folder)
         assert PROVIDER != "scripted" or version == VERSION, version
@@ -358,6 +397,7 @@ def exercise():
             assert grant["database_id"] == database_id, grant
         ui.window_control("×")
         ui.wait("No applications open", timeout=20)
+        assert_catalog_lists(ui, TITLE, COLD_BOOT)
         ui.quit()
     finally:
         ui.close()
@@ -367,11 +407,7 @@ def exercise():
     held_gossip_port = None
     saved_gossip_port = None
     if NATIVE_DESKTOP:
-        stopped = subprocess.run([str(DESKTOP_RUNTIME), "--state", str(folder / "native-state"), "stop"],
-                                 cwd=project, env=database_environment(folder), capture_output=True,
-                                 text=True, timeout=90)
-        stop_output = stopped.stdout + stopped.stderr
-        assert stopped.returncode == 0 and "Bee stopped" in stop_output, stop_output
+        stop_native_owner(folder, project)
         saved_gossip_port, held_gossip_port = occupy_gossip_port(folder / "native-state")
 
     # The source-runtime fixture exits its owner with the terminal process;
@@ -380,6 +416,7 @@ def exercise():
                         state_dir=folder / "native-state" if NATIVE_DESKTOP else None)
     try:
         restarted.wait("No applications open", timeout=COLD_BOOT)
+        assert_native_owner_started_cleanly(folder)
         deadline = time.monotonic() + COLD_BOOT
         while True:
             restarted.open_start()
@@ -397,11 +434,7 @@ def exercise():
     finally:
         restarted.close()
         if NATIVE_DESKTOP:
-            stopped = subprocess.run([str(DESKTOP_RUNTIME), "--state", str(folder / "native-state"), "stop"],
-                                     cwd=project, env=database_environment(folder), capture_output=True,
-                                     text=True, timeout=90)
-            stop_output = stopped.stdout + stopped.stderr
-            assert stopped.returncode == 0 and "Bee stopped" in stop_output, stop_output
+            stop_native_owner(folder, project)
         if held_gossip_port is not None:
             held_gossip_port.close()
     workspace_id = classic_workspace(folder / "workspace.db")

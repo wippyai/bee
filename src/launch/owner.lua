@@ -15,6 +15,7 @@ local workspaces = require("workspaces")
 local command_stop = require("command_stop")
 local handoff = require("owner_handoff")
 local startup_failure = require("startup_failure")
+local startup_watchdog = require("startup_watchdog")
 local uuid = require("uuid")
 
 -- The terminal.host command retains the route and supervisor. This ordinary
@@ -77,6 +78,7 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
     if not owner_name or not bridge_name then error("Invalid retained workspace selection") end
     local ready, ready_error = process.listen("bee.retained.ready", {message = true})
     if not ready then error(tostring(ready_error)) end
+    local progress = assert(process.listen(retained.TOPIC_PROGRESS, {message = true}))
     local failures = assert(process.listen("bee.retained.failure", {message = true}))
     local controller_ready = assert(process.listen("bee.owner.controller_ready", {message = true}))
     local replacing = assert(process.listen("bee.owner.replacing", {message = true}))
@@ -129,21 +131,50 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
             end
         end
         local announced = false
-        local deadline = time.after("10s")
+        local startup_started = time.now()
+        local function startup_now_ms(): integer
+            return math.floor(time.now():sub(startup_started):milliseconds())
+        end
+        local startup = startup_watchdog.new(startup_now_ms(), 10000)
+        local function startup_deadline()
+            local remaining = math.max(1, startup_watchdog.remaining(startup, startup_now_ms()))
+            return time.after(tostring(remaining) .. "ms")
+        end
+        local deadline = startup_deadline()
         while true do
-            local cases = {ready:case_receive(), controller_ready:case_receive(), replacing:case_receive(),
+            local cases = {ready:case_receive(), progress:case_receive(), controller_ready:case_receive(), replacing:case_receive(),
                 events:case_receive(), stops.channel:case_receive(), failures:case_receive()}
             if not announced then cases[#cases + 1] = deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Retained owner channel closed") end
-            if selected.channel == deadline then error("Retained workspace startup timed out") end
-            if selected.channel == stops.channel then
+            if selected.channel == deadline then
+                local now_ms = startup_now_ms()
+                if startup_watchdog.expired(startup, now_ms) then
+                    error("Retained workspace startup timed out during " .. startup_watchdog.phase(startup))
+                end
+                deadline = startup_deadline()
+            elseif selected.channel == stops.channel then
                 if command_stop.accept(selected.value) then return end
             elseif selected.channel == failures then
                 local message = selected.value
                 local node = startup_failure.node_id(tostring(process.pid()))
                 local reason = node and startup_failure.decode(tostring(message:from()), message:payload():data(), node) or nil
                 if reason then error(reason) end
+            elseif selected.channel == progress then
+                if not announced then
+                    local sender = tostring(selected.value:from())
+                    local announcer = supervisor
+                    if bridged then
+                        local bridge = process.registry.lookup(bridge_name)
+                        announcer = bridge and tostring(bridge) or ""
+                    end
+                    local phase = sender == announcer and retained.progress(selected.value:payload():data()) or nil
+                    if phase and startup_watchdog.advance(startup, phase,
+                        startup_now_ms()) then
+                        deadline = startup_deadline()
+                        logger:info("Retained workspace startup progressed", {phase = phase})
+                    end
+                end
             elseif selected.channel == events then
                 local event = selected.value
                 if event.kind == process.event.CANCEL then return end
@@ -212,6 +243,7 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
     if registered then process.registry.unregister(owner_name) end
     command_stop.close(stops)
     process.unlisten(ready)
+    process.unlisten(progress)
     process.unlisten(controller_ready); process.unlisten(replacing)
     process.unlisten(failures)
     if not ok then error(err) end

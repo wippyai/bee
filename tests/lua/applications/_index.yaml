@@ -5,11 +5,14 @@ entries:
   kind: function.lua
   source: file://catalog_test.lua
   method: run
-  modules: [registry, system]
+  modules: [registry, system, uuid, hash]
   meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
   imports:
     catalog: bee.apps:catalog
     admission: bee.gov:governed_application_admission
+    activation_store: bee.gov.persist:activation_store
+    canonical: bee.sync:canonical
     test: wippy.test:test
 - name: command_test
   kind: function.lua

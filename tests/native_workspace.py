@@ -14,7 +14,7 @@ STATE_ENVIRONMENT = {f"BEE_{name.upper()}_DB" for name in STORE_NAMES} | {"BEE_P
 
 
 class NativeDesktop(Desktop):
-    def __init__(self, binary, folder, state, application=None, arguments=(), home=None):
+    def __init__(self, binary, folder, state, application=None, arguments=(), home=None, environment=None):
         self.master, slave = pty.openpty()
         self.width, self.height = 100, 30
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
@@ -32,10 +32,13 @@ class NativeDesktop(Desktop):
         args.extend(arguments)
         # Exercise the embedded defaults without borrowing the caller's stores.
         # Runtime intentionally permits explicit environment overrides.
-        env = {key: value for key, value in os.environ.items()
-               if key not in STATE_ENVIRONMENT | {"BEE_RUNTIME", "USER"}}
-        env.update(TERM="xterm-256color", HOME=str(home or folder), PATH=f"{folder}/bin:/usr/bin:/bin")
-        env["XDG_CONFIG_HOME"] = str((home or folder) / ".config")
+        if environment is None:
+            process_environment = {key: value for key, value in os.environ.items()
+                                  if key not in STATE_ENVIRONMENT | {"BEE_RUNTIME", "USER"}}
+            process_environment.update(TERM="xterm-256color", HOME=str(home or folder), PATH=f"{folder}/bin:/usr/bin:/bin")
+            process_environment["XDG_CONFIG_HOME"] = str((home or folder) / ".config")
+        else:
+            process_environment = dict(environment)
         self.process = subprocess.Popen(args, cwd=folder, stdin=slave, stdout=slave, stderr=slave,
-                                        start_new_session=True, env=env)
+                                        start_new_session=True, env=process_environment)
         os.close(slave)

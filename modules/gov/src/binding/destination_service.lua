@@ -301,10 +301,17 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
                         return nil, "stored applied migration table prefix is malformed"
                     end
                 end
-                if not target or not captured or captured.target_db ~= target or not database_id or not kind
-                    or not package or not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$")
-                    or captured.planned ~= false then
-                    return nil, "stored applied migration database evidence is malformed"
+                if not target or not captured or captured.target_db ~= target then
+                    return nil, "stored applied migration database target is malformed"
+                end
+                if not database_id or not kind or not package then
+                    return nil, "stored applied migration database identity is malformed"
+                end
+                if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
+                    return nil, "stored applied migration database digest is malformed"
+                end
+                if type(captured.planned) ~= "boolean" then
+                    return nil, "stored applied migration planned-state evidence is malformed"
                 end
                 applied_databases[target] = {database_id = database_id, table_prefix = table_prefix,
                     kind = kind, package = package, digest = digest}

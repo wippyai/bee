@@ -106,8 +106,12 @@ fixed setup scope. That private scope can associate/list resources and
 define/list credentials. It reloads the selected definition under its measured definition
 digest, then creates its declared `project` and `session` associations with
 create-if-absent revision zero. A retry accepts only the same root, empty
-subpath and writable association, and refuses a mismatch. Definitions with no
-declared resources or credentials succeed without consulting the host setup map. The host maps
+subpath and writable association. When the host changes a selected root, setup
+rebinds an existing full-root writable association with its expected revision;
+the new revision invalidates grants for the prior root. A custom subpath or
+read-only scope remains intact and setup reports the mismatch instead of
+retargeting it. Definitions with no declared resources or credentials succeed
+without consulting the host setup map. The host maps
 the declared names to admitted roots; driver metadata cannot choose a root or
 grant management permission. Admission subsequently uses the ordinary resource
 grant path, which verifies the root digest before issuing a grant.

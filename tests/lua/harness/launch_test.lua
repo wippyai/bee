@@ -35,6 +35,7 @@ local RETAINED_DEFINITION = "bee.harness.catalog:retained_fixture_definition"
 local EMPTY_DEFINITION = "bee.harness.catalog:setup_empty_definition"
 local POLICY = "bee.harness.catalog:fixture_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
+local SECOND_ROOT = "bee.harness.catalog:git_project_fixture"
 local SOURCE = "bee.harness.catalog:launch_sentinel_key"
 local ALTERNATE_SOURCE = "bee.harness.catalog:alternate_setup_key"
 local counter = 0
@@ -209,6 +210,45 @@ local function associations(workspace: string): {{[string]: unknown}}
     local listed = value(call("bee.resources.binding:list", {workspace_id = workspace}))
     return listed.associations :: {{[string]: unknown}}
 end
+local function with_host_project_root(root_ref: string, body: () -> ())
+    local roots_entry = assert(registry.get("bee.resources:resource_roots"))
+    local roots_original = roots_entry.data
+    local roots_data: {[string]: unknown} = {}
+    for key, item in pairs(roots_original :: {[string]: unknown}) do roots_data[key] = item end
+    local admitted: {{[string]: unknown}} = {}
+    for index, item in ipairs(roots_data.roots :: {unknown}) do
+        local original = item :: {[string]: unknown}
+        local root: {[string]: unknown} = {}
+        for key, value in pairs(original) do root[key] = value end
+        admitted[index] = root
+    end
+    roots_data.roots = admitted
+    local found = false
+    for _, root in ipairs(admitted) do if root.root_ref == root_ref then found = true end end
+    if not found then admitted[#admitted + 1] = {root_ref = root_ref, access = "write"} end
+
+    local setup_entry = assert(registry.get("bee.harness:harness_setup"))
+    local setup_original = setup_entry.data
+    local setup_data: {[string]: unknown} = {}
+    for key, item in pairs(setup_original :: {[string]: unknown}) do setup_data[key] = item end
+    local selected_roots: {[string]: unknown} = {}
+    for key, item in pairs(setup_data.roots :: {[string]: unknown}) do selected_roots[key] = item end
+    selected_roots.project = root_ref
+    setup_data.roots = selected_roots
+
+    local ok, failure = pcall(function()
+        roots_entry.data = roots_data
+        setup_entry.data = setup_data
+        apply(roots_entry)
+        apply(setup_entry)
+        body()
+    end)
+    roots_entry.data = roots_original
+    setup_entry.data = setup_original
+    apply(roots_entry)
+    apply(setup_entry)
+    if not ok then error(tostring(failure)) end
+end
 -- Temporarily sets the fixture definition's and its policy's allowed
 -- overrides, restoring both whatever the body does.
 local function with_overrides(definition_overrides: {string}, policy_overrides: {string}, body: () -> ())
@@ -364,6 +404,76 @@ local function define_tests()
             root.data = original
             apply(root)
             if not ok then error(tostring(failure)) end
+        end)
+        test.it("rebinds a stale setup association to the current host-selected root", function()
+            local target = fresh("setup-host-root-reconcile")
+            test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+            local before = associations(target)
+            local project_before = before[1]
+            local session_before = before[2]
+            if project_before.name ~= "project" or session_before.name ~= "session" then error("setup associations are not ordered") end
+            local project_revision = project_before.revision
+            if type(project_revision) ~= "number" then error("project association revision is invalid") end
+            with_host_project_root(SECOND_ROOT, function()
+                local refreshed = setup(target, RETAINED_DEFINITION)
+                test.is_true(refreshed.ok == true)
+                local after = associations(target)
+                test.eq(#after, 2)
+                test.eq(after[1].root_ref, SECOND_ROOT)
+                test.eq(after[1].subpath, "")
+                test.eq(after[1].allowed_access, "write")
+                test.eq(after[1].revision, project_revision + 1)
+                test.neq(after[1].association_id, project_before.association_id)
+                test.eq(after[2].root_ref, session_before.root_ref)
+                test.eq(after[2].revision, session_before.revision)
+                test.eq(after[2].association_id, session_before.association_id)
+                test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+                local repeated = associations(target)
+                test.eq(repeated[1].revision, after[1].revision)
+                test.eq(repeated[1].association_id, after[1].association_id)
+            end)
+        end)
+        test.it("preserves customized paths and read-only scopes when the host root changes", function()
+            local target = fresh("setup-host-root-custom")
+            test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+            local initial = associations(target)
+            local project = initial[1]
+            if project.name ~= "project" then error("project association is missing") end
+            local revision = project.revision
+            if type(revision) ~= "number" then error("project association revision is invalid") end
+            value(call("bee.resources.binding:associate", {workspace_id = target, name = "project", root_ref = ROOT,
+                subpath = "custom", allowed_access = "write", expected_revision = revision}))
+            with_host_project_root(SECOND_ROOT, function()
+                local reply = setup(target, RETAINED_DEFINITION)
+                test.is_true(reply.ok == false)
+                test.eq(reply.error, "existing association project differs from host setup")
+                local after = associations(target)
+                test.eq(after[1].root_ref, ROOT)
+                test.eq(after[1].subpath, "custom")
+                test.eq(after[1].allowed_access, "write")
+                test.eq(after[1].revision, revision + 1)
+            end)
+
+            local read_only = fresh("setup-host-root-read-only")
+            test.is_true(setup(read_only, RETAINED_DEFINITION).ok == true)
+            local read_project = associations(read_only)[1]
+            local read_revision = read_project.revision
+            if type(read_revision) ~= "number" then error("read-only association revision is invalid") end
+            value(call("bee.resources.binding:associate", {workspace_id = read_only, name = "project", root_ref = ROOT,
+                subpath = "", allowed_access = "read", expected_revision = read_revision}))
+            local read_after = associations(read_only)[1]
+            local readonly_revision = read_after.revision
+            if type(readonly_revision) ~= "number" then error("read-only association revision is invalid") end
+            with_host_project_root(SECOND_ROOT, function()
+                local reply = setup(read_only, RETAINED_DEFINITION)
+                test.is_true(reply.ok == false)
+                test.eq(reply.error, "existing association project differs from host setup")
+                local retained = associations(read_only)[1]
+                test.eq(retained.root_ref, ROOT)
+                test.eq(retained.subpath, "")
+                test.eq(retained.allowed_access, "read")
+                test.eq(retained.revision, readonly_revision)
+            end)
         end)
         test.it("preserves optional login policy on setup retry and refuses a required definition", function()
             local entry = registry.get("bee.harness:harness_setup")

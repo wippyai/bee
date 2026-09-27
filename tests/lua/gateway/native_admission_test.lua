@@ -83,10 +83,11 @@ local function policy(name: string): security.Policy
     return found
 end
 
-local function caller(admit: boolean, manage: boolean): funcs.Executor
+local function caller(admit: boolean, manage: boolean, workspace_read: boolean?): funcs.Executor
     local policies: {security.Policy} = {policy("bee.gateway:native_admission_test_policy")}
     if admit then policies[#policies + 1] = policy("bee.security.gateway:gateway_admit_policy") end
     if manage then policies[#policies + 1] = policy("bee.security.gateway:gateway_manage_policy") end
+    if workspace_read then policies[#policies + 1] = policy("bee.security.storage:workspace_catalog_read_policy") end
     return funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope(policies))
 end
 
@@ -234,6 +235,19 @@ local function define_tests()
                 test.eq(reopened.epoch, 2)
                 test.eq(reopened.drained, 0)
                 test.is_true(reopened.secret ~= before_secret)
+
+                local stale_key = "previous-native-listener-execution"
+                local _, stale_error = db:execute("UPDATE bee_gateway_listener SET native_key = ? WHERE singleton = 1", {stale_key})
+                if stale_error then error("mark previous listener execution: " .. tostring(stale_error)) end
+                local described = raw_call(caller(true, false, true), "bee.gateway.binding:describe", {workspace_id = first_name.workspace_id})
+                if not described.ok then error("describe after listener restart: " .. tostring(described.error and described.error.message)) end
+                test.eq((described.value :: Object).title, "Agent sessions")
+                test.eq((described.value :: Object).total, 0)
+                local reconciled = row(db)
+                test.eq(reconciled.epoch, (reopened.epoch :: number) + 1)
+                test.eq(reconciled.address, selected.address)
+                test.eq(reconciled.native_key, selected.native_key)
+                test.is_true(reconciled.secret ~= reopened.secret)
                 db:release()
             end)
             local restored, restore_error = pcall(restore, saved)

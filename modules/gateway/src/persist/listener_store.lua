@@ -17,6 +17,13 @@ function M.open(db: sql.DB, epoch: integer, address: string, secret: string, ope
         {epoch, address, secret, opened_at, native_key})
 end
 
+function M.reconcile(db: sql.DB, expected_epoch: integer, expected_address: string, expected_native_key: string?, address: string,
+    secret: string, opened_at: string, native_key: string?)
+    return db:execute("UPDATE bee_gateway_listener SET epoch = epoch + 1, address = ?, secret = ?, drained = 0, drain_deadline_at = NULL, " ..
+        "opened_at = ?, native_key = NULLIF(?, '') WHERE singleton = 1 AND epoch = ? AND address = ? AND COALESCE(native_key, '') = ?",
+        {address, secret, opened_at, native_key or "", expected_epoch, expected_address, expected_native_key or ""})
+end
+
 function M.start_drain(db: sql.DB, deadline_at: string)
     return db:execute("UPDATE bee_gateway_listener SET drained = 1, drain_deadline_at = ? WHERE singleton = 1", {deadline_at})
 end

@@ -14,6 +14,7 @@ local types = require("types")
 local protocol = require("protocol")
 local retained = require("retained")
 local catalog = require("catalog")
+local session_policy = require("session_policy")
 local workspaces = require("workspaces")
 local M = {}
 type Channel = channel.Channel
@@ -194,7 +195,7 @@ local function request_core(state: State, client: Client, pending: Pending, mode
     end
     if pending.op == "launch" then
         local input = pending.call and protocol.input(protocol.LAUNCH, pending.call.input) or nil
-        if not input or not input.name or not input.arguments then return false end
+        if not input or input.kind ~= "launch" then return false end
         return send(served.supervisor, "bee.retained.launch", {version = 1, workspace_id = served.workspace_id,
             desktop_id = client.desktop_id, request_id = pending.id, recipient = client.recipient,
             name = input.name, arguments = input.arguments})
@@ -300,7 +301,7 @@ function M.ready(state: State, message: process.Message, now: integer): ()
             local mode: string? = nil
             if pending.op == "attach" and pending.call then
                 local input = protocol.input(protocol.ATTACH, pending.call.input)
-                mode = input and input.mode or nil
+                if input and input.kind == "attach" then mode = input.mode end
             end
             if not request_core(state, client, pending, mode) then
                 if pending.call then
@@ -403,18 +404,18 @@ function M.request(state: State, message: process.Message, now: integer): ()
     -- thirty-second deadline can be slightly ahead of this machine's clock.
     if remaining > 30000 then remaining = 30000 end
     if state.folder and not state.folder.ready then failure(sender, call.request_id, "UNAVAILABLE", "Desktop is starting"); return end
-    if operation == protocol.LIST then
-        catalog.list(state.catalog, state.executor, sender, call, input.query or {limit = protocol.MAX_PAGE}, now + remaining)
+    if input.kind == "list" then
+        catalog.list(state.catalog, state.executor, sender, call, input.query, now + remaining)
         return
     end
-    if operation == protocol.CREATE then
-        if not input.desktop_id or call.idempotency_key ~= input.desktop_id then
+    if input.kind == "create" then
+        if call.idempotency_key ~= input.desktop_id then
             failure(sender, call.request_id, "INVALID_ARGUMENT", "Desktop creation requires its identity as the idempotency key"); return
         end
         catalog.allocate(state.catalog, state.executor, sender, call, input.desktop_id, now + remaining)
         return
     end
-    if operation == protocol.CURRENT then
+    if input.kind == "current" then
         -- A read of the sender's session; it holds no receipt and changes nothing.
         local current = state.clients[sender]
         local session = current and current.session
@@ -425,7 +426,12 @@ function M.request(state: State, message: process.Message, now: integer): ()
             recipient = sender, mode = session.mode, mount_ref = session.mount, expires_at = state.config.expires_at}))
         return
     end
-    if not input.workspace_id or not input.desktop_id then failure(sender, call.request_id, "INVALID_ARGUMENT", "Invalid desktop operation input"); return end
+    if input.kind == "plan" then
+        local plan, err = session_policy.resolve(M.folder_workspace(state), input.request)
+        if not plan then failure(sender, call.request_id, "NOT_FOUND", err or "No desktop session is available"); return end
+        send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, plan))
+        return
+    end
     local key = sender .. "\0" .. call.idempotency_key
     local digest = types.digest({operation = operation, input = call.input, deadline = call.deadline})
     if not digest then failure(sender, call.request_id, "INVALID_ARGUMENT", "Unmeasurable desktop request"); return end
@@ -465,7 +471,7 @@ function M.request(state: State, message: process.Message, now: integer): ()
     if client and client.closing then failure(sender, call.request_id, "UNAVAILABLE", "Desktop session is closing"); return end
     if state.receipt_count >= 256 then failure(sender, call.request_id, "BUSY", "Desktop receipt capacity reached"); return end
     if not client then
-        if operation ~= protocol.ATTACH then failure(sender, call.request_id, "NOT_FOUND", "Desktop session not found"); return end
+        if input.kind ~= "attach" then failure(sender, call.request_id, "NOT_FOUND", "Desktop session not found"); return end
         if state.client_count >= 64 then failure(sender, call.request_id, "BUSY", "Desktop client capacity reached"); return end
         local _, code, message = serve(state, input.workspace_id)
         if code then failure(sender, call.request_id, code, message or "Workspace desktop is unavailable"); return end
@@ -476,18 +482,24 @@ function M.request(state: State, message: process.Message, now: integer): ()
         client = {recipient = sender, workspace_id = input.workspace_id, desktop_id = input.desktop_id, closing = false, dirty = false}
         state.clients[sender] = client; state.client_count = state.client_count + 1
     end
-    if operation ~= protocol.ATTACH and (not client.session or client.session.id ~= input.session_id) then
-        failure(sender, call.request_id, "DENIED", "Desktop session does not match"); return
+    if input.kind == "launch" or input.kind == "detach" or input.kind == "copy" then
+        if not client.session or client.session.id ~= input.session_id then
+            failure(sender, call.request_id, "DENIED", "Desktop session does not match"); return
+        end
     end
-    if (operation == protocol.COPY or operation == protocol.LAUNCH) and (not client.session or client.session.mode ~= "control") then
+    if (input.kind == "copy" or input.kind == "launch") and (not client.session or client.session.mode ~= "control") then
         failure(sender, call.request_id, "DENIED", "Operation requires the active desktop controller"); return
     end
-    local pending: Pending = {id = uuid.v7(), op = operation == protocol.ATTACH and "attach" or (operation == protocol.COPY and "copy" or (operation == protocol.LAUNCH and "launch" or "detach")),
+    local pending_op: "attach" | "detach" | "copy" | "launch" = "detach"
+    if input.kind == "attach" then pending_op = "attach"
+    elseif input.kind == "copy" then pending_op = "copy"
+    elseif input.kind == "launch" then pending_op = "launch" end
+    local pending: Pending = {id = uuid.v7(), op = pending_op,
         call = call, cache_key = key, digest = digest, due = now + remaining,
-        activating = operation == protocol.ATTACH and input.mode == "control" and not client.session}
+        activating = input.kind == "attach" and input.mode == "control" and not client.session}
     state.receipt_count = state.receipt_count + 1
     client.pending = pending
-    if operation == protocol.ATTACH and client.session then
+    if input.kind == "attach" and client.session then
         if client.session.mode ~= input.mode then
             local reply = types.reply_error(call.request_id, types.fault("CONFLICT", "Detach before changing session mode"))
             remember(state, client, pending, reply, now)
@@ -497,7 +509,9 @@ function M.request(state: State, message: process.Message, now: integer): ()
         -- recovery path after the retained client changes execution: its old
         -- mount must never be reused as authority for the new process.
     end
-    if not request_core(state, client, pending, pending.op == "attach" and input.mode or nil) then
+    local mode: string? = nil
+    if input.kind == "attach" then mode = input.mode end
+    if not request_core(state, client, pending, mode) then
         remember(state, client, pending, types.reply_error(call.request_id, types.fault("UNAVAILABLE", "Retained owner did not accept the request")), now)
         client.pending = nil
         if not client.session then forget(state, sender) end
@@ -600,7 +614,7 @@ function M.result(state: State, message: process.Message, now: integer): ()
                     local mode: "control" | "observe" = "observe"
                     if pending.call then
                         local input = protocol.input(protocol.ATTACH, pending.call.input)
-                        if not input then error("Invalid admitted desktop input") end
+                        if not input or input.kind ~= "attach" then error("Invalid admitted desktop input") end
                         mode = input.mode
                     end
                     if client.session then client.session.mount = result.mount
@@ -686,7 +700,7 @@ function M.activated(state: State, message: process.Message, now: integer): ()
                     cache_key = pending.cache_key, digest = pending.digest, due = pending.due, activating = false}
                 client.pending = attachment
                 local input = protocol.input(protocol.ATTACH, pending.call.input)
-                if not input or not request_core(state, client, attachment, input.mode) then
+                if not input or input.kind ~= "attach" or not request_core(state, client, attachment, input.mode) then
                     remember(state, client, pending, types.reply_error(pending.call.request_id,
                         types.fault("UNAVAILABLE", "Desktop attachment request was not accepted")), now)
                     client.pending = nil

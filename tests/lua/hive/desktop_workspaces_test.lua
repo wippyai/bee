@@ -313,6 +313,48 @@ local function define_tests()
             process.unlisten(own)
             close(h)
         end)
+        test.it("answers owner session plans without allocating or attaching", function()
+            local h = harness("session-plan")
+            local candidates = {DEFAULT_DISPLAY, DISPLAY}
+            request(h, protocol.PLAN, "plan-default", {
+                request = {kind = "automatic", mode = "control", desktops = candidates, excluded = {}},
+            })
+            local default_plan = answer(h)
+            test.eq(default_plan.ok, true)
+            local default_value = default_plan.value :: Object
+            test.eq(default_value.kind, "attach")
+            test.eq(default_value.workspace_id, FOLDER)
+            test.eq(default_value.desktop_id, DEFAULT_DISPLAY)
+            test.eq(default_value.mode, "control")
+
+            h.state.folder = nil
+            request(h, protocol.PLAN, "plan-picker", {
+                request = {kind = "automatic", mode = "control", desktops = candidates, excluded = {}},
+            })
+            local picker_plan = answer(h)
+            local picker_value = picker_plan.value :: Object
+            test.eq(picker_value.kind, "choose_workspace")
+
+            request(h, protocol.PLAN, "plan-next", {
+                request = {kind = "workspace", workspace_id = LEASED, mode = "control", desktops = candidates, excluded = {DEFAULT_DISPLAY}},
+            })
+            local next_plan = answer(h)
+            local next_value = next_plan.value :: Object
+            test.eq(next_value.kind, "attach")
+            test.eq(next_value.workspace_id, LEASED)
+            test.eq(next_value.desktop_id, DISPLAY)
+            test.eq(next_value.mode, "control")
+
+            request(h, protocol.PLAN, "plan-allocation", {
+                request = {kind = "workspace", workspace_id = LEASED, mode = "control", desktops = candidates, excluded = candidates},
+            })
+            local allocation = answer(h).value :: Object
+            test.eq(allocation.kind, "allocate")
+            test.eq(allocation.workspace_id, LEASED)
+            test.eq(h.state.client_count, 0)
+            test.eq(h.state.receipt_count, 0)
+            close(h)
+        end)
         test.it("refuses to switch workspaces without a detach", function()
             local h = harness("switch")
             local attached = attach_leased(h)

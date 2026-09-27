@@ -24,7 +24,6 @@ type State = {pending: Pending?}
 -- served reports whether the bridge holds a desktop supervisor for a workspace.
 type Listing = {execution: string, default_workspace: string?, served: (string) -> boolean}
 local MAX_LISTENERS = 16
-local MAX_DESKTOPS = 33
 local M = {}
 M.CATALOG_LIST = "bee.workspace.catalog:list"
 M.CATALOG_SEARCH = "bee.workspace.catalog:search"
@@ -105,7 +104,7 @@ local function decode_identities(value: unknown, pending: Pending): {Identity}?
     for key in pairs(desktops) do
         if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > #desktops then return nil end
         count = count + 1
-        if count > MAX_DESKTOPS then return nil end
+        if count > protocol.MAX_DESKTOPS then return nil end
     end
     if count ~= #desktops then return nil end
     if (pending.desktop_id and count ~= 0) or (not pending.desktop_id and count == 0) then return nil end

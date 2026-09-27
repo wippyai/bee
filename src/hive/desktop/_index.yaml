@@ -22,6 +22,11 @@ entries:
     protocol: bee.hive.desktop:protocol
     bounds: bee.hive:bounds
     contract: bee.protocol:application
+- name: session_policy
+  kind: library.lua
+  source: file://session_policy.lua
+  imports:
+    protocol: bee.hive.desktop:protocol
 - name: owner
   kind: library.lua
   source: file://owner.lua
@@ -31,6 +36,7 @@ entries:
     types: bee.hive:types
     retained: bee.launch:retained_protocol
     catalog: bee.hive.desktop:catalog
+    session_policy: bee.hive.desktop:session_policy
     workspaces: bee.storage:binding
 - name: display
   kind: library.lua

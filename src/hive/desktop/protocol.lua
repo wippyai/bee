@@ -11,6 +11,7 @@ M.ATTACH = "bee.desktop:attach"
 M.DETACH = "bee.desktop:detach"
 M.COPY = "bee.desktop:copy"
 M.LAUNCH = "bee.desktop:launch"
+M.PLAN = "bee.desktop:plan"
 -- The client's current session: after a switch its display shows another
 -- workspace under a new session and mount.
 M.CURRENT = "bee.desktop:current"
@@ -38,10 +39,81 @@ M.VIEW_RESIZE = "bee.hive.viewer.resize"
 M.VIEW_CLOSE = "bee.hive.viewer.close"
 -- folder: whether the bridge composes the owner's folder workspace; a daemon's does not.
 type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, allowed_peers: {string}, application: string?, local_clients: boolean?, folder: boolean}
--- execution: the owner generation the request names; a listing may name none
--- to learn it, since its answer carries the execution it was read under.
-type DesktopInput = {execution: string?, workspace_id: string?, desktop_id: string?, mode: "control" | "observe", session_id: string?, name: string?,
-    arguments: {string}?, query: workspace_query.Query?}
+type Mode = "control" | "observe"
+type AutomaticPlan = {kind: "automatic", mode: Mode, desktops: {string}, excluded: {string}}
+type WorkspacePlan = {kind: "workspace", workspace_id: string, mode: Mode, desktops: {string}, excluded: {string}}
+type SelectionPlan = {kind: "selection", workspace_id: string, desktop_id: string, mode: Mode, desktops: {string}}
+type PlanRequest = AutomaticPlan | WorkspacePlan | SelectionPlan
+type PlanInput = {kind: "plan", execution: string, request: PlanRequest}
+type ListInput = {kind: "list", execution: string?, query: workspace_query.Query}
+type CreateInput = {kind: "create", execution: string, desktop_id: string}
+type CurrentInput = {kind: "current", execution: string}
+type AttachInput = {kind: "attach", execution: string, workspace_id: string, desktop_id: string, mode: Mode}
+type LaunchInput = {kind: "launch", execution: string, workspace_id: string, desktop_id: string, session_id: string, mode: "control", name: string, arguments: {string}}
+type DetachInput = {kind: "detach", execution: string, workspace_id: string, desktop_id: string, session_id: string, mode: "observe"}
+type CopyInput = {kind: "copy", execution: string, workspace_id: string, desktop_id: string, session_id: string, mode: "observe"}
+type DesktopInput = ListInput | CreateInput | CurrentInput | PlanInput | AttachInput | LaunchInput | DetachInput | CopyInput
+type ChooseWorkspace = {kind: "choose_workspace"}
+type AttachPlan = {kind: "attach", workspace_id: string, desktop_id: string, mode: Mode}
+type AllocatePlan = {kind: "allocate", workspace_id: string}
+type SessionPlan = ChooseWorkspace | AttachPlan | AllocatePlan
+
+local function id_list(value: unknown, allow_empty: boolean): {string}?
+    if type(value) ~= "table" then return nil end
+    local count = 0
+    for key in pairs(value) do
+        if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > M.MAX_DESKTOPS then return nil end
+        count = count + 1
+    end
+    if count ~= #value or count > M.MAX_DESKTOPS or (count == 0 and not allow_empty) then return nil end
+    local result: {string} = {}
+    local seen: {[string]: boolean} = {}
+    for _, raw in ipairs(value) do
+        local id = contract.workspace_id(raw)
+        if not id or seen[id] then return nil end
+        seen[id] = true
+        result[#result + 1] = id
+    end
+    return result
+end
+
+local function plan_request(value: unknown): PlanRequest?
+    local object = bounds.object(value)
+    if not object then return nil end
+    local mode: Mode? = nil
+    if object.mode == "control" then mode = "control"
+    elseif object.mode == "observe" then mode = "observe" end
+    if not mode then return nil end
+    local desktops = id_list(object.desktops, false)
+    if not desktops then return nil end
+    if object.kind == "automatic" or object.kind == "workspace" then
+        if bounds.fields(object, {"kind", "mode", "desktops", "excluded", "workspace_id"}) then return nil end
+        local excluded = id_list(object.excluded, true)
+        if not excluded then return nil end
+        local listed: {[string]: boolean} = {}
+        for _, desktop in ipairs(desktops) do listed[desktop] = true end
+        for _, desktop in ipairs(excluded) do if not listed[desktop] then return nil end end
+        if object.kind == "automatic" then
+            if object.workspace_id ~= nil then return nil end
+            return {kind = "automatic", mode = mode, desktops = desktops, excluded = excluded}
+        end
+        local workspace = contract.workspace_id(object.workspace_id)
+        if not workspace then return nil end
+        return {kind = "workspace", workspace_id = workspace, mode = mode, desktops = desktops, excluded = excluded}
+    end
+    if object.kind == "selection" then
+        if bounds.fields(object, {"kind", "mode", "desktops", "workspace_id", "desktop_id"}) then return nil end
+        local workspace = contract.workspace_id(object.workspace_id)
+        local desktop = contract.workspace_id(object.desktop_id)
+        if not workspace or not desktop then return nil end
+        local listed = false
+        for _, id in ipairs(desktops) do if id == desktop then listed = true; break end end
+        if not listed then return nil end
+        return {kind = "selection", workspace_id = workspace, desktop_id = desktop, mode = mode, desktops = desktops}
+    end
+    return nil
+end
+
 function M.configuration(value: unknown): (Configuration?, string?)
     local object = bounds.object(value)
     if not object then return nil, "desktop configuration must be an object" end
@@ -78,40 +150,51 @@ function M.input(operation: string, value: unknown): DesktopInput?
         -- One page of the node's workspaces: a label prefix, a cursor and a size.
         local query = workspace_query.decode(object, {"owner_execution"})
         if not query then return nil end
-        return {execution = execution, workspace_id = nil, desktop_id = nil, session_id = nil, mode = "observe", name = nil, arguments = nil, query = query}
+        return {kind = "list", execution = execution, query = query}
+    end
+    if operation == M.PLAN then
+        if bounds.fields(object, {"owner_execution", "request"}) then return nil end
+        local request = plan_request(object.request)
+        if not execution or not request then return nil end
+        return {kind = "plan", execution = execution, request = request}
     end
     if not execution then return nil end
     if operation == M.CURRENT then
         if bounds.fields(object, {"owner_execution"}) then return nil end
-        return {execution = execution, workspace_id = nil, desktop_id = nil, mode = "observe", session_id = nil, name = nil, arguments = nil, query = nil}
+        return {kind = "current", execution = execution}
     end
     local desktop = contract.workspace_id(object.desktop_id)
     if operation == M.CREATE then
         -- Displays belong to the node, so allocation names no workspace.
         if not desktop or bounds.fields(object, {"owner_execution", "desktop_id"}) then return nil end
-        return {execution = execution, workspace_id = nil, desktop_id = desktop, mode = "control", session_id = nil, name = nil, arguments = nil, query = nil}
+        return {kind = "create", execution = execution, desktop_id = desktop}
     end
     local workspace = contract.workspace_id(object.workspace_id)
     if not workspace or not desktop then return nil end
     if operation == M.ATTACH then
         if bounds.fields(object, {"owner_execution", "workspace_id", "desktop_id", "mode"})
             or (object.mode ~= "control" and object.mode ~= "observe") then return nil end
-        return {execution = execution, workspace_id = workspace, desktop_id = desktop,
-            mode = object.mode == "control" and "control" or "observe", name = nil, arguments = nil, query = nil}
+        return {kind = "attach", execution = execution, workspace_id = workspace, desktop_id = desktop,
+            mode = object.mode == "control" and "control" or "observe"}
     elseif operation == M.LAUNCH then
         if bounds.fields(object, {"owner_execution", "workspace_id", "desktop_id", "session_id", "name", "arguments"}) then return nil end
         local session = bounds.id(object.session_id)
         local name = contract.text(object.name, 40)
-        if not session or not name or not name:match("^[a-z][a-z0-9_-]*$") or object.arguments == nil then return nil end
+        if not session then return nil end
+        if not name then return nil end
+        if not name:match("^[a-z][a-z0-9_-]*$") or object.arguments == nil then return nil end
         local values = arguments.decode(object.arguments)
         if not values then return nil end
-        return {execution = execution, workspace_id = workspace, desktop_id = desktop, session_id = session,
-            mode = "control", name = name, arguments = values, query = nil}
+        return {kind = "launch", execution = execution, workspace_id = workspace, desktop_id = desktop, session_id = session,
+            mode = "control", name = name, arguments = values}
     elseif operation == M.DETACH or operation == M.COPY then
         if bounds.fields(object, {"owner_execution", "workspace_id", "desktop_id", "session_id"}) then return nil end
         local session = bounds.id(object.session_id)
         if not session then return nil end
-        return {execution = execution, workspace_id = workspace, desktop_id = desktop, session_id = session, mode = "observe", name = nil, arguments = nil, query = nil}
+        if operation == M.DETACH then
+            return {kind = "detach", execution = execution, workspace_id = workspace, desktop_id = desktop, session_id = session, mode = "observe"}
+        end
+        return {kind = "copy", execution = execution, workspace_id = workspace, desktop_id = desktop, session_id = session, mode = "observe"}
     end
     return nil
 end

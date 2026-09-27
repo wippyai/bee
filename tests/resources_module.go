@@ -208,7 +208,11 @@ func resourcesModuleBase(folder string, resources bool, credentials bool) error 
 }
 
 func resourcesModuleNamed(root, index, name string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(filepath.Join(root, "src", filepath.FromSlash(index), "_index.yaml"))
+	base := index
+	if base == "" {
+		base = "src"
+	}
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(base), "_index.yaml"))
 	if err != nil {
 		return nil, fmt.Errorf("read source index: %w", err)
 	}
@@ -268,11 +272,6 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	if err := resourcesModuleBase(folder, true, false); err != nil {
 		return err
 	}
-	// The staged module entries attach the production app policies, so the
-	// closure stages them instead of redeclaring copies.
-	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "resources"), filepath.Join(root, "src", "security", "resources")); err != nil {
-		return err
-	}
 	hostEntries := resourcesModuleThreadsEntries()
 	hostEntries = append(hostEntries, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
 	if !dropRoots {
@@ -313,11 +312,6 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 	if err := resourcesModuleBase(folder, false, true); err != nil {
 		return err
 	}
-	// The staged module entries attach the production app policies, so the
-	// closure stages them instead of redeclaring copies.
-	if err := resourcesModuleCopyDir(filepath.Join(folder, "src", "security", "credentials"), filepath.Join(root, "src", "security", "credentials")); err != nil {
-		return err
-	}
 	hostEntries := resourcesModuleThreadsEntries()
 	// The host selects the placement binding recorded on projection receipts
 	// without admitting placement execution into this closure.
@@ -329,8 +323,8 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 			"parameters": []map[string]interface{}{{"name": "target_materializer", "value": "bee:module_materializer"},
 				{"name": "target_sources", "value": "bee:credential_sources"}}},
 	)
-	// credential_sources is host wiring owned by the app root.
-	sources, err := resourcesModuleNamed(root, "", "credential_sources")
+	// The default credential source catalog belongs to the credentials package.
+	sources, err := resourcesModuleNamed(root, "modules/credentials/src", "credential_sources")
 	if err != nil {
 		return err
 	}

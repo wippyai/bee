@@ -27,8 +27,8 @@ local function fresh(prefix: string): string
 end
 
 local scope_names = {"bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
-    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.resources:resource_manage_policy",
-    "bee.security.resources:resource_grant_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy", "bee.security.harness:launch_spawn_policy"}
+    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
+    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -137,10 +137,10 @@ local function define_tests()
             local original: {Original} = {}
             local policy_alpha = assert(registry.get(ALPHA_POLICY))
             local policy_beta = assert(registry.get(BETA_POLICY))
-            local resource_roots = assert(registry.get("bee:resource_roots"))
-            local roots = assert(registry.get("bee:placement_admitted_roots"))
-            local mode = assert(registry.get("bee:placement_resource_mode"))
-            local sources = assert(registry.get("bee:credential_sources"))
+            local resource_roots = assert(registry.get("bee.resources:resource_roots"))
+            local roots = assert(registry.get("bee.placement.native:placement_admitted_roots"))
+            local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+            local sources = assert(registry.get("bee.credentials:credential_sources"))
             original = {
                 {entry = policy_alpha, data = policy_alpha.data},
                 {entry = policy_beta, data = policy_beta.data},

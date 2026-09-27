@@ -148,7 +148,7 @@ entries:
     - bee.gateway.security:elevation_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
-    - bee.security.resources:resource_grant_thread_policy
+    - bee.resources.security:resource_grant_thread_policy
 - name: capability_status
   kind: function.lua
   source: file://capability_status_method.lua
@@ -163,7 +163,7 @@ entries:
     - bee.gateway.security:elevation_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
-    - bee.security.resources:resource_grant_thread_policy
+    - bee.resources.security:resource_grant_thread_policy
 - name: install_request
   kind: function.lua
   source: file://install_request_method.lua

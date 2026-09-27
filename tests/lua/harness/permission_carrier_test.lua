@@ -40,7 +40,7 @@ local function fresh(prefix: string): string
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
 local carrier_scope = {"bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy",
-    "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
+    "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
 local function scope(names: {string}): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(names) do
@@ -74,7 +74,7 @@ local function fixture_paths(): (string, string)
     return bin .. "/claude", streams .. "/claude/stream-json-2/permission.jsonl"
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc = assert(executor:exec("sh -c '" .. command .. "'"))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -90,7 +90,7 @@ local function shell(command: string): string
     return output
 end
 local function file_digest(path: string): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc = assert(executor:exec("cat " .. path))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -204,7 +204,7 @@ local function prepare_host(): string
         list[#list + 1] = {name = APPROVER_POLICY, approvers = {APPROVER}, max_ttl_ms = 60000}
         apply(policies_entry)
     end
-    local roots = registry.get("bee:placement_admitted_roots")
+    local roots = registry.get("bee.placement.native:placement_admitted_roots")
     if not roots then error("admitted roots entry") end
     local root_list = (roots.data :: Object).roots :: {Object}
     local admitted = false

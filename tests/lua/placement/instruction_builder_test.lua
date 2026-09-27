@@ -22,9 +22,9 @@ local POLICY = "bee.placement.native:instruction_builder_policy"
 local PROVIDER = "bee.placement.native:fixture_agent_provider"
 local BINDING = "bee.placement.native:fixture_agent_binding"
 local BUILDER = "bee.placement.native:fixture_builder_build"
-local ACTIVATION = "bee:harness_activation"
-local MODE = "bee:placement_resource_mode"
-local ROOTS = "bee:placement_admitted_roots"
+local ACTIVATION = "bee.harness:harness_activation"
+local MODE = "bee.placement.native:placement_resource_mode"
+local ROOTS = "bee.placement.native:placement_admitted_roots"
 local TEST_MARKER = "ctx_marker_unique_42"
 local FAILING_BUILDER_SOURCE = [[
 local M = {}
@@ -45,7 +45,7 @@ end
 -- A caller is bound to the workspace it acts in, as host-issued principals are.
 local function caller(actor: string, workspace_id: unknown)
     local policies: {security.Policy} = {}
-    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.security.resources:resource_manage_policy", "bee.security.resources:resource_grant_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy", "bee.placement.native:builder_test_caller_policy"}) do
+    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.resources.security:resource_manage_policy", "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.placement.native:builder_test_caller_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
@@ -188,7 +188,7 @@ local function launch_request(attempt_id: string, configuration_digest: string?)
 end
 
 local function shell(command: string): string
-    local executor, executor_error = exec.get("bee:placement_executor")
+    local executor, executor_error = exec.get("bee.placement.native:placement_executor")
     if not executor then error("executor: " .. tostring(executor_error)) end
     local proc, proc_error = executor:exec(command)
     if not proc then executor:release(); error("exec: " .. tostring(proc_error)) end

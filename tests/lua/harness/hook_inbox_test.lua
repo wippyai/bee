@@ -57,7 +57,7 @@ local function apply(entry: {[string]: unknown})
     if not applied then error("apply: " .. tostring(err)) end
 end
 local function admit_root()
-    local catalog_roots = assert(registry.get("bee:resource_roots"))
+    local catalog_roots = assert(registry.get("bee.resources:resource_roots"))
     local available = (catalog_roots.data :: Object).roots :: {Object}
     local admitted = false
     for _, root in ipairs(available) do if root.root_ref == ROOT then admitted = true end end
@@ -65,10 +65,10 @@ local function admit_root()
         available[#available + 1] = {root_ref = ROOT, access = "write"}
         apply(catalog_roots)
     end
-    local mode = assert(registry.get("bee:placement_resource_mode"))
+    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
     mode.data = {mode = "host_configured"}
     apply(mode)
-    local entry = assert(registry.get("bee:placement_admitted_roots"))
+    local entry = assert(registry.get("bee.placement.native:placement_admitted_roots"))
     local roots = (entry.data :: Object).roots :: {Object}
     for _, root in ipairs(roots) do
         if root.root_ref == ROOT then return end
@@ -77,7 +77,7 @@ local function admit_root()
     apply(entry)
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec: " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()

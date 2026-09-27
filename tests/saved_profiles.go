@@ -52,7 +52,7 @@ entries: []
 `
 
 const savedProfilesHarnessSecurityIndex = `version: '1.0'
-namespace: bee.security.harness
+namespace: bee.harness.security
 entries:
 - name: profile_store_policy
   kind: security.policy

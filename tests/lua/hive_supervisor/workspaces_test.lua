@@ -24,7 +24,7 @@ local supervisor = funcs.new():with_actor(security.new_actor("bee.hive.superviso
     "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.security.hive:hive_dispatch_policy"}))
 
 local function admit()
-    local entry = registry.get("bee:resource_roots")
+    local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
     local roots = (entry.data :: Object).roots :: {Object}
     for _, root in ipairs(roots) do if root.root_ref == PROJECTS then return end end

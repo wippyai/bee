@@ -41,43 +41,6 @@ local function main(value: unknown)
     if schema_error then error("Application database schema is unavailable") end
     local _, runs_schema_error = db:execute("CREATE TABLE IF NOT EXISTS tally_runs(attempt_id TEXT, definition_ref TEXT, state TEXT, outcome TEXT, steer TEXT)")
     if runs_schema_error then error("Application run schema is unavailable") end
-    -- The installed agents.launch grant lets this app start exactly the
-    -- allow-listed fixture agent and get a durable receipt for it; the app
-    -- then waits for the child to settle, reads its result and steers it
-    -- once through its installed threads.message grant.
-    local receipt, launch_fault = agents.run({definition_ref = "bee.workspace.app.probe:child",
-        brief = "summarize the workspace", idempotency_key = "tally-launch-" .. launch.launch_token})
-    local run_state = receipt and receipt.state or ("refused:" .. tostring(launch_fault and launch_fault.code))
-    local outcome: string? = nil
-    local steer = "skipped"
-    if receipt then
-        local waited, wait_fault = agents.wait(receipt, 15000)
-        if waited then
-            run_state = waited.state
-            outcome = waited.outcome
-            local current, status_fault = agents.status(receipt)
-            if current and current.state == "ended" then run_state = current.state end
-            if status_fault then run_state = "status:" .. tostring(status_fault.code) end
-        else
-            run_state = "wait:" .. tostring(wait_fault and wait_fault.code)
-        end
-        local message = {message_id = "tally-steer-" .. launch.launch_token, message_kind = "notification",
-            recipient_ids = {}, content = {text = "tally steer: keep counting"}}
-        local encoded, encode_error = canonical.encode(message)
-        local digest = encoded and hash.sha256(encoded) or nil
-        if not encode_error and digest then
-            local sent = funcs.call("bee.threads.service:send", {thread_id = receipt.thread_id,
-                idempotency_key = "tally-steer-" .. launch.launch_token, caller_node_id = "node-tally",
-                payload_digest = digest, message = message})
-            local reply = type(sent) == "table" and sent or nil
-            steer = (reply and reply.ok == true) and "sent" or "refused"
-        else
-            steer = "digest:unavailable"
-        end
-    end
-    local _, run_row_error = db:execute("INSERT INTO tally_runs(attempt_id, definition_ref, state, outcome, steer) VALUES (?, ?, ?, ?, ?)",
-        {receipt and receipt.attempt_id or "", receipt and receipt.definition_ref or "", run_state, outcome or "", steer})
-    if run_row_error then error("Application run record is unavailable") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
@@ -154,12 +117,55 @@ local function main(value: unknown)
         checkpoint()
     end
 
+    local function launch_child()
+        -- The installed agents.launch grant lets this app start exactly the
+        -- allow-listed shipped Claude batch definition. The app waits for the
+        -- placed child, reads its result and steers it through threads.message.
+        local run, launch_fault = agents.launch({definition_ref = "bee.driver.claude:research_batch",
+            brief = "summarize the workspace", idempotency_key = "tally-launch-" .. launch.launch_token,
+            thread = {title = "Tally workspace summary"}})
+        local run_state = run and "starting" or ("refused:" .. tostring(launch_fault and launch_fault.code))
+        local outcome: string? = nil
+        local steer = "skipped"
+        if run then
+            local waited, wait_fault = agents.wait(run, 15000)
+            if waited then
+                run_state = waited.state
+                outcome = waited.outcome
+                local current, status_fault = agents.status(run)
+                if current and current.state == "ended" then run_state = current.state end
+                if status_fault then run_state = "status:" .. tostring(status_fault.code) end
+            else
+                run_state = "wait:" .. tostring(wait_fault and wait_fault.code)
+            end
+            local message = {message_id = "tally-steer-" .. launch.launch_token, message_kind = "notification",
+                recipient_ids = {}, content = {text = "tally steer: keep counting"}}
+            local encoded, encode_error = canonical.encode(message)
+            local digest = encoded and hash.sha256(encoded) or nil
+            if not encode_error and digest then
+                local sent = funcs.call("bee.threads.service:send", {thread_id = run.thread_id,
+                    idempotency_key = "tally-steer-" .. launch.launch_token, caller_node_id = "node-tally",
+                    payload_digest = digest, message = message})
+                local reply = type(sent) == "table" and sent or nil
+                steer = (reply and reply.ok == true) and "sent" or "refused"
+            else
+                steer = "digest:unavailable"
+            end
+        end
+        local _, run_row_error = db:execute("INSERT INTO tally_runs(attempt_id, definition_ref, state, outcome, steer) VALUES (?, ?, ?, ?, ?)",
+            {run and run.attempt_id or "", run and run.definition_ref or "", run_state, outcome or "", steer})
+        if run_row_error then error("Application run record is unavailable") end
+        status = "Agent " .. run_state
+        paint()
+    end
+
     local appearance_request_id = launch.instance_id
     assert(process.send(launch.broker_pid, "bee.appearance.request", {version = 1,
         request_id = appearance_request_id, op = "state"}))
     paint()
     client.ready(launch)
     checkpoint()
+    coroutine.spawn(launch_child)
     while running do
         local event = channel.select({input:case_receive(), lifecycle:case_receive(), receipts:case_receive(), states:case_receive()})
         if not event.ok then break end

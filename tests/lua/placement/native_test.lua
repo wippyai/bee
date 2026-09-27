@@ -48,7 +48,7 @@ end
 -- A caller is bound to the workspace it acts in, as host-issued principals are.
 local function caller(actor: string, workspace_id: unknown)
     local policies: {security.Policy} = {}
-    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.security.resources:resource_manage_policy", "bee.security.resources:resource_grant_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy"}) do
+    for index, name in ipairs({"bee.placement.native:client_test_policy", "bee.resources.security:resource_manage_policy", "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
@@ -64,7 +64,7 @@ local function credential_call(method: string, value: unknown): {[string]: unkno
     return typed.value :: {[string]: unknown}
 end
 local function admit_credential_source()
-    local entry = registry.get("bee:credential_sources")
+    local entry = registry.get("bee.credentials:credential_sources")
     if not entry then error("credential sources entry") end
     local data = entry.data :: {[string]: unknown}
     local list = data.sources :: {{[string]: unknown}}
@@ -78,12 +78,12 @@ local function admit_credential_source()
     if not applied then error("admit credential source: " .. tostring(err)) end
 end
 local function admit_login_source(source: string)
-    local entry = registry.get("bee:credential_sources")
+    local entry = registry.get("bee.credentials:credential_sources")
     if not entry then error("credential sources entry") end
     local data = entry.data :: {[string]: unknown}
     local list = data.sources :: {{[string]: unknown}}
     list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "codex", projection_kinds = {"file"}}
-    local file_policy = registry.get("bee.security.credentials:credential_file_policy")
+    local file_policy = registry.get("bee.credentials.security:credential_file_policy")
     if not file_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
@@ -93,7 +93,7 @@ local function admit_login_source(source: string)
     if not applied then error("admit login source: " .. tostring(apply_error)) end
 end
 local function admit_grok_login_source(source: string)
-    local entry = registry.get("bee:credential_sources")
+    local entry = registry.get("bee.credentials:credential_sources")
     if not entry then error("credential sources entry") end
     local data = entry.data :: {[string]: unknown}
     local list = data.sources :: {{[string]: unknown}}
@@ -103,7 +103,7 @@ local function admit_grok_login_source(source: string)
     list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "grok", projection_kinds = {"file"},
         path = ".grok/auth.json", setup_path = ".grok/config.toml",
         setup_destination = ".grok/.bee-global-config.toml", setup_content_format = "opaque"}
-    local file_policy = registry.get("bee.security.credentials:credential_file_policy")
+    local file_policy = registry.get("bee.credentials.security:credential_file_policy")
     if not file_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
@@ -113,7 +113,7 @@ local function admit_grok_login_source(source: string)
     if not applied then error("admit Grok login source: " .. tostring(apply_error)) end
 end
 local function resource_mode(mode: string)
-    local entry = registry.get("bee:placement_resource_mode")
+    local entry = registry.get("bee.placement.native:placement_resource_mode")
     if not entry then error("resource mode entry") end
     local data = entry.data :: {[string]: unknown}
     data.mode = mode
@@ -261,7 +261,7 @@ local function admit_root(ref: string)
     if not applied then error("admit root: " .. tostring(err)) end
 end
 local function activate_fixture_binding()
-    local entry = registry.get("bee:harness_activation")
+    local entry = registry.get("bee.harness:harness_activation")
     if not entry then error("harness activation") end
     local data = entry.data :: {[string]: unknown}
     local bindings = data.bindings :: {unknown}
@@ -287,7 +287,7 @@ local function kinds(attempt_id: string): {string}
     return list
 end
 local function alive(pid: string): boolean
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc = assert(executor:exec("sh -c 'kill -0 " .. pid .. " 2>/dev/null && echo alive || echo gone'"))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -298,7 +298,7 @@ local function alive(pid: string): boolean
     return output:find("alive", 1, true) ~= nil
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc = assert(executor:exec(quote.line({"sh", "-c", command})))
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -487,7 +487,7 @@ local function define_tests()
             end
         end)
         test.it("reports a rejected OS group signal instead of claiming success", function()
-            local executor, executor_error = exec.get("bee:placement_executor")
+            local executor, executor_error = exec.get("bee.placement.native:placement_executor")
             if not executor then error(tostring(executor_error)) end
             local child, child_error = executor:exec("sh -c 'echo $$; exec sleep 30'", {process_group = true})
             if not child then executor:release(); error(tostring(child_error)) end
@@ -515,8 +515,8 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         resource_mode("host_configured")
-        admit_root("bee:placement_admitted_roots")
-        admit_root("bee:resource_roots")
+        admit_root("bee.placement.native:placement_admitted_roots")
+        admit_root("bee.resources:resource_roots")
         activate_fixture_binding()
         local measured = value(service.capabilities())
         local capability = tostring(measured.capability)

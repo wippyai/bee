@@ -26,7 +26,7 @@ local sends = require("sends")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
 local SHIPPED_SHAPE_DEFINITION = "bee.harness.catalog:shipped_shape_definition"
-local SHIPPED_BATCH_POLICY = "bee:launch_policy_claude_batch"
+local SHIPPED_BATCH_POLICY = "bee.driver.claude:launch_policy_claude_batch"
 local AGENT_DEFINITION = "bee.harness.catalog:agent_fixture_definition"
 local AGENT_POLICY = "bee.harness.catalog:agent_fixture_policy"
 local AGENT_REVIEWER = "bee.harness.catalog:agent_reviewer"
@@ -43,8 +43,8 @@ local function fresh(prefix: string): string
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
 local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
-    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.security.harness:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.resources:resource_manage_policy",
-    "bee.security.resources:resource_grant_policy", "bee.security.credentials:credential_manage_policy", "bee.security.credentials:credential_issue_policy", "bee.security.harness:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
+    "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
+    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -124,7 +124,7 @@ local function carrier_io(): machine.IO
     }
 end
 local function shell(command: string): string
-    local executor = assert(exec.get("bee:placement_executor"))
+    local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
     if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
     local stdout = proc:stdout_stream()
@@ -155,7 +155,7 @@ local function prepare_host(workspace: string)
     policy_data.executables = {claude = bin .. "/claude"}
     policy_data.environment = {BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl"}
     apply(policy_entry)
-    local roots_entry = registry.get("bee:resource_roots")
+    local roots_entry = registry.get("bee.resources:resource_roots")
     if not roots_entry then error("resource roots") end
     local roots_data = roots_entry.data :: {[string]: unknown}
     local roots = roots_data.roots :: {{[string]: unknown}}
@@ -167,7 +167,7 @@ local function prepare_host(workspace: string)
         roots[#roots + 1] = {root_ref = ROOT, access = "write"}
         apply(roots_entry)
     end
-    local native_roots = registry.get("bee:placement_admitted_roots")
+    local native_roots = registry.get("bee.placement.native:placement_admitted_roots")
     if not native_roots then error("native admitted roots") end
     local native_data = native_roots.data :: {[string]: unknown}
     local admitted = native_data.roots :: {{[string]: unknown}}
@@ -177,18 +177,18 @@ local function prepare_host(workspace: string)
         admitted[#admitted + 1] = {root_ref = ROOT, access = "write"}
         apply(native_roots)
     end
-    local setup_entry = registry.get("bee:harness_setup")
+    local setup_entry = registry.get("bee.harness:harness_setup")
     if not setup_entry then error("harness setup") end
     local setup_data = setup_entry.data :: {[string]: unknown}
     setup_data.roots = {project = ROOT, session = ROOT}
     setup_data.credentials = {anthropic = {provider = "claude", source = {kind = "env_variable", ref = SOURCE}}}
     apply(setup_entry)
-    local mode_entry = registry.get("bee:placement_resource_mode")
+    local mode_entry = registry.get("bee.placement.native:placement_resource_mode")
     if not mode_entry then error("resource mode") end
     local mode_data = mode_entry.data :: {[string]: unknown}
     mode_data.mode = "granted"
     apply(mode_entry)
-    local sources_entry = registry.get("bee:credential_sources")
+    local sources_entry = registry.get("bee.credentials:credential_sources")
     if not sources_entry then error("credential sources") end
     local sources_data = sources_entry.data :: {[string]: unknown}
     local sources = sources_data.sources :: {{[string]: unknown}}
@@ -231,7 +231,7 @@ local function with_overrides(definition_overrides: {string}, policy_overrides: 
     if not ok then error(tostring(failure)) end
 end
 local function restore_host()
-    local mode_entry = registry.get("bee:placement_resource_mode")
+    local mode_entry = registry.get("bee.placement.native:placement_resource_mode")
     if not mode_entry then error("resource mode") end
     local mode_data = mode_entry.data :: {[string]: unknown}
     mode_data.mode = "host_configured"
@@ -369,7 +369,7 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("preserves optional login policy on setup retry and refuses a required definition", function()
-            local entry = registry.get("bee:harness_setup")
+            local entry = registry.get("bee.harness:harness_setup")
             if not entry then error("host setup") end
             local original = entry.data
             local changed: {[string]: unknown} = {}
@@ -416,7 +416,7 @@ local function define_tests()
             test.eq(definitions[1].source_ref, ALTERNATE_SOURCE)
         end)
         test.it("refuses missing host credential setup before creating resources", function()
-            local entry = registry.get("bee:harness_setup")
+            local entry = registry.get("bee.harness:harness_setup")
             if not entry then error("host setup") end
             local original = entry.data
             local changed: {[string]: unknown} = {}
@@ -523,21 +523,21 @@ local function define_tests()
         end)
         test.it("ships hidden research routes for every batch driver with bounded policies", function()
             local cases = {
-                {definition = "bee.driver.codex:research_batch", policy = "bee:launch_policy_codex_batch",
+                {definition = "bee.driver.codex:research_batch", policy = "bee.driver.codex:launch_policy_codex_batch",
                     binding = "bee.driver.codex:binding", credential = "codex_login", executable = "bee.driver.codex:executable",
                     config = "bee.driver.codex:config_home", option = "sandbox", expected = "workspace-write"},
-                {definition = "bee.driver.claude:research_batch", policy = "bee:launch_policy_claude_batch",
+                {definition = "bee.driver.claude:research_batch", policy = "bee.driver.claude:launch_policy_claude_batch",
                     binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
                     config = "bee.driver.claude:config_home", option = "max_turns", expected = 1},
-                {definition = "bee.driver.agy:research_batch", policy = "bee:launch_policy_agy_batch",
+                {definition = "bee.driver.agy:research_batch", policy = "bee.driver.agy:launch_policy_agy_batch",
                     binding = "bee.driver.agy:binding", executable = "bee.driver.agy:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
-                {definition = "bee.driver.muse:research_batch", policy = "bee:launch_policy_muse_batch",
+                {definition = "bee.driver.muse:research_batch", policy = "bee.driver.muse:launch_policy_muse_batch",
                     binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
                     option = "approval_mode", expected = "on-request", additional_options = {max_steps = 1}},
-                {definition = "bee.driver.opencode:research_batch", policy = "bee:launch_policy_opencode_batch",
+                {definition = "bee.driver.opencode:research_batch", policy = "bee.driver.opencode:launch_policy_opencode_batch",
                     binding = "bee.driver.opencode:binding", executable = "bee.driver.opencode:executable", unconfined = true},
-                {definition = "bee.driver.grok:research_batch", policy = "bee:launch_policy_grok_batch",
+                {definition = "bee.driver.grok:research_batch", policy = "bee.driver.grok:launch_policy_grok_batch",
                     binding = "bee.driver.grok:binding", executable = "bee.driver.grok:executable",
                     option = "permission_mode", expected = "default", unconfined = true},
             }
@@ -594,8 +594,8 @@ local function define_tests()
             end
         end)
         test.it("flags exactly the unconfined orchestrator worker on the shipped orchestrator policy", function()
-            local entry = assert(registry.get("bee:launch_policy_claude_window"))
-            local orchestrator, orchestrator_error = launch_policy.decode("bee:launch_policy_claude_window", entry,
+            local entry = assert(registry.get("bee.driver.claude:launch_policy_claude_window"))
+            local orchestrator, orchestrator_error = launch_policy.decode("bee.driver.claude:launch_policy_claude_window", entry,
                 function(ref: string): (string?, string?)
                     if ref == "bee.driver.claude:executable" then return "/usr/bin/orchestrator-agent", nil end
                     if ref == "bee.driver.claude:config_home" then return "", nil end
@@ -607,8 +607,8 @@ local function define_tests()
             -- The named Codex route is the person's explicit host-home
             -- choice, so it keeps the inherited home while gaining the
             -- workspace-write CLI sandbox.
-            local named_entry = assert(registry.get("bee:launch_policy_codex_named_batch"))
-            local named, named_error = launch_policy.decode("bee:launch_policy_codex_named_batch", named_entry,
+            local named_entry = assert(registry.get("bee.driver.codex:launch_policy_codex_named_batch"))
+            local named, named_error = launch_policy.decode("bee.driver.codex:launch_policy_codex_named_batch", named_entry,
                 function(ref: string): (string?, string?)
                     if ref == "bee.driver.codex:executable" then return "/usr/bin/named-agent", nil end
                     if ref == "bee.driver.codex:config_home" then return "/home/person/.codex", nil end
@@ -620,13 +620,13 @@ local function define_tests()
         end)
         test.it("ships every driver route with thread and workdir overrides its host policy admits, and no placement override", function()
             local shipped = {
-                {"bee.driver.claude:default_window", "bee:launch_policy_claude_window"}, {"bee.driver.claude:research_batch", "bee:launch_policy_claude_batch"},
-                {"bee.driver.codex:default_window", "bee:launch_policy_codex_window"}, {"bee.driver.codex:research_batch", "bee:launch_policy_codex_batch"},
-                {"bee.driver.codex:named_batch", "bee:launch_policy_codex_named_batch"},
-                {"bee.driver.muse:default_window", "bee:launch_policy_muse_window"}, {"bee.driver.muse:research_batch", "bee:launch_policy_muse_batch"},
-                {"bee.driver.agy:default_window", "bee:launch_policy_agy_window"}, {"bee.driver.agy:research_batch", "bee:launch_policy_agy_batch"},
-                {"bee.driver.grok:default_window", "bee:launch_policy_grok_window"}, {"bee.driver.grok:research_batch", "bee:launch_policy_grok_batch"},
-                {"bee.driver.opencode:default_window", "bee:launch_policy_opencode_window"}, {"bee.driver.opencode:research_batch", "bee:launch_policy_opencode_batch"},
+                {"bee.driver.claude:default_window", "bee.driver.claude:launch_policy_claude_window"}, {"bee.driver.claude:research_batch", "bee.driver.claude:launch_policy_claude_batch"},
+                {"bee.driver.codex:default_window", "bee.driver.codex:launch_policy_codex_window"}, {"bee.driver.codex:research_batch", "bee.driver.codex:launch_policy_codex_batch"},
+                {"bee.driver.codex:named_batch", "bee.driver.codex:launch_policy_codex_named_batch"},
+                {"bee.driver.muse:default_window", "bee.driver.muse:launch_policy_muse_window"}, {"bee.driver.muse:research_batch", "bee.driver.muse:launch_policy_muse_batch"},
+                {"bee.driver.agy:default_window", "bee.driver.agy:launch_policy_agy_window"}, {"bee.driver.agy:research_batch", "bee.driver.agy:launch_policy_agy_batch"},
+                {"bee.driver.grok:default_window", "bee.driver.grok:launch_policy_grok_window"}, {"bee.driver.grok:research_batch", "bee.driver.grok:launch_policy_grok_batch"},
+                {"bee.driver.opencode:default_window", "bee.driver.opencode:launch_policy_opencode_window"}, {"bee.driver.opencode:research_batch", "bee.driver.opencode:launch_policy_opencode_batch"},
             }
             for _, pair in ipairs(shipped) do
                 local decoded, definition_error = definitions.decode(pair[1], assert(registry.get(pair[1])))
@@ -1197,7 +1197,7 @@ local function define_tests()
         end)
         test.it("launches, waits on and cancels a managed agent as an application under its host grant", function()
             local application = "bee.application:" .. workspace .. ":launcher"
-            local sources_entry = assert(registry.get("bee:credential_sources"))
+            local sources_entry = assert(registry.get("bee.credentials:credential_sources"))
             local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
             sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
             apply(sources_entry)
@@ -1209,8 +1209,8 @@ local function define_tests()
                 if err then error("agent_call: " .. tostring(err)) end
                 return reply :: admission.Reply
             end
-            local granted = {"bee.security.harness:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
-            local ungranted = {"bee.security.harness:agent_call_policy"}
+            local granted = {"bee.harness.security:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
+            local ungranted = {"bee.harness.security:agent_call_policy"}
             local key = fresh("app-run")
             test.eq(code(app_call(application, ungranted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key})), "LAUNCH_NOT_PERMITTED")
             local function settle(run: {[string]: unknown}): {[string]: unknown}
@@ -1238,7 +1238,7 @@ local function define_tests()
             test.eq(code(app_call("bee.application:" .. workspace .. ":other", granted, {operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id})), "DENIED")
             test.eq(code(app_call(application, granted, {operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60001})), "INVALID")
             -- The application agents library drives the same facade.
-            local probe_policies = {"bee.security.harness:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy", "bee.harness.catalog:agents_probe_policy"}
+            local probe_policies = {"bee.harness.security:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy", "bee.harness.catalog:agents_probe_policy"}
             local function probe(request: {[string]: unknown}): {[string]: unknown}
                 local policies: {security.Policy} = {}
                 for index, name in ipairs(probe_policies) do policies[index] = assert(security.policy(name)) end
@@ -1317,13 +1317,13 @@ local function define_tests()
             end
             local generated_applied, generated_error = generated_changes:apply()
             if not generated_applied then error("apply generated grant: " .. tostring(generated_error)) end
-            local sources_entry = assert(registry.get("bee:credential_sources"))
+            local sources_entry = assert(registry.get("bee.credentials:credential_sources"))
             local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
             sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
             apply(sources_entry)
             local function generated_scope(): security.Scope
                 local policies: {security.Policy} = {}
-                for index, name in ipairs({"bee.security.harness:agent_call_policy"}) do
+                for index, name in ipairs({"bee.harness.security:agent_call_policy"}) do
                     policies[index] = assert(security.policy(name))
                 end
                 for _, id in ipairs(generated_policies) do
@@ -1399,7 +1399,7 @@ local function define_tests()
             end
             local generated_applied, generated_error = generated_changes:apply()
             if not generated_applied then error("apply generated grant: " .. tostring(generated_error)) end
-            local sources_entry = assert(registry.get("bee:credential_sources"))
+            local sources_entry = assert(registry.get("bee.credentials:credential_sources"))
             local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
             sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
             apply(sources_entry)
@@ -1408,7 +1408,7 @@ local function define_tests()
             open_gateway()
             local function generated_scope(): security.Scope
                 local policies: {security.Policy} = {}
-                for index, name in ipairs({"bee.security.harness:agent_call_policy"}) do
+                for index, name in ipairs({"bee.harness.security:agent_call_policy"}) do
                     policies[index] = assert(security.policy(name))
                 end
                 for _, id in ipairs(generated_policies) do
@@ -1466,7 +1466,7 @@ local function define_tests()
         test.it("runs an agent as a function with durable receipts, replay, cancel before start and wait for terminal carrier record", function()
             local run_workspace = fresh("func-run-ws")
             local application = "bee.application:" .. run_workspace .. ":launcher"
-            local sources_entry = assert(registry.get("bee:credential_sources"))
+            local sources_entry = assert(registry.get("bee.credentials:credential_sources"))
             local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
             sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
             apply(sources_entry)
@@ -1478,7 +1478,7 @@ local function define_tests()
                 if err then error("agent_call: " .. tostring(err)) end
                 return reply :: admission.Reply
             end
-            local granted = {"bee.security.harness:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
+            local granted = {"bee.harness.security:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
             local run_key = fresh("func-run-key")
 
             -- 1. Run returns a durable receipt promptly

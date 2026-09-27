@@ -39,13 +39,13 @@ local function credential(method: string, request: {[string]: unknown}): {[strin
     return value.value :: {[string]: unknown}
 end
 local function admit()
-    local roots_entry = registry.get("bee:placement_admitted_roots")
+    local roots_entry = registry.get("bee.placement.native:placement_admitted_roots")
     assert(roots_entry, "admitted roots entry")
     local roots = (roots_entry.data :: {[string]: unknown}).roots :: {{[string]: unknown}}
     local has_root = false
     for _, root in ipairs(roots) do if tostring(root.root_ref) == ROOT_REF then has_root = true end end
     if not has_root then roots[#roots + 1] = {root_ref = ROOT_REF, access = "write"} end
-    local sources_entry = registry.get("bee:credential_sources")
+    local sources_entry = registry.get("bee.credentials:credential_sources")
     assert(sources_entry, "credential sources entry")
     local sources_data = sources_entry.data :: {[string]: unknown}
     sources_data.sources = {{ref = CRED_SOURCE, workspace_id = "*", audience = ACTOR, provider = "claude", projection_kinds = {"environment"}}}

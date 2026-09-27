@@ -5,7 +5,7 @@
 local registry = require("registry")
 local bounds = require("bounds")
 local M = {}
-M.ACTIVATION = "bee:harness_activation"
+M.ACTIVATION = "bee.harness:harness_activation"
 M.ACTIVATION_TYPE = "bee.harness_activation"
 M.ACTIVATION_SCHEMA = "bee.harness-activation@1"
 M.MAX_BINDINGS = 64

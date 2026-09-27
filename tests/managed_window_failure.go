@@ -326,7 +326,7 @@ func run() error {
 		if name == "test" {
 			entry["source"], entry["method"] = "file://failure.lua", "run"
 			entry["imports"].(map[string]interface{})["placement_store"] = "bee.placement.native.persist:store"
-			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee.security.placement:placement_store_policy", "bee.managed.window.fixture:failure_evidence_policy")
+			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee.placement.native.security:placement_store_policy", "bee.managed.window.fixture:failure_evidence_policy")
 		}
 		kept = append(kept, entry)
 	}

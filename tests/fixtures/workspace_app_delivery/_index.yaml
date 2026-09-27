@@ -88,52 +88,6 @@ entries:
       start_menu: false
       fullscreen: false
       reuse: never
-- name: child_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The one allow-listed fixture agent the installed Tally app may launch; shaped like the shipped drivers with executable_env while the acceptance fills the answer stream
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    executables: {}
-    executable_env: {claude: bee.driver.claude:executable}
-    environment:
-      BEE_FIXTURE_STREAM: ''
-    prepare_options:
-      permission_mode: dontAsk
-      max_turns: 1
-    gateway_tools: []
-- name: child
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    test_support: true
-    comment: The allow-listed fixture agent the installed Tally app launches; only the executable is the scripted agent
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: workspace-app-child
-    title: Tally fixture agent
-    command_names: []
-    binding_ref: bee.driver.claude:binding
-    profile_id: batch
-    policy_ref: bee.workspace.app.probe:child_policy
-    default_mode: batch
-    allowed_overrides: [brief]
-    thread_policy:
-      kind: new
-    credentials: []
-    presentation:
-      start_menu: false
-      fullscreen: false
-      reuse: never
 - name: operator_policy
   kind: security.policy
   meta:
@@ -170,18 +124,18 @@ entries:
   security:
     policies:
     - bee.workspace.app.probe:operator_policy
-    - bee.security.harness:carrier_policy
-    - bee.security.harness:carrier_environment_policy
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:carrier_environment_policy
     - bee.security.threads:thread_create_policy
     - bee.security.threads:thread_observe_policy
-    - bee.security.harness:harness_setup_policy
-    - bee.security.placement:placement_store_policy
-    - bee.security.placement:placement_exec_policy
-    - bee.security.placement:placement_runner_policy
-    - bee.security.resources:resource_grant_policy
-    - bee.security.resources:resource_resolve_policy
-    - bee.security.credentials:credential_issue_policy
-    - bee.security.credentials:credential_materialize_workspace_policy
+    - bee.harness.security:harness_setup_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.resources.security:resource_grant_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_issue_policy
+    - bee.credentials.security:credential_materialize_workspace_policy
     - bee.security.gateway:gateway_materialize_policy
     - bee.security.gateway:gateway_supervision_policy
   meta:
@@ -192,18 +146,18 @@ entries:
           id: bee.workspace_app.operator
         policies:
         - bee.workspace.app.probe:operator_policy
-        - bee.security.harness:carrier_policy
-        - bee.security.harness:carrier_environment_policy
+        - bee.harness.security:carrier_policy
+        - bee.harness.security:carrier_environment_policy
         - bee.security.threads:thread_create_policy
         - bee.security.threads:thread_observe_policy
-        - bee.security.harness:harness_setup_policy
-        - bee.security.placement:placement_store_policy
-        - bee.security.placement:placement_exec_policy
-        - bee.security.placement:placement_runner_policy
-        - bee.security.resources:resource_grant_policy
-        - bee.security.resources:resource_resolve_policy
-        - bee.security.credentials:credential_issue_policy
-        - bee.security.credentials:credential_materialize_workspace_policy
+        - bee.harness.security:harness_setup_policy
+        - bee.placement.native.security:placement_store_policy
+        - bee.placement.native.security:placement_exec_policy
+        - bee.placement.native.security:placement_runner_policy
+        - bee.resources.security:resource_grant_policy
+        - bee.resources.security:resource_resolve_policy
+        - bee.credentials.security:credential_issue_policy
+        - bee.credentials.security:credential_materialize_workspace_policy
         - bee.security.gateway:gateway_materialize_policy
         - bee.security.gateway:gateway_supervision_policy
 - name: inspect_grants

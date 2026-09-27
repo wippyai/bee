@@ -28,6 +28,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host policy for the component-owned OpenCode window route
+  default: bee.driver.opencode:launch_policy_opencode_window
   targets:
   - entry: bee.driver.opencode:default_window
     path: .data.policy_ref
@@ -35,6 +36,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host policy for the component-owned OpenCode batch route
+  default: bee.driver.opencode:launch_policy_opencode_batch
   targets:
   - entry: bee.driver.opencode:research_batch
     path: .data.policy_ref
@@ -188,3 +190,63 @@ entries:
     arguments:
     - bee.driver.opencode:default_window
     fullscreen: true
+- name: launch_policy_opencode_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected non-interactive OpenCode batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {opencode: bee.driver.opencode:executable}
+    environment: {}
+    allow_host_home: false
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_hooks: []
+    profile_options: {}
+    prepare_options: {}
+- name: launch_policy_opencode_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned OpenCode window; missing host executable leaves
+      the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides: [thread, workdir]
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      opencode: bee.driver.opencode:executable
+    environment: {}
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - thread_sessions
+    - thread_notify
+    - session_directory
+    - session_send
+    - session_inbox
+    - session_ack
+    - session_reply
+    - overlay
+    - delivery
+    - docs
+    - components
+    gateway_hooks: []
+    profile_options: {}
+    prepare_options: {}

@@ -36,6 +36,14 @@ entries:
   kind: ns.dependency
   component: bee/gateway
   version: '*'
+- name: protected_namespace
+  kind: ns.requirement
+  meta:
+    comment: Add the native placement namespace to the host trust map
+  default: bee.placement.native
+  targets:
+  - entry: bee:protected_kernel
+    path: .data.namespaces +=
 - name: target_db
   kind: ns.requirement
   meta:
@@ -55,7 +63,8 @@ entries:
 - name: process_host
   kind: ns.requirement
   meta:
-    comment: Process host that runs attempt runners and the supervision sweeper
+    comment: Process host that runs attempt runners and the supervision sweeper; an assembly may override the Bee default
+  default: bee:workers
   targets:
   - entry: bee.placement.native:runner_host_ref
     path: .host_ref
@@ -65,6 +74,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected policy grants for the supervision sweeper
+  default: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy, bee.placement.native.security:placement_sweeper_policy, bee.security.gateway:gateway_supervision_policy]
   targets:
   - entry: bee.placement.native.service:sweeper_service
     path: .lifecycle.security.policies
@@ -72,6 +82,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected native executor; a launch request never selects it
+  default: bee.placement.native:placement_executor
   targets:
   - entry: bee.placement.native:executor_ref
     path: .resource_ref
@@ -79,6 +90,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected read-only filesystem for executable measurement
+  default: bee.placement.native:placement_host_files
   targets:
   - entry: bee.placement.native:host_files_ref
     path: .resource_ref
@@ -86,6 +98,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected admissible resource roots; a launch request cannot choose this policy
+  default: bee.placement.native:placement_admitted_roots
   targets:
   - entry: bee.placement.native:admitted_roots_ref
     path: .resource_ref
@@ -93,6 +106,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected placement resource mode; a launch request cannot choose it
+  default: bee.placement.native:placement_resource_mode
   targets:
   - entry: bee.placement.native:resource_mode_ref
     path: .resource_ref
@@ -175,3 +189,40 @@ entries:
   base: project
   auto_init: true
   mode: '0700'
+- name: placement_admitted_roots
+  kind: registry.entry
+  meta:
+    type: bee.placement_roots
+    comment: fs.directory entries a launch may name as resource roots on this host with the widest access allowed; host policy, not a delegated grant. The workspace folder and its children are admitted so an agent can target a folder it chose, such as a git worktree, without a host step
+  data:
+    roots:
+    - root_ref: bee.env:workspace_root
+      access: write
+- name: placement_executor
+  kind: exec.native
+  meta:
+    comment: Children start with a clean environment; PATH comes from the host, everything else from the admitted request
+  default_env:
+    PATH: ${env:bee.placement.native:placement_path}
+- name: placement_host_files
+  kind: fs.directory
+  meta:
+    comment: The host filesystem as one volume for executable measurement; this entry requests readonly access
+  directory: /
+  auto_init: false
+  readonly: true
+- name: placement_path
+  kind: env.variable
+  meta:
+    comment: Host-selected executable search path for native placement children
+  storage: bee.placement.native:environment
+  variable: PATH
+  default: /usr/local/bin:/usr/bin:/bin
+  readonly: true
+- name: placement_resource_mode
+  kind: registry.entry
+  meta:
+    type: bee.placement_resource_mode
+    comment: host_configured or granted; selected by the host, never by a request
+  data:
+    mode: granted

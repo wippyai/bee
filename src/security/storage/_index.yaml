@@ -71,7 +71,7 @@ entries:
     comment: The catalog backend's store, the host's admitted roots and its own execution
   policy:
     actions: [db.get, registry.get, bee.workspace.manager.execute]
-    resources: [bee.env:workspace_db, bee.resources:roots_ref, bee:resource_roots, bee.workspace.catalog:backend]
+    resources: [bee.env:workspace_db, bee.resources:roots_ref, bee.resources:resource_roots, bee.workspace.catalog:backend]
     effect: allow
 - name: workspace_catalog_volume_policy
   kind: security.policy

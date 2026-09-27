@@ -372,7 +372,7 @@ local function main()
     local definition = bounds.text(values.definition, 160)
     if not definition or definition == "" then definition = DEFAULT_DEFINITION end
     local policy_ref = bounds.text(values.authoring_policy, 160)
-    if not policy_ref or policy_ref == "" then policy_ref = "bee:launch_policy_agy_batch" end
+    if not policy_ref or policy_ref == "" then policy_ref = "bee.driver.agy:launch_policy_agy_batch" end
     local round = text_of(values.round, "round")
     local source_workspace = text_of(values.source_workspace, "source workspace")
     local launch_workspace = text_of(values.launch_workspace, "launch workspace")

@@ -1,12 +1,16 @@
 # Package boundaries
 
-Bee currently ships one native application pack. The local Hub can inspect,
-plan and apply host-authorized components, and governed overlays can author,
-freeze, review, apply and recover a destination-owned runtime overlay. Public
-enrollment, managed headless launch, destination package transfer/install and
-independent package extraction remain proposals. Their metadata must not be
-described as a callable API until the corresponding owner and acceptance
-contract exists. See [the system map](ownership.md) for the larger topology.
+Bee currently ships one native application pack. Its default component lock
+includes `bee/agents`, a meta-package for the separately composed harness,
+credential, placement, resource and driver components. The local Hub can
+inspect, plan and apply host-authorized components, and governed overlays can
+author, freeze, review, apply and recover a destination-owned runtime overlay.
+The bare kernel can omit `bee/agents`; its known agent commands direct the user
+to install the package. Public enrollment, managed headless launch,
+destination-owned package transfer/install and independent release streams
+remain proposals. Their metadata must not be described as a callable API until
+the corresponding owner and acceptance contract exists. See [the system
+map](ownership.md) for the larger topology.
 
 An admitted Wippy component may define services and functions, an owned
 database and migrations, drivers, traits, agents, and optional UI. Bee governs
@@ -22,6 +26,28 @@ authorize them. Component services own their domain protocol and state.
 | Optional packages | Installed applications, coding tools, harnesses, models and services | Published contracts and host admission |
 | Independent subsystems | Threads, Hub reads/planning/local apply, governed overlay authoring/review/apply/recovery, approvals, sync and scoped MCP | Authenticated operation contracts; each owns its state and migrations |
 | Native extensions | Coding-specific I/O, file watching and native adapters | Built into a native release; registry installation cannot add a Go module to a running process |
+
+## Default managed-agent kit
+
+`bee/agents` composes `bee/harness`, `bee/credentials`, `bee/placement`,
+`bee/placement-native`, `bee/resources`, the shared driver contracts and Bee's
+built-in drivers. The normal Bee lock includes this bundle, so the Agent
+application and `bee claude`, `bee codex`, `bee agy`, `bee grok`, `bee muse`,
+`bee opencode` and `bee wippy` commands remain available by default.
+
+The harness owns its Agent application, launch setup and activation entries,
+gateway hook endpoints and harness policies. Placement, credentials and
+resources own their corresponding roots, host requirements and policies.
+Driver components own their launch policies and default host requirements.
+Requirements use package defaults that an assembly can replace. The MCP
+listener, tool routes and tool policies stay in the kernel's gateway core;
+the harness package adds only the hook endpoints used by managed agents.
+
+The Agent application's public definition ID and driver definition IDs remain
+unchanged when their source moves into these packages. Saved workspace state
+therefore continues to resolve those definitions. No owned persistence schema
+stores the moved host policy IDs, so this extraction does not require a data
+migration.
 
 Physical directories do not define registry identity. Moving an implementation
 must preserve its stable definition ID. Every application is a standalone

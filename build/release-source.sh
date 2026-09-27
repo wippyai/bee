@@ -57,12 +57,28 @@ lock_program='
     { print }
 '
 
+# The source lock can use either zero- or two-space sequence indentation. The
+# staged release lock already contains its own two-space bee/bee row, so shift
+# every copied row to the same list indentation while preserving its nesting.
+release_lock_program='
+    $1 == "-" && $2 == "name:" { source_indent = index($0, "-") - 1; bee = ($3 ~ /^bee\//) }
+    bee && $1 == "version:" { sub(/version:.*/, "version: " version) }
+    {
+        if (NF == 0) { print; next }
+        indent = match($0, /[^ ]/) - 1
+        sub(/^ */, "")
+        indent += 2 - source_indent
+        if (indent < 0) indent = 0
+        printf "%*s%s\n", indent, "", $0
+    }
+'
+
 # bee/bee is implicit in editable development. The release lock names it as
 # the root and selects every physical module at the release version.
 {
     printf '%s\n' 'directories:' '  modules: .wippy' '  src: ./src' 'modules:' \
         '  - name: bee/bee' "    version: $version" '    root: true'
-    sed -n '/^modules:/,$p' "$root/wippy.lock" | sed '1d' | awk -v version="$version" "$lock_program"
+    sed -n '/^modules:/,$p' "$root/wippy.lock" | sed '1d' | awk -v version="$version" "$release_lock_program"
 } > "$destination/wippy.lock"
 touch -r "$root/wippy.lock" "$destination/wippy.lock"
 sed '/^  replacements:/a\    bee/bee: .' "$root/.wippy.yaml" > "$destination/.wippy.yaml"

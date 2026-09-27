@@ -34,7 +34,8 @@ DESKTOP_HANG_SECONDS = 120
 
 
 class Desktop:
-    def __init__(self, directory, packed=False, project=ROOT, deployment=None, apps=(), launcher=False, command_name="bee"):
+    def __init__(self, directory, packed=False, project=ROOT, deployment=None, apps=(), launcher=False, command_name="bee",
+                 runtime=None, native=False, state_dir=None):
         self.master, slave = pty.openpty()
         self.width, self.height = 100, 30
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
@@ -47,8 +48,14 @@ class Desktop:
         cwd = directory if packed else project
         if packed:
             deployment_copy(deployment or product_deployment(), directory)
-        args = [str(RUNTIME), "run", command_name]
-        args += list(apps) + ["--host", "bee:terminal", "--set", f"registry.history_path={directory}/registry.db"]
+        selected_runtime = runtime or RUNTIME
+        if native:
+            args = [str(selected_runtime)]
+            if state_dir is not None:
+                args += ["--state", str(state_dir)]
+        else:
+            args = [str(selected_runtime), "run", command_name]
+            args += list(apps) + ["--host", "bee:terminal", "--set", f"registry.history_path={directory}/registry.db"]
         if launcher:
             args = [str(ROOT / "run.sh"), "--set", f"registry.history_path={directory}/registry.db"]
             cwd = directory

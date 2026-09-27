@@ -13,7 +13,7 @@ local model = require("model")
 local appearance = require("appearance")
 
 local PROJECTS = "bee.workspace.catalog:projects_fixture"
-local RESOURCES = "bee:resources_workspace_extension"
+local RESOURCES = "bee.resources:resources_workspace_extension"
 local AGENTS = "bee:gateway_workspace_extension"
 local BROKEN = "bee.workspace.catalog:broken_extension"
 type Object = {[string]: unknown}
@@ -32,7 +32,7 @@ local function executor(id: string, names: {string}): funcs.Executor
 end
 
 local manager = executor("bee.test.extension_manager", {"bee.workspace.catalog:call_test_policy", "bee.security.storage:workspace_catalog_read_policy",
-    "bee.security.storage:workspace_catalog_manage_policy", "bee.workspace.catalog:resources_call_test_policy", "bee.security.resources:resource_manage_policy"})
+    "bee.security.storage:workspace_catalog_manage_policy", "bee.workspace.catalog:resources_call_test_policy", "bee.resources.security:resource_manage_policy"})
 local reader = executor("bee.test.extension_reader", {"bee.workspace.catalog:call_test_policy", "bee.security.storage:workspace_catalog_read_policy"})
 local stranger = executor("bee.test.extension_stranger", {"bee.workspace.catalog:resources_call_test_policy"})
 
@@ -48,7 +48,7 @@ local function value(reply: Reply): Object
 end
 
 local function admit()
-    local entry = registry.get("bee:resource_roots")
+    local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
     local roots = (entry.data :: Object).roots :: {Object}
     for _, root in ipairs(roots) do if root.root_ref == PROJECTS then return end end

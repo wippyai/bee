@@ -154,7 +154,7 @@ local function define_tests()
             test.eq(#exact.bindings, #complete.bindings)
         end)
         test.it("ships a versioned host activation declaration", function()
-            local entry = registry.get("bee:harness_activation")
+            local entry = registry.get("bee.harness:harness_activation")
             if not entry then error("activation entry") end
             local data = entry.data :: {[string]: unknown}
             test.eq(data.schema_revision, "bee.harness-activation@1")
@@ -166,9 +166,9 @@ local function define_tests()
             test.is_true(has(list, "bee.driver.wippy:binding"))
         end)
         test.it("rejects a malformed activation declaration without activating discovered bindings", function()
-            local original = registry.get("bee:harness_activation")
+            local original = registry.get("bee.harness:harness_activation")
             if not original then error("activation entry") end
-            local malformed = registry.get("bee:harness_activation")
+            local malformed = registry.get("bee.harness:harness_activation")
             if not malformed then error("activation entry") end
             (malformed.data :: {[string]: unknown}).schema_revision = "bee.harness-activation@0"
             local changes = registry.snapshot():changes()
@@ -184,7 +184,7 @@ local function define_tests()
             if not restored then error(tostring(restore_error)) end
             if not snapshot then error(tostring(read_error)) end
             test.eq(snapshot.generation, math.floor(applied:id()))
-            test.is_true(has(snapshot.diagnostics, "bee:harness_activation: schema_revision must be bee.harness-activation@1"))
+            test.is_true(has(snapshot.diagnostics, "bee.harness:harness_activation: schema_revision must be bee.harness-activation@1"))
             test.is_false(find(snapshot, "bee.driver.claude:binding").activated)
             test.is_false(find(snapshot, "bee.driver.codex:binding").activated)
             local usable, usable_error = catalog.usable(snapshot)

@@ -31,6 +31,19 @@ case "${1:-}" in
             shift
         done
         [ -n "$module" ] && [ -n "$output" ] || exit 1
+        python3 - "$PWD/wippy.lock" "$module" <<'PY'
+import sys
+import yaml
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    lock = yaml.safe_load(source)
+modules = lock["modules"]
+assert isinstance(modules, list)
+locked = {entry["name"]: entry["version"] for entry in modules}
+assert sys.argv[2] in locked
+assert "bee/agents" in locked
+assert len(set(locked.values())) == 1
+PY
         mkdir -p "$(dirname -- "$output")"
         printf '%s\n' "$module" > "$output"
         ;;

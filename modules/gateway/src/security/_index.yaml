@@ -112,7 +112,7 @@ entries:
   meta: {comment: target_approval_* requirements inject exactly the host-selected approval policies that a binding may resolve; elevation and installation load their own call policies the same way}
   policy:
     actions: [security.policy.get]
-    resources: [bee.gateway.security:access_call_policy, bee.gateway.security:elevation_policy, bee.security.resources:resource_grant_thread_policy,
+    resources: [bee.gateway.security:access_call_policy, bee.gateway.security:elevation_policy, bee.resources.security:resource_grant_thread_policy,
       bee.gateway.security:installation_policy, bee.gateway.security:installation_read_policy, bee.gateway.security:installation_apply_policy]
     effect: allow
 - name: subject_call

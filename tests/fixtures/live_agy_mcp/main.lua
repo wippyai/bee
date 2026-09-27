@@ -27,7 +27,7 @@ local function main()
     local marker = "bee-mcp-" .. tostring(time.now():unix_nano())
     local thread = "research-live"
     local definition = "bee.driver.agy:research_batch"
-    local policy = registry.get("bee:launch_policy_agy_batch")
+    local policy = registry.get("bee.driver.agy:launch_policy_agy_batch")
     if not policy then error("Agy batch policy unavailable") end
     local data = bounds.object(policy.data)
     if not data then error("Agy policy data missing") end

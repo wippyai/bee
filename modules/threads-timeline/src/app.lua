@@ -80,9 +80,14 @@ local function main(value: unknown)
         while more_pages and pages < MAX_DRAIN_PAGES and state.phase == "attached" do
             local intent = model.page_intent(state)
             if not intent then break end
-            more_pages = model.apply_page(state, ask(intent))
-            local acknowledgment = model.ack_intent(state, key())
-            if acknowledgment then model.apply_ack(state, ask(acknowledgment)) end
+            local result = model.apply_page(state, ask(intent))
+            if result.kind == "refused" then
+                more_pages = false
+            else
+                more_pages = result.has_more
+                local acknowledgment = model.ack_intent(state, key())
+                if acknowledgment then model.apply_ack(state, ask(acknowledgment)) end
+            end
             pages = pages + 1
         end
         dirty = true

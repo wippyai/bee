@@ -22,7 +22,8 @@ local function scope(names: {string}): security.Scope
 end
 local function viewer(id: string): caller.Client
     local actor = security.new_actor(id)
-    local viewer_scope = scope({"bee.threads:client_test_policy"})
+    local viewer_scope = scope({"bee.threads:client_test_policy", "bee.security.threads:thread_observe_policy",
+        "bee.security.threads:thread_lifecycle_policy"})
     return caller.new(function(target: string, request: unknown): (unknown, string?)
         local result, err = funcs.new():with_actor(actor):with_scope(viewer_scope):call(target, request)
         if err then return nil, tostring(err) end
@@ -62,12 +63,31 @@ local function define_tests()
             test.eq(state.phase, "attached")
             model.apply_recap(state, ask(state, bob, model.recap_intent(state)))
             test.is_true(state.recap ~= nil)
-            local more = model.apply_page(state, ask(state, bob, model.page_intent(state)))
-            test.is_false(more)
+            local raw_page = ask(state, bob, model.page_intent(state))
+            local page_result = model.apply_page(state, raw_page)
+            test.eq(page_result.kind, "accepted")
+            if page_result.kind == "accepted" then test.is_false(page_result.has_more) end
             test.eq(#state.rows, 3)
             test.eq(state.rows[3].summary, "request from bee.test.timeline_alice: note 3")
             test.eq(state.rows[1].summary, "request from bee.test.timeline_alice to bee.test.timeline_bob: please review")
-            model.apply_ack(state, ask(state, bob, model.ack_intent(state, harness.key())))
+            local ack_intent = model.ack_intent(state, harness.key())
+            if not ack_intent then error("timeline page has no acknowledgment intent") end
+            if ack_intent.request.scanned_through ~= state.rows[3].sequence then
+                local page = type(raw_page.value) == "table" and (raw_page.value :: Object) or nil
+                local current = state.session
+                local outstanding = current and current.outstanding or nil
+                error("timeline page cursor mismatch: owner=" .. tostring(page and page.scanned_through)
+                    .. " row=" .. tostring(state.rows[3].sequence) .. " intent=" .. tostring(ack_intent.request.scanned_through)
+                    .. " outstanding=" .. tostring(outstanding and outstanding.scanned_through))
+            end
+            local acknowledgment = ask(state, bob, ack_intent)
+            test.is_true(acknowledgment.ok)
+            local ack_value = type(acknowledgment.value) == "table" and (acknowledgment.value :: Object) or nil
+            if not ack_value or ack_value.after_sequence ~= state.rows[3].sequence then
+                error("timeline owner acknowledged through " .. tostring(ack_value and ack_value.after_sequence)
+                    .. " after page " .. tostring(ack_intent.request.scanned_through))
+            end
+            model.apply_ack(state, acknowledgment)
             test.eq(state.session and state.session.after_sequence, state.rows[3].sequence)
             harness.value(alice:call("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.message("m4", "note 4")}))
             local watch = model.watch_intent(state)
@@ -98,7 +118,9 @@ local function define_tests()
             test.eq(restored.phase, "attached")
             test.eq(restored.session and restored.session.lease_generation, 2)
             test.eq(restored.dropped_through, state.rows[4].sequence)
-            test.is_false(model.apply_page(restored, ask(restored, bob, model.page_intent(restored))))
+            local page_result = model.apply_page(restored, ask(restored, bob, model.page_intent(restored)))
+            test.eq(page_result.kind, "accepted")
+            if page_result.kind == "accepted" then test.is_false(page_result.has_more) end
             test.eq(#restored.rows, 0)
             -- The earlier instance's lease is fenced: its next acknowledgment is refused and it asks for resume.
             harness.value(alice:call("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.message("m5", "note 5")}))

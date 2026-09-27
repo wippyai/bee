@@ -65,6 +65,7 @@ entries:
     request: bee.placement:request
     transitions: bee.placement:transitions
     protocol: bee.placement.native:protocol
+    resource_resolution: bee.placement.native.service:resource_resolution
     types: bee.placement:types
 - name: git_roots_test
   kind: function.lua
@@ -223,6 +224,8 @@ entries:
     materialization: bee.placement.native.service:materialization
     request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
+    executable_stream: bee.placement.native.service:executable_stream
+    resource_resolution: bee.placement.native.service:resource_resolution
     homes: bee.placement.native.service:homes
     quote: bee.driver.kit:quote
     types: bee.placement:types

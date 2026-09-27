@@ -167,6 +167,25 @@ local function bind_policies(worker_definition: string?)
     worker_data.agent_launch = {}
     apply(worker)
 end
+local function bind_live_worker(provider: string, worker_definition: string)
+    local definition = registry.get(worker_definition)
+    local definition_data = definition and definition.data :: Object or nil
+    local policy_ref = definition_data and type(definition_data.policy_ref) == "string" and definition_data.policy_ref :: string or nil
+    if not policy_ref or policy_ref == "" then
+        policy_ref = "bee.driver." .. provider .. ":launch_policy_" .. provider .. "_batch"
+    end
+    local worker_policy = assert(registry.get(policy_ref))
+    local policy_data = worker_policy.data :: Object
+    local variable_ref = provider == "claude" and "bee.harness.catalog:live_claude_bin" or "bee.harness.catalog:codex_bin"
+    local executable, executable_error = env.get(variable_ref)
+    if executable_error or type(executable) ~= "string" or executable == "" then
+        error("live " .. provider .. " executable is not configured")
+    end
+    remember(policy_ref)
+    policy_data.executables = {[provider] = executable}
+    policy_data.executable_env = {}
+    apply(worker_policy)
+end
 local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
     local cursor = 0
@@ -269,6 +288,7 @@ local function run_live_provider(provider: string)
         open_gateway()
         local target = "bee.driver." .. provider .. ":research_batch"
         bind_policies(target)
+        bind_live_worker(provider, target)
         local setup = assert(registry.get("bee.harness:harness_setup"))
         local setup_data = setup.data :: Object
         local shipped_setup: Object? = nil

@@ -845,6 +845,89 @@ local function define_tests()
             apply(binding)
             if not ok then error(tostring(failure)) end
         end)
+        test.it("keeps Claude's provider config home aligned with a profile that inherits host HOME", function()
+            local profile_entry = assert(registry.get("bee.driver.claude:profiles"))
+            local definition_entry = assert(registry.get(SHIPPED_SHAPE_DEFINITION))
+            local policy_entry = assert(registry.get(SHIPPED_BATCH_POLICY))
+            local original_profiles, original_definition, original_policy = profile_entry.data, definition_entry.data, policy_entry.data
+
+            local profile_data: {[string]: unknown} = {}
+            for key, item in pairs(original_profiles :: {[string]: unknown}) do profile_data[key] = item end
+            local driver = original_profiles.driver :: {[string]: unknown}
+            local driver_copy: {[string]: unknown} = {}
+            for key, item in pairs(driver) do driver_copy[key] = item end
+            local profiles: {{[string]: unknown}} = {}
+            local host_profile_added = false
+            for _, raw in ipairs(driver.profiles :: {{[string]: unknown}}) do
+                local profile: {[string]: unknown} = {}
+                for key, item in pairs(raw) do profile[key] = item end
+                if raw.id == "batch" then
+                    local isolation = raw.isolation_env :: {[string]: unknown}
+                    local isolation_copy: {[string]: unknown} = {}
+                    for key, item in pairs(isolation) do isolation_copy[key] = item end
+                    isolation_copy.private_home = false
+                    profile.id = "batch_host_home"
+                    profile.isolation_env = isolation_copy
+                    host_profile_added = true
+                end
+                profiles[#profiles + 1] = profile
+            end
+            if not host_profile_added then error("Claude batch profile is missing") end
+            driver_copy.profiles = profiles
+            profile_data.driver = driver_copy
+
+            local definition_data: {[string]: unknown} = {}
+            for key, item in pairs(original_definition :: {[string]: unknown}) do definition_data[key] = item end
+            definition_data.profile_id = "batch_host_home"
+            definition_data.credentials = {}
+
+            local policy_data: {[string]: unknown} = {}
+            for key, item in pairs(original_policy :: {[string]: unknown}) do policy_data[key] = item end
+            policy_data.allow_host_home = true
+            policy_data.environment = {CLAUDE_CONFIG_DIR = "/fixture/host-home/.claude"}
+            policy_data.environment_refs = {}
+            policy_data.executables = {claude = "/bin/true"}
+            policy_data.executable_env = {}
+            policy_data.gateway_tools = {}
+            policy_data.gateway_hooks = {}
+
+            profile_entry.data = profile_data
+            definition_entry.data = definition_data
+            policy_entry.data = policy_data
+            local changed = registry.snapshot():changes()
+            changed:update(profile_entry)
+            changed:update(definition_entry)
+            changed:update(policy_entry)
+            local applied, apply_error = changed:apply()
+            if not applied then error("apply host HOME fixture: " .. tostring(apply_error)) end
+
+            local ok, failure = pcall(function()
+                local workspace_id = fresh("claude-host-home")
+                setup(workspace_id, SHIPPED_SHAPE_DEFINITION)
+                local selected = value(call("bee.harness.launch:resolve", {definition_ref = SHIPPED_SHAPE_DEFINITION}))
+                local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("claude-host-home-admit"),
+                    definition_ref = SHIPPED_SHAPE_DEFINITION, workspace_id = workspace_id, brief = "host config fixture",
+                    expected_plan_digest = selected.plan_digest})) :: admission.Admitted
+                local planned, plan_error = machine.plan(carrier_io(), admitted.request)
+                if not planned then error(tostring(plan_error)) end
+                local provider_home = planned.launch.provider_home :: {[string]: unknown}
+                test.eq(provider_home.variable, "CLAUDE_CONFIG_DIR")
+                test.is_false(provider_home.private == true)
+                test.eq(planned.placement_request.environment_refs.HOME, "bee.env:machine_home")
+                test.eq(planned.placement_request.environment.CLAUDE_CONFIG_DIR, "/fixture/host-home/.claude")
+            end)
+
+            profile_entry.data = original_profiles
+            definition_entry.data = original_definition
+            policy_entry.data = original_policy
+            local restore = registry.snapshot():changes()
+            restore:update(profile_entry)
+            restore:update(definition_entry)
+            restore:update(policy_entry)
+            local restored, restore_error = restore:apply()
+            if not restored then error("restore host HOME fixture: " .. tostring(restore_error)) end
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("admits inherited Codex configuration and refuses a conflicting private provider", function()
             local definition_entry = assert(registry.get(DEFINITION))
             local policy_entry = assert(registry.get(POLICY))

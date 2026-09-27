@@ -372,6 +372,12 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local decoded_launch, launch_error = launch_request.launch(prepared_reply.launch)
     if not decoded_launch then return nil, "driver prepare: " .. tostring(launch_error) end
     local launch: driver_types.Launch = decoded_launch
+    -- The carrier selected HOME from the profile (or preserved it from the
+    -- resumed attempt). A driver's provider-home declaration describes its
+    -- files and variable, but must follow that same selection: leaving this
+    -- private after choosing host HOME makes placement redirect
+    -- CLAUDE_CONFIG_DIR into an empty attempt home.
+    if launch.provider_home then launch.provider_home.private = private_home end
     local required_refusal = M.required_file_refusal(launch, private_home)
     if required_refusal then return nil, required_refusal end
     if request.session_ref then

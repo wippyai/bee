@@ -596,6 +596,13 @@ entries:
   storage: bee.placement.native:environment
   variable: BEE_FIXTURE_BIN
   readonly: true
+- name: live_claude_bin
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_CLAUDE_BIN
+  default: ""
+  readonly: true
 - name: git_commit_enabled
   kind: env.variable
   meta: {type: test_support}

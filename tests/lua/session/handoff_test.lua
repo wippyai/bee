@@ -8,7 +8,7 @@ local workspace = "0123456789abcdef0123456789abcdef"
 local function fixture()
     local desktop = state.new(100, 32, nil)
     desktop = state.reduce(desktop, {version = 1, op = "add", id = "view", instance_id = "instance",
-        workspace_id = workspace, title = "Terminal"})
+        workspace_id = workspace, title = "Terminal", icon = ""})
     local bindings = {version = 1, workspace_id = workspace, revision = 2,
         items = {{tab_id = "view", instance_id = "instance", thread_id = "thread"}}}
     local queued: {Queued} = {{kind = "command", payload = {version = 1, op = "focus", id = "view", request_id = "pending"}}}

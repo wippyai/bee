@@ -43,12 +43,10 @@ end
 -- no-ops here; the process boundary admission is commands.decode().
 function M.reduce(value: State, command: commands.Command): State
     if command.op == "screen" then
-        if not command.width or not command.height then return value end
         local scene = model.resize_screen(value.scene, command.width, command.height)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "add" then
-        if not command.id or not command.instance_id or not command.title then return value end
         if #value.scene.windows >= MAX_WINDOWS then return value end
         local scene = model.add(value.scene, command.id, command.instance_id, command.title, command.icon, command.workspace_id)
         if scene == value.scene then return value end
@@ -56,22 +54,18 @@ function M.reduce(value: State, command: commands.Command): State
         tabs[#tabs + 1] = command.id
         return next_state(value, scene, tabs)
     elseif command.op == "announce" then
-        if not command.id or not command.instance_id or not command.title then return value end
         local scene = model.announce(value.scene, command.id, command.instance_id, command.title)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "personalize" then
-        if not command.id or command.user_title == nil or command.accent == nil then return value end
         local scene = model.personalize(value.scene, command.id, command.user_title, command.accent)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "focus" then
-        if not command.id then return value end
         local scene = model.focus(value.scene, command.id)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "fullscreen" or command.op == "maximize" then
-        if not command.id then return value end
         local source = value.scene
         if command.op == "maximize" then
             source = model.focus(source, command.id)
@@ -86,36 +80,28 @@ function M.reduce(value: State, command: commands.Command): State
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "minimize" then
-        if not command.id then return value end
         local scene = model.minimize(value.scene, command.id)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "collapse" then
-        if not command.id then return value end
         local scene = model.collapse(value.scene, command.id)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "restore" then
-        if not command.id then return value end
         local scene = model.restore(value.scene, command.id)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "snap" then
-        if not command.id or not command.side then return value end
         local scene = model.snap(value.scene, command.id, command.side)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "place" then
-        if not command.id or not command.x or not command.y or not command.width or not command.height then
-            return value
-        end
         local scene = model.place(value.scene, command.id, {
             x = command.x, y = command.y, width = command.width, height = command.height,
         })
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "remove" then
-        if not command.id then return value end
         local scene = model.remove(value.scene, command.id)
         if scene == value.scene then return value end
         local tabs: {string} = {}
@@ -124,7 +110,6 @@ function M.reduce(value: State, command: commands.Command): State
         end
         return next_state(value, scene, tabs)
     elseif command.op == "appearance" then
-        if not command.theme or not command.background then return value end
         if command.expected_revision ~= nil and command.expected_revision ~= value.scene.revision then return value end
         local preferences = appearance.decode({theme = command.theme, background = command.background, taskbar = command.taskbar})
         if not preferences then return value end

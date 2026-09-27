@@ -9,8 +9,16 @@ type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Create = {label: string, root_ref: string, subpath: string, create_directory: boolean}
 -- folders: one page of the folders inside path under root_ref, after a folder name.
 type Folders = {root_ref: string, path: string, after: string?, limit: integer}
-type Request = {operation: string, create: Create?, workspace_id: string?, label: string?, query: catalog.Query?, text: string?,
-    limit: integer?, folders: Folders?}
+type Operation = "create" | "read" | "list" | "search" | "rename" | "archive" | "restore" | "inspect"
+    | "search_within" | "roots" | "folders"
+type Request =
+    {operation: "create", create: Create}
+    | {operation: "roots"}
+    | {operation: "folders", folders: Folders}
+    | {operation: "search_within", workspace_id: string, text: string, limit: integer}
+    | {operation: "read" | "archive" | "restore" | "inspect", workspace_id: string}
+    | {operation: "rename", workspace_id: string, label: string}
+    | {operation: "list" | "search", query: catalog.Query}
 
 local M = {}
 M.READ = "bee.workspace.manager.read"
@@ -18,7 +26,8 @@ M.MANAGE = "bee.workspace.manager.manage"
 M.BROWSE = "bee.workspace.manager.browse"
 M.CATALOG = "catalog"
 M.DEFAULT_PAGE = 50
-M.OPERATIONS = {"create", "read", "list", "search", "rename", "archive", "restore", "inspect", "search_within", "roots", "folders"}
+local OPERATIONS: {Operation} = {"create", "read", "list", "search", "rename", "archive", "restore", "inspect", "search_within", "roots", "folders"}
+M.OPERATIONS = OPERATIONS
 M.MAX_WITHIN = 50
 
 function M.fail(code: string, message: string): Reply
@@ -63,10 +72,24 @@ local function workspace(object: {[string]: unknown}): (string?, string?)
     return id, nil
 end
 
+local function decode_operation(value: unknown): Operation?
+    if value == "create" then return "create" end
+    if value == "read" then return "read" end
+    if value == "list" then return "list" end
+    if value == "search" then return "search" end
+    if value == "rename" then return "rename" end
+    if value == "archive" then return "archive" end
+    if value == "restore" then return "restore" end
+    if value == "inspect" then return "inspect" end
+    if value == "search_within" then return "search_within" end
+    if value == "roots" then return "roots" end
+    if value == "folders" then return "folders" end
+    return nil
+end
+
 function M.decode(operation: unknown, value: unknown): (Request?, string?)
-    local selected = bounds.member(operation, M.OPERATIONS)
+    local selected = decode_operation(operation)
     if not selected then return nil, "unknown catalog operation" end
-    local name: string = selected
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
     if selected == "create" then
@@ -83,12 +106,12 @@ function M.decode(operation: unknown, value: unknown): (Request?, string?)
             return nil, "create_directory must be a boolean"
         end
         if create_directory and subpath == "" then return nil, "create_directory needs a subpath to create" end
-        return {operation = name, create = {label = title, root_ref = root_ref, subpath = subpath,
+        return {operation = "create", create = {label = title, root_ref = root_ref, subpath = subpath,
             create_directory = create_directory}}, nil
     elseif selected == "roots" then
         local extra = bounds.fields(object, {})
         if extra then return nil, extra end
-        return {operation = name}, nil
+        return {operation = "roots"}, nil
     elseif selected == "folders" then
         local extra = bounds.fields(object, {"root_ref", "path", "after", "limit"})
         if extra then return nil, extra end
@@ -110,7 +133,7 @@ function M.decode(operation: unknown, value: unknown): (Request?, string?)
             end
             limit = number
         end
-        return {operation = name, folders = {root_ref = root_ref, path = path, after = after, limit = limit}}, nil
+        return {operation = "folders", folders = {root_ref = root_ref, path = path, after = after, limit = limit}}, nil
     elseif selected == "search_within" then
         local extra = bounds.fields(object, {"workspace_id", "text", "limit"})
         if extra then return nil, extra end
@@ -124,13 +147,13 @@ function M.decode(operation: unknown, value: unknown): (Request?, string?)
             if not number or number < 1 or number > M.MAX_WITHIN then return nil, "limit must be between 1 and " .. tostring(M.MAX_WITHIN) end
             limit = number
         end
-        return {operation = name, workspace_id = id, text = text, limit = limit}, nil
+        return {operation = "search_within", workspace_id = id, text = text, limit = limit}, nil
     elseif selected == "read" or selected == "archive" or selected == "restore" or selected == "inspect" then
         local extra = bounds.fields(object, {"workspace_id"})
         if extra then return nil, extra end
         local id, id_error = workspace(object)
         if not id then return nil, id_error end
-        return {operation = name, workspace_id = id}, nil
+        return {operation = selected, workspace_id = id}, nil
     elseif selected == "rename" then
         local extra = bounds.fields(object, {"workspace_id", "label"})
         if extra then return nil, extra end
@@ -138,39 +161,41 @@ function M.decode(operation: unknown, value: unknown): (Request?, string?)
         if not id then return nil, id_error end
         local title = label(object.label)
         if not title then return nil, "label must be one nonempty line of at most " .. tostring(catalog.MAX_LABEL_BYTES) .. " bytes" end
-        return {operation = name, workspace_id = id, label = title}, nil
+        return {operation = "rename", workspace_id = id, label = title}, nil
     elseif selected == "list" then
         local extra = bounds.fields(object, {"state", "after", "limit"})
         if extra then return nil, extra end
         local query, query_error = listing(object, "label", "", nil)
         if not query then return nil, query_error end
-        return {operation = name, query = query}, nil
-    end
-    local extra = bounds.fields(object, {"state", "label", "root_ref", "path", "after", "limit"})
-    if extra then return nil, extra end
-    -- A label prefix, a folder under one root, or, with a path and no
-    -- root_ref, that folder under every admitted root.
-    if object.label ~= nil and (object.root_ref ~= nil or object.path ~= nil) then return nil, "search takes a label or a path, not both" end
-    if object.label == nil and object.root_ref == nil and object.path == nil then return nil, "search takes a label, a root_ref or a path" end
-    if object.label ~= nil then
-        local prefix = label(object.label)
-        if not prefix then return nil, "label must be one nonempty line of at most " .. tostring(catalog.MAX_LABEL_BYTES) .. " bytes" end
-        local query, query_error = listing(object, "label", prefix, nil)
+        return {operation = "list", query = query}, nil
+    elseif selected == "search" then
+        local extra = bounds.fields(object, {"state", "label", "root_ref", "path", "after", "limit"})
+        if extra then return nil, extra end
+        -- A label prefix, a folder under one root, or, with a path and no
+        -- root_ref, that folder under every admitted root.
+        if object.label ~= nil and (object.root_ref ~= nil or object.path ~= nil) then return nil, "search takes a label or a path, not both" end
+        if object.label == nil and object.root_ref == nil and object.path == nil then return nil, "search takes a label, a root_ref or a path" end
+        if object.label ~= nil then
+            local prefix = label(object.label)
+            if not prefix then return nil, "label must be one nonempty line of at most " .. tostring(catalog.MAX_LABEL_BYTES) .. " bytes" end
+            local query, query_error = listing(object, "label", prefix, nil)
+            if not query then return nil, query_error end
+            return {operation = "search", query = query}, nil
+        end
+        local path, path_error = bounds.subpath(object.path == nil and "" or object.path)
+        if not path then return nil, path_error or "invalid path" end
+        if object.root_ref == nil then
+            local across, across_error = listing(object, "roots", path, nil)
+            if not across then return nil, across_error end
+            return {operation = "search", query = across}, nil
+        end
+        local root_ref = bounds.id(object.root_ref)
+        if not root_ref then return nil, "root_ref must be an identifier" end
+        local query, query_error = listing(object, "path", path, root_ref)
         if not query then return nil, query_error end
-        return {operation = name, query = query}, nil
+        return {operation = "search", query = query}, nil
     end
-    local path, path_error = bounds.subpath(object.path == nil and "" or object.path)
-    if not path then return nil, path_error or "invalid path" end
-    if object.root_ref == nil then
-        local across, across_error = listing(object, "roots", path, nil)
-        if not across then return nil, across_error end
-        return {operation = name, query = across}, nil
-    end
-    local root_ref = bounds.id(object.root_ref)
-    if not root_ref then return nil, "root_ref must be an identifier" end
-    local query, query_error = listing(object, "path", path, root_ref)
-    if not query then return nil, query_error end
-    return {operation = name, query = query}, nil
+    return nil, "unknown catalog operation"
 end
 
 -- Reads of one workspace are checked against that workspace; listing, search
@@ -178,18 +203,18 @@ end
 -- names and browsing a root's folders as browsing that root; every other
 -- change against the workspace it changes.
 function M.authority(request: Request): (string, string)
-    local operation = request.operation
-    if operation == "list" or operation == "search" or operation == "roots" then return M.READ, M.CATALOG end
-    if operation == "folders" then
-        local folders = request.folders
-        return M.BROWSE, folders and folders.root_ref or ""
+    if request.operation == "list" or request.operation == "search" or request.operation == "roots" then return M.READ, M.CATALOG end
+    if request.operation == "folders" then
+        return M.BROWSE, request.folders.root_ref
     end
-    if operation == "read" or operation == "inspect" or operation == "search_within" then return M.READ, request.workspace_id or "" end
-    if operation == "create" then
-        local create = request.create
-        return M.MANAGE, create and create.root_ref or ""
+    if request.operation == "read" or request.operation == "inspect" or request.operation == "search_within" then
+        return M.READ, request.workspace_id
     end
-    return M.MANAGE, request.workspace_id or ""
+    if request.operation == "create" then return M.MANAGE, request.create.root_ref end
+    if request.operation == "rename" or request.operation == "archive" or request.operation == "restore" then
+        return M.MANAGE, request.workspace_id
+    end
+    error("unreachable catalog request")
 end
 
 -- The reply shape every operation returns, checked where it crosses back

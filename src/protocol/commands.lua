@@ -15,29 +15,26 @@ local MAX_TITLE = 240
 local MAX_APPEARANCE_VALUE = 80
 local MAX_COORDINATE = 2147483647
 
-type Op = "screen" | "add" | "focus" | "fullscreen" | "maximize" | "minimize" | "collapse" | "restore"
-    | "snap" | "place" | "remove" | "personalize" | "announce" | "appearance" | "snapshot" | "shutdown"
-type Command = {
-    version: integer,
-    request_id: string?,
-    op: Op,
-    width: integer?,
-    height: integer?,
-    id: string?,
-    instance_id: string?,
-    workspace_id: string?,
-    title: string?,
-    user_title: string?,
-    accent: string?,
-    icon: string?,
-    side: string?,
-    x: integer?,
-    y: integer?,
-    theme: string?,
-    background: string?,
-    taskbar: string?,
-    expected_revision: integer?,
-}
+type Header = {version: integer, request_id: string?}
+type Screen = Header & {op: "screen", width: integer, height: integer}
+type Add = Header & {op: "add", id: string, instance_id: string, workspace_id: string?, title: string, icon: string}
+type Focus = Header & {op: "focus", id: string}
+type Fullscreen = Header & {op: "fullscreen", id: string}
+type Maximize = Header & {op: "maximize", id: string}
+type Minimize = Header & {op: "minimize", id: string}
+type Collapse = Header & {op: "collapse", id: string}
+type Restore = Header & {op: "restore", id: string}
+type Remove = Header & {op: "remove", id: string}
+type Snap = Header & {op: "snap", id: string, side: "left" | "right"}
+type Place = Header & {op: "place", id: string, x: integer, y: integer, width: integer, height: integer}
+type Announce = Header & {op: "announce", id: string, instance_id: string, title: string}
+type Personalize = Header & {op: "personalize", id: string, user_title: string, accent: string}
+type Appearance = Header & {op: "appearance", theme: string, background: string,
+    taskbar: "icons" | "labels", expected_revision: integer?}
+type Snapshot = Header & {op: "snapshot"}
+type Shutdown = Header & {op: "shutdown"}
+type Command = Screen | Add | Focus | Fullscreen | Maximize | Minimize | Collapse | Restore | Remove
+    | Snap | Place | Announce | Personalize | Appearance | Snapshot | Shutdown
 
 local function integer(value: unknown, minimum: integer, maximum: integer): integer?
     if type(value) ~= "number" or value ~= value or value ~= math.floor(value) then return nil end
@@ -56,17 +53,6 @@ local function accent(value: unknown): string?
         or value == "rose" or value == "violet" then
         return value
     end
-    return nil
-end
-
-local function target_op(value: unknown): Op?
-    if value == "maximize" then return "maximize" end
-    if value == "focus" then return "focus" end
-    if value == "fullscreen" then return "fullscreen" end
-    if value == "minimize" then return "minimize" end
-    if value == "collapse" then return "collapse" end
-    if value == "restore" then return "restore" end
-    if value == "remove" then return "remove" end
     return nil
 end
 
@@ -89,7 +75,7 @@ function M.decode(value: unknown): Command?
         local width = integer(value.width, 1, MAX_COORDINATE)
         local height = integer(value.height, 1, MAX_COORDINATE)
         if not width or not height then return nil end
-        return {version = base.version, request_id = base.request_id, op = "screen", width = width, height = height} :: Command
+        return {version = base.version, request_id = base.request_id, op = "screen", width = width, height = height}
     elseif value.op == "add" then
         local id = text(value.id, MAX_ID, true)
         local instance_id = text(value.instance_id, MAX_INSTANCE_ID, true)
@@ -100,19 +86,26 @@ function M.decode(value: unknown): Command?
         if not icon then return nil end
         if not id or not instance_id or not title then return nil end
         return {version = base.version, request_id = base.request_id, op = "add", id = id,
-            instance_id = instance_id, workspace_id = workspace_id, title = title, icon = icon} :: Command
+            instance_id = instance_id, workspace_id = workspace_id, title = title, icon = icon}
     elseif value.op == "focus" or value.op == "fullscreen" or value.op == "maximize" or value.op == "minimize"
         or value.op == "collapse" or value.op == "restore" or value.op == "remove" then
         local id = text(value.id, MAX_ID, value.op ~= "focus")
         if not id then return nil end
-        local op = target_op(value.op)
-        if not op then return nil end
-        return {version = base.version, request_id = base.request_id, op = op, id = id} :: Command
+        if value.op == "focus" then return {version = base.version, request_id = base.request_id, op = "focus", id = id} end
+        if value.op == "fullscreen" then return {version = base.version, request_id = base.request_id, op = "fullscreen", id = id} end
+        if value.op == "maximize" then return {version = base.version, request_id = base.request_id, op = "maximize", id = id} end
+        if value.op == "minimize" then return {version = base.version, request_id = base.request_id, op = "minimize", id = id} end
+        if value.op == "collapse" then return {version = base.version, request_id = base.request_id, op = "collapse", id = id} end
+        if value.op == "restore" then return {version = base.version, request_id = base.request_id, op = "restore", id = id} end
+        return {version = base.version, request_id = base.request_id, op = "remove", id = id}
     elseif value.op == "snap" then
         local id = text(value.id, MAX_ID, true)
-        if not id or (value.side ~= "left" and value.side ~= "right") then return nil end
-        local side = tostring(value.side)
-        return {version = base.version, request_id = base.request_id, op = "snap", id = id, side = side} :: Command
+        if not id then return nil end
+        local side: "left" | "right"
+        if value.side == "left" then side = "left"
+        elseif value.side == "right" then side = "right"
+        else return nil end
+        return {version = base.version, request_id = base.request_id, op = "snap", id = id, side = side}
     elseif value.op == "place" then
         local id = text(value.id, MAX_ID, true)
         local x = integer(value.x, -MAX_COORDINATE, MAX_COORDINATE)
@@ -121,21 +114,21 @@ function M.decode(value: unknown): Command?
         local height = integer(value.height, 1, MAX_COORDINATE)
         if not id or not x or not y or not width or not height then return nil end
         return {version = base.version, request_id = base.request_id, op = "place", id = id, x = x, y = y,
-            width = width, height = height} :: Command
+            width = width, height = height}
     elseif value.op == "announce" then
         local id = text(value.id, MAX_ID, true)
         local instance_id = text(value.instance_id, MAX_INSTANCE_ID, true)
         local title = text(value.title, 80, true)
         if not id or not instance_id or not title then return nil end
         return {version = base.version, request_id = base.request_id, op = "announce", id = id,
-            instance_id = instance_id, title = title} :: Command
+            instance_id = instance_id, title = title}
     elseif value.op == "personalize" then
         local id = text(value.id, MAX_ID, true)
         local user_title = text(value.user_title, MAX_APPEARANCE_VALUE, false)
         local selected_accent = accent(value.accent)
         if not id or not user_title or selected_accent == nil then return nil end
         return {version = base.version, request_id = base.request_id, op = "personalize", id = id,
-            user_title = user_title, accent = selected_accent} :: Command
+            user_title = user_title, accent = selected_accent}
     elseif value.op == "appearance" then
         local theme = text(value.theme, MAX_APPEARANCE_VALUE, true)
         local background = text(value.background, MAX_APPEARANCE_VALUE, true)
@@ -147,11 +140,11 @@ function M.decode(value: unknown): Command?
         if not theme or not background then return nil end
         if not appearance.decode({theme = theme, background = background, taskbar = value.taskbar}) then return nil end
         return {version = base.version, request_id = base.request_id, op = "appearance", theme = theme,
-            background = background, taskbar = value.taskbar == "icons" and "icons" or "labels", expected_revision = expected_revision} :: Command
+            background = background, taskbar = value.taskbar == "icons" and "icons" or "labels", expected_revision = expected_revision}
     elseif value.op == "snapshot" then
-        return {version = base.version, request_id = base.request_id, op = "snapshot"} :: Command
+        return {version = base.version, request_id = base.request_id, op = "snapshot"}
     elseif value.op == "shutdown" then
-        return {version = base.version, request_id = base.request_id, op = "shutdown"} :: Command
+        return {version = base.version, request_id = base.request_id, op = "shutdown"}
     end
     return nil
 end

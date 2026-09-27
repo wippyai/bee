@@ -20,6 +20,28 @@ import (
 	"time"
 )
 
+func TestWriteAtomicPublishesOwnerOnlyAndReplacesRegularFiles(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "private")
+	if err := EnsurePrivateDir(directory); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "record.json")
+	if err := WriteAtomic(path, []byte("first")); err != nil {
+		t.Fatal(err)
+	}
+	first, err := os.Stat(path)
+	if err != nil || first.Mode().Perm() != 0o600 {
+		t.Fatalf("published file permissions = %v, %v", first, err)
+	}
+	if err := WriteAtomic(path, []byte("second")); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "second" {
+		t.Fatalf("published bytes = %q, %v", data, err)
+	}
+}
+
 func privateTestDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")

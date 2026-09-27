@@ -43,4 +43,9 @@ entries:
   imports:
     test: wippy.test:test
     remote: bee.hive.manager:remote
+    model: bee.hive.manager:model
+    directory: bee.hive.manager:directory
+    types: bee.hive:types
+    desktop_remote: bee.hive.desktop:remote
+    display: bee.hive.desktop:display
     appearance: bee.application:appearance

@@ -11,18 +11,17 @@ local function define_tests()
         test.it("reads client role only from native membership metadata", function()
             local live = directory.live({open_view = no_view, local_node = "local", lookup = function(): (string?, string?) return nil, nil end,
                 membership = function(): (unknown, unknown) return {
-                    {id = "display", meta = {["bee.role"] = "client"}},
-                    {id = "bee-client-name-only", meta = {}},
-                    {id = "malformed-role", meta = {["bee.role"] = true}},
+                    {id = "display", is_local = false, addr = "", meta = {["bee.role"] = "client"}},
+                    {id = "bee-client-name-only", is_local = false, addr = "", meta = {}},
                 }, nil end,
                 call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
                     error("Membership decoding must not issue a remote operation")
                 end})
             local members = live:members()
+            test.eq(#members, 3)
             test.is_false(members[1].client_only == true)
             test.is_true(members[2].client_only == true)
             test.is_false(members[3].client_only == true)
-            test.is_false(members[4].client_only == true)
         end)
         test.it("asks the supervisor for presence and stats under the telemetry owner and keeps this node without membership", function()
             local calls: {{owner: types.OwnerRef, target: types.Target, timeout: string?}} = {}
@@ -55,7 +54,7 @@ local function define_tests()
         end)
         test.it("decodes runtime membership, bounds it and always includes this node", function()
             local raw: {unknown} = {}
-            for index = 1, 70 do raw[#raw + 1] = {id = "n" .. tostring(index), addr = "10.0.0." .. tostring(index) .. ":7946", is_local = false} end
+            for index = 1, directory.MAX_NODES - 1 do raw[#raw + 1] = {id = "n" .. tostring(index), addr = "10.0.0." .. tostring(index) .. ":7946", is_local = false} end
             local live = directory.live({open_view = no_view, 
                 local_node = "me",
                 lookup = function(): (string?, string?) return "{me@bee.hive.service:supervisor_host|1}", nil end,
@@ -68,24 +67,39 @@ local function define_tests()
             test.eq(#members, directory.MAX_NODES)
             test.eq(members[1].node_id, "me")
             test.is_true(members[1].is_local)
-            test.is_true(tostring(problem):find("more than 64", 1, true) ~= nil)
+            test.is_nil(problem)
             test.is_true(live:supervisor().running)
+            local oversized: {unknown} = {}
+            for index = 1, directory.MAX_NODES + 1 do
+                oversized[#oversized + 1] = {id = "overflow-" .. tostring(index), is_local = false}
+            end
+            local overflow_live = directory.live({open_view = no_view, local_node = "me",
+                lookup = function(): (string?, string?) return nil, "x" end,
+                membership = function(): (unknown, unknown) return oversized, nil end,
+                call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
+                    return types.reply_ok("r", {})
+                end})
+            local overflow_members, overflow_problem = overflow_live:members()
+            test.eq(#overflow_members, 1)
+            test.is_true(tostring(overflow_problem):find("dense list", 1, true) ~= nil)
             local hostile: {unknown} = {{id = "ok", addr = "bad\27addr"}, {id = ""}, {id = "ok"}, "junk", {id = "me", is_local = true}}
-            local decoded_members, malformed = ({directory.live({open_view = no_view, local_node = "me", lookup = function(): (string?, string?) return nil, "x" end,
+            local malformed_live = directory.live({open_view = no_view, local_node = "me", lookup = function(): (string?, string?) return nil, "x" end,
                 membership = function(): (unknown, unknown) return hostile, nil end,
                 call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
                     return types.reply_ok("r", {})
-                end}):members()})
+                end})
+            local decoded_members, malformed = malformed_live:members()
             test.eq(#decoded_members, 1)
             test.eq(decoded_members[1].node_id, "me")
             test.is_true(tostring(malformed):find("malformed", 1, true) ~= nil)
             local sparse: {[integer]: unknown} = {[1] = {id = "ok", is_local = false}, [3] = {id = "other", is_local = false}}
-            local sparse_members, sparse_problem = ({directory.live({open_view = no_view, local_node = "me",
+            local sparse_live = directory.live({open_view = no_view, local_node = "me",
                 lookup = function(): (string?, string?) return nil, "x" end,
                 membership = function(): (unknown, unknown) return sparse, nil end,
                 call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
                     return types.reply_ok("r", {})
-                end}):members()})
+                end})
+            local sparse_members, sparse_problem = sparse_live:members()
             test.eq(#sparse_members, 1)
             test.eq(sparse_members[1].node_id, "me")
             test.is_true(tostring(sparse_problem):find("dense list", 1, true) ~= nil)

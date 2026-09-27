@@ -38,7 +38,7 @@ local function define_tests()
             test.eq(unknown_error, "mappings[1]: unknown field scope")
             test.neq(principals.actor_of("node-a", subject("node-a", "1")), principals.actor_of("node-b", subject("node-a", "1")))
             local _, shape_error = principals.decode({mappings = "many"})
-            test.eq(shape_error, "mappings must be a list")
+            test.eq(shape_error, "mappings must be a dense list of at most 256 entries")
         end)
         test.it("resolves only the pair the host named and keeps two subjects of one issuer apart", function()
             local decoded = decoded_of({mappings = {

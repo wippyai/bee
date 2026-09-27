@@ -21,7 +21,7 @@ local hive = require("hive")
 local types = require("types")
 local remote = require("remote")
 local desktop_protocol = require("desktop_protocol")
-local time_format = require("time_format")
+local clock = require("clock")
 local NAMES = "bee.hive.manager:names"
 local POLL = "5s"
 local CALL_TIMEOUT = "2s"
@@ -168,7 +168,7 @@ local function main(value: unknown)
         supervisor_running = supervisor.running
         model.set_supervisor(state, supervisor.running, supervisor.detail)
         local members, problem = source:members()
-        model.apply_members(state, members, problem, time_format.elapsed_ms(started))
+        model.apply_members(state, members, problem, clock.elapsed_ms(started))
         dirty = true
     end
     local function refresh()

@@ -34,6 +34,7 @@ entries:
   imports:
     protocol: bee.hive.desktop:protocol
     types: bee.hive:types
+    clock: bee:clock
     retained: bee.launch:retained_protocol
     catalog: bee.hive.desktop:catalog
     session_policy: bee.hive.desktop:session_policy
@@ -48,7 +49,7 @@ entries:
     types: bee.hive:types
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
-    time_format: bee.protocol:time
+    clock: bee:clock
     delivery: bee.terminal:delivery
     input: bee.protocol:input
 - name: command
@@ -108,7 +109,7 @@ entries:
     client: bee.hive:client
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
-    time_format: bee.protocol:time
+    clock: bee:clock
     display: bee.hive.desktop:display
     remote: bee.hive.desktop:remote
     delivery: bee.terminal:delivery

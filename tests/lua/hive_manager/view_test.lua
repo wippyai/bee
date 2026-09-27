@@ -10,6 +10,15 @@ local directory = require("directory")
 local types = require("types")
 local appearance = require("appearance")
 local OWNER_EXECUTION = string.rep("e", 32)
+local SAMPLED_AT = "2026-09-09T00:00:00.000Z"
+local function presence(node_id: string, role: string, cluster_size: integer): types.Reply
+    return types.reply_ok("r", {protocol_revision = types.REVISION, node_id = node_id, role = role,
+        cluster_size = cluster_size, sampled_at = SAMPLED_AT})
+end
+local function stats(heap: integer, goroutines: integer): types.Reply
+    return types.reply_ok("r", {memory = {heap_alloc = heap}, goroutines = goroutines,
+        cpu_count = 8, sampled_at = SAMPLED_AT})
+end
 local function populated(source: string): model.State
     local state = model.new({forge = "Forge"})
     model.set_supervisor(state, true, "")
@@ -19,18 +28,18 @@ local function populated(source: string): model.State
         members[#members + 1] = {node_id = id, is_local = index == 1, addr = "10.0.0." .. tostring(index) .. ":7946"}
     end
     model.apply_members(state, members)
-    model.apply_presence(state, "forge", types.reply_ok("r", {role = "leader\27[31m", cluster_size = 12, sampled_at = "2026-09-09T00:00:00.000Z"}))
+    model.apply_presence(state, "forge", presence("forge", "leader", 12))
     model.apply_presence(state, "node-2", types.reply_error("r", types.fault("UNAVAILABLE", "peer \27[2J ended\r")))
-    model.apply_stats(state, "forge", types.reply_ok("r", {memory = {heap_alloc = 3145728}, goroutines = 40}))
+    model.apply_stats(state, "forge", stats(3145728, 40))
     model.apply_catalog(state, "forge", {available = true, reason = "", workspaces = {
         {workspace_id = "ws1", label = "main \7bell", served = true},
-        {workspace_id = "ws2", label = "second", served = false}}})
+        {workspace_id = "ws2", label = "second", served = false}}, next_after = nil})
     model.set_pane(state, "workspaces")
     model.move(state, 1)
     local intent = model.attach_intent(state, "observe", "view-key")
     if not intent then error("view test attach intent missing") end
     model.apply_outcome(state, intent, {ok = true, code = "", message = "", session_id = "session-1", mode = "observe",
-        owner_execution = OWNER_EXECUTION})
+        viewer = "{local@bee.hive.desktop:display_host|1}", owner_execution = OWNER_EXECUTION})
     model.toggle_technical(state)
     return state
 end
@@ -88,8 +97,8 @@ local function define_tests()
             test.eq(cell(frame.rows, "Forge (forge) · this node", "BEE SERVICE", 11), "ready")
             test.eq(cell(frame.rows, "node-2 ", "MEMBERSHIP", 10), "present")
             test.eq(cell(frame.rows, "node-2 ", "BEE SERVICE", 11), "unavailable")
-            test.is_true(text:find("3.0 MiB", 1, true) ~= nil)
-            local wide = table.concat(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "\n")
+            local wide = table.concat(view.draw(240, 30, appearance.defaults(), state, 0, "").rows, "\n")
+            test.is_true(wide:find("3.0 MiB", 1, true) ~= nil)
             test.is_true(wide:find("owner execution " .. OWNER_EXECUTION, 1, true) ~= nil)
             local kinds: {[string]: boolean} = {}
             for _, hit in ipairs(frame.hits) do kinds[hit.kind] = true end
@@ -104,7 +113,18 @@ local function define_tests()
             model.apply_catalog(state, "forge", {available = true, reason = "", next_after = "cursor", workspaces = {
                 {workspace_id = "ws1", label = "retained", served = true},
                 {workspace_id = "ws2", label = "archive", served = false}}})
-            local text = table.concat(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "\n")
+            local rows = view.draw(180, 30, appearance.defaults(), state, 0, "").rows
+            local text = table.concat(rows, "\n"):gsub("\27%[[0-9;]*m", "")
+            if not text:find("retained  served", 1, true) or not text:find("archive  not served", 1, true) then
+                local shown: {string} = {}
+                for _, row in ipairs(rows) do
+                    local plain: string = row:gsub("\27%[[0-9;]*m", "")
+                    if plain:find("retained", 1, true) or plain:find("archive", 1, true) or plain:find("Page", 1, true) then
+                        shown[#shown + 1] = plain
+                    end
+                end
+                error("workspace rows were not rendered: " .. table.concat(shown, "\\n"))
+            end
             test.is_true(text:find("retained  served", 1, true) ~= nil)
             test.is_true(text:find("archive  not served", 1, true) ~= nil)
             test.is_true(text:find("Page 1 · more", 1, true) ~= nil)
@@ -116,7 +136,7 @@ local function define_tests()
             for index = 1, 20 do
                 workspaces[index] = {workspace_id = "ws-" .. tostring(index), label = "Workspace " .. tostring(index), served = false}
             end
-            model.apply_catalog(state, "forge", {available = true, reason = "", workspaces = workspaces})
+            model.apply_catalog(state, "forge", {available = true, reason = "", workspaces = workspaces, next_after = nil})
             model.set_pane(state, "workspaces")
             model.move(state, 20)
             for _, height in ipairs({14, 30}) do
@@ -139,7 +159,7 @@ local function define_tests()
             model.set_supervisor(state, true, "")
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""},
                 {node_id = "display", is_local = false, addr = ""}})
-            model.apply_presence(state, "local", types.reply_ok("r", {role = "non-member", cluster_size = 2}))
+            model.apply_presence(state, "local", presence("local", "non-member", 2))
             model.apply_presence(state, "display", types.reply_error("r", types.fault("UNAVAILABLE", "destination node is not configured")))
             local drawn = view.draw(180, 30, appearance.defaults(), state, 0, "").rows
             local text = table.concat(drawn, "\n")
@@ -178,7 +198,7 @@ local function define_tests()
             model.set_supervisor(state, false, "supervisor is not running")
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}}, "membership unavailable")
             model.apply_presence(state, "local", types.reply_error("r", types.fault("UNAVAILABLE", "no supervisor to ask")))
-            model.apply_catalog(state, "local", {available = false, reason = "No supervisor is available", workspaces = {}})
+            model.apply_catalog(state, "local", {available = false, reason = "No supervisor is available", workspaces = {}, next_after = nil})
             local frame = view.draw(120, 30, appearance.defaults(), state, 0, "")
             local text = table.concat(frame.rows, "\n")
             test.is_true(text:find("Hive supervisor unavailable: supervisor is not running", 1, true) ~= nil)

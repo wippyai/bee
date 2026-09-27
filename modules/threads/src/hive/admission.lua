@@ -13,6 +13,7 @@
 local funcs = require("funcs")
 local security = require("security")
 local time = require("time")
+local clock = require("clock")
 local types = require("types")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -68,7 +69,6 @@ M.RESERVED = {"actor", "actor_id", "principal", "principal_id", "principal_ref",
 -- resolution answers with the thread, it never receives one.
 M.THREADLESS_OPERATIONS = {["bee.threads.service:inbox_resolve"] = true}
 M.INVOKE_CHECK = "bee.hive:invoke_check"
-local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 type Object = {[string]: unknown}
 type Admission = {actor_id: string, policies: {string}, operation_ref: string, input: Object, caller_node_id: string, principal: types.PrincipalRef}
 type ServiceReply = {ok: boolean, error: {code: string, message: string}?, value: unknown, replayed: boolean?}
@@ -109,8 +109,8 @@ function M.admit(local_node: string, request: types.Request, mappings: principal
     end
     local digest, digest_error = types.digest(request.input)
     if not digest or digest ~= request.input_digest then return nil, types.fault("INVALID_ARGUMENT", "input digest mismatch: " .. tostring(digest_error)) end
-    local deadline, deadline_error = time.parse(FORMAT, request.deadline)
-    if deadline_error or not deadline then return nil, types.fault("INVALID_ARGUMENT", "invalid deadline") end
+    local deadline = clock.parse(request.deadline)
+    if not deadline then return nil, types.fault("INVALID_ARGUMENT", "invalid deadline") end
     if not deadline:after(now) then return nil, types.fault("DEADLINE_EXCEEDED", "request deadline has passed") end
     if request.principal_ref.issuer ~= request.caller_node_id then return nil, types.fault("DENIED", "principal issuer is not the authenticated caller node") end
     local mapping = principals.resolve(mappings, request.principal_ref)

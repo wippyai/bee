@@ -29,15 +29,18 @@ end
 -- The owner execution and display identities a listing answered, default first.
 function M.displays(value: unknown): (string?, {string}?)
     local object = bounds.object(value)
-    if not object then return nil, nil end
+    if not object or bounds.fields(object, {"owner_execution", "desktops", "workspaces", "next_after", "default_workspace"}) then return nil, nil end
     local execution = contract.workspace_id(object.owner_execution)
-    local rows = object.desktops
-    if not execution or type(rows) ~= "table" then return nil, nil end
+    local rows = bounds.array(object.desktops, M.MAX_DISPLAYS)
+    if not execution or not rows then return nil, nil end
     local ids: {string} = {}
-    for index, raw in ipairs(rows :: {unknown}) do
+    local seen: {[string]: boolean} = {}
+    for index, raw in ipairs(rows) do
         local row = bounds.object(raw)
+        if row and bounds.fields(row, {"desktop_id", "is_default"}) then row = nil end
         local id = row and contract.workspace_id(row.desktop_id)
-        if not row or not id or index > M.MAX_DISPLAYS then return nil, nil end
+        if not row or not id or seen[id] or row.is_default ~= (index == 1) then return nil, nil end
+        seen[id] = true
         ids[#ids + 1] = id
     end
     return execution, ids
@@ -65,8 +68,9 @@ function M.choose(ops: Operations, node: string, workspace_id: string, mode: Mod
         return attach(first)
     end
     for _, id in ipairs(ids) do
-        local opened, fault = attach(id)
+        local opened, fault, uncertain_target = attach(id)
         if opened then return opened, nil end
+        if fault and fault.code == "UNCERTAIN" then return nil, fault, uncertain_target end
         if not fault or fault.code ~= "DESKTOP_CONTROLLED" then return nil, fault, nil end
     end
     local id = ops.new_id()

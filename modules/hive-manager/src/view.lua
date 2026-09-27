@@ -87,6 +87,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             if state.technical then head = head .. "  cluster " .. (selected.cluster_size and tostring(selected.cluster_size) or "—")
                 .. "  sampled " .. (selected.sampled_at or "—") end
         elseif selected.status == "unavailable" then head = head .. "  ·  Service unavailable: " .. selected.detail end
+        if catalog and catalog.available and not selected.client_only then
+            head = head .. "  ·  Page " .. tostring(model.page_number(state, selected.node_id)) .. (catalog.next_after and " · more" or "")
+            if state.pane == "workspaces" and not state.editing then head = head .. "  ·  / search · PgUp/PgDn page" end
+        end
         if state.technical and not selected.client_only then
             head = head .. "  Raft role " .. (selected.role or "unknown")
             head = head .. "  heap " .. bytes(selected.heap) .. "  goroutines " .. (selected.goroutines and tostring(selected.goroutines) or "-")
@@ -94,10 +98,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 local session = selected.node_id ~= "" and state.sessions[selected.node_id] or nil
                 if session then head = head .. "  owner execution " .. session.owner_execution end
             end
-        end
-        if catalog and catalog.available and not selected.client_only then
-            head = head .. "  ·  Page " .. tostring(model.page_number(state, selected.node_id)) .. (catalog.next_after and " · more" or "")
-            if state.pane == "workspaces" and not state.editing then head = head .. "  ·  / search · PgUp/PgDn page" end
         end
         if state.editing then head = head .. "  ·  Search: " .. model.text(state.search, 60) .. "▏"
         elseif not selected.client_only then

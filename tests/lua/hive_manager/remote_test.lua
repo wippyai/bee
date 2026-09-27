@@ -3,10 +3,17 @@
 -- a mouse row moves below the title row.
 local test = require("test")
 local remote = require("remote")
+local model = require("model")
+local directory = require("directory")
+local types = require("types")
+local desktop_remote = require("desktop_remote")
+local display = require("display")
 local appearance = require("appearance")
 type Object = {[string]: unknown}
 local WORKSPACE = string.rep("b", 32)
 local DISPLAY = string.rep("c", 32)
+local OWNER = string.rep("a", 32)
+type Receipt = {signature: string, handle: display.Handle}
 local function view(mode: "control" | "observe"): remote.View
     return {pid = "{local@bee.hive.desktop:display_host|7}", node_id = "forge", node_label = "Forge", workspace_id = WORKSPACE,
         desktop_id = DISPLAY, mode = mode, session_id = "session-1", rows = {}, cursor = nil, leaving = false}
@@ -85,6 +92,71 @@ local function define_tests()
             test.eq(drawn.rows[2], "row one")
             test.eq(drawn.rows[4], "")
             test.eq(drawn.cursor.y, 2)
+        end)
+        test.it("passes the confirmed manager key to one remote desktop attach across an uncertain reply", function()
+            local state = model.new({})
+            local member: directory.Member = {node_id = "forge", is_local = false, addr = "10.0.0.2:7946", client_only = false}
+            model.apply_members(state, {member}, nil, 0)
+            model.apply_presence(state, "forge", types.reply_ok("presence", {protocol_revision = types.REVISION,
+                node_id = "forge", role = "member", cluster_size = 1, sampled_at = "2026-01-02T03:04:05.006Z"}))
+            local catalog: directory.Catalog = {available = true, reason = "", workspaces = {{workspace_id = WORKSPACE, label = "Main", served = true}}, next_after = nil}
+            model.apply_catalog(state, "forge", catalog)
+            model.select_node(state, "forge")
+            model.select_workspace(state, WORKSPACE)
+            local intent = model.attach_intent(state, "control", "confirmed-manager-key")
+            if not intent then error("confirmed manager attach is missing") end
+
+            local receipts: {[string]: Receipt} = {}
+            local owner_operations = 0
+            local opened: {{key: string, desktop_id: string}} = {}
+            local uncertain = true
+            local operations: desktop_remote.Operations = {
+                list = function(): types.Reply
+                    return types.reply_ok("list", {owner_execution = OWNER, desktops = {{desktop_id = DISPLAY, is_default = true}}})
+                end,
+                create = function(_execution: string, _id: string): types.Reply
+                    error("a listed display should be reused")
+                end,
+                open = function(target: display.Target, key: string): (display.Handle?, display.Fault?)
+                    opened[#opened + 1] = {key = key, desktop_id = target.desktop_id}
+                    local signature = target.owner_execution .. target.workspace_id .. target.desktop_id .. target.mode
+                    local receipt = receipts[key]
+                    if receipt then
+                        if receipt.signature ~= signature then return nil, {code = "CONFLICT", message = "key changed attach"} end
+                        return receipt.handle, nil
+                    end
+                    owner_operations = owner_operations + 1
+                    local handle: display.Handle = {id = "session-1"}
+                    receipts[key] = {signature = signature, handle = handle}
+                    if uncertain then
+                        uncertain = false
+                        return nil, {code = "UNCERTAIN", message = "attach completed but reply was lost"}
+                    end
+                    return handle, nil
+                end,
+                new_id = function(): string return string.rep("d", 32) end,
+            }
+            local selected, failure, target = desktop_remote.choose(operations, intent.node_id, intent.workspace_id,
+                intent.mode, intent.idempotency_key)
+            test.is_nil(selected)
+            test.eq(failure and failure.code, "UNCERTAIN")
+            test.not_nil(target)
+            model.apply_outcome(state, intent, {ok = false, code = "UNCERTAIN", message = "attach result is unknown"})
+            local pending = model.pending_intent(state)
+            test.not_nil(pending)
+            local handle, replay_error = operations.open(target :: display.Target, pending and pending.idempotency_key or "")
+            test.is_nil(replay_error)
+            test.not_nil(handle)
+            test.eq(owner_operations, 1)
+            test.eq(#opened, 2)
+            test.eq(opened[1].key, intent.idempotency_key)
+            test.eq(opened[2].key, intent.idempotency_key)
+            test.eq(opened[1].desktop_id, DISPLAY)
+            test.eq(opened[2].desktop_id, DISPLAY)
+            if not handle or not target then error("remote attach replay did not produce a session") end
+            model.apply_outcome(state, intent, {ok = true, code = "", message = "", session_id = handle.id,
+                mode = intent.mode, viewer = "{local@bee.hive.desktop:display_host|9}", owner_execution = target.owner_execution})
+            test.is_nil(model.pending_intent(state))
         end)
     end)
 end

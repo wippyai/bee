@@ -245,7 +245,7 @@ function M.binding(value: unknown, expected_workspace_id: string?): Binding?
         or (input.cleanup_expected_revision ~= nil and not cleanup_expected_revision) then return nil end
     if expected_workspace_id ~= nil
         and (not workspace(expected_workspace_id, expected_workspace_id)
-            or actor_id ~= application_actor(expected_workspace_id, instance_id)) then return nil end
+            or actor_id ~= principal.actor_id(expected_workspace_id, instance_id)) then return nil end
     if binding_state == "pending" and (membership_revision ~= nil or cleanup_pending ~= 0 or cleanup_expected_revision ~= nil) then return nil end
     if binding_state == "active" and (membership_revision == nil or cleanup_pending ~= 0 or cleanup_expected_revision ~= nil) then return nil end
     if binding_state == "revoked" and ((cleanup_pending == 0 and cleanup_expected_revision ~= nil)

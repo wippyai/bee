@@ -38,7 +38,11 @@ local function define_tests()
             test.is_nil(next(state.served))
             test.is_nil(owner.folder_workspace(state))
             test.is_nil(owner.listing(state).default_workspace)
+            local first_execution = owner.listing(state).execution
             owner.close(state)
+            local restarted = owner.start(daemon, "daemon-node")
+            test.is_true(owner.listing(restarted).execution ~= first_execution)
+            owner.close(restarted)
         end)
     end)
 end

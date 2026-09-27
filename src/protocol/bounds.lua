@@ -1,4 +1,5 @@
 -- Shared primitive decoders for Bee protocol values.
+local clock = require("clock")
 local M = {}
 M.MAX_ID_BYTES = 160
 M.MAX_ARRAY_ITEMS = 64
@@ -33,11 +34,7 @@ function M.count(value: unknown): integer?
 end
 
 function M.timestamp(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 24 or not value:match("^%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d%.%d%d%dZ$") then return nil end
-    local month, day, hour, minute, second = tonumber(value:sub(6, 7)), tonumber(value:sub(9, 10)),
-        tonumber(value:sub(12, 13)), tonumber(value:sub(15, 16)), tonumber(value:sub(18, 19))
-    if not month or not day or not hour or not minute or not second then return nil end
-    if month < 1 or month > 12 or day < 1 or day > 31 or hour > 23 or minute > 59 or second > 59 then return nil end
+    if type(value) ~= "string" or not clock.parse(value) then return nil end
     return value
 end
 

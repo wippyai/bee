@@ -9,6 +9,7 @@ entries:
     types: bee.hive:types
     bounds: bee.protocol:bounds
     canonical: bee.protocol:canonical
+    clock: bee:clock
     catalog: bee.hive:catalog
     principals: bee.hive:principals
 - name: admit

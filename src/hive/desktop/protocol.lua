@@ -40,13 +40,15 @@ M.VIEW_RESIZE = "bee.hive.viewer.resize"
 M.VIEW_CLOSE = "bee.hive.viewer.close"
 M.VIEW_RETRY = "bee.hive.viewer.retry"
 -- folder: whether the bridge composes the owner's folder workspace; a daemon's does not.
-type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, allowed_peers: {string}, application: string?, local_clients: boolean?, folder: boolean}
+type Configuration = {expires_at: string, allowed_nodes: {string}, allowed_peers: {string}, application: string?, local_clients: boolean?, folder: boolean}
 type Mode = "control" | "observe"
 type AutomaticPlan = {kind: "automatic", mode: Mode, desktops: {string}, excluded: {string}}
 type WorkspacePlan = {kind: "workspace", workspace_id: string, mode: Mode, desktops: {string}, excluded: {string}}
 type SelectionPlan = {kind: "selection", workspace_id: string, desktop_id: string, mode: Mode, desktops: {string}}
 type PlanRequest = AutomaticPlan | WorkspacePlan | SelectionPlan
 type PlanInput = {kind: "plan", execution: string, request: PlanRequest}
+-- owner_execution is the current owner incarnation; listing may omit it to learn
+-- the value minted by the owner process.
 type ListInput = {kind: "list", execution: string?, query: workspace_query.Query}
 type CreateInput = {kind: "create", execution: string, desktop_id: string}
 type CurrentInput = {kind: "current", execution: string}
@@ -119,13 +121,14 @@ end
 function M.configuration(value: unknown): (Configuration?, string?)
     local object = bounds.object(value)
     if not object then return nil, "desktop configuration must be an object" end
+    -- Older host configurations carried an execution value. Accept and validate
+    -- it, but the owner now mints the runtime incarnation at startup.
     local fields_error = bounds.fields(object, {"execution", "expires_at", "allowed_nodes", "allowed_peers", "application", "local_clients", "folder"})
     if fields_error then return nil, fields_error end
-    local execution = contract.workspace_id(object.execution)
+    if object.execution ~= nil and not contract.workspace_id(object.execution) then return nil, "execution must be 32 lowercase hexadecimal characters" end
     local expires = bounds.timestamp(object.expires_at)
     local nodes = bounds.ids(object.allowed_nodes)
     local peers = object.allowed_peers == nil and {} or bounds.ids(object.allowed_peers)
-    if not execution then return nil, "execution must be 32 lowercase hexadecimal characters" end
     if not expires then return nil, "expires_at must be a canonical UTC timestamp with milliseconds" end
     if not nodes then return nil, "allowed_nodes must be a bounded dense list of node identities" end
     if not peers then return nil, "allowed_peers must be a bounded dense list of node identities" end
@@ -140,7 +143,7 @@ function M.configuration(value: unknown): (Configuration?, string?)
         application = bounds.id(object.application)
         if not application then return nil, "application must be a bounded entry identity" end
     end
-    return {execution = execution, expires_at = expires, allowed_nodes = nodes, allowed_peers = peers, application = application, local_clients = object.local_clients == true,
+    return {expires_at = expires, allowed_nodes = nodes, allowed_peers = peers, application = application, local_clients = object.local_clients == true,
         folder = object.folder ~= false}, nil
 end
 function M.input(operation: string, value: unknown): DesktopInput?

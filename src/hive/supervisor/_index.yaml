@@ -28,6 +28,7 @@ entries:
     types: bee.hive:types
     peers: bee.hive.supervisor:peers
     catalog: bee.hive:catalog
+    clock: bee:clock
 - name: main
   kind: process.lua
   source: file://main.lua
@@ -50,6 +51,7 @@ entries:
     catalog: bee.hive:catalog
     adapters: bee.hive.supervisor:adapters
     workspace_commands: bee.hive.supervisor:workspace_commands
+    clock: bee:clock
 - name: owner_stop
   kind: library.lua
   source: file://owner_stop.lua
@@ -108,6 +110,7 @@ entries:
   source: file://policy_admission.lua
   modules: [funcs, security, registry, system, time, logger]
   imports:
+    clock: bee:clock
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
     bounds: bee.protocol:bounds
@@ -122,6 +125,7 @@ entries:
   security:
     policies: [bee.hive.supervisor:policy_identity_policy, bee.hive.supervisor:policy_actor_policy, bee.security.hive:policy_admission_policy, bee.security.hive:hive_policy_exposure_policy, bee.security.hive:hive_exposure_facade_policy]
   imports:
+    clock: bee:clock
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
     bounds: bee.protocol:bounds

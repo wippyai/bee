@@ -13,7 +13,7 @@ local client = require("client")
 local types = require("types")
 local protocol = require("protocol")
 local contract = require("contract")
-local time_format = require("time_format")
+local clock = require("clock")
 local delivery = require("delivery")
 local input = require("input")
 
@@ -33,7 +33,7 @@ local DEFAULT_TIMEOUT = "10s"
 local sessions: {[string]: Session} = {}
 
 local function deadline(): string
-    return time_format.deadline(DEFAULT_TIMEOUT)
+    return clock.deadline(DEFAULT_TIMEOUT)
 end
 
 local function fault(code: string, message: string): Fault

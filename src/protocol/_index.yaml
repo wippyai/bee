@@ -1,13 +1,11 @@
 version: '1.0'
 namespace: bee.protocol
 entries:
-- name: time
-  kind: library.lua
-  source: file://time.lua
-  modules: [time]
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
+  imports:
+    clock: bee:clock
 - name: canonical
   kind: library.lua
   source: file://canonical.lua

@@ -32,7 +32,7 @@ entries:
     types: bee.hive:types
     remote: bee.hive.manager:remote
     desktop_protocol: bee.hive.desktop:protocol
-    time_format: bee.protocol:time
+    clock: bee:clock
   meta:
     type: bee.application
     application:
@@ -69,6 +69,7 @@ entries:
   kind: library.lua
   source: file://remote.lua
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.application:appearance
     frame: bee.application:frame
     names: bee.application:names

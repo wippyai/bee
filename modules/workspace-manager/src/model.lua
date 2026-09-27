@@ -209,9 +209,9 @@ end
 
 local function items(value: unknown, label: (Object) -> string, detail: (Object) -> string, limit: integer): {Item}
     local list: {Item} = {}
-    local entries = object(value)
+    local entries = bounds.array(value, limit)
     if not entries then return list end
-    for _, entry in ipairs(entries :: {unknown}) do
+    for _, entry in ipairs(entries) do
         local item = object(entry)
         if item and #list < limit then list[#list + 1] = {label = bounded(label(item), M.LABEL_LIMIT), detail = bounded(detail(item))} end
     end
@@ -233,9 +233,9 @@ function M.apply_inspect(state: State, workspace_id: string, reply: caller.Reply
     detail.live = value.live == true
     detail.applications = items(value.applications, function(item: Object): string return tostring(item.definition_id) end,
         function(item: Object): string return tostring(item.instance_id) .. " · " .. tostring(item.restart_policy) end, 16)
-    local extensions = object(value.extensions)
+    local extensions = bounds.array(value.extensions, 16)
     if extensions then
-        for _, entry in ipairs(extensions :: {unknown}) do
+        for _, entry in ipairs(extensions) do
             local extension = object(entry)
             if extension and #detail.sections < 16 then
                 local fault = extension.error

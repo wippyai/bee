@@ -125,6 +125,11 @@ local function define_tests()
             local _, invalid = remote.choose(operations(malformed), "node-b", WORKSPACE, "control", "attach-6")
             test.eq(invalid and invalid.code, "INVALID_STATE")
             test.eq(#malformed.opened, 0)
+            local sparse = fake({owner_execution = EXECUTION, desktops = {[1] = {desktop_id = FIRST, is_default = true},
+                [3] = {desktop_id = SECOND, is_default = false}}, workspaces = {}})
+            local _, sparse_error = remote.choose(operations(sparse), "node-b", WORKSPACE, "control", "attach-7")
+            test.eq(sparse_error and sparse_error.code, "INVALID_STATE")
+            test.eq(#sparse.opened, 0)
         end)
     end)
 end

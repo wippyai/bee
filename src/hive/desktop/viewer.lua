@@ -14,7 +14,7 @@ local bounds = require("bounds")
 local client = require("client")
 local protocol = require("protocol")
 local contract = require("contract")
-local time_format = require("time_format")
+local clock = require("clock")
 local display = require("display")
 local remote = require("remote")
 local delivery = require("delivery")
@@ -25,7 +25,7 @@ M.MAX_WIDTH = 400
 M.MAX_HEIGHT = 200
 local CALL_TIMEOUT = "10s"
 local function deadline(): string
-    return time_format.deadline(CALL_TIMEOUT)
+    return clock.deadline(CALL_TIMEOUT)
 end
 -- One call to the owner's bridge through a client that lives only for it, so
 -- this process never holds two reply subscriptions.

@@ -71,6 +71,32 @@ type LaunchRequest = {
     timeouts: Timeouts,
     placement_binding_ref: string?,
     placement_binding_digest: string?,
+    options: {[string]: any}?,
+}
+type WorkdirPreparerSetupInput = {
+    attempt_id: string,
+    owner_id: string,
+    workspace_id: string?,
+    working_directory: string,
+    write_roots: {string},
+    options: {[string]: any}?,
+    argv: {string},
+}
+type WorkdirPreparerSetupOutput = {
+    working_directory: string?,
+    extra_writable_roots: {string}?,
+    state: any?,
+}
+type WorkdirPreparerCleanupInput = {
+    attempt_id: string,
+    owner_id: string,
+    state: any?,
+    exit: Exit?,
+    execution_state: ExecutionState?,
+}
+type WorkdirPreparerCleanupOutput = {
+    retained: boolean?,
+    reason: string?,
 }
 type Exit = {code: integer?, signal: integer?}
 -- The projection of an attempt's evidence: execution and cleanup are
@@ -120,6 +146,8 @@ M.ACCESS = {"read", "write"}
 M.EXECUTABLE_KINDS = {"elf", "script", "other"}
 M.PURPOSES = {"project", "output", "cache", "session"}
 M.STOP_MODES = {"cooperative", "forced"}
+M.WORKDIR_PREPARER_CONTRACT = "bee.placement:workdir_preparer"
+M.WORKDIR_PREPARER_BINDING_TYPE = "bee.placement.workdir_preparer"
 -- Capability order: a runtime that controls a group also controls the
 -- direct process; a contained tree covers both.
 function M.rank(capability: Capability): integer

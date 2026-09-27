@@ -60,3 +60,7 @@ entries:
   kind: ns.dependency
   component: bee/driver-wippy
   version: '*'
+- name: dependency_git_worktree
+  kind: ns.dependency
+  component: bee/git-worktree
+  version: '*'

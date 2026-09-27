@@ -337,7 +337,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
     local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id", "placement_binding_ref", "placement_binding_digest",
-        "binding_digest", "profile_digest", "launch", "configuration_digest", "preferences", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts"})
+        "binding_digest", "profile_digest", "launch", "configuration_digest", "preferences", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts", "options"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(object.idempotency_key)
     if not key then return nil, "idempotency_key is not an identifier" end
@@ -470,11 +470,17 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not observation then return nil, "required_exit_observation must be independent or eof_gated" end
     local timeouts, timeouts_error = decode_timeouts(object.timeouts)
     if not timeouts then return nil, timeouts_error end
+    local options: {[string]: any}? = nil
+    if object.options ~= nil then
+        local declared = bounds.object(object.options)
+        if not declared then return nil, "options must be an object" end
+        options = declared
+    end
     local decoded: types.LaunchRequest = {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
         preferences = selected,
         binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
         resources = resources, environment = environment, environment_refs = refs, projections = projections, session_ref = session_ref,
-        required_cleanup = required :: types.Capability, required_exit_observation = observation :: types.ExitObservation, timeouts = timeouts}
+        required_cleanup = required :: types.Capability, required_exit_observation = observation :: types.ExitObservation, timeouts = timeouts, options = options}
     return decoded, nil
 end
 -- The canonical digest of a decoded request: two requests with one

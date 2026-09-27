@@ -40,6 +40,7 @@ type Request = {
     workspace_id: string?,
     parent_action_id: string?,
     origin_view: {view_id: string, instance_id: string}?,
+    options: {[string]: any}?,
 }
 type Exchange = {
     adapter: permission.Adapter,

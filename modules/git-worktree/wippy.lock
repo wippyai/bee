@@ -1,0 +1,6 @@
+directories:
+  modules: .wippy
+  src: ./src
+modules:
+  - name: bee/placement
+    version: 0.1.0-dev

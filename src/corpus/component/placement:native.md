@@ -8,7 +8,7 @@ the replaceable `target_root` requirement.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.placement.native` | `service`: the eight contract operations; `runner`: the per-attempt process that materializes the home, starts the child, records its identity, pumps output and input, signals and records exit; `store` and `migrations`: attempts and append-only evidence; `capability`: the measured cleanup capability of this runtime; `identity`: leader pid, start ticks and boot id; `homes`: derived directory keys under the root; `protocol`: runner, service and recipient messages; `resources`: linked references |
+| `bee.placement.native` | `service`: the eight contract operations; `runner`: the per-attempt process that materializes the home, starts the child, records its identity, pumps output and input, signals and records exit; `workdir_preparers`: discovery, host authorization, setup and cleanup of workdir preparers; `writable_roots_adapter`: driver profile writable roots argument formatting; `store` and `migrations`: attempts and append-only evidence; `capability`: the measured cleanup capability of this runtime; `identity`: leader pid, start ticks and boot id; `homes`: derived directory keys under the root; `protocol`: runner, service and recipient messages; `resources`: linked references |
 
 ## Order of a start
 
@@ -69,24 +69,23 @@ and keeps execution uncertain; a successor cannot take that retained session.
 The predecessor checkpoint remains unchanged. This outcome requires inspection;
 there is no automatic retry or replay of the user's prompt.
 
-## Git metadata for confined CLI workdirs
+## Workdir preparers and writable roots
 
-For an edit-capable CLI profile and a write-granted working directory, placement
-looks for the nearest `.git` entry without starting Git. It reads a repository's
-`.git` directory directly, or resolves a worktree's `.git` pointer file and its
-`commondir` file. The resulting Git directory and common directory are the only
-additional paths passed to the selected CLI sandbox. A regular repository uses
-one path when both directories are the same. Codex receives
-`sandbox_workspace_write.writable_roots`; Claude Code and Agy receive `--add-dir`
-for each path.
+Placement exposes a generic `bee.placement:workdir_preparer` extension point discovered
+from the registry and authorized by the host through `target_workdir_preparers` (registry
+metadata alone never authorizes). A workdir preparer runs setup before the child starts
+and cleanup after it ends. It may contribute extra writable roots inside already
+write-granted roots, update the working directory (such as creating a dedicated Git worktree),
+and preserve state between setup and cleanup. Failures are recorded as placement evidence
+(`workdir_preparer.failed`).
 
-Both paths must remain inside a host-admitted write root for the granted
-working-directory resource. Placement refuses materialization when Git metadata
-escapes those roots. A read-only workdir, a profile without the matching
-edit-capable CLI mode, or a directory without Git metadata receives no extra
-paths. The adapter comes from the activated driver's pinned profile and is kept
-in placement's stored delivery; the launch caller and provider configure reply
-cannot choose it.
+The per-CLI argument rendering stays owned by placement's `writable_roots_adapter`.
+When extra writable roots are contributed and remain inside host-admitted write roots,
+placement renders the driver profile's `git_writable_roots_adapter`: Codex receives
+`sandbox_workspace_write.writable_roots`; Claude Code and Agy receive `--add-dir` for each path.
+Placement refuses materialization when contributed roots escape write-granted roots.
+A read-only workdir, a profile without the matching edit-capable CLI mode, or a launch
+without contributed writable roots receives no extra arguments.
 
 Native placement owns `HOME`, selected from its attempt or retained session home.
 For a driver's private provider home, placement also sets only its declared

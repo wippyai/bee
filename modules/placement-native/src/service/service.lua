@@ -32,6 +32,7 @@ local gateway_protocol = require("gateway_protocol")
 local service_reply = require("service_reply")
 local credential_protocol = require("credential_protocol")
 local resource_resolution = require("resource_resolution")
+local workdir_preparers = require("workdir_preparers")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
 M.RECONCILE_TIMEOUT_MS = 5000
@@ -922,6 +923,10 @@ function M.cleanup(value: unknown): Reply
         if remove_error then
             return transition(attempt.attempt_id, {cleanup = "uncertain", evidence = {kind = "cleanup.failed", detail = remove_error}})
         end
+    end
+    local preparers_ok, preparers_err = workdir_preparers.cleanup(attempt)
+    if not preparers_ok then
+        return transition(attempt.attempt_id, {cleanup = "uncertain", evidence = {kind = "cleanup.failed", detail = preparers_err or "workdir preparers cleanup failed"}})
     end
     return transition(attempt.attempt_id, {cleanup = "complete", evidence = {kind = "cleanup.complete", detail = (home_key and "attempt home removed" or "no attempt home was created") .. "; " .. why}})
 end

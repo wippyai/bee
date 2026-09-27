@@ -78,6 +78,15 @@ entries:
     description: Measure an absolute executable path under the selected placement's host rules
   - name: close_stdin
     description: Close the admitted attempt's stdin when its driver declares session end on stdin closure
+- name: workdir_preparer
+  kind: contract.definition
+  meta:
+    comment: Generic workdir preparer extension point for contributing extra writable roots, setup before child start, and cleanup after child ends
+  methods:
+  - name: setup
+    description: Run setup before the child starts, optionally returning modified working_directory, extra writable roots, and state
+  - name: cleanup
+    description: Run cleanup after the child ends, using state recorded from setup
 - name: resolver
   kind: library.lua
   source: file://resolver.lua
@@ -86,3 +95,4 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     types: bee.placement:types
+

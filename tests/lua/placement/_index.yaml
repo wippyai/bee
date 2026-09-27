@@ -67,14 +67,29 @@ entries:
     protocol: bee.placement.native:protocol
     resource_resolution: bee.placement.native.service:resource_resolution
     types: bee.placement:types
-- name: git_roots_test
+- name: writable_roots_adapter_test
   kind: function.lua
-  source: file://git_roots_test.lua
+  source: file://writable_roots_adapter_test.lua
   method: run
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    git_roots: bee.placement.native.service:git_roots
+    writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
+- name: workdir_preparer_test
+  kind: function.lua
+  source: file://workdir_preparer_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [time, exec, json, funcs, sql, registry]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.git_worktree:worktree_policy]
+  imports:
+    test: wippy.test:test
+    workdir_preparers: bee.placement.native.service:workdir_preparers
+    store: bee.placement.native.persist:store
+    request_codec: bee.placement:request
+    quote: bee.driver.kit:quote
+    types: bee.placement:types
 - name: codex_test_provider
   kind: registry.entry
   meta:

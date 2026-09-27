@@ -40,6 +40,7 @@ type Definition = {
     -- restricts it. An orchestrator launches it only through the explicit
     -- agent_launch_unconfined allow-list on its own launch policy.
     unconfined: boolean,
+    options: {[string]: any}?,
 }
 local function decode_workdir(value: unknown): (WorkdirPolicy?, string?)
     local object = bounds.object(value == nil and {kind = "caller_workspace"} or value)
@@ -80,7 +81,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if not data then return nil, ref .. " has no data" end
     local unknown_field = bounds.fields(data, {"schema_revision", "launch_id", "title", "command_names", "binding_ref", "profile_id", "policy_ref", "agent_ref", "default_mode",
         "allowed_overrides", "workdir_policy", "thread_policy", "session_resource", "credentials", "presentation",
-        "allow_wider_tools", "unconfined"})
+        "allow_wider_tools", "unconfined", "options", "worktree"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local launch_id, binding_ref, profile_id, policy_ref = bounds.id(data.launch_id), bounds.id(data.binding_ref), bounds.id(data.profile_id), bounds.id(data.policy_ref)
@@ -127,6 +128,22 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if data.unconfined ~= nil and type(data.unconfined) ~= "boolean" then
         return nil, ref .. ": unconfined must be a boolean"
     end
+    local options: {[string]: any}? = nil
+    if data.options ~= nil then
+        local declared_options = bounds.object(data.options)
+        if not declared_options then return nil, ref .. ": options must be an object" end
+        options = declared_options
+    end
+    if data.worktree ~= nil then
+        local worktree_opt = bounds.member(data.worktree, {"dedicated"})
+        if not worktree_opt then return nil, ref .. ": worktree must be dedicated" end
+        options = options or {}
+        options.worktree = worktree_opt
+    end
+    if options and options.worktree ~= nil then
+        local worktree_val = bounds.member(options.worktree, {"dedicated"})
+        if not worktree_val then return nil, ref .. ": options.worktree must be dedicated" end
+    end
     local encoded, encode_error = canonical.encode(data)
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
@@ -134,7 +151,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     return {ref = ref, digest = digest, launch_id = launch_id, title = title, command_names = commands, binding_ref = binding_ref, profile_id = profile_id,
         policy_ref = policy_ref, agent_ref = agent_ref, default_mode = mode, allowed_overrides = overrides, workdir_policy = workdir, thread_policy = thread, session_resource = session_resource, credentials = credentials,
         presentation = {start_menu = presentation.start_menu == true, fullscreen = presentation.fullscreen == true, reuse = reuse},
-        allow_wider_tools = data.allow_wider_tools == true, unconfined = data.unconfined == true}, nil
+        allow_wider_tools = data.allow_wider_tools == true, unconfined = data.unconfined == true, options = options}, nil
 end
 function M.load(ref: string): (Definition?, string?)
     local entry, err = registry.get(ref)

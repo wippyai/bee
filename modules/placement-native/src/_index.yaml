@@ -110,6 +110,14 @@ entries:
   targets:
   - entry: bee.placement.native:resource_mode_ref
     path: .resource_ref
+- name: target_workdir_preparers
+  kind: ns.requirement
+  meta:
+    comment: Host-authorized workdir preparer contract bindings; registry metadata alone never authorizes
+  default: bee.placement.native:placement_workdir_preparers
+  targets:
+  - entry: bee.placement.native:workdir_preparers_ref
+    path: .resource_ref
 - name: database_ref
   kind: registry.entry
   meta:
@@ -145,6 +153,11 @@ entries:
   meta:
     type: bee.resource_ref
     comment: The linked host resource-mode policy; target_resource_mode fills resource_ref
+- name: workdir_preparers_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked host workdir-preparers list; target_workdir_preparers fills resource_ref
 - name: resources
   kind: library.lua
   source: file://resources.lua
@@ -231,3 +244,12 @@ entries:
     comment: host_configured or granted; selected by the host, never by a request
   data:
     mode: granted
+- name: placement_workdir_preparers
+  kind: registry.entry
+  meta:
+    type: bee.placement_workdir_preparers
+    comment: Contract bindings authorized by host policy to run workdir setup and cleanup
+  data:
+    preparers:
+    - bee.git_worktree:binding
+
